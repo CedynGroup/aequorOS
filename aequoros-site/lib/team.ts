@@ -15,4 +15,17 @@ export const team: TeamMemberData[] = [
       'Ghanaian by origin, Eric has shipped two other software products: PropMetrik, a real estate analytics platform for the Ghana market, and FinmarketIQ, a market intelligence platform for active traders. Both are live and operational.',
     ],
   },
+  {
+    name: 'Dela Anthonio',
+    title: 'Chief Technology Officer',
+    location: 'Washington DC–Baltimore Area',
+    image: '/images/dela.png',
+    linkedin: 'linkedin.com/in/delaanthonio',
+    bio: [
+      'Dela is a software engineer and technology leader with a strong focus on building and modernizing scalable backend systems. He brings experience working on enterprise-grade infrastructure, helping teams upgrade critical systems without disrupting live production environments.',
+      'He holds a degree in Computer Science from Virginia Polytechnic Institute and State University, and specializes in systems programming, Python, and distributed systems. His technical foundation spans Linux environments, data systems, and application support at scale.',
+      'Beyond enterprise engineering, Dela is a builder in the startup ecosystem. He is the founder of AgendaCraft, where he develops AI-driven tools that promote intentional productivity and better decision-making — blending engineering with product thinking and emphasizing clarity, system design, and operational efficiency.',
+      'As CTO, Dela leads architecture, backend engineering, and system scalability, ensuring that platforms are reliable, secure, and built for long-term growth.',
+    ],
+  },
 ];
