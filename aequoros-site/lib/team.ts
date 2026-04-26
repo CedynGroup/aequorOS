@@ -19,7 +19,7 @@ export const team: TeamMemberData[] = [
     name: 'Dela Anthonio',
     title: 'Chief Technology Officer',
     location: 'Washington DC–Baltimore Area',
-    image: '/images/dela.png',
+    image: '/images/dela.jpg',
     linkedin: 'linkedin.com/in/delaanthonio',
     bio: [
       'Dela is a software engineer and technology leader with a strong focus on building and modernizing scalable backend systems. He brings experience working on enterprise-grade infrastructure, helping teams upgrade critical systems without disrupting live production environments.',
