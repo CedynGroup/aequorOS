@@ -147,6 +147,12 @@ export default function CompanyPage() {
               </article>
             ))}
           </div>
+
+          <div className="mt-10">
+            <LinkButton href="/investors" variant="primary">
+              View investor materials
+            </LinkButton>
+          </div>
         </div>
       </section>
 
