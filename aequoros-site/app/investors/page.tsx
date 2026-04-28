@@ -15,7 +15,7 @@ const materials = [
     description:
       'Overview of the problem, solution, market opportunity, business model, team, and fundraising ask.',
     fileType: 'PDF',
-    href: process.env.INVESTOR_PITCH_DECK_URL ?? '#',
+    href: process.env.NEXT_PUBLIC_INVESTOR_PITCH_DECK_URL ?? '#',
   },
   {
     label: 'FINANCIAL MODEL',
@@ -23,7 +23,7 @@ const materials = [
     description:
       'Revenue projections, unit economics, headcount plan, and 18-month use-of-funds breakdown.',
     fileType: 'Excel',
-    href: process.env.INVESTOR_FINANCIAL_MODEL_URL ?? '#',
+    href: process.env.NEXT_PUBLIC_INVESTOR_FINANCIAL_MODEL_URL ?? '#',
   },
 ];
 
