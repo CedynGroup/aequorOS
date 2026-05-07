@@ -29,7 +29,7 @@ const statusCards = [
   {
     title: 'Seed Round',
     status: 'ACTIVELY RAISING',
-    body: '$1.5M seed round to validate, build MVP, and land first 5 pilot banks over 18 months.',
+    body: '$1.25M seed round to validate, build MVP, and land first 5 pilot banks over 18 months.',
   },
 ];
 
