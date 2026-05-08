@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html, body {
+  background: #FAFBFC;
+  color: #0A2540;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular numerals everywhere there's a number */
+.font-mono {
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+
+/* Numerical cells in data tables — right-aligned, monospaced */
+.num {
+  font-family: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Subtle elevations only — per brief: "no shadows beyond subtle elevation" */
+.card {
+  background: #FFFFFF;
+  border: 1px solid #E4E8EC;
+  border-radius: 6px;
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid #2D7FF9;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Recharts overrides */
+.recharts-cartesian-axis-tick text,
+.recharts-legend-item-text,
+.recharts-tooltip-label,
+.recharts-tooltip-item {
+  font-family: var(--font-inter), sans-serif !important;
+  font-size: 11px !important;
+  fill: #5A6776 !important;
+}
+
+.recharts-default-tooltip {
+  background: #FFFFFF !important;
+  border: 1px solid #D0D7DE !important;
+  border-radius: 4px !important;
+  box-shadow: 0 4px 12px rgba(10, 37, 64, 0.08) !important;
+  font-family: var(--font-inter), sans-serif !important;
+}

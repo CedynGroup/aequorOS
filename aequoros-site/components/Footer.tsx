@@ -51,6 +51,16 @@ export default function Footer() {
                 Contact
               </Link>
             </li>
+            <li>
+              <a
+                href="https://demo.aequoros.com"
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-accent transition-colors"
+              >
+                Platform demo
+              </a>
+            </li>
           </ul>
         </div>
 

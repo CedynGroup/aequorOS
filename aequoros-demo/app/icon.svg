@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="8" fill="#0A2540"/>
+  <!-- Equilibrium Mark: triangle on a horizontal line -->
+  <line x1="14" y1="46" x2="50" y2="46" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <polygon points="32,18 46,42 18,42" fill="none" stroke="#2D7FF9" stroke-width="3" stroke-linejoin="round"/>
+</svg>

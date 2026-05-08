@@ -205,6 +205,35 @@ export default function ProductPage() {
         </div>
       </section>
 
+      {/* 2.4b Interactive prototype */}
+      <section className="bg-white">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pb-16 md:pb-20 lg:pb-24">
+          <div className="border border-border-light border-l-4 border-l-accent rounded-lg p-8 md:p-10 grid lg:grid-cols-[2fr,1fr] gap-8 items-center">
+            <div>
+              <SectionLabel>INTERACTIVE PROTOTYPE</SectionLabel>
+              <h2 className="mt-4 font-serif font-bold text-navy text-2xl md:text-3xl leading-tight">
+                See the platform in motion.
+              </h2>
+              <p className="mt-4 text-text-primary text-base md:text-lg leading-relaxed max-w-2xl">
+                A click-through prototype of all six modules built with synthetic
+                data for a Bank of Ghana–licensed mid-tier universal bank. Useful
+                for investors evaluating execution and for Treasury teams curious
+                about workflow and reporting structure. Not a live system.
+              </p>
+            </div>
+            <div className="flex lg:justify-end">
+              <LinkButton
+                href="https://demo.aequoros.com"
+                variant="primary"
+                external
+              >
+                Open the prototype
+              </LinkButton>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* 2.5 Closing CTA */}
       <section className="bg-navy-deep text-white">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-20 md:py-24">
