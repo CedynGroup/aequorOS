@@ -24,8 +24,8 @@ const options = [
     title: 'Book a conversation',
     content:
       '30 minutes, no agenda other than learning about your situation and sharing what we\u2019re building.',
-    linkLabel: 'calendly.com/eric-inkoom/intro',
-    href: 'https://calendly.com/eric-inkoom/intro',
+    linkLabel: 'calendly.com/eric-aequoros/30min',
+    href: 'https://calendly.com/eric-aequoros/30min',
     external: true,
   },
   {
