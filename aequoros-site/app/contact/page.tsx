@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Mail, Calendar, Linkedin, MapPin } from 'lucide-react';
 import SectionLabel from '@/components/SectionLabel';
 import ContactForm from '@/components/ContactForm';
+import CalendlyInline from '@/components/CalendlyInline';
 
 export const metadata: Metadata = {
   title: 'Contact — AequorOS',
@@ -24,9 +25,9 @@ const options = [
     title: 'Book a conversation',
     content:
       '30 minutes, no agenda other than learning about your situation and sharing what we\u2019re building.',
-    linkLabel: 'calendly.com/eric-aequoros/30min',
-    href: 'https://calendly.com/eric-aequoros/30min',
-    external: true,
+    linkLabel: 'See available times \u2193',
+    href: '#schedule',
+    external: false,
   },
   {
     Icon: Linkedin,
@@ -99,7 +100,24 @@ export default function ContactPage() {
             <ContactForm />
           </div>
 
-          {/* 4.3 Location Info */}
+          {/* 4.3 Inline scheduler */}
+          <div id="schedule" className="mt-20 pt-12 border-t border-border-light scroll-mt-24">
+            <div className="max-w-3xl mb-8">
+              <SectionLabel>BOOK A MEETING</SectionLabel>
+              <h2 className="mt-4 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
+                Pick a time that works for you.
+              </h2>
+              <p className="mt-3 text-text-muted text-lg leading-relaxed">
+                30 minutes, video call. No agenda other than learning about your
+                situation and sharing what we&apos;re building.
+              </p>
+            </div>
+            <div className="border border-border-light border-l-4 border-l-accent rounded-lg overflow-hidden bg-white">
+              <CalendlyInline />
+            </div>
+          </div>
+
+          {/* 4.4 Location Info */}
           <div className="mt-16 pt-8 border-t border-border-light flex items-center justify-center gap-3 text-text-muted">
             <MapPin size={16} className="text-accent" aria-hidden />
             <span className="text-sm">Winchester, VA · Accra, Ghana</span>
