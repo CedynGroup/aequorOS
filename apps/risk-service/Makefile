@@ -1,4 +1,4 @@
-.PHONY: help sync dev test test-postgres lint format typecheck check migrate bootstrap-db revision smoke
+.PHONY: help sync hooks precommit dev test test-postgres lint format typecheck check migrate bootstrap-db revision smoke
 
 HOST ?= 127.0.0.1
 PORT ?= 8000
@@ -7,6 +7,8 @@ APP_FILE := app/main.py
 help:
 	@echo "Available targets:"
 	@echo "  sync       Install dependencies with uv"
+	@echo "  hooks      Install pre-commit and commit-msg hooks"
+	@echo "  precommit  Run pre-commit hooks against all files"
 	@echo "  dev        Run FastAPI dev server on HOST:PORT"
 	@echo "  test       Run pytest"
 	@echo "  test-postgres Run pytest against local Docker Postgres"
@@ -21,6 +23,12 @@ help:
 
 sync:
 	uv sync
+
+hooks:
+	uv run pre-commit install --config ../../.pre-commit-config.yaml --install-hooks
+
+precommit:
+	uv run pre-commit run --all-files --config ../../.pre-commit-config.yaml
 
 dev:
 	uv run fastapi dev $(APP_FILE) --host $(HOST) --port $(PORT)

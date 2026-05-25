@@ -39,6 +39,12 @@ Or use the task runner:
 make sync
 ```
 
+Install the repo hooks after syncing dependencies:
+
+```bash
+make hooks
+```
+
 For tests, `DATABASE_URL` can be unset. For migrations and database readiness checks, set `DATABASE_URL` to a Postgres database. For local object storage, the bundled Docker Compose file starts MinIO and creates the private `risk-local` bucket.
 
 ## Run The API
@@ -95,6 +101,20 @@ make test-postgres
 
 ```bash
 make check
+```
+
+## Pre-Commit Hooks
+
+Run all configured hooks manually:
+
+```bash
+make precommit
+```
+
+Commit messages must follow Conventional Commits. For example:
+
+```bash
+feat(risk-service): add scenario endpoint
 ```
 
 ## Run Migrations

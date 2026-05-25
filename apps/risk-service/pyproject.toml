@@ -18,6 +18,7 @@ dependencies = [
 dev = [
   "basedpyright",
   "httpx",
+  "pre-commit==4.6.0",
   "pytest",
   "ruff",
 ]

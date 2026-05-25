@@ -355,7 +355,7 @@ Machine learning models trained on emerging market data. Temenos T24 integration
 
 Section label: `WHY NOW`
 
-Headline: 
+Headline:
 ```
 Three forces converging.
 ```
@@ -472,7 +472,7 @@ Card structure:
 
 Section label: `UNDER THE HOOD`
 
-Headline: 
+Headline:
 ```
 How AequorOS fits into a bank's operations.
 ```
@@ -502,7 +502,7 @@ Step 3:
 
 Section label: `TECHNICAL FOUNDATION`
 
-Headline: 
+Headline:
 ```
 Built on modern cloud infrastructure.
 ```
@@ -529,12 +529,12 @@ Right column, titled "Security and governance":
 
 Centered:
 
-Headline: 
+Headline:
 ```
 Want to see more?
 ```
 
-Body: 
+Body:
 ```
 We're running a structured research program with Ghana banks to validate the platform's fit. If you're a Treasury or Risk leader at a bank, we'd like to include you.
 ```
@@ -571,7 +571,7 @@ Founded in 2025, headquartered virtually between Winchester, Virginia and Accra,
 
 Section label: `MISSION`
 
-Headline: 
+Headline:
 ```
 Why we're building this.
 ```
@@ -641,7 +641,7 @@ LinkedIn link below bio: icon + "linkedin.com/in/eidanso"
 
 Section label: `WHERE WE ARE`
 
-Headline: 
+Headline:
 ```
 Currently in stealth. Building. Talking to banks.
 ```
@@ -672,12 +672,12 @@ Card 4:
 
 Background: `navy-deep`
 
-Headline: 
+Headline:
 ```
 Join us early.
 ```
 
-Body: 
+Body:
 ```
 We're looking for advisors, potential pilot customers, engineers, and investors who want to build the financial infrastructure African banks have been waiting for.
 ```
