@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import APIRouter
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
@@ -52,6 +53,29 @@ def test_http_error_uses_error_envelope(client: TestClient) -> None:
             "code": "not_found",
             "message": "Not Found",
             "request_id": "missing-request",
+        },
+    }
+
+
+def test_unexpected_error_uses_initial_error_shape() -> None:
+    router = APIRouter()
+
+    @router.get("/boom")
+    def boom() -> None:
+        raise RuntimeError("boom")
+
+    app = create_app()
+    app.include_router(router, prefix="/api")
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get("/api/boom", headers={"X-Request-ID": "req_test"})
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "error": {
+            "code": "internal_server_error",
+            "message": "An unexpected error occurred.",
+            "request_id": "req_test",
         },
     }
 

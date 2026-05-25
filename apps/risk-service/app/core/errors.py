@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.logging import get_request_id, logger
+from app.schemas.common import ErrorBody, ErrorResponse
 
 
 def build_error_payload(
@@ -19,14 +20,15 @@ def build_error_payload(
     request_id: str,
     details: Any | None = None,
 ) -> dict[str, Any]:
-    error: dict[str, Any] = {
-        "code": code,
-        "message": message,
-        "request_id": request_id,
-    }
-    if details is not None:
-        error["details"] = details
-    return {"error": error}
+    response = ErrorResponse(
+        error=ErrorBody(
+            code=code,
+            message=message,
+            request_id=request_id,
+            details=details,
+        ),
+    )
+    return response.model_dump(exclude_none=True)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -79,7 +81,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             content=build_error_payload(
                 code="internal_server_error",
                 message="An unexpected error occurred.",
-                request_id=get_request_id(),
+                request_id=_request_id_from_request(request),
             ),
         )
 
@@ -94,3 +96,10 @@ def _code_for_http_status(status_code: int) -> str:
     if status_code == status.HTTP_403_FORBIDDEN:
         return "forbidden"
     return "http_error"
+
+
+def _request_id_from_request(request: Request) -> str:
+    request_id = getattr(request.state, "request_id", None)
+    if isinstance(request_id, str):
+        return request_id
+    return get_request_id()
