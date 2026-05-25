@@ -20,7 +20,7 @@ target_metadata = Base.metadata
 
 
 def get_database_url() -> str:
-    database_url = get_settings().database_url
+    database_url = get_settings().database.database_url
     if database_url is None:
         msg = "DATABASE_URL is required to run Alembic migrations."
         raise RuntimeError(msg)

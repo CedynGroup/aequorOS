@@ -12,15 +12,15 @@ from app.core.request_id import RequestIdMiddleware
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.logging.log_level)
 
-    app = FastAPI(title=settings.app_name)
+    app = FastAPI(title=settings.app.app_name)
     app.add_middleware(RequestIdMiddleware)
 
-    if settings.cors_origins:
+    if settings.cors.origins:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=settings.cors_origins,
+            allow_origins=settings.cors.origins,
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
