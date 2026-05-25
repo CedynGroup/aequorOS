@@ -1,0 +1,31 @@
+# Python/runtime artifacts
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+htmlcov/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Tests and local-only tooling
+tests/
+
+# Git/editor/OS noise
+.git/
+.gitignore
+.DS_Store
+.idea/
+.vscode/
+
+# Docker/build metadata not needed inside context
+Dockerfile
+.dockerignore
