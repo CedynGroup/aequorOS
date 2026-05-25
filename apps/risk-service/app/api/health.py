@@ -17,19 +17,19 @@ router = APIRouter(prefix="/health", tags=["health"])
 @router.get("/live", response_model=HealthResponse)
 def live(settings: Annotated[Settings, Depends(get_settings)]) -> HealthResponse:
     return HealthResponse(
-        service=settings.app_name,
-        environment=settings.app_env,
+        service=settings.app.app_name,
+        environment=settings.app.app_env,
         status="ok",
     )
 
 
 @router.get("/ready", response_model=ReadinessResponse)
 def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResponse:
-    if settings.database_url is None:
-        if settings.app_env in {"local", "test"}:
+    if settings.database.database_url is None:
+        if settings.app.app_env in {"local", "test"}:
             return ReadinessResponse(
-                service=settings.app_name,
-                environment=settings.app_env,
+                service=settings.app.app_name,
+                environment=settings.app.app_env,
                 status="ok",
                 database={"status": "skipped"},
             )
@@ -39,7 +39,7 @@ def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResp
             detail="Database is not configured.",
         )
 
-    engine = get_engine(settings.database_url)
+    engine = get_engine(settings.database.database_url)
 
     try:
         with Session(engine) as session:
@@ -51,8 +51,8 @@ def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResp
         ) from exc
 
     return ReadinessResponse(
-        service=settings.app_name,
-        environment=settings.app_env,
+        service=settings.app.app_name,
+        environment=settings.app.app_env,
         status="ok",
         database={"status": "ok"},
     )
