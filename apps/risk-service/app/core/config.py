@@ -41,17 +41,11 @@ class StorageSettings(BaseSettings):
     backend: StorageBackend = Field(default="s3", alias="RISK_STORAGE_BACKEND")
     bucket: str = Field(default="risk-local", alias="RISK_S3_BUCKET")
     region: str = Field(default="us-east-1", alias="RISK_S3_REGION")
-    endpoint_url: str | None = Field(
-        default="http://localhost:9000", alias="RISK_S3_ENDPOINT_URL"
-    )
+    endpoint_url: str | None = Field(default="http://localhost:9000", alias="RISK_S3_ENDPOINT_URL")
     access_key_id: str | None = Field(default="minioadmin", alias="RISK_S3_ACCESS_KEY_ID")
-    secret_access_key: str | None = Field(
-        default="minioadmin", alias="RISK_S3_SECRET_ACCESS_KEY"
-    )
+    secret_access_key: str | None = Field(default="minioadmin", alias="RISK_S3_SECRET_ACCESS_KEY")
     force_path_style: bool = Field(default=True, alias="RISK_S3_FORCE_PATH_STYLE")
-    presign_expires_seconds: int = Field(
-        default=900, alias="RISK_S3_PRESIGN_EXPIRES_SECONDS"
-    )
+    presign_expires_seconds: int = Field(default=900, alias="RISK_S3_PRESIGN_EXPIRES_SECONDS")
     max_upload_bytes: int = Field(default=25_000_000, alias="RISK_MAX_UPLOAD_BYTES")
 
     @property
