@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import Boolean, ForeignKey, Index, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
+from sqlalchemy import Boolean, ForeignKey, Index, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UuidPrimaryKeyMixin
@@ -17,7 +16,7 @@ class User(UuidPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     organization_id: Mapped[UUID] = mapped_column(
-        PostgresUUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )

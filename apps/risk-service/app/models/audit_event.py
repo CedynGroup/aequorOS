@@ -4,9 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, String
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, UuidPrimaryKeyMixin, utc_now
@@ -21,19 +19,19 @@ class AuditEvent(UuidPrimaryKeyMixin, Base):
     )
 
     organization_id: Mapped[UUID | None] = mapped_column(
-        PostgresUUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("organizations.id", ondelete="SET NULL"),
         nullable=True,
     )
     actor_user_id: Mapped[UUID | None] = mapped_column(
-        PostgresUUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
     event_type: Mapped[str] = mapped_column(String(120), nullable=False)
     entity_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    entity_id: Mapped[UUID | None] = mapped_column(PostgresUUID(as_uuid=True), nullable=True)
-    details: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    entity_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
