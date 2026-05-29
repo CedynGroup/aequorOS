@@ -25,13 +25,17 @@ def live(settings: Annotated[Settings, Depends(get_settings)]) -> HealthResponse
 
 @router.get("/ready", response_model=ReadinessResponse)
 def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResponse:
+    storage_status = "ok" if settings.storage_configured else "misconfigured"
     if settings.database.database_url is None:
         if settings.app.app_env in {"local", "test"}:
             return ReadinessResponse(
                 service=settings.app.app_name,
                 environment=settings.app.app_env,
                 status="ok",
-                database={"status": "skipped"},
+                database={
+                    "status": "skipped",
+                    "storage": storage_status,
+                },
             )
 
         raise HTTPException(
@@ -50,9 +54,18 @@ def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResp
             detail="Database connectivity check failed.",
         ) from exc
 
+    if not settings.storage_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Storage is not configured.",
+        )
+
     return ReadinessResponse(
         service=settings.app.app_name,
         environment=settings.app.app_env,
         status="ok",
-        database={"status": "ok"},
+        database={
+            "status": "ok",
+            "storage": storage_status,
+        },
     )
