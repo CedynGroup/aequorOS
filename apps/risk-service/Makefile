@@ -1,4 +1,4 @@
-.PHONY: help sync dev test lint format typecheck check migrate revision smoke
+.PHONY: help sync dev test test-postgres lint format typecheck check migrate bootstrap-db revision smoke
 
 HOST ?= 127.0.0.1
 PORT ?= 8000
@@ -9,11 +9,13 @@ help:
 	@echo "  sync       Install dependencies with uv"
 	@echo "  dev        Run FastAPI dev server on HOST:PORT"
 	@echo "  test       Run pytest"
+	@echo "  test-postgres Run pytest against local Docker Postgres"
 	@echo "  lint       Run Ruff checks"
 	@echo "  format     Format Python files with Ruff"
 	@echo "  typecheck  Run BasedPyright"
 	@echo "  check      Run lint, typecheck, and tests"
 	@echo "  migrate    Run Alembic migrations; requires DATABASE_URL"
+	@echo "  bootstrap-db Create local DB roles, run migrations, and grant app privileges"
 	@echo "  revision   Create Alembic revision: make revision name=\"message\""
 	@echo "  smoke      Run local smoke checks that do not require Postgres"
 
@@ -25,6 +27,9 @@ dev:
 
 test:
 	uv run pytest
+
+test-postgres:
+	TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:15432/risk_service uv run pytest
 
 lint:
 	uv run ruff check .
@@ -40,6 +45,9 @@ check: lint typecheck test
 
 migrate:
 	uv run alembic upgrade head
+
+bootstrap-db:
+	./scripts/bootstrap_db.sh
 
 revision:
 	@test -n "$(name)" || (echo 'Usage: make revision name="message"' && exit 1)
