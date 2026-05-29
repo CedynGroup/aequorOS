@@ -39,7 +39,7 @@ Or use the task runner:
 make sync
 ```
 
-For tests, `DATABASE_URL` can be unset. For migrations and database readiness checks, set `DATABASE_URL` to a Postgres database.
+For tests, `DATABASE_URL` can be unset. For migrations and database readiness checks, set `DATABASE_URL` to a Postgres database. For local object storage, the bundled Docker Compose file starts MinIO and creates the private `risk-local` bucket.
 
 ## Run The API
 
@@ -47,15 +47,48 @@ For tests, `DATABASE_URL` can be unset. For migrations and database readiness ch
 make dev
 ```
 
+Local infrastructure:
+
+```bash
+docker compose up -d
+make bootstrap-db
+export DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service
+```
+
+`make bootstrap-db` creates separate local database roles for migrations and app
+runtime, runs Alembic migrations, and grants the runtime role data privileges.
+The migration role can bypass RLS for migrations and backfills; the app runtime
+role is still created with `NOBYPASSRLS`.
+It also seeds two demo tenants so audit foreign keys and header-based tenant
+context work in local demos:
+
+```bash
+X-Org-Id: 11111111-1111-4111-8111-111111111111
+X-User-Id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+```
+
 Health endpoints:
 
 - `GET /api/health/live`
 - `GET /api/health/ready`
 
+Business API endpoints use URL path major versioning under `/api/v1`. See
+`docs/architecture.md` for the API versioning policy.
+
 ## Run Tests
 
 ```bash
 make test
+```
+
+The default test run uses isolated SQLite databases. To run the same tests
+against Postgres, start local infrastructure and provide `TEST_DATABASE_URL`.
+The test fixtures create a temporary schema per fixture and drop it afterward,
+so the configured database is not reset:
+
+```bash
+docker compose up -d risk-postgres
+make test-postgres
 ```
 
 ## Lint And Type Check
@@ -87,7 +120,17 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 LOG_LEVEL=INFO
 
 # Required for migrations and database-backed readiness checks.
-# DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/risk_service
+# DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service
+
+RISK_STORAGE_BACKEND=s3
+RISK_S3_BUCKET=risk-local
+RISK_S3_REGION=us-east-1
+RISK_S3_ENDPOINT_URL=http://localhost:9000
+RISK_S3_ACCESS_KEY_ID=minioadmin
+RISK_S3_SECRET_ACCESS_KEY=minioadmin
+RISK_S3_FORCE_PATH_STYLE=true
+RISK_S3_PRESIGN_EXPIRES_SECONDS=900
+RISK_MAX_UPLOAD_BYTES=25000000
 ```
 
 `psycopg[binary]` is used for MVP setup convenience. Revisit production packaging before hardening deployment images.
