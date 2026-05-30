@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy import (
     JSON,
     BigInteger,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -26,8 +27,30 @@ from app.db.base import Base, TimestampMixin, UuidPrimaryKeyMixin, utc_now
 class RiskCase(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "risk_cases"
     __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft', 'active', 'in_review', 'completed', 'archived')",
+            name="ck_risk_cases_status",
+        ),
+        CheckConstraint(
+            "decision IS NULL OR "
+            "decision IN ('approved', 'rejected', 'needs_more_info', 'escalated')",
+            name="ck_risk_cases_decision",
+        ),
+        CheckConstraint(
+            "risk_level IS NULL OR risk_level IN ('low', 'medium', 'high', 'critical')",
+            name="ck_risk_cases_risk_level",
+        ),
+        CheckConstraint(
+            "risk_score IS NULL OR (risk_score >= 0 AND risk_score <= 100)",
+            name="ck_risk_cases_risk_score",
+        ),
         Index("ix_risk_cases_organization_id_status", "organization_id", "status"),
         Index("ix_risk_cases_organization_id_created_at", "organization_id", "created_at"),
+        Index(
+            "ix_risk_cases_organization_id_assigned_to",
+            "organization_id",
+            "assigned_to_user_id",
+        ),
     )
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -37,11 +60,46 @@ class RiskCase(UuidPrimaryKeyMixin, TimestampMixin, Base):
     subject_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False)
+    assigned_to_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    risk_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    risk_level: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    scored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    scoring_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    decision: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
     created_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RiskCaseDecision(UuidPrimaryKeyMixin, Base):
+    __tablename__ = "risk_case_decisions"
+    __table_args__ = (
+        CheckConstraint(
+            "decision IN ('approved', 'rejected', 'needs_more_info', 'escalated')",
+            name="ck_risk_case_decisions_decision",
+        ),
+        Index("ix_risk_case_decisions_organization_id_case_id", "organization_id", "case_id"),
+    )
+
+    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    case_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("risk_cases.id"), nullable=False
+    )
+    decision: Mapped[str] = mapped_column(String(40), nullable=False)
+    previous_decision: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decided_by: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class StoredObject(UuidPrimaryKeyMixin, Base):
@@ -189,9 +247,58 @@ class RiskAssessmentRun(UuidPrimaryKeyMixin, Base):
     )
 
 
+class RiskScore(UuidPrimaryKeyMixin, Base):
+    __tablename__ = "risk_scores"
+    __table_args__ = (
+        CheckConstraint("score >= 0 AND score <= 100", name="ck_risk_scores_score"),
+        CheckConstraint(
+            "risk_level IN ('low', 'medium', 'high', 'critical')",
+            name="ck_risk_scores_risk_level",
+        ),
+        Index("ix_risk_scores_organization_id_case_id", "organization_id", "case_id"),
+    )
+
+    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    case_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("risk_cases.id"), nullable=False
+    )
+    assessment_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("risk_assessments.id"), nullable=True
+    )
+    run_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("risk_assessment_runs.id"), nullable=True
+    )
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    risk_level: Mapped[str] = mapped_column(String(40), nullable=False)
+    scoring_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    input_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    input_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
+    rule_results: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, server_default=sql_text("'[]'"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
 class RiskFinding(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "risk_findings"
     __table_args__ = (
+        CheckConstraint(
+            "status IN ('open', 'accepted', 'acknowledged', 'dismissed', "
+            "'needs_review', 'resolved', 'superseded')",
+            name="ck_risk_findings_status",
+        ),
+        CheckConstraint(
+            "severity IN ('low', 'medium', 'high', 'critical')",
+            name="ck_risk_findings_severity",
+        ),
+        CheckConstraint(
+            "source IN ('deterministic_rule', 'manual', 'imported')",
+            name="ck_risk_findings_source",
+        ),
         Index("ix_risk_findings_organization_id_case_id", "organization_id", "case_id"),
         Index("ix_risk_findings_organization_id_assessment_id", "organization_id", "assessment_id"),
         Index("ix_risk_findings_organization_id_status", "organization_id", "status"),
@@ -220,6 +327,15 @@ class RiskFinding(UuidPrimaryKeyMixin, TimestampMixin, Base):
         String(40), default="open", server_default=sql_text("'open'"), nullable=False
     )
     disposition_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(
+        String(40), default="manual", server_default=sql_text("'manual'"), nullable=False
+    )
+    rule_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    rule_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    score_impact: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    details: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
 
 
 class RiskFindingEvidence(UuidPrimaryKeyMixin, Base):

@@ -3,12 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.health import router as health_router
-from app.features.assessments import router as assessments_router
-from app.features.cases import router as cases_router
-from app.features.documents import router as documents_router
-from app.features.findings import router as findings_router
-from app.features.jobs import router as jobs_router
-from app.features.taxonomy import router as taxonomy_router
+from app.features.list_taxonomy import router as taxonomy_router
+from app.features.manage_documents import router as documents_router
+from app.features.review_cases import router as cases_router
+from app.features.review_findings import router as findings_router
+from app.features.run_assessments import router as assessments_router
+from app.features.track_jobs import router as jobs_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)

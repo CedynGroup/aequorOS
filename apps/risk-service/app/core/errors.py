@@ -12,6 +12,33 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.logging import get_request_id, logger
 from app.schemas.common import ErrorBody, ErrorResponse
 
+OPENAPI_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    status.HTTP_400_BAD_REQUEST: {
+        "model": ErrorResponse,
+        "description": "Bad request.",
+    },
+    status.HTTP_401_UNAUTHORIZED: {
+        "model": ErrorResponse,
+        "description": "Missing or invalid tenant context.",
+    },
+    status.HTTP_404_NOT_FOUND: {
+        "model": ErrorResponse,
+        "description": "Requested resource was not found for the tenant.",
+    },
+    status.HTTP_409_CONFLICT: {
+        "model": ErrorResponse,
+        "description": "Workflow transition or state conflict.",
+    },
+    status.HTTP_422_UNPROCESSABLE_CONTENT: {
+        "model": ErrorResponse,
+        "description": "Request validation failed.",
+    },
+    status.HTTP_500_INTERNAL_SERVER_ERROR: {
+        "model": ErrorResponse,
+        "description": "Unexpected server error.",
+    },
+}
+
 
 def build_error_payload(
     *,
@@ -61,7 +88,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         exc: RequestValidationError,
     ) -> JSONResponse:
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content=build_error_payload(
                 code="validation_error",
                 message="Request validation failed.",

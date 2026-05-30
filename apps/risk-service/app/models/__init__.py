@@ -8,8 +8,10 @@ from app.models.risk import (
     RiskAssessment,
     RiskAssessmentRun,
     RiskCase,
+    RiskCaseDecision,
     RiskFinding,
     RiskFindingEvidence,
+    RiskScore,
     StoredObject,
 )
 from app.models.user import User
@@ -24,8 +26,10 @@ __all__ = [
     "RiskAssessment",
     "RiskAssessmentRun",
     "RiskCase",
+    "RiskCaseDecision",
     "RiskFinding",
     "RiskFindingEvidence",
+    "RiskScore",
     "StoredObject",
     "User",
 ]
