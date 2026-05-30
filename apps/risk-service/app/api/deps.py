@@ -22,10 +22,10 @@ class TenantContext:
 
 
 def get_tenant_context(
-    x_org_id: Annotated[str | None, Header(alias="X-Org-Id")] = None,
+    x_org_id: Annotated[str, Header(alias="X-Org-Id")],
     x_user_id: Annotated[str | None, Header(alias="X-User-Id")] = None,
 ) -> TenantContext:
-    if not x_org_id:
+    if not x_org_id.strip():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="X-Org-Id header is required."
         )

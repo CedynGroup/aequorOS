@@ -12,11 +12,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.config import Settings
 from app.db.base import utc_now
-from app.features.audit import record_event
-from app.features.cases_service import get_case_or_404
-from app.features.constants import ALLOWED_UPLOAD_CONTENT_TYPES
+from app.domain.risk_constants import ALLOWED_UPLOAD_CONTENT_TYPES
 from app.integrations.storage.base import ObjectStorage
 from app.models import Document, DocumentChunk, Job, StoredObject
+from app.services.audit import record_event
+from app.services.cases import get_case_or_404
 
 
 @dataclass(frozen=True)

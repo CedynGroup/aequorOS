@@ -1,75 +1,24 @@
 from __future__ import annotations
 
-from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict
 
 from app.api.deps import DbSession, Storage, Tenant
 from app.core.config import get_settings
-from app.features import documents_service
 from app.models import Document
+from app.schemas.documents import (
+    CompleteUploadResponse,
+    DocumentRead,
+    DownloadUrlResponse,
+    ParseResponse,
+    ParseStatusResponse,
+    UploadRequest,
+    UploadRequestResponse,
+)
+from app.services import documents as documents_service
 
 router = APIRouter(tags=["documents"])
-
-
-class UploadRequest(BaseModel):
-    case_id: UUID
-    filename: str
-    content_type: str
-    byte_size: int
-    sha256: str | None = None
-
-
-class UploadRequestResponse(BaseModel):
-    document_id: UUID
-    upload_url: str
-    method: str
-    headers: dict[str, str]
-    expires_in_seconds: int
-
-
-class CompleteUploadResponse(BaseModel):
-    document_id: UUID
-    status: str
-
-
-class DocumentRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    organization_id: UUID
-    case_id: UUID
-    stored_object_id: UUID
-    filename: str
-    document_type: str | None
-    source: str
-    status: str
-    parse_status: str
-    parse_error: str | None
-    uploaded_by: UUID | None
-    uploaded_at: datetime | None
-    created_at: datetime
-    updated_at: datetime
-    deleted_at: datetime | None
-
-
-class DownloadUrlResponse(BaseModel):
-    url: str
-    expires_in_seconds: int
-
-
-class ParseResponse(BaseModel):
-    job_id: UUID
-    document_id: UUID
-    status: str
-
-
-class ParseStatusResponse(BaseModel):
-    document_id: UUID
-    parse_status: str
-    parse_error: str | None
 
 
 @router.post("/documents/upload-request", response_model=UploadRequestResponse)

@@ -4,6 +4,9 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+type JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+type JsonObject = dict[str, JsonValue]
+
 
 class ErrorBody(BaseModel):
     model_config = ConfigDict(frozen=True)
