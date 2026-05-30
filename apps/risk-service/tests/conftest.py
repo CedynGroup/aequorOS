@@ -11,7 +11,8 @@ from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
+from app.api.deps import TenantContext
+from app.core.config import Settings, get_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
@@ -151,6 +152,22 @@ def _seed_demo_tenants(engine: Engine) -> None:
 @pytest.fixture
 def fake_storage() -> FakeStorage:
     return FakeStorage()
+
+
+@pytest.fixture
+def test_settings() -> Settings:
+    return get_settings()
+
+
+@pytest.fixture
+def db_settings(db_client: TestClient) -> Settings:
+    _ = db_client
+    return get_settings()
+
+
+@pytest.fixture
+def tenant_ctx() -> TenantContext:
+    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
 
 
 @pytest.fixture
