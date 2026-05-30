@@ -57,25 +57,22 @@ def test_phase_1_happy_path_e2e(db_client: TestClient, fake_storage) -> None:  #
         f"/api/v1/assessment-runs/{run_body['run_id']}", headers=headers()
     )
     assert assessment_run.status_code == 200, assessment_run.text
-    assert assessment_run.json()["summary"] == {"findings_created": 1}
+    assert assessment_run.json()["summary"]["findings_created"] == 1
+    assert assessment_run.json()["summary"]["risk_score"] == 20
 
     assessment_job = db_client.get(f"/api/v1/jobs/{run_body['job_id']}", headers=headers())
     assert assessment_job.status_code == 200, assessment_job.text
     assert assessment_job.json()["job_type"] == "assessment_run"
-    assert assessment_job.json()["progress"] == {"findings_created": 1}
+    assert assessment_job.json()["progress"]["findings_created"] == 1
 
     findings = db_client.get(f"/api/v1/cases/{case_id}/findings", headers=headers())
     assert findings.status_code == 200, findings.text
     assert len(findings.json()) == 1
     finding = findings.json()[0]
     assert finding["risk_type"] == "documentation_gap"
+    assert finding["rule_id"] == "missing_structured_data"
     assert finding["assessment_id"] == assessment_id
     assert finding["run_id"] == run_body["run_id"]
-
-    evidence = db_client.get(f"/api/v1/findings/{finding['id']}/evidence", headers=headers())
-    assert evidence.status_code == 200, evidence.text
-    assert evidence.json()[0]["document"]["id"] == document_id
-    assert evidence.json()[0]["chunk"]["chunk_index"] == 0
 
     assert db_client.get(f"/api/v1/cases/{case_id}", headers=headers(ORG_2)).status_code == 404
     assert (

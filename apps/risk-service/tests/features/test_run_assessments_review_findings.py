@@ -31,10 +31,17 @@ def test_assessments_runs_findings_evidence_and_jobs(db_client: TestClient, fake
     response = db_client.patch(
         f"/api/v1/findings/{finding_id}",
         headers=headers(),
+        json={"status": "dismissed"},
+    )
+    assert response.status_code == 400
+
+    response = db_client.patch(
+        f"/api/v1/findings/{finding_id}",
+        headers=headers(),
         json={"status": "accepted", "disposition_reason": "Confirmed"},
     )
     assert response.status_code == 200
-    assert response.json()["status"] == "accepted"
+    assert response.json()["status"] == "acknowledged"
 
     response = db_client.patch(
         f"/api/v1/findings/{finding_id}",
@@ -45,10 +52,67 @@ def test_assessments_runs_findings_evidence_and_jobs(db_client: TestClient, fake
 
     response = db_client.get(f"/api/v1/findings/{finding_id}/evidence", headers=headers())
     assert response.status_code == 200
-    assert response.json()[0]["document"]["filename"] == "financials.pdf"
+    assert response.json() == []
 
     response = db_client.get(f"/api/v1/findings/{finding_id}", headers=headers(ORG_2))
     assert response.status_code == 404
+
+
+def test_reviewers_can_create_manual_findings(db_client: TestClient) -> None:
+    case_id = str(CaseFactory(db_client).create()["id"])
+
+    response = db_client.post(
+        f"/api/v1/cases/{case_id}/findings",
+        headers=headers(),
+        json={
+            "risk_type": "documentation_gap",
+            "title": "Missing insurance addendum",
+            "summary": "Reviewer could not locate the current insurance addendum.",
+            "rationale": "The case file needs current support before approval.",
+            "severity": "medium",
+            "details": {"document": "insurance_addendum"},
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["source"] == "manual"
+    assert response.json()["status"] == "open"
+    assert response.json()["rule_id"] is None
+    assert response.json()["details"] == {"document": "insurance_addendum"}
+
+    response = db_client.get(f"/api/v1/cases/{case_id}/findings", headers=headers())
+    assert response.status_code == 200
+    assert response.json()[0]["title"] == "Missing insurance addendum"
+
+
+def test_manual_finding_creation_validates_case_and_taxonomy(db_client: TestClient) -> None:
+    case_id = str(CaseFactory(db_client).create()["id"])
+
+    response = db_client.post(
+        f"/api/v1/cases/{case_id}/findings",
+        headers=headers(),
+        json={
+            "risk_type": "not_real",
+            "title": "Invalid",
+            "summary": "Invalid",
+            "severity": "medium",
+        },
+    )
+    assert response.status_code == 400
+
+    response = db_client.post(f"/api/v1/cases/{case_id}/archive", headers=headers())
+    assert response.status_code == 200
+    response = db_client.post(
+        f"/api/v1/cases/{case_id}/findings",
+        headers=headers(),
+        json={
+            "risk_type": "documentation_gap",
+            "title": "Archived",
+            "summary": "Archived",
+            "severity": "medium",
+        },
+    )
+    assert response.status_code == 409
 
 
 def test_cross_org_assessment_and_job_access_is_rejected(

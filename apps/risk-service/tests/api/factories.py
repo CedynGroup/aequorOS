@@ -29,6 +29,7 @@ class CaseFactory:
         status: str = "active",
         subject_type: str | None = None,
         subject_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> JsonDict:
         response = self.client.post(
             "/api/v1/cases",
@@ -39,6 +40,7 @@ class CaseFactory:
                 "status": status,
                 "subject_type": subject_type,
                 "subject_name": subject_name,
+                "metadata": metadata or {},
             },
         )
         assert response.status_code == 201, response.text

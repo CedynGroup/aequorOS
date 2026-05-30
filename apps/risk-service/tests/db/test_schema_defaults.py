@@ -34,7 +34,9 @@ def test_phase_1_database_defaults_are_defined(db_session: Session) -> None:
     extraction_id = db_uuid(db_session, uuid4())
     assessment_id = db_uuid(db_session, uuid4())
     run_id = db_uuid(db_session, uuid4())
+    score_id = db_uuid(db_session, uuid4())
     finding_id = db_uuid(db_session, uuid4())
+    decision_id = db_uuid(db_session, uuid4())
     evidence_id = db_uuid(db_session, uuid4())
     job_id = db_uuid(db_session, uuid4())
 
@@ -214,6 +216,46 @@ def test_phase_1_database_defaults_are_defined(db_session: Session) -> None:
     db_session.execute(
         text(
             """
+            INSERT INTO risk_scores
+              (
+                id,
+                organization_id,
+                case_id,
+                assessment_id,
+                run_id,
+                score,
+                risk_level,
+                scoring_version,
+                input_hash,
+                created_at
+              )
+            VALUES
+              (
+                :score_id,
+                :org_id,
+                :case_id,
+                :assessment_id,
+                :run_id,
+                25,
+                'medium',
+                'deterministic_v1',
+                'hash',
+                :now
+              )
+            """
+        ),
+        {
+            "score_id": score_id,
+            "org_id": org_id,
+            "case_id": case_id,
+            "assessment_id": assessment_id,
+            "run_id": run_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
             INSERT INTO risk_finding_evidence
               (id, organization_id, finding_id, document_id, document_chunk_id, created_at)
             VALUES
@@ -226,6 +268,22 @@ def test_phase_1_database_defaults_are_defined(db_session: Session) -> None:
             "finding_id": finding_id,
             "document_id": document_id,
             "chunk_id": chunk_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_case_decisions
+              (id, organization_id, case_id, decision, created_at)
+            VALUES
+              (:decision_id, :org_id, :case_id, 'approved', :now)
+            """
+        ),
+        {
+            "decision_id": decision_id,
+            "org_id": org_id,
+            "case_id": case_id,
             "now": now,
         },
     )
@@ -254,8 +312,13 @@ def test_phase_1_database_defaults_are_defined(db_session: Session) -> None:
               risk_assessments.input_snapshot,
               risk_assessments.config_snapshot,
               risk_assessment_runs.summary AS run_summary,
+              risk_scores.input_snapshot AS score_input_snapshot,
+              risk_scores.rule_results AS score_rule_results,
               risk_findings.status AS finding_status,
+              risk_findings.source AS finding_source,
+              risk_findings.details AS finding_details,
               risk_finding_evidence.locator,
+              risk_case_decisions.previous_decision,
               jobs.attempts,
               jobs.max_attempts,
               jobs.progress
@@ -266,8 +329,10 @@ def test_phase_1_database_defaults_are_defined(db_session: Session) -> None:
             JOIN risk_assessments ON risk_assessments.case_id = risk_cases.id
             JOIN risk_assessment_runs
               ON risk_assessment_runs.assessment_id = risk_assessments.id
+            JOIN risk_scores ON risk_scores.run_id = risk_assessment_runs.id
             JOIN risk_findings ON risk_findings.run_id = risk_assessment_runs.id
             JOIN risk_finding_evidence ON risk_finding_evidence.finding_id = risk_findings.id
+            JOIN risk_case_decisions ON risk_case_decisions.case_id = risk_cases.id
             JOIN jobs ON jobs.organization_id = risk_cases.organization_id
             WHERE risk_cases.id = :case_id
             """
@@ -283,8 +348,16 @@ def test_phase_1_database_defaults_are_defined(db_session: Session) -> None:
     assert normalize_json(row.input_snapshot) == {}
     assert normalize_json(row.config_snapshot) == {}
     assert normalize_json(row.run_summary) == {}
+    assert normalize_json(row.score_input_snapshot) == {}
+    score_rule_results = row.score_rule_results
+    if isinstance(score_rule_results, str):
+        score_rule_results = json.loads(score_rule_results)
+    assert score_rule_results == []
     assert row.finding_status == "open"
+    assert row.finding_source == "manual"
+    assert normalize_json(row.finding_details) == {}
     assert normalize_json(row.locator) == {}
+    assert row.previous_decision is None
     assert row.attempts == 0
     assert row.max_attempts == 3
     assert normalize_json(row.progress) == {}

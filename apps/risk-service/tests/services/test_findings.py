@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.db.base import utc_now
-from app.features import assessments_service, findings_service
 from app.models import (
     AuditEvent,
     Document,
@@ -19,21 +15,19 @@ from app.models import (
     RiskFindingEvidence,
     StoredObject,
 )
+from app.services import assessments, findings
 from tests.api.helpers import ORG_2
-from tests.conftest import FakeStorage
-from tests.services.factories import ServiceFactories, tenant_context
+from tests.services.factories import ServiceFactories
 
 
 def create_finding(
-    db_session: Session, fake_storage: FakeStorage
+    db_session: Session, factories: ServiceFactories
 ) -> tuple[ServiceFactories, RiskFinding]:
-    settings = get_settings()
-    ctx = tenant_context()
-    factories = ServiceFactories(db_session, fake_storage, settings, ctx)
+    ctx = factories.ctx
     case = factories.create_case()
     factories.create_parsed_document(case.id)
     assessment = factories.create_assessment(case.id)
-    assessments_service.run_assessment(db_session, ctx, assessment.id)
+    assessments.run_assessment(db_session, ctx, assessment.id)
     finding = db_session.scalar(select(RiskFinding))
     assert finding is not None
     return factories, finding
@@ -41,59 +35,80 @@ def create_finding(
 
 def test_update_finding_rejects_generated_fields(
     db_session: Session,
-    fake_storage: FakeStorage,
+    service_factories: ServiceFactories,
 ) -> None:
-    factories, finding = create_finding(db_session, fake_storage)
-    payload = SimpleNamespace(
-        model_fields_set={"title"},
-        model_dump=lambda exclude_unset: {"title": "Nope"},
+    factories, finding = create_finding(db_session, service_factories)
+    command = findings.UpdateFindingCommand(
+        update_data={"title": "Nope"},
+        fields_set={"title"},
     )
 
     with pytest.raises(HTTPException) as exc:
-        findings_service.update_finding(db_session, factories.ctx, finding.id, payload)
+        findings.update_finding(db_session, factories.ctx, finding.id, command)
     assert exc.value.status_code == 400
 
 
 def test_update_finding_status_records_audit_event(
     db_session: Session,
-    fake_storage: FakeStorage,
+    service_factories: ServiceFactories,
 ) -> None:
-    factories, finding = create_finding(db_session, fake_storage)
-    payload = SimpleNamespace(
-        model_fields_set={"status", "disposition_reason"},
-        model_dump=lambda exclude_unset: {
+    factories, finding = create_finding(db_session, service_factories)
+    command = findings.UpdateFindingCommand(
+        fields_set={"status", "disposition_reason"},
+        update_data={
             "status": "accepted",
             "disposition_reason": "Confirmed",
         },
     )
 
-    updated = findings_service.update_finding(db_session, factories.ctx, finding.id, payload)
+    updated = findings.update_finding(db_session, factories.ctx, finding.id, command)
 
     event_types = set(db_session.scalars(select(AuditEvent.event_type)))
-    assert updated.status == "accepted"
+    assert updated.status == "acknowledged"
     assert "finding.status_changed" in event_types
+
+
+def attach_finding_evidence(db_session: Session, finding: RiskFinding) -> None:
+    chunk = db_session.scalar(
+        select(DocumentChunk).where(DocumentChunk.organization_id == finding.organization_id)
+    )
+    assert chunk is not None
+    db_session.add(
+        RiskFindingEvidence(
+            organization_id=finding.organization_id,
+            finding_id=finding.id,
+            document_id=chunk.document_id,
+            document_chunk_id=chunk.id,
+            page_number=chunk.page_start,
+            quote=chunk.text,
+            locator={"chunk_index": chunk.chunk_index},
+        )
+    )
+    db_session.commit()
 
 
 def test_list_finding_evidence_includes_document_and_chunk_metadata(
     db_session: Session,
-    fake_storage: FakeStorage,
+    service_factories: ServiceFactories,
 ) -> None:
-    factories, finding = create_finding(db_session, fake_storage)
+    factories, finding = create_finding(db_session, service_factories)
+    attach_finding_evidence(db_session, finding)
 
-    evidence = findings_service.list_finding_evidence(db_session, factories.ctx, finding.id)
+    evidence = findings.list_finding_evidence(db_session, factories.ctx, finding.id)
 
     assert len(evidence) == 1
     assert evidence[0].document is not None
-    assert evidence[0].document["filename"] == "financials.pdf"
+    assert evidence[0].document.filename == "financials.pdf"
     assert evidence[0].chunk is not None
-    assert evidence[0].chunk["chunk_index"] == 0
+    assert evidence[0].chunk.chunk_index == 0
 
 
 def test_list_finding_evidence_does_not_join_cross_org_document_metadata(
     db_session: Session,
-    fake_storage: FakeStorage,
+    service_factories: ServiceFactories,
 ) -> None:
-    factories, finding = create_finding(db_session, fake_storage)
+    factories, finding = create_finding(db_session, service_factories)
+    attach_finding_evidence(db_session, finding)
     other_case = RiskCase(
         organization_id=ORG_2,
         title="Other org case",
@@ -138,7 +153,7 @@ def test_list_finding_evidence_does_not_join_cross_org_document_metadata(
     evidence.document_chunk_id = other_chunk.id
     db_session.commit()
 
-    result = findings_service.list_finding_evidence(db_session, factories.ctx, finding.id)
+    result = findings.list_finding_evidence(db_session, factories.ctx, finding.id)
 
     assert len(result) == 1
     assert result[0].document_id == other_document.id
