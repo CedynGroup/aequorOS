@@ -25,6 +25,19 @@ This file is the starting point for agents working in `apps/risk-service`.
 - Add regression tests for tenant isolation, state transitions, and
   storage/database edge cases.
 
+## Commit Messages
+
+Use conventional commits with `risk-service` as the scope:
+
+```text
+feat(risk-service): add tenant-scoped risk persistence and RLS
+
+Refs AEQ-6
+```
+
+Keep Linear ticket IDs out of the scope and subject unless there is a repo-wide
+reason to do otherwise. Put the ticket reference in the commit body or footer.
+
 ## Common Commands
 
 ```bash
