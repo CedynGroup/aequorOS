@@ -7,9 +7,9 @@ from tests.api.helpers import ORG_2, headers
 
 
 def test_assessments_runs_findings_evidence_and_jobs(db_client: TestClient, fake_storage) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
     DocumentFactory(db_client, fake_storage).create_parsed(case_id=case_id)
-    assessment_id = str(AssessmentFactory(db_client).create(case_id=case_id)["id"])
+    assessment_id = str(AssessmentFactory(db_client).create(case_id=case_id).id)
 
     response = db_client.post(f"/api/v1/assessments/{assessment_id}/run", headers=headers())
     assert response.status_code == 200, response.text
@@ -59,7 +59,7 @@ def test_assessments_runs_findings_evidence_and_jobs(db_client: TestClient, fake
 
 
 def test_reviewers_can_create_manual_findings(db_client: TestClient) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
 
     response = db_client.post(
         f"/api/v1/cases/{case_id}/findings",
@@ -86,7 +86,7 @@ def test_reviewers_can_create_manual_findings(db_client: TestClient) -> None:
 
 
 def test_manual_finding_creation_validates_case_and_taxonomy(db_client: TestClient) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
 
     response = db_client.post(
         f"/api/v1/cases/{case_id}/findings",
@@ -119,7 +119,7 @@ def test_cross_org_assessment_and_job_access_is_rejected(
     db_client: TestClient,
     fake_storage,
 ) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
     response = db_client.post(
         "/api/v1/assessments",
         headers=headers(ORG_2),
@@ -128,7 +128,7 @@ def test_cross_org_assessment_and_job_access_is_rejected(
     assert response.status_code == 404
 
     document_id = str(
-        DocumentFactory(db_client, fake_storage).create_uploaded(case_id=case_id)["document_id"]
+        DocumentFactory(db_client, fake_storage).create_uploaded(case_id=case_id).document_id
     )
     parse_response = db_client.post(f"/api/v1/documents/{document_id}/parse", headers=headers())
     job_id = parse_response.json()["job_id"]

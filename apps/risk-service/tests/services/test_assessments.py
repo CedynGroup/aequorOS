@@ -17,10 +17,10 @@ def test_create_assessment_snapshots_current_documents(
     service_factories: ServiceFactories,
 ) -> None:
     factories = service_factories
-    case = factories.create_case()
-    document = factories.create_uploaded_document(case.id)
+    case = factories.cases.create()
+    document = factories.documents.create_uploaded(case.id)
 
-    assessment = factories.create_assessment(case.id)
+    assessment = factories.assessments.create(case.id)
 
     assert assessment.input_snapshot == {"document_ids": [str(document.id)]}
 
@@ -31,9 +31,9 @@ def test_run_assessment_creates_finding_when_parsed_evidence_exists(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case()
-    factories.create_parsed_document(case.id)
-    assessment = factories.create_assessment(case.id)
+    case = factories.cases.create()
+    factories.documents.create_parsed(case.id)
+    assessment = factories.assessments.create(case.id)
 
     result = assessments.run_assessment(db_session, ctx, assessment.id)
 
@@ -52,7 +52,7 @@ def test_run_assessment_scores_structured_data_and_updates_case(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case(
+    case = factories.cases.create(
         metadata={
             "structured_data": {
                 "vendor_criticality": "critical",
@@ -61,7 +61,7 @@ def test_run_assessment_scores_structured_data_and_updates_case(
             }
         }
     )
-    assessment = factories.create_assessment(case.id)
+    assessment = factories.assessments.create(case.id)
 
     result = assessments.run_assessment(db_session, ctx, assessment.id)
 
@@ -103,7 +103,7 @@ def test_run_assessment_normalizes_structured_data_aliases(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case(
+    case = factories.cases.create(
         metadata={
             "structured_data": {
                 "vendorCriticality": "high",
@@ -114,7 +114,7 @@ def test_run_assessment_normalizes_structured_data_aliases(
             }
         }
     )
-    assessment = factories.create_assessment(case.id)
+    assessment = factories.assessments.create(case.id)
 
     result = assessments.run_assessment(db_session, ctx, assessment.id)
 
@@ -137,8 +137,8 @@ def test_unrecognized_structured_data_is_treated_as_missing_reviewed_input(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case(metadata={"structured_data": {"cashRunwayMonthz": 2}})
-    assessment = factories.create_assessment(case.id)
+    case = factories.cases.create(metadata={"structured_data": {"cashRunwayMonthz": 2}})
+    assessment = factories.assessments.create(case.id)
 
     result = assessments.run_assessment(db_session, ctx, assessment.id)
 
@@ -156,8 +156,8 @@ def test_rerun_scoring_supersedes_prior_generated_findings(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case(metadata={})
-    first_assessment = factories.create_assessment(case.id)
+    case = factories.cases.create(metadata={})
+    first_assessment = factories.assessments.create(case.id)
 
     first_result = assessments.run_assessment(db_session, ctx, first_assessment.id)
     first_run = assessments.get_run_or_404(db_session, ctx.organization_id, first_result.run_id)
@@ -187,8 +187,8 @@ def test_rerun_scoring_keeps_reviewed_generated_findings(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case(metadata={})
-    first_assessment = factories.create_assessment(case.id)
+    case = factories.cases.create(metadata={})
+    first_assessment = factories.assessments.create(case.id)
     assessments.run_assessment(db_session, ctx, first_assessment.id)
     first_finding = db_session.scalar(select(RiskFinding))
     assert first_finding is not None
@@ -214,7 +214,7 @@ def test_rerun_scoring_does_not_supersede_manual_findings(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case(metadata={})
+    case = factories.cases.create(metadata={})
     manual = findings.create_case_finding(
         db_session,
         ctx,
@@ -231,7 +231,7 @@ def test_rerun_scoring_does_not_supersede_manual_findings(
             details={},
         ),
     )
-    assessment = factories.create_assessment(case.id)
+    assessment = factories.assessments.create(case.id)
 
     assessments.run_assessment(db_session, ctx, assessment.id)
 
@@ -246,11 +246,11 @@ def test_scoring_collects_structured_data_with_later_sources_taking_precedence(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case(
+    case = factories.cases.create(
         metadata={"structured_data": {"vendor_criticality": "high", "debt_to_ebitda": 5}}
     )
-    document = factories.create_uploaded_document(case.id)
-    assessment = factories.create_assessment(case.id)
+    document = factories.documents.create_uploaded(case.id)
+    assessment = factories.assessments.create(case.id)
     assessment.input_snapshot = {
         "structured_data": {"vendor_criticality": "critical", "debt_to_ebitda": 3}
     }
@@ -291,8 +291,8 @@ def test_run_assessment_rejects_archived_cases(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case()
-    assessment = factories.create_assessment(case.id)
+    case = factories.cases.create()
+    assessment = factories.assessments.create(case.id)
     case.status = "archived"
 
     with pytest.raises(HTTPException) as exc:

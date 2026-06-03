@@ -23,8 +23,8 @@ def score_case(client: TestClient, case_id: str) -> dict:
 
 def test_cases_are_org_scoped_and_archivable(db_client: TestClient) -> None:
     cases = CaseFactory(db_client)
-    case_id = str(cases.create()["id"])
-    other_case_id = str(cases.create(org_id=ORG_2)["id"])
+    case_id = str(cases.create().id)
+    other_case_id = str(cases.create(org_id=ORG_2).id)
 
     response = db_client.get("/api/v1/cases", headers=headers())
     assert response.status_code == 200
@@ -45,7 +45,7 @@ def test_case_queue_filters_assignment_summary_and_reports(db_client: TestClient
         cases.create(
             title="Low risk vendor",
             metadata={"structured_data": {"vendor_criticality": "low"}},
-        )["id"]
+        ).id
     )
     high_case_id = str(
         cases.create(
@@ -60,7 +60,7 @@ def test_case_queue_filters_assignment_summary_and_reports(db_client: TestClient
                     "provided_documents": ["financials"],
                 }
             },
-        )["id"]
+        ).id
     )
 
     response = db_client.post(
@@ -96,7 +96,7 @@ def test_case_queue_filters_assignment_summary_and_reports(db_client: TestClient
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
 
-    response = db_client.get("/api/v1/cases/taxonomy", headers=headers())
+    response = db_client.get("/api/v1/taxonomies/cases", headers=headers())
     assert response.status_code == 200
     assert "created_at_desc" in response.json()["sort_options"]
     assert "completed" in response.json()["statuses"]
@@ -111,14 +111,16 @@ def test_case_queue_filters_assignment_summary_and_reports(db_client: TestClient
 
 def test_case_decision_history_and_completed_report(db_client: TestClient) -> None:
     case_id = str(
-        CaseFactory(db_client).create(
+        CaseFactory(db_client)
+        .create(
             metadata={"structured_data": {"vendor_criticality": "low"}},
-        )["id"]
+        )
+        .id
     )
     score_case(db_client, case_id)
 
     response = db_client.post(
-        f"/api/v1/cases/{case_id}/decision",
+        f"/api/v1/cases/{case_id}/decisions",
         headers=headers(),
         json={"decision": "approved", "reason": "No triggered rules"},
     )
@@ -137,22 +139,49 @@ def test_case_decision_history_and_completed_report(db_client: TestClient) -> No
     assert response.status_code == 200
     assert response.json()["items"][0]["id"] == case_id
 
-    response = db_client.get(f"/api/v1/cases/{case_id}/report.json", headers=headers())
+    response = db_client.get(f"/api/v1/cases/{case_id}/report", headers=headers())
     assert response.status_code == 200, response.text
     assert response.json()["case"]["decision"] == "approved"
     assert response.json()["scores"][0]["score"] == 0
 
-    response = db_client.get(f"/api/v1/cases/{case_id}/report.html", headers=headers())
+    response = db_client.get(
+        f"/api/v1/cases/{case_id}/report",
+        headers={**headers(), "Accept": "text/html"},
+    )
     assert response.status_code == 200, response.text
     assert "text/html" in response.headers["content-type"]
     assert "Risk review report" in response.text
 
-    response = db_client.get(f"/api/v1/cases/{case_id}/report.json", headers=headers(ORG_2))
+    response = db_client.get(
+        f"/api/v1/cases/{case_id}/report",
+        headers={**headers(), "Accept": "text/html;q=1, application/json;q=0.1"},
+    )
+    assert response.status_code == 200, response.text
+    assert "text/html" in response.headers["content-type"]
+    assert "Risk review report" in response.text
+
+    response = db_client.get(
+        f"/api/v1/cases/{case_id}/report",
+        headers={**headers(), "Accept": "text/html;q=0.1, application/json;q=1"},
+    )
+    assert response.status_code == 200, response.text
+    assert "application/json" in response.headers["content-type"]
+    assert response.json()["case"]["decision"] == "approved"
+
+    response = db_client.get(
+        f"/api/v1/cases/{case_id}/report",
+        headers={**headers(), "Accept": "text/html;Q=0, application/json;q=1"},
+    )
+    assert response.status_code == 200, response.text
+    assert "application/json" in response.headers["content-type"]
+    assert response.json()["case"]["decision"] == "approved"
+
+    response = db_client.get(f"/api/v1/cases/{case_id}/report", headers=headers(ORG_2))
     assert response.status_code == 404
 
 
 def test_completed_status_requires_decision_workflow(db_client: TestClient) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
 
     response = db_client.patch(
         f"/api/v1/cases/{case_id}",
@@ -176,7 +205,7 @@ def test_completed_status_requires_decision_workflow(db_client: TestClient) -> N
     assert response.status_code == 409
 
     response = db_client.post(
-        f"/api/v1/cases/{case_id}/decision",
+        f"/api/v1/cases/{case_id}/decisions",
         headers=headers(),
         json={"decision": "needs_more_info", "reason": "Waiting on support"},
     )
@@ -194,10 +223,10 @@ def test_completed_status_requires_decision_workflow(db_client: TestClient) -> N
 
 
 def test_final_decision_requires_scoring(db_client: TestClient) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
 
     response = db_client.post(
-        f"/api/v1/cases/{case_id}/decision",
+        f"/api/v1/cases/{case_id}/decisions",
         headers=headers(),
         json={"decision": "approved", "reason": "Not scored"},
     )
@@ -210,20 +239,22 @@ def test_completed_case_can_be_redecided_and_reopened_for_more_information(
     db_client: TestClient,
 ) -> None:
     case_id = str(
-        CaseFactory(db_client).create(
+        CaseFactory(db_client)
+        .create(
             metadata={"structured_data": {"vendor_criticality": "low"}},
-        )["id"]
+        )
+        .id
     )
     score_case(db_client, case_id)
     first = db_client.post(
-        f"/api/v1/cases/{case_id}/decision",
+        f"/api/v1/cases/{case_id}/decisions",
         headers=headers(),
         json={"decision": "approved", "reason": "Initial approval"},
     )
     assert first.status_code == 200, first.text
 
     second = db_client.post(
-        f"/api/v1/cases/{case_id}/decision",
+        f"/api/v1/cases/{case_id}/decisions",
         headers=headers(),
         json={"decision": "needs_more_info", "reason": "New support requested"},
     )
@@ -243,7 +274,7 @@ def test_completed_case_can_be_redecided_and_reopened_for_more_information(
 
 
 def test_assignment_can_be_cleared(db_client: TestClient) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
     assigned = db_client.post(
         f"/api/v1/cases/{case_id}/assign",
         headers=headers(),
@@ -266,9 +297,11 @@ def test_assignment_can_be_cleared(db_client: TestClient) -> None:
 
 def test_manual_findings_block_final_decision_until_reviewed(db_client: TestClient) -> None:
     case_id = str(
-        CaseFactory(db_client).create(
+        CaseFactory(db_client)
+        .create(
             metadata={"structured_data": {"vendor_criticality": "low"}},
-        )["id"]
+        )
+        .id
     )
     score_case(db_client, case_id)
     finding = db_client.post(
@@ -284,7 +317,7 @@ def test_manual_findings_block_final_decision_until_reviewed(db_client: TestClie
     assert finding.status_code == 201, finding.text
 
     response = db_client.post(
-        f"/api/v1/cases/{case_id}/decision",
+        f"/api/v1/cases/{case_id}/decisions",
         headers=headers(),
         json={"decision": "approved", "reason": "Ready"},
     )
@@ -301,7 +334,7 @@ def test_manual_findings_block_final_decision_until_reviewed(db_client: TestClie
     assert response.status_code == 200, response.text
 
     response = db_client.post(
-        f"/api/v1/cases/{case_id}/decision",
+        f"/api/v1/cases/{case_id}/decisions",
         headers=headers(),
         json={"decision": "approved", "reason": "Manual finding reviewed"},
     )
@@ -310,13 +343,13 @@ def test_manual_findings_block_final_decision_until_reviewed(db_client: TestClie
 
 def test_case_queue_filters_sorting_and_pagination(db_client: TestClient) -> None:
     cases = CaseFactory(db_client)
-    draft_case_id = str(cases.create(title="Alpha draft", status="draft")["id"])
+    draft_case_id = str(cases.create(title="Alpha draft", status="draft").id)
     active_case_id = str(
         cases.create(
             title="Beta active",
             status="active",
             metadata={"structured_data": {"vendor_criticality": "critical"}},
-        )["id"]
+        ).id
     )
     score_case(db_client, active_case_id)
 
@@ -363,7 +396,7 @@ def test_case_queue_rejects_invalid_pagination_parameters(db_client: TestClient)
 
 
 def test_archived_filter_requires_include_archived(db_client: TestClient) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
     archive = db_client.post(f"/api/v1/cases/{case_id}/archive", headers=headers())
     assert archive.status_code == 200, archive.text
 
@@ -383,7 +416,7 @@ def test_archived_filter_requires_include_archived(db_client: TestClient) -> Non
 def test_archived_cases_reject_assignment_decisions_and_leave_summary_queue(
     db_client: TestClient,
 ) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
     response = db_client.post(f"/api/v1/cases/{case_id}/archive", headers=headers())
     assert response.status_code == 200, response.text
 
@@ -402,7 +435,7 @@ def test_archived_cases_reject_assignment_decisions_and_leave_summary_queue(
     assert response.status_code == 409
 
     response = db_client.post(
-        f"/api/v1/cases/{case_id}/decision",
+        f"/api/v1/cases/{case_id}/decisions",
         headers=headers(),
         json={"decision": "approved", "reason": "Archived case"},
     )
@@ -424,27 +457,32 @@ def test_tenant_context_and_report_edges_use_error_envelope(db_client: TestClien
     assert invalid_tenant.status_code == 401
     assert invalid_tenant.json()["error"]["code"] == "unauthorized"
 
-    other_case_id = str(CaseFactory(db_client).create(org_id=ORG_2)["id"])
-    report = db_client.get(f"/api/v1/cases/{other_case_id}/report.json", headers=headers())
+    other_case_id = str(CaseFactory(db_client).create(org_id=ORG_2).id)
+    report = db_client.get(f"/api/v1/cases/{other_case_id}/report", headers=headers())
     assert report.status_code == 404
     assert report.json()["error"]["code"] == "not_found"
 
 
 def test_report_html_preserves_zero_risk_score(db_client: TestClient) -> None:
     case_id = str(
-        CaseFactory(db_client).create(
+        CaseFactory(db_client)
+        .create(
             metadata={"structured_data": {"vendor_criticality": "low"}},
-        )["id"]
+        )
+        .id
     )
     score_case(db_client, case_id)
     decision = db_client.post(
-        f"/api/v1/cases/{case_id}/decision",
+        f"/api/v1/cases/{case_id}/decisions",
         headers=headers(),
         json={"decision": "approved", "reason": "No deterministic findings"},
     )
     assert decision.status_code == 200, decision.text
 
-    response = db_client.get(f"/api/v1/cases/{case_id}/report.html", headers=headers())
+    response = db_client.get(
+        f"/api/v1/cases/{case_id}/report",
+        headers={**headers(), "Accept": "text/html"},
+    )
 
     assert response.status_code == 200, response.text
     assert '<div class="label">Risk score</div><div class="value">0</div>' in response.text

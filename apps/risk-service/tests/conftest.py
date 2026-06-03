@@ -19,6 +19,7 @@ from app.integrations.storage.base import PresignedUpload, StoredObjectHead
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import Organization, User
+from tests.api.factories import ApiFactories
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 
@@ -152,6 +153,11 @@ def _seed_demo_tenants(engine: Engine) -> None:
 @pytest.fixture
 def fake_storage() -> FakeStorage:
     return FakeStorage()
+
+
+@pytest.fixture
+def api_factories(db_client: TestClient, fake_storage: FakeStorage) -> ApiFactories:
+    return ApiFactories(db_client, fake_storage)
 
 
 @pytest.fixture

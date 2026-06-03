@@ -17,7 +17,7 @@ def test_request_upload_validates_content_type_and_size(
     factories = service_factories
     settings = factories.settings
     ctx = factories.ctx
-    case = factories.create_case()
+    case = factories.cases.create()
 
     with pytest.raises(HTTPException) as unsupported:
         documents.request_upload(
@@ -49,9 +49,9 @@ def test_request_upload_creates_scoped_object_key(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case()
+    case = factories.cases.create()
 
-    result = factories.request_upload(case.id)
+    result = factories.documents.request_upload(case.id)
 
     stored_object = db_session.scalar(
         select(StoredObject).where(StoredObject.organization_id == ctx.organization_id)
@@ -70,9 +70,9 @@ def test_complete_upload_persists_storage_metadata(
     service_factories: ServiceFactories,
 ) -> None:
     factories = service_factories
-    case = factories.create_case()
+    case = factories.cases.create()
 
-    document = factories.create_uploaded_document(case.id)
+    document = factories.documents.create_uploaded(case.id)
 
     stored_object = db_session.get(StoredObject, document.stored_object_id)
     assert stored_object is not None
@@ -87,14 +87,14 @@ def test_parse_rejects_unuploaded_and_deleted_documents(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case()
-    upload = factories.request_upload(case.id)
+    case = factories.cases.create()
+    upload = factories.documents.request_upload(case.id)
 
     with pytest.raises(HTTPException) as unuploaded:
         documents.request_parse(db_session, ctx, upload.document_id)
     assert unuploaded.value.status_code == 400
 
-    document = factories.create_uploaded_document(case.id)
+    document = factories.documents.create_uploaded(case.id)
     documents.delete_document(
         db_session,
         ctx,
@@ -113,8 +113,8 @@ def test_parse_stub_creates_chunks_idempotently(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case()
-    document = factories.create_uploaded_document(case.id)
+    case = factories.cases.create()
+    document = factories.documents.create_uploaded(case.id)
 
     first = documents.request_parse(db_session, ctx, document.id)
     second = documents.request_parse(db_session, ctx, document.id)
@@ -134,8 +134,8 @@ def test_document_service_records_audit_events(
 ) -> None:
     factories = service_factories
     ctx = factories.ctx
-    case = factories.create_case()
-    document = factories.create_uploaded_document(case.id)
+    case = factories.cases.create()
+    document = factories.documents.create_uploaded(case.id)
     documents.request_parse(db_session, ctx, document.id)
 
     event_types = set(db_session.scalars(select(AuditEvent.event_type)))
