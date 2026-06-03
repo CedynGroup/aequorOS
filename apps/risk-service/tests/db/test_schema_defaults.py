@@ -5,10 +5,12 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from tests.api.helpers import ORG_1
+from tests.api.helpers import ORG_1, ORG_2, USER_2
 
 
 def db_uuid(session: Session, value: UUID) -> str:
@@ -361,3 +363,972 @@ def test_phase_1_database_defaults_are_defined(db_session: Session) -> None:
     assert row.attempts == 0
     assert row.max_attempts == 3
     assert normalize_json(row.progress) == {}
+
+
+def test_financial_workspace_database_defaults_are_defined(db_session: Session) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    case_id = db_uuid(db_session, uuid4())
+    institution_id = db_uuid(db_session, uuid4())
+    account_id = db_uuid(db_session, uuid4())
+    reporting_period_id = db_uuid(db_session, uuid4())
+    balance_id = db_uuid(db_session, uuid4())
+    obligation_id = db_uuid(db_session, uuid4())
+    source_row_id = db_uuid(db_session, uuid4())
+    source_link_id = db_uuid(db_session, uuid4())
+    manual_edit_id = db_uuid(db_session, uuid4())
+    validation_issue_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (
+                :case_id,
+                :org_id,
+                'Financial case',
+                'financial_statement_review',
+                'active',
+                :now,
+                :now
+              )
+            """
+        ),
+        {"case_id": case_id, "org_id": org_id, "now": now},
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_institutions
+              (id, organization_id, case_id, name, created_at, updated_at)
+            VALUES
+              (:institution_id, :org_id, :case_id, 'Aequor Bank', :now, :now)
+            """
+        ),
+        {"institution_id": institution_id, "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_accounts
+              (id, organization_id, case_id, institution_id, account_name, created_at, updated_at)
+            VALUES
+              (:account_id, :org_id, :case_id, :institution_id, 'Operating Account', :now, :now)
+            """
+        ),
+        {
+            "account_id": account_id,
+            "org_id": org_id,
+            "case_id": case_id,
+            "institution_id": institution_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_reporting_periods
+              (id, organization_id, case_id, period_type, created_at, updated_at)
+            VALUES
+              (:reporting_period_id, :org_id, :case_id, 'quarter', :now, :now)
+            """
+        ),
+        {
+            "reporting_period_id": reporting_period_id,
+            "org_id": org_id,
+            "case_id": case_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_balances
+              (
+                id,
+                organization_id,
+                case_id,
+                account_id,
+                reporting_period_id,
+                balance_type,
+                amount,
+                created_at,
+                updated_at
+              )
+            VALUES
+              (
+                :balance_id,
+                :org_id,
+                :case_id,
+                :account_id,
+                :reporting_period_id,
+                'cash',
+                250000,
+                :now,
+                :now
+              )
+            """
+        ),
+        {
+            "balance_id": balance_id,
+            "org_id": org_id,
+            "case_id": case_id,
+            "account_id": account_id,
+            "reporting_period_id": reporting_period_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_obligations
+              (
+                id,
+                organization_id,
+                case_id,
+                institution_id,
+                account_id,
+                reporting_period_id,
+                obligation_type,
+                created_at,
+                updated_at
+              )
+            VALUES
+              (
+                :obligation_id,
+                :org_id,
+                :case_id,
+                :institution_id,
+                :account_id,
+                :reporting_period_id,
+                'credit_facility',
+                :now,
+                :now
+              )
+            """
+        ),
+        {
+            "obligation_id": obligation_id,
+            "org_id": org_id,
+            "case_id": case_id,
+            "institution_id": institution_id,
+            "account_id": account_id,
+            "reporting_period_id": reporting_period_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_source_rows
+              (id, organization_id, case_id, row_index, created_at)
+            VALUES
+              (:source_row_id, :org_id, :case_id, 0, :now)
+            """
+        ),
+        {
+            "source_row_id": source_row_id,
+            "org_id": org_id,
+            "case_id": case_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_record_source_links
+              (id, organization_id, case_id, record_table, record_id, source_row_id, created_at)
+            VALUES
+              (
+                :source_link_id,
+                :org_id,
+                :case_id,
+                'financial_balances',
+                :balance_id,
+                :source_row_id,
+                :now
+              )
+            """
+        ),
+        {
+            "source_link_id": source_link_id,
+            "org_id": org_id,
+            "case_id": case_id,
+            "balance_id": balance_id,
+            "source_row_id": source_row_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_manual_edit_history
+              (id, organization_id, case_id, record_table, record_id, field_name, created_at)
+            VALUES
+              (
+                :manual_edit_id,
+                :org_id,
+                :case_id,
+                'financial_accounts',
+                :account_id,
+                'account_name',
+                :now
+              )
+            """
+        ),
+        {
+            "manual_edit_id": manual_edit_id,
+            "org_id": org_id,
+            "case_id": case_id,
+            "account_id": account_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_validation_issues
+              (id, organization_id, case_id, severity, status, message, created_at)
+            VALUES
+              (:validation_issue_id, :org_id, :case_id, 'low', 'open', 'Check source.', :now)
+            """
+        ),
+        {
+            "validation_issue_id": validation_issue_id,
+            "org_id": org_id,
+            "case_id": case_id,
+            "now": now,
+        },
+    )
+    db_session.commit()
+
+    row = db_session.execute(
+        text(
+            """
+            SELECT
+              financial_institutions.metadata AS institution_metadata,
+              financial_accounts.metadata AS account_metadata,
+              financial_reporting_periods.metadata AS period_metadata,
+              financial_balances.metadata AS balance_metadata,
+              financial_obligations.details AS obligation_details,
+              financial_source_rows.locator,
+              financial_source_rows.raw_payload,
+              financial_record_source_links.metadata AS source_link_metadata,
+              financial_manual_edit_history.previous_value,
+              financial_manual_edit_history.new_value,
+              financial_validation_issues.details AS validation_details
+            FROM financial_institutions
+            JOIN financial_accounts
+              ON financial_accounts.institution_id = financial_institutions.id
+            JOIN financial_reporting_periods
+              ON financial_reporting_periods.case_id = financial_institutions.case_id
+            JOIN financial_balances
+              ON financial_balances.account_id = financial_accounts.id
+            JOIN financial_obligations
+              ON financial_obligations.account_id = financial_accounts.id
+            JOIN financial_source_rows
+              ON financial_source_rows.case_id = financial_institutions.case_id
+            JOIN financial_record_source_links
+              ON financial_record_source_links.source_row_id = financial_source_rows.id
+            JOIN financial_manual_edit_history
+              ON financial_manual_edit_history.record_id = financial_accounts.id
+            JOIN financial_validation_issues
+              ON financial_validation_issues.case_id = financial_institutions.case_id
+            WHERE financial_institutions.id = :institution_id
+            """
+        ),
+        {"institution_id": institution_id},
+    ).one()
+
+    assert normalize_json(row.institution_metadata) == {}
+    assert normalize_json(row.account_metadata) == {}
+    assert normalize_json(row.period_metadata) == {}
+    assert normalize_json(row.balance_metadata) == {}
+    assert normalize_json(row.obligation_details) == {}
+    assert normalize_json(row.locator) == {}
+    assert normalize_json(row.raw_payload) == {}
+    assert normalize_json(row.source_link_metadata) == {}
+    assert row.previous_value is None
+    assert row.new_value is None
+    assert normalize_json(row.validation_details) == {}
+
+
+def test_financial_workspace_allows_null_optional_relationships(db_session: Session) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    case_id = db_uuid(db_session, uuid4())
+    balance_id = db_uuid(db_session, uuid4())
+    obligation_id = db_uuid(db_session, uuid4())
+    source_row_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (:case_id, :org_id, 'Financial case', 'vendor', 'active', :now, :now)
+            """
+        ),
+        {"case_id": case_id, "org_id": org_id, "now": now},
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_balances
+              (
+                id,
+                organization_id,
+                case_id,
+                account_id,
+                reporting_period_id,
+                balance_type,
+                amount,
+                created_at,
+                updated_at
+              )
+            VALUES
+              (:balance_id, :org_id, :case_id, NULL, NULL, 'cash', 100, :now, :now)
+            """
+        ),
+        {"balance_id": balance_id, "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_obligations
+              (
+                id,
+                organization_id,
+                case_id,
+                institution_id,
+                account_id,
+                reporting_period_id,
+                obligation_type,
+                created_at,
+                updated_at
+              )
+            VALUES
+              (
+                :obligation_id,
+                :org_id,
+                :case_id,
+                NULL,
+                NULL,
+                NULL,
+                'lease',
+                :now,
+                :now
+              )
+            """
+        ),
+        {"obligation_id": obligation_id, "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_source_rows
+              (id, organization_id, case_id, document_id, row_index, created_at)
+            VALUES
+              (:source_row_id, :org_id, :case_id, NULL, NULL, :now)
+            """
+        ),
+        {"source_row_id": source_row_id, "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    db_session.commit()
+
+    count = db_session.execute(
+        text(
+            """
+            SELECT
+              (
+                SELECT count(*)
+                FROM financial_balances
+                WHERE id = :balance_id
+                  AND account_id IS NULL
+                  AND reporting_period_id IS NULL
+              ) +
+              (
+                SELECT count(*)
+                FROM financial_obligations
+                WHERE id = :obligation_id
+                  AND institution_id IS NULL
+                  AND account_id IS NULL
+                  AND reporting_period_id IS NULL
+              ) +
+              (
+                SELECT count(*)
+                FROM financial_source_rows
+                WHERE id = :source_row_id
+                  AND document_id IS NULL
+              ) AS inserted_count
+            """
+        ),
+        {
+            "balance_id": balance_id,
+            "obligation_id": obligation_id,
+            "source_row_id": source_row_id,
+        },
+    ).scalar_one()
+
+    assert count == 3
+
+
+def test_financial_workspace_rejects_cross_tenant_case_links(db_session: Session) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    other_org_id = db_uuid(db_session, ORG_2)
+    other_case_id = db_uuid(db_session, uuid4())
+    institution_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (:other_case_id, :other_org_id, 'Other tenant case', 'vendor', 'active', :now, :now)
+            """
+        ),
+        {"other_case_id": other_case_id, "other_org_id": other_org_id, "now": now},
+    )
+
+    with pytest.raises(IntegrityError):
+        db_session.execute(
+            text(
+                """
+                INSERT INTO financial_institutions
+                  (id, organization_id, case_id, name, created_at, updated_at)
+                VALUES
+                  (:institution_id, :org_id, :other_case_id, 'Wrong Tenant Bank', :now, :now)
+                """
+            ),
+            {
+                "institution_id": institution_id,
+                "org_id": org_id,
+                "other_case_id": other_case_id,
+                "now": now,
+            },
+        )
+        db_session.flush()
+
+    db_session.rollback()
+
+
+def test_financial_workspace_rejects_cross_case_parent_links(db_session: Session) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    source_case_id = db_uuid(db_session, uuid4())
+    target_case_id = db_uuid(db_session, uuid4())
+    institution_id = db_uuid(db_session, uuid4())
+    account_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (:source_case_id, :org_id, 'Source case', 'vendor', 'active', :now, :now),
+              (:target_case_id, :org_id, 'Target case', 'vendor', 'active', :now, :now)
+            """
+        ),
+        {
+            "source_case_id": source_case_id,
+            "target_case_id": target_case_id,
+            "org_id": org_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_institutions
+              (id, organization_id, case_id, name, created_at, updated_at)
+            VALUES
+              (:institution_id, :org_id, :source_case_id, 'Source Bank', :now, :now)
+            """
+        ),
+        {
+            "institution_id": institution_id,
+            "org_id": org_id,
+            "source_case_id": source_case_id,
+            "now": now,
+        },
+    )
+
+    with pytest.raises(IntegrityError):
+        db_session.execute(
+            text(
+                """
+                INSERT INTO financial_accounts
+                  (
+                    id,
+                    organization_id,
+                    case_id,
+                    institution_id,
+                    account_name,
+                    created_at,
+                    updated_at
+                  )
+                VALUES
+                  (
+                    :account_id,
+                    :org_id,
+                    :target_case_id,
+                    :institution_id,
+                    'Cross-case account',
+                    :now,
+                    :now
+                  )
+                """
+            ),
+            {
+                "account_id": account_id,
+                "org_id": org_id,
+                "target_case_id": target_case_id,
+                "institution_id": institution_id,
+                "now": now,
+            },
+        )
+        db_session.flush()
+
+    db_session.rollback()
+
+
+def test_financial_source_rows_reject_cross_case_documents(db_session: Session) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    source_case_id = db_uuid(db_session, uuid4())
+    target_case_id = db_uuid(db_session, uuid4())
+    stored_object_id = db_uuid(db_session, uuid4())
+    document_id = db_uuid(db_session, uuid4())
+    source_row_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (:source_case_id, :org_id, 'Source case', 'vendor', 'active', :now, :now),
+              (:target_case_id, :org_id, 'Target case', 'vendor', 'active', :now, :now)
+            """
+        ),
+        {
+            "source_case_id": source_case_id,
+            "target_case_id": target_case_id,
+            "org_id": org_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO stored_objects
+              (id, organization_id, provider, bucket, object_key, status, created_at)
+            VALUES
+              (:stored_object_id, :org_id, 's3', 'risk-local', 'object-key', 'available', :now)
+            """
+        ),
+        {"stored_object_id": stored_object_id, "org_id": org_id, "now": now},
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO documents
+              (
+                id,
+                organization_id,
+                case_id,
+                stored_object_id,
+                filename,
+                status,
+                created_at,
+                updated_at
+              )
+            VALUES
+              (
+                :document_id,
+                :org_id,
+                :source_case_id,
+                :stored_object_id,
+                'financials.pdf',
+                'uploaded',
+                :now,
+                :now
+              )
+            """
+        ),
+        {
+            "document_id": document_id,
+            "org_id": org_id,
+            "source_case_id": source_case_id,
+            "stored_object_id": stored_object_id,
+            "now": now,
+        },
+    )
+
+    with pytest.raises(IntegrityError):
+        db_session.execute(
+            text(
+                """
+                INSERT INTO financial_source_rows
+                  (id, organization_id, case_id, document_id, row_index, created_at)
+                VALUES
+                  (:source_row_id, :org_id, :target_case_id, :document_id, 0, :now)
+                """
+            ),
+            {
+                "source_row_id": source_row_id,
+                "org_id": org_id,
+                "target_case_id": target_case_id,
+                "document_id": document_id,
+                "now": now,
+            },
+        )
+        db_session.flush()
+
+    db_session.rollback()
+
+
+def test_financial_manual_edits_reject_cross_tenant_editors(db_session: Session) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    case_id = db_uuid(db_session, uuid4())
+    account_id = db_uuid(db_session, uuid4())
+    manual_edit_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (:case_id, :org_id, 'Financial case', 'vendor', 'active', :now, :now)
+            """
+        ),
+        {"case_id": case_id, "org_id": org_id, "now": now},
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_accounts
+              (id, organization_id, case_id, account_name, created_at, updated_at)
+            VALUES
+              (:account_id, :org_id, :case_id, 'Operating Account', :now, :now)
+            """
+        ),
+        {"account_id": account_id, "org_id": org_id, "case_id": case_id, "now": now},
+    )
+
+    with pytest.raises(IntegrityError):
+        db_session.execute(
+            text(
+                """
+                INSERT INTO financial_manual_edit_history
+                  (
+                    id,
+                    organization_id,
+                    case_id,
+                    record_table,
+                    record_id,
+                    field_name,
+                    edited_by,
+                    created_at
+                  )
+                VALUES
+                  (
+                    :manual_edit_id,
+                    :org_id,
+                    :case_id,
+                    'financial_accounts',
+                    :account_id,
+                    'account_name',
+                    :wrong_tenant_user_id,
+                    :now
+                  )
+                """
+            ),
+            {
+                "manual_edit_id": manual_edit_id,
+                "org_id": org_id,
+                "case_id": case_id,
+                "account_id": account_id,
+                "wrong_tenant_user_id": db_uuid(db_session, USER_2),
+                "now": now,
+            },
+        )
+        db_session.flush()
+
+    db_session.rollback()
+
+
+def test_financial_record_source_links_reject_cross_tenant_source_rows(
+    db_session: Session,
+) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    other_org_id = db_uuid(db_session, ORG_2)
+    case_id = db_uuid(db_session, uuid4())
+    other_case_id = db_uuid(db_session, uuid4())
+    other_source_row_id = db_uuid(db_session, uuid4())
+    source_link_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (:case_id, :org_id, 'Financial case', 'vendor', 'active', :now, :now),
+              (:other_case_id, :other_org_id, 'Other case', 'vendor', 'active', :now, :now)
+            """
+        ),
+        {
+            "case_id": case_id,
+            "org_id": org_id,
+            "other_case_id": other_case_id,
+            "other_org_id": other_org_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_source_rows
+              (id, organization_id, case_id, row_index, created_at)
+            VALUES
+              (:other_source_row_id, :other_org_id, :other_case_id, 0, :now)
+            """
+        ),
+        {
+            "other_source_row_id": other_source_row_id,
+            "other_org_id": other_org_id,
+            "other_case_id": other_case_id,
+            "now": now,
+        },
+    )
+
+    with pytest.raises(IntegrityError):
+        db_session.execute(
+            text(
+                """
+                INSERT INTO financial_record_source_links
+                  (id, organization_id, case_id, record_table, record_id, source_row_id, created_at)
+                VALUES
+                  (
+                    :source_link_id,
+                    :org_id,
+                    :case_id,
+                    'financial_balances',
+                    :record_id,
+                    :other_source_row_id,
+                    :now
+                  )
+                """
+            ),
+            {
+                "source_link_id": source_link_id,
+                "org_id": org_id,
+                "case_id": case_id,
+                "record_id": db_uuid(db_session, uuid4()),
+                "other_source_row_id": other_source_row_id,
+                "now": now,
+            },
+        )
+        db_session.flush()
+
+    db_session.rollback()
+
+
+def test_financial_workspace_rejects_invalid_domain_values(db_session: Session) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    case_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (:case_id, :org_id, 'Financial case', 'vendor', 'active', :now, :now)
+            """
+        ),
+        {"case_id": case_id, "org_id": org_id, "now": now},
+    )
+    db_session.commit()
+
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_reporting_periods
+          (id, organization_id, case_id, period_type, created_at, updated_at)
+        VALUES
+          (:id, :org_id, :case_id, 'decade', :now, :now)
+        """,
+        {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_accounts
+          (id, organization_id, case_id, account_name, currency, created_at, updated_at)
+        VALUES
+          (:id, :org_id, :case_id, 'Operating Account', 'usd', :now, :now)
+        """,
+        {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_accounts
+          (id, organization_id, case_id, account_name, status, created_at, updated_at)
+        VALUES
+          (:id, :org_id, :case_id, 'Operating Account', 'pending', :now, :now)
+        """,
+        {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_balances
+          (id, organization_id, case_id, balance_type, amount, currency, created_at, updated_at)
+        VALUES
+          (:id, :org_id, :case_id, 'cash', 100, 'US', :now, :now)
+        """,
+        {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_obligations
+          (id, organization_id, case_id, obligation_type, status, created_at, updated_at)
+        VALUES
+          (:id, :org_id, :case_id, 'lease', 'pending', :now, :now)
+        """,
+        {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
+    )
+
+
+def test_financial_support_records_reject_invalid_record_references(
+    db_session: Session,
+) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    case_id = db_uuid(db_session, uuid4())
+    source_row_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (:case_id, :org_id, 'Financial case', 'vendor', 'active', :now, :now)
+            """
+        ),
+        {"case_id": case_id, "org_id": org_id, "now": now},
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_source_rows
+              (id, organization_id, case_id, created_at)
+            VALUES
+              (:source_row_id, :org_id, :case_id, :now)
+            """
+        ),
+        {"source_row_id": source_row_id, "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    db_session.commit()
+
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_record_source_links
+          (id, organization_id, case_id, record_table, record_id, source_row_id, created_at)
+        VALUES
+          (
+            :id,
+            :org_id,
+            :case_id,
+            'financial_source_rows',
+            :record_id,
+            :source_row_id,
+            :now
+          )
+        """,
+        {
+            "id": db_uuid(db_session, uuid4()),
+            "org_id": org_id,
+            "case_id": case_id,
+            "record_id": db_uuid(db_session, uuid4()),
+            "source_row_id": source_row_id,
+            "now": now,
+        },
+    )
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_manual_edit_history
+          (id, organization_id, case_id, record_table, record_id, field_name, created_at)
+        VALUES
+          (
+            :id,
+            :org_id,
+            :case_id,
+            'financial_source_rows',
+            :record_id,
+            'row_index',
+            :now
+          )
+        """,
+        {
+            "id": db_uuid(db_session, uuid4()),
+            "org_id": org_id,
+            "case_id": case_id,
+            "record_id": db_uuid(db_session, uuid4()),
+            "now": now,
+        },
+    )
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_validation_issues
+          (id, organization_id, case_id, record_id, severity, status, message, created_at)
+        VALUES
+          (:id, :org_id, :case_id, :record_id, 'low', 'open', 'Missing table.', :now)
+        """,
+        {
+            "id": db_uuid(db_session, uuid4()),
+            "org_id": org_id,
+            "case_id": case_id,
+            "record_id": db_uuid(db_session, uuid4()),
+            "now": now,
+        },
+    )
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_validation_issues
+          (id, organization_id, case_id, record_table, severity, status, message, created_at)
+        VALUES
+          (:id, :org_id, :case_id, 'financial_balances', 'low', 'open', 'Missing ID.', :now)
+        """,
+        {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
+    )
+
+
+def expect_integrity_error(
+    db_session: Session,
+    sql: str,
+    params: dict[str, Any],
+) -> None:
+    with pytest.raises(IntegrityError):
+        db_session.execute(text(sql), params)
+        db_session.flush()
+    db_session.rollback()

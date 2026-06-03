@@ -7,9 +7,9 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.core.config import get_settings
 from app.db.base import Base
-from app.models import audit_event, organization, risk, user
+from app.models import audit_event, financial, organization, risk, user
 
-_ = (audit_event, organization, risk, user)
+_ = (audit_event, financial, organization, risk, user)
 
 config = context.config
 

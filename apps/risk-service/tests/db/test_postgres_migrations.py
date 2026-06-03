@@ -14,6 +14,7 @@ from sqlalchemy.engine import Engine, make_url
 from alembic import command
 from app.core.config import get_settings
 from app.db.session import get_engine
+from tests.api.helpers import ORG_1, ORG_2
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,44 @@ class MigratedPostgresSchema:
                     {
                         "schema_name": self.schema_name,
                         "table_names": sorted(table_names),
+                    },
+                ).scalars()
+            )
+
+    def tables(self, table_names: set[str]) -> set[str]:
+        with self.app_engine.connect() as connection:
+            return set(
+                connection.execute(
+                    text(
+                        """
+                        SELECT tablename
+                        FROM pg_tables
+                        WHERE schemaname = :schema_name
+                          AND tablename = ANY(:table_names)
+                        """
+                    ),
+                    {
+                        "schema_name": self.schema_name,
+                        "table_names": sorted(table_names),
+                    },
+                ).scalars()
+            )
+
+    def indexes(self, index_names: set[str]) -> set[str]:
+        with self.app_engine.connect() as connection:
+            return set(
+                connection.execute(
+                    text(
+                        """
+                        SELECT indexname
+                        FROM pg_indexes
+                        WHERE schemaname = :schema_name
+                          AND indexname = ANY(:index_names)
+                        """
+                    ),
+                    {
+                        "schema_name": self.schema_name,
+                        "index_names": sorted(index_names),
                     },
                 ).scalars()
             )
@@ -128,3 +167,203 @@ def test_postgres_migrations_create_workflow_constraints_and_rls(
         "risk_scores_tenant_isolation",
         "risk_case_decisions_tenant_isolation",
     }
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    financial_tables = {
+        "financial_institutions",
+        "financial_accounts",
+        "financial_reporting_periods",
+        "financial_balances",
+        "financial_obligations",
+        "financial_source_rows",
+        "financial_record_source_links",
+        "financial_manual_edit_history",
+        "financial_validation_issues",
+    }
+
+    assert migrated_postgres_schema.tables(financial_tables) == financial_tables
+    assert migrated_postgres_schema.indexes(
+        {
+            "ix_financial_institutions_organization_id_case_id",
+            "ix_financial_accounts_organization_id_case_id",
+            "ix_financial_reporting_periods_organization_id_case_id",
+            "ix_financial_balances_organization_id_case_id",
+            "ix_financial_obligations_organization_id_case_id",
+            "ix_financial_source_rows_organization_id_case_id",
+            "ix_financial_source_rows_organization_id_document_id",
+            "ix_financial_record_source_links_organization_id_case_id",
+            "ix_financial_record_source_links_organization_id_record",
+            "ix_financial_manual_edit_history_organization_id_case_id",
+            "ix_financial_manual_edit_history_organization_id_record",
+            "ix_financial_validation_issues_organization_id_case_id",
+            "ix_financial_validation_issues_organization_id_record",
+        }
+    ) == {
+        "ix_financial_institutions_organization_id_case_id",
+        "ix_financial_accounts_organization_id_case_id",
+        "ix_financial_reporting_periods_organization_id_case_id",
+        "ix_financial_balances_organization_id_case_id",
+        "ix_financial_obligations_organization_id_case_id",
+        "ix_financial_source_rows_organization_id_case_id",
+        "ix_financial_source_rows_organization_id_document_id",
+        "ix_financial_record_source_links_organization_id_case_id",
+        "ix_financial_record_source_links_organization_id_record",
+        "ix_financial_manual_edit_history_organization_id_case_id",
+        "ix_financial_manual_edit_history_organization_id_record",
+        "ix_financial_validation_issues_organization_id_case_id",
+        "ix_financial_validation_issues_organization_id_record",
+    }
+    assert migrated_postgres_schema.policies(financial_tables) == {
+        f"{table}_tenant_isolation" for table in financial_tables
+    }
+    assert migrated_postgres_schema.constraints(
+        {
+            "ck_financial_source_rows_row_index",
+            "ck_financial_accounts_currency",
+            "ck_financial_accounts_status",
+            "ck_financial_reporting_periods_period_type",
+            "ck_financial_balances_currency",
+            "ck_financial_obligations_currency",
+            "ck_financial_obligations_status",
+            "ck_financial_record_source_links_confidence",
+            "ck_financial_record_source_links_record_table",
+            "ck_financial_manual_edit_history_record_table",
+            "ck_financial_validation_issues_severity",
+            "ck_financial_validation_issues_status",
+            "ck_financial_validation_issues_record_reference",
+            "uq_risk_cases_id_organization_id",
+            "uq_documents_id_organization_id_case_id",
+            "uq_users_id_organization_id",
+            "uq_financial_institutions_id_organization_id_case_id",
+            "uq_financial_accounts_id_organization_id_case_id",
+            "uq_financial_reporting_periods_id_organization_id_case_id",
+            "uq_financial_balances_id_organization_id_case_id",
+            "uq_financial_obligations_id_organization_id_case_id",
+            "uq_financial_source_rows_id_organization_id_case_id",
+        }
+    ) == {
+        "ck_financial_source_rows_row_index",
+        "ck_financial_accounts_currency",
+        "ck_financial_accounts_status",
+        "ck_financial_reporting_periods_period_type",
+        "ck_financial_balances_currency",
+        "ck_financial_obligations_currency",
+        "ck_financial_obligations_status",
+        "ck_financial_record_source_links_confidence",
+        "ck_financial_record_source_links_record_table",
+        "ck_financial_manual_edit_history_record_table",
+        "ck_financial_validation_issues_severity",
+        "ck_financial_validation_issues_status",
+        "ck_financial_validation_issues_record_reference",
+        "uq_risk_cases_id_organization_id",
+        "uq_documents_id_organization_id_case_id",
+        "uq_users_id_organization_id",
+        "uq_financial_institutions_id_organization_id_case_id",
+        "uq_financial_accounts_id_organization_id_case_id",
+        "uq_financial_reporting_periods_id_organization_id_case_id",
+        "uq_financial_balances_id_organization_id_case_id",
+        "uq_financial_obligations_id_organization_id_case_id",
+        "uq_financial_source_rows_id_organization_id_case_id",
+    }
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres RLS tests.",
+)
+def test_postgres_financial_workspace_rls_isolates_tenant_rows(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    case_id = uuid4()
+    institution_id = uuid4()
+
+    with migrated_postgres_schema.app_engine.connect() as connection:
+        bypasses_rls = connection.scalar(
+            text(
+                """
+                SELECT rolbypassrls
+                FROM pg_roles
+                WHERE rolname = current_user
+                """
+            )
+        )
+        if bypasses_rls:
+            pytest.skip("Current TEST_DATABASE_URL role bypasses RLS.")
+        connection.commit()
+
+        with connection.begin():
+            connection.execute(
+                text("SELECT set_config('app.organization_id', :organization_id, true)"),
+                {"organization_id": str(ORG_1)},
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO organizations (id, name, created_at, updated_at)
+                    VALUES (:organization_id, 'Tenant One', now(), now())
+                    """
+                ),
+                {"organization_id": str(ORG_1)},
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO risk_cases
+                      (id, organization_id, title, case_type, status, created_at, updated_at)
+                    VALUES
+                      (
+                        :case_id,
+                        :organization_id,
+                        'Tenant one financial case',
+                        'vendor',
+                        'active',
+                        now(),
+                        now()
+                      )
+                    """
+                ),
+                {"case_id": str(case_id), "organization_id": str(ORG_1)},
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO financial_institutions
+                      (id, organization_id, case_id, name, created_at, updated_at)
+                    VALUES
+                      (
+                        :institution_id,
+                        :organization_id,
+                        :case_id,
+                        'Tenant One Bank',
+                        now(),
+                        now()
+                      )
+                    """
+                ),
+                {
+                    "institution_id": str(institution_id),
+                    "organization_id": str(ORG_1),
+                    "case_id": str(case_id),
+                },
+            )
+
+            visible_to_org_one = connection.scalar(
+                text("SELECT count(*) FROM financial_institutions")
+            )
+            connection.execute(
+                text("SELECT set_config('app.organization_id', :organization_id, true)"),
+                {"organization_id": str(ORG_2)},
+            )
+            visible_to_org_two = connection.scalar(
+                text("SELECT count(*) FROM financial_institutions")
+            )
+
+        assert visible_to_org_one == 1
+        assert visible_to_org_two == 0

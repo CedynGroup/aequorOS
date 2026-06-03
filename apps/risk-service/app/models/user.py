@@ -5,13 +5,14 @@ from uuid import UUID
 from sqlalchemy import Boolean, ForeignKey, Index, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UuidPrimaryKeyMixin
+from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 
 
-class User(UuidPrimaryKeyMixin, TimestampMixin, Base):
+class User(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
     __table_args__ = (
         UniqueConstraint("organization_id", "email", name="uq_users_organization_id_email"),
+        UniqueConstraint("id", "organization_id", name="uq_users_id_organization_id"),
         Index("ix_users_organization_id", "organization_id"),
     )
 
