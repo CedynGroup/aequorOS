@@ -8,18 +8,20 @@ from tests.api.helpers import ORG_1, ORG_2, headers
 
 def test_phase_1_happy_path_e2e(db_client: TestClient, fake_storage) -> None:  # noqa: PLR0915
     case_id = str(
-        CaseFactory(db_client).create(
+        CaseFactory(db_client)
+        .create(
             title="E2E vendor case",
             subject_type="company",
             subject_name="Acme Vendor",
-        )["id"]
+        )
+        .id
     )
     documents = DocumentFactory(db_client, fake_storage)
 
     upload_body = documents.request_upload(case_id=case_id)
-    document_id = upload_body["document_id"]
-    assert upload_body["method"] == "PUT"
-    assert f"orgs/{ORG_1}/documents/{document_id}/original" in upload_body["upload_url"]
+    document_id = str(upload_body.document_id)
+    assert upload_body.method == "PUT"
+    assert f"orgs/{ORG_1}/documents/{document_id}/original" in upload_body.upload_url
 
     documents.complete_upload(document_id=str(document_id))
 
@@ -45,8 +47,8 @@ def test_phase_1_happy_path_e2e(db_client: TestClient, fake_storage) -> None:  #
         case_id=case_id,
         name="Initial vendor assessment",
     )
-    assessment_id = assessment["id"]
-    assert assessment["input_snapshot"]["document_ids"] == [document_id]
+    assessment_id = str(assessment.id)
+    assert assessment.input_snapshot["document_ids"] == [document_id]
 
     run = db_client.post(f"/api/v1/assessments/{assessment_id}/run", headers=headers())
     assert run.status_code == 200, run.text

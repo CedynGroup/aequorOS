@@ -8,7 +8,7 @@ from tests.api.helpers import ORG_2, headers
 
 
 def test_upload_flow_validates_and_completes(db_client: TestClient, fake_storage) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
     documents = DocumentFactory(db_client, fake_storage)
 
     response = db_client.post(
@@ -35,7 +35,7 @@ def test_upload_flow_validates_and_completes(db_client: TestClient, fake_storage
     )
     assert response.status_code == 400
 
-    document_id = str(documents.request_upload(case_id=case_id)["document_id"])
+    document_id = str(documents.request_upload(case_id=case_id).document_id)
 
     response = db_client.post(f"/api/v1/documents/{document_id}/complete-upload", headers=headers())
     assert response.status_code == 400
@@ -57,9 +57,9 @@ def test_upload_flow_validates_and_completes(db_client: TestClient, fake_storage
 def test_documents_download_delete_and_tenant_isolation(
     db_client: TestClient, fake_storage
 ) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
     documents = DocumentFactory(db_client, fake_storage)
-    document_id = str(documents.create_uploaded(case_id=case_id)["document_id"])
+    document_id = str(documents.create_uploaded(case_id=case_id).document_id)
 
     response = db_client.get(f"/api/v1/documents/{document_id}", headers=headers())
     assert response.status_code == 200
@@ -91,9 +91,9 @@ def test_parse_flow_creates_completed_job_and_rejects_bad_states(
     db_client: TestClient,
     fake_storage,
 ) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
     documents = DocumentFactory(db_client, fake_storage)
-    unuploaded_document_id = str(documents.request_upload(case_id=case_id)["document_id"])
+    unuploaded_document_id = str(documents.request_upload(case_id=case_id).document_id)
 
     response = db_client.post(
         f"/api/v1/documents/{unuploaded_document_id}/parse", headers=headers()

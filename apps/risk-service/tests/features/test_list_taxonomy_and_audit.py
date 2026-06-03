@@ -12,7 +12,7 @@ from tests.api.helpers import headers
 
 
 def test_audit_events_are_created(db_client: TestClient, db_settings: Settings) -> None:
-    case_id = str(CaseFactory(db_client).create()["id"])
+    case_id = str(CaseFactory(db_client).create().id)
     db_client.patch(f"/api/v1/cases/{case_id}", headers=headers(), json={"status": "in_review"})
     assessment = db_client.post(
         "/api/v1/assessments",

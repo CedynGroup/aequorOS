@@ -24,9 +24,8 @@ def create_finding(
     db_session: Session, factories: ServiceFactories
 ) -> tuple[ServiceFactories, RiskFinding]:
     ctx = factories.ctx
-    case = factories.create_case()
-    factories.create_parsed_document(case.id)
-    assessment = factories.create_assessment(case.id)
+    document = factories.documents.create_parsed()
+    assessment = factories.assessments.create(document.case_id)
     assessments.run_assessment(db_session, ctx, assessment.id)
     finding = db_session.scalar(select(RiskFinding))
     assert finding is not None
