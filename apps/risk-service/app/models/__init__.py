@@ -1,4 +1,15 @@
 from app.models.audit_event import AuditEvent
+from app.models.financial import (
+    FinancialAccount,
+    FinancialBalance,
+    FinancialInstitution,
+    FinancialManualEditHistory,
+    FinancialObligation,
+    FinancialRecordSourceLink,
+    FinancialReportingPeriod,
+    FinancialSourceRow,
+    FinancialValidationIssue,
+)
 from app.models.organization import Organization
 from app.models.risk import (
     Document,
@@ -21,6 +32,15 @@ __all__ = [
     "Document",
     "DocumentChunk",
     "DocumentExtraction",
+    "FinancialAccount",
+    "FinancialBalance",
+    "FinancialInstitution",
+    "FinancialManualEditHistory",
+    "FinancialObligation",
+    "FinancialRecordSourceLink",
+    "FinancialReportingPeriod",
+    "FinancialSourceRow",
+    "FinancialValidationIssue",
     "Job",
     "Organization",
     "RiskAssessment",

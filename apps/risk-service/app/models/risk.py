@@ -16,15 +16,16 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
 )
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UuidPrimaryKeyMixin, utc_now
+from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin, utc_now
 
 
-class RiskCase(UuidPrimaryKeyMixin, TimestampMixin, Base):
+class RiskCase(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "risk_cases"
     __table_args__ = (
         CheckConstraint(
@@ -51,6 +52,7 @@ class RiskCase(UuidPrimaryKeyMixin, TimestampMixin, Base):
             "organization_id",
             "assigned_to_user_id",
         ),
+        UniqueConstraint("id", "organization_id", name="uq_risk_cases_id_organization_id"),
     )
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -77,7 +79,7 @@ class RiskCase(UuidPrimaryKeyMixin, TimestampMixin, Base):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class RiskCaseDecision(UuidPrimaryKeyMixin, Base):
+class RiskCaseDecision(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "risk_case_decisions"
     __table_args__ = (
         CheckConstraint(
@@ -102,7 +104,7 @@ class RiskCaseDecision(UuidPrimaryKeyMixin, Base):
     )
 
 
-class StoredObject(UuidPrimaryKeyMixin, Base):
+class StoredObject(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "stored_objects"
     __table_args__ = (
         Index(
@@ -131,12 +133,18 @@ class StoredObject(UuidPrimaryKeyMixin, Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class Document(UuidPrimaryKeyMixin, TimestampMixin, Base):
+class Document(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "documents"
     __table_args__ = (
         Index("ix_documents_organization_id_case_id", "organization_id", "case_id"),
         Index("ix_documents_organization_id_status", "organization_id", "status"),
         Index("ix_documents_organization_id_parse_status", "organization_id", "parse_status"),
+        UniqueConstraint(
+            "id",
+            "organization_id",
+            "case_id",
+            name="uq_documents_id_organization_id_case_id",
+        ),
     )
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -161,7 +169,7 @@ class Document(UuidPrimaryKeyMixin, TimestampMixin, Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class DocumentChunk(UuidPrimaryKeyMixin, Base):
+class DocumentChunk(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "document_chunks"
     __table_args__ = (
         Index(
@@ -186,7 +194,7 @@ class DocumentChunk(UuidPrimaryKeyMixin, Base):
     )
 
 
-class DocumentExtraction(UuidPrimaryKeyMixin, Base):
+class DocumentExtraction(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "document_extractions"
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -206,7 +214,7 @@ class DocumentExtraction(UuidPrimaryKeyMixin, Base):
     )
 
 
-class RiskAssessment(UuidPrimaryKeyMixin, TimestampMixin, Base):
+class RiskAssessment(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "risk_assessments"
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -225,7 +233,7 @@ class RiskAssessment(UuidPrimaryKeyMixin, TimestampMixin, Base):
     created_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
 
 
-class RiskAssessmentRun(UuidPrimaryKeyMixin, Base):
+class RiskAssessmentRun(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "risk_assessment_runs"
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -247,7 +255,7 @@ class RiskAssessmentRun(UuidPrimaryKeyMixin, Base):
     )
 
 
-class RiskScore(UuidPrimaryKeyMixin, Base):
+class RiskScore(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "risk_scores"
     __table_args__ = (
         CheckConstraint("score >= 0 AND score <= 100", name="ck_risk_scores_score"),
@@ -283,7 +291,7 @@ class RiskScore(UuidPrimaryKeyMixin, Base):
     )
 
 
-class RiskFinding(UuidPrimaryKeyMixin, TimestampMixin, Base):
+class RiskFinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "risk_findings"
     __table_args__ = (
         CheckConstraint(
@@ -338,7 +346,7 @@ class RiskFinding(UuidPrimaryKeyMixin, TimestampMixin, Base):
     )
 
 
-class RiskFindingEvidence(UuidPrimaryKeyMixin, Base):
+class RiskFindingEvidence(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "risk_finding_evidence"
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -362,7 +370,7 @@ class RiskFindingEvidence(UuidPrimaryKeyMixin, Base):
     )
 
 
-class Job(UuidPrimaryKeyMixin, Base):
+class Job(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "jobs"
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)

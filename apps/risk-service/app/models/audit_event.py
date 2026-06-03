@@ -7,10 +7,10 @@ from uuid import UUID
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, UuidPrimaryKeyMixin, utc_now
+from app.db.base import Base, UuidV4PrimaryKeyMixin, utc_now
 
 
-class AuditEvent(UuidPrimaryKeyMixin, Base):
+class AuditEvent(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "audit_events"
     __table_args__ = (
         Index("ix_audit_events_organization_id", "organization_id"),
