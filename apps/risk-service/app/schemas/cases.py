@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.risk_constants import CaseDecision, CaseStatus, RiskLevel
 from app.schemas.common import JsonObject
-from app.services import cases as cases_service
+from app.services import case_types
 
 
 class CaseCreate(BaseModel):
@@ -19,8 +20,8 @@ class CaseCreate(BaseModel):
     status: CaseStatus = CaseStatus.DRAFT
     metadata: JsonObject = Field(default_factory=dict)
 
-    def to_command(self) -> cases_service.CreateCaseCommand:
-        return cases_service.CreateCaseCommand(
+    def to_command(self) -> case_types.CreateCaseCommand:
+        return case_types.CreateCaseCommand(
             title=self.title,
             case_type=self.case_type,
             subject_type=self.subject_type,
@@ -38,7 +39,7 @@ class CaseUpdate(BaseModel):
     subject_name: str | None = None
     status: CaseStatus | None = None
 
-    def to_command(self) -> cases_service.UpdateCaseCommand:
+    def to_command(self) -> case_types.UpdateCaseCommand:
         update_data: dict[str, str | None] = {}
         if "title" in self.model_fields_set:
             update_data["title"] = self.title
@@ -50,19 +51,77 @@ class CaseUpdate(BaseModel):
             update_data["subject_name"] = self.subject_name
         if "status" in self.model_fields_set:
             update_data["status"] = self.status.value if self.status is not None else None
-        return cases_service.UpdateCaseCommand(update_data=update_data)
+        return case_types.UpdateCaseCommand(update_data=update_data)
 
 
 class CaseAssign(BaseModel):
     assigned_to_user_id: UUID | None
 
 
+class CaseBulkActionBaseCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_ids: list[UUID] = Field(min_length=1, max_length=100)
+
+    @field_validator("case_ids")
+    @classmethod
+    def validate_case_ids_are_unique(cls, value: list[UUID]) -> list[UUID]:
+        if len(set(value)) != len(value):
+            raise ValueError("case_ids must be unique.")
+        return value
+
+
+class CaseBulkAssignCreate(CaseBulkActionBaseCreate):
+    action: Literal["assign"]
+    assigned_to_user_id: UUID
+
+    def to_command(self) -> case_types.BulkCaseActionCommand:
+        return case_types.BulkAssignCaseActionCommand(
+            case_ids=self.case_ids,
+            assigned_to_user_id=self.assigned_to_user_id,
+        )
+
+
+class CaseBulkUnassignCreate(CaseBulkActionBaseCreate):
+    action: Literal["unassign"]
+
+    def to_command(self) -> case_types.BulkCaseActionCommand:
+        return case_types.BulkUnassignCaseActionCommand(case_ids=self.case_ids)
+
+
+class CaseBulkArchiveCreate(CaseBulkActionBaseCreate):
+    action: Literal["archive"]
+
+    def to_command(self) -> case_types.BulkCaseActionCommand:
+        return case_types.BulkArchiveCaseActionCommand(case_ids=self.case_ids)
+
+
+class CaseBulkUpdateStatusCreate(CaseBulkActionBaseCreate):
+    action: Literal["update_status"]
+    status: CaseStatus
+
+    def to_command(self) -> case_types.BulkCaseActionCommand:
+        return case_types.BulkUpdateStatusCaseActionCommand(
+            case_ids=self.case_ids,
+            status=self.status,
+        )
+
+
+type CaseBulkActionCreate = Annotated[
+    CaseBulkAssignCreate
+    | CaseBulkUnassignCreate
+    | CaseBulkArchiveCreate
+    | CaseBulkUpdateStatusCreate,
+    Field(discriminator="action"),
+]
+
+
 class CaseDecisionCreate(BaseModel):
     decision: CaseDecision
     reason: str | None = None
 
-    def to_command(self) -> cases_service.RecordDecisionCommand:
-        return cases_service.RecordDecisionCommand(decision=self.decision.value, reason=self.reason)
+    def to_command(self) -> case_types.RecordDecisionCommand:
+        return case_types.RecordDecisionCommand(decision=self.decision.value, reason=self.reason)
 
 
 class CaseRead(BaseModel):
@@ -111,7 +170,7 @@ class CaseQueueItemRead(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_queue_item(cls, item: cases_service.CaseQueueItem) -> CaseQueueItemRead:
+    def from_queue_item(cls, item: case_types.CaseQueueItem) -> CaseQueueItemRead:
         case = item.case
         return cls(
             id=case.id,
@@ -144,7 +203,7 @@ class CaseListRead(BaseModel):
     has_more: bool
 
     @classmethod
-    def from_result(cls, result: cases_service.CaseListResult) -> CaseListRead:
+    def from_result(cls, result: case_types.CaseListResult) -> CaseListRead:
         return cls(
             items=[CaseQueueItemRead.from_queue_item(item) for item in result.items],
             total=result.total,
@@ -153,6 +212,53 @@ class CaseListRead(BaseModel):
             page=result.page,
             pages=result.pages,
             has_more=result.has_more,
+        )
+
+
+class CaseBulkActionSuccessRead(BaseModel):
+    case_id: UUID
+    status: CaseStatus
+    case: CaseRead
+
+    @classmethod
+    def from_result_item(cls, item: case_types.BulkCaseActionSuccess) -> CaseBulkActionSuccessRead:
+        return cls(
+            case_id=item.case_id,
+            status=item.status,
+            case=CaseRead.model_validate(item.case),
+        )
+
+
+class CaseBulkActionErrorRead(BaseModel):
+    code: case_types.BulkCaseActionFailureCode
+    message: str
+
+
+class CaseBulkActionFailureRead(BaseModel):
+    case_id: UUID
+    status_code: int
+    error: CaseBulkActionErrorRead
+
+    @classmethod
+    def from_result_item(cls, item: case_types.BulkCaseActionFailure) -> CaseBulkActionFailureRead:
+        return cls(
+            case_id=item.case_id,
+            status_code=item.status_code,
+            error=CaseBulkActionErrorRead(code=item.code, message=item.message),
+        )
+
+
+class CaseBulkActionRead(BaseModel):
+    succeeded: list[CaseBulkActionSuccessRead]
+    failed: list[CaseBulkActionFailureRead]
+
+    @classmethod
+    def from_result(cls, result: case_types.BulkCaseActionResult) -> CaseBulkActionRead:
+        return cls(
+            succeeded=[
+                CaseBulkActionSuccessRead.from_result_item(item) for item in result.succeeded
+            ],
+            failed=[CaseBulkActionFailureRead.from_result_item(item) for item in result.failed],
         )
 
 

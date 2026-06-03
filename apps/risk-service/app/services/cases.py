@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import UTC, datetime
+from http import HTTPStatus
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -18,79 +18,29 @@ from app.domain.risk_constants import (
     RISK_LEVELS,
     CaseDecision,
     CaseStatus,
+    RiskLevel,
 )
 from app.models import RiskCase, RiskCaseDecision, RiskFinding, RiskScore, User
-from app.schemas.common import JsonObject
 from app.services.audit import record_event
-
-
-@dataclass(frozen=True)
-class CaseFilters:
-    include_archived: bool = False
-    status: str | None = None
-    assigned_to_user_id: UUID | None = None
-    decision: str | None = None
-    risk_level: str | None = None
-    q: str | None = None
-    sort: str = "created_at_desc"
-    limit: int = 50
-    offset: int = 0
-
-
-@dataclass(frozen=True)
-class CreateCaseCommand:
-    title: str
-    case_type: str
-    subject_type: str | None
-    subject_name: str | None
-    description: str | None
-    status: str
-    metadata: JsonObject
-
-
-@dataclass(frozen=True)
-class UpdateCaseCommand:
-    update_data: dict[str, str | None]
-
-
-@dataclass(frozen=True)
-class RecordDecisionCommand:
-    decision: str
-    reason: str | None
-
-
-@dataclass(frozen=True)
-class CaseQueueItem:
-    case: RiskCase
-    findings_count: int
-    open_findings_count: int
-    assignee_display_name: str | None
-    assignee_email: str | None
-
-
-@dataclass(frozen=True)
-class CaseListResult:
-    items: list[CaseQueueItem]
-    total: int
-    limit: int
-    offset: int
-    page: int
-    pages: int
-    has_more: bool
-
-
-@dataclass(frozen=True)
-class CaseSummary:
-    total_cases: int
-    archived_cases: int
-    unassigned_cases: int
-    completed_cases: int
-    open_findings: int
-    by_status: dict[str, int]
-    by_assignee: dict[str, int]
-    by_decision: dict[str, int]
-    by_risk_level: dict[str, int]
-
+from app.services.case_types import (
+    BulkArchiveCaseActionCommand,
+    BulkAssignCaseActionCommand,
+    BulkCaseActionCommand,
+    BulkCaseActionFailure,
+    BulkCaseActionFailureCode,
+    BulkCaseActionResult,
+    BulkCaseActionSuccess,
+    BulkUnassignCaseActionCommand,
+    BulkUpdateStatusCaseActionCommand,
+    CaseFilters,
+    CaseListResult,
+    CaseQueueItem,
+    CaseSnapshot,
+    CaseSummary,
+    CreateCaseCommand,
+    RecordDecisionCommand,
+    UpdateCaseCommand,
+)
 
 CASE_STATUS_TRANSITIONS = {
     CaseStatus.DRAFT.value: {
@@ -112,6 +62,32 @@ def get_case_or_404(db: Session, organization_id: UUID, case_id: UUID) -> RiskCa
     if case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found.")
     return case
+
+
+def snapshot_case(case: RiskCase) -> CaseSnapshot:
+    return CaseSnapshot(
+        id=case.id,
+        organization_id=case.organization_id,
+        title=case.title,
+        case_type=case.case_type,
+        subject_type=case.subject_type,
+        subject_name=case.subject_name,
+        description=case.description,
+        status=CaseStatus(case.status),
+        assigned_to_user_id=case.assigned_to_user_id,
+        assigned_at=case.assigned_at,
+        risk_score=case.risk_score,
+        risk_level=RiskLevel(case.risk_level) if case.risk_level is not None else None,
+        scored_at=case.scored_at,
+        scoring_version=case.scoring_version,
+        decision=CaseDecision(case.decision) if case.decision is not None else None,
+        decided_at=case.decided_at,
+        metadata_=case.metadata_,
+        created_by=case.created_by,
+        created_at=case.created_at,
+        updated_at=case.updated_at,
+        archived_at=case.archived_at,
+    )
 
 
 def create_case(db: Session, ctx: TenantContext, command: CreateCaseCommand) -> RiskCase:
@@ -347,6 +323,74 @@ def assign_case(
     db.commit()
     db.refresh(case)
     return case
+
+
+def bulk_case_action(
+    db: Session, ctx: TenantContext, command: BulkCaseActionCommand
+) -> BulkCaseActionResult:
+    succeeded: list[BulkCaseActionSuccess] = []
+    failed: list[BulkCaseActionFailure] = []
+
+    for case_id in command.case_ids:
+        try:
+            case = apply_bulk_case_action(db, ctx, case_id, command)
+        except HTTPException as exc:
+            db.rollback()
+            failed.append(bulk_failure_from_http_exception(case_id, exc))
+            continue
+        succeeded.append(
+            BulkCaseActionSuccess(
+                case_id=case.id,
+                status=CaseStatus(case.status),
+                case=snapshot_case(case),
+            )
+        )
+
+    return BulkCaseActionResult(succeeded=succeeded, failed=failed)
+
+
+def apply_bulk_case_action(
+    db: Session, ctx: TenantContext, case_id: UUID, command: BulkCaseActionCommand
+) -> RiskCase:
+    if isinstance(command, BulkAssignCaseActionCommand):
+        return assign_case(db, ctx, case_id, command.assigned_to_user_id)
+    if isinstance(command, BulkUnassignCaseActionCommand):
+        return assign_case(db, ctx, case_id, None)
+    if isinstance(command, BulkArchiveCaseActionCommand):
+        return archive_case(db, ctx, case_id)
+    if isinstance(command, BulkUpdateStatusCaseActionCommand):
+        return update_case(
+            db,
+            ctx,
+            case_id,
+            UpdateCaseCommand(update_data={"status": command.status.value}),
+        )
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid bulk action.")
+
+
+def bulk_failure_from_http_exception(case_id: UUID, exc: HTTPException) -> BulkCaseActionFailure:
+    try:
+        message = exc.detail if isinstance(exc.detail, str) else HTTPStatus(exc.status_code).phrase
+    except ValueError:
+        message = "Error"
+    return BulkCaseActionFailure(
+        case_id=case_id,
+        status_code=exc.status_code,
+        code=code_for_bulk_error(exc.status_code),
+        message=message,
+    )
+
+
+def code_for_bulk_error(status_code: int) -> BulkCaseActionFailureCode:
+    if status_code == status.HTTP_400_BAD_REQUEST:
+        return BulkCaseActionFailureCode.BAD_REQUEST
+    if status_code == status.HTTP_401_UNAUTHORIZED:
+        return BulkCaseActionFailureCode.UNAUTHORIZED
+    if status_code == status.HTTP_404_NOT_FOUND:
+        return BulkCaseActionFailureCode.NOT_FOUND
+    if status_code == status.HTTP_409_CONFLICT:
+        return BulkCaseActionFailureCode.CONFLICT
+    return BulkCaseActionFailureCode.HTTP_ERROR
 
 
 def decide_case(
