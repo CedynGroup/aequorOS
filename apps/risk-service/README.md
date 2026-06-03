@@ -38,13 +38,15 @@ cp .env.example .env
 Or use the task runner:
 
 ```bash
-mise run sync
+mise run risk-service:sync
 ```
+
+The same `risk-service:*` tasks are also available from the repository root.
 
 Install the repo hooks after syncing dependencies:
 
 ```bash
-mise run hooks
+mise run risk-service:hooks
 ```
 
 For tests, `DATABASE_URL` can be unset. For migrations and database readiness checks, set `DATABASE_URL` to a Postgres database. For local object storage, the bundled Docker Compose file starts MinIO and creates the private `risk-local` bucket.
@@ -52,18 +54,18 @@ For tests, `DATABASE_URL` can be unset. For migrations and database readiness ch
 ## Run The API
 
 ```bash
-mise run dev
+mise run risk-service:dev
 ```
 
 Local infrastructure:
 
 ```bash
 docker compose up -d
-mise run bootstrap-db
+mise run risk-service:bootstrap-db
 export DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service
 ```
 
-`mise run bootstrap-db` creates separate local database roles for migrations and app
+`mise run risk-service:bootstrap-db` creates separate local database roles for migrations and app
 runtime, runs Alembic migrations, and grants the runtime role data privileges.
 The migration role can bypass RLS for migrations and backfills; the app runtime
 role is still created with `NOBYPASSRLS`.
@@ -86,7 +88,7 @@ Business API endpoints use URL path major versioning under `/api/v1`. See
 ## Run Tests
 
 ```bash
-mise run test
+mise run risk-service:test
 ```
 
 The default test run uses isolated SQLite databases. To run the same tests
@@ -96,13 +98,13 @@ so the configured database is not reset:
 
 ```bash
 docker compose up -d risk-postgres
-mise run test-postgres
+mise run risk-service:test-postgres
 ```
 
 ## Lint And Type Check
 
 ```bash
-mise run check
+mise run risk-service:check
 ```
 
 ## Pre-Commit Hooks
@@ -110,7 +112,7 @@ mise run check
 Run all configured hooks manually:
 
 ```bash
-mise run precommit
+mise run risk-service:precommit
 ```
 
 Commit messages must follow Conventional Commits. For example:
@@ -124,13 +126,13 @@ feat(risk-service): add scenario endpoint
 `DATABASE_URL` is required for migrations.
 
 ```bash
-mise run migrate
+mise run risk-service:migrate
 ```
 
 To create a migration revision:
 
 ```bash
-mise run revision "describe change"
+mise run risk-service:revision "describe change"
 ```
 
 ## Environment Variables

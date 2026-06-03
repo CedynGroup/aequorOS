@@ -1,0 +1,77 @@
+[tasks."risk-service:sync"]
+description = "Install risk service dependencies with uv"
+dir = "apps/risk-service"
+run = "mise run risk-service:sync"
+
+[tasks."risk-service:hooks"]
+description = "Install risk service pre-commit and commit-msg hooks"
+dir = "apps/risk-service"
+run = "mise run risk-service:hooks"
+
+[tasks."risk-service:precommit"]
+description = "Run risk service pre-commit hooks against all files"
+dir = "apps/risk-service"
+run = "mise run risk-service:precommit"
+
+[tasks."risk-service:dev"]
+description = "Run risk service FastAPI dev server"
+dir = "apps/risk-service"
+run = "mise run risk-service:dev"
+
+[tasks."risk-service:test"]
+description = "Run risk service pytest"
+dir = "apps/risk-service"
+run = "mise run risk-service:test"
+
+[tasks."risk-service:test-postgres"]
+description = "Run risk service pytest against local Docker Postgres"
+dir = "apps/risk-service"
+run = "mise run risk-service:test-postgres"
+
+[tasks."risk-service:lint"]
+description = "Run risk service Ruff checks"
+dir = "apps/risk-service"
+run = "mise run risk-service:lint"
+
+[tasks."risk-service:format"]
+description = "Format risk service Python files with Ruff"
+dir = "apps/risk-service"
+run = "mise run risk-service:format"
+
+[tasks."risk-service:typecheck"]
+description = "Run risk service BasedPyright"
+dir = "apps/risk-service"
+run = "mise run risk-service:typecheck"
+
+[tasks."risk-service:check"]
+description = "Run risk service lint, typecheck, and tests"
+dir = "apps/risk-service"
+run = "mise run risk-service:check"
+
+[tasks."risk-service:migrate"]
+description = "Run risk service Alembic migrations; requires DATABASE_URL"
+dir = "apps/risk-service"
+run = "mise run risk-service:migrate"
+
+[tasks."risk-service:bootstrap-db"]
+description = "Create risk service local DB roles, run migrations, and grant app privileges"
+dir = "apps/risk-service"
+run = "mise run risk-service:bootstrap-db"
+
+[tasks."risk-service:revision"]
+description = "Create risk service Alembic revision"
+dir = "apps/risk-service"
+usage = '''
+arg "<message>" help="Revision message"
+'''
+run = 'mise run risk-service:revision "${usage_message?}"'
+
+[tasks."risk-service:smoke"]
+description = "Run risk service local smoke checks that do not require Postgres"
+dir = "apps/risk-service"
+run = [
+  "uv sync",
+  "uv run ruff check .",
+  "uv run basedpyright",
+  "uv run pytest",
+]
