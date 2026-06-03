@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import DateTime, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from app.core.ids import new_uuid4, new_uuid7
 
 
 def utc_now() -> datetime:
@@ -15,12 +17,23 @@ class Base(DeclarativeBase):
     pass
 
 
-class UuidPrimaryKeyMixin:
+class UuidV4PrimaryKeyMixin:
     id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         primary_key=True,
-        default=uuid4,
+        default=new_uuid4,
     )
+
+
+class UuidV7PrimaryKeyMixin:
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=new_uuid7,
+    )
+
+
+UuidPrimaryKeyMixin = UuidV4PrimaryKeyMixin
 
 
 class TimestampMixin:
