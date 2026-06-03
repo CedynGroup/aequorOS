@@ -1,59 +1,63 @@
-[tasks.sync]
+[tools]
+python = "3.13"
+uv = "latest"
+
+[tasks."risk-service:sync"]
 description = "Install dependencies with uv"
 run = "uv sync"
 
-[tasks.hooks]
+[tasks."risk-service:hooks"]
 description = "Install pre-commit and commit-msg hooks"
 run = "uv run pre-commit install --config ../../.pre-commit-config.yaml --install-hooks"
 
-[tasks.precommit]
+[tasks."risk-service:precommit"]
 description = "Run pre-commit hooks against all files"
 run = "uv run pre-commit run --all-files --config ../../.pre-commit-config.yaml"
 
-[tasks.dev]
+[tasks."risk-service:dev"]
 description = "Run FastAPI dev server"
 run = '''
 #!/usr/bin/env bash
 uv run fastapi dev app/main.py --host "${HOST:-127.0.0.1}" --port "${PORT:-8000}"
 '''
 
-[tasks.test]
+[tasks."risk-service:test"]
 description = "Run pytest"
 run = "uv run pytest"
 
-[tasks.test-postgres]
+[tasks."risk-service:test-postgres"]
 description = "Run pytest against local Docker Postgres"
 env = { TEST_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:15432/risk_service" }
 run = "uv run pytest"
 
-[tasks.lint]
+[tasks."risk-service:lint"]
 description = "Run Ruff checks"
 run = "uv run ruff check ."
 
-[tasks.format]
+[tasks."risk-service:format"]
 description = "Format Python files with Ruff"
 run = [
   "uv run ruff format .",
   "uv run ruff check . --fix",
 ]
 
-[tasks.typecheck]
+[tasks."risk-service:typecheck"]
 description = "Run BasedPyright"
 run = "uv run basedpyright"
 
-[tasks.check]
+[tasks."risk-service:check"]
 description = "Run lint, typecheck, and tests"
-depends = ["lint", "typecheck", "test"]
+depends = ["risk-service:lint", "risk-service:typecheck", "risk-service:test"]
 
-[tasks.migrate]
+[tasks."risk-service:migrate"]
 description = "Run Alembic migrations; requires DATABASE_URL"
 run = "uv run alembic upgrade head"
 
-[tasks.bootstrap-db]
+[tasks."risk-service:bootstrap-db"]
 description = "Create local DB roles, run migrations, and grant app privileges"
 run = "./scripts/bootstrap_db.sh"
 
-[tasks.revision]
+[tasks."risk-service:revision"]
 description = "Create Alembic revision"
 usage = '''
 arg "<message>" help="Revision message"
@@ -63,7 +67,11 @@ run = '''
 uv run alembic revision --autogenerate -m "${usage_message?}"
 '''
 
-[tasks.smoke]
+[tasks."risk-service:smoke"]
 description = "Run local smoke checks that do not require Postgres"
-depends = ["sync"]
-run = "mise run check"
+depends = ["risk-service:sync"]
+run = [
+  "uv run ruff check .",
+  "uv run basedpyright",
+  "uv run pytest",
+]

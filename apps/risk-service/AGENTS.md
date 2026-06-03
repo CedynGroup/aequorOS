@@ -41,8 +41,8 @@ reason to do otherwise. Put the ticket reference in the commit body or footer.
 ## Common Commands
 
 ```bash
-mise run test
-mise run test-postgres
-mise run check
-mise run bootstrap-db
+mise run risk-service:test
+mise run risk-service:test-postgres
+mise run risk-service:check
+mise run risk-service:bootstrap-db
 ```
