@@ -22,6 +22,7 @@ Risk calculations, ingestion pipelines, auth, background workers, and report gen
 
 - Python 3.13
 - uv
+- mise
 - Postgres for migrations and database-backed readiness checks
 
 ## Local Setup
@@ -29,6 +30,7 @@ Risk calculations, ingestion pipelines, auth, background workers, and report gen
 From `apps/risk-service`:
 
 ```bash
+mise trust
 uv sync
 cp .env.example .env
 ```
@@ -36,13 +38,13 @@ cp .env.example .env
 Or use the task runner:
 
 ```bash
-make sync
+mise run sync
 ```
 
 Install the repo hooks after syncing dependencies:
 
 ```bash
-make hooks
+mise run hooks
 ```
 
 For tests, `DATABASE_URL` can be unset. For migrations and database readiness checks, set `DATABASE_URL` to a Postgres database. For local object storage, the bundled Docker Compose file starts MinIO and creates the private `risk-local` bucket.
@@ -50,18 +52,18 @@ For tests, `DATABASE_URL` can be unset. For migrations and database readiness ch
 ## Run The API
 
 ```bash
-make dev
+mise run dev
 ```
 
 Local infrastructure:
 
 ```bash
 docker compose up -d
-make bootstrap-db
+mise run bootstrap-db
 export DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service
 ```
 
-`make bootstrap-db` creates separate local database roles for migrations and app
+`mise run bootstrap-db` creates separate local database roles for migrations and app
 runtime, runs Alembic migrations, and grants the runtime role data privileges.
 The migration role can bypass RLS for migrations and backfills; the app runtime
 role is still created with `NOBYPASSRLS`.
@@ -84,7 +86,7 @@ Business API endpoints use URL path major versioning under `/api/v1`. See
 ## Run Tests
 
 ```bash
-make test
+mise run test
 ```
 
 The default test run uses isolated SQLite databases. To run the same tests
@@ -94,13 +96,13 @@ so the configured database is not reset:
 
 ```bash
 docker compose up -d risk-postgres
-make test-postgres
+mise run test-postgres
 ```
 
 ## Lint And Type Check
 
 ```bash
-make check
+mise run check
 ```
 
 ## Pre-Commit Hooks
@@ -108,7 +110,7 @@ make check
 Run all configured hooks manually:
 
 ```bash
-make precommit
+mise run precommit
 ```
 
 Commit messages must follow Conventional Commits. For example:
@@ -122,13 +124,13 @@ feat(risk-service): add scenario endpoint
 `DATABASE_URL` is required for migrations.
 
 ```bash
-make migrate
+mise run migrate
 ```
 
 To create a migration revision:
 
 ```bash
-make revision name="describe change"
+mise run revision "describe change"
 ```
 
 ## Environment Variables
