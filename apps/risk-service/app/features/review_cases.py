@@ -4,34 +4,25 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, status
-from fastapi.responses import HTMLResponse
 
 from app.api.deps import DbSession, Tenant
 from app.domain.risk_constants import (
-    CASE_DECISIONS,
-    CASE_SORT_OPTIONS,
-    CASE_STATUSES,
-    RISK_LEVELS,
     CaseDecision,
     CaseSort,
     CaseStatus,
     RiskLevel,
 )
-from app.models import RiskCase, RiskCaseDecision, RiskScore
+from app.models import RiskCase, RiskScore
 from app.schemas.cases import (
     CaseAssign,
     CaseCreate,
-    CaseDecisionCreate,
-    CaseDecisionRead,
     CaseListRead,
     CaseRead,
     CaseSummaryRead,
-    CaseTaxonomyRead,
     CaseUpdate,
     ScoreRead,
 )
 from app.services import cases as cases_service
-from app.services import reports as reports_service
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -102,16 +93,6 @@ def case_summary(db: DbSession, ctx: Tenant) -> CaseSummaryRead:
     return CaseSummaryRead(**cases_service.case_summary(db, ctx).__dict__)
 
 
-@router.get("/taxonomy", response_model=CaseTaxonomyRead)
-def case_taxonomy() -> CaseTaxonomyRead:
-    return CaseTaxonomyRead(
-        statuses=sorted(CASE_STATUSES),
-        decisions=sorted(CASE_DECISIONS),
-        risk_levels=sorted(RISK_LEVELS),
-        sort_options=sorted(CASE_SORT_OPTIONS),
-    )
-
-
 @router.get("/{case_id}", response_model=CaseRead)
 def get_case(case_id: UUID, db: DbSession, ctx: Tenant) -> RiskCase:
     return cases_service.get_case_or_404(db, ctx.organization_id, case_id)
@@ -127,43 +108,9 @@ def assign_case(case_id: UUID, payload: CaseAssign, db: DbSession, ctx: Tenant) 
     return cases_service.assign_case(db, ctx, case_id, payload.assigned_to_user_id)
 
 
-@router.post("/{case_id}/decision", response_model=CaseDecisionRead)
-def decide_case(
-    case_id: UUID, payload: CaseDecisionCreate, db: DbSession, ctx: Tenant
-) -> RiskCaseDecision:
-    return cases_service.decide_case(db, ctx, case_id, payload.to_command())
-
-
-@router.get("/{case_id}/decisions", response_model=list[CaseDecisionRead])
-def list_case_decisions(case_id: UUID, db: DbSession, ctx: Tenant) -> list[RiskCaseDecision]:
-    return cases_service.list_case_decisions(db, ctx, case_id)
-
-
 @router.get("/{case_id}/scores", response_model=list[ScoreRead])
 def list_case_scores(case_id: UUID, db: DbSession, ctx: Tenant) -> list[RiskScore]:
     return cases_service.list_case_scores(db, ctx, case_id)
-
-
-@router.get("/{case_id}/report.json", response_model=reports_service.RiskReportPayload)
-def case_report_json(
-    case_id: UUID, db: DbSession, ctx: Tenant
-) -> reports_service.RiskReportPayload:
-    return reports_service.report_payload(db, ctx, case_id)
-
-
-@router.get(
-    "/{case_id}/report.html",
-    response_class=HTMLResponse,
-    responses={
-        status.HTTP_200_OK: {
-            "content": {"text/html": {"schema": {"type": "string"}}},
-            "description": "Analyst-readable HTML risk review report.",
-        }
-    },
-)
-def case_report_html(case_id: UUID, db: DbSession, ctx: Tenant) -> HTMLResponse:
-    payload = reports_service.report_payload(db, ctx, case_id)
-    return HTMLResponse(content=reports_service.report_html(payload))
 
 
 @router.post("/{case_id}/archive", response_model=CaseRead)
