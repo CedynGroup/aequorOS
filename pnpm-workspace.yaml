@@ -1,0 +1,9 @@
+packages:
+  - "aequoros-demo"
+  - "aequoros-site"
+  - "apps/*"
+
+allowBuilds:
+  unrs-resolver: true
+
+engineStrict: true
