@@ -49,6 +49,47 @@ run = "uv run basedpyright"
 description = "Run lint, typecheck, and tests"
 depends = ["risk-service:lint", "risk-service:typecheck", "risk-service:test"]
 
+[tasks."risk-service:openapi-schema"]
+description = "Generate OpenAPI schema"
+run = "PYTHONPATH=. uv run python scripts/export_openapi_schema.py > openapi-schema.json"
+
+[tasks."risk-service:openapi-client"]
+description = "Generate TypeScript OpenAPI client"
+depends = ["risk-service:openapi-schema"]
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd ../.. && pwd)"
+OPENAPI_CLIENT="$ROOT/packages/risk-service-api"
+
+echo "Generating TypeScript client from OpenAPI schema..."
+echo "Cleaning old generated files..."
+rm -rf "$OPENAPI_CLIENT/src"
+rm -rf "$OPENAPI_CLIENT/dist"
+rm -rf "$OPENAPI_CLIENT/.openapi-generator"
+
+uv run openapi-generator-cli generate \
+  -i openapi-schema.json \
+  -g typescript-fetch \
+  -o "$OPENAPI_CLIENT" \
+  -c openapi-config.yaml \
+  --additional-properties=supportsES6=true \
+  --skip-validate-spec
+
+echo "Formatting generated TypeScript code..."
+(cd "$ROOT" && pnpm -w exec prettier --write packages/risk-service-api/src/)
+
+echo "Restoring source-first package.json configuration..."
+uv run python scripts/fix-api-client-package.py "$OPENAPI_CLIENT/package.json"
+
+echo "Formatting post-processed TypeScript code..."
+(cd "$ROOT" && pnpm -w exec prettier --write packages/risk-service-api/src/ packages/risk-service-api/README.md)
+
+echo ""
+echo "TypeScript client generated successfully."
+'''
+
 [tasks."risk-service:migrate"]
 description = "Run Alembic migrations; requires DATABASE_URL"
 run = "uv run alembic upgrade head"

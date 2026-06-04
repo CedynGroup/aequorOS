@@ -2,6 +2,7 @@ packages:
   - "aequoros-demo"
   - "aequoros-site"
   - "apps/*"
+  - "packages/*"
 
 allowBuilds:
   unrs-resolver: true

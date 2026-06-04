@@ -52,6 +52,28 @@ description = "Run risk service lint, typecheck, and tests"
 dir = "apps/risk-service"
 run = "mise run risk-service:check"
 
+[tasks."risk-service:openapi-schema"]
+description = "Generate risk service OpenAPI schema"
+dir = "apps/risk-service"
+run = "mise run risk-service:openapi-schema"
+
+[tasks."risk-service:openapi-client"]
+description = "Generate risk service TypeScript OpenAPI client"
+dir = "apps/risk-service"
+run = "mise run risk-service:openapi-client"
+
+[tasks."risk-service:api-typecheck"]
+description = "Type-check the generated risk service API client"
+run = "pnpm --filter @aequoros/risk-service-api run type-check"
+
+[tasks."risk-service:api-fresh"]
+description = "Regenerate and verify the risk service API client is fresh"
+run = [
+  "mise run risk-service:openapi-client",
+  "mise run risk-service:api-typecheck",
+  "test -z \"$(git status --porcelain -- apps/risk-service/openapi-schema.json packages/risk-service-api)\"",
+]
+
 [tasks."risk-service:migrate"]
 description = "Run risk service Alembic migrations; requires DATABASE_URL"
 dir = "apps/risk-service"

@@ -112,6 +112,12 @@ importers:
 
   apps/risk-service: {}
 
+  packages/risk-service-api:
+    devDependencies:
+      typescript:
+        specifier: ^4.0 || ^5.0
+        version: 5.9.3
+
 packages:
 
   '@alloc/quick-lru@5.2.0':

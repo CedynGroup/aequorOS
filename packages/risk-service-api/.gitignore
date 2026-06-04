@@ -1,0 +1,17 @@
+# Generated files - only exclude compiled output
+dist/
+
+# Build artifacts
+node_modules/
+wwwroot/*.js
+typings
+.turbo/
+.openapi-generator/
+
+# Keep in version control:
+# - src/ (generated TypeScript source)
+# - package.json (auto-fixed by mise for source-first imports)
+# - .openapi-generator-ignore
+# - tsconfig*.json
+# - .gitignore
+# - .npmignore
