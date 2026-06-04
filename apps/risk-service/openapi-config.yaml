@@ -1,0 +1,11 @@
+apiPackage: apis
+apiPropertyNaming: camelCase
+modelPackage: models
+modelPropertyNaming: camelCase
+enablePostProcessFile: true
+npmName: "@aequoros/risk-service-api"
+paramNaming: camelCase
+supportsES6: true
+title: AequorOS Risk Service API
+withNodeImports: true
+withSeparateModelsAndApi: true

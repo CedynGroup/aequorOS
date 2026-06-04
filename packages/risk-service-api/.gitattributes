@@ -1,0 +1,2 @@
+# Auto-resolve conflicts in generated code
+src/** merge=ours

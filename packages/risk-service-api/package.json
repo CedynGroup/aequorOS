@@ -1,0 +1,29 @@
+{
+  "name": "@aequoros/risk-service-api",
+  "version": "0.1.0",
+  "description": "OpenAPI client for @aequoros/risk-service-api",
+  "author": "OpenAPI-Generator",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:CedynGroup/aequorOS.git"
+  },
+  "main": "./src/index.ts",
+  "typings": "./src/index.ts",
+  "module": "./src/index.ts",
+  "sideEffects": false,
+  "scripts": {
+    "build": "echo 'No build needed - source consumed directly'",
+    "prepare": "echo 'No prepare needed - source consumed directly'",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^4.0 || ^5.0"
+  },
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  }
+}

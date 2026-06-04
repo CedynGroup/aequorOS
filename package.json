@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@11.2.2",
+  "scripts": {
+    "generate-risk-service-api": "mise run risk-service:openapi-client",
+    "check:risk-service-api": "mise run risk-service:api-typecheck",
+    "check:risk-service-api:fresh": "mise run risk-service:api-fresh"
+  },
   "devDependencies": {
     "prettier": "^3.3.3"
   },

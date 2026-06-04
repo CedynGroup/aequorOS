@@ -363,6 +363,18 @@ wheels = [
 ]
 
 [[package]]
+name = "jdk4py"
+version = "21.0.8.2"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9b/91/faab5f5b2bdcaf74c20304c5c3a6a9e304a6c609a1d755e927c07a87f883/jdk4py-21.0.8.2-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:7b2b397f2999e5a71728691477857a5a41215b3c95f6e8b15a4d53bc76203dff", size = 30900008, upload-time = "2026-04-10T20:50:45.913Z" },
+    { url = "https://files.pythonhosted.org/packages/e6/19/449f69b8706c2cb5fa46fdc3e75650983e44e4e025d6ade78580b2c8572d/jdk4py-21.0.8.2-py3-none-macosx_11_0_arm64.whl", hash = "sha256:0667b81b3ddc60157f773e0d05d00f4d46530f82bdc59e295b322b8d33f69417", size = 29692099, upload-time = "2026-04-10T20:50:37.405Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/0c/24a7d8e4c96c3843b8163ba7a9be939b48fc181fb3263bd4fd9289ed8f41/jdk4py-21.0.8.2-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:2519dce230b3ed13a93a3efed15c6b8b163aeacd77859ddf59eef3faa69c635d", size = 33195566, upload-time = "2026-04-10T20:50:34.609Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/61/f3b5936908ff6de66c61aef69bf1074cb468fb883f5a0bb9e15e67a6b484/jdk4py-21.0.8.2-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:85addfcb57c7051dad6145b9f816fc519337e9a0c705ef01edc9dc7818ee0356", size = 33794570, upload-time = "2026-04-10T20:50:40.113Z" },
+    { url = "https://files.pythonhosted.org/packages/11/e3/87b83011678930770bf59b3f3fa5bd6c85f5e48941f1ef9e31cbfb62bee3/jdk4py-21.0.8.2-py3-none-win_amd64.whl", hash = "sha256:1c8e37d26315dfbb603503153d3dcdd90021fda71d64ab0b6309f06f83c0d503", size = 30329010, upload-time = "2026-04-10T20:50:42.783Z" },
+]
+
+[[package]]
 name = "jinja2"
 version = "3.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -482,6 +494,20 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/01/0a/34461b9050cb45ee371dccdefc622aef6351506ea2691b08fc761ca67150/nodejs_wheel_binaries-24.15.0-py2.py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:3984cb8d87766567aee67a49743227ab40ede6f47734ec990ff90e50b74e7740", size = 62326172, upload-time = "2026-04-19T15:48:04.094Z" },
     { url = "https://files.pythonhosted.org/packages/c9/17/09252bf35672dba926649d59dfe51443a0f6955ad13784e91131d5ec82a2/nodejs_wheel_binaries-24.15.0-py2.py3-none-win_amd64.whl", hash = "sha256:a437601956b532dcb3082046e6978e622733f90edc0932cbb9adb3bb97a16501", size = 41543461, upload-time = "2026-04-19T15:48:09.332Z" },
     { url = "https://files.pythonhosted.org/packages/0a/7e/b649777d148e1e0c2ce349156603cdb12f7ed99921b95d93717393650193/nodejs_wheel_binaries-24.15.0-py2.py3-none-win_arm64.whl", hash = "sha256:bdf4a431e08321a32efc604111c6f23941f87055d796a537e8c4110daecad23f", size = 39233248, upload-time = "2026-04-19T15:48:13.326Z" },
+]
+
+[[package]]
+name = "openapi-generator-cli"
+version = "7.13.0.post0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/42/96/888960134ccd709ec6481ae5fbbc10c300a5970df5f3902bc7db441a9735/openapi_generator_cli-7.13.0.post0.tar.gz", hash = "sha256:ba40cac2eb5aab5544a889f8cd97b57fae995fea242b7ecb05524ea86da85fe4", size = 27143358, upload-time = "2025-04-28T17:47:34.769Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/11/ff/94325c9aff601231df9e83168179ecc6ad054e1274464884dab1b1db7c49/openapi_generator_cli-7.13.0.post0-py3-none-any.whl", hash = "sha256:e17d099203964e82db5fc7309b27f2154dd6dca3b237084acc896fd03a6f4569", size = 27156894, upload-time = "2025-04-28T17:47:24.268Z" },
+]
+
+[package.optional-dependencies]
+jdk4py = [
+    { name = "jdk4py" },
 ]
 
 [[package]]
@@ -789,6 +815,7 @@ dependencies = [
 dev = [
     { name = "basedpyright" },
     { name = "httpx" },
+    { name = "openapi-generator-cli", extra = ["jdk4py"] },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "ruff" },
@@ -809,6 +836,7 @@ requires-dist = [
 dev = [
     { name = "basedpyright" },
     { name = "httpx" },
+    { name = "openapi-generator-cli", extras = ["jdk4py"], specifier = "~=7.13.0" },
     { name = "pre-commit", specifier = "==4.6.0" },
     { name = "pytest" },
     { name = "ruff" },
