@@ -7,7 +7,7 @@ description = "Install dependencies with uv"
 run = "uv sync"
 
 [tasks."risk-service:hooks"]
-description = "Install pre-commit and commit-msg hooks"
+description = "Install pre-commit, commit-msg, and pre-push hooks"
 run = "uv run pre-commit install --config ../../.pre-commit-config.yaml --install-hooks"
 
 [tasks."risk-service:precommit"]

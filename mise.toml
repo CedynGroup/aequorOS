@@ -8,7 +8,7 @@ dir = "apps/risk-service"
 run = "mise run risk-service:sync"
 
 [tasks."risk-service:hooks"]
-description = "Install risk service pre-commit and commit-msg hooks"
+description = "Install risk service pre-commit, commit-msg, and pre-push hooks"
 dir = "apps/risk-service"
 run = "mise run risk-service:hooks"
 
