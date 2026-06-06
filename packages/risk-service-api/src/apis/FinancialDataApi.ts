@@ -16,17 +16,30 @@ import * as runtime from "../runtime";
 import type {
   ErrorResponse,
   FinancialDataWorkspaceRead,
+  FinancialWorkspaceMapRequest,
+  FinancialWorkspaceMapResponse,
 } from "../models/index";
 import {
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
   FinancialDataWorkspaceReadFromJSON,
   FinancialDataWorkspaceReadToJSON,
+  FinancialWorkspaceMapRequestFromJSON,
+  FinancialWorkspaceMapRequestToJSON,
+  FinancialWorkspaceMapResponseFromJSON,
+  FinancialWorkspaceMapResponseToJSON,
 } from "../models/index";
 
 export interface GetCaseFinancialWorkspaceRequest {
   caseId: string;
   xOrgId: string;
+  xUserId?: string | null;
+}
+
+export interface MapCaseFinancialWorkspaceRequest {
+  caseId: string;
+  xOrgId: string;
+  financialWorkspaceMapRequest: FinancialWorkspaceMapRequest;
   xUserId?: string | null;
 }
 
@@ -93,6 +106,83 @@ export class FinancialDataApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<FinancialDataWorkspaceRead> {
     const response = await this.getCaseFinancialWorkspaceRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Map Case Financial Workspace
+   */
+  async mapCaseFinancialWorkspaceRaw(
+    requestParameters: MapCaseFinancialWorkspaceRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialWorkspaceMapResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling mapCaseFinancialWorkspace().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling mapCaseFinancialWorkspace().',
+      );
+    }
+
+    if (requestParameters["financialWorkspaceMapRequest"] == null) {
+      throw new runtime.RequiredError(
+        "financialWorkspaceMapRequest",
+        'Required parameter "financialWorkspaceMapRequest" was null or undefined when calling mapCaseFinancialWorkspace().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/map`.replace(
+          `{${"case_id"}}`,
+          encodeURIComponent(String(requestParameters["caseId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialWorkspaceMapRequestToJSON(
+          requestParameters["financialWorkspaceMapRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialWorkspaceMapResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Map Case Financial Workspace
+   */
+  async mapCaseFinancialWorkspace(
+    requestParameters: MapCaseFinancialWorkspaceRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialWorkspaceMapResponse> {
+    const response = await this.mapCaseFinancialWorkspaceRaw(
       requestParameters,
       initOverrides,
     );
