@@ -189,37 +189,25 @@ def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
     }
 
     assert migrated_postgres_schema.tables(financial_tables) == financial_tables
-    assert migrated_postgres_schema.indexes(
-        {
-            "ix_financial_institutions_organization_id_case_id",
-            "ix_financial_accounts_organization_id_case_id",
-            "ix_financial_reporting_periods_organization_id_case_id",
-            "ix_financial_balances_organization_id_case_id",
-            "ix_financial_obligations_organization_id_case_id",
-            "ix_financial_source_rows_organization_id_case_id",
-            "ix_financial_source_rows_organization_id_document_id",
-            "ix_financial_record_source_links_organization_id_case_id",
-            "ix_financial_record_source_links_organization_id_record",
-            "ix_financial_manual_edit_history_organization_id_case_id",
-            "ix_financial_manual_edit_history_organization_id_record",
-            "ix_financial_validation_issues_organization_id_case_id",
-            "ix_financial_validation_issues_organization_id_record",
-        }
-    ) == {
-        "ix_financial_institutions_organization_id_case_id",
-        "ix_financial_accounts_organization_id_case_id",
-        "ix_financial_reporting_periods_organization_id_case_id",
-        "ix_financial_balances_organization_id_case_id",
-        "ix_financial_obligations_organization_id_case_id",
-        "ix_financial_source_rows_organization_id_case_id",
-        "ix_financial_source_rows_organization_id_document_id",
-        "ix_financial_record_source_links_organization_id_case_id",
-        "ix_financial_record_source_links_organization_id_record",
-        "ix_financial_manual_edit_history_organization_id_case_id",
-        "ix_financial_manual_edit_history_organization_id_record",
-        "ix_financial_validation_issues_organization_id_case_id",
-        "ix_financial_validation_issues_organization_id_record",
+    financial_indexes = {
+        "ix_financial_institutions_case_id",
+        "uq_financial_institutions_dedupe_key",
+        "ix_financial_accounts_case_id",
+        "uq_financial_accounts_dedupe_key",
+        "ix_financial_reporting_periods_case_id",
+        "uq_financial_reporting_periods_dedupe_key",
+        "ix_financial_balances_case_id",
+        "uq_financial_balances_dedupe_key",
+        "ix_financial_obligations_case_id",
+        "uq_financial_obligations_dedupe_key",
+        "ix_financial_source_rows_case_id",
+        "uq_financial_source_rows_extraction_row",
+        "ix_financial_record_source_links_case_id",
+        "uq_financial_record_source_links_field",
+        "ix_financial_manual_edit_history_case_id",
+        "ix_financial_validation_issues_case_id",
     }
+    assert migrated_postgres_schema.indexes(financial_indexes) == financial_indexes
     assert migrated_postgres_schema.policies(financial_tables) == {
         f"{table}_tenant_isolation" for table in financial_tables
     }
@@ -335,12 +323,13 @@ def test_postgres_financial_workspace_rls_isolates_tenant_rows(
                 text(
                     """
                     INSERT INTO financial_institutions
-                      (id, organization_id, case_id, name, created_at, updated_at)
+                      (id, organization_id, case_id, dedupe_key, name, created_at, updated_at)
                     VALUES
                       (
                         :institution_id,
                         :organization_id,
                         :case_id,
+                        'test:institution:rls',
                         'Tenant One Bank',
                         now(),
                         now()

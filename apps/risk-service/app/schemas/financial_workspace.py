@@ -103,6 +103,7 @@ class FinancialSourceRowRead(BaseModel):
     organization_id: UUID
     case_id: UUID
     document_id: UUID | None
+    document_extraction_id: UUID | None
     row_index: int | None
     locator: JsonObject
     raw_payload: JsonObject
@@ -118,6 +119,8 @@ class FinancialRecordSourceLinkRead(BaseModel):
     record_table: str
     record_id: UUID
     source_row_id: UUID
+    field_name: str | None
+    source_field: str | None
     confidence: Decimal | None
     metadata: JsonObject = Field(validation_alias="metadata_", serialization_alias="metadata")
     created_at: datetime

@@ -15,6 +15,7 @@ def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient
     assert "/api/v1/cases/{case_id}/report" in paths
     assert "/api/v1/cases/{case_id}/findings" in paths
     assert "/api/v1/cases/{case_id}/financial-workspace" in paths
+    assert "/api/v1/cases/{case_id}/financial-workspace/map" in paths
 
     case_list_operation = paths["/api/v1/cases"]["get"]
     case_list_ref = paths["/api/v1/cases"]["get"]["responses"]["200"]["content"][
@@ -29,11 +30,15 @@ def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient
     financial_workspace_ref = paths["/api/v1/cases/{case_id}/financial-workspace"]["get"][
         "responses"
     ]["200"]["content"]["application/json"]["schema"]["$ref"]
+    financial_workspace_map_ref = paths["/api/v1/cases/{case_id}/financial-workspace/map"]["post"][
+        "responses"
+    ]["200"]["content"]["application/json"]["schema"]["$ref"]
 
     assert case_list_ref == "#/components/schemas/CaseListRead"
     assert report_ref == "#/components/schemas/RiskReportPayload"
     assert finding_create_ref == "#/components/schemas/FindingCreate"
     assert financial_workspace_ref == "#/components/schemas/FinancialDataWorkspaceRead"
+    assert financial_workspace_map_ref == "#/components/schemas/FinancialWorkspaceMapResponse"
     assert case_list_operation["operationId"] == "listCases"
 
     case_parameters = {
@@ -92,6 +97,7 @@ def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
     assert "/api/v1/cases/bulk-actions" in paths
     assert "/api/v1/cases/{case_id}/report" in paths
     assert "/api/v1/cases/{case_id}/financial-workspace" in paths
+    assert "/api/v1/cases/{case_id}/financial-workspace/map" in paths
     assert "/api/v1/taxonomies/cases" in paths
 
     report_ref = paths["/api/v1/cases/{case_id}/report"]["get"]["responses"]["200"]["content"][
@@ -100,6 +106,7 @@ def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
     financial_workspace_ref = paths["/api/v1/cases/{case_id}/financial-workspace"]["get"][
         "responses"
     ]["200"]["content"]["application/json"]["schema"]["$ref"]
+    financial_workspace_map = paths["/api/v1/cases/{case_id}/financial-workspace/map"]["post"]
     bulk_action_request_schema = paths["/api/v1/cases/bulk-actions"]["post"]["requestBody"][
         "content"
     ]["application/json"]["schema"]
@@ -110,6 +117,7 @@ def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
 
     assert report_ref == "#/components/schemas/RiskReportPayload"
     assert financial_workspace_ref == "#/components/schemas/FinancialDataWorkspaceRead"
+    assert financial_workspace_map["operationId"] == "mapCaseFinancialWorkspace"
     assert bulk_action_request_schema["discriminator"]["propertyName"] == "action"
     assert {option["$ref"] for option in bulk_action_request_schema["oneOf"]} == {
         "#/components/schemas/CaseBulkAssignCreate",

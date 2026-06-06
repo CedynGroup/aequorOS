@@ -10,6 +10,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
@@ -32,7 +33,14 @@ class FinancialInstitution(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             ["case_id", "organization_id"],
             ["risk_cases.id", "risk_cases.organization_id"],
         ),
-        Index("ix_financial_institutions_organization_id_case_id", "organization_id", "case_id"),
+        Index("ix_financial_institutions_case_id", "case_id"),
+        Index(
+            "uq_financial_institutions_dedupe_key",
+            "dedupe_key",
+            "organization_id",
+            "case_id",
+            unique=True,
+        ),
         UniqueConstraint(
             "id",
             "organization_id",
@@ -43,6 +51,7 @@ class FinancialInstitution(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     institution_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
     reference_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -74,7 +83,14 @@ class FinancialAccount(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "status IS NULL OR status IN ('active', 'inactive', 'closed', 'unknown')",
             name="ck_financial_accounts_status",
         ),
-        Index("ix_financial_accounts_organization_id_case_id", "organization_id", "case_id"),
+        Index("ix_financial_accounts_case_id", "case_id"),
+        Index(
+            "uq_financial_accounts_dedupe_key",
+            "dedupe_key",
+            "organization_id",
+            "case_id",
+            unique=True,
+        ),
         UniqueConstraint(
             "id",
             "organization_id",
@@ -85,6 +101,7 @@ class FinancialAccount(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     institution_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     account_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     account_name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -108,9 +125,15 @@ class FinancialReportingPeriod(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_financial_reporting_periods_period_type",
         ),
         Index(
-            "ix_financial_reporting_periods_organization_id_case_id",
+            "ix_financial_reporting_periods_case_id",
+            "case_id",
+        ),
+        Index(
+            "uq_financial_reporting_periods_dedupe_key",
+            "dedupe_key",
             "organization_id",
             "case_id",
+            unique=True,
         ),
         UniqueConstraint(
             "id",
@@ -122,6 +145,7 @@ class FinancialReportingPeriod(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     period_type: Mapped[str] = mapped_column(String(40), nullable=False)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -159,7 +183,14 @@ class FinancialBalance(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "currency IS NULL OR (length(currency) = 3 AND upper(currency) = currency)",
             name="ck_financial_balances_currency",
         ),
-        Index("ix_financial_balances_organization_id_case_id", "organization_id", "case_id"),
+        Index("ix_financial_balances_case_id", "case_id"),
+        Index(
+            "uq_financial_balances_dedupe_key",
+            "dedupe_key",
+            "organization_id",
+            "case_id",
+            unique=True,
+        ),
         UniqueConstraint(
             "id",
             "organization_id",
@@ -170,6 +201,7 @@ class FinancialBalance(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     account_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     reporting_period_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     balance_type: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -221,7 +253,14 @@ class FinancialObligation(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "('active', 'inactive', 'closed', 'matured', 'defaulted', 'unknown')",
             name="ck_financial_obligations_status",
         ),
-        Index("ix_financial_obligations_organization_id_case_id", "organization_id", "case_id"),
+        Index("ix_financial_obligations_case_id", "case_id"),
+        Index(
+            "uq_financial_obligations_dedupe_key",
+            "dedupe_key",
+            "organization_id",
+            "case_id",
+            unique=True,
+        ),
         UniqueConstraint(
             "id",
             "organization_id",
@@ -232,6 +271,7 @@ class FinancialObligation(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
 
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     institution_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     account_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     reporting_period_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
@@ -264,11 +304,12 @@ class FinancialSourceRow(UuidV7PrimaryKeyMixin, Base):
             "row_index IS NULL OR row_index >= 0",
             name="ck_financial_source_rows_row_index",
         ),
-        Index("ix_financial_source_rows_organization_id_case_id", "organization_id", "case_id"),
+        Index("ix_financial_source_rows_case_id", "case_id"),
         Index(
-            "ix_financial_source_rows_organization_id_document_id",
-            "organization_id",
-            "document_id",
+            "uq_financial_source_rows_extraction_row",
+            "document_extraction_id",
+            "row_index",
+            unique=True,
         ),
         UniqueConstraint(
             "id",
@@ -281,6 +322,9 @@ class FinancialSourceRow(UuidV7PrimaryKeyMixin, Base):
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     document_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    document_extraction_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("document_extractions.id"), nullable=True
+    )
     row_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     locator: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
@@ -320,15 +364,17 @@ class FinancialRecordSourceLink(UuidV7PrimaryKeyMixin, Base):
             name="ck_financial_record_source_links_record_table",
         ),
         Index(
-            "ix_financial_record_source_links_organization_id_case_id",
-            "organization_id",
+            "ix_financial_record_source_links_case_id",
             "case_id",
         ),
         Index(
-            "ix_financial_record_source_links_organization_id_record",
-            "organization_id",
-            "record_table",
+            "uq_financial_record_source_links_field",
+            "source_row_id",
             "record_id",
+            "record_table",
+            "field_name",
+            "source_field",
+            unique=True,
         ),
     )
 
@@ -337,6 +383,8 @@ class FinancialRecordSourceLink(UuidV7PrimaryKeyMixin, Base):
     record_table: Mapped[str] = mapped_column(String(120), nullable=False)
     record_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     source_row_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    field_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source_field: Mapped[str | None] = mapped_column(String(120), nullable=True)
     confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     metadata_: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
@@ -365,15 +413,8 @@ class FinancialManualEditHistory(UuidV7PrimaryKeyMixin, Base):
             name="ck_financial_manual_edit_history_record_table",
         ),
         Index(
-            "ix_financial_manual_edit_history_organization_id_case_id",
-            "organization_id",
+            "ix_financial_manual_edit_history_case_id",
             "case_id",
-        ),
-        Index(
-            "ix_financial_manual_edit_history_organization_id_record",
-            "organization_id",
-            "record_table",
-            "record_id",
         ),
     )
 
@@ -415,15 +456,8 @@ class FinancialValidationIssue(UuidV7PrimaryKeyMixin, Base):
             name="ck_financial_validation_issues_record_reference",
         ),
         Index(
-            "ix_financial_validation_issues_organization_id_case_id",
-            "organization_id",
+            "ix_financial_validation_issues_case_id",
             "case_id",
-        ),
-        Index(
-            "ix_financial_validation_issues_organization_id_record",
-            "organization_id",
-            "record_table",
-            "record_id",
         ),
     )
 

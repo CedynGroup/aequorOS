@@ -2,14 +2,25 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import Table, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.models.financial import (
+    FinancialAccount,
+    FinancialBalance,
+    FinancialInstitution,
+    FinancialManualEditHistory,
+    FinancialObligation,
+    FinancialRecordSourceLink,
+    FinancialReportingPeriod,
+    FinancialSourceRow,
+    FinancialValidationIssue,
+)
 from tests.api.helpers import ORG_1, ORG_2, USER_2
 
 
@@ -24,6 +35,195 @@ def normalize_json(value: Any) -> dict[str, Any]:
         return json.loads(value)
     assert isinstance(value, dict)
     return value
+
+
+def index_columns(model: type, index_name: str) -> tuple[str, ...]:
+    table = cast(Table, model.__table__)
+    for index in table.indexes:
+        if index.name == index_name:
+            return tuple(column.name for column in index.columns)
+    raise AssertionError(f"Index {index_name} not found on {table.name}")
+
+
+def index_names(model: type) -> set[str]:
+    table = cast(Table, model.__table__)
+    return {index.name or "" for index in table.indexes}
+
+
+def test_financial_mapper_indexes_are_minimal_and_selective() -> None:
+    assert index_names(FinancialInstitution) == {
+        "ix_financial_institutions_case_id",
+        "uq_financial_institutions_dedupe_key",
+    }
+    assert index_names(FinancialAccount) == {
+        "ix_financial_accounts_case_id",
+        "uq_financial_accounts_dedupe_key",
+    }
+    assert index_names(FinancialReportingPeriod) == {
+        "ix_financial_reporting_periods_case_id",
+        "uq_financial_reporting_periods_dedupe_key",
+    }
+    assert index_names(FinancialBalance) == {
+        "ix_financial_balances_case_id",
+        "uq_financial_balances_dedupe_key",
+    }
+    assert index_names(FinancialObligation) == {
+        "ix_financial_obligations_case_id",
+        "uq_financial_obligations_dedupe_key",
+    }
+    assert index_names(FinancialSourceRow) == {
+        "ix_financial_source_rows_case_id",
+        "uq_financial_source_rows_extraction_row",
+    }
+    assert index_names(FinancialRecordSourceLink) == {
+        "ix_financial_record_source_links_case_id",
+        "uq_financial_record_source_links_field",
+    }
+    assert index_names(FinancialManualEditHistory) == {
+        "ix_financial_manual_edit_history_case_id",
+    }
+    assert index_names(FinancialValidationIssue) == {
+        "ix_financial_validation_issues_case_id",
+    }
+
+    assert index_columns(FinancialInstitution, "ix_financial_institutions_case_id") == ("case_id",)
+    assert index_columns(FinancialAccount, "ix_financial_accounts_case_id") == ("case_id",)
+    assert index_columns(FinancialReportingPeriod, "ix_financial_reporting_periods_case_id") == (
+        "case_id",
+    )
+    assert index_columns(FinancialBalance, "ix_financial_balances_case_id") == ("case_id",)
+    assert index_columns(FinancialObligation, "ix_financial_obligations_case_id") == ("case_id",)
+    assert index_columns(FinancialSourceRow, "ix_financial_source_rows_case_id") == ("case_id",)
+    assert index_columns(FinancialSourceRow, "uq_financial_source_rows_extraction_row") == (
+        "document_extraction_id",
+        "row_index",
+    )
+    assert index_columns(FinancialRecordSourceLink, "ix_financial_record_source_links_case_id") == (
+        "case_id",
+    )
+    assert index_columns(FinancialRecordSourceLink, "uq_financial_record_source_links_field") == (
+        "source_row_id",
+        "record_id",
+        "record_table",
+        "field_name",
+        "source_field",
+    )
+    assert index_columns(FinancialInstitution, "uq_financial_institutions_dedupe_key") == (
+        "dedupe_key",
+        "organization_id",
+        "case_id",
+    )
+    assert index_columns(FinancialAccount, "uq_financial_accounts_dedupe_key") == (
+        "dedupe_key",
+        "organization_id",
+        "case_id",
+    )
+    assert index_columns(FinancialReportingPeriod, "uq_financial_reporting_periods_dedupe_key") == (
+        "dedupe_key",
+        "organization_id",
+        "case_id",
+    )
+    assert index_columns(FinancialBalance, "uq_financial_balances_dedupe_key") == (
+        "dedupe_key",
+        "organization_id",
+        "case_id",
+    )
+    assert index_columns(FinancialObligation, "uq_financial_obligations_dedupe_key") == (
+        "dedupe_key",
+        "organization_id",
+        "case_id",
+    )
+    assert index_columns(
+        FinancialManualEditHistory, "ix_financial_manual_edit_history_case_id"
+    ) == ("case_id",)
+    assert index_columns(FinancialValidationIssue, "ix_financial_validation_issues_case_id") == (
+        "case_id",
+    )
+
+
+def test_financial_canonical_dedupe_keys_are_case_scoped(db_session: Session) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    first_case_id = db_uuid(db_session, uuid4())
+    second_case_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (:first_case_id, :org_id, 'First financial case', 'vendor', 'active', :now, :now),
+              (:second_case_id, :org_id, 'Second financial case', 'vendor', 'active', :now, :now)
+            """
+        ),
+        {
+            "first_case_id": first_case_id,
+            "second_case_id": second_case_id,
+            "org_id": org_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_institutions
+              (id, organization_id, case_id, dedupe_key, name, created_at, updated_at)
+            VALUES
+              (
+                :first_id,
+                :org_id,
+                :first_case_id,
+                'institution:shared-key',
+                'First Bank',
+                :now,
+                :now
+              ),
+              (
+                :second_id,
+                :org_id,
+                :second_case_id,
+                'institution:shared-key',
+                'Second Bank',
+                :now,
+                :now
+              )
+            """
+        ),
+        {
+            "first_id": db_uuid(db_session, uuid4()),
+            "second_id": db_uuid(db_session, uuid4()),
+            "org_id": org_id,
+            "first_case_id": first_case_id,
+            "second_case_id": second_case_id,
+            "now": now,
+        },
+    )
+    db_session.commit()
+
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_institutions
+          (id, organization_id, case_id, dedupe_key, name, created_at, updated_at)
+        VALUES
+          (
+            :id,
+            :org_id,
+            :first_case_id,
+            'institution:shared-key',
+            'Duplicate Bank',
+            :now,
+            :now
+          )
+        """,
+        {
+            "id": db_uuid(db_session, uuid4()),
+            "org_id": org_id,
+            "first_case_id": first_case_id,
+            "now": now,
+        },
+    )
 
 
 def test_phase_1_database_defaults_are_defined(db_session: Session) -> None:
@@ -402,9 +602,17 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
         text(
             """
             INSERT INTO financial_institutions
-              (id, organization_id, case_id, name, created_at, updated_at)
+              (id, organization_id, case_id, dedupe_key, name, created_at, updated_at)
             VALUES
-              (:institution_id, :org_id, :case_id, 'Aequor Bank', :now, :now)
+              (
+                :institution_id,
+                :org_id,
+                :case_id,
+                'test:institution:workspace',
+                'Aequor Bank',
+                :now,
+                :now
+              )
             """
         ),
         {"institution_id": institution_id, "org_id": org_id, "case_id": case_id, "now": now},
@@ -413,9 +621,27 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
         text(
             """
             INSERT INTO financial_accounts
-              (id, organization_id, case_id, institution_id, account_name, created_at, updated_at)
+              (
+                id,
+                organization_id,
+                case_id,
+                dedupe_key,
+                institution_id,
+                account_name,
+                created_at,
+                updated_at
+              )
             VALUES
-              (:account_id, :org_id, :case_id, :institution_id, 'Operating Account', :now, :now)
+              (
+                :account_id,
+                :org_id,
+                :case_id,
+                'test:account:workspace',
+                :institution_id,
+                'Operating Account',
+                :now,
+                :now
+              )
             """
         ),
         {
@@ -430,9 +656,17 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
         text(
             """
             INSERT INTO financial_reporting_periods
-              (id, organization_id, case_id, period_type, created_at, updated_at)
+              (id, organization_id, case_id, dedupe_key, period_type, created_at, updated_at)
             VALUES
-              (:reporting_period_id, :org_id, :case_id, 'quarter', :now, :now)
+              (
+                :reporting_period_id,
+                :org_id,
+                :case_id,
+                'test:period:workspace',
+                'quarter',
+                :now,
+                :now
+              )
             """
         ),
         {
@@ -450,6 +684,7 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
                 id,
                 organization_id,
                 case_id,
+                dedupe_key,
                 account_id,
                 reporting_period_id,
                 balance_type,
@@ -462,6 +697,7 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
                 :balance_id,
                 :org_id,
                 :case_id,
+                'test:balance:workspace',
                 :account_id,
                 :reporting_period_id,
                 'cash',
@@ -488,6 +724,7 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
                 id,
                 organization_id,
                 case_id,
+                dedupe_key,
                 institution_id,
                 account_id,
                 reporting_period_id,
@@ -500,6 +737,7 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
                 :obligation_id,
                 :org_id,
                 :case_id,
+                'test:obligation:workspace',
                 :institution_id,
                 :account_id,
                 :reporting_period_id,
@@ -682,6 +920,7 @@ def test_financial_workspace_allows_null_optional_relationships(db_session: Sess
                 id,
                 organization_id,
                 case_id,
+                dedupe_key,
                 account_id,
                 reporting_period_id,
                 balance_type,
@@ -690,7 +929,18 @@ def test_financial_workspace_allows_null_optional_relationships(db_session: Sess
                 updated_at
               )
             VALUES
-              (:balance_id, :org_id, :case_id, NULL, NULL, 'cash', 100, :now, :now)
+              (
+                :balance_id,
+                :org_id,
+                :case_id,
+                'test:balance:nullable-links',
+                NULL,
+                NULL,
+                'cash',
+                100,
+                :now,
+                :now
+              )
             """
         ),
         {"balance_id": balance_id, "org_id": org_id, "case_id": case_id, "now": now},
@@ -703,6 +953,7 @@ def test_financial_workspace_allows_null_optional_relationships(db_session: Sess
                 id,
                 organization_id,
                 case_id,
+                dedupe_key,
                 institution_id,
                 account_id,
                 reporting_period_id,
@@ -715,6 +966,7 @@ def test_financial_workspace_allows_null_optional_relationships(db_session: Sess
                 :obligation_id,
                 :org_id,
                 :case_id,
+                'test:obligation:nullable-links',
                 NULL,
                 NULL,
                 NULL,
@@ -800,9 +1052,17 @@ def test_financial_workspace_rejects_cross_tenant_case_links(db_session: Session
             text(
                 """
                 INSERT INTO financial_institutions
-                  (id, organization_id, case_id, name, created_at, updated_at)
+                  (id, organization_id, case_id, dedupe_key, name, created_at, updated_at)
                 VALUES
-                  (:institution_id, :org_id, :other_case_id, 'Wrong Tenant Bank', :now, :now)
+                  (
+                    :institution_id,
+                    :org_id,
+                    :other_case_id,
+                    'test:institution:wrong-tenant',
+                    'Wrong Tenant Bank',
+                    :now,
+                    :now
+                  )
                 """
             ),
             {
@@ -846,9 +1106,17 @@ def test_financial_workspace_rejects_cross_case_parent_links(db_session: Session
         text(
             """
             INSERT INTO financial_institutions
-              (id, organization_id, case_id, name, created_at, updated_at)
+              (id, organization_id, case_id, dedupe_key, name, created_at, updated_at)
             VALUES
-              (:institution_id, :org_id, :source_case_id, 'Source Bank', :now, :now)
+              (
+                :institution_id,
+                :org_id,
+                :source_case_id,
+                'test:institution:source-case',
+                'Source Bank',
+                :now,
+                :now
+              )
             """
         ),
         {
@@ -868,6 +1136,7 @@ def test_financial_workspace_rejects_cross_case_parent_links(db_session: Session
                     id,
                     organization_id,
                     case_id,
+                    dedupe_key,
                     institution_id,
                     account_name,
                     created_at,
@@ -878,6 +1147,7 @@ def test_financial_workspace_rejects_cross_case_parent_links(db_session: Session
                     :account_id,
                     :org_id,
                     :target_case_id,
+                    'test:account:cross-case-parent',
                     :institution_id,
                     'Cross-case account',
                     :now,
@@ -1016,9 +1286,17 @@ def test_financial_manual_edits_reject_cross_tenant_editors(db_session: Session)
         text(
             """
             INSERT INTO financial_accounts
-              (id, organization_id, case_id, account_name, created_at, updated_at)
+              (id, organization_id, case_id, dedupe_key, account_name, created_at, updated_at)
             VALUES
-              (:account_id, :org_id, :case_id, 'Operating Account', :now, :now)
+              (
+                :account_id,
+                :org_id,
+                :case_id,
+                'test:account:manual-edit',
+                'Operating Account',
+                :now,
+                :now
+              )
             """
         ),
         {"account_id": account_id, "org_id": org_id, "case_id": case_id, "now": now},
@@ -1058,6 +1336,55 @@ def test_financial_manual_edits_reject_cross_tenant_editors(db_session: Session)
                 "case_id": case_id,
                 "account_id": account_id,
                 "wrong_tenant_user_id": db_uuid(db_session, USER_2),
+                "now": now,
+            },
+        )
+        db_session.flush()
+
+    db_session.rollback()
+
+
+def test_financial_source_rows_reject_unknown_document_extractions(db_session: Session) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    case_id = db_uuid(db_session, uuid4())
+    source_row_id = db_uuid(db_session, uuid4())
+    missing_extraction_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (:case_id, :org_id, 'Financial case', 'vendor', 'active', :now, :now)
+            """
+        ),
+        {"case_id": case_id, "org_id": org_id, "now": now},
+    )
+
+    with pytest.raises(IntegrityError):
+        db_session.execute(
+            text(
+                """
+                INSERT INTO financial_source_rows
+                  (
+                    id,
+                    organization_id,
+                    case_id,
+                    document_extraction_id,
+                    row_index,
+                    created_at
+                  )
+                VALUES
+                  (:source_row_id, :org_id, :case_id, :missing_extraction_id, 0, :now)
+                """
+            ),
+            {
+                "source_row_id": source_row_id,
+                "org_id": org_id,
+                "case_id": case_id,
+                "missing_extraction_id": missing_extraction_id,
                 "now": now,
             },
         )
@@ -1166,9 +1493,9 @@ def test_financial_workspace_rejects_invalid_domain_values(db_session: Session) 
         db_session,
         """
         INSERT INTO financial_reporting_periods
-          (id, organization_id, case_id, period_type, created_at, updated_at)
+          (id, organization_id, case_id, dedupe_key, period_type, created_at, updated_at)
         VALUES
-          (:id, :org_id, :case_id, 'decade', :now, :now)
+          (:id, :org_id, :case_id, 'test:period:invalid-domain', 'decade', :now, :now)
         """,
         {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
     )
@@ -1176,9 +1503,18 @@ def test_financial_workspace_rejects_invalid_domain_values(db_session: Session) 
         db_session,
         """
         INSERT INTO financial_accounts
-          (id, organization_id, case_id, account_name, currency, created_at, updated_at)
+          (id, organization_id, case_id, dedupe_key, account_name, currency, created_at, updated_at)
         VALUES
-          (:id, :org_id, :case_id, 'Operating Account', 'usd', :now, :now)
+          (
+            :id,
+            :org_id,
+            :case_id,
+            'test:account:invalid-currency',
+            'Operating Account',
+            'usd',
+            :now,
+            :now
+          )
         """,
         {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
     )
@@ -1186,9 +1522,18 @@ def test_financial_workspace_rejects_invalid_domain_values(db_session: Session) 
         db_session,
         """
         INSERT INTO financial_accounts
-          (id, organization_id, case_id, account_name, status, created_at, updated_at)
+          (id, organization_id, case_id, dedupe_key, account_name, status, created_at, updated_at)
         VALUES
-          (:id, :org_id, :case_id, 'Operating Account', 'pending', :now, :now)
+          (
+            :id,
+            :org_id,
+            :case_id,
+            'test:account:invalid-status',
+            'Operating Account',
+            'pending',
+            :now,
+            :now
+          )
         """,
         {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
     )
@@ -1196,9 +1541,19 @@ def test_financial_workspace_rejects_invalid_domain_values(db_session: Session) 
         db_session,
         """
         INSERT INTO financial_balances
-          (id, organization_id, case_id, balance_type, amount, currency, created_at, updated_at)
+          (
+            id,
+            organization_id,
+            case_id,
+            dedupe_key,
+            balance_type,
+            amount,
+            currency,
+            created_at,
+            updated_at
+          )
         VALUES
-          (:id, :org_id, :case_id, 'cash', 100, 'US', :now, :now)
+          (:id, :org_id, :case_id, 'test:balance:invalid-currency', 'cash', 100, 'US', :now, :now)
         """,
         {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
     )
@@ -1206,9 +1561,18 @@ def test_financial_workspace_rejects_invalid_domain_values(db_session: Session) 
         db_session,
         """
         INSERT INTO financial_obligations
-          (id, organization_id, case_id, obligation_type, status, created_at, updated_at)
+          (
+            id,
+            organization_id,
+            case_id,
+            dedupe_key,
+            obligation_type,
+            status,
+            created_at,
+            updated_at
+          )
         VALUES
-          (:id, :org_id, :case_id, 'lease', 'pending', :now, :now)
+          (:id, :org_id, :case_id, 'test:obligation:invalid-status', 'lease', 'pending', :now, :now)
         """,
         {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
     )
