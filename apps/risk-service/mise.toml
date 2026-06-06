@@ -77,13 +77,10 @@ uv run openapi-generator-cli generate \
   --additional-properties=supportsES6=true \
   --skip-validate-spec
 
-echo "Formatting generated TypeScript code..."
-(cd "$ROOT" && pnpm -w exec prettier --write packages/risk-service-api/src/)
-
 echo "Restoring source-first package.json configuration..."
 uv run python scripts/fix-api-client-package.py "$OPENAPI_CLIENT/package.json"
 
-echo "Formatting post-processed TypeScript code..."
+echo "Formatting generated TypeScript code..."
 (cd "$ROOT" && pnpm -w exec prettier --write packages/risk-service-api/src/ packages/risk-service-api/README.md)
 
 echo ""

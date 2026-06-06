@@ -2289,6 +2289,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "field_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Name"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -2311,6 +2322,17 @@
             "title": "Record Table",
             "type": "string"
           },
+          "source_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Field"
+          },
           "source_row_id": {
             "format": "uuid",
             "title": "Source Row Id",
@@ -2324,6 +2346,8 @@
           "record_table",
           "record_id",
           "source_row_id",
+          "field_name",
+          "source_field",
           "confidence",
           "metadata",
           "created_at"
@@ -2441,6 +2465,18 @@
             "title": "Created At",
             "type": "string"
           },
+          "document_extraction_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Extraction Id"
+          },
           "document_id": {
             "anyOf": [
               {
@@ -2486,6 +2522,7 @@
           "organization_id",
           "case_id",
           "document_id",
+          "document_extraction_id",
           "row_index",
           "locator",
           "raw_payload",
@@ -2593,6 +2630,147 @@
           "resolved_at"
         ],
         "title": "FinancialValidationIssueRead",
+        "type": "object"
+      },
+      "FinancialWorkspaceMapRequest": {
+        "properties": {
+          "document_extraction_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Extraction Id"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          }
+        },
+        "title": "FinancialWorkspaceMapRequest",
+        "type": "object"
+      },
+      "FinancialWorkspaceMapResponse": {
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "created": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Created",
+            "type": "object"
+          },
+          "document_extraction_id": {
+            "format": "uuid",
+            "title": "Document Extraction Id",
+            "type": "string"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "title": "Organization Id",
+            "type": "string"
+          },
+          "reused": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Reused",
+            "type": "object"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/FinancialWorkspaceMapSummary"
+          },
+          "unmapped_rows": {
+            "items": {
+              "$ref": "#/components/schemas/FinancialWorkspaceMapRowSummary"
+            },
+            "title": "Unmapped Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_id",
+          "organization_id",
+          "document_id",
+          "document_extraction_id",
+          "summary",
+          "created",
+          "reused",
+          "unmapped_rows"
+        ],
+        "title": "FinancialWorkspaceMapResponse",
+        "type": "object"
+      },
+      "FinancialWorkspaceMapRowSummary": {
+        "properties": {
+          "locator": {
+            "$ref": "#/components/schemas/JsonObject-Output"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "row_index": {
+            "title": "Row Index",
+            "type": "integer"
+          },
+          "source_row_id": {
+            "format": "uuid",
+            "title": "Source Row Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row_index",
+          "source_row_id",
+          "reason",
+          "locator"
+        ],
+        "title": "FinancialWorkspaceMapRowSummary",
+        "type": "object"
+      },
+      "FinancialWorkspaceMapSummary": {
+        "properties": {
+          "mapped_source_row_count": {
+            "title": "Mapped Source Row Count",
+            "type": "integer"
+          },
+          "source_row_count": {
+            "title": "Source Row Count",
+            "type": "integer"
+          },
+          "unmapped_source_row_count": {
+            "title": "Unmapped Source Row Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_row_count",
+          "mapped_source_row_count",
+          "unmapped_source_row_count"
+        ],
+        "title": "FinancialWorkspaceMapSummary",
         "type": "object"
       },
       "FindingCreate": {
@@ -6545,6 +6723,134 @@
           }
         },
         "summary": "Get Case Financial Workspace",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-workspace/map": {
+      "post": {
+        "operationId": "mapCaseFinancialWorkspace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialWorkspaceMapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialWorkspaceMapResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Map Case Financial Workspace",
         "tags": [
           "financial-data"
         ]

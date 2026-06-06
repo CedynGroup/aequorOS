@@ -95,17 +95,39 @@ def fix_package_json(data: dict[str, Any]) -> dict[str, Any]:
 def patch_error_body(package_root: Path) -> None:
     model_path = package_root / "src" / "models" / "ErrorBody.ts"
     text = model_path.read_text(encoding="utf-8")
-    replacements = {
-        "details?: null;": "details?: any | null;",
-        'details: json["details"] == null ? undefined : FromJSON(json["details"]),': (
-            'details: json["details"] == null ? undefined : json["details"],'
+    detail_type_variants = ("details?: null;", "details?:  | null;")
+    if "details?: any | null;" not in text:
+        for generated in detail_type_variants:
+            if generated in text:
+                text = text.replace(generated, "details?: any | null;")
+                break
+        else:
+            raise ValueError("Expected ErrorBody.ts details type fragment not found")
+    replacement_groups = (
+        (
+            (
+                'details: json["details"] == null ? undefined : FromJSON(json["details"]),',
+                "'details': json['details'] == null ? undefined : FromJSON(json['details']),",
+            ),
+            "'details': json['details'] == null ? undefined : json['details'],",
         ),
-        'details: ToJSON(value["details"]),': 'details: value["details"],',
-    }
-    for generated, patched in replacements.items():
-        if generated not in text and patched not in text:
-            raise ValueError(f"Expected ErrorBody.ts fragment not found: {generated}")
-        text = text.replace(generated, patched)
+        (
+            (
+                'details: ToJSON(value["details"]),',
+                "'details': ToJSON(value['details']),",
+            ),
+            "'details': value['details'],",
+        ),
+    )
+    for generated_variants, patched in replacement_groups:
+        if patched in text:
+            continue
+        for generated in generated_variants:
+            if generated in text:
+                text = text.replace(generated, patched)
+                break
+        else:
+            raise ValueError(f"Expected ErrorBody.ts fragment not found: {generated_variants[0]}")
     model_path.write_text(text, encoding="utf-8")
 
 
@@ -140,12 +162,16 @@ import {
             raise ValueError("Expected Payload.ts header marker not found")
         text = text.replace(marker, f" */\n\n{imports}", 1)
 
-    from_json_patched = "    default:\n      return value;\n  }\n}\n\nexport function PayloadToJSON"
-    from_json_expected = "    default:\n      return json;\n  }\n}\n\nexport function PayloadToJSON"
+    from_json_patched = (
+        "        default:\n            return value;\n    }\n}\n\nexport function PayloadToJSON"
+    )
+    from_json_expected = (
+        "        default:\n            return json;\n    }\n}\n\nexport function PayloadToJSON"
+    )
     text = text.replace(from_json_patched, from_json_expected)
 
-    to_json_expected = "    default:\n      return json;\n  }\n}\n"
-    to_json_patched = "    default:\n      return value;\n  }\n}\n"
+    to_json_expected = "        default:\n            return json;\n    }\n}\n"
+    to_json_patched = "        default:\n            return value;\n    }\n}\n"
     if to_json_expected not in text and to_json_patched not in text:
         raise ValueError("Expected Payload.ts default serializer branch not found")
     if to_json_expected in text:

@@ -36,6 +36,12 @@ export interface FinancialSourceRowRead {
    * @type {string}
    * @memberof FinancialSourceRowRead
    */
+  documentExtractionId: string | null;
+  /**
+   *
+   * @type {string}
+   * @memberof FinancialSourceRowRead
+   */
   documentId: string | null;
   /**
    *
@@ -77,6 +83,11 @@ export function instanceOfFinancialSourceRowRead(
 ): value is FinancialSourceRowRead {
   if (!("caseId" in value) || value["caseId"] === undefined) return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
+  if (
+    !("documentExtractionId" in value) ||
+    value["documentExtractionId"] === undefined
+  )
+    return false;
   if (!("documentId" in value) || value["documentId"] === undefined)
     return false;
   if (!("id" in value) || value["id"] === undefined) return false;
@@ -105,6 +116,7 @@ export function FinancialSourceRowReadFromJSONTyped(
   return {
     caseId: json["case_id"],
     createdAt: new Date(json["created_at"]),
+    documentExtractionId: json["document_extraction_id"],
     documentId: json["document_id"],
     id: json["id"],
     locator: json["locator"],
@@ -131,6 +143,7 @@ export function FinancialSourceRowReadToJSONTyped(
   return {
     case_id: value["caseId"],
     created_at: value["createdAt"].toISOString(),
+    document_extraction_id: value["documentExtractionId"],
     document_id: value["documentId"],
     id: value["id"],
     locator: value["locator"],

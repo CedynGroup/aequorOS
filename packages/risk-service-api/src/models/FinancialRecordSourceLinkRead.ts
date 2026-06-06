@@ -42,6 +42,12 @@ export interface FinancialRecordSourceLinkRead {
    * @type {string}
    * @memberof FinancialRecordSourceLinkRead
    */
+  fieldName: string | null;
+  /**
+   *
+   * @type {string}
+   * @memberof FinancialRecordSourceLinkRead
+   */
   id: string;
   /**
    *
@@ -72,6 +78,12 @@ export interface FinancialRecordSourceLinkRead {
    * @type {string}
    * @memberof FinancialRecordSourceLinkRead
    */
+  sourceField: string | null;
+  /**
+   *
+   * @type {string}
+   * @memberof FinancialRecordSourceLinkRead
+   */
   sourceRowId: string;
 }
 
@@ -85,12 +97,15 @@ export function instanceOfFinancialRecordSourceLinkRead(
   if (!("confidence" in value) || value["confidence"] === undefined)
     return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
+  if (!("fieldName" in value) || value["fieldName"] === undefined) return false;
   if (!("id" in value) || value["id"] === undefined) return false;
   if (!("metadata" in value) || value["metadata"] === undefined) return false;
   if (!("organizationId" in value) || value["organizationId"] === undefined)
     return false;
   if (!("recordId" in value) || value["recordId"] === undefined) return false;
   if (!("recordTable" in value) || value["recordTable"] === undefined)
+    return false;
+  if (!("sourceField" in value) || value["sourceField"] === undefined)
     return false;
   if (!("sourceRowId" in value) || value["sourceRowId"] === undefined)
     return false;
@@ -114,11 +129,13 @@ export function FinancialRecordSourceLinkReadFromJSONTyped(
     caseId: json["case_id"],
     confidence: json["confidence"],
     createdAt: new Date(json["created_at"]),
+    fieldName: json["field_name"],
     id: json["id"],
     metadata: json["metadata"],
     organizationId: json["organization_id"],
     recordId: json["record_id"],
     recordTable: json["record_table"],
+    sourceField: json["source_field"],
     sourceRowId: json["source_row_id"],
   };
 }
@@ -141,11 +158,13 @@ export function FinancialRecordSourceLinkReadToJSONTyped(
     case_id: value["caseId"],
     confidence: value["confidence"],
     created_at: value["createdAt"].toISOString(),
+    field_name: value["fieldName"],
     id: value["id"],
     metadata: value["metadata"],
     organization_id: value["organizationId"],
     record_id: value["recordId"],
     record_table: value["recordTable"],
+    source_field: value["sourceField"],
     source_row_id: value["sourceRowId"],
   };
 }
