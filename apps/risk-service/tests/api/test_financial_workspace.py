@@ -77,6 +77,7 @@ def test_financial_workspace_orders_groups_deterministically(db_client: TestClie
                 FinancialInstitution(
                     organization_id=ORG_1,
                     case_id=case.id,
+                    dedupe_key="test:institution:second",
                     name="Second Bank",
                     created_at=second_created,
                     updated_at=second_created,
@@ -84,6 +85,7 @@ def test_financial_workspace_orders_groups_deterministically(db_client: TestClie
                 FinancialInstitution(
                     organization_id=ORG_1,
                     case_id=case.id,
+                    dedupe_key="test:institution:first",
                     name="First Bank",
                     created_at=first_created,
                     updated_at=first_created,
@@ -111,6 +113,7 @@ def test_financial_workspace_serializes_precision_dates_and_nulls(
         balance = FinancialBalance(
             organization_id=ORG_1,
             case_id=case.id,
+            dedupe_key="test:balance:precision",
             account_id=None,
             reporting_period_id=None,
             balance_type="cash",
@@ -121,6 +124,7 @@ def test_financial_workspace_serializes_precision_dates_and_nulls(
         obligation = FinancialObligation(
             organization_id=ORG_1,
             case_id=case.id,
+            dedupe_key="test:obligation:precision",
             obligation_type="lease",
             interest_rate=Decimal("0.123456"),
             maturity_date=None,
@@ -168,6 +172,7 @@ def seed_financial_workspace(*, case_id: UUID) -> None:
         institution = FinancialInstitution(
             organization_id=ORG_1,
             case_id=case_id,
+            dedupe_key="test:institution:seed",
             name="Aequor Bank",
             institution_type="bank",
             reference_code="BANK-GH-001",
@@ -179,6 +184,7 @@ def seed_financial_workspace(*, case_id: UUID) -> None:
         account = FinancialAccount(
             organization_id=ORG_1,
             case_id=case_id,
+            dedupe_key="test:account:seed",
             institution_id=institution.id,
             account_number="123456789",
             account_name="Operating Account",
@@ -189,6 +195,7 @@ def seed_financial_workspace(*, case_id: UUID) -> None:
         period = FinancialReportingPeriod(
             organization_id=ORG_1,
             case_id=case_id,
+            dedupe_key="test:period:seed",
             period_type="quarter",
             start_date=date(2026, 1, 1),
             end_date=date(2026, 3, 31),
@@ -201,6 +208,7 @@ def seed_financial_workspace(*, case_id: UUID) -> None:
         balance = FinancialBalance(
             organization_id=ORG_1,
             case_id=case_id,
+            dedupe_key="test:balance:seed",
             account_id=account.id,
             reporting_period_id=period.id,
             balance_type="cash",
@@ -211,6 +219,7 @@ def seed_financial_workspace(*, case_id: UUID) -> None:
         obligation = FinancialObligation(
             organization_id=ORG_1,
             case_id=case_id,
+            dedupe_key="test:obligation:seed",
             institution_id=institution.id,
             account_id=account.id,
             reporting_period_id=period.id,

@@ -126,6 +126,112 @@ FastAPI route
   -> route returns response schema
 ```
 
+## Core Data Concepts
+
+### Risk Cases
+
+`RiskCase` is the top-level review workspace. Most tenant-owned workflow data is
+scoped to a case through `case_id`, including uploaded documents, assessments,
+findings, and financial workspace records.
+
+### Documents
+
+`Document` represents a file known to the service, usually an uploaded PDF,
+spreadsheet, or other supporting artifact. The document row stores workflow
+state and metadata such as tenant, case, filename, upload status, parse status,
+and the backing object-storage reference.
+
+The original file bytes live in object storage. The `Document` row is the
+database handle used by API workflows.
+
+### Document Chunks
+
+`DocumentChunk` represents text extracted from a document during parsing. Chunks
+are useful for review, search, scoring, and future model prompts. They are not
+the canonical structured representation of a financial statement or table.
+
+### Document Extractions
+
+`DocumentExtraction` represents structured data extracted from a document. It is
+linked to `Document` by `document_id` and stores the parser output in
+`extracted_json`, along with `extraction_type`, `schema_version`, `status`,
+confidence, error details, and creation time.
+
+A document can have multiple extractions over time. For example, a later parser
+version can create a new extraction while preserving the older one for audit and
+reproducibility. Internal parser/extraction changes should use
+`document_extractions.schema_version`; they do not require an HTTP API version
+bump unless the external API contract changes.
+
+### Financial Workspace Records
+
+The financial workspace is the canonical, case-local representation of financial
+data after mapping. It is intentionally separate from raw document extraction
+payloads.
+
+Canonical records include:
+
+- `FinancialInstitution`
+- `FinancialAccount`
+- `FinancialReportingPeriod`
+- `FinancialBalance`
+- `FinancialObligation`
+
+These records are used by downstream review, validation, and future risk
+analysis workflows. They should be created or reused using tenant- and
+case-scoped lookups.
+
+### Source Rows And Traceability
+
+`FinancialSourceRow` stores each parsed row that the mapper considered. It keeps
+the original row payload in `raw_payload`, plus row location details in
+`locator`, so unknown or unmapped fields are not silently lost.
+
+`FinancialRecordSourceLink` connects canonical financial records back to the
+source row and field that produced them. Mapper-created links should include
+field-level details such as `field_name` and `source_field` so reviewers can
+trace a canonical value back to the originating extraction row.
+
+### Financial Mapping Flow
+
+The financial workspace mapper consumes completed `DocumentExtraction` rows and
+maps supported structured payload shapes into canonical records:
+
+```json
+{ "rows": [{ "Bank": "Aequor Bank", "Balance": "250000", "Currency": "GHS" }] }
+```
+
+```json
+{
+  "tables": [
+    {
+      "rows": [
+        { "Lender": "ABC Bank", "Committed": "1000000", "Drawn": "250000" }
+      ]
+    }
+  ]
+}
+```
+
+The mapper endpoint is:
+
+```text
+POST /api/v1/cases/{case_id}/financial-workspace/map
+```
+
+The request accepts exactly one of `document_id` or `document_extraction_id`.
+When `document_id` is provided, the service uses the newest completed extraction
+for that document. When `document_extraction_id` is provided, that extraction
+must be completed and must belong to the requested tenant and case through its
+document.
+
+The response groups operational counts under `summary`, `created`, and `reused`.
+Summary counts use source-row terminology, for example `source_row_count`,
+`mapped_source_row_count`, and `unmapped_source_row_count`.
+
+The mapper must preserve idempotency for repeated runs against the same
+extraction and must preserve unmapped rows in `FinancialSourceRow`.
+
 ## API Versioning
 
 The service uses URL path major versioning for HTTP contracts.

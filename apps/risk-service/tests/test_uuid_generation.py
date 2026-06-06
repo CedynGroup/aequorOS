@@ -40,6 +40,7 @@ def test_financial_models_use_uuid7_primary_key_defaults(db_session: Session) ->
     institution = FinancialInstitution(
         organization_id=ORG_1,
         case_id=risk_case.id,
+        dedupe_key="test:institution:uuid-generation",
         name="Example Bank",
     )
     db_session.add(institution)

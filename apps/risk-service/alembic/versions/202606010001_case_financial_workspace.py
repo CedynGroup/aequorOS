@@ -56,6 +56,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("case_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("dedupe_key", sa.String(length=96), nullable=False),
         sa.Column("name", sa.Text(), nullable=False),
         sa.Column("institution_type", sa.String(length=120), nullable=True),
         sa.Column("reference_code", sa.String(length=120), nullable=True),
@@ -80,15 +81,22 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_financial_institutions_organization_id_case_id",
+        "ix_financial_institutions_case_id",
         "financial_institutions",
-        ["organization_id", "case_id"],
+        ["case_id"],
+    )
+    op.create_index(
+        "uq_financial_institutions_dedupe_key",
+        "financial_institutions",
+        ["dedupe_key", "organization_id", "case_id"],
+        unique=True,
     )
     op.create_table(
         "financial_accounts",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("case_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("dedupe_key", sa.String(length=96), nullable=False),
         sa.Column("institution_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("account_number", sa.Text(), nullable=True),
         sa.Column("account_name", sa.Text(), nullable=False),
@@ -132,15 +140,22 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_financial_accounts_organization_id_case_id",
+        "ix_financial_accounts_case_id",
         "financial_accounts",
-        ["organization_id", "case_id"],
+        ["case_id"],
+    )
+    op.create_index(
+        "uq_financial_accounts_dedupe_key",
+        "financial_accounts",
+        ["dedupe_key", "organization_id", "case_id"],
+        unique=True,
     )
     op.create_table(
         "financial_reporting_periods",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("case_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("dedupe_key", sa.String(length=96), nullable=False),
         sa.Column("period_type", sa.String(length=40), nullable=False),
         sa.Column("start_date", sa.Date(), nullable=True),
         sa.Column("end_date", sa.Date(), nullable=True),
@@ -171,15 +186,22 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_financial_reporting_periods_organization_id_case_id",
+        "ix_financial_reporting_periods_case_id",
         "financial_reporting_periods",
-        ["organization_id", "case_id"],
+        ["case_id"],
+    )
+    op.create_index(
+        "uq_financial_reporting_periods_dedupe_key",
+        "financial_reporting_periods",
+        ["dedupe_key", "organization_id", "case_id"],
+        unique=True,
     )
     op.create_table(
         "financial_balances",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("case_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("dedupe_key", sa.String(length=96), nullable=False),
         sa.Column("account_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("reporting_period_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("balance_type", sa.String(length=120), nullable=False),
@@ -227,15 +249,22 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_financial_balances_organization_id_case_id",
+        "ix_financial_balances_case_id",
         "financial_balances",
-        ["organization_id", "case_id"],
+        ["case_id"],
+    )
+    op.create_index(
+        "uq_financial_balances_dedupe_key",
+        "financial_balances",
+        ["dedupe_key", "organization_id", "case_id"],
+        unique=True,
     )
     op.create_table(
         "financial_obligations",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("case_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("dedupe_key", sa.String(length=96), nullable=False),
         sa.Column("institution_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("account_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("reporting_period_id", postgresql.UUID(as_uuid=True), nullable=True),
@@ -302,9 +331,15 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_financial_obligations_organization_id_case_id",
+        "ix_financial_obligations_case_id",
         "financial_obligations",
-        ["organization_id", "case_id"],
+        ["case_id"],
+    )
+    op.create_index(
+        "uq_financial_obligations_dedupe_key",
+        "financial_obligations",
+        ["dedupe_key", "organization_id", "case_id"],
+        unique=True,
     )
     op.create_table(
         "financial_source_rows",
@@ -312,6 +347,7 @@ def upgrade() -> None:
         sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("case_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("document_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("document_extraction_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("row_index", sa.Integer(), nullable=True),
         sa.Column(
             "locator",
@@ -338,6 +374,10 @@ def upgrade() -> None:
             ["document_id", "organization_id", "case_id"],
             ["documents.id", "documents.organization_id", "documents.case_id"],
         ),
+        sa.ForeignKeyConstraint(
+            ["document_extraction_id"],
+            ["document_extractions.id"],
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "id",
@@ -347,14 +387,15 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_financial_source_rows_organization_id_case_id",
+        "ix_financial_source_rows_case_id",
         "financial_source_rows",
-        ["organization_id", "case_id"],
+        ["case_id"],
     )
     op.create_index(
-        "ix_financial_source_rows_organization_id_document_id",
+        "uq_financial_source_rows_extraction_row",
         "financial_source_rows",
-        ["organization_id", "document_id"],
+        ["document_extraction_id", "row_index"],
+        unique=True,
     )
 
     op.create_table(
@@ -365,6 +406,8 @@ def upgrade() -> None:
         sa.Column("record_table", sa.String(length=120), nullable=False),
         sa.Column("record_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("source_row_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("field_name", sa.String(length=120), nullable=True),
+        sa.Column("source_field", sa.String(length=120), nullable=True),
         sa.Column("confidence", sa.Numeric(5, 4), nullable=True),
         sa.Column(
             "metadata",
@@ -399,14 +442,21 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        "ix_financial_record_source_links_organization_id_case_id",
+        "ix_financial_record_source_links_case_id",
         "financial_record_source_links",
-        ["organization_id", "case_id"],
+        ["case_id"],
     )
     op.create_index(
-        "ix_financial_record_source_links_organization_id_record",
+        "uq_financial_record_source_links_field",
         "financial_record_source_links",
-        ["organization_id", "record_table", "record_id"],
+        [
+            "source_row_id",
+            "record_id",
+            "record_table",
+            "field_name",
+            "source_field",
+        ],
+        unique=True,
     )
 
     op.create_table(
@@ -448,14 +498,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        "ix_financial_manual_edit_history_organization_id_case_id",
+        "ix_financial_manual_edit_history_case_id",
         "financial_manual_edit_history",
-        ["organization_id", "case_id"],
-    )
-    op.create_index(
-        "ix_financial_manual_edit_history_organization_id_record",
-        "financial_manual_edit_history",
-        ["organization_id", "record_table", "record_id"],
+        ["case_id"],
     )
 
     op.create_table(
@@ -500,14 +545,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        "ix_financial_validation_issues_organization_id_case_id",
+        "ix_financial_validation_issues_case_id",
         "financial_validation_issues",
-        ["organization_id", "case_id"],
-    )
-    op.create_index(
-        "ix_financial_validation_issues_organization_id_record",
-        "financial_validation_issues",
-        ["organization_id", "record_table", "record_id"],
+        ["case_id"],
     )
     for table in FINANCIAL_TABLES:
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
