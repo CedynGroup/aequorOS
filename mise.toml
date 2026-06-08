@@ -32,6 +32,11 @@ description = "Run risk service pytest against local Docker Postgres"
 dir = "apps/risk-service"
 run = "mise run risk-service:test-postgres"
 
+[tasks."risk-service:test-postgres-migrations"]
+description = "Run risk service Postgres-backed Alembic migration tests"
+dir = "apps/risk-service"
+run = "mise run risk-service:test-postgres-migrations"
+
 [tasks."risk-service:lint"]
 description = "Run risk service Ruff checks"
 dir = "apps/risk-service"

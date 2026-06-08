@@ -1,0 +1,53 @@
+name: Risk Service CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/risk-service/**"
+      - "packages/risk-service-api/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/risk-service.yml"
+  push:
+    branches:
+      - main
+
+jobs:
+  risk-service:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: risk_service
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d risk_service"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+        with:
+          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+      - name: Install risk service dependencies
+        run: mise run risk-service:sync
+      - name: Install workspace dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+      - name: Lint risk service
+        run: mise run risk-service:lint
+      - name: Typecheck risk service
+        run: mise run risk-service:typecheck
+      - name: Test risk service
+        run: mise run risk-service:test
+      - name: Test Postgres migrations
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/risk_service
+        run: mise run risk-service:test-postgres-migrations
+      - name: Typecheck generated API client
+        run: mise run risk-service:api-typecheck
