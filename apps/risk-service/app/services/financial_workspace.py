@@ -19,12 +19,16 @@ from app.models import (
 )
 from app.schemas.financial_workspace import FinancialDataWorkspaceRead
 from app.services.cases import get_case_or_404
+from app.services.financial_validation import summarize_validation_issues
 
 
 def get_financial_workspace(
     db: Session, ctx: TenantContext, case_id: UUID
 ) -> FinancialDataWorkspaceRead:
     case = get_case_or_404(db, ctx.organization_id, case_id)
+    validation_issues = list(
+        db.scalars(financial_stmt(FinancialValidationIssue, ctx.organization_id, case_id))
+    )
     return FinancialDataWorkspaceRead(
         case_id=case.id,
         organization_id=case.organization_id,
@@ -48,9 +52,8 @@ def get_financial_workspace(
         manual_edits=list(
             db.scalars(financial_stmt(FinancialManualEditHistory, ctx.organization_id, case_id))
         ),
-        validation_issues=list(
-            db.scalars(financial_stmt(FinancialValidationIssue, ctx.organization_id, case_id))
-        ),
+        validation_issues=validation_issues,
+        validation_summary=summarize_validation_issues(validation_issues),
     )
 
 

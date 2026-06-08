@@ -16,6 +16,8 @@ def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient
     assert "/api/v1/cases/{case_id}/findings" in paths
     assert "/api/v1/cases/{case_id}/financial-workspace" in paths
     assert "/api/v1/cases/{case_id}/financial-workspace/map" in paths
+    assert "/api/v1/cases/{case_id}/financial-data/validate" in paths
+    assert "/api/v1/cases/{case_id}/financial-data/validation-issues" in paths
 
     case_list_operation = paths["/api/v1/cases"]["get"]
     case_list_ref = paths["/api/v1/cases"]["get"]["responses"]["200"]["content"][
@@ -33,12 +35,16 @@ def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient
     financial_workspace_map_ref = paths["/api/v1/cases/{case_id}/financial-workspace/map"]["post"][
         "responses"
     ]["200"]["content"]["application/json"]["schema"]["$ref"]
+    financial_validate_ref = paths["/api/v1/cases/{case_id}/financial-data/validate"]["post"][
+        "responses"
+    ]["200"]["content"]["application/json"]["schema"]["$ref"]
 
     assert case_list_ref == "#/components/schemas/CaseListRead"
     assert report_ref == "#/components/schemas/RiskReportPayload"
     assert finding_create_ref == "#/components/schemas/FindingCreate"
     assert financial_workspace_ref == "#/components/schemas/FinancialDataWorkspaceRead"
     assert financial_workspace_map_ref == "#/components/schemas/FinancialWorkspaceMapResponse"
+    assert financial_validate_ref == "#/components/schemas/FinancialValidationRunResponse"
     assert case_list_operation["operationId"] == "listCases"
 
     case_parameters = {
@@ -80,6 +86,7 @@ def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient
         "record_source_links",
         "manual_edits",
         "validation_issues",
+        "validation_summary",
     } <= set(components["FinancialDataWorkspaceRead"]["required"])
     assert "metadata" in components["CaseRead"]["properties"]
     assert "metadata" in components["FinancialInstitutionRead"]["properties"]
@@ -98,6 +105,8 @@ def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
     assert "/api/v1/cases/{case_id}/report" in paths
     assert "/api/v1/cases/{case_id}/financial-workspace" in paths
     assert "/api/v1/cases/{case_id}/financial-workspace/map" in paths
+    assert "/api/v1/cases/{case_id}/financial-data/validate" in paths
+    assert "/api/v1/cases/{case_id}/financial-data/validation-issues" in paths
     assert "/api/v1/taxonomies/cases" in paths
 
     report_ref = paths["/api/v1/cases/{case_id}/report"]["get"]["responses"]["200"]["content"][
@@ -107,6 +116,8 @@ def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
         "responses"
     ]["200"]["content"]["application/json"]["schema"]["$ref"]
     financial_workspace_map = paths["/api/v1/cases/{case_id}/financial-workspace/map"]["post"]
+    financial_validate = paths["/api/v1/cases/{case_id}/financial-data/validate"]["post"]
+    financial_issues = paths["/api/v1/cases/{case_id}/financial-data/validation-issues"]["get"]
     bulk_action_request_schema = paths["/api/v1/cases/bulk-actions"]["post"]["requestBody"][
         "content"
     ]["application/json"]["schema"]
@@ -118,6 +129,8 @@ def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
     assert report_ref == "#/components/schemas/RiskReportPayload"
     assert financial_workspace_ref == "#/components/schemas/FinancialDataWorkspaceRead"
     assert financial_workspace_map["operationId"] == "mapCaseFinancialWorkspace"
+    assert financial_validate["operationId"] == "validateCaseFinancialData"
+    assert financial_issues["operationId"] == "listCaseFinancialValidationIssues"
     assert bulk_action_request_schema["discriminator"]["propertyName"] == "action"
     assert {option["$ref"] for option in bulk_action_request_schema["oneOf"]} == {
         "#/components/schemas/CaseBulkAssignCreate",
@@ -142,5 +155,4 @@ def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
     assert "/api/v1/cases/{case_id}/decision" not in paths
     assert "/api/v1/cases/{case_id}/report.json" not in paths
     assert "/api/v1/cases/{case_id}/report.html" not in paths
-    assert "/api/v1/cases/{case_id}/financial-data" not in paths
     assert "/api/v1/cases/taxonomy" not in paths

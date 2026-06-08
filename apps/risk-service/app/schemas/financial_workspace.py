@@ -2,11 +2,25 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.schemas.common import JsonObject, JsonValue
+
+type FinancialValidationSeverity = Literal["error", "warning", "info"]
+type FinancialValidationEntityType = Literal[
+    "institution", "account", "reporting_period", "balance", "obligation"
+]
+
+ENTITY_TYPE_BY_TABLE: dict[str, FinancialValidationEntityType] = {
+    "financial_institutions": "institution",
+    "financial_accounts": "account",
+    "financial_reporting_periods": "reporting_period",
+    "financial_balances": "balance",
+    "financial_obligations": "obligation",
+}
 
 
 class FinancialInstitutionRead(BaseModel):
@@ -150,13 +164,58 @@ class FinancialValidationIssueRead(BaseModel):
     case_id: UUID
     record_table: str | None
     record_id: UUID | None
+    issue_key: str
+    field_name: str
     severity: str
     status: str
-    rule_id: str | None
+    rule_id: str
     message: str
     details: JsonObject
     created_at: datetime
     resolved_at: datetime | None
+
+    @computed_field
+    @property
+    def code(self) -> str | None:
+        return self.rule_id
+
+    @computed_field
+    @property
+    def entity_type(self) -> FinancialValidationEntityType | None:
+        if self.record_table is None:
+            value = self.details.get("entity_type")
+            if value in set(ENTITY_TYPE_BY_TABLE.values()):
+                return value
+            return None
+        return ENTITY_TYPE_BY_TABLE.get(self.record_table)
+
+    @computed_field
+    @property
+    def entity_id(self) -> UUID | None:
+        return self.record_id
+
+    @computed_field
+    @property
+    def field(self) -> str | None:
+        if self.field_name:
+            return self.field_name
+        value = self.details.get("field")
+        return value if isinstance(value, str) else None
+
+
+class FinancialValidationSummaryRead(BaseModel):
+    total: int = 0
+    error: int = 0
+    warning: int = 0
+    info: int = 0
+
+
+class FinancialValidationRunResponse(BaseModel):
+    case_id: UUID
+    organization_id: UUID
+    issue_count: int
+    summary: FinancialValidationSummaryRead
+    issues: list[FinancialValidationIssueRead]
 
 
 class FinancialDataWorkspaceRead(BaseModel):
@@ -171,3 +230,4 @@ class FinancialDataWorkspaceRead(BaseModel):
     record_source_links: list[FinancialRecordSourceLinkRead]
     manual_edits: list[FinancialManualEditRead]
     validation_issues: list[FinancialValidationIssueRead]
+    validation_summary: FinancialValidationSummaryRead

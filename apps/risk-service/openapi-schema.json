@@ -1908,6 +1908,9 @@
             },
             "title": "Validation Issues",
             "type": "array"
+          },
+          "validation_summary": {
+            "$ref": "#/components/schemas/FinancialValidationSummaryRead"
           }
         },
         "required": [
@@ -1921,7 +1924,8 @@
           "source_rows",
           "record_source_links",
           "manual_edits",
-          "validation_issues"
+          "validation_issues",
+          "validation_summary"
         ],
         "title": "FinancialDataWorkspaceRead",
         "type": "object"
@@ -2531,12 +2535,34 @@
         "title": "FinancialSourceRowRead",
         "type": "object"
       },
+      "FinancialValidationEntityType": {
+        "enum": [
+          "institution",
+          "account",
+          "reporting_period",
+          "balance",
+          "obligation"
+        ],
+        "type": "string"
+      },
       "FinancialValidationIssueRead": {
         "properties": {
           "case_id": {
             "format": "uuid",
             "title": "Case Id",
             "type": "string"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "readOnly": true,
+            "title": "Code"
           },
           "created_at": {
             "format": "date-time",
@@ -2546,9 +2572,53 @@
           "details": {
             "$ref": "#/components/schemas/JsonObject-Output"
           },
+          "entity_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "readOnly": true,
+            "title": "Entity Id"
+          },
+          "entity_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialValidationEntityType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "readOnly": true
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "readOnly": true,
+            "title": "Field"
+          },
+          "field_name": {
+            "title": "Field Name",
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
+            "type": "string"
+          },
+          "issue_key": {
+            "title": "Issue Key",
             "type": "string"
           },
           "message": {
@@ -2596,15 +2666,8 @@
             "title": "Resolved At"
           },
           "rule_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rule Id"
+            "title": "Rule Id",
+            "type": "string"
           },
           "severity": {
             "title": "Severity",
@@ -2621,15 +2684,92 @@
           "case_id",
           "record_table",
           "record_id",
+          "issue_key",
+          "field_name",
           "severity",
           "status",
           "rule_id",
           "message",
           "details",
           "created_at",
-          "resolved_at"
+          "resolved_at",
+          "code",
+          "entity_type",
+          "entity_id",
+          "field"
         ],
         "title": "FinancialValidationIssueRead",
+        "type": "object"
+      },
+      "FinancialValidationRunResponse": {
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "issue_count": {
+            "title": "Issue Count",
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/FinancialValidationIssueRead"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "title": "Organization Id",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/FinancialValidationSummaryRead"
+          }
+        },
+        "required": [
+          "case_id",
+          "organization_id",
+          "issue_count",
+          "summary",
+          "issues"
+        ],
+        "title": "FinancialValidationRunResponse",
+        "type": "object"
+      },
+      "FinancialValidationSeverity": {
+        "enum": [
+          "error",
+          "warning",
+          "info"
+        ],
+        "type": "string"
+      },
+      "FinancialValidationSummaryRead": {
+        "properties": {
+          "error": {
+            "default": 0,
+            "title": "Error",
+            "type": "integer"
+          },
+          "info": {
+            "default": 0,
+            "title": "Info",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "warning": {
+            "default": 0,
+            "title": "Warning",
+            "type": "integer"
+          }
+        },
+        "title": "FinancialValidationSummaryRead",
         "type": "object"
       },
       "FinancialWorkspaceMapRequest": {
@@ -6607,6 +6747,278 @@
         "summary": "List Case Documents",
         "tags": [
           "documents"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-data/validate": {
+      "post": {
+        "operationId": "validateCaseFinancialData",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialValidationRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Validate Case Financial Data",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-data/validation-issues": {
+      "get": {
+        "operationId": "listCaseFinancialValidationIssues",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/FinancialValidationSeverity"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "entity_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/FinancialValidationEntityType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Type"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FinancialValidationIssueRead"
+                  },
+                  "title": "Response Listcasefinancialvalidationissues",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "List Case Financial Validation Issues",
+        "tags": [
+          "financial-data"
         ]
       }
     },
