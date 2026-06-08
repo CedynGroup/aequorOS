@@ -83,7 +83,7 @@ def test_financial_mapper_indexes_are_minimal_and_selective() -> None:
         "ix_financial_manual_edit_history_case_id",
     }
     assert index_names(FinancialValidationIssue) == {
-        "ix_financial_validation_issues_case_id",
+        "uq_financial_validation_issues_current_natural_key",
     }
 
     assert index_columns(FinancialInstitution, "ix_financial_institutions_case_id") == ("case_id",)
@@ -136,8 +136,15 @@ def test_financial_mapper_indexes_are_minimal_and_selective() -> None:
     assert index_columns(
         FinancialManualEditHistory, "ix_financial_manual_edit_history_case_id"
     ) == ("case_id",)
-    assert index_columns(FinancialValidationIssue, "ix_financial_validation_issues_case_id") == (
+    assert index_columns(
+        FinancialValidationIssue, "uq_financial_validation_issues_current_natural_key"
+    ) == (
+        "organization_id",
         "case_id",
+        "record_table",
+        "record_id",
+        "rule_id",
+        "field_name",
     )
 
 
@@ -828,9 +835,31 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
         text(
             """
             INSERT INTO financial_validation_issues
-              (id, organization_id, case_id, severity, status, message, created_at)
+              (
+                id,
+                organization_id,
+                case_id,
+                issue_key,
+                field_name,
+                severity,
+                status,
+                rule_id,
+                message,
+                created_at
+              )
             VALUES
-              (:validation_issue_id, :org_id, :case_id, 'low', 'open', 'Check source.', :now)
+              (
+                :validation_issue_id,
+                :org_id,
+                :case_id,
+                'validation:defaults',
+                '',
+                'warning',
+                'open',
+                'check_source',
+                'Check source.',
+                :now
+              )
             """
         ),
         {
@@ -1663,9 +1692,33 @@ def test_financial_support_records_reject_invalid_record_references(
         db_session,
         """
         INSERT INTO financial_validation_issues
-          (id, organization_id, case_id, record_id, severity, status, message, created_at)
+          (
+            id,
+            organization_id,
+            case_id,
+            record_id,
+            issue_key,
+            field_name,
+            severity,
+            status,
+            rule_id,
+            message,
+            created_at
+          )
         VALUES
-          (:id, :org_id, :case_id, :record_id, 'low', 'open', 'Missing table.', :now)
+          (
+            :id,
+            :org_id,
+            :case_id,
+            :record_id,
+            'validation:missing-table',
+            '',
+            'warning',
+            'open',
+            'missing_table',
+            'Missing table.',
+            :now
+          )
         """,
         {
             "id": db_uuid(db_session, uuid4()),
@@ -1679,11 +1732,143 @@ def test_financial_support_records_reject_invalid_record_references(
         db_session,
         """
         INSERT INTO financial_validation_issues
-          (id, organization_id, case_id, record_table, severity, status, message, created_at)
+          (
+            id,
+            organization_id,
+            case_id,
+            record_table,
+            issue_key,
+            field_name,
+            severity,
+            status,
+            rule_id,
+            message,
+            created_at
+          )
         VALUES
-          (:id, :org_id, :case_id, 'financial_balances', 'low', 'open', 'Missing ID.', :now)
+          (
+            :id,
+            :org_id,
+            :case_id,
+            'financial_balances',
+            'validation:missing-id',
+            '',
+            'warning',
+            'open',
+            'missing_id',
+            'Missing ID.',
+            :now
+          )
         """,
         {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
+    )
+
+
+def test_financial_validation_issues_reject_duplicate_current_natural_key(
+    db_session: Session,
+) -> None:
+    now = datetime.now(UTC).isoformat()
+    org_id = db_uuid(db_session, ORG_1)
+    case_id = db_uuid(db_session, uuid4())
+    record_id = db_uuid(db_session, uuid4())
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO risk_cases
+              (id, organization_id, title, case_type, status, created_at, updated_at)
+            VALUES
+              (:case_id, :org_id, 'Financial case', 'vendor', 'active', :now, :now)
+            """
+        ),
+        {"case_id": case_id, "org_id": org_id, "now": now},
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_validation_issues
+              (
+                id,
+                organization_id,
+                case_id,
+                record_table,
+                record_id,
+                issue_key,
+                field_name,
+                severity,
+                status,
+                rule_id,
+                message,
+                created_at
+              )
+            VALUES
+              (
+                :first_id,
+                :org_id,
+                :case_id,
+                'financial_balances',
+                :record_id,
+                'issue:first',
+                'currency',
+                'warning',
+                'open',
+                'source_traceability_missing',
+                'Missing source.',
+                :now
+              )
+            """
+        ),
+        {
+            "first_id": db_uuid(db_session, uuid4()),
+            "org_id": org_id,
+            "case_id": case_id,
+            "record_id": record_id,
+            "now": now,
+        },
+    )
+    db_session.commit()
+
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_validation_issues
+          (
+            id,
+            organization_id,
+            case_id,
+            record_table,
+            record_id,
+            issue_key,
+            field_name,
+            severity,
+            status,
+            rule_id,
+            message,
+            created_at
+          )
+        VALUES
+          (
+            :second_id,
+            :org_id,
+            :case_id,
+            'financial_balances',
+            :record_id,
+            'issue:second',
+            'currency',
+            'warning',
+            'open',
+            'source_traceability_missing',
+            'Duplicate natural key.',
+            :now
+          )
+        """,
+        {
+            "second_id": db_uuid(db_session, uuid4()),
+            "org_id": org_id,
+            "case_id": case_id,
+            "record_id": record_id,
+            "now": now,
+        },
     )
 
 

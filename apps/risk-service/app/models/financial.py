@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import (
@@ -440,7 +440,7 @@ class FinancialValidationIssue(UuidV7PrimaryKeyMixin, Base):
             ["risk_cases.id", "risk_cases.organization_id"],
         ),
         CheckConstraint(
-            "severity IN ('low', 'medium', 'high', 'critical')",
+            "severity IN ('error', 'warning', 'info')",
             name="ck_financial_validation_issues_severity",
         ),
         CheckConstraint(
@@ -456,8 +456,14 @@ class FinancialValidationIssue(UuidV7PrimaryKeyMixin, Base):
             name="ck_financial_validation_issues_record_reference",
         ),
         Index(
-            "ix_financial_validation_issues_case_id",
+            "uq_financial_validation_issues_current_natural_key",
+            "organization_id",
             "case_id",
+            "record_table",
+            "record_id",
+            "rule_id",
+            "field_name",
+            unique=True,
         ),
     )
 
@@ -465,9 +471,15 @@ class FinancialValidationIssue(UuidV7PrimaryKeyMixin, Base):
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     record_table: Mapped[str | None] = mapped_column(String(120), nullable=True)
     record_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
-    severity: Mapped[str] = mapped_column(String(40), nullable=False)
-    status: Mapped[str] = mapped_column(String(40), nullable=False)
-    rule_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    issue_key: Mapped[str] = mapped_column(String(96), nullable=False)
+    field_name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    severity: Mapped[Literal["error", "warning", "info"]] = mapped_column(
+        String(40), nullable=False
+    )
+    status: Mapped[Literal["open", "resolved", "dismissed"]] = mapped_column(
+        String(40), nullable=False
+    )
+    rule_id: Mapped[str] = mapped_column(String(120), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     details: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False

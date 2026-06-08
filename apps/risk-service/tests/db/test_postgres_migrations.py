@@ -205,7 +205,7 @@ def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
         "ix_financial_record_source_links_case_id",
         "uq_financial_record_source_links_field",
         "ix_financial_manual_edit_history_case_id",
-        "ix_financial_validation_issues_case_id",
+        "uq_financial_validation_issues_current_natural_key",
     }
     assert migrated_postgres_schema.indexes(financial_indexes) == financial_indexes
     assert migrated_postgres_schema.policies(financial_tables) == {
