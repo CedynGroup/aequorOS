@@ -40,6 +40,7 @@ def test_financial_workspace_returns_empty_groups_for_valid_case(db_client: Test
     assert body["record_source_links"] == []
     assert body["manual_edits"] == []
     assert body["validation_issues"] == []
+    assert body["validation_summary"] == {"total": 0, "error": 0, "warning": 0, "info": 0}
 
 
 def test_financial_workspace_returns_grouped_records(db_client: TestClient) -> None:
@@ -62,7 +63,12 @@ def test_financial_workspace_returns_grouped_records(db_client: TestClient) -> N
     assert body["manual_edits"][0]["field_name"] == "account_name"
     assert body["manual_edits"][0]["record_id"] == body["accounts"][0]["id"]
     assert body["validation_issues"][0]["rule_id"] == "missing_currency"
+    assert body["validation_issues"][0]["code"] == "missing_currency"
+    assert body["validation_issues"][0]["issue_key"] == "missing_currency:test-seed"
+    assert body["validation_issues"][0]["entity_type"] == "balance"
+    assert body["validation_issues"][0]["field"] == "currency"
     assert body["validation_issues"][0]["record_id"] == body["balances"][0]["id"]
+    assert body["validation_summary"] == {"total": 1, "error": 0, "warning": 1, "info": 0}
 
 
 def test_financial_workspace_orders_groups_deterministically(db_client: TestClient) -> None:
@@ -164,6 +170,112 @@ def test_financial_workspace_rejects_invalid_tenant_header(db_client: TestClient
     )
 
     assert response.status_code == 401, response.text
+
+
+def test_financial_validation_run_list_filters_and_workspace_summary(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    seed_financial_validation_records(case_id=case.id)
+
+    run_response = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-data/validate",
+        headers=headers(),
+    )
+    error_response = db_client.get(
+        f"/api/v1/cases/{case.id}/financial-data/validation-issues?severity=error",
+        headers=headers(),
+    )
+    account_response = db_client.get(
+        f"/api/v1/cases/{case.id}/financial-data/validation-issues?entity_type=account",
+        headers=headers(),
+    )
+    workspace_response = db_client.get(
+        f"/api/v1/cases/{case.id}/financial-workspace",
+        headers=headers(),
+    )
+
+    assert run_response.status_code == 200, run_response.text
+    body = run_response.json()
+    assert body["case_id"] == str(case.id)
+    assert body["issue_count"] == body["summary"]["total"]
+    assert body["summary"]["error"] >= 2
+    assert body["summary"]["warning"] >= 1
+    first_issue = body["issues"][0]
+    assert {
+        "severity",
+        "code",
+        "issue_key",
+        "field_name",
+        "entity_type",
+        "entity_id",
+        "field",
+        "message",
+    } <= set(first_issue)
+    assert first_issue["field_name"] == first_issue["field"]
+
+    assert error_response.status_code == 200, error_response.text
+    assert {issue["severity"] for issue in error_response.json()} == {"error"}
+    assert account_response.status_code == 200, account_response.text
+    assert {issue["entity_type"] for issue in account_response.json()} == {"account"}
+
+    assert workspace_response.status_code == 200, workspace_response.text
+    workspace_body = workspace_response.json()
+    assert workspace_body["validation_summary"] == body["summary"]
+    assert len(workspace_body["validation_issues"]) == body["issue_count"]
+
+
+def test_financial_validation_issue_filters_reject_invalid_values(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+
+    invalid_severity = db_client.get(
+        f"/api/v1/cases/{case.id}/financial-data/validation-issues?severity=critical",
+        headers=headers(),
+    )
+    invalid_entity_type = db_client.get(
+        f"/api/v1/cases/{case.id}/financial-data/validation-issues?entity_type=facility",
+        headers=headers(),
+    )
+
+    assert invalid_severity.status_code == 422, invalid_severity.text
+    assert invalid_entity_type.status_code == 422, invalid_entity_type.text
+
+
+def test_financial_validation_rerun_replaces_stale_issues(db_client: TestClient) -> None:
+    case = CaseFactory(db_client).create()
+    seed_financial_validation_records(case_id=case.id)
+
+    first = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-data/validate",
+        headers=headers(),
+    )
+    second = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-data/validate",
+        headers=headers(),
+    )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert second.json()["issue_count"] == first.json()["issue_count"]
+
+
+def test_financial_validation_enforces_tenant_isolation(db_client: TestClient) -> None:
+    case = CaseFactory(db_client).create()
+    seed_financial_validation_records(case_id=case.id)
+
+    run_response = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-data/validate",
+        headers=headers(ORG_2),
+    )
+    list_response = db_client.get(
+        f"/api/v1/cases/{case.id}/financial-data/validation-issues",
+        headers=headers(ORG_2),
+    )
+
+    assert run_response.status_code == 404, run_response.text
+    assert list_response.status_code == 404, list_response.text
 
 
 def seed_financial_workspace(*, case_id: UUID) -> None:
@@ -271,11 +383,51 @@ def seed_financial_workspace(*, case_id: UUID) -> None:
                     case_id=case_id,
                     record_table="financial_balances",
                     record_id=balance.id,
-                    severity="medium",
+                    issue_key="missing_currency:test-seed",
+                    field_name="currency",
+                    severity="warning",
                     status="open",
                     rule_id="missing_currency",
                     message="Currency should be confirmed from source file.",
-                    details={"field": "currency"},
+                    details={"entity_type": "balance", "field": "currency"},
+                ),
+            ]
+        )
+        session.commit()
+
+
+def seed_financial_validation_records(*, case_id: UUID) -> None:
+    sessionmaker = get_sessionmaker()
+    with sessionmaker() as session:
+        account = FinancialAccount(
+            organization_id=ORG_1,
+            case_id=case_id,
+            dedupe_key="test:validation:account",
+            account_name="Validation Account",
+            account_type=None,
+            currency="GHS",
+        )
+        session.add(account)
+        session.flush()
+        session.add_all(
+            [
+                FinancialBalance(
+                    organization_id=ORG_1,
+                    case_id=case_id,
+                    dedupe_key="test:validation:balance",
+                    account_id=account.id,
+                    balance_type="cash",
+                    amount=Decimal("100.00"),
+                    currency="USD",
+                ),
+                FinancialObligation(
+                    organization_id=ORG_1,
+                    case_id=case_id,
+                    dedupe_key="test:validation:obligation",
+                    obligation_type="facility",
+                    principal_amount=Decimal("10.00"),
+                    outstanding_amount=Decimal("15.00"),
+                    currency="GHS",
                 ),
             ]
         )
