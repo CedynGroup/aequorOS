@@ -9,6 +9,7 @@ from tests.factories import (
 from tests.services.factories.assessments import AssessmentServiceFactory
 from tests.services.factories.cases import CaseServiceFactory
 from tests.services.factories.documents import DocumentServiceFactory
+from tests.services.factories.financial_workspace import FinancialWorkspaceFactory
 from tests.services.factories.shared import MutableObjectStorage
 from tests.services.factories.suite import ServiceFactories
 
@@ -17,6 +18,7 @@ __all__ = [
     "AssessmentServiceFactory",
     "CaseServiceFactory",
     "DocumentServiceFactory",
+    "FinancialWorkspaceFactory",
     "MutableObjectStorage",
     "ServiceFactories",
     "UploadPayload",
