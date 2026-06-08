@@ -16,6 +16,10 @@ import * as runtime from "../runtime";
 import type {
   ErrorResponse,
   FinancialDataWorkspaceRead,
+  FinancialValidationEntityType,
+  FinancialValidationIssueRead,
+  FinancialValidationRunResponse,
+  FinancialValidationSeverity,
   FinancialWorkspaceMapRequest,
   FinancialWorkspaceMapResponse,
 } from "../models/index";
@@ -24,6 +28,14 @@ import {
   ErrorResponseToJSON,
   FinancialDataWorkspaceReadFromJSON,
   FinancialDataWorkspaceReadToJSON,
+  FinancialValidationEntityTypeFromJSON,
+  FinancialValidationEntityTypeToJSON,
+  FinancialValidationIssueReadFromJSON,
+  FinancialValidationIssueReadToJSON,
+  FinancialValidationRunResponseFromJSON,
+  FinancialValidationRunResponseToJSON,
+  FinancialValidationSeverityFromJSON,
+  FinancialValidationSeverityToJSON,
   FinancialWorkspaceMapRequestFromJSON,
   FinancialWorkspaceMapRequestToJSON,
   FinancialWorkspaceMapResponseFromJSON,
@@ -36,10 +48,24 @@ export interface GetCaseFinancialWorkspaceRequest {
   xUserId?: string | null;
 }
 
+export interface ListCaseFinancialValidationIssuesRequest {
+  caseId: string;
+  xOrgId: string;
+  severity?: FinancialValidationSeverity | null;
+  entityType?: FinancialValidationEntityType | null;
+  xUserId?: string | null;
+}
+
 export interface MapCaseFinancialWorkspaceRequest {
   caseId: string;
   xOrgId: string;
   financialWorkspaceMapRequest: FinancialWorkspaceMapRequest;
+  xUserId?: string | null;
+}
+
+export interface ValidateCaseFinancialDataRequest {
+  caseId: string;
+  xOrgId: string;
   xUserId?: string | null;
 }
 
@@ -106,6 +132,79 @@ export class FinancialDataApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<FinancialDataWorkspaceRead> {
     const response = await this.getCaseFinancialWorkspaceRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * List Case Financial Validation Issues
+   */
+  async listCaseFinancialValidationIssuesRaw(
+    requestParameters: ListCaseFinancialValidationIssuesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<Array<FinancialValidationIssueRead>>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling listCaseFinancialValidationIssues().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling listCaseFinancialValidationIssues().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["severity"] != null) {
+      queryParameters["severity"] = requestParameters["severity"];
+    }
+
+    if (requestParameters["entityType"] != null) {
+      queryParameters["entity_type"] = requestParameters["entityType"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-data/validation-issues`.replace(
+          `{${"case_id"}}`,
+          encodeURIComponent(String(requestParameters["caseId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      jsonValue.map(FinancialValidationIssueReadFromJSON),
+    );
+  }
+
+  /**
+   * List Case Financial Validation Issues
+   */
+  async listCaseFinancialValidationIssues(
+    requestParameters: ListCaseFinancialValidationIssuesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<Array<FinancialValidationIssueRead>> {
+    const response = await this.listCaseFinancialValidationIssuesRaw(
       requestParameters,
       initOverrides,
     );
@@ -183,6 +282,71 @@ export class FinancialDataApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<FinancialWorkspaceMapResponse> {
     const response = await this.mapCaseFinancialWorkspaceRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Validate Case Financial Data
+   */
+  async validateCaseFinancialDataRaw(
+    requestParameters: ValidateCaseFinancialDataRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialValidationRunResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling validateCaseFinancialData().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling validateCaseFinancialData().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-data/validate`.replace(
+          `{${"case_id"}}`,
+          encodeURIComponent(String(requestParameters["caseId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialValidationRunResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Validate Case Financial Data
+   */
+  async validateCaseFinancialData(
+    requestParameters: ValidateCaseFinancialDataRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialValidationRunResponse> {
+    const response = await this.validateCaseFinancialDataRaw(
       requestParameters,
       initOverrides,
     );

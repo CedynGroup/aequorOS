@@ -69,6 +69,13 @@ import {
   FinancialBalanceReadToJSON,
   FinancialBalanceReadToJSONTyped,
 } from "./FinancialBalanceRead";
+import type { FinancialValidationSummaryRead } from "./FinancialValidationSummaryRead";
+import {
+  FinancialValidationSummaryReadFromJSON,
+  FinancialValidationSummaryReadFromJSONTyped,
+  FinancialValidationSummaryReadToJSON,
+  FinancialValidationSummaryReadToJSONTyped,
+} from "./FinancialValidationSummaryRead";
 import type { FinancialObligationRead } from "./FinancialObligationRead";
 import {
   FinancialObligationReadFromJSON,
@@ -149,6 +156,12 @@ export interface FinancialDataWorkspaceRead {
    * @memberof FinancialDataWorkspaceRead
    */
   validationIssues: Array<FinancialValidationIssueRead>;
+  /**
+   *
+   * @type {FinancialValidationSummaryRead}
+   * @memberof FinancialDataWorkspaceRead
+   */
+  validationSummary: FinancialValidationSummaryRead;
 }
 
 /**
@@ -178,6 +191,11 @@ export function instanceOfFinancialDataWorkspaceRead(
   if (!("sourceRows" in value) || value["sourceRows"] === undefined)
     return false;
   if (!("validationIssues" in value) || value["validationIssues"] === undefined)
+    return false;
+  if (
+    !("validationSummary" in value) ||
+    value["validationSummary"] === undefined
+  )
     return false;
   return true;
 }
@@ -225,6 +243,9 @@ export function FinancialDataWorkspaceReadFromJSONTyped(
     validationIssues: (json["validation_issues"] as Array<any>).map(
       FinancialValidationIssueReadFromJSON,
     ),
+    validationSummary: FinancialValidationSummaryReadFromJSON(
+      json["validation_summary"],
+    ),
   };
 }
 
@@ -267,6 +288,9 @@ export function FinancialDataWorkspaceReadToJSONTyped(
     ),
     validation_issues: (value["validationIssues"] as Array<any>).map(
       FinancialValidationIssueReadToJSON,
+    ),
+    validation_summary: FinancialValidationSummaryReadToJSON(
+      value["validationSummary"],
     ),
   };
 }
