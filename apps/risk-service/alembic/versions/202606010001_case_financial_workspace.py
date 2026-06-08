@@ -510,9 +510,11 @@ def upgrade() -> None:
         sa.Column("case_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("record_table", sa.String(length=120), nullable=True),
         sa.Column("record_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("issue_key", sa.String(length=96), nullable=False),
+        sa.Column("field_name", sa.String(length=120), nullable=False),
         sa.Column("severity", sa.String(length=40), nullable=False),
         sa.Column("status", sa.String(length=40), nullable=False),
-        sa.Column("rule_id", sa.String(length=120), nullable=True),
+        sa.Column("rule_id", sa.String(length=120), nullable=False),
         sa.Column("message", sa.Text(), nullable=False),
         sa.Column(
             "details",
@@ -523,7 +525,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
-            "severity IN ('low', 'medium', 'high', 'critical')",
+            "severity IN ('error', 'warning', 'info')",
             name="ck_financial_validation_issues_severity",
         ),
         sa.CheckConstraint(
@@ -545,9 +547,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        "ix_financial_validation_issues_case_id",
+        "uq_financial_validation_issues_current_natural_key",
         "financial_validation_issues",
-        ["case_id"],
+        ["organization_id", "case_id", "record_table", "record_id", "rule_id", "field_name"],
+        unique=True,
     )
     for table in FINANCIAL_TABLES:
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
