@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from "../runtime";
+import type { FinancialValidationEntityType } from "./FinancialValidationEntityType";
+import {
+  FinancialValidationEntityTypeFromJSON,
+  FinancialValidationEntityTypeFromJSONTyped,
+  FinancialValidationEntityTypeToJSON,
+  FinancialValidationEntityTypeToJSONTyped,
+} from "./FinancialValidationEntityType";
+
 /**
  *
  * @export
@@ -25,6 +33,12 @@ export interface FinancialValidationIssueRead {
    * @memberof FinancialValidationIssueRead
    */
   caseId: string;
+  /**
+   *
+   * @type {string}
+   * @memberof FinancialValidationIssueRead
+   */
+  code: string | null;
   /**
    *
    * @type {Date}
@@ -42,7 +56,37 @@ export interface FinancialValidationIssueRead {
    * @type {string}
    * @memberof FinancialValidationIssueRead
    */
+  entityId: string | null;
+  /**
+   *
+   * @type {FinancialValidationEntityType}
+   * @memberof FinancialValidationIssueRead
+   */
+  entityType: FinancialValidationEntityType | null;
+  /**
+   *
+   * @type {string}
+   * @memberof FinancialValidationIssueRead
+   */
+  field: string | null;
+  /**
+   *
+   * @type {string}
+   * @memberof FinancialValidationIssueRead
+   */
+  fieldName: string;
+  /**
+   *
+   * @type {string}
+   * @memberof FinancialValidationIssueRead
+   */
   id: string;
+  /**
+   *
+   * @type {string}
+   * @memberof FinancialValidationIssueRead
+   */
+  issueKey: string;
   /**
    *
    * @type {string}
@@ -78,7 +122,7 @@ export interface FinancialValidationIssueRead {
    * @type {string}
    * @memberof FinancialValidationIssueRead
    */
-  ruleId: string | null;
+  ruleId: string;
   /**
    *
    * @type {string}
@@ -100,9 +144,16 @@ export function instanceOfFinancialValidationIssueRead(
   value: object,
 ): value is FinancialValidationIssueRead {
   if (!("caseId" in value) || value["caseId"] === undefined) return false;
+  if (!("code" in value) || value["code"] === undefined) return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
   if (!("details" in value) || value["details"] === undefined) return false;
+  if (!("entityId" in value) || value["entityId"] === undefined) return false;
+  if (!("entityType" in value) || value["entityType"] === undefined)
+    return false;
+  if (!("field" in value) || value["field"] === undefined) return false;
+  if (!("fieldName" in value) || value["fieldName"] === undefined) return false;
   if (!("id" in value) || value["id"] === undefined) return false;
+  if (!("issueKey" in value) || value["issueKey"] === undefined) return false;
   if (!("message" in value) || value["message"] === undefined) return false;
   if (!("organizationId" in value) || value["organizationId"] === undefined)
     return false;
@@ -132,9 +183,15 @@ export function FinancialValidationIssueReadFromJSONTyped(
   }
   return {
     caseId: json["case_id"],
+    code: json["code"],
     createdAt: new Date(json["created_at"]),
     details: json["details"],
+    entityId: json["entity_id"],
+    entityType: FinancialValidationEntityTypeFromJSON(json["entity_type"]),
+    field: json["field"],
+    fieldName: json["field_name"],
     id: json["id"],
+    issueKey: json["issue_key"],
     message: json["message"],
     organizationId: json["organization_id"],
     recordId: json["record_id"],
@@ -163,9 +220,15 @@ export function FinancialValidationIssueReadToJSONTyped(
 
   return {
     case_id: value["caseId"],
+    code: value["code"],
     created_at: value["createdAt"].toISOString(),
     details: value["details"],
+    entity_id: value["entityId"],
+    entity_type: FinancialValidationEntityTypeToJSON(value["entityType"]),
+    field: value["field"],
+    field_name: value["fieldName"],
     id: value["id"],
+    issue_key: value["issueKey"],
     message: value["message"],
     organization_id: value["organizationId"],
     record_id: value["recordId"],
