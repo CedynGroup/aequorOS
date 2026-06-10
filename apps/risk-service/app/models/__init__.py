@@ -2,6 +2,7 @@ from app.models.audit_event import AuditEvent
 from app.models.financial import (
     FinancialAccount,
     FinancialBalance,
+    FinancialCashFlow,
     FinancialInstitution,
     FinancialManualEditHistory,
     FinancialObligation,
@@ -34,6 +35,7 @@ __all__ = [
     "DocumentExtraction",
     "FinancialAccount",
     "FinancialBalance",
+    "FinancialCashFlow",
     "FinancialInstitution",
     "FinancialManualEditHistory",
     "FinancialObligation",

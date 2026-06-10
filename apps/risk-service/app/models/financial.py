@@ -213,6 +213,70 @@ class FinancialBalance(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     )
 
 
+class FinancialCashFlow(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "financial_cash_flows"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["case_id", "organization_id"],
+            ["risk_cases.id", "risk_cases.organization_id"],
+        ),
+        ForeignKeyConstraint(
+            ["account_id", "organization_id", "case_id"],
+            [
+                "financial_accounts.id",
+                "financial_accounts.organization_id",
+                "financial_accounts.case_id",
+            ],
+        ),
+        ForeignKeyConstraint(
+            ["reporting_period_id", "organization_id", "case_id"],
+            [
+                "financial_reporting_periods.id",
+                "financial_reporting_periods.organization_id",
+                "financial_reporting_periods.case_id",
+            ],
+        ),
+        CheckConstraint(
+            "currency IS NULL OR (length(currency) = 3 AND upper(currency) = currency)",
+            name="ck_financial_cash_flows_currency",
+        ),
+        CheckConstraint(
+            "direction IN ('inflow', 'outflow')",
+            name="ck_financial_cash_flows_direction",
+        ),
+        CheckConstraint(
+            "amount > 0",
+            name="ck_financial_cash_flows_amount_positive",
+        ),
+        CheckConstraint(
+            "length(trim(category)) > 0",
+            name="ck_financial_cash_flows_category",
+        ),
+        Index("ix_financial_cash_flows_case_id", "case_id"),
+        Index(
+            "uq_financial_cash_flows_dedupe_key",
+            "dedupe_key",
+            "organization_id",
+            "case_id",
+            unique=True,
+        ),
+    )
+
+    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
+    account_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    reporting_period_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    cash_flow_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
+    currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    direction: Mapped[str] = mapped_column(String(40), nullable=False)
+    category: Mapped[str] = mapped_column(String(120), nullable=False)
+    metadata_: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
+
+
 class FinancialObligation(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "financial_obligations"
     __table_args__ = (
@@ -360,7 +424,7 @@ class FinancialRecordSourceLink(UuidV7PrimaryKeyMixin, Base):
             "record_table IN "
             "('financial_institutions', 'financial_accounts', "
             "'financial_reporting_periods', 'financial_balances', "
-            "'financial_obligations')",
+            "'financial_cash_flows', 'financial_obligations')",
             name="ck_financial_record_source_links_record_table",
         ),
         Index(
@@ -409,7 +473,7 @@ class FinancialManualEditHistory(UuidV7PrimaryKeyMixin, Base):
             "record_table IN "
             "('financial_institutions', 'financial_accounts', "
             "'financial_reporting_periods', 'financial_balances', "
-            "'financial_obligations')",
+            "'financial_cash_flows', 'financial_obligations')",
             name="ck_financial_manual_edit_history_record_table",
         ),
         Index(
@@ -452,7 +516,7 @@ class FinancialValidationIssue(UuidV7PrimaryKeyMixin, Base):
             "(record_table IS NOT NULL AND "
             "record_table IN ('financial_institutions', 'financial_accounts', "
             "'financial_reporting_periods', 'financial_balances', "
-            "'financial_obligations') AND record_id IS NOT NULL))",
+            "'financial_cash_flows', 'financial_obligations') AND record_id IS NOT NULL))",
             name="ck_financial_validation_issues_record_reference",
         ),
         Index(
