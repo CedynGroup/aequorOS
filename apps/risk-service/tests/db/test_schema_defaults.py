@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.financial import (
     FinancialAccount,
     FinancialBalance,
+    FinancialCashFlow,
     FinancialInstitution,
     FinancialManualEditHistory,
     FinancialObligation,
@@ -67,6 +68,10 @@ def test_financial_mapper_indexes_are_minimal_and_selective() -> None:
         "ix_financial_balances_case_id",
         "uq_financial_balances_dedupe_key",
     }
+    assert index_names(FinancialCashFlow) == {
+        "ix_financial_cash_flows_case_id",
+        "uq_financial_cash_flows_dedupe_key",
+    }
     assert index_names(FinancialObligation) == {
         "ix_financial_obligations_case_id",
         "uq_financial_obligations_dedupe_key",
@@ -92,6 +97,7 @@ def test_financial_mapper_indexes_are_minimal_and_selective() -> None:
         "case_id",
     )
     assert index_columns(FinancialBalance, "ix_financial_balances_case_id") == ("case_id",)
+    assert index_columns(FinancialCashFlow, "ix_financial_cash_flows_case_id") == ("case_id",)
     assert index_columns(FinancialObligation, "ix_financial_obligations_case_id") == ("case_id",)
     assert index_columns(FinancialSourceRow, "ix_financial_source_rows_case_id") == ("case_id",)
     assert index_columns(FinancialSourceRow, "uq_financial_source_rows_extraction_row") == (
@@ -124,6 +130,11 @@ def test_financial_mapper_indexes_are_minimal_and_selective() -> None:
         "case_id",
     )
     assert index_columns(FinancialBalance, "uq_financial_balances_dedupe_key") == (
+        "dedupe_key",
+        "organization_id",
+        "case_id",
+    )
+    assert index_columns(FinancialCashFlow, "uq_financial_cash_flows_dedupe_key") == (
         "dedupe_key",
         "organization_id",
         "case_id",
@@ -580,6 +591,7 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
     account_id = db_uuid(db_session, uuid4())
     reporting_period_id = db_uuid(db_session, uuid4())
     balance_id = db_uuid(db_session, uuid4())
+    cash_flow_id = db_uuid(db_session, uuid4())
     obligation_id = db_uuid(db_session, uuid4())
     source_row_id = db_uuid(db_session, uuid4())
     source_link_id = db_uuid(db_session, uuid4())
@@ -656,6 +668,47 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
             "org_id": org_id,
             "case_id": case_id,
             "institution_id": institution_id,
+            "now": now,
+        },
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_cash_flows
+              (
+                id,
+                organization_id,
+                case_id,
+                dedupe_key,
+                account_id,
+                reporting_period_id,
+                amount,
+                direction,
+                category,
+                created_at,
+                updated_at
+              )
+            VALUES
+              (
+                :cash_flow_id,
+                :org_id,
+                :case_id,
+                'test:cash-flow:workspace',
+                :account_id,
+                NULL,
+                15000,
+                'inflow',
+                'customer deposit',
+                :now,
+                :now
+              )
+            """
+        ),
+        {
+            "cash_flow_id": cash_flow_id,
+            "org_id": org_id,
+            "case_id": case_id,
+            "account_id": account_id,
             "now": now,
         },
     )
@@ -879,6 +932,7 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
               financial_accounts.metadata AS account_metadata,
               financial_reporting_periods.metadata AS period_metadata,
               financial_balances.metadata AS balance_metadata,
+              financial_cash_flows.metadata AS cash_flow_metadata,
               financial_obligations.details AS obligation_details,
               financial_source_rows.locator,
               financial_source_rows.raw_payload,
@@ -893,6 +947,8 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
               ON financial_reporting_periods.case_id = financial_institutions.case_id
             JOIN financial_balances
               ON financial_balances.account_id = financial_accounts.id
+            JOIN financial_cash_flows
+              ON financial_cash_flows.account_id = financial_accounts.id
             JOIN financial_obligations
               ON financial_obligations.account_id = financial_accounts.id
             JOIN financial_source_rows
@@ -913,6 +969,7 @@ def test_financial_workspace_database_defaults_are_defined(db_session: Session) 
     assert normalize_json(row.account_metadata) == {}
     assert normalize_json(row.period_metadata) == {}
     assert normalize_json(row.balance_metadata) == {}
+    assert normalize_json(row.cash_flow_metadata) == {}
     assert normalize_json(row.obligation_details) == {}
     assert normalize_json(row.locator) == {}
     assert normalize_json(row.raw_payload) == {}
@@ -927,6 +984,7 @@ def test_financial_workspace_allows_null_optional_relationships(db_session: Sess
     org_id = db_uuid(db_session, ORG_1)
     case_id = db_uuid(db_session, uuid4())
     balance_id = db_uuid(db_session, uuid4())
+    cash_flow_id = db_uuid(db_session, uuid4())
     obligation_id = db_uuid(db_session, uuid4())
     source_row_id = db_uuid(db_session, uuid4())
 
@@ -973,6 +1031,41 @@ def test_financial_workspace_allows_null_optional_relationships(db_session: Sess
             """
         ),
         {"balance_id": balance_id, "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO financial_cash_flows
+              (
+                id,
+                organization_id,
+                case_id,
+                dedupe_key,
+                account_id,
+                reporting_period_id,
+                amount,
+                direction,
+                category,
+                created_at,
+                updated_at
+              )
+            VALUES
+              (
+                :cash_flow_id,
+                :org_id,
+                :case_id,
+                'test:cash-flow:nullable-links',
+                NULL,
+                NULL,
+                100,
+                'outflow',
+                'vendor payment',
+                :now,
+                :now
+              )
+            """
+        ),
+        {"cash_flow_id": cash_flow_id, "org_id": org_id, "case_id": case_id, "now": now},
     )
     db_session.execute(
         text(
@@ -1033,6 +1126,13 @@ def test_financial_workspace_allows_null_optional_relationships(db_session: Sess
               ) +
               (
                 SELECT count(*)
+                FROM financial_cash_flows
+                WHERE id = :cash_flow_id
+                  AND account_id IS NULL
+                  AND reporting_period_id IS NULL
+              ) +
+              (
+                SELECT count(*)
                 FROM financial_obligations
                 WHERE id = :obligation_id
                   AND institution_id IS NULL
@@ -1049,12 +1149,13 @@ def test_financial_workspace_allows_null_optional_relationships(db_session: Sess
         ),
         {
             "balance_id": balance_id,
+            "cash_flow_id": cash_flow_id,
             "obligation_id": obligation_id,
             "source_row_id": source_row_id,
         },
     ).scalar_one()
 
-    assert count == 3
+    assert count == 4
 
 
 def test_financial_workspace_rejects_cross_tenant_case_links(db_session: Session) -> None:
@@ -1583,6 +1684,128 @@ def test_financial_workspace_rejects_invalid_domain_values(db_session: Session) 
           )
         VALUES
           (:id, :org_id, :case_id, 'test:balance:invalid-currency', 'cash', 100, 'US', :now, :now)
+        """,
+        {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_cash_flows
+          (
+            id,
+            organization_id,
+            case_id,
+            dedupe_key,
+            amount,
+            currency,
+            direction,
+            category,
+            created_at,
+            updated_at
+          )
+        VALUES
+          (
+            :id,
+            :org_id,
+            :case_id,
+            'test:cash-flow:invalid-currency',
+            100,
+            'usd',
+            'inflow',
+            'deposit',
+            :now,
+            :now
+          )
+        """,
+        {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_cash_flows
+          (
+            id,
+            organization_id,
+            case_id,
+            dedupe_key,
+            amount,
+            direction,
+            category,
+            created_at,
+            updated_at
+          )
+        VALUES
+          (
+            :id,
+            :org_id,
+            :case_id,
+            'test:cash-flow:invalid-direction',
+            100,
+            'sideways',
+            'deposit',
+            :now,
+            :now
+          )
+        """,
+        {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_cash_flows
+          (
+            id,
+            organization_id,
+            case_id,
+            dedupe_key,
+            amount,
+            direction,
+            category,
+            created_at,
+            updated_at
+          )
+        VALUES
+          (
+            :id,
+            :org_id,
+            :case_id,
+            'test:cash-flow:invalid-amount',
+            0,
+            'inflow',
+            'deposit',
+            :now,
+            :now
+          )
+        """,
+        {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
+    )
+    expect_integrity_error(
+        db_session,
+        """
+        INSERT INTO financial_cash_flows
+          (
+            id,
+            organization_id,
+            case_id,
+            dedupe_key,
+            amount,
+            direction,
+            category,
+            created_at,
+            updated_at
+          )
+        VALUES
+          (
+            :id,
+            :org_id,
+            :case_id,
+            'test:cash-flow:invalid-category',
+            100,
+            'inflow',
+            '',
+            :now,
+            :now
+          )
         """,
         {"id": db_uuid(db_session, uuid4()), "org_id": org_id, "case_id": case_id, "now": now},
     )
