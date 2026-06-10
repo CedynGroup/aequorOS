@@ -15,6 +15,9 @@
 import * as runtime from "../runtime";
 import type {
   ErrorResponse,
+  FinancialCashFlowCreate,
+  FinancialCashFlowRead,
+  FinancialCashFlowUpdate,
   FinancialDataWorkspaceRead,
   FinancialValidationEntityType,
   FinancialValidationIssueRead,
@@ -26,6 +29,12 @@ import type {
 import {
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
+  FinancialCashFlowCreateFromJSON,
+  FinancialCashFlowCreateToJSON,
+  FinancialCashFlowReadFromJSON,
+  FinancialCashFlowReadToJSON,
+  FinancialCashFlowUpdateFromJSON,
+  FinancialCashFlowUpdateToJSON,
   FinancialDataWorkspaceReadFromJSON,
   FinancialDataWorkspaceReadToJSON,
   FinancialValidationEntityTypeFromJSON,
@@ -41,6 +50,13 @@ import {
   FinancialWorkspaceMapResponseFromJSON,
   FinancialWorkspaceMapResponseToJSON,
 } from "../models/index";
+
+export interface CreateCaseFinancialCashFlowRequest {
+  caseId: string;
+  xOrgId: string;
+  financialCashFlowCreate: FinancialCashFlowCreate;
+  xUserId?: string | null;
+}
 
 export interface GetCaseFinancialWorkspaceRequest {
   caseId: string;
@@ -63,6 +79,14 @@ export interface MapCaseFinancialWorkspaceRequest {
   xUserId?: string | null;
 }
 
+export interface UpdateCaseFinancialCashFlowRequest {
+  caseId: string;
+  cashFlowId: string;
+  xOrgId: string;
+  financialCashFlowUpdate: FinancialCashFlowUpdate;
+  xUserId?: string | null;
+}
+
 export interface ValidateCaseFinancialDataRequest {
   caseId: string;
   xOrgId: string;
@@ -73,6 +97,83 @@ export interface ValidateCaseFinancialDataRequest {
  *
  */
 export class FinancialDataApi extends runtime.BaseAPI {
+  /**
+   * Create Case Financial Cash Flow
+   */
+  async createCaseFinancialCashFlowRaw(
+    requestParameters: CreateCaseFinancialCashFlowRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialCashFlowRead>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling createCaseFinancialCashFlow().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialCashFlow().',
+      );
+    }
+
+    if (requestParameters["financialCashFlowCreate"] == null) {
+      throw new runtime.RequiredError(
+        "financialCashFlowCreate",
+        'Required parameter "financialCashFlowCreate" was null or undefined when calling createCaseFinancialCashFlow().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/cash-flows`.replace(
+          `{${"case_id"}}`,
+          encodeURIComponent(String(requestParameters["caseId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialCashFlowCreateToJSON(
+          requestParameters["financialCashFlowCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialCashFlowReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Create Case Financial Cash Flow
+   */
+  async createCaseFinancialCashFlow(
+    requestParameters: CreateCaseFinancialCashFlowRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialCashFlowRead> {
+    const response = await this.createCaseFinancialCashFlowRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Get Case Financial Workspace
    */
@@ -282,6 +383,95 @@ export class FinancialDataApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<FinancialWorkspaceMapResponse> {
     const response = await this.mapCaseFinancialWorkspaceRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Update Case Financial Cash Flow
+   */
+  async updateCaseFinancialCashFlowRaw(
+    requestParameters: UpdateCaseFinancialCashFlowRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialCashFlowRead>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling updateCaseFinancialCashFlow().',
+      );
+    }
+
+    if (requestParameters["cashFlowId"] == null) {
+      throw new runtime.RequiredError(
+        "cashFlowId",
+        'Required parameter "cashFlowId" was null or undefined when calling updateCaseFinancialCashFlow().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialCashFlow().',
+      );
+    }
+
+    if (requestParameters["financialCashFlowUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "financialCashFlowUpdate",
+        'Required parameter "financialCashFlowUpdate" was null or undefined when calling updateCaseFinancialCashFlow().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/cash-flows/{cash_flow_id}`
+          .replace(
+            `{${"case_id"}}`,
+            encodeURIComponent(String(requestParameters["caseId"])),
+          )
+          .replace(
+            `{${"cash_flow_id"}}`,
+            encodeURIComponent(String(requestParameters["cashFlowId"])),
+          ),
+        method: "PATCH",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialCashFlowUpdateToJSON(
+          requestParameters["financialCashFlowUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialCashFlowReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Update Case Financial Cash Flow
+   */
+  async updateCaseFinancialCashFlow(
+    requestParameters: UpdateCaseFinancialCashFlowRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialCashFlowRead> {
+    const response = await this.updateCaseFinancialCashFlowRaw(
       requestParameters,
       initOverrides,
     );

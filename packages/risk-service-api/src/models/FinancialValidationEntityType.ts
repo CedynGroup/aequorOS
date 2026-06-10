@@ -21,6 +21,7 @@ export const FinancialValidationEntityType = {
   Account: "account",
   ReportingPeriod: "reporting_period",
   Balance: "balance",
+  CashFlow: "cash_flow",
   Obligation: "obligation",
 } as const;
 export type FinancialValidationEntityType =

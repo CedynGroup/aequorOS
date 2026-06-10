@@ -13,6 +13,7 @@ describe("demo data helpers", () => {
       accounts: [],
       reportingPeriods: [],
       balances: [],
+      cashFlows: [],
       obligations: [],
       sourceRows: [],
       recordSourceLinks: [],

@@ -23,11 +23,13 @@ export function emptyWorkspace(organizationId: string, caseId: string): Financia
     accounts: [],
     reportingPeriods: [],
     balances: [],
+    cashFlows: [],
     obligations: [],
     sourceRows: [],
     recordSourceLinks: [],
     manualEdits: [],
     validationIssues: [],
+    validationSummary: { error: 0, info: 0, total: 0, warning: 0 },
   };
 }
 
