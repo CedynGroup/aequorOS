@@ -81,6 +81,7 @@ def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient
         "accounts",
         "reporting_periods",
         "balances",
+        "cash_flows",
         "obligations",
         "source_rows",
         "record_source_links",
@@ -107,6 +108,8 @@ def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
     assert "/api/v1/cases/{case_id}/financial-workspace/map" in paths
     assert "/api/v1/cases/{case_id}/financial-data/validate" in paths
     assert "/api/v1/cases/{case_id}/financial-data/validation-issues" in paths
+    assert "/api/v1/cases/{case_id}/financial-workspace/cash-flows" in paths
+    assert "/api/v1/cases/{case_id}/financial-workspace/cash-flows/{cash_flow_id}" in paths
     assert "/api/v1/taxonomies/cases" in paths
 
     report_ref = paths["/api/v1/cases/{case_id}/report"]["get"]["responses"]["200"]["content"][

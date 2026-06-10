@@ -6,7 +6,11 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 
 from app.api.deps import DbSession, Tenant
+from app.models import FinancialCashFlow
 from app.schemas.financial_workspace import (
+    FinancialCashFlowCreate,
+    FinancialCashFlowRead,
+    FinancialCashFlowUpdate,
     FinancialDataWorkspaceRead,
     FinancialValidationEntityType,
     FinancialValidationIssueRead,
@@ -19,7 +23,8 @@ from app.schemas.financial_workspace_mapping import (
 )
 from app.services import financial_validation as financial_validation_service
 from app.services import financial_workspace as financial_workspace_service
-from app.services.financial_mapping import map_financial_workspace
+from app.services.financial_cash_flows import create_cash_flow, update_cash_flow
+from app.services.financial_mapping.service import map_financial_workspace
 
 router = APIRouter(tags=["financial-data"])
 
@@ -74,3 +79,30 @@ def list_case_financial_validation_issues(
         severity=severity,
         entity_type=entity_type,
     )
+
+
+@router.post(
+    "/cases/{case_id}/financial-workspace/cash-flows",
+    response_model=FinancialCashFlowRead,
+)
+def create_case_financial_cash_flow(
+    case_id: UUID,
+    payload: FinancialCashFlowCreate,
+    db: DbSession,
+    ctx: Tenant,
+) -> FinancialCashFlow:
+    return create_cash_flow(db, ctx, case_id, payload)
+
+
+@router.patch(
+    "/cases/{case_id}/financial-workspace/cash-flows/{cash_flow_id}",
+    response_model=FinancialCashFlowRead,
+)
+def update_case_financial_cash_flow(
+    case_id: UUID,
+    cash_flow_id: UUID,
+    payload: FinancialCashFlowUpdate,
+    db: DbSession,
+    ctx: Tenant,
+) -> FinancialCashFlow:
+    return update_cash_flow(db, ctx, case_id, cash_flow_id, payload)
