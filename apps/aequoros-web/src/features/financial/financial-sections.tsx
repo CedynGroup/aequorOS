@@ -15,6 +15,7 @@ export function FinancialSections({
     { title: "accounts", rows: workspace.accounts, columns: ["accountName", "accountNumber", "accountType", "currency", "status", "institutionId"] },
     { title: "reporting_periods", rows: workspace.reportingPeriods, columns: ["label", "periodType", "startDate", "endDate", "asOfDate"] },
     { title: "balances", rows: workspace.balances, columns: ["balanceType", "amount", "currency", "asOfDate", "accountId", "reportingPeriodId"] },
+    { title: "cash_flows", rows: workspace.cashFlows, columns: ["cashFlowDate", "amount", "currency", "direction", "category", "accountId", "reportingPeriodId"] },
     { title: "obligations", rows: workspace.obligations, columns: ["obligationType", "facilityType", "principalAmount", "outstandingAmount", "currency", "maturityDate", "interestRate", "status"] },
     { title: "source_rows", rows: workspace.sourceRows, columns: ["rowIndex", "locator", "rawPayload", "documentId"] },
     { title: "record_source_links", rows: workspace.recordSourceLinks, columns: ["recordTable", "recordId", "sourceRowId", "confidence", "metadata"] },

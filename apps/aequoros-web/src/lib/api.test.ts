@@ -197,6 +197,68 @@ describe("risk API helpers", () => {
     });
   });
 
+  it("serializes manual cash-flow create and correction payloads", async () => {
+    const responseBody = {
+      id: "cash-flow-1",
+      organization_id: DEFAULT_ORG_ID,
+      case_id: "case-1",
+      account_id: null,
+      reporting_period_id: null,
+      cash_flow_date: "2026-04-15",
+      amount: "1000.0000",
+      currency: "GHS",
+      direction: "inflow",
+      category: "customer deposit",
+      metadata: {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(responseBody), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...responseBody, amount: "1250.0000" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    await riskApi.createFinancialCashFlow(tenant, "case-1", {
+      amount: "1000",
+      cashFlowDate: new Date("2026-04-15T00:00:00Z"),
+      currency: "GHS",
+      direction: "inflow",
+      category: "customer deposit",
+    });
+    await riskApi.updateFinancialCashFlow(tenant, "case-1", "cash-flow-1", {
+      amount: "1250",
+      reason: "Reviewer correction",
+    });
+
+    const [createUrl, createInit] = fetchMock.mock.calls[0];
+    const [updateUrl, updateInit] = fetchMock.mock.calls[1];
+    expect(String(createUrl)).toContain("/cases/case-1/financial-workspace/cash-flows");
+    expect(requestJsonBody(createInit)).toMatchObject({
+      amount: "1000",
+      cash_flow_date: "2026-04-15",
+      currency: "GHS",
+      direction: "inflow",
+      category: "customer deposit",
+    });
+    expect(String(updateUrl)).toContain(
+      "/cases/case-1/financial-workspace/cash-flows/cash-flow-1",
+    );
+    expect(requestJsonBody(updateInit)).toMatchObject({
+      amount: "1250",
+      reason: "Reviewer correction",
+    });
+  });
+
   it("normalizes API error envelopes", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(

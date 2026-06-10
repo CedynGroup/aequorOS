@@ -34,6 +34,13 @@ import {
   FinancialAccountReadToJSON,
   FinancialAccountReadToJSONTyped,
 } from "./FinancialAccountRead";
+import type { FinancialCashFlowRead } from "./FinancialCashFlowRead";
+import {
+  FinancialCashFlowReadFromJSON,
+  FinancialCashFlowReadFromJSONTyped,
+  FinancialCashFlowReadToJSON,
+  FinancialCashFlowReadToJSONTyped,
+} from "./FinancialCashFlowRead";
 import type { FinancialRecordSourceLinkRead } from "./FinancialRecordSourceLinkRead";
 import {
   FinancialRecordSourceLinkReadFromJSON,
@@ -110,6 +117,12 @@ export interface FinancialDataWorkspaceRead {
   caseId: string;
   /**
    *
+   * @type {Array<FinancialCashFlowRead>}
+   * @memberof FinancialDataWorkspaceRead
+   */
+  cashFlows: Array<FinancialCashFlowRead>;
+  /**
+   *
    * @type {Array<FinancialInstitutionRead>}
    * @memberof FinancialDataWorkspaceRead
    */
@@ -173,6 +186,7 @@ export function instanceOfFinancialDataWorkspaceRead(
   if (!("accounts" in value) || value["accounts"] === undefined) return false;
   if (!("balances" in value) || value["balances"] === undefined) return false;
   if (!("caseId" in value) || value["caseId"] === undefined) return false;
+  if (!("cashFlows" in value) || value["cashFlows"] === undefined) return false;
   if (!("institutions" in value) || value["institutions"] === undefined)
     return false;
   if (!("manualEdits" in value) || value["manualEdits"] === undefined)
@@ -221,6 +235,9 @@ export function FinancialDataWorkspaceReadFromJSONTyped(
       FinancialBalanceReadFromJSON,
     ),
     caseId: json["case_id"],
+    cashFlows: (json["cash_flows"] as Array<any>).map(
+      FinancialCashFlowReadFromJSON,
+    ),
     institutions: (json["institutions"] as Array<any>).map(
       FinancialInstitutionReadFromJSON,
     ),
@@ -267,6 +284,9 @@ export function FinancialDataWorkspaceReadToJSONTyped(
     accounts: (value["accounts"] as Array<any>).map(FinancialAccountReadToJSON),
     balances: (value["balances"] as Array<any>).map(FinancialBalanceReadToJSON),
     case_id: value["caseId"],
+    cash_flows: (value["cashFlows"] as Array<any>).map(
+      FinancialCashFlowReadToJSON,
+    ),
     institutions: (value["institutions"] as Array<any>).map(
       FinancialInstitutionReadToJSON,
     ),

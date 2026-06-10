@@ -13,11 +13,13 @@ describe("FinancialSections", () => {
       accounts: [],
       reportingPeriods: [],
       balances: [],
+      cashFlows: [],
       obligations: [],
       sourceRows: [],
       recordSourceLinks: [],
       manualEdits: [],
       validationIssues: [],
+      validationSummary: { error: 0, info: 0, total: 0, warning: 0 },
     };
 
     render(<FinancialSections workspace={workspace} mocked={false} />);
@@ -26,6 +28,7 @@ describe("FinancialSections", () => {
     expect(screen.getByText("Accounts")).toBeInTheDocument();
     expect(screen.getByText("Reporting Periods")).toBeInTheDocument();
     expect(screen.getByText("Balances")).toBeInTheDocument();
+    expect(screen.getByText("Cash Flows")).toBeInTheDocument();
     expect(screen.getByText("Obligations")).toBeInTheDocument();
     expect(screen.getByText("Source Rows")).toBeInTheDocument();
     expect(screen.getByText("Record Source Links")).toBeInTheDocument();
