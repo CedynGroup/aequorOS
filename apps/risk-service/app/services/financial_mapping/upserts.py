@@ -14,6 +14,7 @@ from app.api.deps import TenantContext
 from app.models import (
     FinancialAccount,
     FinancialBalance,
+    FinancialCashFlow,
     FinancialInstitution,
     FinancialObligation,
     FinancialReportingPeriod,
@@ -51,6 +52,7 @@ def existing_by_dedupe[
     T: (
         FinancialAccount,
         FinancialBalance,
+        FinancialCashFlow,
         FinancialInstitution,
         FinancialObligation,
         FinancialReportingPeriod,
@@ -75,6 +77,7 @@ def add_or_get_by_dedupe[  # noqa: PLR0913
     T: (
         FinancialAccount,
         FinancialBalance,
+        FinancialCashFlow,
         FinancialInstitution,
         FinancialObligation,
         FinancialReportingPeriod,
@@ -286,6 +289,55 @@ def get_or_create_balance(  # noqa: PLR0913
         metadata_=metadata,
     )
     return add_or_get_by_dedupe(db, balance, FinancialBalance, ctx, case_id, dedupe_key)
+
+
+def get_or_create_cash_flow(  # noqa: PLR0913
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    *,
+    source_row_id: UUID | None = None,
+    account_id: UUID | None,
+    reporting_period_id: UUID | None,
+    cash_flow_date: date | None,
+    amount: Decimal,
+    currency: str | None,
+    direction: str,
+    category: str,
+    metadata: JsonObject,
+) -> tuple[FinancialCashFlow, bool]:
+    if source_row_id is not None:
+        linked = linked_record(db, ctx, case_id, source_row_id, "financial_cash_flows")
+        if isinstance(linked, FinancialCashFlow):
+            return linked, False
+
+    dedupe_key = canonical_dedupe_key(
+        "cash_flow",
+        [
+            account_id,
+            reporting_period_id,
+            cash_flow_date,
+            direction,
+            category,
+            amount,
+            currency,
+        ],
+    )
+
+    cash_flow = FinancialCashFlow(
+        organization_id=ctx.organization_id,
+        case_id=case_id,
+        dedupe_key=dedupe_key,
+        account_id=account_id,
+        reporting_period_id=reporting_period_id,
+        cash_flow_date=cash_flow_date,
+        amount=amount,
+        currency=currency,
+        direction=direction,
+        category=category,
+        metadata_=metadata,
+    )
+    return add_or_get_by_dedupe(db, cash_flow, FinancialCashFlow, ctx, case_id, dedupe_key)
 
 
 def get_or_create_obligation(  # noqa: PLR0913

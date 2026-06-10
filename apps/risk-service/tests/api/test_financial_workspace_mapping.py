@@ -12,6 +12,7 @@ from app.db.session import get_sessionmaker
 from app.models import (
     DocumentExtraction,
     FinancialBalance,
+    FinancialCashFlow,
     FinancialObligation,
     FinancialRecordSourceLink,
     FinancialSourceRow,
@@ -177,6 +178,78 @@ def test_financial_workspace_map_uses_latest_completed_extraction_for_document_i
     assert body["summary"]["mapped_source_row_count"] == 1
 
 
+def test_financial_workspace_map_creates_cash_flows_with_traceability(
+    db_client: TestClient,
+    api_factories: ApiFactories,
+) -> None:
+    case = api_factories.cases.create()
+    document = api_factories.documents.create_uploaded(case_id=case.id)
+    extraction_id = seed_extraction(
+        document_id=document.document_id,
+        extracted_json={
+            "rows": [
+                {
+                    "Account": "Operating Account",
+                    "Cash Flow Date": "2026-04-15",
+                    "Amount": "15,000",
+                    "Direction": "Inflow",
+                    "Category": "Customer Deposit",
+                    "Currency": "GHS",
+                }
+            ]
+        },
+    )
+
+    first = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/map",
+        headers=headers(),
+        json={"document_extraction_id": str(extraction_id)},
+    )
+    second = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/map",
+        headers=headers(),
+        json={"document_extraction_id": str(extraction_id)},
+    )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    first_body = first.json()
+    second_body = second.json()
+    assert first_body["created"]["cash_flows"] == 1
+    assert first_body["created"]["balances"] == 0
+    assert second_body["created"]["cash_flows"] == 0
+    assert second_body["reused"]["cash_flows"] == 1
+
+    with get_sessionmaker()() as session:
+        cash_flow = session.scalar(select(FinancialCashFlow))
+        links = list(session.scalars(select(FinancialRecordSourceLink)))
+
+    assert cash_flow is not None
+    assert cash_flow.amount == Decimal("15000.0000")
+    assert cash_flow.currency == "GHS"
+    assert cash_flow.direction == "inflow"
+    assert cash_flow.category == "customer deposit"
+    assert cash_flow.cash_flow_date.isoformat() == "2026-04-15"
+    assert {
+        (link.record_table, link.field_name, link.source_field)
+        for link in links
+        if link.record_table == "financial_cash_flows"
+    } >= {
+        ("financial_cash_flows", "amount", "Amount"),
+        ("financial_cash_flows", "currency", "Currency"),
+        ("financial_cash_flows", "direction", "Direction"),
+        ("financial_cash_flows", "category", "Category"),
+        ("financial_cash_flows", "cash_flow_date", "Cash Flow Date"),
+    }
+
+    workspace = db_client.get(
+        f"/api/v1/cases/{case.id}/financial-workspace",
+        headers=headers(),
+    )
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["cash_flows"][0]["id"] == str(cash_flow.id)
+
+
 def test_financial_workspace_map_rejects_invalid_and_non_completed_extractions(
     db_client: TestClient,
     api_factories: ApiFactories,
@@ -327,6 +400,39 @@ def test_financial_workspace_map_preserves_invalid_amount_rows_as_unmapped(
             is not None
         )
         assert session.scalar(select(FinancialBalance)) is None
+
+
+def test_financial_workspace_map_preserves_invalid_cash_flow_rows_as_unmapped(
+    db_client: TestClient,
+    api_factories: ApiFactories,
+) -> None:
+    case = api_factories.cases.create()
+    document = api_factories.documents.create_uploaded(case_id=case.id)
+    extraction_id = seed_extraction(
+        document_id=document.document_id,
+        extracted_json={
+            "rows": [
+                {
+                    "Cash Flow Amount": "not an amount",
+                    "Direction": "inflow",
+                    "Category": "deposit",
+                }
+            ]
+        },
+    )
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/map",
+        headers=headers(),
+        json={"document_extraction_id": str(extraction_id)},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["summary"]["mapped_source_row_count"] == 0
+    assert body["created"]["cash_flows"] == 0
+    with get_sessionmaker()() as session:
+        assert session.scalar(select(FinancialCashFlow)) is None
 
 
 def test_financial_workspace_map_does_not_reuse_stale_cross_case_source_link(

@@ -2,18 +2,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
+from decimal import Decimal
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import (
     FinancialAccount,
+    FinancialCashFlow,
     FinancialInstitution,
     FinancialReportingPeriod,
     FinancialSourceRow,
 )
 from app.schemas.common import JsonObject
+from app.services.financial_cash_flows import (
+    normalize_direction,
+    reconcile_cash_flow_review_issues,
+    validated_cash_flow_values,
+)
 from app.services.financial_mapping.links import link_field, mapper_metadata
 from app.services.financial_mapping.normalization import (
     first_decimal,
@@ -27,6 +35,10 @@ from app.services.financial_mapping.normalization import (
 from app.services.financial_mapping.types import (
     ACCOUNT_ALIASES,
     BALANCE_AMOUNT_ALIASES,
+    CASH_FLOW_AMOUNT_ALIASES,
+    CASH_FLOW_CATEGORY_ALIASES,
+    CASH_FLOW_DATE_ALIASES,
+    CASH_FLOW_DIRECTION_ALIASES,
     CURRENCY_ALIASES,
     INSTITUTION_ALIASES,
     OBLIGATION_AMOUNT_ALIASES,
@@ -40,6 +52,7 @@ from app.services.financial_mapping.types import (
 from app.services.financial_mapping.upserts import (
     get_or_create_account,
     get_or_create_balance,
+    get_or_create_cash_flow,
     get_or_create_institution,
     get_or_create_obligation,
     get_or_create_reporting_period,
@@ -112,10 +125,15 @@ def map_source_row(mapping: RowMappingContext) -> int:
     if reporting_period is not None:
         mapped_record_count += 1
 
-    if map_balance(mapping, account, reporting_period):
+    cash_flow_intent = has_cash_flow_mapping_intent(mapping)
+    cash_flow = map_cash_flow(mapping, account, reporting_period)
+    if cash_flow is not None:
         mapped_record_count += 1
 
-    if map_obligation(mapping, institution, account, reporting_period):
+    if not cash_flow_intent and map_balance(mapping, account, reporting_period):
+        mapped_record_count += 1
+
+    if not cash_flow_intent and map_obligation(mapping, institution, account, reporting_period):
         mapped_record_count += 1
 
     return mapped_record_count
@@ -259,6 +277,131 @@ def map_balance(
     )
     link_currency(mapping, "financial_balances", balance.id)
     return True
+
+
+def map_cash_flow(
+    mapping: RowMappingContext,
+    account: FinancialAccount | None,
+    reporting_period: FinancialReportingPeriod | None,
+) -> FinancialCashFlow | None:
+    amount_field = first_cash_flow_amount_field(mapping)
+    if amount_field is None:
+        return None
+    amount = parse_decimal(amount_field.value)
+    if amount is None:
+        return None
+
+    direction_field = first_field(mapping.normalized, CASH_FLOW_DIRECTION_ALIASES)
+    category_field = first_field(mapping.normalized, CASH_FLOW_CATEGORY_ALIASES)
+    date_field = first_field(mapping.normalized, CASH_FLOW_DATE_ALIASES)
+    direction = cash_flow_direction_from_fields(amount_field, direction_field, amount)
+    if direction is None or category_field is None:
+        return None
+
+    if amount < 0:
+        amount = abs(amount)
+    try:
+        values = validated_cash_flow_values(
+            amount=amount,
+            direction=direction,
+            category=category_field.value,
+            currency=mapping.currency,
+        )
+    except HTTPException:
+        return None
+
+    cash_flow_date = parse_date(date_field.value) if date_field is not None else None
+    cash_flow, created = get_or_create_cash_flow(
+        mapping.db,
+        mapping.tenant,
+        mapping.case_id,
+        source_row_id=mapping.source_row.id,
+        account_id=account.id if account is not None else None,
+        reporting_period_id=reporting_period.id if reporting_period is not None else None,
+        cash_flow_date=cash_flow_date,
+        amount=values.amount,
+        currency=values.currency,
+        direction=values.direction,
+        category=values.category,
+        metadata=mapping.metadata(),
+    )
+    mapping.count_record(created, "cash_flows")
+    mapping.link(
+        record_table="financial_cash_flows",
+        record_id=cash_flow.id,
+        field_name="amount",
+        source_field=amount_field.source_field,
+    )
+    if direction_field is not None:
+        mapping.link(
+            record_table="financial_cash_flows",
+            record_id=cash_flow.id,
+            field_name="direction",
+            source_field=direction_field.source_field,
+        )
+    elif amount_field.canonical_name in {"inflow", "outflow"}:
+        mapping.link(
+            record_table="financial_cash_flows",
+            record_id=cash_flow.id,
+            field_name="direction",
+            source_field=amount_field.source_field,
+        )
+    mapping.link(
+        record_table="financial_cash_flows",
+        record_id=cash_flow.id,
+        field_name="category",
+        source_field=category_field.source_field,
+    )
+    if date_field is not None:
+        mapping.link(
+            record_table="financial_cash_flows",
+            record_id=cash_flow.id,
+            field_name="cash_flow_date",
+            source_field=date_field.source_field,
+        )
+    link_currency(mapping, "financial_cash_flows", cash_flow.id)
+    reconcile_cash_flow_review_issues(mapping.db, mapping.tenant, cash_flow)
+    return cash_flow
+
+
+def first_cash_flow_amount_field(mapping: RowMappingContext) -> FieldValue | None:
+    amount_field = first_field(mapping.normalized, CASH_FLOW_AMOUNT_ALIASES)
+    if amount_field is None:
+        return None
+    has_explicit_amount = amount_field.canonical_name not in {"amount"}
+    has_cash_flow_intent = (
+        first_field(mapping.normalized, CASH_FLOW_DIRECTION_ALIASES) is not None
+        or first_field(mapping.normalized, CASH_FLOW_CATEGORY_ALIASES) is not None
+        or first_field(mapping.normalized, CASH_FLOW_DATE_ALIASES) is not None
+        or amount_field.canonical_name in {"inflow", "outflow"}
+    )
+    if has_explicit_amount or has_cash_flow_intent:
+        return amount_field
+    return None
+
+
+def has_cash_flow_mapping_intent(mapping: RowMappingContext) -> bool:
+    return first_field(mapping.normalized, CASH_FLOW_AMOUNT_ALIASES) is not None and (
+        first_field(mapping.normalized, CASH_FLOW_DIRECTION_ALIASES) is not None
+        or first_field(mapping.normalized, CASH_FLOW_CATEGORY_ALIASES) is not None
+        or first_field(mapping.normalized, CASH_FLOW_DATE_ALIASES) is not None
+    )
+
+
+def cash_flow_direction_from_fields(
+    amount_field: FieldValue,
+    direction_field: FieldValue | None,
+    amount: Decimal,
+) -> str | None:
+    if amount_field.canonical_name == "inflow":
+        return "inflow"
+    if amount_field.canonical_name == "outflow":
+        return "outflow"
+    if direction_field is not None:
+        return normalize_direction(direction_field.value)
+    if amount < 0:
+        return "outflow"
+    return None
 
 
 def map_obligation(

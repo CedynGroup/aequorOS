@@ -9,6 +9,7 @@ from app.api.deps import TenantContext
 from app.models import (
     FinancialAccount,
     FinancialBalance,
+    FinancialCashFlow,
     FinancialInstitution,
     FinancialManualEditHistory,
     FinancialObligation,
@@ -40,6 +41,9 @@ def get_financial_workspace(
             db.scalars(financial_stmt(FinancialReportingPeriod, ctx.organization_id, case_id))
         ),
         balances=list(db.scalars(financial_stmt(FinancialBalance, ctx.organization_id, case_id))),
+        cash_flows=list(
+            db.scalars(financial_stmt(FinancialCashFlow, ctx.organization_id, case_id))
+        ),
         obligations=list(
             db.scalars(financial_stmt(FinancialObligation, ctx.organization_id, case_id))
         ),

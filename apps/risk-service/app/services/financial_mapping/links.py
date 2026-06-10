@@ -9,7 +9,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import FinancialBalance, FinancialObligation, FinancialRecordSourceLink
+from app.models import (
+    FinancialBalance,
+    FinancialCashFlow,
+    FinancialObligation,
+    FinancialRecordSourceLink,
+)
 from app.schemas.common import JsonObject, JsonValue
 from app.services.financial_mapping.normalization import normalize_key
 from app.services.financial_mapping.types import (
@@ -27,8 +32,8 @@ def linked_record(
     ctx: TenantContext,
     case_id: UUID,
     source_row_id: UUID,
-    record_table: Literal["financial_balances", "financial_obligations"],
-) -> FinancialBalance | FinancialObligation | None:
+    record_table: Literal["financial_balances", "financial_cash_flows", "financial_obligations"],
+) -> FinancialBalance | FinancialCashFlow | FinancialObligation | None:
     link = db.scalar(
         select(FinancialRecordSourceLink).where(
             FinancialRecordSourceLink.organization_id == ctx.organization_id,
@@ -45,6 +50,14 @@ def linked_record(
                 FinancialBalance.id == link.record_id,
                 FinancialBalance.organization_id == ctx.organization_id,
                 FinancialBalance.case_id == case_id,
+            )
+        )
+    if record_table == "financial_cash_flows":
+        return db.scalar(
+            select(FinancialCashFlow).where(
+                FinancialCashFlow.id == link.record_id,
+                FinancialCashFlow.organization_id == ctx.organization_id,
+                FinancialCashFlow.case_id == case_id,
             )
         )
     if record_table == "financial_obligations":

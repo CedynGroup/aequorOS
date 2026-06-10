@@ -15,6 +15,7 @@ type CountKey = Literal[
     "accounts",
     "reporting_periods",
     "balances",
+    "cash_flows",
     "obligations",
     "record_source_links",
 ]
@@ -33,6 +34,21 @@ type FieldAlias = Literal[
     "as_of_date",
     "amount",
     "balance",
+    "cash_flow",
+    "cashflow",
+    "cash_flow_amount",
+    "net_cash_flow",
+    "inflow",
+    "outflow",
+    "direction",
+    "cash_flow_direction",
+    "flow_direction",
+    "category",
+    "cash_flow_category",
+    "transaction_category",
+    "cash_flow_date",
+    "flow_date",
+    "date",
     "principal",
     "committed",
     "outstanding",
@@ -45,6 +61,7 @@ type RecordTable = Literal[
     "financial_accounts",
     "financial_reporting_periods",
     "financial_balances",
+    "financial_cash_flows",
     "financial_obligations",
 ]
 
@@ -62,6 +79,30 @@ PERIOD_ALIASES: tuple[FieldAlias, ...] = (
     "as_of_date",
 )
 BALANCE_AMOUNT_ALIASES: tuple[FieldAlias, ...] = ("amount", "balance")
+CASH_FLOW_AMOUNT_ALIASES: tuple[FieldAlias, ...] = (
+    "cash_flow",
+    "cashflow",
+    "cash_flow_amount",
+    "net_cash_flow",
+    "inflow",
+    "outflow",
+    "amount",
+)
+CASH_FLOW_DIRECTION_ALIASES: tuple[FieldAlias, ...] = (
+    "direction",
+    "cash_flow_direction",
+    "flow_direction",
+)
+CASH_FLOW_CATEGORY_ALIASES: tuple[FieldAlias, ...] = (
+    "category",
+    "cash_flow_category",
+    "transaction_category",
+)
+CASH_FLOW_DATE_ALIASES: tuple[FieldAlias, ...] = (
+    "cash_flow_date",
+    "flow_date",
+    "date",
+)
 OBLIGATION_AMOUNT_ALIASES: tuple[FieldAlias, ...] = (
     "principal",
     "committed",
@@ -74,6 +115,10 @@ SUPPORTED_FIELD_NAMES = {
     *ACCOUNT_ALIASES,
     *PERIOD_ALIASES,
     *BALANCE_AMOUNT_ALIASES,
+    *CASH_FLOW_AMOUNT_ALIASES,
+    *CASH_FLOW_DIRECTION_ALIASES,
+    *CASH_FLOW_CATEGORY_ALIASES,
+    *CASH_FLOW_DATE_ALIASES,
     *OBLIGATION_AMOUNT_ALIASES,
     *CURRENCY_ALIASES,
 }
@@ -84,6 +129,7 @@ COUNT_KEYS: tuple[CountKey, ...] = (
     "accounts",
     "reporting_periods",
     "balances",
+    "cash_flows",
     "obligations",
     "record_source_links",
 )
