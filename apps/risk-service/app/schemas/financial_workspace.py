@@ -5,13 +5,13 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from app.schemas.common import JsonObject, JsonValue
 
 type FinancialValidationSeverity = Literal["error", "warning", "info"]
 type FinancialValidationEntityType = Literal[
-    "institution", "account", "reporting_period", "balance", "obligation"
+    "institution", "account", "reporting_period", "balance", "cash_flow", "obligation"
 ]
 
 ENTITY_TYPE_BY_TABLE: dict[str, FinancialValidationEntityType] = {
@@ -19,6 +19,7 @@ ENTITY_TYPE_BY_TABLE: dict[str, FinancialValidationEntityType] = {
     "financial_accounts": "account",
     "financial_reporting_periods": "reporting_period",
     "financial_balances": "balance",
+    "financial_cash_flows": "cash_flow",
     "financial_obligations": "obligation",
 }
 
@@ -85,6 +86,54 @@ class FinancialBalanceRead(BaseModel):
     metadata: JsonObject = Field(validation_alias="metadata_", serialization_alias="metadata")
     created_at: datetime
     updated_at: datetime
+
+
+class FinancialCashFlowRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: UUID
+    organization_id: UUID
+    case_id: UUID
+    account_id: UUID | None
+    reporting_period_id: UUID | None
+    cash_flow_date: date | None
+    amount: Decimal
+    currency: str | None
+    direction: str
+    category: str
+    metadata: JsonObject = Field(validation_alias="metadata_", serialization_alias="metadata")
+    created_at: datetime
+    updated_at: datetime
+
+
+class FinancialCashFlowCreate(BaseModel):
+    account_id: UUID | None = None
+    reporting_period_id: UUID | None = None
+    cash_flow_date: date | None = None
+    amount: str = Field(min_length=1)
+    currency: str | None = None
+    direction: str
+    category: str
+    metadata: JsonObject = Field(default_factory=dict)
+
+
+class FinancialCashFlowUpdate(BaseModel):
+    account_id: UUID | None = None
+    reporting_period_id: UUID | None = None
+    cash_flow_date: date | None = None
+    amount: str | None = Field(default=None, min_length=1)
+    currency: str | None = None
+    direction: str | None = None
+    category: str | None = None
+    metadata: JsonObject | None = None
+    reason: str | None = None
+
+    @model_validator(mode="after")
+    def require_update_field(self) -> FinancialCashFlowUpdate:
+        update_fields = set(self.model_fields_set) - {"reason"}
+        if not update_fields:
+            raise ValueError("At least one cash-flow field is required.")
+        return self
 
 
 class FinancialObligationRead(BaseModel):
@@ -225,6 +274,7 @@ class FinancialDataWorkspaceRead(BaseModel):
     accounts: list[FinancialAccountRead]
     reporting_periods: list[FinancialReportingPeriodRead]
     balances: list[FinancialBalanceRead]
+    cash_flows: list[FinancialCashFlowRead]
     obligations: list[FinancialObligationRead]
     source_rows: list[FinancialSourceRowRead]
     record_source_links: list[FinancialRecordSourceLinkRead]

@@ -13,6 +13,11 @@ from app.models import (
     FinancialSourceRow,
 )
 from app.schemas.financial_workspace_mapping import FinancialWorkspaceMapRequest
+from app.services.financial_cash_flows import (
+    cash_flow_review_rules,
+    normalize_category,
+    normalize_direction,
+)
 from app.services.financial_mapping.extraction import parse_extracted_rows
 from app.services.financial_mapping.normalization import parse_decimal
 from app.services.financial_mapping.service import map_financial_workspace
@@ -64,6 +69,24 @@ def test_canonical_dedupe_key_fits_database_column() -> None:
 
     assert key.startswith("reporting_period:")
     assert len(key) <= 96
+
+
+def test_cash_flow_normalization_and_review_rules_are_declarative() -> None:
+    assert normalize_direction("Inflow") == "inflow"
+    assert normalize_direction("debit") == "outflow"
+    assert normalize_direction("sideways") is None
+    assert normalize_category(" Customer Deposit ") == "customer deposit"
+
+    rules = cash_flow_review_rules(
+        currency=None,
+        cash_flow_date=None,
+        reporting_period_id=None,
+    )
+
+    assert {rule.rule_id for rule in rules} == {
+        "cash_flow_missing_currency",
+        "cash_flow_missing_period_or_date",
+    }
 
 
 def test_map_financial_workspace_service_maps_aliases_and_is_idempotent(
