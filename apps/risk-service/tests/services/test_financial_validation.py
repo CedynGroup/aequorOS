@@ -245,6 +245,7 @@ def test_evaluate_financial_validation_handles_available_amount_aliases_directly
             accounts=[],
             periods=[],
             balances=[],
+            cash_flows=[],
             obligations=[obligation],
             links=[],
             manual_edits=[],

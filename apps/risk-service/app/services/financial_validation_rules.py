@@ -9,6 +9,7 @@ from uuid import UUID
 from app.models import (
     FinancialAccount,
     FinancialBalance,
+    FinancialCashFlow,
     FinancialInstitution,
     FinancialManualEditHistory,
     FinancialObligation,
@@ -24,6 +25,7 @@ type RecordTable = Literal[
     "financial_accounts",
     "financial_reporting_periods",
     "financial_balances",
+    "financial_cash_flows",
     "financial_obligations",
 ]
 
@@ -32,6 +34,7 @@ type FinancialValidationRecord = (
     | FinancialAccount
     | FinancialReportingPeriod
     | FinancialBalance
+    | FinancialCashFlow
     | FinancialObligation
 )
 
@@ -46,6 +49,8 @@ BALANCE_PERIOD_REQUIRED = "balance_reporting_period_required"
 BALANCE_AMOUNT_REQUIRED = "balance_amount_required"
 BALANCE_CURRENCY_REQUIRED = "balance_currency_required"
 BALANCE_CURRENCY_MISMATCH = "balance_currency_mismatch"
+CASH_FLOW_CURRENCY_REVIEW = "cash_flow_missing_currency"
+CASH_FLOW_PERIOD_OR_DATE_REVIEW = "cash_flow_missing_period_or_date"
 OBLIGATION_PRINCIPAL_REQUIRED = "obligation_principal_required"
 OBLIGATION_OUTSTANDING_REQUIRED = "obligation_outstanding_required"
 OBLIGATION_CURRENCY_REQUIRED = "obligation_currency_required"
@@ -83,6 +88,7 @@ class FinancialValidationDataset:
     accounts: list[FinancialAccount]
     periods: list[FinancialReportingPeriod]
     balances: list[FinancialBalance]
+    cash_flows: list[FinancialCashFlow]
     obligations: list[FinancialObligation]
     links: list[FinancialRecordSourceLink]
     manual_edits: list[FinancialManualEditHistory]
@@ -330,6 +336,32 @@ def validate_obligation_amounts(
         )
 
 
+def validate_cash_flow_review_fields(
+    cash_flow: FinancialCashFlow,
+    _context: ValidationContext,
+) -> Iterable[IssueDraft]:
+    if cash_flow.currency is None:
+        yield issue(
+            cash_flow,
+            "financial_cash_flows",
+            "warning",
+            CASH_FLOW_CURRENCY_REVIEW,
+            "currency",
+            "Cash-flow currency should be confirmed from source data.",
+            {"field": "currency"},
+        )
+    if cash_flow.cash_flow_date is None and cash_flow.reporting_period_id is None:
+        yield issue(
+            cash_flow,
+            "financial_cash_flows",
+            "warning",
+            CASH_FLOW_PERIOD_OR_DATE_REVIEW,
+            "cash_flow_date",
+            "Cash flow should have either a cash-flow date or reporting period.",
+            {"fields": ["cash_flow_date", "reporting_period_id"]},
+        )
+
+
 def issue(  # noqa: PLR0913
     record: object,
     record_table: RecordTable,
@@ -494,6 +526,12 @@ BALANCE_VALIDATION_SPEC = EntityValidationSpec[FinancialBalance](
     record_rules=(validate_balance_links, validate_balance_account_currency),
 )
 
+CASH_FLOW_VALIDATION_SPEC = EntityValidationSpec[FinancialCashFlow](
+    table="financial_cash_flows",
+    records=lambda dataset: dataset.cash_flows,
+    record_rules=(validate_cash_flow_review_fields,),
+)
+
 OBLIGATION_VALIDATION_SPEC = EntityValidationSpec[FinancialObligation](
     table="financial_obligations",
     records=lambda dataset: dataset.obligations,
@@ -506,5 +544,6 @@ ENTITY_VALIDATION_SPECS: tuple[FinancialValidationSpec, ...] = (
     ACCOUNT_VALIDATION_SPEC,
     REPORTING_PERIOD_VALIDATION_SPEC,
     BALANCE_VALIDATION_SPEC,
+    CASH_FLOW_VALIDATION_SPEC,
     OBLIGATION_VALIDATION_SPEC,
 )
