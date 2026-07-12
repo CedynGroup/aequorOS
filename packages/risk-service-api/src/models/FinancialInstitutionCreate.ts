@@ -13,20 +13,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { InstitutionType } from "./InstitutionType";
+import type { FinancialAccountCreateAccountType } from "./FinancialAccountCreateAccountType";
 import {
-  InstitutionTypeFromJSON,
-  InstitutionTypeFromJSONTyped,
-  InstitutionTypeToJSON,
-  InstitutionTypeToJSONTyped,
-} from "./InstitutionType";
-import type { ReferenceCode } from "./ReferenceCode";
-import {
-  ReferenceCodeFromJSON,
-  ReferenceCodeFromJSONTyped,
-  ReferenceCodeToJSON,
-  ReferenceCodeToJSONTyped,
-} from "./ReferenceCode";
+  FinancialAccountCreateAccountTypeFromJSON,
+  FinancialAccountCreateAccountTypeFromJSONTyped,
+  FinancialAccountCreateAccountTypeToJSON,
+  FinancialAccountCreateAccountTypeToJSONTyped,
+} from "./FinancialAccountCreateAccountType";
 
 /**
  *
@@ -37,10 +30,10 @@ export interface FinancialInstitutionCreate {
   [key: string]: any | any;
   /**
    *
-   * @type {InstitutionType}
+   * @type {FinancialAccountCreateAccountType}
    * @memberof FinancialInstitutionCreate
    */
-  institutionType?: InstitutionType;
+  institutionType?: FinancialAccountCreateAccountType;
   /**
    *
    * @type {{ [key: string]: any; }}
@@ -61,10 +54,10 @@ export interface FinancialInstitutionCreate {
   reason: string;
   /**
    *
-   * @type {ReferenceCode}
+   * @type {FinancialAccountCreateAccountType}
    * @memberof FinancialInstitutionCreate
    */
-  referenceCode?: ReferenceCode;
+  referenceCode?: FinancialAccountCreateAccountType;
 }
 
 /**
@@ -96,14 +89,14 @@ export function FinancialInstitutionCreateFromJSONTyped(
     institutionType:
       json["institution_type"] == null
         ? undefined
-        : InstitutionTypeFromJSON(json["institution_type"]),
+        : FinancialAccountCreateAccountTypeFromJSON(json["institution_type"]),
     metadata: json["metadata"] == null ? undefined : json["metadata"],
     name: json["name"],
     reason: json["reason"],
     referenceCode:
       json["reference_code"] == null
         ? undefined
-        : ReferenceCodeFromJSON(json["reference_code"]),
+        : FinancialAccountCreateAccountTypeFromJSON(json["reference_code"]),
   };
 }
 
@@ -122,11 +115,14 @@ export function FinancialInstitutionCreateToJSONTyped(
   }
 
   return {
-    ...value,
-    institution_type: InstitutionTypeToJSON(value["institutionType"]),
+    institution_type: FinancialAccountCreateAccountTypeToJSON(
+      value["institutionType"],
+    ),
     metadata: value["metadata"],
     name: value["name"],
     reason: value["reason"],
-    reference_code: ReferenceCodeToJSON(value["referenceCode"]),
+    reference_code: FinancialAccountCreateAccountTypeToJSON(
+      value["referenceCode"],
+    ),
   };
 }

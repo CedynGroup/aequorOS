@@ -399,7 +399,8 @@ def update_record(  # noqa: PLR0913, UP047
         previous = getattr(record, provenance_attr)
         setattr(record, provenance_attr, provenance)
         provenance_field = "details" if provenance_attr == "details" else "metadata"
-        changed.setdefault(provenance_field, (previous, provenance))
+        original = changed.get(provenance_field, (previous, provenance))[0]
+        changed[provenance_field] = (original, provenance)
     record.dedupe_key = dedupe(model_values(record))
     for field_name, (previous, new_value) in changed.items():
         add_history(db, ctx, case_id, table, record_id, field_name, previous, new_value, reason)
@@ -600,7 +601,8 @@ def obligation_dedupe(values: dict[str, Any]) -> str:
             values.get("institution_id"),
             values.get("account_id"),
             values.get("reporting_period_id"),
-            "facility",
+            normalize_text(values.get("obligation_type")),
+            normalize_text(values.get("facility_type")),
             values.get("principal_amount"),
             values.get("outstanding_amount"),
             values.get("currency"),

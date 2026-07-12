@@ -12,18 +12,17 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 /**
  *
  * @export
  * @interface MaturityDate
  */
-export interface MaturityDate {}
+export type MaturityDate = string | null;
 
 /**
  * Check if a given object implements the MaturityDate interface.
  */
-export function instanceOfMaturityDate(value: object): value is MaturityDate {
+export function instanceOfMaturityDate(value: unknown): value is MaturityDate {
   return true;
 }
 

@@ -13,34 +13,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { AccountId } from "./AccountId";
-import {
-  AccountIdFromJSON,
-  AccountIdFromJSONTyped,
-  AccountIdToJSON,
-  AccountIdToJSONTyped,
-} from "./AccountId";
-import type { InstitutionId } from "./InstitutionId";
-import {
-  InstitutionIdFromJSON,
-  InstitutionIdFromJSONTyped,
-  InstitutionIdToJSON,
-  InstitutionIdToJSONTyped,
-} from "./InstitutionId";
-import type { OutstandingAmount } from "./OutstandingAmount";
-import {
-  OutstandingAmountFromJSON,
-  OutstandingAmountFromJSONTyped,
-  OutstandingAmountToJSON,
-  OutstandingAmountToJSONTyped,
-} from "./OutstandingAmount";
-import type { MaturityDate } from "./MaturityDate";
-import {
-  MaturityDateFromJSON,
-  MaturityDateFromJSONTyped,
-  MaturityDateToJSON,
-  MaturityDateToJSONTyped,
-} from "./MaturityDate";
 import type { FinancialAccountUpdateMetadata } from "./FinancialAccountUpdateMetadata";
 import {
   FinancialAccountUpdateMetadataFromJSON,
@@ -55,20 +27,41 @@ import {
   StartDateToJSON,
   StartDateToJSONTyped,
 } from "./StartDate";
-import type { ObligationType } from "./ObligationType";
+import type { FinancialAccountCreateAccountType } from "./FinancialAccountCreateAccountType";
 import {
-  ObligationTypeFromJSON,
-  ObligationTypeFromJSONTyped,
-  ObligationTypeToJSON,
-  ObligationTypeToJSONTyped,
-} from "./ObligationType";
-import type { Currency } from "./Currency";
+  FinancialAccountCreateAccountTypeFromJSON,
+  FinancialAccountCreateAccountTypeFromJSONTyped,
+  FinancialAccountCreateAccountTypeToJSON,
+  FinancialAccountCreateAccountTypeToJSONTyped,
+} from "./FinancialAccountCreateAccountType";
+import type { AccountId } from "./AccountId";
 import {
-  CurrencyFromJSON,
-  CurrencyFromJSONTyped,
-  CurrencyToJSON,
-  CurrencyToJSONTyped,
-} from "./Currency";
+  AccountIdFromJSON,
+  AccountIdFromJSONTyped,
+  AccountIdToJSON,
+  AccountIdToJSONTyped,
+} from "./AccountId";
+import type { FinancialObligationCreateOutstandingAmount } from "./FinancialObligationCreateOutstandingAmount";
+import {
+  FinancialObligationCreateOutstandingAmountFromJSON,
+  FinancialObligationCreateOutstandingAmountFromJSONTyped,
+  FinancialObligationCreateOutstandingAmountToJSON,
+  FinancialObligationCreateOutstandingAmountToJSONTyped,
+} from "./FinancialObligationCreateOutstandingAmount";
+import type { FinancialObligationCreateInterestRate } from "./FinancialObligationCreateInterestRate";
+import {
+  FinancialObligationCreateInterestRateFromJSON,
+  FinancialObligationCreateInterestRateFromJSONTyped,
+  FinancialObligationCreateInterestRateToJSON,
+  FinancialObligationCreateInterestRateToJSONTyped,
+} from "./FinancialObligationCreateInterestRate";
+import type { InstitutionId } from "./InstitutionId";
+import {
+  InstitutionIdFromJSON,
+  InstitutionIdFromJSONTyped,
+  InstitutionIdToJSON,
+  InstitutionIdToJSONTyped,
+} from "./InstitutionId";
 import type { ReportingPeriodId } from "./ReportingPeriodId";
 import {
   ReportingPeriodIdFromJSON,
@@ -76,6 +69,20 @@ import {
   ReportingPeriodIdToJSON,
   ReportingPeriodIdToJSONTyped,
 } from "./ReportingPeriodId";
+import type { FinancialAccountCreateCurrency } from "./FinancialAccountCreateCurrency";
+import {
+  FinancialAccountCreateCurrencyFromJSON,
+  FinancialAccountCreateCurrencyFromJSONTyped,
+  FinancialAccountCreateCurrencyToJSON,
+  FinancialAccountCreateCurrencyToJSONTyped,
+} from "./FinancialAccountCreateCurrency";
+import type { MaturityDate } from "./MaturityDate";
+import {
+  MaturityDateFromJSON,
+  MaturityDateFromJSONTyped,
+  MaturityDateToJSON,
+  MaturityDateToJSONTyped,
+} from "./MaturityDate";
 import type { Status1 } from "./Status1";
 import {
   Status1FromJSON,
@@ -83,27 +90,6 @@ import {
   Status1ToJSON,
   Status1ToJSONTyped,
 } from "./Status1";
-import type { InterestRate } from "./InterestRate";
-import {
-  InterestRateFromJSON,
-  InterestRateFromJSONTyped,
-  InterestRateToJSON,
-  InterestRateToJSONTyped,
-} from "./InterestRate";
-import type { PrincipalAmount } from "./PrincipalAmount";
-import {
-  PrincipalAmountFromJSON,
-  PrincipalAmountFromJSONTyped,
-  PrincipalAmountToJSON,
-  PrincipalAmountToJSONTyped,
-} from "./PrincipalAmount";
-import type { FacilityType } from "./FacilityType";
-import {
-  FacilityTypeFromJSON,
-  FacilityTypeFromJSONTyped,
-  FacilityTypeToJSON,
-  FacilityTypeToJSONTyped,
-} from "./FacilityType";
 
 /**
  *
@@ -120,10 +106,10 @@ export interface FinancialObligationUpdate {
   accountId?: AccountId;
   /**
    *
-   * @type {Currency}
+   * @type {FinancialAccountCreateCurrency}
    * @memberof FinancialObligationUpdate
    */
-  currency?: Currency;
+  currency?: FinancialAccountCreateCurrency;
   /**
    *
    * @type {FinancialAccountUpdateMetadata}
@@ -132,10 +118,10 @@ export interface FinancialObligationUpdate {
   details?: FinancialAccountUpdateMetadata;
   /**
    *
-   * @type {FacilityType}
+   * @type {FinancialAccountCreateAccountType}
    * @memberof FinancialObligationUpdate
    */
-  facilityType?: FacilityType;
+  facilityType?: FinancialAccountCreateAccountType;
   /**
    *
    * @type {InstitutionId}
@@ -144,10 +130,10 @@ export interface FinancialObligationUpdate {
   institutionId?: InstitutionId;
   /**
    *
-   * @type {InterestRate}
+   * @type {FinancialObligationCreateInterestRate}
    * @memberof FinancialObligationUpdate
    */
-  interestRate?: InterestRate;
+  interestRate?: FinancialObligationCreateInterestRate;
   /**
    *
    * @type {MaturityDate}
@@ -156,22 +142,22 @@ export interface FinancialObligationUpdate {
   maturityDate?: MaturityDate;
   /**
    *
-   * @type {ObligationType}
+   * @type {string}
    * @memberof FinancialObligationUpdate
    */
-  obligationType?: ObligationType;
+  obligationType?: string;
   /**
    *
-   * @type {OutstandingAmount}
+   * @type {FinancialObligationCreateOutstandingAmount}
    * @memberof FinancialObligationUpdate
    */
-  outstandingAmount?: OutstandingAmount;
+  outstandingAmount?: FinancialObligationCreateOutstandingAmount;
   /**
    *
-   * @type {PrincipalAmount}
+   * @type {FinancialObligationCreateOutstandingAmount}
    * @memberof FinancialObligationUpdate
    */
-  principalAmount?: PrincipalAmount;
+  principalAmount?: FinancialObligationCreateOutstandingAmount;
   /**
    *
    * @type {string}
@@ -228,7 +214,9 @@ export function FinancialObligationUpdateFromJSONTyped(
         ? undefined
         : AccountIdFromJSON(json["account_id"]),
     currency:
-      json["currency"] == null ? undefined : CurrencyFromJSON(json["currency"]),
+      json["currency"] == null
+        ? undefined
+        : FinancialAccountCreateCurrencyFromJSON(json["currency"]),
     details:
       json["details"] == null
         ? undefined
@@ -236,7 +224,7 @@ export function FinancialObligationUpdateFromJSONTyped(
     facilityType:
       json["facility_type"] == null
         ? undefined
-        : FacilityTypeFromJSON(json["facility_type"]),
+        : FinancialAccountCreateAccountTypeFromJSON(json["facility_type"]),
     institutionId:
       json["institution_id"] == null
         ? undefined
@@ -244,23 +232,25 @@ export function FinancialObligationUpdateFromJSONTyped(
     interestRate:
       json["interest_rate"] == null
         ? undefined
-        : InterestRateFromJSON(json["interest_rate"]),
+        : FinancialObligationCreateInterestRateFromJSON(json["interest_rate"]),
     maturityDate:
       json["maturity_date"] == null
         ? undefined
         : MaturityDateFromJSON(json["maturity_date"]),
     obligationType:
-      json["obligation_type"] == null
-        ? undefined
-        : ObligationTypeFromJSON(json["obligation_type"]),
+      json["obligation_type"] == null ? undefined : json["obligation_type"],
     outstandingAmount:
       json["outstanding_amount"] == null
         ? undefined
-        : OutstandingAmountFromJSON(json["outstanding_amount"]),
+        : FinancialObligationCreateOutstandingAmountFromJSON(
+            json["outstanding_amount"],
+          ),
     principalAmount:
       json["principal_amount"] == null
         ? undefined
-        : PrincipalAmountFromJSON(json["principal_amount"]),
+        : FinancialObligationCreateOutstandingAmountFromJSON(
+            json["principal_amount"],
+          ),
     reason: json["reason"],
     reportingPeriodId:
       json["reporting_period_id"] == null
@@ -290,17 +280,24 @@ export function FinancialObligationUpdateToJSONTyped(
   }
 
   return {
-    ...value,
     account_id: AccountIdToJSON(value["accountId"]),
-    currency: CurrencyToJSON(value["currency"]),
+    currency: FinancialAccountCreateCurrencyToJSON(value["currency"]),
     details: FinancialAccountUpdateMetadataToJSON(value["details"]),
-    facility_type: FacilityTypeToJSON(value["facilityType"]),
+    facility_type: FinancialAccountCreateAccountTypeToJSON(
+      value["facilityType"],
+    ),
     institution_id: InstitutionIdToJSON(value["institutionId"]),
-    interest_rate: InterestRateToJSON(value["interestRate"]),
+    interest_rate: FinancialObligationCreateInterestRateToJSON(
+      value["interestRate"],
+    ),
     maturity_date: MaturityDateToJSON(value["maturityDate"]),
-    obligation_type: ObligationTypeToJSON(value["obligationType"]),
-    outstanding_amount: OutstandingAmountToJSON(value["outstandingAmount"]),
-    principal_amount: PrincipalAmountToJSON(value["principalAmount"]),
+    obligation_type: value["obligationType"],
+    outstanding_amount: FinancialObligationCreateOutstandingAmountToJSON(
+      value["outstandingAmount"],
+    ),
+    principal_amount: FinancialObligationCreateOutstandingAmountToJSON(
+      value["principalAmount"],
+    ),
     reason: value["reason"],
     reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),
     start_date: StartDateToJSON(value["startDate"]),

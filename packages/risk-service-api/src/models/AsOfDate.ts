@@ -12,18 +12,17 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 /**
  *
  * @export
  * @interface AsOfDate
  */
-export interface AsOfDate {}
+export type AsOfDate = string | null;
 
 /**
  * Check if a given object implements the AsOfDate interface.
  */
-export function instanceOfAsOfDate(value: object): value is AsOfDate {
+export function instanceOfAsOfDate(value: unknown): value is AsOfDate {
   return true;
 }
 

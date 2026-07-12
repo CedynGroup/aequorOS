@@ -12,18 +12,17 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 /**
  *
  * @export
  * @interface AccountId
  */
-export interface AccountId {}
+export type AccountId = string | null;
 
 /**
  * Check if a given object implements the AccountId interface.
  */
-export function instanceOfAccountId(value: object): value is AccountId {
+export function instanceOfAccountId(value: unknown): value is AccountId {
   return true;
 }
 

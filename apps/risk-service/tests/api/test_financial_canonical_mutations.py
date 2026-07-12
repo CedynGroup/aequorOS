@@ -155,6 +155,150 @@ def test_all_core_entity_manual_entry_contracts_are_available(db_client: TestCli
             assert actual == expected
 
 
+def test_explicit_provenance_fields_record_the_persisted_history_value(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    institution = create_record(
+        db_client,
+        case.id,
+        "institutions",
+        {"name": "History Bank", "metadata": {"note": "source"}, "reason": "manual"},
+    )
+    obligation = create_record(
+        db_client,
+        case.id,
+        "obligations",
+        {
+            "obligation_type": "loan",
+            "details": {"note": "source"},
+            "reason": "manual",
+        },
+    )
+
+    institution_response = db_client.patch(
+        f"/api/v1/cases/{case.id}/financial-workspace/institutions/{institution['id']}",
+        headers=headers(),
+        json={"metadata": {"note": "reviewed"}, "reason": "metadata correction"},
+    )
+    obligation_response = db_client.patch(
+        f"/api/v1/cases/{case.id}/financial-workspace/obligations/{obligation['id']}",
+        headers=headers(),
+        json={"details": {"note": "reviewed"}, "reason": "details correction"},
+    )
+
+    assert institution_response.status_code == 200, institution_response.text
+    assert obligation_response.status_code == 200, obligation_response.text
+    with get_sessionmaker()() as session:
+        for record_id, field, reason, persisted in (
+            (
+                institution["id"],
+                "metadata",
+                "metadata correction",
+                institution_response.json()["record"]["metadata"],
+            ),
+            (
+                obligation["id"],
+                "details",
+                "details correction",
+                obligation_response.json()["record"]["details"],
+            ),
+        ):
+            history = session.scalar(
+                select(FinancialManualEditHistory).where(
+                    FinancialManualEditHistory.record_id == UUID(str(record_id)),
+                    FinancialManualEditHistory.field_name == field,
+                    FinancialManualEditHistory.reason == reason,
+                )
+            )
+            assert history is not None
+            assert history.new_value == persisted
+            assert history.new_value["provenance"] == "corrected"
+
+
+def test_obligation_identity_uses_type_and_updates_after_correction(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    common = {
+        "principal_amount": "1000",
+        "outstanding_amount": "500",
+        "currency": "USD",
+        "reason": "manual",
+    }
+    loan = create_record(
+        db_client,
+        case.id,
+        "obligations",
+        {**common, "obligation_type": "loan"},
+    )
+    facility = create_record(
+        db_client,
+        case.id,
+        "obligations",
+        {**common, "obligation_type": "facility"},
+    )
+
+    correction = db_client.patch(
+        f"/api/v1/cases/{case.id}/financial-workspace/obligations/{loan['id']}",
+        headers=headers(),
+        json={"obligation_type": "lease", "reason": "correct type"},
+    )
+    replacement = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/obligations",
+        headers=headers(),
+        json={**common, "obligation_type": "loan"},
+    )
+
+    assert facility["obligation_type"] == "facility"
+    assert correction.status_code == 200, correction.text
+    assert replacement.status_code == 200, replacement.text
+
+
+def test_mutation_contracts_reject_database_overflow_and_nonnullable_covenant_nulls(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    institution_overflow = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/institutions",
+        headers=headers(),
+        json={"name": "Bank", "institution_type": "x" * 121, "reason": "manual"},
+    )
+    balance_overflow = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/balances",
+        headers=headers(),
+        json={"balance_type": "cash", "amount": "12345678901234567.1234", "reason": "manual"},
+    )
+    interest_overflow = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/obligations",
+        headers=headers(),
+        json={"obligation_type": "loan", "interest_rate": "12345.123456", "reason": "manual"},
+    )
+    covenant = create_record(
+        db_client,
+        case.id,
+        "covenants",
+        {
+            "name": "Leverage",
+            "metric": "leverage",
+            "operator": "lte",
+            "threshold": "3.0",
+            "reason": "manual",
+        },
+    )
+
+    assert institution_overflow.status_code == 422
+    assert balance_overflow.status_code == 422
+    assert interest_overflow.status_code == 422
+    for field in ("compliance_status", "source_record", "reporting_context", "metadata"):
+        response = db_client.patch(
+            f"/api/v1/cases/{case.id}/financial-workspace/covenants/{covenant['id']}",
+            headers=headers(),
+            json={field: None, "reason": "invalid null"},
+        )
+        assert response.status_code == 422, response.text
+
+
 def test_covenant_contract_computes_and_validates_compliance(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     obligation = create_record(

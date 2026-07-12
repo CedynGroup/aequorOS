@@ -12,18 +12,17 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 /**
  *
  * @export
  * @interface ObligationId
  */
-export interface ObligationId {}
+export type ObligationId = string | null;
 
 /**
  * Check if a given object implements the ObligationId interface.
  */
-export function instanceOfObligationId(value: object): value is ObligationId {
+export function instanceOfObligationId(value: unknown): value is ObligationId {
   return true;
 }
 

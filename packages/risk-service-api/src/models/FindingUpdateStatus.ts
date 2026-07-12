@@ -12,7 +12,6 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 import type { FindingStatus } from "./FindingStatus";
 import {
   FindingStatusFromJSON,
@@ -26,13 +25,21 @@ import {
  * @export
  * @interface FindingUpdateStatus
  */
-export interface FindingUpdateStatus {}
+export type FindingUpdateStatus =
+  | "open"
+  | "accepted"
+  | "acknowledged"
+  | "dismissed"
+  | "needs_review"
+  | "resolved"
+  | "superseded"
+  | null;
 
 /**
  * Check if a given object implements the FindingUpdateStatus interface.
  */
 export function instanceOfFindingUpdateStatus(
-  value: object,
+  value: unknown,
 ): value is FindingUpdateStatus {
   return true;
 }

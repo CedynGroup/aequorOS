@@ -13,34 +13,27 @@
  */
 
 import { mapValues } from "../runtime";
-import type { FinancialAccountUpdateMetadata } from "./FinancialAccountUpdateMetadata";
+import type { FinancialCovenantComplianceStatus } from "./FinancialCovenantComplianceStatus";
 import {
-  FinancialAccountUpdateMetadataFromJSON,
-  FinancialAccountUpdateMetadataFromJSONTyped,
-  FinancialAccountUpdateMetadataToJSON,
-  FinancialAccountUpdateMetadataToJSONTyped,
-} from "./FinancialAccountUpdateMetadata";
-import type { FinancialCovenantCreateComplianceStatus } from "./FinancialCovenantCreateComplianceStatus";
+  FinancialCovenantComplianceStatusFromJSON,
+  FinancialCovenantComplianceStatusFromJSONTyped,
+  FinancialCovenantComplianceStatusToJSON,
+  FinancialCovenantComplianceStatusToJSONTyped,
+} from "./FinancialCovenantComplianceStatus";
+import type { FinancialCovenantCreateActualValue } from "./FinancialCovenantCreateActualValue";
 import {
-  FinancialCovenantCreateComplianceStatusFromJSON,
-  FinancialCovenantCreateComplianceStatusFromJSONTyped,
-  FinancialCovenantCreateComplianceStatusToJSON,
-  FinancialCovenantCreateComplianceStatusToJSONTyped,
-} from "./FinancialCovenantCreateComplianceStatus";
-import type { ActualValue } from "./ActualValue";
+  FinancialCovenantCreateActualValueFromJSON,
+  FinancialCovenantCreateActualValueFromJSONTyped,
+  FinancialCovenantCreateActualValueToJSON,
+  FinancialCovenantCreateActualValueToJSONTyped,
+} from "./FinancialCovenantCreateActualValue";
+import type { FinancialCovenantOperator } from "./FinancialCovenantOperator";
 import {
-  ActualValueFromJSON,
-  ActualValueFromJSONTyped,
-  ActualValueToJSON,
-  ActualValueToJSONTyped,
-} from "./ActualValue";
-import type { FinancialCovenantUpdateOperator } from "./FinancialCovenantUpdateOperator";
-import {
-  FinancialCovenantUpdateOperatorFromJSON,
-  FinancialCovenantUpdateOperatorFromJSONTyped,
-  FinancialCovenantUpdateOperatorToJSON,
-  FinancialCovenantUpdateOperatorToJSONTyped,
-} from "./FinancialCovenantUpdateOperator";
+  FinancialCovenantOperatorFromJSON,
+  FinancialCovenantOperatorFromJSONTyped,
+  FinancialCovenantOperatorToJSON,
+  FinancialCovenantOperatorToJSONTyped,
+} from "./FinancialCovenantOperator";
 import type { ObligationId } from "./ObligationId";
 import {
   ObligationIdFromJSON,
@@ -55,27 +48,13 @@ import {
   ReportingPeriodIdToJSON,
   ReportingPeriodIdToJSONTyped,
 } from "./ReportingPeriodId";
-import type { Metric } from "./Metric";
+import type { FinancialCovenantAmount } from "./FinancialCovenantAmount";
 import {
-  MetricFromJSON,
-  MetricFromJSONTyped,
-  MetricToJSON,
-  MetricToJSONTyped,
-} from "./Metric";
-import type { Threshold1 } from "./Threshold1";
-import {
-  Threshold1FromJSON,
-  Threshold1FromJSONTyped,
-  Threshold1ToJSON,
-  Threshold1ToJSONTyped,
-} from "./Threshold1";
-import type { Name } from "./Name";
-import {
-  NameFromJSON,
-  NameFromJSONTyped,
-  NameToJSON,
-  NameToJSONTyped,
-} from "./Name";
+  FinancialCovenantAmountFromJSON,
+  FinancialCovenantAmountFromJSONTyped,
+  FinancialCovenantAmountToJSON,
+  FinancialCovenantAmountToJSONTyped,
+} from "./FinancialCovenantAmount";
 
 /**
  *
@@ -86,34 +65,34 @@ export interface FinancialCovenantUpdate {
   [key: string]: any | any;
   /**
    *
-   * @type {ActualValue}
+   * @type {FinancialCovenantCreateActualValue}
    * @memberof FinancialCovenantUpdate
    */
-  actualValue?: ActualValue;
+  actualValue?: FinancialCovenantCreateActualValue;
   /**
    *
-   * @type {FinancialCovenantCreateComplianceStatus}
+   * @type {FinancialCovenantComplianceStatus}
    * @memberof FinancialCovenantUpdate
    */
-  complianceStatus?: FinancialCovenantCreateComplianceStatus;
+  complianceStatus?: FinancialCovenantComplianceStatus;
   /**
    *
-   * @type {FinancialAccountUpdateMetadata}
+   * @type {{ [key: string]: any; }}
    * @memberof FinancialCovenantUpdate
    */
-  metadata?: FinancialAccountUpdateMetadata;
+  metadata?: { [key: string]: any };
   /**
    *
-   * @type {Metric}
+   * @type {string}
    * @memberof FinancialCovenantUpdate
    */
-  metric?: Metric;
+  metric?: string;
   /**
    *
-   * @type {Name}
+   * @type {string}
    * @memberof FinancialCovenantUpdate
    */
-  name?: Name;
+  name?: string;
   /**
    *
    * @type {ObligationId}
@@ -122,10 +101,10 @@ export interface FinancialCovenantUpdate {
   obligationId?: ObligationId;
   /**
    *
-   * @type {FinancialCovenantUpdateOperator}
+   * @type {FinancialCovenantOperator}
    * @memberof FinancialCovenantUpdate
    */
-  operator?: FinancialCovenantUpdateOperator;
+  operator?: FinancialCovenantOperator;
   /**
    *
    * @type {string}
@@ -134,10 +113,10 @@ export interface FinancialCovenantUpdate {
   reason: string;
   /**
    *
-   * @type {FinancialAccountUpdateMetadata}
+   * @type {{ [key: string]: any; }}
    * @memberof FinancialCovenantUpdate
    */
-  reportingContext?: FinancialAccountUpdateMetadata;
+  reportingContext?: { [key: string]: any };
   /**
    *
    * @type {ReportingPeriodId}
@@ -146,16 +125,16 @@ export interface FinancialCovenantUpdate {
   reportingPeriodId?: ReportingPeriodId;
   /**
    *
-   * @type {FinancialAccountUpdateMetadata}
+   * @type {{ [key: string]: any; }}
    * @memberof FinancialCovenantUpdate
    */
-  sourceRecord?: FinancialAccountUpdateMetadata;
+  sourceRecord?: { [key: string]: any };
   /**
    *
-   * @type {Threshold1}
+   * @type {FinancialCovenantAmount}
    * @memberof FinancialCovenantUpdate
    */
-  threshold?: Threshold1;
+  threshold?: FinancialCovenantAmount;
 }
 
 /**
@@ -186,19 +165,14 @@ export function FinancialCovenantUpdateFromJSONTyped(
     actualValue:
       json["actual_value"] == null
         ? undefined
-        : ActualValueFromJSON(json["actual_value"]),
+        : FinancialCovenantCreateActualValueFromJSON(json["actual_value"]),
     complianceStatus:
       json["compliance_status"] == null
         ? undefined
-        : FinancialCovenantCreateComplianceStatusFromJSON(
-            json["compliance_status"],
-          ),
-    metadata:
-      json["metadata"] == null
-        ? undefined
-        : FinancialAccountUpdateMetadataFromJSON(json["metadata"]),
-    metric: json["metric"] == null ? undefined : MetricFromJSON(json["metric"]),
-    name: json["name"] == null ? undefined : NameFromJSON(json["name"]),
+        : FinancialCovenantComplianceStatusFromJSON(json["compliance_status"]),
+    metadata: json["metadata"] == null ? undefined : json["metadata"],
+    metric: json["metric"] == null ? undefined : json["metric"],
+    name: json["name"] == null ? undefined : json["name"],
     obligationId:
       json["obligation_id"] == null
         ? undefined
@@ -206,24 +180,20 @@ export function FinancialCovenantUpdateFromJSONTyped(
     operator:
       json["operator"] == null
         ? undefined
-        : FinancialCovenantUpdateOperatorFromJSON(json["operator"]),
+        : FinancialCovenantOperatorFromJSON(json["operator"]),
     reason: json["reason"],
     reportingContext:
-      json["reporting_context"] == null
-        ? undefined
-        : FinancialAccountUpdateMetadataFromJSON(json["reporting_context"]),
+      json["reporting_context"] == null ? undefined : json["reporting_context"],
     reportingPeriodId:
       json["reporting_period_id"] == null
         ? undefined
         : ReportingPeriodIdFromJSON(json["reporting_period_id"]),
     sourceRecord:
-      json["source_record"] == null
-        ? undefined
-        : FinancialAccountUpdateMetadataFromJSON(json["source_record"]),
+      json["source_record"] == null ? undefined : json["source_record"],
     threshold:
       json["threshold"] == null
         ? undefined
-        : Threshold1FromJSON(json["threshold"]),
+        : FinancialCovenantAmountFromJSON(json["threshold"]),
   };
 }
 
@@ -242,22 +212,21 @@ export function FinancialCovenantUpdateToJSONTyped(
   }
 
   return {
-    ...value,
-    actual_value: ActualValueToJSON(value["actualValue"]),
-    compliance_status: FinancialCovenantCreateComplianceStatusToJSON(
+    actual_value: FinancialCovenantCreateActualValueToJSON(
+      value["actualValue"],
+    ),
+    compliance_status: FinancialCovenantComplianceStatusToJSON(
       value["complianceStatus"],
     ),
-    metadata: FinancialAccountUpdateMetadataToJSON(value["metadata"]),
-    metric: MetricToJSON(value["metric"]),
-    name: NameToJSON(value["name"]),
+    metadata: value["metadata"],
+    metric: value["metric"],
+    name: value["name"],
     obligation_id: ObligationIdToJSON(value["obligationId"]),
-    operator: FinancialCovenantUpdateOperatorToJSON(value["operator"]),
+    operator: FinancialCovenantOperatorToJSON(value["operator"]),
     reason: value["reason"],
-    reporting_context: FinancialAccountUpdateMetadataToJSON(
-      value["reportingContext"],
-    ),
+    reporting_context: value["reportingContext"],
     reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),
-    source_record: FinancialAccountUpdateMetadataToJSON(value["sourceRecord"]),
-    threshold: Threshold1ToJSON(value["threshold"]),
+    source_record: value["sourceRecord"],
+    threshold: FinancialCovenantAmountToJSON(value["threshold"]),
   };
 }

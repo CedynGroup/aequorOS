@@ -12,18 +12,24 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 /**
  *
  * @export
  * @interface Status1
  */
-export interface Status1 {}
+export type Status1 =
+  | "active"
+  | "inactive"
+  | "closed"
+  | "matured"
+  | "defaulted"
+  | "unknown"
+  | null;
 
 /**
  * Check if a given object implements the Status1 interface.
  */
-export function instanceOfStatus1(value: object): value is Status1 {
+export function instanceOfStatus1(value: unknown): value is Status1 {
   return true;
 }
 

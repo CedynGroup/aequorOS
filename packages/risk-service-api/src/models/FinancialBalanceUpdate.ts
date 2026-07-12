@@ -20,13 +20,6 @@ import {
   FinancialAccountUpdateMetadataToJSON,
   FinancialAccountUpdateMetadataToJSONTyped,
 } from "./FinancialAccountUpdateMetadata";
-import type { Amount1 } from "./Amount1";
-import {
-  Amount1FromJSON,
-  Amount1FromJSONTyped,
-  Amount1ToJSON,
-  Amount1ToJSONTyped,
-} from "./Amount1";
 import type { AsOfDate } from "./AsOfDate";
 import {
   AsOfDateFromJSON,
@@ -41,13 +34,13 @@ import {
   AccountIdToJSON,
   AccountIdToJSONTyped,
 } from "./AccountId";
-import type { Currency } from "./Currency";
+import type { FinancialAmount } from "./FinancialAmount";
 import {
-  CurrencyFromJSON,
-  CurrencyFromJSONTyped,
-  CurrencyToJSON,
-  CurrencyToJSONTyped,
-} from "./Currency";
+  FinancialAmountFromJSON,
+  FinancialAmountFromJSONTyped,
+  FinancialAmountToJSON,
+  FinancialAmountToJSONTyped,
+} from "./FinancialAmount";
 import type { ReportingPeriodId } from "./ReportingPeriodId";
 import {
   ReportingPeriodIdFromJSON,
@@ -55,13 +48,13 @@ import {
   ReportingPeriodIdToJSON,
   ReportingPeriodIdToJSONTyped,
 } from "./ReportingPeriodId";
-import type { BalanceType } from "./BalanceType";
+import type { FinancialAccountCreateCurrency } from "./FinancialAccountCreateCurrency";
 import {
-  BalanceTypeFromJSON,
-  BalanceTypeFromJSONTyped,
-  BalanceTypeToJSON,
-  BalanceTypeToJSONTyped,
-} from "./BalanceType";
+  FinancialAccountCreateCurrencyFromJSON,
+  FinancialAccountCreateCurrencyFromJSONTyped,
+  FinancialAccountCreateCurrencyToJSON,
+  FinancialAccountCreateCurrencyToJSONTyped,
+} from "./FinancialAccountCreateCurrency";
 
 /**
  *
@@ -78,10 +71,10 @@ export interface FinancialBalanceUpdate {
   accountId?: AccountId;
   /**
    *
-   * @type {Amount1}
+   * @type {FinancialAmount}
    * @memberof FinancialBalanceUpdate
    */
-  amount?: Amount1;
+  amount?: FinancialAmount;
   /**
    *
    * @type {AsOfDate}
@@ -90,16 +83,16 @@ export interface FinancialBalanceUpdate {
   asOfDate?: AsOfDate;
   /**
    *
-   * @type {BalanceType}
+   * @type {string}
    * @memberof FinancialBalanceUpdate
    */
-  balanceType?: BalanceType;
+  balanceType?: string;
   /**
    *
-   * @type {Currency}
+   * @type {FinancialAccountCreateCurrency}
    * @memberof FinancialBalanceUpdate
    */
-  currency?: Currency;
+  currency?: FinancialAccountCreateCurrency;
   /**
    *
    * @type {FinancialAccountUpdateMetadata}
@@ -150,17 +143,19 @@ export function FinancialBalanceUpdateFromJSONTyped(
         ? undefined
         : AccountIdFromJSON(json["account_id"]),
     amount:
-      json["amount"] == null ? undefined : Amount1FromJSON(json["amount"]),
+      json["amount"] == null
+        ? undefined
+        : FinancialAmountFromJSON(json["amount"]),
     asOfDate:
       json["as_of_date"] == null
         ? undefined
         : AsOfDateFromJSON(json["as_of_date"]),
     balanceType:
-      json["balance_type"] == null
-        ? undefined
-        : BalanceTypeFromJSON(json["balance_type"]),
+      json["balance_type"] == null ? undefined : json["balance_type"],
     currency:
-      json["currency"] == null ? undefined : CurrencyFromJSON(json["currency"]),
+      json["currency"] == null
+        ? undefined
+        : FinancialAccountCreateCurrencyFromJSON(json["currency"]),
     metadata:
       json["metadata"] == null
         ? undefined
@@ -188,12 +183,11 @@ export function FinancialBalanceUpdateToJSONTyped(
   }
 
   return {
-    ...value,
     account_id: AccountIdToJSON(value["accountId"]),
-    amount: Amount1ToJSON(value["amount"]),
+    amount: FinancialAmountToJSON(value["amount"]),
     as_of_date: AsOfDateToJSON(value["asOfDate"]),
-    balance_type: BalanceTypeToJSON(value["balanceType"]),
-    currency: CurrencyToJSON(value["currency"]),
+    balance_type: value["balanceType"],
+    currency: FinancialAccountCreateCurrencyToJSON(value["currency"]),
     metadata: FinancialAccountUpdateMetadataToJSON(value["metadata"]),
     reason: value["reason"],
     reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),

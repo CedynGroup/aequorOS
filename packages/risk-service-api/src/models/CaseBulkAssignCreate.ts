@@ -85,7 +85,6 @@ export function CaseBulkAssignCreateToJSONTyped(
   }
 
   return {
-    ...value,
     action: value["action"],
     assigned_to_user_id: value["assignedToUserId"],
     case_ids: value["caseIds"],

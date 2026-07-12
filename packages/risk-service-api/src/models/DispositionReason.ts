@@ -12,19 +12,18 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 /**
  *
  * @export
  * @interface DispositionReason
  */
-export interface DispositionReason {}
+export type DispositionReason = string | null;
 
 /**
  * Check if a given object implements the DispositionReason interface.
  */
 export function instanceOfDispositionReason(
-  value: object,
+  value: unknown,
 ): value is DispositionReason {
   return true;
 }

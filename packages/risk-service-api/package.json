@@ -14,6 +14,7 @@
   "scripts": {
     "build": "echo 'No build needed - source consumed directly'",
     "prepare": "echo 'No prepare needed - source consumed directly'",
+    "test": "rm -rf dist-test && tsc --outDir dist-test && node dist-test/tests/generated-contracts.test.js && rm -rf dist-test",
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {

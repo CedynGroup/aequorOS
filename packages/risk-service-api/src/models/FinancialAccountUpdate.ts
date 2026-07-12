@@ -27,6 +27,13 @@ import {
   StatusToJSON,
   StatusToJSONTyped,
 } from "./Status";
+import type { FinancialAccountCreateAccountType } from "./FinancialAccountCreateAccountType";
+import {
+  FinancialAccountCreateAccountTypeFromJSON,
+  FinancialAccountCreateAccountTypeFromJSONTyped,
+  FinancialAccountCreateAccountTypeToJSON,
+  FinancialAccountCreateAccountTypeToJSONTyped,
+} from "./FinancialAccountCreateAccountType";
 import type { InstitutionId } from "./InstitutionId";
 import {
   InstitutionIdFromJSON,
@@ -34,27 +41,13 @@ import {
   InstitutionIdToJSON,
   InstitutionIdToJSONTyped,
 } from "./InstitutionId";
-import type { Currency } from "./Currency";
+import type { FinancialAccountCreateCurrency } from "./FinancialAccountCreateCurrency";
 import {
-  CurrencyFromJSON,
-  CurrencyFromJSONTyped,
-  CurrencyToJSON,
-  CurrencyToJSONTyped,
-} from "./Currency";
-import type { AccountType } from "./AccountType";
-import {
-  AccountTypeFromJSON,
-  AccountTypeFromJSONTyped,
-  AccountTypeToJSON,
-  AccountTypeToJSONTyped,
-} from "./AccountType";
-import type { AccountName } from "./AccountName";
-import {
-  AccountNameFromJSON,
-  AccountNameFromJSONTyped,
-  AccountNameToJSON,
-  AccountNameToJSONTyped,
-} from "./AccountName";
+  FinancialAccountCreateCurrencyFromJSON,
+  FinancialAccountCreateCurrencyFromJSONTyped,
+  FinancialAccountCreateCurrencyToJSON,
+  FinancialAccountCreateCurrencyToJSONTyped,
+} from "./FinancialAccountCreateCurrency";
 import type { AccountNumber } from "./AccountNumber";
 import {
   AccountNumberFromJSON,
@@ -72,10 +65,10 @@ export interface FinancialAccountUpdate {
   [key: string]: any | any;
   /**
    *
-   * @type {AccountName}
+   * @type {string}
    * @memberof FinancialAccountUpdate
    */
-  accountName?: AccountName;
+  accountName?: string;
   /**
    *
    * @type {AccountNumber}
@@ -84,16 +77,16 @@ export interface FinancialAccountUpdate {
   accountNumber?: AccountNumber;
   /**
    *
-   * @type {AccountType}
+   * @type {FinancialAccountCreateAccountType}
    * @memberof FinancialAccountUpdate
    */
-  accountType?: AccountType;
+  accountType?: FinancialAccountCreateAccountType;
   /**
    *
-   * @type {Currency}
+   * @type {FinancialAccountCreateCurrency}
    * @memberof FinancialAccountUpdate
    */
-  currency?: Currency;
+  currency?: FinancialAccountCreateCurrency;
   /**
    *
    * @type {InstitutionId}
@@ -146,9 +139,7 @@ export function FinancialAccountUpdateFromJSONTyped(
   return {
     ...json,
     accountName:
-      json["account_name"] == null
-        ? undefined
-        : AccountNameFromJSON(json["account_name"]),
+      json["account_name"] == null ? undefined : json["account_name"],
     accountNumber:
       json["account_number"] == null
         ? undefined
@@ -156,9 +147,11 @@ export function FinancialAccountUpdateFromJSONTyped(
     accountType:
       json["account_type"] == null
         ? undefined
-        : AccountTypeFromJSON(json["account_type"]),
+        : FinancialAccountCreateAccountTypeFromJSON(json["account_type"]),
     currency:
-      json["currency"] == null ? undefined : CurrencyFromJSON(json["currency"]),
+      json["currency"] == null
+        ? undefined
+        : FinancialAccountCreateCurrencyFromJSON(json["currency"]),
     institutionId:
       json["institution_id"] == null
         ? undefined
@@ -187,11 +180,10 @@ export function FinancialAccountUpdateToJSONTyped(
   }
 
   return {
-    ...value,
-    account_name: AccountNameToJSON(value["accountName"]),
+    account_name: value["accountName"],
     account_number: AccountNumberToJSON(value["accountNumber"]),
-    account_type: AccountTypeToJSON(value["accountType"]),
-    currency: CurrencyToJSON(value["currency"]),
+    account_type: FinancialAccountCreateAccountTypeToJSON(value["accountType"]),
+    currency: FinancialAccountCreateCurrencyToJSON(value["currency"]),
     institution_id: InstitutionIdToJSON(value["institutionId"]),
     metadata: FinancialAccountUpdateMetadataToJSON(value["metadata"]),
     reason: value["reason"],

@@ -166,7 +166,6 @@ export function FinancialReportingPeriodCreateToJSONTyped(
   }
 
   return {
-    ...value,
     as_of_date: AsOfDateToJSON(value["asOfDate"]),
     end_date: EndDateToJSON(value["endDate"]),
     label: LabelToJSON(value["label"]),

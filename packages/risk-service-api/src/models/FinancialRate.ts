@@ -15,36 +15,36 @@
 /**
  *
  * @export
- * @interface InstitutionId
+ * @interface FinancialRate
  */
-export type InstitutionId = string | null;
+export type FinancialRate = number | string;
 
 /**
- * Check if a given object implements the InstitutionId interface.
+ * Check if a given object implements the FinancialRate interface.
  */
-export function instanceOfInstitutionId(
+export function instanceOfFinancialRate(
   value: unknown,
-): value is InstitutionId {
+): value is FinancialRate {
   return true;
 }
 
-export function InstitutionIdFromJSON(json: any): InstitutionId {
-  return InstitutionIdFromJSONTyped(json, false);
+export function FinancialRateFromJSON(json: any): FinancialRate {
+  return FinancialRateFromJSONTyped(json, false);
 }
 
-export function InstitutionIdFromJSONTyped(
+export function FinancialRateFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): InstitutionId {
+): FinancialRate {
   return json;
 }
 
-export function InstitutionIdToJSON(json: any): InstitutionId {
-  return InstitutionIdToJSONTyped(json, false);
+export function FinancialRateToJSON(json: any): FinancialRate {
+  return FinancialRateToJSONTyped(json, false);
 }
 
-export function InstitutionIdToJSONTyped(
-  value?: InstitutionId | null,
+export function FinancialRateToJSONTyped(
+  value?: FinancialRate | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   return value;

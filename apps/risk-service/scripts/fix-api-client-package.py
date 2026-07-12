@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -88,6 +89,10 @@ def fix_package_json(data: dict[str, Any]) -> dict[str, Any]:
     scripts = data.setdefault("scripts", {})
     scripts["build"] = "echo 'No build needed - source consumed directly'"
     scripts["prepare"] = "echo 'No prepare needed - source consumed directly'"
+    scripts["test"] = (
+        "rm -rf dist-test && tsc --outDir dist-test "
+        "&& node dist-test/tests/generated-contracts.test.js && rm -rf dist-test"
+    )
     scripts["type-check"] = "tsc --noEmit"
     return data
 
@@ -110,6 +115,7 @@ def patch_error_body(package_root: Path) -> None:
                 "'details': json['details'] == null ? undefined : FromJSON(json['details']),",
             ),
             "'details': json['details'] == null ? undefined : json['details'],",
+            'details: json["details"] == null ? undefined : json["details"],',
         ),
         (
             (
@@ -117,10 +123,11 @@ def patch_error_body(package_root: Path) -> None:
                 "'details': ToJSON(value['details']),",
             ),
             "'details': value['details'],",
+            'details: value["details"],',
         ),
     )
-    for generated_variants, patched in replacement_groups:
-        if patched in text:
+    for generated_variants, patched, formatted in replacement_groups:
+        if patched in text or formatted in text:
             continue
         for generated in generated_variants:
             if generated in text:
@@ -162,32 +169,140 @@ import {
             raise ValueError("Expected Payload.ts header marker not found")
         text = text.replace(marker, f" */\n\n{imports}", 1)
 
-    from_json_patched = (
-        "        default:\n            return value;\n    }\n}\n\nexport function PayloadToJSON"
+    from_json, separator, to_json = text.partition("export function PayloadToJSON")
+    if not separator:
+        raise ValueError("Expected Payload.ts serializer function not found")
+    from_json = re.sub(
+        r"(default:\s+)return value;",
+        r"\1return json;",
+        from_json,
     )
-    from_json_expected = (
-        "        default:\n            return json;\n    }\n}\n\nexport function PayloadToJSON"
+    to_json = re.sub(
+        r"(default:\s+)return json;",
+        r"\1return value;",
+        to_json,
     )
-    text = text.replace(from_json_patched, from_json_expected)
-
-    to_json_expected = "        default:\n            return json;\n    }\n}\n"
-    to_json_patched = "        default:\n            return value;\n    }\n}\n"
-    if to_json_expected not in text and to_json_patched not in text:
-        raise ValueError("Expected Payload.ts default serializer branch not found")
-    if to_json_expected in text:
-        head, separator, tail = text.rpartition(to_json_expected)
-        text = head + to_json_patched + tail if separator else text
+    if not re.search(r"default:\s+return json;", from_json) or not re.search(
+        r"default:\s+return value;", to_json
+    ):
+        raise ValueError("Expected Payload.ts default serializer branches not found")
+    text = from_json + separator + to_json
     model_path.write_text(text, encoding="utf-8")
 
 
-def patch_generated_source(package_root: Path) -> None:
+def property_name(name: str) -> str:
+    head, *tail = name.split("_")
+    return head + "".join(part.capitalize() for part in tail)
+
+
+def schema_type(schema: dict[str, Any], components: dict[str, Any]) -> str:
+    if "$ref" in schema:
+        result = schema_type(components[schema["$ref"].rsplit("/", 1)[-1]], components)
+    elif "const" in schema:
+        result = json.dumps(schema["const"])
+    elif "enum" in schema:
+        result = " | ".join(json.dumps(value) for value in schema["enum"])
+    elif "anyOf" in schema:
+        types = list(dict.fromkeys(schema_type(item, components) for item in schema["anyOf"]))
+        result = " | ".join(types)
+    else:
+        primitive = schema.get("type")
+        primitive_types = {
+            "integer": "number",
+            "number": "number",
+            "string": "string",
+            "boolean": "boolean",
+            "null": "null",
+            "object": "{ [key: string]: any }",
+        }
+        if primitive == "array":
+            result = f"Array<{schema_type(schema['items'], components)}>"
+        elif primitive in primitive_types:
+            result = primitive_types[primitive]
+        else:
+            raise ValueError(f"Unsupported inline schema: {schema}")
+    return result
+
+
+def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
+    document = json.loads(schema_path.read_text(encoding="utf-8"))
+    components = document["components"]["schemas"]
+    model_dir = package_root / "src" / "models"
+    model_text = {path.stem: path.read_text(encoding="utf-8") for path in model_dir.glob("*.ts")}
+    empty_models = {
+        name
+        for name, text in model_text.items()
+        if re.search(rf"export interface {re.escape(name)} \{{\s*\}}", text)
+    }
+    for alias in sorted(empty_models):
+        schemas: list[dict[str, Any]] = [components[alias]] if alias in components else []
+        property_pattern = re.compile(
+            rf"^\s+(\w+)\??: {re.escape(alias)}(?: \| null)?;$", re.MULTILINE
+        )
+        for consumer, text in model_text.items():
+            if consumer not in components:
+                continue
+            for match in property_pattern.finditer(text):
+                generated_name = match.group(1)
+                candidates = [
+                    value
+                    for name, value in components[consumer].get("properties", {}).items()
+                    if property_name(name) == generated_name
+                ]
+                if len(candidates) != 1:
+                    raise ValueError(f"Could not resolve {consumer}.{generated_name} for {alias}")
+                schemas.append(candidates[0])
+        if not schemas:
+            raise ValueError(f"Could not find a schema use for generated alias {alias}")
+        types = {schema_type(schema, components) for schema in schemas}
+        if len(types) != 1:
+            raise ValueError(f"Generated alias {alias} has conflicting schemas: {sorted(types)}")
+        alias_path = model_dir / f"{alias}.ts"
+        text = model_text[alias]
+        text = re.sub(r"import \{ mapValues \} from ['\"]\.\./runtime['\"];\n", "", text)
+        text = re.sub(
+            rf"export interface {re.escape(alias)} \{{\s*\}}",
+            f"export type {alias} = {types.pop()};",
+            text,
+        )
+        instance_pattern = (
+            rf"export function instanceOf{re.escape(alias)}"
+            rf"\(\s*value: object,?\s*\): value is {re.escape(alias)}"
+        )
+        text = re.sub(
+            instance_pattern,
+            f"export function instanceOf{alias}(value: unknown): value is {alias}",
+            text,
+        )
+        alias_path.write_text(text, encoding="utf-8")
+
+
+def patch_serializers(package_root: Path, schema_path: Path) -> None:
+    document = json.loads(schema_path.read_text(encoding="utf-8"))
+    components = document["components"]["schemas"]
+    for model_path in (package_root / "src" / "models").glob("*.ts"):
+        text = model_path.read_text(encoding="utf-8")
+        schema = components.get(model_path.stem, {})
+        if schema.get("additionalProperties") is not False:
+            continue
+        patched = re.sub(r"^\s+\.\.\.value,\n", "", text, flags=re.MULTILINE)
+        if patched != text:
+            model_path.write_text(patched, encoding="utf-8")
+
+
+def patch_generated_source(package_root: Path, schema_path: Path) -> None:
     patch_error_body(package_root)
     patch_payload(package_root)
+    patch_primitive_aliases(package_root, schema_path)
+    patch_serializers(package_root, schema_path)
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("Usage: fix-api-client-package.py <package.json path>", file=sys.stderr)
+    if len(sys.argv) != 3:
+        print(
+            "Usage: fix-api-client-package.py <package.json path> <OpenAPI schema path>",
+            file=sys.stderr,
+        )
         return 1
 
     package_path = Path(sys.argv[1])
@@ -206,7 +321,7 @@ def main() -> int:
     )
     package_root = package_path.parent
     try:
-        patch_generated_source(package_root)
+        patch_generated_source(package_root, Path(sys.argv[2]))
     except (OSError, ValueError) as exc:
         print(f"Error patching generated source: {exc}", file=sys.stderr)
         return 1

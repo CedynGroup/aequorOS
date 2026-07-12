@@ -80,7 +80,6 @@ export function CaseBulkUnassignCreateToJSONTyped(
   }
 
   return {
-    ...value,
     action: value["action"],
     case_ids: value["caseIds"],
   };

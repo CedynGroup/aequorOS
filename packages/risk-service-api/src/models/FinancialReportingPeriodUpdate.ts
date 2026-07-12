@@ -27,13 +27,6 @@ import {
   StartDateToJSON,
   StartDateToJSONTyped,
 } from "./StartDate";
-import type { PeriodType } from "./PeriodType";
-import {
-  PeriodTypeFromJSON,
-  PeriodTypeFromJSONTyped,
-  PeriodTypeToJSON,
-  PeriodTypeToJSONTyped,
-} from "./PeriodType";
 import type { AsOfDate } from "./AsOfDate";
 import {
   AsOfDateFromJSON,
@@ -89,10 +82,10 @@ export interface FinancialReportingPeriodUpdate {
   metadata?: FinancialAccountUpdateMetadata;
   /**
    *
-   * @type {PeriodType}
+   * @type {string}
    * @memberof FinancialReportingPeriodUpdate
    */
-  periodType?: PeriodType;
+  periodType?: FinancialReportingPeriodUpdatePeriodTypeEnum;
   /**
    *
    * @type {string}
@@ -106,6 +99,20 @@ export interface FinancialReportingPeriodUpdate {
    */
   startDate?: StartDate;
 }
+
+/**
+ * @export
+ */
+export const FinancialReportingPeriodUpdatePeriodTypeEnum = {
+  AsOf: "as_of",
+  Day: "day",
+  Month: "month",
+  Quarter: "quarter",
+  Year: "year",
+  Custom: "custom",
+} as const;
+export type FinancialReportingPeriodUpdatePeriodTypeEnum =
+  (typeof FinancialReportingPeriodUpdatePeriodTypeEnum)[keyof typeof FinancialReportingPeriodUpdatePeriodTypeEnum];
 
 /**
  * Check if a given object implements the FinancialReportingPeriodUpdate interface.
@@ -143,10 +150,7 @@ export function FinancialReportingPeriodUpdateFromJSONTyped(
       json["metadata"] == null
         ? undefined
         : FinancialAccountUpdateMetadataFromJSON(json["metadata"]),
-    periodType:
-      json["period_type"] == null
-        ? undefined
-        : PeriodTypeFromJSON(json["period_type"]),
+    periodType: json["period_type"] == null ? undefined : json["period_type"],
     reason: json["reason"],
     startDate:
       json["start_date"] == null
@@ -170,12 +174,11 @@ export function FinancialReportingPeriodUpdateToJSONTyped(
   }
 
   return {
-    ...value,
     as_of_date: AsOfDateToJSON(value["asOfDate"]),
     end_date: EndDateToJSON(value["endDate"]),
     label: LabelToJSON(value["label"]),
     metadata: FinancialAccountUpdateMetadataToJSON(value["metadata"]),
-    period_type: PeriodTypeToJSON(value["periodType"]),
+    period_type: value["periodType"],
     reason: value["reason"],
     start_date: StartDateToJSON(value["startDate"]),
   };

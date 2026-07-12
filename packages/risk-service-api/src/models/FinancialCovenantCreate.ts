@@ -20,6 +20,13 @@ import {
   FinancialCovenantCreateComplianceStatusToJSON,
   FinancialCovenantCreateComplianceStatusToJSONTyped,
 } from "./FinancialCovenantCreateComplianceStatus";
+import type { FinancialCovenantCreateActualValue } from "./FinancialCovenantCreateActualValue";
+import {
+  FinancialCovenantCreateActualValueFromJSON,
+  FinancialCovenantCreateActualValueFromJSONTyped,
+  FinancialCovenantCreateActualValueToJSON,
+  FinancialCovenantCreateActualValueToJSONTyped,
+} from "./FinancialCovenantCreateActualValue";
 import type { FinancialCovenantOperator } from "./FinancialCovenantOperator";
 import {
   FinancialCovenantOperatorFromJSON,
@@ -27,13 +34,6 @@ import {
   FinancialCovenantOperatorToJSON,
   FinancialCovenantOperatorToJSONTyped,
 } from "./FinancialCovenantOperator";
-import type { ActualValue } from "./ActualValue";
-import {
-  ActualValueFromJSON,
-  ActualValueFromJSONTyped,
-  ActualValueToJSON,
-  ActualValueToJSONTyped,
-} from "./ActualValue";
 import type { ObligationId } from "./ObligationId";
 import {
   ObligationIdFromJSON,
@@ -48,13 +48,13 @@ import {
   ReportingPeriodIdToJSON,
   ReportingPeriodIdToJSONTyped,
 } from "./ReportingPeriodId";
-import type { Threshold } from "./Threshold";
+import type { FinancialCovenantAmount } from "./FinancialCovenantAmount";
 import {
-  ThresholdFromJSON,
-  ThresholdFromJSONTyped,
-  ThresholdToJSON,
-  ThresholdToJSONTyped,
-} from "./Threshold";
+  FinancialCovenantAmountFromJSON,
+  FinancialCovenantAmountFromJSONTyped,
+  FinancialCovenantAmountToJSON,
+  FinancialCovenantAmountToJSONTyped,
+} from "./FinancialCovenantAmount";
 
 /**
  *
@@ -65,10 +65,10 @@ export interface FinancialCovenantCreate {
   [key: string]: any | any;
   /**
    *
-   * @type {ActualValue}
+   * @type {FinancialCovenantCreateActualValue}
    * @memberof FinancialCovenantCreate
    */
-  actualValue?: ActualValue;
+  actualValue?: FinancialCovenantCreateActualValue;
   /**
    *
    * @type {FinancialCovenantCreateComplianceStatus}
@@ -131,10 +131,10 @@ export interface FinancialCovenantCreate {
   sourceRecord?: { [key: string]: any };
   /**
    *
-   * @type {Threshold}
+   * @type {FinancialCovenantAmount}
    * @memberof FinancialCovenantCreate
    */
-  threshold: Threshold;
+  threshold: FinancialCovenantAmount;
 }
 
 /**
@@ -169,7 +169,7 @@ export function FinancialCovenantCreateFromJSONTyped(
     actualValue:
       json["actual_value"] == null
         ? undefined
-        : ActualValueFromJSON(json["actual_value"]),
+        : FinancialCovenantCreateActualValueFromJSON(json["actual_value"]),
     complianceStatus:
       json["compliance_status"] == null
         ? undefined
@@ -193,7 +193,7 @@ export function FinancialCovenantCreateFromJSONTyped(
         : ReportingPeriodIdFromJSON(json["reporting_period_id"]),
     sourceRecord:
       json["source_record"] == null ? undefined : json["source_record"],
-    threshold: ThresholdFromJSON(json["threshold"]),
+    threshold: FinancialCovenantAmountFromJSON(json["threshold"]),
   };
 }
 
@@ -212,8 +212,9 @@ export function FinancialCovenantCreateToJSONTyped(
   }
 
   return {
-    ...value,
-    actual_value: ActualValueToJSON(value["actualValue"]),
+    actual_value: FinancialCovenantCreateActualValueToJSON(
+      value["actualValue"],
+    ),
     compliance_status: FinancialCovenantCreateComplianceStatusToJSON(
       value["complianceStatus"],
     ),
@@ -226,6 +227,6 @@ export function FinancialCovenantCreateToJSONTyped(
     reporting_context: value["reportingContext"],
     reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),
     source_record: value["sourceRecord"],
-    threshold: ThresholdToJSON(value["threshold"]),
+    threshold: FinancialCovenantAmountToJSON(value["threshold"]),
   };
 }

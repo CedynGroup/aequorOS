@@ -12,7 +12,6 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 import type { FinancialCovenantComplianceStatus } from "./FinancialCovenantComplianceStatus";
 import {
   FinancialCovenantComplianceStatusFromJSON,
@@ -26,13 +25,17 @@ import {
  * @export
  * @interface FinancialCovenantCreateComplianceStatus
  */
-export interface FinancialCovenantCreateComplianceStatus {}
+export type FinancialCovenantCreateComplianceStatus =
+  | "compliant"
+  | "non_compliant"
+  | "unknown"
+  | null;
 
 /**
  * Check if a given object implements the FinancialCovenantCreateComplianceStatus interface.
  */
 export function instanceOfFinancialCovenantCreateComplianceStatus(
-  value: object,
+  value: unknown,
 ): value is FinancialCovenantCreateComplianceStatus {
   return true;
 }

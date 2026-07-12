@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
@@ -10,6 +10,11 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 from app.schemas.common import JsonObject, JsonValue
 
 type FinancialValidationSeverity = Literal["error", "warning", "info"]
+type FinancialString120 = Annotated[str, Field(max_length=120)]
+type FinancialCurrency = Annotated[str, Field(min_length=3, max_length=3)]
+type FinancialAmount = Annotated[Decimal, Field(max_digits=20, decimal_places=4)]
+type FinancialRate = Annotated[Decimal, Field(max_digits=10, decimal_places=6)]
+type FinancialCovenantAmount = Annotated[Decimal, Field(max_digits=20, decimal_places=6)]
 type FinancialValidationEntityType = Literal[
     "institution",
     "account",
@@ -182,15 +187,15 @@ class ManualUpdatePayload(ManualMutationPayload):
 
 class FinancialInstitutionCreate(ManualMutationPayload):
     name: str = Field(min_length=1)
-    institution_type: str | None = None
-    reference_code: str | None = None
+    institution_type: FinancialString120 | None = None
+    reference_code: FinancialString120 | None = None
     metadata: JsonObject = Field(default_factory=dict)
 
 
 class FinancialInstitutionUpdate(ManualUpdatePayload):
-    name: str | None = Field(default=None, min_length=1)
-    institution_type: str | None = None
-    reference_code: str | None = None
+    name: str = Field(default="", min_length=1)
+    institution_type: FinancialString120 | None = None
+    reference_code: FinancialString120 | None = None
     metadata: JsonObject | None = None
 
 
@@ -198,8 +203,8 @@ class FinancialAccountCreate(ManualMutationPayload):
     institution_id: UUID | None = None
     account_number: str | None = None
     account_name: str = Field(min_length=1)
-    account_type: str | None = None
-    currency: str | None = None
+    account_type: FinancialString120 | None = None
+    currency: FinancialCurrency | None = None
     status: Literal["active", "inactive", "closed", "unknown"] | None = None
     metadata: JsonObject = Field(default_factory=dict)
 
@@ -207,9 +212,9 @@ class FinancialAccountCreate(ManualMutationPayload):
 class FinancialAccountUpdate(ManualUpdatePayload):
     institution_id: UUID | None = None
     account_number: str | None = None
-    account_name: str | None = Field(default=None, min_length=1)
-    account_type: str | None = None
-    currency: str | None = None
+    account_name: str = Field(default="", min_length=1)
+    account_type: FinancialString120 | None = None
+    currency: FinancialCurrency | None = None
     status: Literal["active", "inactive", "closed", "unknown"] | None = None
     metadata: JsonObject | None = None
 
@@ -224,7 +229,7 @@ class FinancialReportingPeriodCreate(ManualMutationPayload):
 
 
 class FinancialReportingPeriodUpdate(ManualUpdatePayload):
-    period_type: Literal["as_of", "day", "month", "quarter", "year", "custom"] | None = None
+    period_type: Literal["as_of", "day", "month", "quarter", "year", "custom"] = "custom"
     start_date: date | None = None
     end_date: date | None = None
     as_of_date: date | None = None
@@ -235,9 +240,9 @@ class FinancialReportingPeriodUpdate(ManualUpdatePayload):
 class FinancialBalanceCreate(ManualMutationPayload):
     account_id: UUID | None = None
     reporting_period_id: UUID | None = None
-    balance_type: str = Field(min_length=1)
-    amount: Decimal
-    currency: str | None = None
+    balance_type: FinancialString120 = Field(min_length=1)
+    amount: FinancialAmount
+    currency: FinancialCurrency | None = None
     as_of_date: date | None = None
     metadata: JsonObject = Field(default_factory=dict)
 
@@ -245,9 +250,9 @@ class FinancialBalanceCreate(ManualMutationPayload):
 class FinancialBalanceUpdate(ManualUpdatePayload):
     account_id: UUID | None = None
     reporting_period_id: UUID | None = None
-    balance_type: str | None = Field(default=None, min_length=1)
-    amount: Decimal | None = None
-    currency: str | None = None
+    balance_type: FinancialString120 = Field(default="", min_length=1)
+    amount: FinancialAmount = Decimal(0)
+    currency: FinancialCurrency | None = None
     as_of_date: date | None = None
     metadata: JsonObject | None = None
 
@@ -256,14 +261,14 @@ class FinancialObligationCreate(ManualMutationPayload):
     institution_id: UUID | None = None
     account_id: UUID | None = None
     reporting_period_id: UUID | None = None
-    obligation_type: str = Field(min_length=1)
-    facility_type: str | None = None
-    principal_amount: Decimal | None = None
-    outstanding_amount: Decimal | None = None
-    currency: str | None = None
+    obligation_type: FinancialString120 = Field(min_length=1)
+    facility_type: FinancialString120 | None = None
+    principal_amount: FinancialAmount | None = None
+    outstanding_amount: FinancialAmount | None = None
+    currency: FinancialCurrency | None = None
     start_date: date | None = None
     maturity_date: date | None = None
-    interest_rate: Decimal | None = None
+    interest_rate: FinancialRate | None = None
     status: Literal["active", "inactive", "closed", "matured", "defaulted", "unknown"] | None = None
     details: JsonObject = Field(default_factory=dict)
 
@@ -272,14 +277,14 @@ class FinancialObligationUpdate(ManualUpdatePayload):
     institution_id: UUID | None = None
     account_id: UUID | None = None
     reporting_period_id: UUID | None = None
-    obligation_type: str | None = Field(default=None, min_length=1)
-    facility_type: str | None = None
-    principal_amount: Decimal | None = None
-    outstanding_amount: Decimal | None = None
-    currency: str | None = None
+    obligation_type: FinancialString120 = Field(default="", min_length=1)
+    facility_type: FinancialString120 | None = None
+    principal_amount: FinancialAmount | None = None
+    outstanding_amount: FinancialAmount | None = None
+    currency: FinancialCurrency | None = None
     start_date: date | None = None
     maturity_date: date | None = None
-    interest_rate: Decimal | None = None
+    interest_rate: FinancialRate | None = None
     status: Literal["active", "inactive", "closed", "matured", "defaulted", "unknown"] | None = None
     details: JsonObject | None = None
 
@@ -313,10 +318,10 @@ class FinancialCovenantCreate(ManualMutationPayload):
     obligation_id: UUID | None = None
     reporting_period_id: UUID | None = None
     name: str = Field(min_length=1)
-    metric: str = Field(min_length=1)
+    metric: FinancialString120 = Field(min_length=1)
     operator: FinancialCovenantOperator
-    threshold: Decimal
-    actual_value: Decimal | None = None
+    threshold: FinancialCovenantAmount
+    actual_value: FinancialCovenantAmount | None = None
     compliance_status: FinancialCovenantComplianceStatus | None = None
     source_record: JsonObject = Field(default_factory=dict)
     reporting_context: JsonObject = Field(default_factory=dict)
@@ -326,15 +331,15 @@ class FinancialCovenantCreate(ManualMutationPayload):
 class FinancialCovenantUpdate(ManualUpdatePayload):
     obligation_id: UUID | None = None
     reporting_period_id: UUID | None = None
-    name: str | None = Field(default=None, min_length=1)
-    metric: str | None = Field(default=None, min_length=1)
-    operator: FinancialCovenantOperator | None = None
-    threshold: Decimal | None = None
-    actual_value: Decimal | None = None
-    compliance_status: FinancialCovenantComplianceStatus | None = None
-    source_record: JsonObject | None = None
-    reporting_context: JsonObject | None = None
-    metadata: JsonObject | None = None
+    name: str = Field(default="", min_length=1)
+    metric: FinancialString120 = Field(default="", min_length=1)
+    operator: FinancialCovenantOperator = "eq"
+    threshold: FinancialCovenantAmount = Decimal(0)
+    actual_value: FinancialCovenantAmount | None = None
+    compliance_status: FinancialCovenantComplianceStatus = "unknown"
+    source_record: JsonObject = Field(default_factory=dict)
+    reporting_context: JsonObject = Field(default_factory=dict)
+    metadata: JsonObject = Field(default_factory=dict)
 
 
 class FinancialSourceRowRead(BaseModel):

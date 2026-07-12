@@ -20,6 +20,13 @@ import {
   StartDateToJSON,
   StartDateToJSONTyped,
 } from "./StartDate";
+import type { FinancialAccountCreateAccountType } from "./FinancialAccountCreateAccountType";
+import {
+  FinancialAccountCreateAccountTypeFromJSON,
+  FinancialAccountCreateAccountTypeFromJSONTyped,
+  FinancialAccountCreateAccountTypeToJSON,
+  FinancialAccountCreateAccountTypeToJSONTyped,
+} from "./FinancialAccountCreateAccountType";
 import type { AccountId } from "./AccountId";
 import {
   AccountIdFromJSON,
@@ -27,6 +34,20 @@ import {
   AccountIdToJSON,
   AccountIdToJSONTyped,
 } from "./AccountId";
+import type { FinancialObligationCreateOutstandingAmount } from "./FinancialObligationCreateOutstandingAmount";
+import {
+  FinancialObligationCreateOutstandingAmountFromJSON,
+  FinancialObligationCreateOutstandingAmountFromJSONTyped,
+  FinancialObligationCreateOutstandingAmountToJSON,
+  FinancialObligationCreateOutstandingAmountToJSONTyped,
+} from "./FinancialObligationCreateOutstandingAmount";
+import type { FinancialObligationCreateInterestRate } from "./FinancialObligationCreateInterestRate";
+import {
+  FinancialObligationCreateInterestRateFromJSON,
+  FinancialObligationCreateInterestRateFromJSONTyped,
+  FinancialObligationCreateInterestRateToJSON,
+  FinancialObligationCreateInterestRateToJSONTyped,
+} from "./FinancialObligationCreateInterestRate";
 import type { InstitutionId } from "./InstitutionId";
 import {
   InstitutionIdFromJSON,
@@ -34,13 +55,6 @@ import {
   InstitutionIdToJSON,
   InstitutionIdToJSONTyped,
 } from "./InstitutionId";
-import type { Currency } from "./Currency";
-import {
-  CurrencyFromJSON,
-  CurrencyFromJSONTyped,
-  CurrencyToJSON,
-  CurrencyToJSONTyped,
-} from "./Currency";
 import type { ReportingPeriodId } from "./ReportingPeriodId";
 import {
   ReportingPeriodIdFromJSON,
@@ -48,13 +62,13 @@ import {
   ReportingPeriodIdToJSON,
   ReportingPeriodIdToJSONTyped,
 } from "./ReportingPeriodId";
-import type { OutstandingAmount } from "./OutstandingAmount";
+import type { FinancialAccountCreateCurrency } from "./FinancialAccountCreateCurrency";
 import {
-  OutstandingAmountFromJSON,
-  OutstandingAmountFromJSONTyped,
-  OutstandingAmountToJSON,
-  OutstandingAmountToJSONTyped,
-} from "./OutstandingAmount";
+  FinancialAccountCreateCurrencyFromJSON,
+  FinancialAccountCreateCurrencyFromJSONTyped,
+  FinancialAccountCreateCurrencyToJSON,
+  FinancialAccountCreateCurrencyToJSONTyped,
+} from "./FinancialAccountCreateCurrency";
 import type { MaturityDate } from "./MaturityDate";
 import {
   MaturityDateFromJSON,
@@ -69,27 +83,6 @@ import {
   Status1ToJSON,
   Status1ToJSONTyped,
 } from "./Status1";
-import type { InterestRate } from "./InterestRate";
-import {
-  InterestRateFromJSON,
-  InterestRateFromJSONTyped,
-  InterestRateToJSON,
-  InterestRateToJSONTyped,
-} from "./InterestRate";
-import type { PrincipalAmount } from "./PrincipalAmount";
-import {
-  PrincipalAmountFromJSON,
-  PrincipalAmountFromJSONTyped,
-  PrincipalAmountToJSON,
-  PrincipalAmountToJSONTyped,
-} from "./PrincipalAmount";
-import type { FacilityType } from "./FacilityType";
-import {
-  FacilityTypeFromJSON,
-  FacilityTypeFromJSONTyped,
-  FacilityTypeToJSON,
-  FacilityTypeToJSONTyped,
-} from "./FacilityType";
 
 /**
  *
@@ -106,10 +99,10 @@ export interface FinancialObligationCreate {
   accountId?: AccountId;
   /**
    *
-   * @type {Currency}
+   * @type {FinancialAccountCreateCurrency}
    * @memberof FinancialObligationCreate
    */
-  currency?: Currency;
+  currency?: FinancialAccountCreateCurrency;
   /**
    *
    * @type {{ [key: string]: any; }}
@@ -118,10 +111,10 @@ export interface FinancialObligationCreate {
   details?: { [key: string]: any };
   /**
    *
-   * @type {FacilityType}
+   * @type {FinancialAccountCreateAccountType}
    * @memberof FinancialObligationCreate
    */
-  facilityType?: FacilityType;
+  facilityType?: FinancialAccountCreateAccountType;
   /**
    *
    * @type {InstitutionId}
@@ -130,10 +123,10 @@ export interface FinancialObligationCreate {
   institutionId?: InstitutionId;
   /**
    *
-   * @type {InterestRate}
+   * @type {FinancialObligationCreateInterestRate}
    * @memberof FinancialObligationCreate
    */
-  interestRate?: InterestRate;
+  interestRate?: FinancialObligationCreateInterestRate;
   /**
    *
    * @type {MaturityDate}
@@ -148,16 +141,16 @@ export interface FinancialObligationCreate {
   obligationType: string;
   /**
    *
-   * @type {OutstandingAmount}
+   * @type {FinancialObligationCreateOutstandingAmount}
    * @memberof FinancialObligationCreate
    */
-  outstandingAmount?: OutstandingAmount;
+  outstandingAmount?: FinancialObligationCreateOutstandingAmount;
   /**
    *
-   * @type {PrincipalAmount}
+   * @type {FinancialObligationCreateOutstandingAmount}
    * @memberof FinancialObligationCreate
    */
-  principalAmount?: PrincipalAmount;
+  principalAmount?: FinancialObligationCreateOutstandingAmount;
   /**
    *
    * @type {string}
@@ -216,12 +209,14 @@ export function FinancialObligationCreateFromJSONTyped(
         ? undefined
         : AccountIdFromJSON(json["account_id"]),
     currency:
-      json["currency"] == null ? undefined : CurrencyFromJSON(json["currency"]),
+      json["currency"] == null
+        ? undefined
+        : FinancialAccountCreateCurrencyFromJSON(json["currency"]),
     details: json["details"] == null ? undefined : json["details"],
     facilityType:
       json["facility_type"] == null
         ? undefined
-        : FacilityTypeFromJSON(json["facility_type"]),
+        : FinancialAccountCreateAccountTypeFromJSON(json["facility_type"]),
     institutionId:
       json["institution_id"] == null
         ? undefined
@@ -229,7 +224,7 @@ export function FinancialObligationCreateFromJSONTyped(
     interestRate:
       json["interest_rate"] == null
         ? undefined
-        : InterestRateFromJSON(json["interest_rate"]),
+        : FinancialObligationCreateInterestRateFromJSON(json["interest_rate"]),
     maturityDate:
       json["maturity_date"] == null
         ? undefined
@@ -238,11 +233,15 @@ export function FinancialObligationCreateFromJSONTyped(
     outstandingAmount:
       json["outstanding_amount"] == null
         ? undefined
-        : OutstandingAmountFromJSON(json["outstanding_amount"]),
+        : FinancialObligationCreateOutstandingAmountFromJSON(
+            json["outstanding_amount"],
+          ),
     principalAmount:
       json["principal_amount"] == null
         ? undefined
-        : PrincipalAmountFromJSON(json["principal_amount"]),
+        : FinancialObligationCreateOutstandingAmountFromJSON(
+            json["principal_amount"],
+          ),
     reason: json["reason"],
     reportingPeriodId:
       json["reporting_period_id"] == null
@@ -272,17 +271,24 @@ export function FinancialObligationCreateToJSONTyped(
   }
 
   return {
-    ...value,
     account_id: AccountIdToJSON(value["accountId"]),
-    currency: CurrencyToJSON(value["currency"]),
+    currency: FinancialAccountCreateCurrencyToJSON(value["currency"]),
     details: value["details"],
-    facility_type: FacilityTypeToJSON(value["facilityType"]),
+    facility_type: FinancialAccountCreateAccountTypeToJSON(
+      value["facilityType"],
+    ),
     institution_id: InstitutionIdToJSON(value["institutionId"]),
-    interest_rate: InterestRateToJSON(value["interestRate"]),
+    interest_rate: FinancialObligationCreateInterestRateToJSON(
+      value["interestRate"],
+    ),
     maturity_date: MaturityDateToJSON(value["maturityDate"]),
     obligation_type: value["obligationType"],
-    outstanding_amount: OutstandingAmountToJSON(value["outstandingAmount"]),
-    principal_amount: PrincipalAmountToJSON(value["principalAmount"]),
+    outstanding_amount: FinancialObligationCreateOutstandingAmountToJSON(
+      value["outstandingAmount"],
+    ),
+    principal_amount: FinancialObligationCreateOutstandingAmountToJSON(
+      value["principalAmount"],
+    ),
     reason: value["reason"],
     reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),
     start_date: StartDateToJSON(value["startDate"]),

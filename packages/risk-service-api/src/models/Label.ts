@@ -12,18 +12,17 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 /**
  *
  * @export
  * @interface Label
  */
-export interface Label {}
+export type Label = string | null;
 
 /**
  * Check if a given object implements the Label interface.
  */
-export function instanceOfLabel(value: object): value is Label {
+export function instanceOfLabel(value: unknown): value is Label {
   return true;
 }
 

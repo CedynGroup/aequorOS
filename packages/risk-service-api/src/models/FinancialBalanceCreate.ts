@@ -27,20 +27,13 @@ import {
   AccountIdToJSON,
   AccountIdToJSONTyped,
 } from "./AccountId";
-import type { Amount } from "./Amount";
+import type { FinancialAmount } from "./FinancialAmount";
 import {
-  AmountFromJSON,
-  AmountFromJSONTyped,
-  AmountToJSON,
-  AmountToJSONTyped,
-} from "./Amount";
-import type { Currency } from "./Currency";
-import {
-  CurrencyFromJSON,
-  CurrencyFromJSONTyped,
-  CurrencyToJSON,
-  CurrencyToJSONTyped,
-} from "./Currency";
+  FinancialAmountFromJSON,
+  FinancialAmountFromJSONTyped,
+  FinancialAmountToJSON,
+  FinancialAmountToJSONTyped,
+} from "./FinancialAmount";
 import type { ReportingPeriodId } from "./ReportingPeriodId";
 import {
   ReportingPeriodIdFromJSON,
@@ -48,6 +41,13 @@ import {
   ReportingPeriodIdToJSON,
   ReportingPeriodIdToJSONTyped,
 } from "./ReportingPeriodId";
+import type { FinancialAccountCreateCurrency } from "./FinancialAccountCreateCurrency";
+import {
+  FinancialAccountCreateCurrencyFromJSON,
+  FinancialAccountCreateCurrencyFromJSONTyped,
+  FinancialAccountCreateCurrencyToJSON,
+  FinancialAccountCreateCurrencyToJSONTyped,
+} from "./FinancialAccountCreateCurrency";
 
 /**
  *
@@ -64,10 +64,10 @@ export interface FinancialBalanceCreate {
   accountId?: AccountId;
   /**
    *
-   * @type {Amount}
+   * @type {FinancialAmount}
    * @memberof FinancialBalanceCreate
    */
-  amount: Amount;
+  amount: FinancialAmount;
   /**
    *
    * @type {AsOfDate}
@@ -82,10 +82,10 @@ export interface FinancialBalanceCreate {
   balanceType: string;
   /**
    *
-   * @type {Currency}
+   * @type {FinancialAccountCreateCurrency}
    * @memberof FinancialBalanceCreate
    */
-  currency?: Currency;
+  currency?: FinancialAccountCreateCurrency;
   /**
    *
    * @type {{ [key: string]: any; }}
@@ -138,14 +138,16 @@ export function FinancialBalanceCreateFromJSONTyped(
       json["account_id"] == null
         ? undefined
         : AccountIdFromJSON(json["account_id"]),
-    amount: AmountFromJSON(json["amount"]),
+    amount: FinancialAmountFromJSON(json["amount"]),
     asOfDate:
       json["as_of_date"] == null
         ? undefined
         : AsOfDateFromJSON(json["as_of_date"]),
     balanceType: json["balance_type"],
     currency:
-      json["currency"] == null ? undefined : CurrencyFromJSON(json["currency"]),
+      json["currency"] == null
+        ? undefined
+        : FinancialAccountCreateCurrencyFromJSON(json["currency"]),
     metadata: json["metadata"] == null ? undefined : json["metadata"],
     reason: json["reason"],
     reportingPeriodId:
@@ -170,12 +172,11 @@ export function FinancialBalanceCreateToJSONTyped(
   }
 
   return {
-    ...value,
     account_id: AccountIdToJSON(value["accountId"]),
-    amount: AmountToJSON(value["amount"]),
+    amount: FinancialAmountToJSON(value["amount"]),
     as_of_date: AsOfDateToJSON(value["asOfDate"]),
     balance_type: value["balanceType"],
-    currency: CurrencyToJSON(value["currency"]),
+    currency: FinancialAccountCreateCurrencyToJSON(value["currency"]),
     metadata: value["metadata"],
     reason: value["reason"],
     reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),

@@ -20,27 +20,13 @@ import {
   FinancialAccountUpdateMetadataToJSON,
   FinancialAccountUpdateMetadataToJSONTyped,
 } from "./FinancialAccountUpdateMetadata";
-import type { InstitutionType } from "./InstitutionType";
+import type { FinancialAccountCreateAccountType } from "./FinancialAccountCreateAccountType";
 import {
-  InstitutionTypeFromJSON,
-  InstitutionTypeFromJSONTyped,
-  InstitutionTypeToJSON,
-  InstitutionTypeToJSONTyped,
-} from "./InstitutionType";
-import type { ReferenceCode } from "./ReferenceCode";
-import {
-  ReferenceCodeFromJSON,
-  ReferenceCodeFromJSONTyped,
-  ReferenceCodeToJSON,
-  ReferenceCodeToJSONTyped,
-} from "./ReferenceCode";
-import type { Name } from "./Name";
-import {
-  NameFromJSON,
-  NameFromJSONTyped,
-  NameToJSON,
-  NameToJSONTyped,
-} from "./Name";
+  FinancialAccountCreateAccountTypeFromJSON,
+  FinancialAccountCreateAccountTypeFromJSONTyped,
+  FinancialAccountCreateAccountTypeToJSON,
+  FinancialAccountCreateAccountTypeToJSONTyped,
+} from "./FinancialAccountCreateAccountType";
 
 /**
  *
@@ -51,10 +37,10 @@ export interface FinancialInstitutionUpdate {
   [key: string]: any | any;
   /**
    *
-   * @type {InstitutionType}
+   * @type {FinancialAccountCreateAccountType}
    * @memberof FinancialInstitutionUpdate
    */
-  institutionType?: InstitutionType;
+  institutionType?: FinancialAccountCreateAccountType;
   /**
    *
    * @type {FinancialAccountUpdateMetadata}
@@ -63,10 +49,10 @@ export interface FinancialInstitutionUpdate {
   metadata?: FinancialAccountUpdateMetadata;
   /**
    *
-   * @type {Name}
+   * @type {string}
    * @memberof FinancialInstitutionUpdate
    */
-  name?: Name;
+  name?: string;
   /**
    *
    * @type {string}
@@ -75,10 +61,10 @@ export interface FinancialInstitutionUpdate {
   reason: string;
   /**
    *
-   * @type {ReferenceCode}
+   * @type {FinancialAccountCreateAccountType}
    * @memberof FinancialInstitutionUpdate
    */
-  referenceCode?: ReferenceCode;
+  referenceCode?: FinancialAccountCreateAccountType;
 }
 
 /**
@@ -109,17 +95,17 @@ export function FinancialInstitutionUpdateFromJSONTyped(
     institutionType:
       json["institution_type"] == null
         ? undefined
-        : InstitutionTypeFromJSON(json["institution_type"]),
+        : FinancialAccountCreateAccountTypeFromJSON(json["institution_type"]),
     metadata:
       json["metadata"] == null
         ? undefined
         : FinancialAccountUpdateMetadataFromJSON(json["metadata"]),
-    name: json["name"] == null ? undefined : NameFromJSON(json["name"]),
+    name: json["name"] == null ? undefined : json["name"],
     reason: json["reason"],
     referenceCode:
       json["reference_code"] == null
         ? undefined
-        : ReferenceCodeFromJSON(json["reference_code"]),
+        : FinancialAccountCreateAccountTypeFromJSON(json["reference_code"]),
   };
 }
 
@@ -138,11 +124,14 @@ export function FinancialInstitutionUpdateToJSONTyped(
   }
 
   return {
-    ...value,
-    institution_type: InstitutionTypeToJSON(value["institutionType"]),
+    institution_type: FinancialAccountCreateAccountTypeToJSON(
+      value["institutionType"],
+    ),
     metadata: FinancialAccountUpdateMetadataToJSON(value["metadata"]),
-    name: NameToJSON(value["name"]),
+    name: value["name"],
     reason: value["reason"],
-    reference_code: ReferenceCodeToJSON(value["referenceCode"]),
+    reference_code: FinancialAccountCreateAccountTypeToJSON(
+      value["referenceCode"],
+    ),
   };
 }

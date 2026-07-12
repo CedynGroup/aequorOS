@@ -12,18 +12,17 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 /**
  *
  * @export
  * @interface EndDate
  */
-export interface EndDate {}
+export type EndDate = string | null;
 
 /**
  * Check if a given object implements the EndDate interface.
  */
-export function instanceOfEndDate(value: object): value is EndDate {
+export function instanceOfEndDate(value: unknown): value is EndDate {
   return true;
 }
 

@@ -78,7 +78,6 @@ export function CaseBulkArchiveCreateToJSONTyped(
   }
 
   return {
-    ...value,
     action: value["action"],
     case_ids: value["caseIds"],
   };

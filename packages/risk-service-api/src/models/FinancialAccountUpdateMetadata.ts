@@ -12,19 +12,18 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 /**
  *
  * @export
  * @interface FinancialAccountUpdateMetadata
  */
-export interface FinancialAccountUpdateMetadata {}
+export type FinancialAccountUpdateMetadata = { [key: string]: any } | null;
 
 /**
  * Check if a given object implements the FinancialAccountUpdateMetadata interface.
  */
 export function instanceOfFinancialAccountUpdateMetadata(
-  value: object,
+  value: unknown,
 ): value is FinancialAccountUpdateMetadata {
   return true;
 }

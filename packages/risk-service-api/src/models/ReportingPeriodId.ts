@@ -12,19 +12,18 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 /**
  *
  * @export
  * @interface ReportingPeriodId
  */
-export interface ReportingPeriodId {}
+export type ReportingPeriodId = string | null;
 
 /**
  * Check if a given object implements the ReportingPeriodId interface.
  */
 export function instanceOfReportingPeriodId(
-  value: object,
+  value: unknown,
 ): value is ReportingPeriodId {
   return true;
 }
