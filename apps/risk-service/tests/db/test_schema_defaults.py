@@ -14,6 +14,7 @@ from app.models.financial import (
     FinancialAccount,
     FinancialBalance,
     FinancialCashFlow,
+    FinancialCovenant,
     FinancialInstitution,
     FinancialManualEditHistory,
     FinancialObligation,
@@ -76,6 +77,11 @@ def test_financial_mapper_indexes_are_minimal_and_selective() -> None:
         "ix_financial_obligations_case_id",
         "uq_financial_obligations_dedupe_key",
     }
+    assert index_names(FinancialCovenant) == {
+        "ix_financial_covenants_case_id",
+        "ix_financial_covenants_obligation_id",
+        "uq_financial_covenants_dedupe_key",
+    }
     assert index_names(FinancialSourceRow) == {
         "ix_financial_source_rows_case_id",
         "uq_financial_source_rows_extraction_row",
@@ -99,6 +105,10 @@ def test_financial_mapper_indexes_are_minimal_and_selective() -> None:
     assert index_columns(FinancialBalance, "ix_financial_balances_case_id") == ("case_id",)
     assert index_columns(FinancialCashFlow, "ix_financial_cash_flows_case_id") == ("case_id",)
     assert index_columns(FinancialObligation, "ix_financial_obligations_case_id") == ("case_id",)
+    assert index_columns(FinancialCovenant, "ix_financial_covenants_case_id") == ("case_id",)
+    assert index_columns(FinancialCovenant, "ix_financial_covenants_obligation_id") == (
+        "obligation_id",
+    )
     assert index_columns(FinancialSourceRow, "ix_financial_source_rows_case_id") == ("case_id",)
     assert index_columns(FinancialSourceRow, "uq_financial_source_rows_extraction_row") == (
         "document_extraction_id",
@@ -140,6 +150,11 @@ def test_financial_mapper_indexes_are_minimal_and_selective() -> None:
         "case_id",
     )
     assert index_columns(FinancialObligation, "uq_financial_obligations_dedupe_key") == (
+        "dedupe_key",
+        "organization_id",
+        "case_id",
+    )
+    assert index_columns(FinancialCovenant, "uq_financial_covenants_dedupe_key") == (
         "dedupe_key",
         "organization_id",
         "case_id",

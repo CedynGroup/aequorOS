@@ -12,6 +12,7 @@ from app.api.deps import TenantContext
 from app.models import (
     FinancialBalance,
     FinancialCashFlow,
+    FinancialCovenant,
     FinancialObligation,
     FinancialRecordSourceLink,
 )
@@ -32,8 +33,13 @@ def linked_record(
     ctx: TenantContext,
     case_id: UUID,
     source_row_id: UUID,
-    record_table: Literal["financial_balances", "financial_cash_flows", "financial_obligations"],
-) -> FinancialBalance | FinancialCashFlow | FinancialObligation | None:
+    record_table: Literal[
+        "financial_balances",
+        "financial_cash_flows",
+        "financial_obligations",
+        "financial_covenants",
+    ],
+) -> FinancialBalance | FinancialCashFlow | FinancialObligation | FinancialCovenant | None:
     link = db.scalar(
         select(FinancialRecordSourceLink).where(
             FinancialRecordSourceLink.organization_id == ctx.organization_id,
@@ -66,6 +72,14 @@ def linked_record(
                 FinancialObligation.id == link.record_id,
                 FinancialObligation.organization_id == ctx.organization_id,
                 FinancialObligation.case_id == case_id,
+            )
+        )
+    if record_table == "financial_covenants":
+        return db.scalar(
+            select(FinancialCovenant).where(
+                FinancialCovenant.id == link.record_id,
+                FinancialCovenant.organization_id == ctx.organization_id,
+                FinancialCovenant.case_id == case_id,
             )
         )
     return None

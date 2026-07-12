@@ -13,6 +13,7 @@ from app.models import (
     DocumentExtraction,
     FinancialBalance,
     FinancialCashFlow,
+    FinancialCovenant,
     FinancialObligation,
     FinancialRecordSourceLink,
     FinancialSourceRow,
@@ -138,6 +139,58 @@ def test_financial_workspace_map_creates_records_traceability_and_is_idempotent(
     assert {
         (link["field_name"], link["source_field"]) for link in workspace_body["record_source_links"]
     } >= {("amount", "Balance"), ("currency", "CCY")}
+
+
+def test_financial_workspace_maps_covenant_fields_and_traceability(
+    db_client: TestClient,
+    api_factories: ApiFactories,
+) -> None:
+    case = api_factories.cases.create()
+    document = api_factories.documents.create_uploaded(case_id=case.id)
+    extraction_id = seed_extraction(
+        document_id=document.document_id,
+        extracted_json={
+            "rows": [
+                {
+                    "Covenant Name": "Minimum liquidity",
+                    "Covenant Metric": "Liquidity Ratio",
+                    "Covenant Operator": ">=",
+                    "Covenant Threshold": "1.25",
+                    "Covenant Actual Value": "1.50",
+                }
+            ]
+        },
+    )
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/map",
+        headers=headers(),
+        json={"document_extraction_id": str(extraction_id)},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["created"]["covenants"] == 1
+    sessionmaker = get_sessionmaker()
+    with sessionmaker() as session:
+        covenant = session.scalar(select(FinancialCovenant))
+        links = list(
+            session.scalars(
+                select(FinancialRecordSourceLink).where(
+                    FinancialRecordSourceLink.record_table == "financial_covenants"
+                )
+            )
+        )
+    assert covenant is not None
+    assert covenant.operator == "gte"
+    assert covenant.compliance_status == "compliant"
+    assert covenant.source_record["Covenant Name"] == "Minimum liquidity"
+    assert {link.field_name for link in links} >= {
+        "name",
+        "metric",
+        "operator",
+        "threshold",
+        "actual_value",
+    }
 
 
 def test_financial_workspace_map_uses_latest_completed_extraction_for_document_id(

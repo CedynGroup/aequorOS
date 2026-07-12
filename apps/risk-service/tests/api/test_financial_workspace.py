@@ -38,6 +38,7 @@ def test_financial_workspace_returns_empty_groups_for_valid_case(db_client: Test
     assert body["balances"] == []
     assert body["cash_flows"] == []
     assert body["obligations"] == []
+    assert body["covenants"] == []
     assert body["source_rows"] == []
     assert body["record_source_links"] == []
     assert body["manual_edits"] == []

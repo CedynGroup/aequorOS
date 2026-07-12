@@ -12,7 +12,9 @@ from app.api.deps import TenantContext
 from app.models import (
     FinancialAccount,
     FinancialCashFlow,
+    FinancialCovenant,
     FinancialInstitution,
+    FinancialObligation,
     FinancialReportingPeriod,
     FinancialSourceRow,
 )
@@ -28,6 +30,7 @@ from app.services.financial_mapping.normalization import (
     first_field,
     normalize_currency,
     normalize_row,
+    normalize_text,
     parse_date,
     parse_decimal,
     string_value,
@@ -39,6 +42,12 @@ from app.services.financial_mapping.types import (
     CASH_FLOW_CATEGORY_ALIASES,
     CASH_FLOW_DATE_ALIASES,
     CASH_FLOW_DIRECTION_ALIASES,
+    COVENANT_ACTUAL_ALIASES,
+    COVENANT_METRIC_ALIASES,
+    COVENANT_NAME_ALIASES,
+    COVENANT_OPERATOR_ALIASES,
+    COVENANT_STATUS_ALIASES,
+    COVENANT_THRESHOLD_ALIASES,
     CURRENCY_ALIASES,
     INSTITUTION_ALIASES,
     OBLIGATION_AMOUNT_ALIASES,
@@ -53,6 +62,7 @@ from app.services.financial_mapping.upserts import (
     get_or_create_account,
     get_or_create_balance,
     get_or_create_cash_flow,
+    get_or_create_covenant,
     get_or_create_institution,
     get_or_create_obligation,
     get_or_create_reporting_period,
@@ -133,7 +143,13 @@ def map_source_row(mapping: RowMappingContext) -> int:
     if not cash_flow_intent and map_balance(mapping, account, reporting_period):
         mapped_record_count += 1
 
-    if not cash_flow_intent and map_obligation(mapping, institution, account, reporting_period):
+    obligation = None
+    if not cash_flow_intent:
+        obligation = map_obligation(mapping, institution, account, reporting_period)
+    if obligation is not None:
+        mapped_record_count += 1
+
+    if map_covenant(mapping, obligation, reporting_period) is not None:
         mapped_record_count += 1
 
     return mapped_record_count
@@ -409,7 +425,7 @@ def map_obligation(
     institution: FinancialInstitution | None,
     account: FinancialAccount | None,
     reporting_period: FinancialReportingPeriod | None,
-) -> bool:
+) -> FinancialObligation | None:
     obligation_fields = [
         field
         for field in (
@@ -418,7 +434,7 @@ def map_obligation(
         if field is not None and parse_decimal(field.value) is not None
     ]
     if not obligation_fields:
-        return False
+        return None
 
     principal = first_decimal(mapping.normalized, ("principal", "committed"))
     outstanding = first_decimal(mapping.normalized, ("outstanding", "drawn"))
@@ -449,7 +465,103 @@ def map_obligation(
             source_field=obligation_field.source_field,
         )
     link_currency(mapping, "financial_obligations", obligation.id)
-    return True
+    return obligation
+
+
+def map_covenant(
+    mapping: RowMappingContext,
+    obligation: FinancialObligation | None,
+    reporting_period: FinancialReportingPeriod | None,
+) -> FinancialCovenant | None:
+    name = first_field(mapping.normalized, COVENANT_NAME_ALIASES)
+    metric = first_field(mapping.normalized, COVENANT_METRIC_ALIASES)
+    operator_field = first_field(mapping.normalized, COVENANT_OPERATOR_ALIASES)
+    threshold_field = first_field(mapping.normalized, COVENANT_THRESHOLD_ALIASES)
+    if any(field is None for field in (name, metric, operator_field, threshold_field)):
+        return None
+    assert name is not None
+    assert metric is not None
+    assert operator_field is not None
+    assert threshold_field is not None
+    threshold = parse_decimal(threshold_field.value)
+    operator = normalize_covenant_operator(operator_field.value)
+    if threshold is None or operator is None:
+        return None
+    actual_field = first_field(mapping.normalized, COVENANT_ACTUAL_ALIASES)
+    actual = parse_decimal(actual_field.value) if actual_field is not None else None
+    status_field = first_field(mapping.normalized, COVENANT_STATUS_ALIASES)
+    compliance = normalized_covenant_status(status_field.value) if status_field else None
+    if compliance is None:
+        compliance = computed_covenant_status(operator, threshold, actual)
+    covenant, created = get_or_create_covenant(
+        mapping.db,
+        mapping.tenant,
+        mapping.case_id,
+        source_row_id=mapping.source_row.id,
+        obligation_id=obligation.id if obligation is not None else None,
+        reporting_period_id=reporting_period.id if reporting_period is not None else None,
+        name=string_value(name.value) or "",
+        metric=string_value(metric.value) or "",
+        operator=operator,
+        threshold=threshold,
+        actual_value=actual,
+        compliance_status=compliance,
+        source_record=mapping.row.payload,
+        reporting_context=mapping.metadata(),
+        metadata=mapping.metadata(),
+    )
+    mapping.count_record(created, "covenants")
+    for field_name, field in (
+        ("name", name),
+        ("metric", metric),
+        ("operator", operator_field),
+        ("threshold", threshold_field),
+        ("actual_value", actual_field),
+        ("compliance_status", status_field),
+    ):
+        if field is not None:
+            mapping.link(
+                record_table="financial_covenants",
+                record_id=covenant.id,
+                field_name=field_name,
+                source_field=field.source_field,
+            )
+    return covenant
+
+
+def normalize_covenant_operator(value: object) -> str | None:
+    aliases = {
+        "<": "lt",
+        "lt": "lt",
+        "<=": "lte",
+        "lte": "lte",
+        "=": "eq",
+        "==": "eq",
+        "eq": "eq",
+        ">=": "gte",
+        "gte": "gte",
+        ">": "gt",
+        "gt": "gt",
+    }
+    return aliases.get(str(value).strip().lower())
+
+
+def normalized_covenant_status(value: object) -> str | None:
+    normalized = normalize_text(value).replace("-", "_").replace(" ", "_")
+    return normalized if normalized in {"compliant", "non_compliant", "unknown"} else None
+
+
+def computed_covenant_status(operator: str, threshold: Decimal, actual: Decimal | None) -> str:
+    if actual is None:
+        return "unknown"
+    comparisons = {
+        "lt": actual < threshold,
+        "lte": actual <= threshold,
+        "eq": actual == threshold,
+        "gte": actual >= threshold,
+        "gt": actual > threshold,
+    }
+    return "compliant" if comparisons[operator] else "non_compliant"
 
 
 def link_currency(

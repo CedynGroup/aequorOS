@@ -11,7 +11,13 @@ from app.schemas.common import JsonObject, JsonValue
 
 type FinancialValidationSeverity = Literal["error", "warning", "info"]
 type FinancialValidationEntityType = Literal[
-    "institution", "account", "reporting_period", "balance", "cash_flow", "obligation"
+    "institution",
+    "account",
+    "reporting_period",
+    "balance",
+    "cash_flow",
+    "obligation",
+    "covenant",
 ]
 
 ENTITY_TYPE_BY_TABLE: dict[str, FinancialValidationEntityType] = {
@@ -21,6 +27,7 @@ ENTITY_TYPE_BY_TABLE: dict[str, FinancialValidationEntityType] = {
     "financial_balances": "balance",
     "financial_cash_flows": "cash_flow",
     "financial_obligations": "obligation",
+    "financial_covenants": "covenant",
 }
 
 
@@ -159,6 +166,177 @@ class FinancialObligationRead(BaseModel):
     updated_at: datetime
 
 
+class ManualMutationPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class ManualUpdatePayload(ManualMutationPayload):
+    @model_validator(mode="after")
+    def require_update_field(self) -> ManualUpdatePayload:
+        if not (set(self.model_fields_set) - {"reason"}):
+            raise ValueError("At least one editable field is required.")
+        return self
+
+
+class FinancialInstitutionCreate(ManualMutationPayload):
+    name: str = Field(min_length=1)
+    institution_type: str | None = None
+    reference_code: str | None = None
+    metadata: JsonObject = Field(default_factory=dict)
+
+
+class FinancialInstitutionUpdate(ManualUpdatePayload):
+    name: str | None = Field(default=None, min_length=1)
+    institution_type: str | None = None
+    reference_code: str | None = None
+    metadata: JsonObject | None = None
+
+
+class FinancialAccountCreate(ManualMutationPayload):
+    institution_id: UUID | None = None
+    account_number: str | None = None
+    account_name: str = Field(min_length=1)
+    account_type: str | None = None
+    currency: str | None = None
+    status: Literal["active", "inactive", "closed", "unknown"] | None = None
+    metadata: JsonObject = Field(default_factory=dict)
+
+
+class FinancialAccountUpdate(ManualUpdatePayload):
+    institution_id: UUID | None = None
+    account_number: str | None = None
+    account_name: str | None = Field(default=None, min_length=1)
+    account_type: str | None = None
+    currency: str | None = None
+    status: Literal["active", "inactive", "closed", "unknown"] | None = None
+    metadata: JsonObject | None = None
+
+
+class FinancialReportingPeriodCreate(ManualMutationPayload):
+    period_type: Literal["as_of", "day", "month", "quarter", "year", "custom"]
+    start_date: date | None = None
+    end_date: date | None = None
+    as_of_date: date | None = None
+    label: str | None = None
+    metadata: JsonObject = Field(default_factory=dict)
+
+
+class FinancialReportingPeriodUpdate(ManualUpdatePayload):
+    period_type: Literal["as_of", "day", "month", "quarter", "year", "custom"] | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    as_of_date: date | None = None
+    label: str | None = None
+    metadata: JsonObject | None = None
+
+
+class FinancialBalanceCreate(ManualMutationPayload):
+    account_id: UUID | None = None
+    reporting_period_id: UUID | None = None
+    balance_type: str = Field(min_length=1)
+    amount: Decimal
+    currency: str | None = None
+    as_of_date: date | None = None
+    metadata: JsonObject = Field(default_factory=dict)
+
+
+class FinancialBalanceUpdate(ManualUpdatePayload):
+    account_id: UUID | None = None
+    reporting_period_id: UUID | None = None
+    balance_type: str | None = Field(default=None, min_length=1)
+    amount: Decimal | None = None
+    currency: str | None = None
+    as_of_date: date | None = None
+    metadata: JsonObject | None = None
+
+
+class FinancialObligationCreate(ManualMutationPayload):
+    institution_id: UUID | None = None
+    account_id: UUID | None = None
+    reporting_period_id: UUID | None = None
+    obligation_type: str = Field(min_length=1)
+    facility_type: str | None = None
+    principal_amount: Decimal | None = None
+    outstanding_amount: Decimal | None = None
+    currency: str | None = None
+    start_date: date | None = None
+    maturity_date: date | None = None
+    interest_rate: Decimal | None = None
+    status: Literal["active", "inactive", "closed", "matured", "defaulted", "unknown"] | None = None
+    details: JsonObject = Field(default_factory=dict)
+
+
+class FinancialObligationUpdate(ManualUpdatePayload):
+    institution_id: UUID | None = None
+    account_id: UUID | None = None
+    reporting_period_id: UUID | None = None
+    obligation_type: str | None = Field(default=None, min_length=1)
+    facility_type: str | None = None
+    principal_amount: Decimal | None = None
+    outstanding_amount: Decimal | None = None
+    currency: str | None = None
+    start_date: date | None = None
+    maturity_date: date | None = None
+    interest_rate: Decimal | None = None
+    status: Literal["active", "inactive", "closed", "matured", "defaulted", "unknown"] | None = None
+    details: JsonObject | None = None
+
+
+type FinancialCovenantOperator = Literal["lt", "lte", "eq", "gte", "gt"]
+type FinancialCovenantComplianceStatus = Literal["compliant", "non_compliant", "unknown"]
+
+
+class FinancialCovenantRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: UUID
+    organization_id: UUID
+    case_id: UUID
+    obligation_id: UUID | None
+    reporting_period_id: UUID | None
+    name: str
+    metric: str
+    operator: FinancialCovenantOperator
+    threshold: Decimal
+    actual_value: Decimal | None
+    compliance_status: FinancialCovenantComplianceStatus
+    source_record: JsonObject
+    reporting_context: JsonObject
+    metadata: JsonObject = Field(validation_alias="metadata_", serialization_alias="metadata")
+    created_at: datetime
+    updated_at: datetime
+
+
+class FinancialCovenantCreate(ManualMutationPayload):
+    obligation_id: UUID | None = None
+    reporting_period_id: UUID | None = None
+    name: str = Field(min_length=1)
+    metric: str = Field(min_length=1)
+    operator: FinancialCovenantOperator
+    threshold: Decimal
+    actual_value: Decimal | None = None
+    compliance_status: FinancialCovenantComplianceStatus | None = None
+    source_record: JsonObject = Field(default_factory=dict)
+    reporting_context: JsonObject = Field(default_factory=dict)
+    metadata: JsonObject = Field(default_factory=dict)
+
+
+class FinancialCovenantUpdate(ManualUpdatePayload):
+    obligation_id: UUID | None = None
+    reporting_period_id: UUID | None = None
+    name: str | None = Field(default=None, min_length=1)
+    metric: str | None = Field(default=None, min_length=1)
+    operator: FinancialCovenantOperator | None = None
+    threshold: Decimal | None = None
+    actual_value: Decimal | None = None
+    compliance_status: FinancialCovenantComplianceStatus | None = None
+    source_record: JsonObject | None = None
+    reporting_context: JsonObject | None = None
+    metadata: JsonObject | None = None
+
+
 class FinancialSourceRowRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -267,6 +445,36 @@ class FinancialValidationRunResponse(BaseModel):
     issues: list[FinancialValidationIssueRead]
 
 
+class FinancialInstitutionMutationResponse(BaseModel):
+    record: FinancialInstitutionRead
+    validation: FinancialValidationRunResponse
+
+
+class FinancialAccountMutationResponse(BaseModel):
+    record: FinancialAccountRead
+    validation: FinancialValidationRunResponse
+
+
+class FinancialReportingPeriodMutationResponse(BaseModel):
+    record: FinancialReportingPeriodRead
+    validation: FinancialValidationRunResponse
+
+
+class FinancialBalanceMutationResponse(BaseModel):
+    record: FinancialBalanceRead
+    validation: FinancialValidationRunResponse
+
+
+class FinancialObligationMutationResponse(BaseModel):
+    record: FinancialObligationRead
+    validation: FinancialValidationRunResponse
+
+
+class FinancialCovenantMutationResponse(BaseModel):
+    record: FinancialCovenantRead
+    validation: FinancialValidationRunResponse
+
+
 class FinancialDataWorkspaceRead(BaseModel):
     case_id: UUID
     organization_id: UUID
@@ -276,6 +484,7 @@ class FinancialDataWorkspaceRead(BaseModel):
     balances: list[FinancialBalanceRead]
     cash_flows: list[FinancialCashFlowRead]
     obligations: list[FinancialObligationRead]
+    covenants: list[FinancialCovenantRead]
     source_rows: list[FinancialSourceRowRead]
     record_source_links: list[FinancialRecordSourceLinkRead]
     manual_edits: list[FinancialManualEditRead]

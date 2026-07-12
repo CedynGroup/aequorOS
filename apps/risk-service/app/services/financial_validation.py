@@ -12,6 +12,7 @@ from app.models import (
     FinancialAccount,
     FinancialBalance,
     FinancialCashFlow,
+    FinancialCovenant,
     FinancialInstitution,
     FinancialManualEditHistory,
     FinancialObligation,
@@ -43,6 +44,7 @@ TABLE_BY_ENTITY_TYPE: dict[FinancialValidationEntityType, RecordTable] = {
     "balance": "financial_balances",
     "cash_flow": "financial_cash_flows",
     "obligation": "financial_obligations",
+    "covenant": "financial_covenants",
 }
 
 
@@ -164,6 +166,7 @@ def load_validation_dataset(
         balances=list(db.scalars(financial_stmt(FinancialBalance, ctx, case_id))),
         cash_flows=list(db.scalars(financial_stmt(FinancialCashFlow, ctx, case_id))),
         obligations=list(db.scalars(financial_stmt(FinancialObligation, ctx, case_id))),
+        covenants=list(db.scalars(financial_stmt(FinancialCovenant, ctx, case_id))),
         links=list(db.scalars(financial_stmt(FinancialRecordSourceLink, ctx, case_id))),
         manual_edits=list(db.scalars(financial_stmt(FinancialManualEditHistory, ctx, case_id))),
     )

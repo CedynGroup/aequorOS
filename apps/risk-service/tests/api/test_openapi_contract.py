@@ -83,6 +83,7 @@ def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient
         "balances",
         "cash_flows",
         "obligations",
+        "covenants",
         "source_rows",
         "record_source_links",
         "manual_edits",
@@ -159,3 +160,45 @@ def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
     assert "/api/v1/cases/{case_id}/report.json" not in paths
     assert "/api/v1/cases/{case_id}/report.html" not in paths
     assert "/api/v1/cases/taxonomy" not in paths
+
+
+def test_canonical_mutation_contracts_use_resource_specific_allowlisted_paths(
+    client: TestClient,
+) -> None:
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+    components = schema["components"]["schemas"]
+    resources = {
+        "institutions": "FinancialInstitution",
+        "accounts": "FinancialAccount",
+        "reporting-periods": "FinancialReportingPeriod",
+        "balances": "FinancialBalance",
+        "obligations": "FinancialObligation",
+        "covenants": "FinancialCovenant",
+    }
+
+    for resource, model_name in resources.items():
+        collection_path = f"/api/v1/cases/{{case_id}}/financial-workspace/{resource}"
+        identifier = resource.removesuffix("s").replace("-", "_") + "_id"
+        if resource == "reporting-periods":
+            identifier = "reporting_period_id"
+        item_path = f"{collection_path}/{{{identifier}}}"
+        assert (
+            paths[collection_path]["post"]["requestBody"]["content"]["application/json"]["schema"][
+                "$ref"
+            ]
+            == f"#/components/schemas/{model_name}Create"
+        )
+        parameters = {
+            parameter["name"]: parameter
+            for parameter in paths[collection_path]["post"]["parameters"]
+        }
+        assert parameters["X-User-Id"]["required"] is True
+        response_ref = paths[item_path]["patch"]["responses"]["200"]["content"]["application/json"][
+            "schema"
+        ]["$ref"]
+        assert response_ref == f"#/components/schemas/{model_name}MutationResponse"
+        assert components[f"{model_name}Create"]["additionalProperties"] is False
+        assert components[f"{model_name}Update"]["additionalProperties"] is False
+
+    assert "/api/v1/cases/{case_id}/financial-data/{entity_type}/{entity_id}" not in paths
