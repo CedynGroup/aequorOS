@@ -41,7 +41,10 @@ from app.schemas.financial_workspace import (
 from app.services.audit import record_event
 from app.services.cases import get_case_or_404
 from app.services.financial_mapping.normalization import normalize_currency, normalize_text
-from app.services.financial_mapping.upserts import canonical_dedupe_key
+from app.services.financial_mapping.upserts import (
+    canonical_account_dedupe_key,
+    canonical_dedupe_key,
+)
 from app.services.financial_validation import validate_financial_data
 
 
@@ -580,13 +583,11 @@ def institution_dedupe(values: dict[str, Any]) -> str:
 
 
 def account_dedupe(values: dict[str, Any]) -> str:
-    return canonical_dedupe_key(
-        "account",
-        [
-            values.get("institution_id"),
-            normalize_text(values["account_name"]),
-            values.get("currency"),
-        ],
+    return canonical_account_dedupe_key(
+        values.get("institution_id"),
+        values.get("account_number"),
+        values["account_name"],
+        values.get("currency"),
     )
 
 

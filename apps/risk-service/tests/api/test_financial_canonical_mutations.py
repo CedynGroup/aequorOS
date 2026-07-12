@@ -256,6 +256,44 @@ def test_obligation_identity_uses_type_and_updates_after_correction(
     assert replacement.status_code == 200, replacement.text
 
 
+def test_account_identity_uses_account_number_and_updates_after_correction(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    common = {
+        "account_name": "Operating",
+        "currency": "USD",
+        "reason": "manual",
+    }
+    first = create_record(
+        db_client,
+        case.id,
+        "accounts",
+        {**common, "account_number": "111"},
+    )
+    second = create_record(
+        db_client,
+        case.id,
+        "accounts",
+        {**common, "account_number": "222"},
+    )
+
+    correction = db_client.patch(
+        f"/api/v1/cases/{case.id}/financial-workspace/accounts/{first['id']}",
+        headers=headers(),
+        json={"account_number": "333", "reason": "correct account number"},
+    )
+    replacement = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/accounts",
+        headers=headers(),
+        json={**common, "account_number": "111"},
+    )
+
+    assert first["id"] != second["id"]
+    assert correction.status_code == 200, correction.text
+    assert replacement.status_code == 200, replacement.text
+
+
 def test_mutation_contracts_reject_database_overflow_and_nonnullable_covenant_nulls(
     db_client: TestClient,
 ) -> None:

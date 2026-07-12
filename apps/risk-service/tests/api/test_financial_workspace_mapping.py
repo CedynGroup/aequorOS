@@ -254,11 +254,23 @@ def test_financial_workspace_skips_covenants_outside_persistence_bounds(
                     "Covenant Threshold": "123456789012345.123456",
                 },
                 {
+                    "Covenant Name": "Integer threshold overflow",
+                    "Covenant Metric": "leverage",
+                    "Covenant Operator": "<=",
+                    "Covenant Threshold": "123456789012345",
+                },
+                {
                     "Covenant Name": "Actual overflow",
                     "Covenant Metric": "liquidity",
                     "Covenant Operator": ">=",
                     "Covenant Threshold": "1",
                     "Covenant Actual Value": "123456789012345.123456",
+                },
+                {
+                    "Covenant Name": "   ",
+                    "Covenant Metric": "liquidity",
+                    "Covenant Operator": ">=",
+                    "Covenant Threshold": "1",
                 },
             ]
         },

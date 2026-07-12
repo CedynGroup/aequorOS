@@ -49,6 +49,23 @@ def canonical_dedupe_key(kind: str, parts: list[object | None]) -> str:
     return f"{kind}:{digest}"
 
 
+def canonical_account_dedupe_key(
+    institution_id: UUID | None,
+    account_number: str | None,
+    account_name: str,
+    currency: str | None,
+) -> str:
+    parts: list[object | None] = [institution_id]
+    normalized_account_number = normalize_text(account_number)
+    if normalized_account_number:
+        parts.append(normalized_account_number)
+    parts.extend([normalize_text(account_name), currency])
+    return canonical_dedupe_key(
+        "account",
+        parts,
+    )
+
+
 def existing_by_dedupe[
     T: (
         FinancialAccount,
@@ -197,11 +214,7 @@ def get_or_create_account(  # noqa: PLR0913
     currency: str | None,
     metadata: JsonObject,
 ) -> tuple[FinancialAccount, bool]:
-    normalized_account_name = normalize_text(account_name)
-    dedupe_key = canonical_dedupe_key(
-        "account",
-        [institution_id, normalized_account_name, currency],
-    )
+    dedupe_key = canonical_account_dedupe_key(institution_id, None, account_name, currency)
 
     account = FinancialAccount(
         organization_id=ctx.organization_id,

@@ -485,11 +485,13 @@ def map_covenant(
     assert threshold_field is not None
     threshold = parse_decimal(threshold_field.value)
     operator = normalize_covenant_operator(operator_field.value)
+    name_value = string_value(name.value)
     metric_value = normalize_text(metric.value)
     if (
         threshold is None
         or not covenant_decimal_in_bounds(threshold)
         or operator is None
+        or name_value is None
         or not metric_value
         or len(metric_value) > 120
     ):
@@ -509,7 +511,7 @@ def map_covenant(
         source_row_id=mapping.source_row.id,
         obligation_id=obligation.id if obligation is not None else None,
         reporting_period_id=reporting_period.id if reporting_period is not None else None,
-        name=string_value(name.value) or "",
+        name=name_value,
         metric=metric_value,
         operator=operator,
         threshold=threshold,
@@ -546,7 +548,7 @@ def covenant_decimal_in_bounds(value: Decimal) -> bool:
         return False
     decimal_places = max(-exponent, 0)
     integer_places = max(len(digits) + exponent, 0)
-    return decimal_places <= 6 and integer_places + decimal_places <= 20
+    return decimal_places <= 6 and integer_places <= 14
 
 
 def normalize_covenant_operator(value: object) -> str | None:
