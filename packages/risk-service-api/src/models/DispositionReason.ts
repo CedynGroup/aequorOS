@@ -25,7 +25,7 @@ export type DispositionReason = string | null;
 export function instanceOfDispositionReason(
   value: unknown,
 ): value is DispositionReason {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function DispositionReasonFromJSON(json: any): DispositionReason {

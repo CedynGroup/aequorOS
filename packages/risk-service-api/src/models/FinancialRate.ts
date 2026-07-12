@@ -25,7 +25,7 @@ export type FinancialRate = number | string;
 export function instanceOfFinancialRate(
   value: unknown,
 ): value is FinancialRate {
-  return true;
+  return typeof value === "number" || typeof value === "string";
 }
 
 export function FinancialRateFromJSON(json: any): FinancialRate {

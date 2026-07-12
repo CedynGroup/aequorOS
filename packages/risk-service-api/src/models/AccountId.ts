@@ -23,7 +23,7 @@ export type AccountId = string | null;
  * Check if a given object implements the AccountId interface.
  */
 export function instanceOfAccountId(value: unknown): value is AccountId {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function AccountIdFromJSON(json: any): AccountId {

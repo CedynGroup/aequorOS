@@ -23,7 +23,7 @@ export type AsOfDate = string | null;
  * Check if a given object implements the AsOfDate interface.
  */
 export function instanceOfAsOfDate(value: unknown): value is AsOfDate {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function AsOfDateFromJSON(json: any): AsOfDate {

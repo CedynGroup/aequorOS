@@ -23,7 +23,7 @@ export type Label = string | null;
  * Check if a given object implements the Label interface.
  */
 export function instanceOfLabel(value: unknown): value is Label {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function LabelFromJSON(json: any): Label {

@@ -3,11 +3,12 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.db.session import get_sessionmaker
-from app.models import AuditEvent, FinancialManualEditHistory
+from app.models import AuditEvent, FinancialInstitution, FinancialManualEditHistory
 from tests.api.factories import CaseFactory
 from tests.api.helpers import ORG_1, ORG_2, headers
 
@@ -395,6 +396,67 @@ def test_mutations_reject_unsupported_input_authorization_and_cross_tenant_acces
     assert missing_actor.status_code == 422
     assert cross_tenant.status_code == 404
     assert cross_tenant_update.status_code == 404
+
+
+def test_mutations_strip_reasons_and_reject_whitespace_only_values(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    blank = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/institutions",
+        headers=headers(),
+        json={"name": "Blank Reason Bank", "reason": "   \t"},
+    )
+    created = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/institutions",
+        headers=headers(),
+        json={"name": "Trimmed Reason Bank", "reason": "  reviewer verified  "},
+    )
+
+    assert blank.status_code == 422
+    assert created.status_code == 200, created.text
+    record_id = UUID(created.json()["record"]["id"])
+    with get_sessionmaker()() as session:
+        reasons = set(
+            session.scalars(
+                select(FinancialManualEditHistory.reason).where(
+                    FinancialManualEditHistory.record_id == record_id
+                )
+            )
+        )
+    assert reasons == {"reviewer verified"}
+
+
+def test_mutation_rolls_back_when_validation_refresh_fails(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = CaseFactory(db_client).create()
+
+    def fail_validation(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("validation refresh failed")
+
+    monkeypatch.setattr(
+        "app.services.financial_canonical_edits.validate_financial_data",
+        fail_validation,
+    )
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/institutions",
+        headers=headers(),
+        json={"name": "Rolled Back Bank", "reason": "manual"},
+    )
+
+    assert response.status_code == 500
+    with get_sessionmaker()() as session:
+        assert session.scalar(
+            select(FinancialInstitution).where(FinancialInstitution.name == "Rolled Back Bank")
+        ) is None
+        assert session.scalar(
+            select(FinancialManualEditHistory).where(
+                FinancialManualEditHistory.case_id == case.id,
+                FinancialManualEditHistory.reason == "manual",
+            )
+        ) is None
 
 
 def create_record(

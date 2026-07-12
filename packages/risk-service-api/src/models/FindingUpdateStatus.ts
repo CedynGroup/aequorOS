@@ -41,7 +41,17 @@ export type FindingUpdateStatus =
 export function instanceOfFindingUpdateStatus(
   value: unknown,
 ): value is FindingUpdateStatus {
-  return true;
+  return (
+    [
+      "open",
+      "accepted",
+      "acknowledged",
+      "dismissed",
+      "needs_review",
+      "resolved",
+      "superseded",
+    ].indexOf(value as never) !== -1 || value === null
+  );
 }
 
 export function FindingUpdateStatusFromJSON(json: any): FindingUpdateStatus {

@@ -23,7 +23,7 @@ export type EndDate = string | null;
  * Check if a given object implements the EndDate interface.
  */
 export function instanceOfEndDate(value: unknown): value is EndDate {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function EndDateFromJSON(json: any): EndDate {

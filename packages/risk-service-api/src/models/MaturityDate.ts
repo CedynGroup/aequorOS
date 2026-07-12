@@ -23,7 +23,7 @@ export type MaturityDate = string | null;
  * Check if a given object implements the MaturityDate interface.
  */
 export function instanceOfMaturityDate(value: unknown): value is MaturityDate {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function MaturityDateFromJSON(json: any): MaturityDate {

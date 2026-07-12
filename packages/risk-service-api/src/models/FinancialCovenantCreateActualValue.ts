@@ -33,7 +33,9 @@ export type FinancialCovenantCreateActualValue = number | string | null;
 export function instanceOfFinancialCovenantCreateActualValue(
   value: unknown,
 ): value is FinancialCovenantCreateActualValue {
-  return true;
+  return (
+    typeof value === "number" || typeof value === "string" || value === null
+  );
 }
 
 export function FinancialCovenantCreateActualValueFromJSON(

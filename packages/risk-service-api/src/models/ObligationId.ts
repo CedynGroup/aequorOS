@@ -23,7 +23,7 @@ export type ObligationId = string | null;
  * Check if a given object implements the ObligationId interface.
  */
 export function instanceOfObligationId(value: unknown): value is ObligationId {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function ObligationIdFromJSON(json: any): ObligationId {

@@ -23,7 +23,9 @@ export type Confidence = number | string | null;
  * Check if a given object implements the Confidence interface.
  */
 export function instanceOfConfidence(value: unknown): value is Confidence {
-  return true;
+  return (
+    typeof value === "number" || typeof value === "string" || value === null
+  );
 }
 
 export function ConfidenceFromJSON(json: any): Confidence {

@@ -25,7 +25,7 @@ export type AccountNumber = string | null;
 export function instanceOfAccountNumber(
   value: unknown,
 ): value is AccountNumber {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function AccountNumberFromJSON(json: any): AccountNumber {

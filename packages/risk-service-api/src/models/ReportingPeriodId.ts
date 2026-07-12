@@ -25,7 +25,7 @@ export type ReportingPeriodId = string | null;
 export function instanceOfReportingPeriodId(
   value: unknown,
 ): value is ReportingPeriodId {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function ReportingPeriodIdFromJSON(json: any): ReportingPeriodId {

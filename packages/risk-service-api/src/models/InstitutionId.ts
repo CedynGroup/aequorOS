@@ -25,7 +25,7 @@ export type InstitutionId = string | null;
 export function instanceOfInstitutionId(
   value: unknown,
 ): value is InstitutionId {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function InstitutionIdFromJSON(json: any): InstitutionId {

@@ -37,7 +37,10 @@ export type FinancialCovenantCreateComplianceStatus =
 export function instanceOfFinancialCovenantCreateComplianceStatus(
   value: unknown,
 ): value is FinancialCovenantCreateComplianceStatus {
-  return true;
+  return (
+    ["compliant", "non_compliant", "unknown"].indexOf(value as never) !== -1 ||
+    value === null
+  );
 }
 
 export function FinancialCovenantCreateComplianceStatusFromJSON(

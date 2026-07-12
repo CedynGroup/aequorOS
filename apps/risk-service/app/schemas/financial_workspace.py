@@ -5,7 +5,14 @@ from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    computed_field,
+    model_validator,
+)
 
 from app.schemas.common import JsonObject, JsonValue
 
@@ -15,6 +22,9 @@ type FinancialCurrency = Annotated[str, Field(min_length=3, max_length=3)]
 type FinancialAmount = Annotated[Decimal, Field(max_digits=20, decimal_places=4)]
 type FinancialRate = Annotated[Decimal, Field(max_digits=10, decimal_places=6)]
 type FinancialCovenantAmount = Annotated[Decimal, Field(max_digits=20, decimal_places=6)]
+type FinancialMutationReason = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
+]
 type FinancialValidationEntityType = Literal[
     "institution",
     "account",
@@ -174,7 +184,7 @@ class FinancialObligationRead(BaseModel):
 class ManualMutationPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    reason: str = Field(min_length=1, max_length=2000)
+    reason: FinancialMutationReason
 
 
 class ManualUpdatePayload(ManualMutationPayload):

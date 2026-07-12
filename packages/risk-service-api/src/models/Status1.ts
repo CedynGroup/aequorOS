@@ -30,7 +30,11 @@ export type Status1 =
  * Check if a given object implements the Status1 interface.
  */
 export function instanceOfStatus1(value: unknown): value is Status1 {
-  return true;
+  return (
+    ["active", "inactive", "closed", "matured", "defaulted", "unknown"].indexOf(
+      value as never,
+    ) !== -1 || value === null
+  );
 }
 
 export function Status1FromJSON(json: any): Status1 {

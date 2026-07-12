@@ -231,6 +231,53 @@ def test_financial_workspace_map_uses_latest_completed_extraction_for_document_i
     assert body["summary"]["mapped_source_row_count"] == 1
 
 
+def test_financial_workspace_skips_covenants_outside_persistence_bounds(
+    db_client: TestClient,
+    api_factories: ApiFactories,
+) -> None:
+    case = api_factories.cases.create()
+    document = api_factories.documents.create_uploaded(case_id=case.id)
+    extraction_id = seed_extraction(
+        document_id=document.document_id,
+        extracted_json={
+            "rows": [
+                {
+                    "Covenant Name": "Metric overflow",
+                    "Covenant Metric": "x" * 121,
+                    "Covenant Operator": "<=",
+                    "Covenant Threshold": "1",
+                },
+                {
+                    "Covenant Name": "Threshold overflow",
+                    "Covenant Metric": "leverage",
+                    "Covenant Operator": "<=",
+                    "Covenant Threshold": "123456789012345.123456",
+                },
+                {
+                    "Covenant Name": "Actual overflow",
+                    "Covenant Metric": "liquidity",
+                    "Covenant Operator": ">=",
+                    "Covenant Threshold": "1",
+                    "Covenant Actual Value": "123456789012345.123456",
+                },
+            ]
+        },
+    )
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/map",
+        headers=headers(),
+        json={"document_extraction_id": str(extraction_id)},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["created"]["covenants"] == 0
+    with get_sessionmaker()() as session:
+        assert session.scalar(
+            select(FinancialCovenant).where(FinancialCovenant.case_id == case.id)
+        ) is None
+
+
 def test_financial_workspace_map_creates_cash_flows_with_traceability(
     db_client: TestClient,
     api_factories: ApiFactories,

@@ -25,7 +25,10 @@ export type FinancialAccountUpdateMetadata = { [key: string]: any } | null;
 export function instanceOfFinancialAccountUpdateMetadata(
   value: unknown,
 ): value is FinancialAccountUpdateMetadata {
-  return true;
+  return (
+    (typeof value === "object" && value !== null && !Array.isArray(value)) ||
+    value === null
+  );
 }
 
 export function FinancialAccountUpdateMetadataFromJSON(

@@ -224,6 +224,30 @@ def schema_type(schema: dict[str, Any], components: dict[str, Any]) -> str:
     return result
 
 
+def schema_guard(schema: dict[str, Any], components: dict[str, Any]) -> str:  # noqa: PLR0911
+    if "$ref" in schema:
+        return schema_guard(components[schema["$ref"].rsplit("/", 1)[-1]], components)
+    if "const" in schema:
+        return f"value === {json.dumps(schema['const'])}"
+    if "enum" in schema:
+        values = ", ".join(json.dumps(value) for value in schema["enum"])
+        return f"[{values}].indexOf(value as never) !== -1"
+    if "anyOf" in schema:
+        guards = list(dict.fromkeys(schema_guard(item, components) for item in schema["anyOf"]))
+        return " || ".join(f"({guard})" for guard in guards)
+    primitive = schema.get("type")
+    if primitive in {"integer", "number", "string", "boolean"}:
+        runtime_type = "number" if primitive in {"integer", "number"} else primitive
+        return f'typeof value === "{runtime_type}"'
+    if primitive == "null":
+        return "value === null"
+    if primitive == "array":
+        return "Array.isArray(value)"
+    if primitive == "object":
+        return 'typeof value === "object" && value !== null && !Array.isArray(value)'
+    raise ValueError(f"Unsupported inline schema guard: {schema}")
+
+
 def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
     document = json.loads(schema_path.read_text(encoding="utf-8"))
     components = document["components"]["schemas"]
@@ -255,8 +279,11 @@ def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
         if not schemas:
             raise ValueError(f"Could not find a schema use for generated alias {alias}")
         types = {schema_type(schema, components) for schema in schemas}
+        guards = {schema_guard(schema, components) for schema in schemas}
         if len(types) != 1:
             raise ValueError(f"Generated alias {alias} has conflicting schemas: {sorted(types)}")
+        if len(guards) != 1:
+            raise ValueError(f"Generated alias {alias} has conflicting guards: {sorted(guards)}")
         alias_path = model_dir / f"{alias}.ts"
         text = model_text[alias]
         text = re.sub(r"import \{ mapValues \} from ['\"]\.\./runtime['\"];\n", "", text)
@@ -273,6 +300,13 @@ def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
             instance_pattern,
             f"export function instanceOf{alias}(value: unknown): value is {alias}",
             text,
+        )
+        guard = guards.pop()
+        text = re.sub(
+            rf"(export function instanceOf{re.escape(alias)}[\s\S]*?\{{\s*)return true;",
+            rf"\1return {guard};",
+            text,
+            count=1,
         )
         alias_path.write_text(text, encoding="utf-8")
 

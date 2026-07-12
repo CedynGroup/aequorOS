@@ -1,7 +1,10 @@
-import type { AccountId } from "../src/models/AccountId";
-import type { AsOfDate } from "../src/models/AsOfDate";
+import { AccountId, instanceOfAccountId } from "../src/models/AccountId";
+import { AsOfDate, instanceOfAsOfDate } from "../src/models/AsOfDate";
 import type { FinancialAccountUpdateMetadata } from "../src/models/FinancialAccountUpdateMetadata";
-import type { FinancialAmount } from "../src/models/FinancialAmount";
+import {
+  FinancialAmount,
+  instanceOfFinancialAmount,
+} from "../src/models/FinancialAmount";
 import {
   FinancialBalanceCreate,
   FinancialBalanceCreateToJSON,
@@ -57,6 +60,17 @@ assert(
   "camelCase balanceType leaked into JSON",
 );
 assert(!("unexpected" in serialized), "unknown property leaked into JSON");
+assert(instanceOfFinancialAmount(125.5), "number amount was rejected");
+assert(instanceOfFinancialAmount("125.5"), "string amount was rejected");
+assert(!instanceOfFinancialAmount({}), "object was accepted as an amount");
+assert(instanceOfAccountId(null), "nullable account ID rejected null");
+assert(
+  instanceOfAccountId("0198c7de-95bf-7000-8000-000000000001"),
+  "account ID rejected string",
+);
+assert(!instanceOfAccountId(42), "number was accepted as an account ID");
+assert(instanceOfAsOfDate("2026-07-12"), "date alias rejected string");
+assert(!instanceOfAsOfDate({}), "object was accepted as a date alias");
 
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) {

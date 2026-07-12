@@ -33,7 +33,9 @@ export type FinancialObligationCreateOutstandingAmount = number | string | null;
 export function instanceOfFinancialObligationCreateOutstandingAmount(
   value: unknown,
 ): value is FinancialObligationCreateOutstandingAmount {
-  return true;
+  return (
+    typeof value === "number" || typeof value === "string" || value === null
+  );
 }
 
 export function FinancialObligationCreateOutstandingAmountFromJSON(

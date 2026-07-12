@@ -23,7 +23,10 @@ export type Status = "active" | "inactive" | "closed" | "unknown" | null;
  * Check if a given object implements the Status interface.
  */
 export function instanceOfStatus(value: unknown): value is Status {
-  return true;
+  return (
+    ["active", "inactive", "closed", "unknown"].indexOf(value as never) !==
+      -1 || value === null
+  );
 }
 
 export function StatusFromJSON(json: any): Status {

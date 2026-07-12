@@ -33,7 +33,9 @@ export type FinancialObligationCreateInterestRate = number | string | null;
 export function instanceOfFinancialObligationCreateInterestRate(
   value: unknown,
 ): value is FinancialObligationCreateInterestRate {
-  return true;
+  return (
+    typeof value === "number" || typeof value === "string" || value === null
+  );
 }
 
 export function FinancialObligationCreateInterestRateFromJSON(

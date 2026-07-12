@@ -362,9 +362,13 @@ def create_record(  # noqa: PLR0913, UP047
         entity_id=cast(Any, record).id,
         details={"reason": reason},
     )
-    commit_or_conflict(db, "Manual entry conflicts with an existing canonical record.")
+    validation = validate_and_commit(
+        db,
+        ctx,
+        case_id,
+        "Manual entry conflicts with an existing canonical record.",
+    )
     db.refresh(record)
-    validation = validate_financial_data(db, ctx, case_id)
     return response_type(record=record, validation=validation)
 
 
@@ -412,9 +416,13 @@ def update_record(  # noqa: PLR0913, UP047
         entity_id=record_id,
         details={"reason": reason, "fields": sorted(changed)},
     )
-    commit_or_conflict(db, "Correction conflicts with an existing canonical record.")
+    validation = validate_and_commit(
+        db,
+        ctx,
+        case_id,
+        "Correction conflicts with an existing canonical record.",
+    )
     db.refresh(record)
-    validation = validate_financial_data(db, ctx, case_id)
     return response_type(record=record, validation=validation)
 
 
@@ -546,6 +554,21 @@ def commit_or_conflict(db: Session, message: str) -> None:
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
+
+
+def validate_and_commit(
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    conflict_message: str,
+) -> Any:
+    try:
+        validation = validate_financial_data(db, ctx, case_id, commit=False)
+        commit_or_conflict(db, conflict_message)
+    except Exception:
+        db.rollback()
+        raise
+    return validation
 
 
 def model_values(record: Any) -> dict[str, Any]:

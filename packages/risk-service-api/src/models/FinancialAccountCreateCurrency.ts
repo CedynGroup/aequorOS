@@ -25,7 +25,7 @@ export type FinancialAccountCreateCurrency = string | null;
 export function instanceOfFinancialAccountCreateCurrency(
   value: unknown,
 ): value is FinancialAccountCreateCurrency {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function FinancialAccountCreateCurrencyFromJSON(

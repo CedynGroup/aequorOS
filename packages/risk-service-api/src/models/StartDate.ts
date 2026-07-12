@@ -23,7 +23,7 @@ export type StartDate = string | null;
  * Check if a given object implements the StartDate interface.
  */
 export function instanceOfStartDate(value: unknown): value is StartDate {
-  return true;
+  return typeof value === "string" || value === null;
 }
 
 export function StartDateFromJSON(json: any): StartDate {

@@ -485,10 +485,19 @@ def map_covenant(
     assert threshold_field is not None
     threshold = parse_decimal(threshold_field.value)
     operator = normalize_covenant_operator(operator_field.value)
-    if threshold is None or operator is None:
+    metric_value = normalize_text(metric.value)
+    if (
+        threshold is None
+        or not covenant_decimal_in_bounds(threshold)
+        or operator is None
+        or not metric_value
+        or len(metric_value) > 120
+    ):
         return None
     actual_field = first_field(mapping.normalized, COVENANT_ACTUAL_ALIASES)
     actual = parse_decimal(actual_field.value) if actual_field is not None else None
+    if actual_field is not None and (actual is None or not covenant_decimal_in_bounds(actual)):
+        return None
     status_field = first_field(mapping.normalized, COVENANT_STATUS_ALIASES)
     compliance = normalized_covenant_status(status_field.value) if status_field else None
     if compliance is None:
@@ -501,7 +510,7 @@ def map_covenant(
         obligation_id=obligation.id if obligation is not None else None,
         reporting_period_id=reporting_period.id if reporting_period is not None else None,
         name=string_value(name.value) or "",
-        metric=string_value(metric.value) or "",
+        metric=metric_value,
         operator=operator,
         threshold=threshold,
         actual_value=actual,
@@ -527,6 +536,17 @@ def map_covenant(
                 source_field=field.source_field,
             )
     return covenant
+
+
+def covenant_decimal_in_bounds(value: Decimal) -> bool:
+    if not value.is_finite():
+        return False
+    _, digits, exponent = value.as_tuple()
+    if not isinstance(exponent, int):
+        return False
+    decimal_places = max(-exponent, 0)
+    integer_places = max(len(digits) + exponent, 0)
+    return decimal_places <= 6 and integer_places + decimal_places <= 20
 
 
 def normalize_covenant_operator(value: object) -> str | None:
