@@ -6,17 +6,20 @@ The service is built with FastAPI, Pydantic settings, SQLAlchemy, Alembic, and P
 
 ## Current Surface
 
-The service currently provides the backend foundation:
+The service currently provides the backend foundation and financial-data APIs:
 
 - Health and readiness endpoints under `/api/health`
 - Centralized environment-based settings
 - Request ID propagation through `X-Request-ID`
 - Loguru JSON structured logging
 - Consistent API error envelopes
-- SQLAlchemy models and Alembic migration setup for organizations, users, and audit events
-- Placeholder domain packages for risk workflows
+- SQLAlchemy models and Alembic migrations for tenant-owned risk and financial records
+- Canonical financial-workspace mapping, validation, manual entry, and correction
+- Covenant persistence, mapping, deterministic compliance validation, and correction
+- Audit events, per-field manual edit history, and source-record traceability
 
-Risk calculations, ingestion pipelines, auth, background workers, and report generation are intentionally not implemented yet.
+Production risk calculations, full ingestion pipelines, auth, background workers,
+and report generation are intentionally not implemented yet.
 
 ## Requirements
 
@@ -84,6 +87,15 @@ Health endpoints:
 
 Business API endpoints use URL path major versioning under `/api/v1`. See
 `docs/architecture.md` for the API versioning policy.
+
+Canonical financial data is read with
+`GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
+`PATCH` routes below that path support institutions, accounts, reporting
+periods, balances, obligations, and covenants. These mutations require both
+`X-Org-Id` and `X-User-Id`; each request body requires a non-empty `reason`.
+Successful responses contain the updated `record` and the case's refreshed
+`validation` state. See `docs/architecture.md` for the complete contract and
+correction-history behavior.
 
 ## Run Tests
 

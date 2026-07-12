@@ -176,6 +176,7 @@ Canonical records include:
 - `FinancialReportingPeriod`
 - `FinancialBalance`
 - `FinancialObligation`
+- `FinancialCovenant`
 
 These records are used by downstream review, validation, and future risk
 analysis workflows. They should be created or reused using tenant- and
@@ -231,6 +232,60 @@ Summary counts use source-row terminology, for example `source_row_count`,
 
 The mapper must preserve idempotency for repeated runs against the same
 extraction and must preserve unmapped rows in `FinancialSourceRow`.
+
+Rows containing covenant name, metric, comparison operator, and threshold are
+also mapped into `FinancialCovenant`. Supported operators normalize to `lt`,
+`lte`, `eq`, `gte`, and `gt`. Covenants retain the raw source record and
+field-level source links, and may link to the obligation/facility and reporting
+period mapped from the same row. When no valid source compliance status is
+present, status is computed deterministically from the operator, threshold, and
+actual value; a missing actual value produces `unknown`.
+
+### Canonical Manual Entry And Correction
+
+Manual creation and correction use resource-specific routes rather than a
+generic entity mutation endpoint:
+
+```text
+POST  /api/v1/cases/{case_id}/financial-workspace/{resource}
+PATCH /api/v1/cases/{case_id}/financial-workspace/{resource}/{record_id}
+```
+
+Supported resources are `institutions`, `accounts`, `reporting-periods`,
+`balances`, `obligations`, and `covenants`. Request schemas explicitly allowlist
+the writable fields for each resource and reject unknown fields. Both
+`X-Org-Id` and an active, same-tenant `X-User-Id` are required. Every create or
+update requires a non-empty `reason` explaining the manual change.
+
+Create operations mark record metadata with manual provenance. Corrections
+preserve existing metadata and source links, mark the record as corrected, and
+write one `FinancialManualEditHistory` row per changed field with the previous
+value, new value, reason, actor, and timestamp. Creates and updates also emit
+audit events. Tenant, case, and linked-record
+ownership are checked before a write, so cross-case or cross-tenant references
+are not accepted.
+
+Each successful mutation returns:
+
+```json
+{
+  "record": {},
+  "validation": {
+    "case_id": "...",
+    "organization_id": "...",
+    "issue_count": 0,
+    "summary": { "total": 0, "error": 0, "warning": 0, "info": 0 },
+    "issues": []
+  }
+}
+```
+
+Validation is refreshed after the write and the transaction commits only after
+the record, history, audit event, and validation state are ready. Covenant
+validation checks required identifying fields, recommends an obligation or
+facility link, and reports an error if a supplied compliance status disagrees
+with the deterministic comparison. The full workspace read includes covenants,
+manual edit history, source links, validation issues, and validation summary.
 
 ## API Versioning
 
