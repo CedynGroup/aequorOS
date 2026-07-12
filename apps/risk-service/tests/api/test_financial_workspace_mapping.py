@@ -285,9 +285,10 @@ def test_financial_workspace_skips_covenants_outside_persistence_bounds(
     assert response.status_code == 200, response.text
     assert response.json()["created"]["covenants"] == 0
     with get_sessionmaker()() as session:
-        assert session.scalar(
-            select(FinancialCovenant).where(FinancialCovenant.case_id == case.id)
-        ) is None
+        assert (
+            session.scalar(select(FinancialCovenant).where(FinancialCovenant.case_id == case.id))
+            is None
+        )
 
 
 def test_financial_workspace_map_creates_cash_flows_with_traceability(

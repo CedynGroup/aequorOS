@@ -486,15 +486,21 @@ def test_mutation_rolls_back_when_validation_refresh_fails(
 
     assert response.status_code == 500
     with get_sessionmaker()() as session:
-        assert session.scalar(
-            select(FinancialInstitution).where(FinancialInstitution.name == "Rolled Back Bank")
-        ) is None
-        assert session.scalar(
-            select(FinancialManualEditHistory).where(
-                FinancialManualEditHistory.case_id == case.id,
-                FinancialManualEditHistory.reason == "manual",
+        assert (
+            session.scalar(
+                select(FinancialInstitution).where(FinancialInstitution.name == "Rolled Back Bank")
             )
-        ) is None
+            is None
+        )
+        assert (
+            session.scalar(
+                select(FinancialManualEditHistory).where(
+                    FinancialManualEditHistory.case_id == case.id,
+                    FinancialManualEditHistory.reason == "manual",
+                )
+            )
+            is None
+        )
 
 
 def create_record(
