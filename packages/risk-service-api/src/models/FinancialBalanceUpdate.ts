@@ -62,7 +62,6 @@ import {
  * @interface FinancialBalanceUpdate
  */
 export interface FinancialBalanceUpdate {
-  [key: string]: any | any;
   /**
    *
    * @type {AccountId}

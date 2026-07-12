@@ -27,7 +27,6 @@ import {
  * @interface CaseBulkUpdateStatusCreate
  */
 export interface CaseBulkUpdateStatusCreate {
-  [key: string]: any | any;
   /**
    *
    * @type {string}

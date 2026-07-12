@@ -62,7 +62,6 @@ import {
  * @interface FinancialAccountUpdate
  */
 export interface FinancialAccountUpdate {
-  [key: string]: any | any;
   /**
    *
    * @type {string}

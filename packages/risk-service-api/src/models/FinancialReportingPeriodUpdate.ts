@@ -55,7 +55,6 @@ import {
  * @interface FinancialReportingPeriodUpdate
  */
 export interface FinancialReportingPeriodUpdate {
-  [key: string]: any | any;
   /**
    *
    * @type {AsOfDate}

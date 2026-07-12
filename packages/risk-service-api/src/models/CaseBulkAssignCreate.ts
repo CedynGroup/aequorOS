@@ -19,7 +19,6 @@ import { mapValues } from "../runtime";
  * @interface CaseBulkAssignCreate
  */
 export interface CaseBulkAssignCreate {
-  [key: string]: any | any;
   /**
    *
    * @type {string}

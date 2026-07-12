@@ -27,7 +27,6 @@ import {
  * @interface FinancialInstitutionCreate
  */
 export interface FinancialInstitutionCreate {
-  [key: string]: any | any;
   /**
    *
    * @type {FinancialAccountCreateAccountType}

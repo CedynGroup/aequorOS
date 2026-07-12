@@ -97,7 +97,6 @@ import {
  * @interface FinancialObligationUpdate
  */
 export interface FinancialObligationUpdate {
-  [key: string]: any | any;
   /**
    *
    * @type {AccountId}

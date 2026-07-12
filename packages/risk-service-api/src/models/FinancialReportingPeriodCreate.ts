@@ -48,7 +48,6 @@ import {
  * @interface FinancialReportingPeriodCreate
  */
 export interface FinancialReportingPeriodCreate {
-  [key: string]: any | any;
   /**
    *
    * @type {AsOfDate}

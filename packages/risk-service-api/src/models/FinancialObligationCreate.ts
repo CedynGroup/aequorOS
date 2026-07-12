@@ -90,7 +90,6 @@ import {
  * @interface FinancialObligationCreate
  */
 export interface FinancialObligationCreate {
-  [key: string]: any | any;
   /**
    *
    * @type {AccountId}

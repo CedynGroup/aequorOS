@@ -22,6 +22,15 @@ type MetadataContract = Assert<
   Equal<FinancialAccountUpdateMetadata, { [key: string]: any } | null>
 >;
 
+const closedPayload: FinancialBalanceCreate = {
+  accountId: "0198c7de-95bf-7000-8000-000000000001",
+  amount: "125.50",
+  balanceType: "cash",
+  reason: "manual",
+  // @ts-expect-error closed mutation models reject unknown properties
+  unexpected: "must be rejected",
+};
+
 const payload: FinancialBalanceCreate & { unexpected: string } = {
   accountId: "0198c7de-95bf-7000-8000-000000000001",
   amount: "125.50",
@@ -29,7 +38,10 @@ const payload: FinancialBalanceCreate & { unexpected: string } = {
   reason: "manual",
   unexpected: "must not be serialized",
 };
-const serialized = FinancialBalanceCreateToJSON(payload);
+const serialized = FinancialBalanceCreateToJSON(payload) as unknown as Record<
+  string,
+  unknown
+>;
 
 assert(
   serialized.account_id === payload.accountId,
@@ -56,3 +68,4 @@ void (0 as unknown as AmountContract);
 void (0 as unknown as AccountIdContract);
 void (0 as unknown as DateContract);
 void (0 as unknown as MetadataContract);
+void closedPayload;

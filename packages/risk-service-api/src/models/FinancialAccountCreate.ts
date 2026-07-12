@@ -55,7 +55,6 @@ import {
  * @interface FinancialAccountCreate
  */
 export interface FinancialAccountCreate {
-  [key: string]: any | any;
   /**
    *
    * @type {string}

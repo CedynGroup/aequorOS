@@ -34,7 +34,6 @@ import {
  * @interface FinancialInstitutionUpdate
  */
 export interface FinancialInstitutionUpdate {
-  [key: string]: any | any;
   /**
    *
    * @type {FinancialAccountCreateAccountType}

@@ -277,7 +277,7 @@ def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
         alias_path.write_text(text, encoding="utf-8")
 
 
-def patch_serializers(package_root: Path, schema_path: Path) -> None:
+def patch_closed_models(package_root: Path, schema_path: Path) -> None:
     document = json.loads(schema_path.read_text(encoding="utf-8"))
     components = document["components"]["schemas"]
     for model_path in (package_root / "src" / "models").glob("*.ts"):
@@ -285,7 +285,13 @@ def patch_serializers(package_root: Path, schema_path: Path) -> None:
         schema = components.get(model_path.stem, {})
         if schema.get("additionalProperties") is not False:
             continue
-        patched = re.sub(r"^\s+\.\.\.value,\n", "", text, flags=re.MULTILINE)
+        patched = re.sub(
+            r"^\s+\[key: string\]: any \| any;\n",
+            "",
+            text,
+            flags=re.MULTILINE,
+        )
+        patched = re.sub(r"^\s+\.\.\.value,\n", "", patched, flags=re.MULTILINE)
         if patched != text:
             model_path.write_text(patched, encoding="utf-8")
 
@@ -294,7 +300,7 @@ def patch_generated_source(package_root: Path, schema_path: Path) -> None:
     patch_error_body(package_root)
     patch_payload(package_root)
     patch_primitive_aliases(package_root, schema_path)
-    patch_serializers(package_root, schema_path)
+    patch_closed_models(package_root, schema_path)
 
 
 def main() -> int:

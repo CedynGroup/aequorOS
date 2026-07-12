@@ -62,7 +62,6 @@ import {
  * @interface FinancialCovenantCreate
  */
 export interface FinancialCovenantCreate {
-  [key: string]: any | any;
   /**
    *
    * @type {FinancialCovenantCreateActualValue}
