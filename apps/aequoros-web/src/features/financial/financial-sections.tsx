@@ -909,8 +909,7 @@ function optional(values: FormValues, key: string) {
 }
 
 function optionalDate(values: FormValues, key: string) {
-  const value = optional(values, key);
-  return value ? new Date(`${value}T00:00:00Z`) : undefined;
+  return optional(values, key);
 }
 
 function buildCreatePayload(

@@ -96,8 +96,10 @@ function FinancialControls({
   const [success, setSuccess] = useState<string>();
 
   async function mapWorkspace() {
-    if (!documentId.trim() && !extractionId.trim()) {
-      setError("Enter a document ID or document extraction ID to map.");
+    const trimmedDocumentId = documentId.trim();
+    const trimmedExtractionId = extractionId.trim();
+    if (Boolean(trimmedDocumentId) === Boolean(trimmedExtractionId)) {
+      setError("Enter exactly one document ID or document extraction ID.");
       return;
     }
     setPending("map");
@@ -105,8 +107,8 @@ function FinancialControls({
     setSuccess(undefined);
     try {
       const result = await financialReviewClient.map(tenant, caseId, {
-        documentId: documentId.trim() || undefined,
-        documentExtractionId: extractionId.trim() || undefined,
+        documentId: trimmedDocumentId || undefined,
+        documentExtractionId: trimmedExtractionId || undefined,
       });
       setSuccess(
         `Mapping complete: ${result.summary.sourceRowCount} source rows reviewed.`,

@@ -348,4 +348,54 @@ describe("FinancialSections", () => {
     );
     expect(screen.getByText(/Added covenant/)).toBeInTheDocument();
   });
+
+  it("submits date-only strings for financial dates", async () => {
+    const user = userEvent.setup();
+    const create = vi.fn<FinancialReviewClient["create"]>();
+
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ create })}
+        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Add reporting period" }),
+    );
+    const form = screen.getByRole("form", { name: "Add reporting period" });
+    await user.type(within(form).getByLabelText("Period type"), "annual");
+    fireEvent.change(within(form).getByLabelText("Start date"), {
+      target: { value: "2025-01-01" },
+    });
+    fireEvent.change(within(form).getByLabelText("End date"), {
+      target: { value: "2025-12-31" },
+    });
+    fireEvent.change(within(form).getByLabelText("As-of date"), {
+      target: { value: "2025-12-31" },
+    });
+    await user.type(
+      within(form).getByLabelText("Reason"),
+      "Add audited reporting period",
+    );
+    await user.click(
+      within(form).getByRole("button", { name: "Add reporting period" }),
+    );
+
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    expect(create).toHaveBeenCalledWith(
+      "reportingPeriod",
+      tenant,
+      "case-1",
+      expect.objectContaining({
+        startDate: "2025-01-01",
+        endDate: "2025-12-31",
+        asOfDate: "2025-12-31",
+      }),
+    );
+  });
 });

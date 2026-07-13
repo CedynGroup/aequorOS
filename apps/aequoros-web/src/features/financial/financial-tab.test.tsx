@@ -90,12 +90,24 @@ describe("FinancialTab", () => {
       within(controls).getByRole("button", { name: "Map financial data" }),
     );
     expect(
-      within(controls).getByText(/Enter a document ID/),
+      within(controls).getByText(/Enter exactly one document ID/),
     ).toBeInTheDocument();
     await user.type(
       within(controls).getByLabelText("Document ID"),
       "document-1",
     );
+    await user.type(
+      within(controls).getByLabelText("Extraction ID"),
+      "extraction-1",
+    );
+    await user.click(
+      within(controls).getByRole("button", { name: "Map financial data" }),
+    );
+    expect(
+      within(controls).getByText(/Enter exactly one document ID/),
+    ).toBeInTheDocument();
+    expect(map).not.toHaveBeenCalled();
+    await user.clear(within(controls).getByLabelText("Extraction ID"));
     await user.click(
       within(controls).getByRole("button", { name: "Map financial data" }),
     );
