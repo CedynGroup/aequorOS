@@ -502,6 +502,7 @@ function FinancialSection({
   const [editingId, setEditingId] = useState<string>();
   const [sourceId, setSourceId] = useState<string>();
   const [successMessage, setSuccessMessage] = useState<string>();
+  const [submittingForm, setSubmittingForm] = useState<string>();
 
   return (
     <section
@@ -524,6 +525,7 @@ function FinancialSection({
             variant="outline"
             onClick={() => setAdding((value) => !value)}
             aria-expanded={adding}
+            disabled={submittingForm !== undefined}
           >
             <Plus className="size-3.5" /> Add {config.singular}
           </Button>
@@ -552,6 +554,12 @@ function FinancialSection({
           caseId={caseId}
           client={client}
           onCancel={() => setAdding(false)}
+          onSavingChange={(saving) =>
+            setSubmittingForm(saving ? "create" : undefined)
+          }
+          submissionBlocked={
+            submittingForm !== undefined && submittingForm !== "create"
+          }
           onMutation={async (response) => {
             await onMutation?.((currentWorkspace) =>
               workspaceAfterMutation(
@@ -636,6 +644,13 @@ function FinancialSection({
                         : undefined
                     }
                     canEdit={Boolean(config.kind && !mocked)}
+                    submittingForm={submittingForm}
+                    submissionBlocked={
+                      submittingForm !== undefined && submittingForm !== row.id
+                    }
+                    onSavingChange={(saving) =>
+                      setSubmittingForm(saving ? row.id : undefined)
+                    }
                   />
                 );
               })}
@@ -659,6 +674,9 @@ function FinancialRecordRows({
   onSource,
   mutationProps,
   canEdit,
+  submittingForm,
+  submissionBlocked,
+  onSavingChange,
 }: {
   row: FinancialRecord;
   config: SectionConfig;
@@ -676,6 +694,9 @@ function FinancialRecordRows({
     onMutation: (response: FinancialMutationResponse) => void;
   };
   canEdit: boolean;
+  submittingForm?: string;
+  submissionBlocked: boolean;
+  onSavingChange: (saving: boolean) => void;
 }) {
   return (
     <>
@@ -719,6 +740,7 @@ function FinancialRecordRows({
                 variant="ghost"
                 onClick={onEdit}
                 aria-expanded={editing}
+                disabled={submittingForm !== undefined}
               >
                 <Edit3 className="size-3.5" /> Edit
               </Button>
@@ -741,6 +763,8 @@ function FinancialRecordRows({
               record={row}
               config={config}
               onCancel={onEdit}
+              onSavingChange={onSavingChange}
+              submissionBlocked={submissionBlocked}
               {...mutationProps}
             />
           </td>
@@ -811,6 +835,8 @@ function MutationForm({
   caseId,
   client,
   onCancel,
+  onSavingChange,
+  submissionBlocked,
   onMutation,
 }: {
   mode: "create" | "update";
@@ -820,6 +846,8 @@ function MutationForm({
   caseId: string;
   client: FinancialReviewClient;
   onCancel: () => void;
+  onSavingChange: (saving: boolean) => void;
+  submissionBlocked: boolean;
   onMutation: (response: FinancialMutationResponse) => Promise<void> | void;
 }) {
   const [initialValues] = useState(() => valuesFromRecord(config, record));
@@ -855,10 +883,11 @@ function MutationForm({
       setFieldError("Change at least one field before saving a correction.");
       return;
     }
-    if (!config.kind || saving) return;
+    if (!config.kind || saving || submissionBlocked) return;
     setFieldError(undefined);
     setError(undefined);
     setSaving(true);
+    onSavingChange(true);
     try {
       const response =
         mode === "create"
@@ -883,6 +912,7 @@ function MutationForm({
       setMutationSaved(true);
       lastSubmit.current = async () => {
         setSaving(true);
+        onSavingChange(true);
         setError(undefined);
         try {
           await onMutation(response);
@@ -890,6 +920,7 @@ function MutationForm({
           setError(await financialErrorMessage(caught));
         } finally {
           setSaving(false);
+          onSavingChange(false);
         }
       };
       await onMutation(response);
@@ -897,6 +928,7 @@ function MutationForm({
       setError(await financialErrorMessage(caught));
     } finally {
       setSaving(false);
+      onSavingChange(false);
     }
   }
   if (!mutationSaved) lastSubmit.current = submit;
@@ -922,7 +954,13 @@ function MutationForm({
             atomically.
           </div>
         </div>
-        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={onCancel}
+          disabled={saving}
+        >
           Cancel
         </Button>
       </div>
@@ -988,8 +1026,10 @@ function MutationForm({
             size="sm"
             variant="outline"
             className="ml-2"
-            disabled={saving}
-            onClick={() => void lastSubmit.current?.()}
+            disabled={saving || submissionBlocked}
+            onClick={() => {
+              if (!submissionBlocked) void lastSubmit.current?.();
+            }}
           >
             <RotateCcw className="size-3.5" />
             {mutationSaved ? "Retry refresh" : "Retry"}
@@ -997,7 +1037,10 @@ function MutationForm({
         </Alert>
       ) : null}
       <div className="flex justify-end">
-        <Button type="submit" disabled={saving || mutationSaved}>
+        <Button
+          type="submit"
+          disabled={saving || mutationSaved || submissionBlocked}
+        >
           {saving ? <Loader2 className="size-4 animate-spin" /> : null}
           {saving
             ? "Saving…"

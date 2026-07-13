@@ -422,6 +422,73 @@ describe("FinancialSections", () => {
     ).toBeInTheDocument();
   });
 
+  it("prevents dismissing a form while its mutation is in flight", async () => {
+    const user = userEvent.setup();
+    const response = {
+      record: {
+        ...workspace().institutions[0],
+        name: "Northstar Commercial Bank",
+      },
+      validation: validation(),
+    } as FinancialInstitutionMutationResponse;
+    let resolveUpdate!: (value: FinancialInstitutionMutationResponse) => void;
+    const update = vi
+      .fn<FinancialReviewClient["update"]>()
+      .mockReturnValue(
+        new Promise<FinancialInstitutionMutationResponse>((resolve) => {
+          resolveUpdate = resolve;
+        }),
+      );
+
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ update })}
+        onMutation={vi.fn<(updateWorkspace: WorkspaceUpdater) => void>()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add institution" }));
+    const addForm = screen.getByRole("form", { name: "Add institution" });
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const form = screen.getByRole("form", { name: "Edit institution" });
+    await user.clear(within(form).getByLabelText("Name"));
+    await user.type(
+      within(form).getByLabelText("Name"),
+      "Northstar Commercial Bank",
+    );
+    await user.type(
+      within(form).getByLabelText("Reason"),
+      "Corrected against audited statement",
+    );
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(within(form).getByRole("button", { name: "Cancel" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeDisabled();
+    for (const button of screen.getAllByRole("button", {
+      name: "Add institution",
+    })) {
+      expect(button).toBeDisabled();
+    }
+    expect(
+      within(addForm).getByRole("button", { name: "Add institution" }),
+    ).toBeDisabled();
+    await user.click(within(form).getByRole("button", { name: "Cancel" }));
+    expect(form).toBeInTheDocument();
+
+    resolveUpdate(response);
+    expect(
+      await screen.findByText(/Saved institution correction/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Edit institution" })).toBeNull();
+  });
+
   it("rejects unchanged corrections after a field is reverted", async () => {
     const user = userEvent.setup();
     const update = vi.fn<FinancialReviewClient["update"]>();
