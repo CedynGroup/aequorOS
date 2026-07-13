@@ -244,3 +244,39 @@ def test_scenario_contracts_are_case_scoped_closed_and_generated(client: TestCli
         {"type": "boolean"},
         {"type": "null"},
     ]
+
+
+def test_calculation_contracts_include_lifecycle_errors_versions_and_outputs(
+    client: TestClient,
+) -> None:
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+    components = schema["components"]["schemas"]
+    base = "/api/v1/cases/{case_id}/calculation-runs"
+
+    assert paths[base]["get"]["operationId"] == "listCalculationRuns"
+    assert paths[base]["post"]["operationId"] == "startCalculationRun"
+    assert paths[f"{base}/{{run_id}}"]["get"]["operationId"] == "getCalculationRun"
+    assert paths[f"{base}/{{run_id}}/rerun"]["post"]["operationId"] == (
+        "rerunCalculation"
+    )
+    assert components["CalculationRunCreate"]["additionalProperties"] is False
+    assert components["CalculationRerunCreate"]["additionalProperties"] is False
+    assert {
+        "status",
+        "engine_version",
+        "input_schema_version",
+        "output_schema_version",
+        "input_hash",
+        "inputs",
+        "error",
+        "outputs",
+    } <= set(components["CalculationRunRead"]["required"])
+    assert {
+        "total_assets",
+        "total_liabilities",
+        "total_equity",
+        "cash",
+        "projected_inflows",
+        "projected_outflows",
+    } <= set(components["ForecastPeriodRead"]["required"])

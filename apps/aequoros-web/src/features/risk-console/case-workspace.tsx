@@ -29,6 +29,11 @@ const ScenariosTab = lazy(() =>
     default: module.ScenariosTab,
   })),
 );
+const CalculationsTab = lazy(() =>
+  import("../calculations/calculations-tab").then((module) => ({
+    default: module.CalculationsTab,
+  })),
+);
 const FindingsTab = lazy(() =>
   import("../findings/findings-tab").then((module) => ({
     default: module.FindingsTab,
@@ -109,6 +114,7 @@ export function CaseWorkspace({
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="financial">Financial Workspace</TabsTrigger>
                 <TabsTrigger value="scenarios">Scenarios</TabsTrigger>
+                <TabsTrigger value="calculations">Forecast</TabsTrigger>
                 <TabsTrigger value="findings">Findings</TabsTrigger>
                 <TabsTrigger value="decisions">Decisions</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -134,6 +140,11 @@ export function CaseWorkspace({
             <TabsContent value="scenarios" className="m-0 p-3">
               <LazyTabBoundary>
                 <ScenariosTab tenant={tenant} caseId={caseId} />
+              </LazyTabBoundary>
+            </TabsContent>
+            <TabsContent value="calculations" className="m-0 p-3">
+              <LazyTabBoundary>
+                <CalculationsTab tenant={tenant} caseId={caseId} />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="findings" className="m-0 p-3">

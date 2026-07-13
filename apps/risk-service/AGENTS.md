@@ -31,6 +31,10 @@ This file is the starting point for agents working in `apps/risk-service`.
 - Scenario mutations use resource-specific `/api/v1/cases/{case_id}/scenarios/*`
   routes. Keep assumption history, audit events, validation, and readiness in the
   same transaction; editing an assumption resets it to draft until reviewed.
+- Calculation runs use `/api/v1/cases/{case_id}/calculation-runs`; persist the
+  complete deterministic input snapshot and SHA-256 input hash with engine,
+  input-schema, and output-schema versions. Reruns must append history and never
+  replace prior successful forecast periods.
 
 ## Commit Messages
 

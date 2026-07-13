@@ -21,3 +21,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   must omit `complianceStatus` so the backend derives it from the covenant inputs.
 - Validate web changes with `pnpm --filter @aequoros/aequoros-web typecheck`, `lint`, `test`, and
   `build`; deterministic financial review journeys are in `e2e/financial-review.spec.ts`.
+- Balance-sheet forecast attempts live under `/api/v1/cases/{case_id}/calculation-runs`.
+  Runs are immutable snapshots: reruns create a new row with current canonical
+  financial data and reviewed scenario assumptions, while prior successful
+  outputs and failed-run diagnostics remain available.
