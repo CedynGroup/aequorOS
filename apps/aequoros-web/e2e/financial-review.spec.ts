@@ -11,6 +11,7 @@ type MockState = {
   issueActive: boolean;
   correctionAttempts: number;
   covenantAdded: boolean;
+  mappingComplete: boolean;
 };
 
 function issueJson() {
@@ -104,6 +105,21 @@ function workspaceJson(state: MockState) {
         raw_payload: { name: "Northstar Bank" },
         created_at: now,
       },
+      ...(state.mappingComplete
+        ? [
+            {
+              id: "source-unmapped",
+              organization_id: demoTenant.orgId,
+              case_id: northstarCase.id,
+              document_id: documentId,
+              document_extraction_id: "extraction-1",
+              row_index: 9,
+              locator: { sheet: "Debt", cell: "A9" },
+              raw_payload: { obligation_type: "term_loan" },
+              created_at: now,
+            },
+          ]
+        : []),
     ],
     record_source_links: [
       {
@@ -161,6 +177,7 @@ async function installFinancialBackend(page: Page) {
     issueActive: true,
     correctionAttempts: 0,
     covenantAdded: false,
+    mappingComplete: false,
   };
 
   await page.route("http://127.0.0.1:8003/api/v1/**", async (route) => {
@@ -194,7 +211,8 @@ async function installFinancialBackend(page: Page) {
     if (
       path === `/api/v1/cases/${northstarCase.id}/financial-workspace/map` &&
       method === "POST"
-    )
+    ) {
+      state.mappingComplete = true;
       return json(route, {
         organization_id: demoTenant.orgId,
         case_id: northstarCase.id,
@@ -216,6 +234,7 @@ async function installFinancialBackend(page: Page) {
           },
         ],
       });
+    }
     if (
       path === `/api/v1/cases/${northstarCase.id}/financial-data/validate` &&
       method === "POST"
@@ -378,8 +397,9 @@ test("uploads, maps, validates, retries correction, revalidates, and manually ad
   await expect(
     page.getByText(/Mapping complete: 1 of 2 source rows mapped/),
   ).toBeVisible();
+  await expect(page.getByLabel("Unmapped source rows")).toContainText("Row 9");
   await expect(page.getByLabel("Unmapped source rows")).toContainText(
-    "Row 9: No canonical record matched",
+    "term_loan",
   );
   await page.getByRole("button", { name: "Revalidate" }).click();
   await expect(page.getByText(/Validation refreshed: 1 issues/)).toBeVisible();

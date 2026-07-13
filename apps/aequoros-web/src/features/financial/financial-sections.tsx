@@ -13,6 +13,8 @@ import type {
   FinancialReportingPeriodCreate,
   FinancialReportingPeriodUpdate,
   FinancialValidationIssueRead,
+  Status,
+  Status1,
 } from "@aequoros/risk-service-api";
 import {
   AlertCircle,
@@ -73,6 +75,22 @@ type SectionConfig = {
   fields: FieldConfig[];
 };
 
+const accountStatuses = [
+  "active",
+  "inactive",
+  "closed",
+  "unknown",
+] satisfies NonNullable<Status>[];
+const obligationStatuses = [
+  "active",
+  "inactive",
+  "closed",
+  "matured",
+  "defaulted",
+  "unknown",
+] satisfies NonNullable<Status1>[];
+const automaticCompliance = "__automatic__";
+
 const sections: SectionConfig[] = [
   {
     collection: "institutions",
@@ -97,7 +115,7 @@ const sections: SectionConfig[] = [
       { key: "accountNumber", label: "Account number" },
       { key: "accountType", label: "Type" },
       { key: "currency" },
-      { key: "status" },
+      { key: "status", type: "select", options: accountStatuses },
       { key: "institutionId", label: "Institution ID" },
     ],
   },
@@ -166,7 +184,7 @@ const sections: SectionConfig[] = [
       { key: "startDate", label: "Start date", type: "date" },
       { key: "maturityDate", label: "Maturity", type: "date" },
       { key: "interestRate", label: "Interest rate", type: "number" },
-      { key: "status" },
+      { key: "status", type: "select", options: obligationStatuses },
       { key: "institutionId", label: "Institution ID" },
       { key: "accountId", label: "Account ID" },
       { key: "reportingPeriodId", label: "Reporting period ID" },
@@ -193,7 +211,7 @@ const sections: SectionConfig[] = [
         key: "complianceStatus",
         label: "Compliance",
         type: "select",
-        options: ["unknown", "compliant", "non_compliant"],
+        options: [automaticCompliance, "unknown", "compliant", "non_compliant"],
       },
       { key: "obligationId", label: "Obligation ID" },
       { key: "reportingPeriodId", label: "Reporting period ID" },
@@ -893,7 +911,9 @@ function MutationForm({
                 <option value="">Select…</option>
                 {field.options?.map((option) => (
                   <option key={option} value={option}>
-                    {labelize(option)}
+                    {option === automaticCompliance
+                      ? "Automatic recalculation"
+                      : labelize(option)}
                   </option>
                 ))}
               </select>
@@ -987,7 +1007,12 @@ function valuesFromRecord(
 ): FormValues {
   const values = record as unknown as Record<string, unknown> | undefined;
   return Object.fromEntries(
-    config.fields.map((field) => [field.key, inputValue(values?.[field.key])]),
+    config.fields.map((field) => [
+      field.key,
+      field.key === "complianceStatus" && !record
+        ? automaticCompliance
+        : inputValue(values?.[field.key]),
+    ]),
   ) as FormValues;
 }
 
@@ -1020,6 +1045,11 @@ function optional(values: FormValues, key: string) {
 
 function optionalDate(values: FormValues, key: string) {
   return optional(values, key);
+}
+
+function complianceStatus(values: FormValues) {
+  const value = optional(values, "complianceStatus");
+  return value === automaticCompliance ? undefined : value;
 }
 
 function buildCreatePayload(
@@ -1087,7 +1117,7 @@ function buildCreatePayload(
         operator: values.operator,
         threshold: values.threshold,
         actualValue: optional(values, "actualValue"),
-        complianceStatus: optional(values, "complianceStatus"),
+        complianceStatus: complianceStatus(values),
         obligationId: optional(values, "obligationId"),
         reportingPeriodId: optional(values, "reportingPeriodId"),
         reason,
@@ -1164,7 +1194,7 @@ function buildUpdatePayload(
         threshold: changed("threshold"),
         actualValue: changed("actualValue"),
         complianceStatus: changedFields.has("complianceStatus")
-          ? optional(values, "complianceStatus")
+          ? complianceStatus(values)
           : undefined,
         obligationId: changed("obligationId"),
         reportingPeriodId: changed("reportingPeriodId"),

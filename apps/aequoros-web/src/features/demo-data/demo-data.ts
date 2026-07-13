@@ -29,7 +29,6 @@ export function emptyWorkspace(
     cashFlows: [],
     covenants: [],
     obligations: [],
-    covenants: [],
     sourceRows: [],
     recordSourceLinks: [],
     manualEdits: [],

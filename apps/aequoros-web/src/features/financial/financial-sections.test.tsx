@@ -169,6 +169,45 @@ describe("FinancialSections", () => {
     ).toBeInTheDocument();
   });
 
+  it("constrains account and obligation statuses to contract values", async () => {
+    const user = userEvent.setup();
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add account" }));
+    const accountForm = screen.getByRole("form", { name: "Add account" });
+    expect(
+      within(accountForm)
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("value")),
+    ).toEqual(["", "active", "inactive", "closed", "unknown"]);
+
+    await user.click(screen.getByRole("button", { name: "Add obligation" }));
+    const obligationForm = screen.getByRole("form", {
+      name: "Add obligation",
+    });
+    expect(
+      within(obligationForm)
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("value")),
+    ).toEqual([
+      "",
+      "active",
+      "inactive",
+      "closed",
+      "matured",
+      "defaulted",
+      "unknown",
+    ]);
+  });
+
   it("navigates from a validation issue to the affected field", async () => {
     const user = userEvent.setup();
     render(<FinancialSections workspace={workspace()} mocked={false} />);
@@ -725,6 +764,68 @@ describe("FinancialSections", () => {
         reason: "Override status",
       }),
     );
+  });
+
+  it("requests automatic covenant recalculation without sending a status", async () => {
+    const user = userEvent.setup();
+    const data = workspace();
+    const covenant = {
+      id: "covenant-1",
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      name: "Leverage ratio",
+      metric: "debt_to_ebitda",
+      operator: "lte" as const,
+      threshold: "3.5",
+      actualValue: "3.2",
+      complianceStatus: "compliant" as const,
+      obligationId: null,
+      reportingPeriodId: null,
+      metadata: {},
+      reportingContext: {},
+      sourceRecord: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    data.covenants = [covenant];
+    const update = vi.fn<FinancialReviewClient["update"]>().mockResolvedValue({
+      record: { ...covenant, complianceStatus: "compliant" },
+      validation: validation(),
+    } as FinancialCovenantMutationResponse);
+
+    render(
+      <FinancialSections
+        workspace={data}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ update })}
+        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+      />,
+    );
+
+    const section = screen.getByText("Covenants").closest("section")!;
+    await user.click(within(section).getByRole("button", { name: "Edit" }));
+    const form = within(section).getByRole("form", { name: "Edit covenant" });
+    await user.selectOptions(
+      within(form).getByLabelText("Compliance"),
+      "__automatic__",
+    );
+    await user.type(
+      within(form).getByLabelText("Reason"),
+      "Recalculate from corrected values",
+    );
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    const payload = vi.mocked(update).mock.calls[0]?.[4] as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(payload.reason).toBe("Recalculate from corrected values");
+    expect(payload.complianceStatus).toBeUndefined();
   });
 
   it("includes obligation start date in manual entry", async () => {

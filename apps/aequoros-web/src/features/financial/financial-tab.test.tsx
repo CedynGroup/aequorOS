@@ -54,9 +54,23 @@ describe("FinancialTab", () => {
 
   it("maps source data and reflects an explicit revalidation result", async () => {
     const user = userEvent.setup();
-    vi.spyOn(financialReviewClient, "workspace").mockResolvedValue(
-      emptyWorkspace(),
-    );
+    const refreshedWorkspace = emptyWorkspace();
+    refreshedWorkspace.sourceRows = [
+      {
+        id: "source-3",
+        organizationId: tenant.orgId,
+        caseId: "case-1",
+        documentId: "document-1",
+        documentExtractionId: "extraction-1",
+        rowIndex: 8,
+        locator: { sheet: "Debt", cell: "A8" },
+        rawPayload: { obligation_type: "term_loan" },
+        createdAt: new Date("2026-07-13T12:00:00Z"),
+      },
+    ];
+    vi.spyOn(financialReviewClient, "workspace")
+      .mockResolvedValueOnce(emptyWorkspace())
+      .mockResolvedValue(refreshedWorkspace);
     const map = vi.spyOn(financialReviewClient, "map").mockResolvedValue({
       organizationId: tenant.orgId,
       caseId: "case-1",
@@ -130,10 +144,8 @@ describe("FinancialTab", () => {
     ).toBeInTheDocument();
     const unmapped = within(controls).getByLabelText("Unmapped source rows");
     expect(within(unmapped).getByText(/Row 8/)).toBeInTheDocument();
-    expect(
-      within(unmapped).getByText(/No canonical record matched/),
-    ).toBeInTheDocument();
     expect(within(unmapped).getByText(/Debt/)).toBeInTheDocument();
+    expect(within(unmapped).getByText(/term_loan/)).toBeInTheDocument();
 
     await user.click(
       within(controls).getByRole("button", { name: "Revalidate" }),
@@ -232,5 +244,53 @@ describe("FinancialTab", () => {
 
     await within(controls).findByText(/Mapping complete/);
     expect(workspaceRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps demo mode read-only when the workspace request succeeds", async () => {
+    vi.spyOn(financialReviewClient, "workspace").mockResolvedValue(
+      emptyWorkspace(),
+    );
+
+    renderWithQuery(
+      <FinancialTab tenant={tenant} caseId="case-1" mockWorkspace={true} />,
+    );
+
+    expect(
+      await screen.findByText("Editing disabled for demo data"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Map and validate financial data"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add institution" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows persisted source rows without canonical links as unmapped", async () => {
+    const persistedWorkspace = emptyWorkspace();
+    persistedWorkspace.sourceRows = [
+      {
+        id: "source-unmapped",
+        organizationId: tenant.orgId,
+        caseId: "case-1",
+        documentId: "document-1",
+        documentExtractionId: "extraction-1",
+        rowIndex: 12,
+        locator: { sheet: "Debt", cell: "A12" },
+        rawPayload: { principal: "500000" },
+        createdAt: new Date("2026-07-13T12:00:00Z"),
+      },
+    ];
+    vi.spyOn(financialReviewClient, "workspace").mockResolvedValue(
+      persistedWorkspace,
+    );
+
+    renderWithQuery(
+      <FinancialTab tenant={tenant} caseId="case-1" mockWorkspace={false} />,
+    );
+
+    const unmapped = await screen.findByLabelText("Unmapped source rows");
+    expect(within(unmapped).getByText(/Row 12/)).toBeInTheDocument();
+    expect(within(unmapped).getByText(/500000/)).toBeInTheDocument();
   });
 });
