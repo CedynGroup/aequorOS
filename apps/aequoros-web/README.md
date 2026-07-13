@@ -34,24 +34,20 @@ affected field, inspect source-row metadata and raw values, and review the
 manual edit audit history. Source rows without canonical record links remain
 listed for review after refreshes and navigation.
 
-Institutions, accounts, reporting periods, balances, obligations, and covenants
-support inline correction and manual entry. Every change requires a non-empty
-reason, and a successful mutation immediately applies the validation state
-returned by the API before refreshing the workspace. Failed submissions retain
-their inputs and can be retried; a failed refresh after a successful mutation
-can be retried without submitting the mutation again.
+Institutions, accounts, reporting periods, balances, cash flows, obligations,
+and covenants support inline correction and manual entry. Every change requires
+a non-empty reason, and a successful mutation immediately applies the validation
+state returned by the API before refreshing the workspace. Failed submissions
+retain their inputs and can be retried; a failed refresh after a successful
+mutation can be retried without submitting the mutation again.
 
 Account and obligation statuses are limited to the generated contract values.
 Covenant compliance can be set explicitly or left on automatic recalculation;
 automatic recalculation omits the compliance status so the backend derives it
 from the covenant inputs.
 
-Cash flows are read-only because their generated create and update contracts do
-not yet require a reason or return refreshed validation. Add cash-flow editing
-only after those contracts provide the same audit and validation guarantees as
-the other canonical resources. When frontend demo mode is active, the entire
-financial workspace is read-only, including backend-loaded records, mapping,
-and revalidation.
+When frontend demo mode is active, the entire financial workspace is read-only,
+including backend-loaded records, mapping, and revalidation.
 
 ## Checks
 

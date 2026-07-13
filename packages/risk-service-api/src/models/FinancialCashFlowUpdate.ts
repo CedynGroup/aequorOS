@@ -13,6 +13,49 @@
  */
 
 import { mapValues } from "../runtime";
+import type { FinancialAccountUpdateMetadata } from "./FinancialAccountUpdateMetadata";
+import {
+  FinancialAccountUpdateMetadataFromJSON,
+  FinancialAccountUpdateMetadataFromJSONTyped,
+  FinancialAccountUpdateMetadataToJSON,
+  FinancialAccountUpdateMetadataToJSONTyped,
+} from "./FinancialAccountUpdateMetadata";
+import type { AccountId } from "./AccountId";
+import {
+  AccountIdFromJSON,
+  AccountIdFromJSONTyped,
+  AccountIdToJSON,
+  AccountIdToJSONTyped,
+} from "./AccountId";
+import type { FinancialAmount } from "./FinancialAmount";
+import {
+  FinancialAmountFromJSON,
+  FinancialAmountFromJSONTyped,
+  FinancialAmountToJSON,
+  FinancialAmountToJSONTyped,
+} from "./FinancialAmount";
+import type { CashFlowDate } from "./CashFlowDate";
+import {
+  CashFlowDateFromJSON,
+  CashFlowDateFromJSONTyped,
+  CashFlowDateToJSON,
+  CashFlowDateToJSONTyped,
+} from "./CashFlowDate";
+import type { ReportingPeriodId } from "./ReportingPeriodId";
+import {
+  ReportingPeriodIdFromJSON,
+  ReportingPeriodIdFromJSONTyped,
+  ReportingPeriodIdToJSON,
+  ReportingPeriodIdToJSONTyped,
+} from "./ReportingPeriodId";
+import type { FinancialAccountCreateCurrency } from "./FinancialAccountCreateCurrency";
+import {
+  FinancialAccountCreateCurrencyFromJSON,
+  FinancialAccountCreateCurrencyFromJSONTyped,
+  FinancialAccountCreateCurrencyToJSON,
+  FinancialAccountCreateCurrencyToJSONTyped,
+} from "./FinancialAccountCreateCurrency";
+
 /**
  *
  * @export
@@ -21,59 +64,69 @@ import { mapValues } from "../runtime";
 export interface FinancialCashFlowUpdate {
   /**
    *
-   * @type {string}
+   * @type {AccountId}
    * @memberof FinancialCashFlowUpdate
    */
-  accountId?: string | null;
+  accountId?: AccountId;
+  /**
+   *
+   * @type {FinancialAmount}
+   * @memberof FinancialCashFlowUpdate
+   */
+  amount?: FinancialAmount;
+  /**
+   *
+   * @type {CashFlowDate}
+   * @memberof FinancialCashFlowUpdate
+   */
+  cashFlowDate?: CashFlowDate;
   /**
    *
    * @type {string}
    * @memberof FinancialCashFlowUpdate
    */
-  amount?: string | null;
+  category?: string;
   /**
    *
-   * @type {Date}
+   * @type {FinancialAccountCreateCurrency}
    * @memberof FinancialCashFlowUpdate
    */
-  cashFlowDate?: Date | null;
-  /**
-   *
-   * @type {string}
-   * @memberof FinancialCashFlowUpdate
-   */
-  category?: string | null;
+  currency?: FinancialAccountCreateCurrency;
   /**
    *
    * @type {string}
    * @memberof FinancialCashFlowUpdate
    */
-  currency?: string | null;
+  direction?: FinancialCashFlowUpdateDirectionEnum;
+  /**
+   *
+   * @type {FinancialAccountUpdateMetadata}
+   * @memberof FinancialCashFlowUpdate
+   */
+  metadata?: FinancialAccountUpdateMetadata;
   /**
    *
    * @type {string}
    * @memberof FinancialCashFlowUpdate
    */
-  direction?: string | null;
+  reason: string;
   /**
    *
-   * @type {{ [key: string]: any; }}
+   * @type {ReportingPeriodId}
    * @memberof FinancialCashFlowUpdate
    */
-  metadata?: { [key: string]: any };
-  /**
-   *
-   * @type {string}
-   * @memberof FinancialCashFlowUpdate
-   */
-  reason?: string | null;
-  /**
-   *
-   * @type {string}
-   * @memberof FinancialCashFlowUpdate
-   */
-  reportingPeriodId?: string | null;
+  reportingPeriodId?: ReportingPeriodId;
 }
+
+/**
+ * @export
+ */
+export const FinancialCashFlowUpdateDirectionEnum = {
+  Inflow: "inflow",
+  Outflow: "outflow",
+} as const;
+export type FinancialCashFlowUpdateDirectionEnum =
+  (typeof FinancialCashFlowUpdateDirectionEnum)[keyof typeof FinancialCashFlowUpdateDirectionEnum];
 
 /**
  * Check if a given object implements the FinancialCashFlowUpdate interface.
@@ -81,6 +134,7 @@ export interface FinancialCashFlowUpdate {
 export function instanceOfFinancialCashFlowUpdate(
   value: object,
 ): value is FinancialCashFlowUpdate {
+  if (!("reason" in value) || value["reason"] === undefined) return false;
   return true;
 }
 
@@ -98,21 +152,34 @@ export function FinancialCashFlowUpdateFromJSONTyped(
     return json;
   }
   return {
-    accountId: json["account_id"] == null ? undefined : json["account_id"],
-    amount: json["amount"] == null ? undefined : json["amount"],
+    ...json,
+    accountId:
+      json["account_id"] == null
+        ? undefined
+        : AccountIdFromJSON(json["account_id"]),
+    amount:
+      json["amount"] == null
+        ? undefined
+        : FinancialAmountFromJSON(json["amount"]),
     cashFlowDate:
       json["cash_flow_date"] == null
         ? undefined
-        : new Date(json["cash_flow_date"]),
+        : CashFlowDateFromJSON(json["cash_flow_date"]),
     category: json["category"] == null ? undefined : json["category"],
-    currency: json["currency"] == null ? undefined : json["currency"],
+    currency:
+      json["currency"] == null
+        ? undefined
+        : FinancialAccountCreateCurrencyFromJSON(json["currency"]),
     direction: json["direction"] == null ? undefined : json["direction"],
-    metadata: json["metadata"] == null ? undefined : json["metadata"],
-    reason: json["reason"] == null ? undefined : json["reason"],
+    metadata:
+      json["metadata"] == null
+        ? undefined
+        : FinancialAccountUpdateMetadataFromJSON(json["metadata"]),
+    reason: json["reason"],
     reportingPeriodId:
       json["reporting_period_id"] == null
         ? undefined
-        : json["reporting_period_id"],
+        : ReportingPeriodIdFromJSON(json["reporting_period_id"]),
   };
 }
 
@@ -131,17 +198,14 @@ export function FinancialCashFlowUpdateToJSONTyped(
   }
 
   return {
-    account_id: value["accountId"],
-    amount: value["amount"],
-    cash_flow_date:
-      value["cashFlowDate"] == null
-        ? undefined
-        : (value["cashFlowDate"] as any).toISOString().substring(0, 10),
+    account_id: AccountIdToJSON(value["accountId"]),
+    amount: FinancialAmountToJSON(value["amount"]),
+    cash_flow_date: CashFlowDateToJSON(value["cashFlowDate"]),
     category: value["category"],
-    currency: value["currency"],
+    currency: FinancialAccountCreateCurrencyToJSON(value["currency"]),
     direction: value["direction"],
-    metadata: value["metadata"],
+    metadata: FinancialAccountUpdateMetadataToJSON(value["metadata"]),
     reason: value["reason"],
-    reporting_period_id: value["reportingPeriodId"],
+    reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),
   };
 }

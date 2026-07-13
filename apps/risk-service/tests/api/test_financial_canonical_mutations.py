@@ -8,7 +8,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.db.session import get_sessionmaker
-from app.models import AuditEvent, FinancialInstitution, FinancialManualEditHistory
+from app.models import (
+    AuditEvent,
+    FinancialCashFlow,
+    FinancialInstitution,
+    FinancialManualEditHistory,
+)
 from tests.api.factories import CaseFactory
 from tests.api.helpers import ORG_1, ORG_2, headers
 
@@ -497,6 +502,47 @@ def test_mutation_rolls_back_when_validation_refresh_fails(
                 select(FinancialManualEditHistory).where(
                     FinancialManualEditHistory.case_id == case.id,
                     FinancialManualEditHistory.reason == "manual",
+                )
+            )
+            is None
+        )
+
+
+def test_cash_flow_mutation_rolls_back_when_validation_refresh_fails(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = CaseFactory(db_client).create()
+
+    def fail_validation(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("validation refresh failed")
+
+    monkeypatch.setattr(
+        "app.services.financial_canonical_edits.validate_financial_data",
+        fail_validation,
+    )
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/cash-flows",
+        headers=headers(),
+        json={
+            "amount": "1000",
+            "direction": "inflow",
+            "category": "deposit",
+            "reason": "atomic manual entry",
+        },
+    )
+
+    assert response.status_code == 500
+    with get_sessionmaker()() as session:
+        assert (
+            session.scalar(select(FinancialCashFlow).where(FinancialCashFlow.case_id == case.id))
+            is None
+        )
+        assert (
+            session.scalar(
+                select(FinancialManualEditHistory).where(
+                    FinancialManualEditHistory.case_id == case.id,
+                    FinancialManualEditHistory.reason == "atomic manual entry",
                 )
             )
             is None

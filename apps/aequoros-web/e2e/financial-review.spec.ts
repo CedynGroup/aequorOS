@@ -18,6 +18,8 @@ type MockState = {
   correctionAttempts: number;
   covenantAdded: boolean;
   mappingComplete: boolean;
+  cashFlows: ReturnType<typeof cashFlowJson>[];
+  cashFlowCorrectionAttempts: number;
 };
 
 function issueJson() {
@@ -57,6 +59,35 @@ function institutionJson(name: string) {
   };
 }
 
+function cashFlowJson(
+  id = "cash-flow-1",
+  values: Partial<{
+    cash_flow_date: string | null;
+    amount: string;
+    currency: string | null;
+    direction: string;
+    category: string;
+    metadata: Record<string, unknown>;
+  }> = {},
+) {
+  return {
+    id,
+    organization_id: demoTenant.orgId,
+    case_id: northstarCase.id,
+    account_id: null,
+    reporting_period_id: null,
+    cash_flow_date: "2026-06-30" as string | null,
+    amount: "1250.00",
+    currency: "USD" as string | null,
+    direction: "inflow",
+    category: "receipts",
+    metadata: {},
+    created_at: now,
+    updated_at: now,
+    ...values,
+  };
+}
+
 function validationJson(issueActive: boolean) {
   return {
     organization_id: demoTenant.orgId,
@@ -80,23 +111,7 @@ function workspaceJson(state: MockState) {
     accounts: [],
     reporting_periods: [],
     balances: [],
-    cash_flows: [
-      {
-        id: "cash-flow-1",
-        organization_id: demoTenant.orgId,
-        case_id: northstarCase.id,
-        account_id: null,
-        reporting_period_id: null,
-        cash_flow_date: "2026-06-30",
-        amount: "1250.00",
-        currency: "USD",
-        direction: "inflow",
-        category: "receipts",
-        metadata: {},
-        created_at: now,
-        updated_at: now,
-      },
-    ],
+    cash_flows: state.cashFlows,
     covenants: state.covenantAdded ? [covenantJson()] : [],
     obligations: [],
     source_rows: [
@@ -137,6 +152,19 @@ function workspaceJson(state: MockState) {
         field_name: "name",
         source_row_id: "source-1",
         source_field: "name",
+        confidence: "high",
+        metadata: {},
+        created_at: now,
+      },
+      {
+        id: "link-cash-flow",
+        organization_id: demoTenant.orgId,
+        case_id: northstarCase.id,
+        record_table: "financial_cash_flows",
+        record_id: "cash-flow-1",
+        field_name: "amount",
+        source_row_id: "source-1",
+        source_field: "amount",
         confidence: "high",
         metadata: {},
         created_at: now,
@@ -184,6 +212,8 @@ async function installFinancialBackend(page: Page) {
     correctionAttempts: 0,
     covenantAdded: false,
     mappingComplete: false,
+    cashFlows: [cashFlowJson()],
+    cashFlowCorrectionAttempts: 0,
   };
 
   await page.route("http://127.0.0.1:8003/api/v1/**", async (route) => {
@@ -291,6 +321,59 @@ async function installFinancialBackend(page: Page) {
     }
     if (
       path ===
+        `/api/v1/cases/${northstarCase.id}/financial-workspace/cash-flows` &&
+      method === "POST"
+    ) {
+      const payload = request.postDataJSON() as Record<string, string>;
+      expect(payload.reason).toBe("Add missing supplier payment");
+      const created = cashFlowJson("cash-flow-2", {
+        cash_flow_date: payload.cash_flow_date,
+        amount: payload.amount,
+        currency: payload.currency,
+        direction: payload.direction,
+        category: payload.category,
+        metadata: { provenance: "manual" },
+      });
+      state.cashFlows.push(created);
+      return json(route, {
+        record: created,
+        validation: validationJson(state.issueActive),
+      });
+    }
+    if (
+      path ===
+        `/api/v1/cases/${northstarCase.id}/financial-workspace/cash-flows/cash-flow-1` &&
+      method === "PATCH"
+    ) {
+      state.cashFlowCorrectionAttempts += 1;
+      if (state.cashFlowCorrectionAttempts === 1)
+        return json(
+          route,
+          {
+            error: {
+              code: "temporary_failure",
+              message: "Temporary cash-flow mutation failure",
+              details: {},
+            },
+          },
+          503,
+        );
+      const payload = request.postDataJSON() as Record<string, string | null>;
+      expect(payload.reason).toBe("Correct cash-flow statement values");
+      expect(payload.cash_flow_date).toBeNull();
+      state.cashFlows[0] = cashFlowJson("cash-flow-1", {
+        cash_flow_date: null,
+        amount: String(payload.amount),
+        currency: "USD",
+        metadata: { provenance: "corrected" },
+      });
+      return json(route, {
+        record: state.cashFlows[0],
+        validation: validationJson(state.issueActive),
+      });
+    }
+    if (
+      path ===
         `/api/v1/cases/${northstarCase.id}/financial-workspace/covenants/covenant-1` &&
       method === "PATCH"
     ) {
@@ -393,13 +476,16 @@ test("reviews validation and drills into mapped source metadata", async ({
       "#financial-financial_institutions-71000000-0000-4000-8000-000000000001-name",
     ),
   ).toBeFocused();
-  await page.getByRole("button", { name: "Source (1)" }).click();
+  await page
+    .locator("#financial-section-financial_institutions")
+    .getByRole("button", { name: "Source (1)" })
+    .click();
   await expect(page.getByLabel("Source traceability")).toContainText("row 4");
   await expect(page.getByLabel("Source traceability")).toContainText(
     "Balance Sheet",
   );
   await expect(
-    page.getByText(/intentionally keeps cash flows read-only/),
+    page.getByRole("button", { name: "Add cash flow" }),
   ).toBeVisible();
   await captureEvidence(page, "financial-review-source-traceability");
 
@@ -412,6 +498,47 @@ test("reviews validation and drills into mapped source metadata", async ({
     page.getByRole("button", { name: "Add institution" }),
   ).not.toBeVisible();
   await captureEvidence(page, "financial-review-demo-read-only");
+});
+
+test("creates and corrects cash flows with validation refresh, retry, and traceability", async ({
+  page,
+}) => {
+  await page.goto(`/cases/${northstarCase.id}?tab=financial&archived=false`);
+  const section = page.locator("#financial-section-financial_cash_flows");
+
+  await section.getByRole("button", { name: "Add cash flow" }).click();
+  const addForm = section.getByRole("form", { name: "Add cash flow" });
+  await addForm.getByLabel("Date").fill("2026-07-01");
+  await addForm.getByLabel("Amount").fill("2750");
+  await addForm.getByLabel("Currency").fill("USD");
+  await addForm.getByLabel("Direction").selectOption("outflow");
+  await addForm.getByLabel("Category").fill("supplier payment");
+  await addForm.getByLabel("Reason").fill("Add missing supplier payment");
+  await addForm.getByRole("button", { name: "Add cash flow" }).click();
+  await expect(page.getByText(/Added cash flow/)).toBeVisible();
+  await expect(section.getByText("supplier payment")).toBeVisible();
+
+  await section.getByRole("button", { name: "Edit" }).first().click();
+  const editForm = section.getByRole("form", { name: "Edit cash flow" });
+  await editForm.getByLabel("Date").fill("");
+  await editForm.getByLabel("Amount").fill("1500");
+  await editForm
+    .getByLabel("Reason")
+    .fill("Correct cash-flow statement values");
+  await editForm.getByRole("button", { name: "Save correction" }).click();
+  await expect(
+    editForm.getByText(/Temporary cash-flow mutation failure/),
+  ).toBeVisible();
+  await expect(editForm.getByLabel("Amount")).toHaveValue("1500");
+  await editForm.getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByText(/Saved cash flow correction/)).toBeVisible();
+  await expect(section.getByText("1500")).toBeVisible();
+
+  await section.getByRole("button", { name: "Source (1)" }).click();
+  await expect(section.getByLabel("Source traceability")).toContainText(
+    "Mapped field",
+  );
+  await captureEvidence(page, "financial-review-cash-flow-mutations");
 });
 
 test("uploads, maps, validates, retries correction, revalidates, and manually adds a covenant", async ({
@@ -444,7 +571,10 @@ test("uploads, maps, validates, retries correction, revalidates, and manually ad
   await page.getByRole("button", { name: "Revalidate" }).click();
   await expect(page.getByText(/Validation refreshed: 1 issues/)).toBeVisible();
 
-  await page.getByRole("button", { name: "Edit" }).click();
+  await page
+    .locator("#financial-section-financial_institutions")
+    .getByRole("button", { name: "Edit" })
+    .click();
   const editForm = page.getByRole("form", { name: "Edit institution" });
   await editForm.getByLabel("Name").fill("Northstar Commercial Bank");
   await editForm

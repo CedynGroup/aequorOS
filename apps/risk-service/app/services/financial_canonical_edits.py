@@ -568,6 +568,12 @@ def validate_and_commit(
     try:
         validation = validate_financial_data(db, ctx, case_id, commit=False)
         commit_or_conflict(db, conflict_message)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=conflict_message,
+        ) from exc
     except Exception:
         db.rollback()
         raise

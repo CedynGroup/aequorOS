@@ -1791,7 +1791,7 @@
           "account_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
               },
               {
                 "type": "null"
@@ -1998,7 +1998,7 @@
           "account_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
               },
               {
                 "type": "null"
@@ -2106,7 +2106,7 @@
             "title": "As Of Date"
           },
           "balance_type": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
           },
           "currency": {
             "anyOf": [
@@ -2297,7 +2297,7 @@
             "title": "As Of Date"
           },
           "balance_type": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2",
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1",
             "default": ""
           },
           "currency": {
@@ -2343,6 +2343,7 @@
         "type": "object"
       },
       "FinancialCashFlowCreate": {
+        "additionalProperties": false,
         "properties": {
           "account_id": {
             "anyOf": [
@@ -2357,9 +2358,7 @@
             "title": "Account Id"
           },
           "amount": {
-            "minLength": 1,
-            "title": "Amount",
-            "type": "string"
+            "$ref": "#/components/schemas/FinancialAmount"
           },
           "cash_flow_date": {
             "anyOf": [
@@ -2374,26 +2373,31 @@
             "title": "Cash Flow Date"
           },
           "category": {
-            "title": "Category",
-            "type": "string"
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
           },
           "currency": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/FinancialCurrency"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Currency"
+            ]
           },
           "direction": {
+            "enum": [
+              "inflow",
+              "outflow"
+            ],
             "title": "Direction",
             "type": "string"
           },
           "metadata": {
             "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
           },
           "reporting_period_id": {
             "anyOf": [
@@ -2409,11 +2413,28 @@
           }
         },
         "required": [
+          "reason",
           "amount",
           "direction",
           "category"
         ],
         "title": "FinancialCashFlowCreate",
+        "type": "object"
+      },
+      "FinancialCashFlowMutationResponse": {
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/FinancialCashFlowRead"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/FinancialValidationRunResponse"
+          }
+        },
+        "required": [
+          "record",
+          "validation"
+        ],
+        "title": "FinancialCashFlowMutationResponse",
         "type": "object"
       },
       "FinancialCashFlowRead": {
@@ -2526,6 +2547,7 @@
         "type": "object"
       },
       "FinancialCashFlowUpdate": {
+        "additionalProperties": false,
         "properties": {
           "account_id": {
             "anyOf": [
@@ -2540,16 +2562,8 @@
             "title": "Account Id"
           },
           "amount": {
-            "anyOf": [
-              {
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Amount"
+            "$ref": "#/components/schemas/FinancialAmount",
+            "default": "0"
           },
           "cash_flow_date": {
             "anyOf": [
@@ -2564,37 +2578,27 @@
             "title": "Cash Flow Date"
           },
           "category": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Category"
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1",
+            "default": ""
           },
           "currency": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/FinancialCurrency"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Currency"
+            ]
           },
           "direction": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "default": "inflow",
+            "enum": [
+              "inflow",
+              "outflow"
             ],
-            "title": "Direction"
+            "title": "Direction",
+            "type": "string"
           },
           "metadata": {
             "anyOf": [
@@ -2607,15 +2611,7 @@
             ]
           },
           "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
+            "$ref": "#/components/schemas/FinancialMutationReason"
           },
           "reporting_period_id": {
             "anyOf": [
@@ -2630,6 +2626,9 @@
             "title": "Reporting Period Id"
           }
         },
+        "required": [
+          "reason"
+        ],
         "title": "FinancialCashFlowUpdate",
         "type": "object"
       },
@@ -2679,7 +2678,7 @@
             "$ref": "#/components/schemas/JsonObject-Input"
           },
           "metric": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
           },
           "name": {
             "minLength": 1,
@@ -2896,7 +2895,7 @@
             "$ref": "#/components/schemas/JsonObject-Input"
           },
           "metric": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2",
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1",
             "default": ""
           },
           "name": {
@@ -3076,7 +3075,7 @@
           "institution_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
               },
               {
                 "type": "null"
@@ -3097,7 +3096,7 @@
           "reference_code": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
               },
               {
                 "type": "null"
@@ -3205,7 +3204,7 @@
           "institution_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
               },
               {
                 "type": "null"
@@ -3234,7 +3233,7 @@
           "reference_code": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
               },
               {
                 "type": "null"
@@ -3365,7 +3364,7 @@
           "facility_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
               },
               {
                 "type": "null"
@@ -3407,7 +3406,7 @@
             "title": "Maturity Date"
           },
           "obligation_type": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
           },
           "outstanding_amount": {
             "anyOf": [
@@ -3724,7 +3723,7 @@
           "facility_type": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
               },
               {
                 "type": "null"
@@ -3766,7 +3765,7 @@
             "title": "Maturity Date"
           },
           "obligation_type": {
-            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2",
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1",
             "default": ""
           },
           "outstanding_amount": {
@@ -6447,11 +6446,11 @@
       },
       "app__schemas__financial_workspace__FinancialString120__1": {
         "maxLength": 120,
+        "minLength": 1,
         "type": "string"
       },
       "app__schemas__financial_workspace__FinancialString120__2": {
         "maxLength": 120,
-        "minLength": 1,
         "type": "string"
       }
     }
@@ -9920,6 +9919,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/cash-flows": {
       "post": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "createCaseFinancialCashFlow",
         "parameters": [
           {
@@ -9944,17 +9944,10 @@
           {
             "in": "header",
             "name": "X-User-Id",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
+              "title": "X-User-Id",
+              "type": "string"
             }
           }
         ],
@@ -9973,7 +9966,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FinancialCashFlowRead"
+                  "$ref": "#/components/schemas/FinancialCashFlowMutationResponse"
                 }
               }
             },
@@ -10048,6 +10041,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/cash-flows/{cash_flow_id}": {
       "patch": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "updateCaseFinancialCashFlow",
         "parameters": [
           {
@@ -10082,17 +10076,10 @@
           {
             "in": "header",
             "name": "X-User-Id",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
+              "title": "X-User-Id",
+              "type": "string"
             }
           }
         ],
@@ -10111,7 +10098,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FinancialCashFlowRead"
+                  "$ref": "#/components/schemas/FinancialCashFlowMutationResponse"
                 }
               }
             },

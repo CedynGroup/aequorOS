@@ -173,6 +173,7 @@ def test_canonical_mutation_contracts_use_resource_specific_allowlisted_paths(
         "accounts": "FinancialAccount",
         "reporting-periods": "FinancialReportingPeriod",
         "balances": "FinancialBalance",
+        "cash-flows": "FinancialCashFlow",
         "obligations": "FinancialObligation",
         "covenants": "FinancialCovenant",
     }

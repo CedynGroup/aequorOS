@@ -3,12 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -16,20 +15,30 @@ from app.db.base import utc_now
 from app.models import (
     FinancialAccount,
     FinancialCashFlow,
-    FinancialManualEditHistory,
     FinancialReportingPeriod,
     FinancialValidationIssue,
 )
 from app.schemas.common import JsonObject
-from app.schemas.financial_workspace import FinancialCashFlowCreate, FinancialCashFlowUpdate
-from app.services.cases import get_case_or_404
+from app.schemas.financial_workspace import (
+    FinancialCashFlowCreate,
+    FinancialCashFlowMutationResponse,
+    FinancialCashFlowUpdate,
+)
+from app.services.financial_canonical_edits import (
+    bad_request,
+    create_record,
+    manual_metadata,
+    payload_values,
+    update_record,
+    validate_link,
+)
 from app.services.financial_mapping.normalization import (
     normalize_currency,
     normalize_text,
     parse_decimal,
     string_value,
 )
-from app.services.financial_mapping.upserts import canonical_dedupe_key, get_or_create_cash_flow
+from app.services.financial_mapping.upserts import canonical_dedupe_key
 
 VALID_DIRECTIONS = {"inflow", "outflow"}
 CASH_FLOW_RECORD_TABLE = "financial_cash_flows"
@@ -70,38 +79,36 @@ def create_cash_flow(
     ctx: TenantContext,
     case_id: UUID,
     payload: FinancialCashFlowCreate,
-) -> FinancialCashFlow:
-    case = get_case_or_404(db, ctx.organization_id, case_id)
-    values = validated_cash_flow_values(
-        amount=payload.amount,
-        direction=payload.direction,
-        category=payload.category,
-        currency=payload.currency,
+) -> FinancialCashFlowMutationResponse:
+    values, reason = payload_values(payload, exclude_unset=True)
+    normalized = validated_cash_flow_values(
+        amount=values["amount"],
+        direction=values["direction"],
+        category=values["category"],
+        currency=values.get("currency"),
     )
-    validate_optional_links(
-        db,
-        ctx,
-        case.id,
-        account_id=payload.account_id,
-        reporting_period_id=payload.reporting_period_id,
+    validate_links(db, ctx, case_id, values)
+    values.update(
+        amount=normalized.amount,
+        currency=normalized.currency,
+        direction=normalized.direction,
+        category=normalized.category,
     )
-    cash_flow, _created = get_or_create_cash_flow(
-        db,
-        ctx,
-        case.id,
-        account_id=payload.account_id,
-        reporting_period_id=payload.reporting_period_id,
-        cash_flow_date=payload.cash_flow_date,
-        amount=values.amount,
-        currency=values.currency,
-        direction=values.direction,
-        category=values.category,
-        metadata=payload.metadata,
+    values["metadata_"] = manual_metadata(values.pop("metadata", {}), "manual")
+    values["dedupe_key"] = cash_flow_dedupe(values)
+    return cast(
+        FinancialCashFlowMutationResponse,
+        create_record(
+            db,
+            ctx,
+            case_id,
+            FinancialCashFlow,
+            CASH_FLOW_RECORD_TABLE,
+            values,
+            reason,
+            FinancialCashFlowMutationResponse,
+        ),
     )
-    reconcile_cash_flow_review_issues(db, ctx, cash_flow)
-    db.commit()
-    db.refresh(cash_flow)
-    return cash_flow
 
 
 def update_cash_flow(
@@ -110,117 +117,46 @@ def update_cash_flow(
     case_id: UUID,
     cash_flow_id: UUID,
     payload: FinancialCashFlowUpdate,
-) -> FinancialCashFlow:
-    get_case_or_404(db, ctx.organization_id, case_id)
-    cash_flow = get_cash_flow_or_404(db, ctx, case_id, cash_flow_id)
-
+) -> FinancialCashFlowMutationResponse:
     updates = payload.model_dump(exclude_unset=True)
-    reason = updates.pop("reason", None)
+    reason = updates.pop("reason")
     if "amount" in updates and updates["amount"] is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cash-flow amount is required.",
-        )
+        bad_request("Cash-flow amount is required.")
     if "direction" in updates and updates["direction"] is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cash-flow direction is required.",
-        )
+        bad_request("Cash-flow direction is required.")
     if "category" in updates and updates["category"] is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cash-flow category is required.",
-        )
-
-    next_amount = updates.get("amount", cash_flow.amount)
-    next_direction = updates.get("direction", cash_flow.direction)
-    next_category = updates.get("category", cash_flow.category)
-    next_currency = updates.get("currency", cash_flow.currency)
-    values = validated_cash_flow_values(
-        amount=next_amount,
-        direction=next_direction,
-        category=next_category,
-        currency=next_currency,
+        bad_request("Cash-flow category is required.")
+    validate_links(db, ctx, case_id, updates)
+    if "amount" in updates:
+        amount = parse_decimal(updates["amount"])
+        if amount is None or amount <= 0:
+            bad_request("Cash-flow amount must be greater than zero.")
+        updates["amount"] = amount
+    if "currency" in updates and updates["currency"] is not None:
+        currency = normalize_currency(updates["currency"])
+        if currency is None:
+            bad_request("Cash-flow currency must be a 3-letter uppercase code.")
+        updates["currency"] = currency
+    if "category" in updates:
+        category = normalize_category(updates["category"])
+        if category is None:
+            bad_request("Cash-flow category is required.")
+        updates["category"] = category
+    return cast(
+        FinancialCashFlowMutationResponse,
+        update_record(
+            db,
+            ctx,
+            case_id,
+            cash_flow_id,
+            FinancialCashFlow,
+            CASH_FLOW_RECORD_TABLE,
+            updates,
+            reason,
+            cash_flow_dedupe,
+            FinancialCashFlowMutationResponse,
+        ),
     )
-    account_id = updates.get("account_id", cash_flow.account_id)
-    reporting_period_id = updates.get("reporting_period_id", cash_flow.reporting_period_id)
-    validate_optional_links(
-        db,
-        ctx,
-        case_id,
-        account_id=account_id,
-        reporting_period_id=reporting_period_id,
-    )
-
-    normalized_updates = {
-        **updates,
-        "amount": values.amount,
-        "currency": values.currency,
-        "direction": values.direction,
-        "category": values.category,
-    }
-    for field_name, new_value in normalized_updates.items():
-        model_field_name = "metadata_" if field_name == "metadata" else field_name
-        normalized_new_value = {} if field_name == "metadata" and new_value is None else new_value
-        previous_value = getattr(cash_flow, model_field_name)
-        if previous_value == normalized_new_value:
-            continue
-        setattr(cash_flow, model_field_name, normalized_new_value)
-        db.add(
-            FinancialManualEditHistory(
-                organization_id=ctx.organization_id,
-                case_id=case_id,
-                record_table=CASH_FLOW_RECORD_TABLE,
-                record_id=cash_flow.id,
-                field_name=field_name,
-                previous_value=jsonable_encoder(previous_value),
-                new_value=jsonable_encoder(normalized_new_value),
-                edited_by=ctx.actor_user_id,
-                reason=reason,
-            )
-        )
-
-    cash_flow.dedupe_key = canonical_dedupe_key(
-        "cash_flow",
-        [
-            cash_flow.account_id,
-            cash_flow.reporting_period_id,
-            cash_flow.cash_flow_date,
-            cash_flow.direction,
-            cash_flow.category,
-            cash_flow.amount,
-            cash_flow.currency,
-        ],
-    )
-    reconcile_cash_flow_review_issues(db, ctx, cash_flow)
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cash-flow correction conflicts with an existing record.",
-        ) from exc
-    db.refresh(cash_flow)
-    return cash_flow
-
-
-def get_cash_flow_or_404(
-    db: Session, ctx: TenantContext, case_id: UUID, cash_flow_id: UUID
-) -> FinancialCashFlow:
-    cash_flow = db.scalar(
-        select(FinancialCashFlow).where(
-            FinancialCashFlow.id == cash_flow_id,
-            FinancialCashFlow.organization_id == ctx.organization_id,
-            FinancialCashFlow.case_id == case_id,
-        )
-    )
-    if cash_flow is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cash flow not found.",
-        )
-    return cash_flow
 
 
 @dataclass(frozen=True)
@@ -295,37 +231,38 @@ def normalize_category(value: object) -> str | None:
     return normalized or None
 
 
-def validate_optional_links(
+def validate_links(
     db: Session,
     ctx: TenantContext,
     case_id: UUID,
-    *,
-    account_id: UUID | None,
-    reporting_period_id: UUID | None,
+    values: dict[str, Any],
 ) -> None:
-    if account_id is not None:
-        account = db.scalar(
-            select(FinancialAccount.id).where(
-                FinancialAccount.id == account_id,
-                FinancialAccount.organization_id == ctx.organization_id,
-                FinancialAccount.case_id == case_id,
-            )
+    if "account_id" in values:
+        validate_link(db, ctx, case_id, FinancialAccount, values["account_id"], "Account")
+    if "reporting_period_id" in values:
+        validate_link(
+            db,
+            ctx,
+            case_id,
+            FinancialReportingPeriod,
+            values["reporting_period_id"],
+            "Reporting period",
         )
-        if account is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
-    if reporting_period_id is not None:
-        reporting_period = db.scalar(
-            select(FinancialReportingPeriod.id).where(
-                FinancialReportingPeriod.id == reporting_period_id,
-                FinancialReportingPeriod.organization_id == ctx.organization_id,
-                FinancialReportingPeriod.case_id == case_id,
-            )
-        )
-        if reporting_period is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Reporting period not found.",
-            )
+
+
+def cash_flow_dedupe(values: dict[str, Any]) -> str:
+    return canonical_dedupe_key(
+        "cash_flow",
+        [
+            values.get("account_id"),
+            values.get("reporting_period_id"),
+            values.get("cash_flow_date"),
+            values.get("direction"),
+            normalize_text(values.get("category")),
+            values.get("amount"),
+            values.get("currency"),
+        ],
+    )
 
 
 def reconcile_cash_flow_review_issues(
@@ -354,7 +291,6 @@ def reconcile_cash_flow_review_issues(
         )
     )
     open_by_rule = {(issue.rule_id, issue.field_name): issue for issue in open_issues}
-
     for rule_id, rule in violated_rules.items():
         if (rule_id, rule.field_name) in open_by_rule:
             continue
@@ -373,7 +309,6 @@ def reconcile_cash_flow_review_issues(
                 details=rule.details,
             )
         )
-
     now = utc_now()
     for issue in open_issues:
         if issue.rule_id not in violated_rules:

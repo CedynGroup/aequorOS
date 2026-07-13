@@ -6,7 +6,6 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import DbSession, MutationTenant, Tenant
-from app.models import FinancialCashFlow
 from app.schemas.financial_workspace import (
     FinancialAccountCreate,
     FinancialAccountMutationResponse,
@@ -15,7 +14,7 @@ from app.schemas.financial_workspace import (
     FinancialBalanceMutationResponse,
     FinancialBalanceUpdate,
     FinancialCashFlowCreate,
-    FinancialCashFlowRead,
+    FinancialCashFlowMutationResponse,
     FinancialCashFlowUpdate,
     FinancialCovenantCreate,
     FinancialCovenantMutationResponse,
@@ -120,28 +119,30 @@ def list_case_financial_validation_issues(
 
 @router.post(
     "/cases/{case_id}/financial-workspace/cash-flows",
-    response_model=FinancialCashFlowRead,
+    response_model=FinancialCashFlowMutationResponse,
+    description=MUTATION_DESCRIPTION,
 )
 def create_case_financial_cash_flow(
     case_id: UUID,
     payload: FinancialCashFlowCreate,
     db: DbSession,
-    ctx: Tenant,
-) -> FinancialCashFlow:
+    ctx: MutationTenant,
+) -> FinancialCashFlowMutationResponse:
     return create_cash_flow(db, ctx, case_id, payload)
 
 
 @router.patch(
     "/cases/{case_id}/financial-workspace/cash-flows/{cash_flow_id}",
-    response_model=FinancialCashFlowRead,
+    response_model=FinancialCashFlowMutationResponse,
+    description=MUTATION_DESCRIPTION,
 )
 def update_case_financial_cash_flow(
     case_id: UUID,
     cash_flow_id: UUID,
     payload: FinancialCashFlowUpdate,
     db: DbSession,
-    ctx: Tenant,
-) -> FinancialCashFlow:
+    ctx: MutationTenant,
+) -> FinancialCashFlowMutationResponse:
     return update_cash_flow(db, ctx, case_id, cash_flow_id, payload)
 
 

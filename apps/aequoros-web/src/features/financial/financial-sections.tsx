@@ -3,6 +3,8 @@ import type {
   FinancialAccountUpdate,
   FinancialBalanceCreate,
   FinancialBalanceUpdate,
+  FinancialCashFlowCreate,
+  FinancialCashFlowUpdate,
   FinancialCovenantCreate,
   FinancialCovenantUpdate,
   FinancialDataWorkspaceRead,
@@ -160,12 +162,18 @@ const sections: SectionConfig[] = [
     table: "financial_cash_flows",
     title: "Cash Flows",
     singular: "cash flow",
+    kind: "cashFlow",
     fields: [
       { key: "cashFlowDate", label: "Date", type: "date" },
-      { key: "amount", type: "number" },
+      { key: "amount", required: true, type: "number" },
       { key: "currency" },
-      { key: "direction" },
-      { key: "category" },
+      {
+        key: "direction",
+        required: true,
+        type: "select",
+        options: ["inflow", "outflow"],
+      },
+      { key: "category", required: true },
       { key: "accountId", label: "Account ID" },
       { key: "reportingPeriodId", label: "Reporting period ID" },
     ],
@@ -516,7 +524,6 @@ function FinancialSection({
             {config.title}
           </h3>
           <Badge>{rows.length} records</Badge>
-          {!config.kind ? <Badge tone="info">Read only</Badge> : null}
         </div>
         {config.kind && !mocked ? (
           <Button
@@ -531,14 +538,6 @@ function FinancialSection({
           </Button>
         ) : null}
       </div>
-
-      {!config.kind ? (
-        <div className="border-b border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
-          Cash-flow mutation contracts do not yet provide required reasons and
-          refreshed validation, so this slice intentionally keeps cash flows
-          read-only.
-        </div>
-      ) : null}
 
       {successMessage ? (
         <output className="block border-b border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
@@ -1167,6 +1166,17 @@ function buildCreatePayload(
         reportingPeriodId: optional(values, "reportingPeriodId"),
         reason,
       } as FinancialBalanceCreate;
+    case "cashFlow":
+      return {
+        cashFlowDate: optionalDate(values, "cashFlowDate"),
+        amount: values.amount,
+        currency: optional(values, "currency"),
+        direction: values.direction,
+        category: values.category,
+        accountId: optional(values, "accountId"),
+        reportingPeriodId: optional(values, "reportingPeriodId"),
+        reason,
+      } as FinancialCashFlowCreate;
     case "obligation":
       return {
         obligationType: values.obligationType,
@@ -1243,6 +1253,17 @@ function buildUpdatePayload(
         reportingPeriodId: changed("reportingPeriodId"),
         reason,
       } as FinancialBalanceUpdate;
+    case "cashFlow":
+      return {
+        cashFlowDate: changed("cashFlowDate"),
+        amount: changed("amount"),
+        currency: changed("currency"),
+        direction: changed("direction"),
+        category: changed("category"),
+        accountId: changed("accountId"),
+        reportingPeriodId: changed("reportingPeriodId"),
+        reason,
+      } as FinancialCashFlowUpdate;
     case "obligation":
       return {
         obligationType: changed("obligationType"),

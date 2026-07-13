@@ -12,10 +12,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Financial review UI code lives under `apps/aequoros-web/src/features/financial` and must call
   `FinancialDataApi` from `packages/risk-service-api`; do not duplicate OpenAPI payloads or
   hand-roll financial workspace requests.
-- Canonical institution, account, reporting-period, balance, obligation, and covenant mutations
-  require a non-empty reason and return refreshed validation. Cash-flow create/update contracts
-  do not yet provide the same guarantees, so cash flows remain read-only in the review UI until
-  the generated contracts add required reasons and refreshed-validation mutation responses.
+- Canonical institution, account, reporting-period, balance, cash-flow, obligation, and covenant
+  mutations require a non-empty reason and return the record plus refreshed validation. Their
+  review forms support manual entry and correction through the generated contracts.
 - Keep every financial mutation disabled while demo mode is active. Constrain account and
   obligation statuses to generated contract values; automatic covenant compliance recalculation
   must omit `complianceStatus` so the backend derives it from the covenant inputs.

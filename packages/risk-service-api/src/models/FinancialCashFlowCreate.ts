@@ -13,6 +13,42 @@
  */
 
 import { mapValues } from "../runtime";
+import type { AccountId } from "./AccountId";
+import {
+  AccountIdFromJSON,
+  AccountIdFromJSONTyped,
+  AccountIdToJSON,
+  AccountIdToJSONTyped,
+} from "./AccountId";
+import type { FinancialAmount } from "./FinancialAmount";
+import {
+  FinancialAmountFromJSON,
+  FinancialAmountFromJSONTyped,
+  FinancialAmountToJSON,
+  FinancialAmountToJSONTyped,
+} from "./FinancialAmount";
+import type { CashFlowDate } from "./CashFlowDate";
+import {
+  CashFlowDateFromJSON,
+  CashFlowDateFromJSONTyped,
+  CashFlowDateToJSON,
+  CashFlowDateToJSONTyped,
+} from "./CashFlowDate";
+import type { ReportingPeriodId } from "./ReportingPeriodId";
+import {
+  ReportingPeriodIdFromJSON,
+  ReportingPeriodIdFromJSONTyped,
+  ReportingPeriodIdToJSON,
+  ReportingPeriodIdToJSONTyped,
+} from "./ReportingPeriodId";
+import type { FinancialAccountCreateCurrency } from "./FinancialAccountCreateCurrency";
+import {
+  FinancialAccountCreateCurrencyFromJSON,
+  FinancialAccountCreateCurrencyFromJSONTyped,
+  FinancialAccountCreateCurrencyToJSON,
+  FinancialAccountCreateCurrencyToJSONTyped,
+} from "./FinancialAccountCreateCurrency";
+
 /**
  *
  * @export
@@ -21,22 +57,22 @@ import { mapValues } from "../runtime";
 export interface FinancialCashFlowCreate {
   /**
    *
-   * @type {string}
+   * @type {AccountId}
    * @memberof FinancialCashFlowCreate
    */
-  accountId?: string | null;
+  accountId?: AccountId;
   /**
    *
-   * @type {string}
+   * @type {FinancialAmount}
    * @memberof FinancialCashFlowCreate
    */
-  amount: string;
+  amount: FinancialAmount;
   /**
    *
-   * @type {Date}
+   * @type {CashFlowDate}
    * @memberof FinancialCashFlowCreate
    */
-  cashFlowDate?: Date | null;
+  cashFlowDate?: CashFlowDate;
   /**
    *
    * @type {string}
@@ -45,16 +81,16 @@ export interface FinancialCashFlowCreate {
   category: string;
   /**
    *
-   * @type {string}
+   * @type {FinancialAccountCreateCurrency}
    * @memberof FinancialCashFlowCreate
    */
-  currency?: string | null;
+  currency?: FinancialAccountCreateCurrency;
   /**
    *
    * @type {string}
    * @memberof FinancialCashFlowCreate
    */
-  direction: string;
+  direction: FinancialCashFlowCreateDirectionEnum;
   /**
    *
    * @type {{ [key: string]: any; }}
@@ -66,8 +102,24 @@ export interface FinancialCashFlowCreate {
    * @type {string}
    * @memberof FinancialCashFlowCreate
    */
-  reportingPeriodId?: string | null;
+  reason: string;
+  /**
+   *
+   * @type {ReportingPeriodId}
+   * @memberof FinancialCashFlowCreate
+   */
+  reportingPeriodId?: ReportingPeriodId;
 }
+
+/**
+ * @export
+ */
+export const FinancialCashFlowCreateDirectionEnum = {
+  Inflow: "inflow",
+  Outflow: "outflow",
+} as const;
+export type FinancialCashFlowCreateDirectionEnum =
+  (typeof FinancialCashFlowCreateDirectionEnum)[keyof typeof FinancialCashFlowCreateDirectionEnum];
 
 /**
  * Check if a given object implements the FinancialCashFlowCreate interface.
@@ -78,6 +130,7 @@ export function instanceOfFinancialCashFlowCreate(
   if (!("amount" in value) || value["amount"] === undefined) return false;
   if (!("category" in value) || value["category"] === undefined) return false;
   if (!("direction" in value) || value["direction"] === undefined) return false;
+  if (!("reason" in value) || value["reason"] === undefined) return false;
   return true;
 }
 
@@ -95,20 +148,28 @@ export function FinancialCashFlowCreateFromJSONTyped(
     return json;
   }
   return {
-    accountId: json["account_id"] == null ? undefined : json["account_id"],
-    amount: json["amount"],
+    ...json,
+    accountId:
+      json["account_id"] == null
+        ? undefined
+        : AccountIdFromJSON(json["account_id"]),
+    amount: FinancialAmountFromJSON(json["amount"]),
     cashFlowDate:
       json["cash_flow_date"] == null
         ? undefined
-        : new Date(json["cash_flow_date"]),
+        : CashFlowDateFromJSON(json["cash_flow_date"]),
     category: json["category"],
-    currency: json["currency"] == null ? undefined : json["currency"],
+    currency:
+      json["currency"] == null
+        ? undefined
+        : FinancialAccountCreateCurrencyFromJSON(json["currency"]),
     direction: json["direction"],
     metadata: json["metadata"] == null ? undefined : json["metadata"],
+    reason: json["reason"],
     reportingPeriodId:
       json["reporting_period_id"] == null
         ? undefined
-        : json["reporting_period_id"],
+        : ReportingPeriodIdFromJSON(json["reporting_period_id"]),
   };
 }
 
@@ -127,16 +188,14 @@ export function FinancialCashFlowCreateToJSONTyped(
   }
 
   return {
-    account_id: value["accountId"],
-    amount: value["amount"],
-    cash_flow_date:
-      value["cashFlowDate"] == null
-        ? undefined
-        : (value["cashFlowDate"] as any).toISOString().substring(0, 10),
+    account_id: AccountIdToJSON(value["accountId"]),
+    amount: FinancialAmountToJSON(value["amount"]),
+    cash_flow_date: CashFlowDateToJSON(value["cashFlowDate"]),
     category: value["category"],
-    currency: value["currency"],
+    currency: FinancialAccountCreateCurrencyToJSON(value["currency"]),
     direction: value["direction"],
     metadata: value["metadata"],
-    reporting_period_id: value["reportingPeriodId"],
+    reason: value["reason"],
+    reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),
   };
 }

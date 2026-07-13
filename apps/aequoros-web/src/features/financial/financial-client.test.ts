@@ -108,4 +108,62 @@ describe("generated financial client integration", () => {
     });
     expect(response.validation.summary.total).toBe(0);
   });
+
+  it("uses the canonical cash-flow mutation contract", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          record: {
+            id: "cash-flow-1",
+            organization_id: tenant.orgId,
+            case_id: "case-1",
+            account_id: null,
+            reporting_period_id: null,
+            cash_flow_date: "2026-07-01",
+            amount: "2750.00",
+            currency: "USD",
+            direction: "outflow",
+            category: "supplier payment",
+            metadata: { provenance: "manual" },
+            created_at: now,
+            updated_at: now,
+          },
+          validation: validation(),
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const response = await financialReviewClient.create(
+      "cashFlow",
+      tenant,
+      "case-1",
+      {
+        cashFlowDate: "2026-07-01",
+        amount: "2750.00",
+        currency: "USD",
+        direction: "outflow",
+        category: "supplier payment",
+        reason: "Missing bank statement row",
+      },
+    );
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain(
+      "/api/v1/cases/case-1/financial-workspace/cash-flows",
+    );
+    expect(JSON.parse(String(init?.body))).toEqual({
+      cash_flow_date: "2026-07-01",
+      amount: "2750.00",
+      currency: "USD",
+      direction: "outflow",
+      category: "supplier payment",
+      reason: "Missing bank statement row",
+    });
+    expect(response.record).toMatchObject({
+      id: "cash-flow-1",
+      cashFlowDate: new Date("2026-07-01"),
+      metadata: { provenance: "manual" },
+    });
+  });
 });
