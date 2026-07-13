@@ -9,3 +9,15 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Regenerate scenario and other API contracts with
   `mise run risk-service:openapi-client`; validate the generated package with
   `pnpm --filter @aequoros/risk-service-api test`.
+- Financial review UI code lives under `apps/aequoros-web/src/features/financial` and must call
+  `FinancialDataApi` from `packages/risk-service-api`; do not duplicate OpenAPI payloads or
+  hand-roll financial workspace requests.
+- Canonical institution, account, reporting-period, balance, obligation, and covenant mutations
+  require a non-empty reason and return refreshed validation. Cash-flow create/update contracts
+  do not yet provide the same guarantees, so cash flows remain read-only in the review UI until
+  the generated contracts add required reasons and refreshed-validation mutation responses.
+- Keep every financial mutation disabled while demo mode is active. Constrain account and
+  obligation statuses to generated contract values; automatic covenant compliance recalculation
+  must omit `complianceStatus` so the backend derives it from the covenant inputs.
+- Validate web changes with `pnpm --filter @aequoros/aequoros-web typecheck`, `lint`, `test`, and
+  `build`; deterministic financial review journeys are in `e2e/financial-review.spec.ts`.
