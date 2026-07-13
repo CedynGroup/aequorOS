@@ -1186,13 +1186,18 @@ function buildUpdatePayload(
         reportingPeriodId: changed("reportingPeriodId"),
         reason,
       } as FinancialObligationUpdate;
-    case "covenant":
+    case "covenant": {
+      const automaticRecalculation =
+        changedFields.has("complianceStatus") &&
+        complianceStatus(values) === undefined;
       return {
         name: changed("name"),
         metric: changed("metric"),
         operator: changed("operator"),
         threshold: changed("threshold"),
-        actualValue: changed("actualValue"),
+        actualValue: automaticRecalculation
+          ? (optional(values, "actualValue") ?? null)
+          : changed("actualValue"),
         complianceStatus: changedFields.has("complianceStatus")
           ? complianceStatus(values)
           : undefined,
@@ -1200,6 +1205,7 @@ function buildUpdatePayload(
         reportingPeriodId: changed("reportingPeriodId"),
         reason,
       } as FinancialCovenantUpdate;
+    }
   }
 }
 

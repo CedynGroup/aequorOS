@@ -825,6 +825,7 @@ describe("FinancialSections", () => {
       unknown
     >;
     expect(payload.reason).toBe("Recalculate from corrected values");
+    expect(payload.actualValue).toBe("3.2");
     expect(payload.complianceStatus).toBeUndefined();
   });
 

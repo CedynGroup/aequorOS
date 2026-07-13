@@ -283,6 +283,20 @@ async function installFinancialBackend(page: Page) {
         validation: validationJson(false),
       });
     }
+    if (
+      path ===
+        `/api/v1/cases/${northstarCase.id}/financial-workspace/covenants/covenant-1` &&
+      method === "PATCH"
+    ) {
+      const payload = request.postDataJSON() as Record<string, unknown>;
+      expect(payload.reason).toBe("Recalculate covenant compliance");
+      expect(payload).toHaveProperty("actual_value", null);
+      expect(payload).not.toHaveProperty("compliance_status");
+      return json(route, {
+        record: covenantJson(),
+        validation: validationJson(false),
+      });
+    }
     if (path === "/api/v1/documents/upload-request" && method === "POST")
       return json(route, {
         document_id: documentId,
@@ -431,4 +445,22 @@ test("uploads, maps, validates, retries correction, revalidates, and manually ad
   await covenantForm.getByRole("button", { name: "Add covenant" }).click();
   await expect(page.getByText(/Added covenant/)).toBeVisible();
   await expect(page.getByText("Leverage ratio")).toBeVisible();
+
+  const covenantSection = page.locator(
+    "#financial-section-financial_covenants",
+  );
+  await covenantSection.getByRole("button", { name: "Edit" }).click();
+  const covenantEditForm = covenantSection.getByRole("form", {
+    name: "Edit covenant",
+  });
+  await covenantEditForm
+    .getByLabel("Compliance")
+    .selectOption("__automatic__");
+  await covenantEditForm
+    .getByLabel("Reason")
+    .fill("Recalculate covenant compliance");
+  await covenantEditForm
+    .getByRole("button", { name: "Save correction" })
+    .click();
+  await expect(page.getByText(/Saved covenant correction/)).toBeVisible();
 });
