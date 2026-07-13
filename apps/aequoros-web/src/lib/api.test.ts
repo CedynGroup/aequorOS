@@ -302,11 +302,13 @@ describe("risk API helpers", () => {
         incomplete_scenario_ids: ["scenario-1"],
       },
     };
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify(responseBody), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(responseBody), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
     );
 
     await riskApi.updateAssumption(
@@ -316,8 +318,13 @@ describe("risk API helpers", () => {
       "assumption-1",
       { value: 0.05, reason: "Reviewer update" },
     );
+    await riskApi.updateScenario(tenant, "case-1", "scenario-1", {
+      name: "Operating plan",
+      description: "Approved management case",
+      reason: "Reviewer update",
+    });
 
-    const [url, init] = firstFetchCall(fetchMock);
+    const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain(
       "/cases/case-1/scenarios/scenario-1/assumptions/assumption-1",
     );
@@ -325,6 +332,14 @@ describe("risk API helpers", () => {
     expect(requestJsonBody(init)).toEqual({
       reason: "Reviewer update",
       value: 0.05,
+    });
+    const [scenarioUrl, scenarioInit] = fetchMock.mock.calls[1];
+    expect(String(scenarioUrl)).toContain("/cases/case-1/scenarios/scenario-1");
+    expect(scenarioInit?.method).toBe("PATCH");
+    expect(requestJsonBody(scenarioInit)).toEqual({
+      description: "Approved management case",
+      name: "Operating plan",
+      reason: "Reviewer update",
     });
   });
 

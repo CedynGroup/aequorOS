@@ -20,13 +20,6 @@ import {
   DescriptionToJSON,
   DescriptionToJSONTyped,
 } from "./Description";
-import type { Name } from "./Name";
-import {
-  NameFromJSON,
-  NameFromJSONTyped,
-  NameToJSON,
-  NameToJSONTyped,
-} from "./Name";
 
 /**
  *
@@ -42,10 +35,10 @@ export interface ScenarioUpdate {
   description?: Description;
   /**
    *
-   * @type {Name}
+   * @type {string}
    * @memberof ScenarioUpdate
    */
-  name?: Name;
+  name?: string;
   /**
    *
    * @type {string}
@@ -81,7 +74,7 @@ export function ScenarioUpdateFromJSONTyped(
       json["description"] == null
         ? undefined
         : DescriptionFromJSON(json["description"]),
-    name: json["name"] == null ? undefined : NameFromJSON(json["name"]),
+    name: json["name"] == null ? undefined : json["name"],
     reason: json["reason"],
   };
 }
@@ -100,7 +93,7 @@ export function ScenarioUpdateToJSONTyped(
 
   return {
     description: DescriptionToJSON(value["description"]),
-    name: NameToJSON(value["name"]),
+    name: value["name"],
     reason: value["reason"],
   };
 }

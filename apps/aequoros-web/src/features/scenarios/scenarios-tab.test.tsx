@@ -144,6 +144,9 @@ describe("ScenariosTab", () => {
     const update = vi
       .spyOn(riskApi, "updateAssumption")
       .mockResolvedValue(mutation());
+    const updateScenario = vi
+      .spyOn(riskApi, "updateScenario")
+      .mockResolvedValue(mutation(scenario({ name: "Operating plan" })));
     const review = vi
       .spyOn(riskApi, "reviewAssumption")
       .mockResolvedValue(mutation());
@@ -157,9 +160,27 @@ describe("ScenariosTab", () => {
       .mockResolvedValue(mutation());
 
     renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+    const scenarioName = await screen.findByLabelText("Scenario name");
+    await user.clear(scenarioName);
+    await user.type(scenarioName, "Operating plan");
+    await user.click(screen.getByRole("button", { name: "Save details" }));
+    await waitFor(() => {
+      expect(updateScenario).toHaveBeenCalledWith(
+        tenant,
+        caseId,
+        scenario().id,
+        {
+          name: "Operating plan",
+          description: "Default baseline scenario",
+          reason: "Update scenario details",
+        },
+      );
+    });
+
     const value = await screen.findByLabelText("Revenue growth value");
     await user.clear(value);
     await user.type(value, "0.05");
+    expect(screen.getByRole("button", { name: "Review" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(update).toHaveBeenCalledWith(
@@ -178,6 +199,51 @@ describe("ScenariosTab", () => {
     await user.click(screen.getByRole("button", { name: "Archive scenario" }));
     await waitFor(() => expect(archive).toHaveBeenCalledTimes(1));
     expect(screen.getByText("Saved successfully")).toBeInTheDocument();
+  });
+
+  it("preserves values entered with the explicit string type", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(workspace());
+    const update = vi
+      .spyOn(riskApi, "updateAssumption")
+      .mockResolvedValue(mutation());
+    const create = vi
+      .spyOn(riskApi, "createAssumption")
+      .mockResolvedValue(mutation());
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+    await user.selectOptions(
+      await screen.findByLabelText("Revenue growth value type"),
+      "string",
+    );
+    const value = screen.getByLabelText("Revenue growth value");
+    await user.clear(value);
+    await user.type(value, "001");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledWith(
+        tenant,
+        caseId,
+        scenario().id,
+        assumption().id,
+        { value: "001", reason: "Reviewer updated assumption" },
+      );
+    });
+
+    await user.type(screen.getByLabelText("Assumption key"), "policy_code");
+    await user.type(screen.getByLabelText("Assumption label"), "Policy code");
+    await user.type(screen.getByLabelText("New assumption value"), "true");
+    await user.click(screen.getByRole("button", { name: "Add assumption" }));
+    await waitFor(() => {
+      expect(create).toHaveBeenCalledWith(tenant, caseId, scenario().id, {
+        category: "other",
+        key: "policy_code",
+        label: "Policy code",
+        value: "true",
+        unit: undefined,
+        reason: "Add scenario assumption",
+      });
+    });
   });
 
   it("renders API errors explicitly", async () => {

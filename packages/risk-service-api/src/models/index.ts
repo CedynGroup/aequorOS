@@ -110,7 +110,6 @@ export * from "./InstitutionId";
 export * from "./JobRead";
 export * from "./Label";
 export * from "./MaturityDate";
-export * from "./Name";
 export * from "./ObligationId";
 export * from "./ParseResponse";
 export * from "./ParseStatusResponse";

@@ -16,6 +16,12 @@ type ScenarioProvenance = dict[str, AssumptionValue]
 type ChangeReason = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
 ]
+type ScenarioName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)
+]
+type AssumptionLabel = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)
+]
 
 
 class ClosedModel(BaseModel):
@@ -60,14 +66,14 @@ class ScenarioRead(BaseModel):
 
 
 class ScenarioCreate(ClosedModel):
-    name: str = Field(min_length=1, max_length=160)
+    name: ScenarioName
     description: str | None = Field(default=None, max_length=2000)
     scenario_type: Literal["custom"] = "custom"
     reason: ChangeReason
 
 
 class ScenarioUpdate(ClosedModel):
-    name: str | None = Field(default=None, min_length=1, max_length=160)
+    name: ScenarioName = Field(default_factory=str)
     description: str | None = Field(default=None, max_length=2000)
     reason: ChangeReason
 
@@ -83,7 +89,7 @@ class ScenarioInitialize(ClosedModel):
 
 
 class ScenarioCopy(ClosedModel):
-    name: str = Field(min_length=1, max_length=160)
+    name: ScenarioName
     reason: ChangeReason
 
 
@@ -94,7 +100,7 @@ class ScenarioArchive(ClosedModel):
 class AssumptionCreate(ClosedModel):
     category: AssumptionCategory
     key: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_]*$")
-    label: str = Field(min_length=1, max_length=160)
+    label: AssumptionLabel
     value: AssumptionValue
     unit: str | None = Field(default=None, max_length=40)
     provenance: ScenarioProvenance = Field(default_factory=dict)
@@ -103,7 +109,7 @@ class AssumptionCreate(ClosedModel):
 
 class AssumptionUpdate(ClosedModel):
     category: AssumptionCategory = "other"
-    label: str = Field(default="", min_length=1, max_length=160)
+    label: AssumptionLabel = ""
     value: AssumptionValue = None
     unit: str | None = Field(default=None, max_length=40)
     provenance: ScenarioProvenance = Field(default_factory=dict)

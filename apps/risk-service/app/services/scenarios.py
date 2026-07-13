@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -160,7 +161,7 @@ def initialize_defaults(
             created_by=ctx.actor_user_id,
         )
         db.add(scenario)
-        db.flush()
+        _flush(db, "Scenario defaults already exist.")
         for values in DEFAULT_ASSUMPTIONS[scenario_type]:
             assumption = ScenarioAssumption(
                 organization_id=ctx.organization_id,
@@ -170,7 +171,7 @@ def initialize_defaults(
                 **values,
             )
             db.add(assumption)
-            db.flush()
+            _flush(db, "Scenario defaults already exist.")
             _history(db, ctx, assumption, "initialized", payload.reason, values)
         record_event(
             db,
@@ -180,8 +181,11 @@ def initialize_defaults(
             entity_id=scenario.id,
             details={"scenario_type": scenario_type, "reason": payload.reason},
         )
-    _commit(db, "Scenario defaults already exist.")
-    return list_workspace(db, ctx, case_id)
+    return _complete(
+        db,
+        "Scenario defaults already exist.",
+        lambda: list_workspace(db, ctx, case_id),
+    )
 
 
 def create_scenario(
@@ -198,7 +202,7 @@ def create_scenario(
         created_by=ctx.actor_user_id,
     )
     db.add(scenario)
-    db.flush()
+    _flush(db, "Scenario could not be created.")
     record_event(
         db,
         ctx,
@@ -207,8 +211,11 @@ def create_scenario(
         entity_id=scenario.id,
         details={"reason": payload.reason},
     )
-    _commit(db, "Scenario could not be created.")
-    return _mutation_response(db, ctx, case_id, scenario.id)
+    return _complete(
+        db,
+        "Scenario could not be created.",
+        lambda: _mutation_response(db, ctx, case_id, scenario.id),
+    )
 
 
 def update_scenario(
@@ -238,8 +245,11 @@ def update_scenario(
             "changes": changes,
         },
     )
-    _commit(db, "Scenario could not be updated.")
-    return _mutation_response(db, ctx, case_id, scenario.id)
+    return _complete(
+        db,
+        "Scenario could not be updated.",
+        lambda: _mutation_response(db, ctx, case_id, scenario.id),
+    )
 
 
 def copy_scenario(
@@ -257,7 +267,7 @@ def copy_scenario(
         created_by=ctx.actor_user_id,
     )
     db.add(copy)
-    db.flush()
+    _flush(db, "Scenario could not be copied.")
     for source_assumption in _assumption_rows(db, source.id):
         assumption = ScenarioAssumption(
             organization_id=ctx.organization_id,
@@ -277,7 +287,7 @@ def copy_scenario(
             review_status="draft",
         )
         db.add(assumption)
-        db.flush()
+        _flush(db, "Scenario could not be copied.")
         _history(
             db,
             ctx,
@@ -294,8 +304,11 @@ def copy_scenario(
         entity_id=copy.id,
         details={"source_scenario_id": str(source.id), "reason": payload.reason},
     )
-    _commit(db, "Scenario could not be copied.")
-    return _mutation_response(db, ctx, case_id, copy.id)
+    return _complete(
+        db,
+        "Scenario could not be copied.",
+        lambda: _mutation_response(db, ctx, case_id, copy.id),
+    )
 
 
 def archive_scenario(
@@ -312,8 +325,11 @@ def archive_scenario(
         entity_id=scenario.id,
         details={"reason": payload.reason},
     )
-    _commit(db, "Scenario could not be archived.")
-    return _mutation_response(db, ctx, case_id, scenario.id)
+    return _complete(
+        db,
+        "Scenario could not be archived.",
+        lambda: _mutation_response(db, ctx, case_id, scenario.id),
+    )
 
 
 def create_assumption(
@@ -326,7 +342,7 @@ def create_assumption(
     _require_actor(ctx)
     _active_scenario_or_404(db, ctx, case_id, scenario_id)
     values = payload.model_dump(exclude={"reason"})
-    values["provenance"] = {"source": "manual", **values["provenance"]}
+    values["provenance"] = {**values["provenance"], "source": "manual"}
     assumption = ScenarioAssumption(
         organization_id=ctx.organization_id,
         case_id=case_id,
@@ -334,7 +350,7 @@ def create_assumption(
         **values,
     )
     db.add(assumption)
-    db.flush()
+    _flush(db, "An assumption with this key already exists in the scenario.")
     _history(db, ctx, assumption, "created", payload.reason, values)
     record_event(
         db,
@@ -344,8 +360,11 @@ def create_assumption(
         entity_id=assumption.id,
         details={"scenario_id": str(scenario_id), "reason": payload.reason},
     )
-    _commit(db, "An assumption with this key already exists in the scenario.")
-    return _mutation_response(db, ctx, case_id, scenario_id)
+    return _complete(
+        db,
+        "An assumption with this key already exists in the scenario.",
+        lambda: _mutation_response(db, ctx, case_id, scenario_id),
+    )
 
 
 def update_assumption(  # noqa: PLR0913
@@ -361,7 +380,7 @@ def update_assumption(  # noqa: PLR0913
     assumption = _assumption_or_404(db, ctx, case_id, scenario_id, assumption_id)
     changes = payload.model_dump(exclude={"reason"}, exclude_unset=True)
     if "provenance" in changes and changes["provenance"] is not None:
-        changes["provenance"] = {"source": "reviewer_edit", **changes["provenance"]}
+        changes["provenance"] = {**changes["provenance"], "source": "reviewer_edit"}
     previous = {field: getattr(assumption, field) for field in changes}
     for field, value in changes.items():
         setattr(assumption, field, value)
@@ -387,8 +406,11 @@ def update_assumption(  # noqa: PLR0913
         entity_id=assumption.id,
         details={"scenario_id": str(scenario_id), "reason": payload.reason},
     )
-    _commit(db, "Assumption could not be updated.")
-    return _mutation_response(db, ctx, case_id, scenario_id)
+    return _complete(
+        db,
+        "Assumption could not be updated.",
+        lambda: _mutation_response(db, ctx, case_id, scenario_id),
+    )
 
 
 def review_assumption(  # noqa: PLR0913
@@ -414,8 +436,11 @@ def review_assumption(  # noqa: PLR0913
         entity_id=assumption.id,
         details={"scenario_id": str(scenario_id), "reason": payload.reason},
     )
-    _commit(db, "Assumption could not be reviewed.")
-    return _mutation_response(db, ctx, case_id, scenario_id)
+    return _complete(
+        db,
+        "Assumption could not be reviewed.",
+        lambda: _mutation_response(db, ctx, case_id, scenario_id),
+    )
 
 
 def validation_for(
@@ -596,9 +621,26 @@ def _require_actor(ctx: TenantContext) -> None:
         )
 
 
-def _commit(db: Session, conflict_message: str) -> None:
+def _flush(db: Session, conflict_message: str) -> None:
     try:
-        db.commit()
+        db.flush()
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=conflict_message) from exc
+    except Exception:
+        db.rollback()
+        raise
+
+
+def _complete[T](db: Session, conflict_message: str, build_response: Callable[[], T]) -> T:
+    try:
+        db.flush()
+        response = build_response()
+        db.commit()
+        return response
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=conflict_message) from exc
+    except Exception:
+        db.rollback()
+        raise

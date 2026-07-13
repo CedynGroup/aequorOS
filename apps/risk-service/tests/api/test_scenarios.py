@@ -59,9 +59,7 @@ def test_default_scenario_lifecycle_validation_review_and_readiness(
             )
             assert response.status_code == 200, response.text
 
-    readiness = db_client.get(
-        f"/api/v1/cases/{case.id}/scenarios/readiness", headers=headers()
-    )
+    readiness = db_client.get(f"/api/v1/cases/{case.id}/scenarios/readiness", headers=headers())
     assert readiness.status_code == 200
     assert readiness.json()["ready"] is True
     assert readiness.json()["complete_scenario_count"] == 2
@@ -117,6 +115,23 @@ def test_custom_scenario_assumptions_copy_archive_and_provenance(
         if item["key"] == "minimum_cash_buffer"
     )
     assert extra["provenance"] == {"source": "manual", "document": "Treasury policy"}
+
+    forged = db_client.patch(
+        f"/api/v1/cases/{case.id}/scenarios/{custom['id']}/assumptions/{extra['id']}",
+        headers=headers(),
+        json={
+            "provenance": {"source": "system_default", "document": "Updated policy"},
+            "reason": "Update supporting evidence",
+        },
+    )
+    assert forged.status_code == 200, forged.text
+    forged_extra = next(
+        item for item in forged.json()["scenario"]["assumptions"] if item["id"] == extra["id"]
+    )
+    assert forged_extra["provenance"] == {
+        "source": "reviewer_edit",
+        "document": "Updated policy",
+    }
 
     archived = db_client.post(
         f"/api/v1/cases/{case.id}/scenarios/{custom['id']}/archive",
@@ -183,6 +198,71 @@ def test_scenario_contracts_are_closed_and_initialization_is_idempotent(
         json={"name": "Invalid", "reason": "test", "unexpected": True},
     )
     assert rejected.status_code == 422
+
+    for payload in (
+        {"name": "   ", "reason": "test"},
+        {"name": None, "reason": "test"},
+    ):
+        response = db_client.patch(
+            f"/api/v1/cases/{case.id}/scenarios/{first['scenarios'][0]['id']}",
+            headers=headers(),
+            json=payload,
+        )
+        assert response.status_code == 422
+
+    blank_create = db_client.post(
+        f"/api/v1/cases/{case.id}/scenarios",
+        headers=headers(),
+        json={"name": "   ", "reason": "test"},
+    )
+    assert blank_create.status_code == 422
+
+    blank_copy = db_client.post(
+        f"/api/v1/cases/{case.id}/scenarios/{first['scenarios'][0]['id']}/copy",
+        headers=headers(),
+        json={"name": "   ", "reason": "test"},
+    )
+    assert blank_copy.status_code == 422
+
+    blank_label = db_client.post(
+        f"/api/v1/cases/{case.id}/scenarios/{first['scenarios'][0]['id']}/assumptions",
+        headers=headers(),
+        json={
+            "category": "other",
+            "key": "blank_label",
+            "label": "   ",
+            "value": "value",
+            "reason": "test",
+        },
+    )
+    assert blank_label.status_code == 422
+
+
+def test_duplicate_assumption_returns_conflict_and_rolls_back(db_client: TestClient) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = initialize(db_client, case.id)["scenarios"][0]
+    existing = scenario["assumptions"][0]
+
+    duplicate = db_client.post(
+        f"/api/v1/cases/{case.id}/scenarios/{scenario['id']}/assumptions",
+        headers=headers(),
+        json={
+            "category": "other",
+            "key": existing["key"],
+            "label": "Duplicate",
+            "value": "001",
+            "provenance": {"source": "forged"},
+            "reason": "Exercise duplicate validation",
+        },
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"]["message"] == (
+        "An assumption with this key already exists in the scenario."
+    )
+
+    workspace = db_client.get(f"/api/v1/cases/{case.id}/scenarios", headers=headers()).json()
+    current = next(item for item in workspace["scenarios"] if item["id"] == scenario["id"])
+    assert len(current["assumptions"]) == len(scenario["assumptions"])
 
 
 def test_scenario_endpoints_enforce_tenant_isolation(db_client: TestClient) -> None:

@@ -261,10 +261,7 @@
             "type": "string"
           },
           "label": {
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Label",
-            "type": "string"
+            "$ref": "#/components/schemas/AssumptionLabel"
           },
           "provenance": {
             "$ref": "#/components/schemas/ScenarioProvenance"
@@ -298,6 +295,11 @@
         "title": "AssumptionCreate",
         "type": "object"
       },
+      "AssumptionLabel": {
+        "maxLength": 160,
+        "minLength": 1,
+        "type": "string"
+      },
       "AssumptionReview": {
         "additionalProperties": false,
         "properties": {
@@ -326,11 +328,8 @@
             "default": "other"
           },
           "label": {
-            "default": "",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Label",
-            "type": "string"
+            "$ref": "#/components/schemas/AssumptionLabel",
+            "default": ""
           },
           "provenance": {
             "$ref": "#/components/schemas/ScenarioProvenance"
@@ -5905,10 +5904,7 @@
         "additionalProperties": false,
         "properties": {
           "name": {
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
+            "$ref": "#/components/schemas/ScenarioName"
           },
           "reason": {
             "$ref": "#/components/schemas/ChangeReason"
@@ -5937,10 +5933,7 @@
             "title": "Description"
           },
           "name": {
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
+            "$ref": "#/components/schemas/ScenarioName"
           },
           "reason": {
             "$ref": "#/components/schemas/ChangeReason"
@@ -5992,6 +5985,11 @@
         ],
         "title": "ScenarioMutationResponse",
         "type": "object"
+      },
+      "ScenarioName": {
+        "maxLength": 160,
+        "minLength": 1,
+        "type": "string"
       },
       "ScenarioProvenance": {
         "additionalProperties": {
@@ -6168,17 +6166,7 @@
             "title": "Description"
           },
           "name": {
-            "anyOf": [
-              {
-                "maxLength": 160,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
+            "$ref": "#/components/schemas/ScenarioName"
           },
           "reason": {
             "$ref": "#/components/schemas/ChangeReason"

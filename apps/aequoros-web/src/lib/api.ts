@@ -56,6 +56,8 @@ import {
   ScenarioInitializeToJSON,
   type ScenarioMutationResponse,
   ScenarioMutationResponseFromJSON,
+  type ScenarioUpdate,
+  ScenarioUpdateToJSON,
   type ScenarioValidationRead,
   ScenarioValidationReadFromJSON,
   type ScenarioWorkspaceRead,
@@ -254,6 +256,19 @@ export const riskApi = {
       tenant,
       ScenarioMutationResponseFromJSON,
       { method: "POST", body: JSON.stringify(ScenarioCreateToJSON(payload)) },
+    );
+  },
+  updateScenario(
+    tenant: TenantHeaders,
+    caseId: string,
+    scenarioId: string,
+    payload: ScenarioUpdate,
+  ) {
+    return apiJson<ScenarioMutationResponse>(
+      `/cases/${caseId}/scenarios/${scenarioId}`,
+      tenant,
+      ScenarioMutationResponseFromJSON,
+      { method: "PATCH", body: JSON.stringify(ScenarioUpdateToJSON(payload)) },
     );
   },
   copyScenario(

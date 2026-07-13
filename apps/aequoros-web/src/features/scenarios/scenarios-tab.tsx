@@ -17,6 +17,7 @@ import {
   Panel,
   PanelHeader,
   Skeleton,
+  Textarea,
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { labelize } from "../../lib/utils";
@@ -29,6 +30,13 @@ const categories: AssumptionCategory[] = [
   "credit_usage",
   "repayment_behavior",
   "other",
+];
+type AssumptionValueType = "string" | "number" | "boolean" | "null";
+const valueTypes: AssumptionValueType[] = [
+  "string",
+  "number",
+  "boolean",
+  "null",
 ];
 
 export function ScenariosTab({
@@ -208,12 +216,24 @@ function ScenarioEditor({
     queryFn: () => riskApi.scenarioValidation(tenant, caseId, scenario.id),
   });
   const [copyName, setCopyName] = useState(`${scenario.name} copy`);
+  const [name, setName] = useState(scenario.name);
+  const [description, setDescription] = useState(scenario.description ?? "");
   const [newAssumption, setNewAssumption] = useState({
     category: "other" as AssumptionCategory,
     key: "",
     label: "",
     value: "",
+    valueType: "string" as AssumptionValueType,
     unit: "",
+  });
+  const updateScenario = useMutation({
+    mutationFn: () =>
+      riskApi.updateScenario(tenant, caseId, scenario.id, {
+        name,
+        description: description || null,
+        reason: "Update scenario details",
+      }),
+    onSuccess: () => onSaved("Scenario details saved"),
   });
   const copy = useMutation({
     mutationFn: () =>
@@ -242,7 +262,7 @@ function ScenarioEditor({
         category: newAssumption.category,
         key: newAssumption.key,
         label: newAssumption.label,
-        value: parseValue(newAssumption.value),
+        value: typedValue(newAssumption.value, newAssumption.valueType),
         unit: newAssumption.unit || undefined,
         reason: "Add scenario assumption",
       }),
@@ -252,12 +272,14 @@ function ScenarioEditor({
         key: "",
         label: "",
         value: "",
+        valueType: "string",
         unit: "",
       });
       await onSaved("Assumption added");
     },
   });
-  const actionError = copy.error ?? archive.error ?? add.error;
+  const actionError =
+    updateScenario.error ?? copy.error ?? archive.error ?? add.error;
 
   return (
     <Panel>
@@ -269,6 +291,37 @@ function ScenarioEditor({
         }
       />
       <div className="space-y-4 p-3">
+        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] md:items-end">
+          <div>
+            <Label>Scenario name</Label>
+            <Input
+              aria-label="Scenario name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Scenario description</Label>
+            <Textarea
+              aria-label="Scenario description"
+              className="min-h-8"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </div>
+          <Button
+            variant="outline"
+            disabled={
+              !name.trim() ||
+              updateScenario.isPending ||
+              (name === scenario.name &&
+                description === (scenario.description ?? ""))
+            }
+            onClick={() => updateScenario.mutate()}
+          >
+            Save details
+          </Button>
+        </div>
         {validation.isLoading ? <Skeleton className="h-16" /> : null}
         {validation.isError ? <ErrorPanel error={validation.error} /> : null}
         {validation.data?.complete ? (
@@ -337,7 +390,7 @@ function ScenarioEditor({
         </div>
         <div className="rounded-md border border-dashed border-[rgb(var(--border))] p-3">
           <div className="mb-2 text-sm font-medium">Add assumption</div>
-          <div className="grid gap-2 md:grid-cols-5">
+          <div className="grid gap-2 md:grid-cols-6">
             <select
               aria-label="Assumption category"
               className="h-8 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2 text-sm"
@@ -374,10 +427,28 @@ function ScenarioEditor({
                 })
               }
             />
+            <select
+              aria-label="New assumption value type"
+              className="h-8 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2 text-sm"
+              value={newAssumption.valueType}
+              onChange={(event) =>
+                setNewAssumption({
+                  ...newAssumption,
+                  valueType: event.target.value as AssumptionValueType,
+                })
+              }
+            >
+              {valueTypes.map((valueType) => (
+                <option key={valueType} value={valueType}>
+                  {labelize(valueType)}
+                </option>
+              ))}
+            </select>
             <Input
               aria-label="New assumption value"
               placeholder="Value"
               value={newAssumption.value}
+              disabled={newAssumption.valueType === "null"}
               onChange={(event) =>
                 setNewAssumption({
                   ...newAssumption,
@@ -398,7 +469,10 @@ function ScenarioEditor({
             className="mt-2"
             variant="outline"
             disabled={
-              !newAssumption.key || !newAssumption.label || add.isPending
+              !newAssumption.key.trim() ||
+              !newAssumption.label.trim() ||
+              !isValidValue(newAssumption.value, newAssumption.valueType) ||
+              add.isPending
             }
             onClick={() => add.mutate()}
           >
@@ -423,14 +497,28 @@ function AssumptionRow({
   assumption: ScenarioAssumptionRead;
   onSaved: (message: string) => Promise<void>;
 }) {
-  const [value, setValue] = useState(String(assumption.value ?? ""));
+  const initialType = valueTypeOf(assumption.value);
+  const [valueType, setValueType] = useState(initialType);
+  const [value, setValue] = useState(valueInput(assumption.value));
+  const [persistedValue, setPersistedValue] = useState(assumption.value);
+  useEffect(() => {
+    setValueType(valueTypeOf(assumption.value));
+    setValue(valueInput(assumption.value));
+    setPersistedValue(assumption.value);
+  }, [assumption.updatedAt, assumption.value]);
+  const nextValue = typedValue(value, valueType);
+  const dirty =
+    valueType !== valueTypeOf(persistedValue) || nextValue !== persistedValue;
   const update = useMutation({
     mutationFn: () =>
       riskApi.updateAssumption(tenant, caseId, scenarioId, assumption.id, {
-        value: parseValue(value),
+        value: nextValue,
         reason: "Reviewer updated assumption",
       }),
-    onSuccess: () => onSaved(`${assumption.label} saved`),
+    onSuccess: () => {
+      setPersistedValue(nextValue);
+      return onSaved(`${assumption.label} saved`);
+    },
   });
   const review = useMutation({
     mutationFn: () =>
@@ -440,7 +528,7 @@ function AssumptionRow({
     onSuccess: () => onSaved(`${assumption.label} reviewed`),
   });
   return (
-    <div className="grid gap-2 rounded-md border border-[rgb(var(--border))] p-2 md:grid-cols-[minmax(0,1fr)_160px_auto] md:items-center">
+    <div className="grid gap-2 rounded-md border border-[rgb(var(--border))] p-2 md:grid-cols-[minmax(0,1fr)_100px_160px_auto] md:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">
@@ -459,30 +547,47 @@ function AssumptionRow({
           {assumption.unit ?? "unitless"}
         </div>
       </div>
+      <select
+        aria-label={`${assumption.label} value type`}
+        className="h-8 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2 text-sm"
+        value={valueType}
+        onChange={(event) =>
+          setValueType(event.target.value as AssumptionValueType)
+        }
+      >
+        {valueTypes.map((option) => (
+          <option key={option} value={option}>
+            {labelize(option)}
+          </option>
+        ))}
+      </select>
       <Input
         aria-label={`${assumption.label} value`}
         value={value}
+        disabled={valueType === "null"}
         onChange={(event) => setValue(event.target.value)}
       />
       <div className="flex gap-2">
         <Button
           size="sm"
           variant="outline"
-          disabled={update.isPending}
+          disabled={
+            !dirty || !isValidValue(value, valueType) || update.isPending
+          }
           onClick={() => update.mutate()}
         >
           Save
         </Button>
         <Button
           size="sm"
-          disabled={review.isPending}
+          disabled={dirty || update.isPending || review.isPending}
           onClick={() => review.mutate()}
         >
           Review
         </Button>
       </div>
       {update.isError || review.isError ? (
-        <div className="md:col-span-3">
+        <div className="md:col-span-4">
           <ErrorPanel error={update.error ?? review.error} />
         </div>
       ) : null}
@@ -490,11 +595,29 @@ function AssumptionRow({
   );
 }
 
-function parseValue(value: string): AssumptionValue {
-  const normalized = value.trim();
-  if (!normalized) return null;
-  if (normalized === "true") return true;
-  if (normalized === "false") return false;
-  const numeric = Number(normalized);
-  return Number.isFinite(numeric) ? numeric : normalized;
+function valueTypeOf(value: AssumptionValue): AssumptionValueType {
+  if (value === null) return "null";
+  return typeof value as AssumptionValueType;
+}
+
+function valueInput(value: AssumptionValue): string {
+  return value === null ? "" : String(value);
+}
+
+function isValidValue(value: string, valueType: AssumptionValueType): boolean {
+  if (valueType === "number") {
+    return value.trim() !== "" && Number.isFinite(Number(value));
+  }
+  if (valueType === "boolean") return value === "true" || value === "false";
+  return true;
+}
+
+function typedValue(
+  value: string,
+  valueType: AssumptionValueType,
+): AssumptionValue {
+  if (valueType === "null") return null;
+  if (valueType === "boolean") return value === "true";
+  if (valueType === "number") return Number(value);
+  return value;
 }
