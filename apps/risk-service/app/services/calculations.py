@@ -3,6 +3,8 @@ from __future__ import annotations
 import calendar
 import hashlib
 import json
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -10,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -20,6 +22,7 @@ from app.models import (
     FinancialBalance,
     FinancialCashFlow,
     FinancialObligation,
+    FinancialReportingPeriod,
     RiskScenario,
     ScenarioAssumption,
 )
@@ -29,23 +32,49 @@ from app.schemas.calculations import (
     CalculationRunCreate,
     CalculationRunListRead,
     CalculationRunRead,
+    CalculationRunSummaryRead,
     ForecastPeriodRead,
 )
 from app.services.audit import record_event
 from app.services.cases import get_case_or_404
+from app.services.scenario_semantics import resolve_engine_assumptions
 
 ENGINE_VERSION = "balance-sheet-v1.0.0"
 INPUT_SCHEMA_VERSION = "calculation-input-v1"
 OUTPUT_SCHEMA_VERSION = "balance-sheet-output-v1"
 MONEY = Decimal("0.0001")
 MAX_STORED_MONEY = Decimal("9999999999999999.9999")
-LIABILITY_TYPES = {"liability", "liabilities", "debt", "payable", "payables", "loan"}
-REQUIRED_ASSUMPTIONS = {
-    "revenue_growth_rate",
-    "expense_growth_rate",
-    "cash_flow_delay_days",
-    "credit_usage_rate",
-    "repayment_rate",
+ASSET_TYPES = {
+    "asset",
+    "assets",
+    "accounts_receivable",
+    "cash",
+    "cash_and_equivalents",
+    "equipment",
+    "goodwill",
+    "intangible_assets",
+    "inventory",
+    "investment",
+    "investments",
+    "prepaid_expenses",
+    "property",
+    "property_plant_and_equipment",
+    "receivable",
+    "receivables",
+}
+LIABILITY_TYPES = {
+    "accounts_payable",
+    "accrued_liabilities",
+    "debt",
+    "lease_liability",
+    "liabilities",
+    "liability",
+    "loan",
+    "long_term_debt",
+    "notes_payable",
+    "payable",
+    "payables",
+    "short_term_debt",
 }
 
 
@@ -108,8 +137,14 @@ def rerun(
     )
 
 
-def list_runs(
-    db: Session, ctx: TenantContext, case_id: UUID, *, scenario_id: UUID | None = None
+def list_runs(  # noqa: PLR0913
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    *,
+    scenario_id: UUID | None = None,
+    limit: int = 25,
+    offset: int = 0,
 ) -> CalculationRunListRead:
     get_case_or_404(db, ctx.organization_id, case_id)
     stmt = select(CalculationRun).where(
@@ -118,14 +153,28 @@ def list_runs(
     )
     if scenario_id is not None:
         stmt = stmt.where(CalculationRun.scenario_id == scenario_id)
-    rows = list(
-        db.scalars(stmt.order_by(CalculationRun.created_at.desc(), CalculationRun.id.desc()))
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    latest = db.scalar(
+        stmt.with_only_columns(CalculationRun.id)
+        .where(CalculationRun.status == "succeeded")
+        .order_by(CalculationRun.created_at.desc(), CalculationRun.id.desc())
+        .limit(1)
     )
-    latest = next((row.id for row in rows if row.status == "succeeded"), None)
+    rows = list(
+        db.scalars(
+            stmt.order_by(CalculationRun.created_at.desc(), CalculationRun.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    )
     return CalculationRunListRead(
         case_id=case_id,
-        runs=[_read_run(db, row) for row in rows],
+        runs=[_read_summary(row) for row in rows],
         latest_successful_run_id=latest,
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(rows) < total,
     )
 
 
@@ -143,30 +192,11 @@ def _create_and_execute(  # noqa: PLR0913
     *,
     rerun_of_run_id: UUID | None = None,
 ) -> CalculationRunRead:
+    _scenario_or_404(db, ctx, case_id, scenario_id)
     now = datetime.now(UTC)
-    try:
-        snapshot, as_of_date = build_input_snapshot(
-            db,
-            ctx,
-            case_id,
-            scenario_id,
-            forecast_periods,
-            requested_as_of_date,
-        )
-        input_hash = _snapshot_hash(snapshot)
-        failure: CalculationInputError | None = None
-    except CalculationInputError as exc:
-        as_of_date = requested_as_of_date or now.date()
-        snapshot = {
-            "schema_version": INPUT_SCHEMA_VERSION,
-            "case_id": str(case_id),
-            "scenario_id": str(scenario_id),
-            "forecast_periods": forecast_periods,
-            "as_of_date": as_of_date.isoformat(),
-            "validation_error": {"code": exc.code, "details": exc.details},
-        }
-        input_hash = _snapshot_hash(snapshot)
-        failure = exc
+    as_of_date = requested_as_of_date or now.date()
+    snapshot = _pending_snapshot(case_id, scenario_id, forecast_periods, as_of_date)
+    input_hash = _snapshot_hash(snapshot)
 
     run = CalculationRun(
         organization_id=ctx.organization_id,
@@ -199,56 +229,71 @@ def _create_and_execute(  # noqa: PLR0913
             "rerun_of_run_id": str(rerun_of_run_id) if rerun_of_run_id else None,
         },
     )
+    db.commit()
+
     run.status = "running"
     run.started_at = now
-
-    if failure is not None:
-        _mark_failed(run, failure)
-    else:
-        try:
-            for value in calculate_forecast(snapshot):
-                db.add(
-                    CalculationForecastPeriod(
-                        organization_id=ctx.organization_id,
-                        case_id=case_id,
-                        run_id=run.id,
-                        **value.__dict__,
-                    )
-                )
-            run.status = "succeeded"
-            run.completed_at = datetime.now(UTC)
-        except CalculationInputError as exc:
-            _mark_failed(run, exc)
-        except Exception as exc:  # persisted failure boundary for debuggable run lifecycle
-            _mark_failed(
-                run,
-                CalculationInputError(
-                    "calculation_error",
-                    "The balance-sheet forecast could not be calculated.",
-                    {"exception_type": type(exc).__name__, "reason": str(exc)},
-                ),
-            )
-
-    event_type = (
-        "calculation_run.succeeded" if run.status == "succeeded" else "calculation_run.failed"
-    )
-    record_event(
-        db,
-        ctx,
-        event_type=event_type,
-        entity_type="calculation_run",
-        entity_id=run.id,
-        details={
-            "input_hash": run.input_hash,
-            "output_periods": forecast_periods if run.status == "succeeded" else 0,
-            "error_code": run.error_code,
-        },
-    )
     db.commit()
-    return _read_run(db, run)
+
+    try:
+        _begin_repeatable_read(db)
+        snapshot, as_of_date = build_input_snapshot(
+            db,
+            ctx,
+            case_id,
+            scenario_id,
+            forecast_periods,
+            requested_as_of_date,
+        )
+        run.inputs = snapshot
+        run.input_hash = _snapshot_hash(snapshot)
+        run.as_of_date = as_of_date
+        for value in calculate_forecast(snapshot):
+            db.add(
+                CalculationForecastPeriod(
+                    organization_id=ctx.organization_id,
+                    case_id=case_id,
+                    run_id=run.id,
+                    **value.__dict__,
+                )
+            )
+        db.flush()
+        run.status = "succeeded"
+        run.completed_at = datetime.now(UTC)
+        record_event(
+            db,
+            ctx,
+            event_type="calculation_run.succeeded",
+            entity_type="calculation_run",
+            entity_id=run.id,
+            details={"input_hash": run.input_hash, "output_periods": forecast_periods},
+        )
+        db.commit()
+    except CalculationInputError as exc:
+        failure_snapshot = _failure_snapshot(
+            case_id, scenario_id, forecast_periods, requested_as_of_date or now.date(), exc
+        )
+        _persist_failure(db, ctx, case_id, run.id, exc, failure_snapshot)
+    except Exception:
+        _persist_failure(
+            db,
+            ctx,
+            case_id,
+            run.id,
+            CalculationInputError(
+                "calculation_error",
+                "The balance-sheet forecast could not be calculated.",
+                {
+                    "corrective_action": (
+                        "Review the run inputs and retry. Contact support if it fails again."
+                    )
+                },
+            ),
+        )
+    return get_run(db, ctx, case_id, run.id)
 
 
-def build_input_snapshot(  # noqa: PLR0913
+def build_input_snapshot(  # noqa: PLR0913, PLR0915
     db: Session,
     ctx: TenantContext,
     case_id: UUID,
@@ -278,20 +323,25 @@ def build_input_snapshot(  # noqa: PLR0913
             .order_by(ScenarioAssumption.key, ScenarioAssumption.id)
         )
     )
-    by_key = {item.key: item for item in assumptions}
-    missing = sorted(REQUIRED_ASSUMPTIONS - by_key.keys())
-    unreviewed = sorted(
-        key
-        for key in REQUIRED_ASSUMPTIONS
-        if key in by_key and by_key[key].review_status != "reviewed"
+    engine_assumptions, missing_categories, ambiguous_categories = resolve_engine_assumptions(
+        assumptions
     )
-    if missing or unreviewed:
+    unreviewed = sorted(item.key for item in assumptions if item.review_status != "reviewed")
+    missing_values = [
+        {"id": str(item.id), "key": item.key} for item in assumptions if item.value is None
+    ]
+    if missing_categories or ambiguous_categories or unreviewed or missing_values:
         raise CalculationInputError(
             "scenario_not_ready",
-            "The scenario must contain reviewed values for every required forecast assumption.",
+            "The scenario needs one reviewed assumption for every forecast category.",
             {
-                "missing_assumptions": missing,
+                "missing_categories": missing_categories,
+                "ambiguous_categories": ambiguous_categories,
                 "unreviewed_assumptions": unreviewed,
+                "missing_values": missing_values,
+                "corrective_action": (
+                    "Add or review the listed scenario assumptions, then run the forecast again."
+                ),
                 "assumptions": [
                     {
                         "id": str(item.id),
@@ -305,6 +355,17 @@ def build_input_snapshot(  # noqa: PLR0913
             },
         )
 
+    reporting_periods = list(
+        db.scalars(
+            select(FinancialReportingPeriod)
+            .where(
+                FinancialReportingPeriod.organization_id == ctx.organization_id,
+                FinancialReportingPeriod.case_id == case_id,
+            )
+            .order_by(FinancialReportingPeriod.id)
+        )
+    )
+    periods_by_id = {item.id: item for item in reporting_periods}
     balances = list(
         db.scalars(
             select(FinancialBalance)
@@ -319,6 +380,7 @@ def build_input_snapshot(  # noqa: PLR0913
         raise CalculationInputError(
             "financial_data_missing",
             "At least one canonical financial balance is required to run the forecast.",
+            {"corrective_action": "Add a dated canonical balance and run the forecast again."},
         )
     cash_flows = list(
         db.scalars(
@@ -330,7 +392,7 @@ def build_input_snapshot(  # noqa: PLR0913
             .order_by(FinancialCashFlow.id)
         )
     )
-    obligations = list(
+    all_obligations = list(
         db.scalars(
             select(FinancialObligation)
             .where(
@@ -340,8 +402,148 @@ def build_input_snapshot(  # noqa: PLR0913
             .order_by(FinancialObligation.id)
         )
     )
-    derived_as_of = max((item.as_of_date for item in balances if item.as_of_date), default=None)
+    balance_dates = {
+        item.id: _record_effective_date(
+            item.as_of_date,
+            periods_by_id.get(item.reporting_period_id) if item.reporting_period_id else None,
+        )
+        for item in balances
+    }
+    undated_balances = [
+        {"id": str(item.id), "balance_type": item.balance_type}
+        for item in balances
+        if balance_dates[item.id] is None
+    ]
+    if undated_balances:
+        raise CalculationInputError(
+            "financial_period_missing",
+            "Every balance must have an as-of date or a dated reporting period.",
+            {
+                "balances": undated_balances,
+                "corrective_action": (
+                    "Set an as-of date or assign a dated reporting period for each listed balance."
+                ),
+            },
+        )
+    derived_as_of = max((value for value in balance_dates.values() if value), default=None)
     as_of_date = requested_as_of_date or derived_as_of or scenario.created_at.date()
+    eligible_balance_dates = [
+        value for value in balance_dates.values() if value is not None and value <= as_of_date
+    ]
+    if not eligible_balance_dates:
+        raise CalculationInputError(
+            "financial_period_missing",
+            "No balance reporting period exists on or before the requested as-of date.",
+            {
+                "as_of_date": as_of_date.isoformat(),
+                "corrective_action": "Choose a later as-of date or add balances for this period.",
+            },
+        )
+    effective_balance_date = max(eligible_balance_dates)
+    balances = [item for item in balances if balance_dates[item.id] == effective_balance_date]
+    selected_period_ids = {
+        item.reporting_period_id for item in balances if item.reporting_period_id
+    }
+    if len(selected_period_ids) > 1:
+        raise CalculationInputError(
+            "financial_period_ambiguous",
+            "Balances resolve to multiple reporting periods for the same effective date.",
+            {
+                "reporting_period_ids": sorted(str(value) for value in selected_period_ids),
+                "effective_date": effective_balance_date.isoformat(),
+                "corrective_action": (
+                    "Assign the selected balances to one reporting period and run the "
+                    "forecast again."
+                ),
+            },
+        )
+    selected_period_id = next(iter(selected_period_ids)) if len(selected_period_ids) == 1 else None
+
+    undated_cash_flows = [
+        {"id": str(item.id), "category": item.category}
+        for item in cash_flows
+        if _record_effective_date(
+            item.cash_flow_date,
+            periods_by_id.get(item.reporting_period_id) if item.reporting_period_id else None,
+        )
+        is None
+    ]
+    if undated_cash_flows:
+        raise CalculationInputError(
+            "financial_period_missing",
+            "Every cash flow must have a date or a dated reporting period.",
+            {
+                "cash_flows": undated_cash_flows,
+                "corrective_action": (
+                    "Set a cash-flow date or assign a dated reporting period for each listed "
+                    "record."
+                ),
+            },
+        )
+    cash_flows = _select_period_records(
+        cash_flows,
+        periods_by_id,
+        as_of_date,
+        selected_period_id,
+        lambda item: item.cash_flow_date,
+    )
+    active_obligations = [
+        item
+        for item in all_obligations
+        if item.status == "active" and (item.start_date is None or item.start_date <= as_of_date)
+    ]
+    obligations = _select_period_records(
+        active_obligations,
+        periods_by_id,
+        as_of_date,
+        selected_period_id,
+        lambda _item: None,
+    )
+    incomplete_obligations = [
+        {
+            "id": str(item.id),
+            "dedupe_key": item.dedupe_key,
+            "obligation_type": item.obligation_type,
+            "missing_fields": [
+                field
+                for field, value in (
+                    ("principal_amount", item.principal_amount),
+                    ("outstanding_amount", item.outstanding_amount),
+                )
+                if value is None
+            ],
+        }
+        for item in obligations
+        if item.principal_amount is None or item.outstanding_amount is None
+    ]
+    if incomplete_obligations:
+        raise CalculationInputError(
+            "active_obligation_amounts_missing",
+            "Active obligations require principal and outstanding amounts.",
+            {
+                "obligations": incomplete_obligations,
+                "corrective_action": (
+                    "Enter every missing principal and outstanding amount, or mark an obligation "
+                    "inactive if it should not participate."
+                ),
+            },
+        )
+    unknown_balances = [
+        {"id": str(item.id), "balance_type": item.balance_type}
+        for item in balances
+        if _normalized_balance_type(item.balance_type) not in ASSET_TYPES | LIABILITY_TYPES
+    ]
+    if unknown_balances:
+        raise CalculationInputError(
+            "unknown_balance_type",
+            "Some balances cannot be classified as assets or liabilities.",
+            {
+                "balances": unknown_balances,
+                "corrective_action": "Change each listed balance to a supported canonical type.",
+                "supported_asset_types": sorted(ASSET_TYPES),
+                "supported_liability_types": sorted(LIABILITY_TYPES),
+            },
+        )
     financial_inputs = [
         *(("balance", item) for item in balances),
         *(("cash_flow", item) for item in cash_flows),
@@ -356,18 +558,30 @@ def build_input_snapshot(  # noqa: PLR0913
         raise CalculationInputError(
             "missing_currency",
             "Every financial input must have a reporting currency.",
-            {"inputs": missing_currency_inputs},
+            {
+                "inputs": missing_currency_inputs,
+                "corrective_action": "Set a currency on every listed financial record.",
+            },
         )
     currencies = sorted({item.currency for _, item in financial_inputs})
     if len(currencies) > 1:
         raise CalculationInputError(
             "multiple_currencies",
             "The first forecast supports one reporting currency per case.",
-            {"currencies": currencies},
+            {
+                "currencies": currencies,
+                "inputs": [
+                    {"type": input_type, "id": str(item.id), "currency": item.currency}
+                    for input_type, item in financial_inputs
+                ],
+                "corrective_action": (
+                    "Convert the selected-period inputs to one reporting currency."
+                ),
+            },
         )
     currency = currencies[0]
     numeric_assumptions = {
-        key: str(_decimal_assumption(by_key[key].value, key)) for key in REQUIRED_ASSUMPTIONS
+        key: str(_decimal_assumption(item.value, key)) for key, item in engine_assumptions.items()
     }
 
     snapshot: dict[str, Any] = {
@@ -392,6 +606,10 @@ def build_input_snapshot(  # noqa: PLR0913
         },
         "forecast_periods": forecast_periods,
         "as_of_date": as_of_date.isoformat(),
+        "effective_balance_date": effective_balance_date.isoformat(),
+        "reporting_period": _period_snapshot(
+            periods_by_id.get(selected_period_id) if selected_period_id else None
+        ),
         "currency": currency,
         "balances": [
             {
@@ -400,6 +618,9 @@ def build_input_snapshot(  # noqa: PLR0913
                 "amount": str(item.amount),
                 "currency": item.currency,
                 "as_of_date": item.as_of_date.isoformat() if item.as_of_date else None,
+                "reporting_period_id": (
+                    str(item.reporting_period_id) if item.reporting_period_id else None
+                ),
                 "updated_at": item.updated_at.isoformat(),
             }
             for item in balances
@@ -412,6 +633,9 @@ def build_input_snapshot(  # noqa: PLR0913
                 "category": item.category,
                 "currency": item.currency,
                 "cash_flow_date": item.cash_flow_date.isoformat() if item.cash_flow_date else None,
+                "reporting_period_id": (
+                    str(item.reporting_period_id) if item.reporting_period_id else None
+                ),
                 "updated_at": item.updated_at.isoformat(),
             }
             for item in cash_flows
@@ -419,16 +643,88 @@ def build_input_snapshot(  # noqa: PLR0913
         "obligations": [
             {
                 "id": str(item.id),
-                "principal_amount": str(item.principal_amount or 0),
-                "outstanding_amount": str(item.outstanding_amount or 0),
+                "principal_amount": str(item.principal_amount),
+                "outstanding_amount": str(item.outstanding_amount),
                 "currency": item.currency,
                 "status": item.status,
+                "reporting_period_id": (
+                    str(item.reporting_period_id) if item.reporting_period_id else None
+                ),
                 "updated_at": item.updated_at.isoformat(),
             }
             for item in obligations
         ],
     }
     return snapshot, as_of_date
+
+
+def _record_effective_date(
+    record_date: date | None, reporting_period: FinancialReportingPeriod | None
+) -> date | None:
+    if record_date is not None:
+        return record_date
+    if reporting_period is None:
+        return None
+    return reporting_period.as_of_date or reporting_period.end_date or reporting_period.start_date
+
+
+def _select_period_records(
+    records: list[Any],
+    periods_by_id: dict[UUID, FinancialReportingPeriod],
+    as_of_date: date,
+    selected_period_id: UUID | None,
+    record_date: Callable[[Any], date | None],
+) -> list[Any]:
+    selected_period = periods_by_id.get(selected_period_id) if selected_period_id else None
+    current: list[Any] = []
+    dated: list[tuple[Any, date]] = []
+    for item in records:
+        explicit_date = record_date(item)
+        period = periods_by_id.get(item.reporting_period_id) if item.reporting_period_id else None
+        effective_date = _record_effective_date(explicit_date, period)
+        if effective_date is not None and effective_date > as_of_date:
+            continue
+        if item.reporting_period_id is not None:
+            if selected_period_id is None:
+                if effective_date is not None:
+                    dated.append((item, effective_date))
+            elif item.reporting_period_id == selected_period_id:
+                current.append(item)
+            continue
+        if explicit_date is None or (
+            selected_period is not None and _date_in_period(explicit_date, selected_period)
+        ):
+            current.append(item)
+        elif selected_period is None:
+            dated.append((item, explicit_date))
+    if selected_period_id is not None or not dated:
+        return current
+    latest_date = max(value for _, value in dated)
+    return [*current, *(item for item, value in dated if value == latest_date)]
+
+
+def _date_in_period(value: date, period: FinancialReportingPeriod) -> bool:
+    if period.start_date is not None and value < period.start_date:
+        return False
+    boundary = period.end_date or period.as_of_date
+    return boundary is None or value <= boundary
+
+
+def _period_snapshot(period: FinancialReportingPeriod | None) -> dict[str, Any] | None:
+    if period is None:
+        return None
+    return {
+        "id": str(period.id),
+        "period_type": period.period_type,
+        "start_date": period.start_date.isoformat() if period.start_date else None,
+        "end_date": period.end_date.isoformat() if period.end_date else None,
+        "as_of_date": period.as_of_date.isoformat() if period.as_of_date else None,
+        "label": period.label,
+    }
+
+
+def _normalized_balance_type(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
 
 
 def calculate_forecast(snapshot: dict[str, Any]) -> list[ForecastValue]:
@@ -440,27 +736,31 @@ def calculate_forecast(snapshot: dict[str, Any]) -> list[ForecastValue]:
     repayment_rate = Decimal(assumptions["repayment_rate"])
     if delay_days < 0 or delay_days > 365:
         raise CalculationInputError(
-            "invalid_assumption", "Cash-flow delay must be between 0 and 365 days."
+            "invalid_assumption",
+            "Cash-flow delay must be between 0 and 365 days.",
+            {"corrective_action": "Update and review the cash-flow timing assumption."},
         )
     if credit_usage < 0 or credit_usage > 1 or repayment_rate < 0 or repayment_rate > 1:
         raise CalculationInputError(
-            "invalid_assumption", "Credit usage and repayment rates must be between 0 and 1."
+            "invalid_assumption",
+            "Credit usage and repayment rates must be between 0 and 1.",
+            {"corrective_action": "Update and review the listed rate assumptions."},
         )
 
     asset_balances = [
         Decimal(item["amount"])
         for item in snapshot["balances"]
-        if item["balance_type"].strip().lower() not in LIABILITY_TYPES
+        if _normalized_balance_type(item["balance_type"]) in ASSET_TYPES
     ]
     liability_balances = [
         Decimal(item["amount"])
         for item in snapshot["balances"]
-        if item["balance_type"].strip().lower() in LIABILITY_TYPES
+        if _normalized_balance_type(item["balance_type"]) in LIABILITY_TYPES
     ]
     cash_balances = [
         Decimal(item["amount"])
         for item in snapshot["balances"]
-        if item["balance_type"].strip().lower() in {"cash", "cash_and_equivalents"}
+        if _normalized_balance_type(item["balance_type"]) in {"cash", "cash_and_equivalents"}
     ]
     base_assets = sum(asset_balances, Decimal(0))
     base_cash = sum(cash_balances, Decimal(0))
@@ -533,13 +833,23 @@ def calculate_forecast(snapshot: dict[str, Any]) -> list[ForecastValue]:
 def _decimal_assumption(value: Any, key: str) -> Decimal:
     if isinstance(value, bool) or value is None:
         raise CalculationInputError(
-            "invalid_assumption", f"{key} must be a numeric value.", {"assumption": key}
+            "invalid_assumption",
+            f"{key} must be a numeric value.",
+            {
+                "assumption": key,
+                "corrective_action": "Enter a numeric value and review the assumption again.",
+            },
         )
     try:
         return Decimal(str(value))
     except (InvalidOperation, ValueError) as exc:
         raise CalculationInputError(
-            "invalid_assumption", f"{key} must be a numeric value.", {"assumption": key}
+            "invalid_assumption",
+            f"{key} must be a numeric value.",
+            {
+                "assumption": key,
+                "corrective_action": "Enter a numeric value and review the assumption again.",
+            },
         ) from exc
 
 
@@ -553,7 +863,12 @@ def _money(value: Decimal) -> Decimal:
         raise CalculationInputError(
             "calculation_output_out_of_range",
             "A forecast value exceeds the supported monetary range.",
-            {"maximum_absolute_value": str(MAX_STORED_MONEY)},
+            {
+                "maximum_absolute_value": str(MAX_STORED_MONEY),
+                "corrective_action": (
+                    "Correct oversized financial inputs and run the forecast again."
+                ),
+            },
         )
     try:
         rounded = value.quantize(MONEY, rounding=ROUND_HALF_UP)
@@ -561,13 +876,23 @@ def _money(value: Decimal) -> Decimal:
         raise CalculationInputError(
             "calculation_output_out_of_range",
             "A forecast value exceeds the supported monetary range.",
-            {"maximum_absolute_value": str(MAX_STORED_MONEY)},
+            {
+                "maximum_absolute_value": str(MAX_STORED_MONEY),
+                "corrective_action": (
+                    "Correct oversized financial inputs and run the forecast again."
+                ),
+            },
         ) from exc
     if abs(rounded) > MAX_STORED_MONEY:
         raise CalculationInputError(
             "calculation_output_out_of_range",
             "A forecast value exceeds the supported monetary range.",
-            {"maximum_absolute_value": str(MAX_STORED_MONEY)},
+            {
+                "maximum_absolute_value": str(MAX_STORED_MONEY),
+                "corrective_action": (
+                    "Correct oversized financial inputs and run the forecast again."
+                ),
+            },
         )
     return rounded
 
@@ -588,6 +913,93 @@ def _mark_failed(run: CalculationRun, error: CalculationInputError) -> None:
     run.error_details = error.details
 
 
+def _pending_snapshot(
+    case_id: UUID, scenario_id: UUID, forecast_periods: int, as_of_date: date
+) -> dict[str, Any]:
+    return {
+        "schema_version": INPUT_SCHEMA_VERSION,
+        "case_id": str(case_id),
+        "scenario_id": str(scenario_id),
+        "forecast_periods": forecast_periods,
+        "as_of_date": as_of_date.isoformat(),
+        "snapshot_status": "pending",
+    }
+
+
+def _failure_snapshot(
+    case_id: UUID,
+    scenario_id: UUID,
+    forecast_periods: int,
+    as_of_date: date,
+    error: CalculationInputError,
+) -> dict[str, Any]:
+    snapshot = _pending_snapshot(case_id, scenario_id, forecast_periods, as_of_date)
+    snapshot["snapshot_status"] = "rejected"
+    snapshot["validation_error"] = {
+        "code": error.code,
+        "message": error.message,
+        "details": error.details,
+    }
+    return snapshot
+
+
+def _begin_repeatable_read(db: Session) -> None:
+    bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        db.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+
+
+def _persist_failure(  # noqa: PLR0913
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    run_id: UUID,
+    error: CalculationInputError,
+    snapshot: dict[str, Any] | None = None,
+) -> None:
+    db.rollback()
+    run = _run_or_404(db, ctx, case_id, run_id)
+    if snapshot is not None:
+        run.inputs = snapshot
+        run.input_hash = _snapshot_hash(snapshot)
+        run.as_of_date = date.fromisoformat(snapshot["as_of_date"])
+    _mark_failed(run, error)
+    record_event(
+        db,
+        ctx,
+        event_type="calculation_run.failed",
+        entity_type="calculation_run",
+        entity_id=run.id,
+        details={"input_hash": run.input_hash, "output_periods": 0, "error_code": error.code},
+    )
+    db.commit()
+
+
+def _error_read(run: CalculationRun) -> CalculationErrorRead | None:
+    if not run.error_code or not run.error_message:
+        return None
+    return CalculationErrorRead(
+        code=run.error_code, message=run.error_message, details=run.error_details
+    )
+
+
+def _read_summary(run: CalculationRun) -> CalculationRunSummaryRead:
+    return CalculationRunSummaryRead(
+        id=run.id,
+        scenario_id=run.scenario_id,
+        rerun_of_run_id=run.rerun_of_run_id,
+        status=run.status,  # type: ignore[arg-type]
+        engine_version=run.engine_version,
+        input_hash=run.input_hash,
+        forecast_periods=run.forecast_periods,
+        as_of_date=run.as_of_date,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        error=_error_read(run),
+        created_at=run.created_at,
+    )
+
+
 def _read_run(db: Session, run: CalculationRun) -> CalculationRunRead:
     outputs = list(
         db.scalars(
@@ -600,11 +1012,6 @@ def _read_run(db: Session, run: CalculationRun) -> CalculationRunRead:
             .order_by(CalculationForecastPeriod.period_number)
         )
     )
-    error = None
-    if run.error_code and run.error_message:
-        error = CalculationErrorRead(
-            code=run.error_code, message=run.error_message, details=run.error_details
-        )
     return CalculationRunRead(
         id=run.id,
         organization_id=run.organization_id,
@@ -621,7 +1028,7 @@ def _read_run(db: Session, run: CalculationRun) -> CalculationRunRead:
         as_of_date=run.as_of_date,
         started_at=run.started_at,
         completed_at=run.completed_at,
-        error=error,
+        error=_error_read(run),
         outputs=[ForecastPeriodRead.model_validate(item) for item in outputs],
         created_by=run.created_by,
         created_at=run.created_at,
@@ -642,6 +1049,22 @@ def _run_or_404(db: Session, ctx: TenantContext, case_id: UUID, run_id: UUID) ->
             status_code=status.HTTP_404_NOT_FOUND, detail="Calculation run not found."
         )
     return row
+
+
+def _scenario_or_404(
+    db: Session, ctx: TenantContext, case_id: UUID, scenario_id: UUID
+) -> RiskScenario:
+    scenario = db.scalar(
+        select(RiskScenario).where(
+            RiskScenario.id == scenario_id,
+            RiskScenario.organization_id == ctx.organization_id,
+            RiskScenario.case_id == case_id,
+            RiskScenario.archived_at.is_(None),
+        )
+    )
+    if scenario is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found.")
+    return scenario
 
 
 def _require_actor(ctx: TenantContext) -> None:

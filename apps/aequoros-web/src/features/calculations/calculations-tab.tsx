@@ -1,5 +1,6 @@
 import type {
   CalculationRunRead,
+  CalculationRunSummaryRead,
   CalculationStatus,
   ForecastPeriodRead,
 } from "@aequoros/risk-service-api";
@@ -42,14 +43,16 @@ export function CalculationsTab({
   caseId: string;
 }) {
   const queryClient = useQueryClient();
-  const runsKey = ["calculation-runs", tenant, caseId] as const;
+  const [runOffset, setRunOffset] = useState(0);
+  const runsKey = ["calculation-runs", tenant, caseId, runOffset] as const;
   const scenarios = useQuery({
     queryKey: ["scenarios", tenant, caseId],
     queryFn: () => riskApi.scenarios(tenant, caseId),
   });
   const runs = useQuery({
     queryKey: runsKey,
-    queryFn: () => riskApi.calculationRuns(tenant, caseId),
+    queryFn: () =>
+      riskApi.calculationRuns(tenant, caseId, undefined, 25, runOffset),
     refetchInterval: (query) =>
       query.state.data?.runs.some((run) =>
         (["queued", "running"] as CalculationStatus[]).includes(run.status),
@@ -60,6 +63,26 @@ export function CalculationsTab({
   const [scenarioId, setScenarioId] = useState("");
   const [forecastPeriods, setForecastPeriods] = useState("3");
   const [selectedRunId, setSelectedRunId] = useState("");
+  const selectedRun = useQuery({
+    queryKey: ["calculation-run", tenant, caseId, selectedRunId],
+    queryFn: () => riskApi.calculationRun(tenant, caseId, selectedRunId),
+    enabled: Boolean(
+      selectedRunId && runs.data?.runs.some((run) => run.id === selectedRunId),
+    ),
+    refetchInterval: (query) =>
+      query.state.data &&
+      (["queued", "running"] as CalculationStatus[]).includes(
+        query.state.data.status,
+      )
+        ? 1000
+        : false,
+  });
+
+  useEffect(() => {
+    setRunOffset(0);
+    setScenarioId("");
+    setSelectedRunId("");
+  }, [caseId, tenant.orgId]);
 
   useEffect(() => {
     if (!scenarios.data) return;
@@ -91,8 +114,12 @@ export function CalculationsTab({
     : (scenarios.data?.scenarios[0]?.id ?? "");
 
   const refreshRuns = async (run: CalculationRunRead, message: string) => {
+    setRunOffset(0);
     setSelectedRunId(run.id);
-    await queryClient.invalidateQueries({ queryKey: runsKey });
+    queryClient.setQueryData(["calculation-run", tenant, caseId, run.id], run);
+    await queryClient.invalidateQueries({
+      queryKey: ["calculation-runs", tenant, caseId],
+    });
     if (run.status === "failed") toast.error(run.error?.message ?? message);
     else toast.success(message);
   };
@@ -123,11 +150,8 @@ export function CalculationsTab({
       </Alert>
     );
   }
-  const selectedRun =
-    runs.data?.runs.find((run) => run.id === selectedRunId) ??
-    runs.data?.runs[0];
-  const latestSuccessful = runs.data?.runs.find(
-    (run) => run.id === runs.data?.latestSuccessfulRunId,
+  const selectedSummary = runs.data?.runs.find(
+    (run) => run.id === selectedRunId,
   );
   const isSubmitting = start.isPending || rerun.isPending;
 
@@ -185,7 +209,7 @@ export function CalculationsTab({
         ) : null}
       </Panel>
 
-      {!selectedRun ? (
+      {!selectedSummary ? (
         <Alert title="No calculation runs">
           Select a scenario and run the first forecast. Outputs and failures
           will remain here as versioned history.
@@ -194,18 +218,32 @@ export function CalculationsTab({
         <div className="grid gap-3 @5xl/calculations:grid-cols-[250px_minmax(0,1fr)]">
           <RunHistory
             runs={runs.data?.runs ?? []}
-            selectedRunId={selectedRun.id}
+            total={runs.data?.total ?? 0}
+            selectedRunId={selectedSummary.id}
             onSelect={setSelectedRunId}
-          />
-          <RunOutput
-            run={selectedRun}
-            latestSuccessful={latestSuccessful}
-            isRerunning={rerun.isPending}
-            onRerun={() => rerun.mutate(selectedRun.id)}
-            onShowLatest={() =>
-              latestSuccessful && setSelectedRunId(latestSuccessful.id)
+            hasMore={runs.data?.hasMore ?? false}
+            offset={runs.data?.offset ?? 0}
+            onPrevious={() =>
+              setRunOffset((current) => Math.max(0, current - 25))
             }
+            onNext={() => setRunOffset((current) => current + 25)}
           />
+          {selectedRun.isLoading ? (
+            <Skeleton className="h-72" />
+          ) : selectedRun.isError ? (
+            <ErrorPanel error={selectedRun.error} />
+          ) : selectedRun.data ? (
+            <RunOutput
+              run={selectedRun.data}
+              latestSuccessfulRunId={runs.data?.latestSuccessfulRunId}
+              isRerunning={rerun.isPending}
+              onRerun={() => rerun.mutate(selectedRun.data.id)}
+              onShowLatest={() =>
+                runs.data?.latestSuccessfulRunId &&
+                setSelectedRunId(runs.data.latestSuccessfulRunId)
+              }
+            />
+          ) : null}
         </div>
       )}
       {rerun.isError ? <ErrorPanel error={rerun.error} /> : null}
@@ -215,16 +253,26 @@ export function CalculationsTab({
 
 function RunHistory({
   runs,
+  total,
   selectedRunId,
   onSelect,
+  hasMore,
+  offset,
+  onPrevious,
+  onNext,
 }: {
-  runs: CalculationRunRead[];
+  runs: CalculationRunSummaryRead[];
+  total: number;
   selectedRunId: string;
   onSelect: (id: string) => void;
+  hasMore: boolean;
+  offset: number;
+  onPrevious: () => void;
+  onNext: () => void;
 }) {
   return (
     <Panel>
-      <PanelHeader title="Run history" meta={`${runs.length} persisted`} />
+      <PanelHeader title="Run history" meta={`${total} persisted`} />
       <div className="space-y-2 p-3">
         {runs.map((run) => (
           <button
@@ -246,6 +294,26 @@ function RunHistory({
             </span>
           </button>
         ))}
+        {offset > 0 || hasMore ? (
+          <div className="flex justify-between gap-2 pt-1">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={offset === 0}
+              onClick={onPrevious}
+            >
+              Previous
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!hasMore}
+              onClick={onNext}
+            >
+              Next
+            </Button>
+          </div>
+        ) : null}
       </div>
     </Panel>
   );
@@ -253,13 +321,13 @@ function RunHistory({
 
 function RunOutput({
   run,
-  latestSuccessful,
+  latestSuccessfulRunId,
   isRerunning,
   onRerun,
   onShowLatest,
 }: {
   run: CalculationRunRead;
-  latestSuccessful?: CalculationRunRead;
+  latestSuccessfulRunId?: string | null;
   isRerunning: boolean;
   onRerun: () => void;
   onShowLatest: () => void;
@@ -298,7 +366,8 @@ function RunOutput({
             >
               {run.error?.message ?? "The forecast did not complete."}
             </Alert>
-            {latestSuccessful && latestSuccessful.id !== run.id ? (
+            <DiagnosticDetails details={run.error?.details} />
+            {latestSuccessfulRunId && latestSuccessfulRunId !== run.id ? (
               <Alert title="Prior valid output preserved">
                 <button
                   type="button"
@@ -323,6 +392,88 @@ function RunOutput({
       </div>
     </Panel>
   );
+}
+
+function DiagnosticDetails({
+  details,
+}: {
+  details?: Record<string, unknown> | null;
+}) {
+  if (!details) return null;
+  const correctiveAction =
+    typeof details.corrective_action === "string"
+      ? details.corrective_action
+      : null;
+  const records = [
+    "obligations",
+    "balances",
+    "cash_flows",
+    "inputs",
+    "ambiguous_categories",
+    "missing_values",
+  ]
+    .flatMap((key) => (Array.isArray(details[key]) ? details[key] : []))
+    .filter((item): item is Record<string, unknown> =>
+      Boolean(item && typeof item === "object"),
+    );
+  const missing = [
+    "missing_categories",
+    "unreviewed_assumptions",
+    "reporting_period_ids",
+  ]
+    .flatMap((key) => (Array.isArray(details[key]) ? details[key] : []))
+    .filter((item): item is string => typeof item === "string");
+  if (!correctiveAction && !records.length && !missing.length) return null;
+  return (
+    <Alert title="How to resolve this run" tone="warning">
+      {correctiveAction ? <p>{correctiveAction}</p> : null}
+      {records.length ? (
+        <ul className="mt-2 list-disc space-y-1 pl-4 font-mono text-xs">
+          {records.map((record, index) => (
+            <li
+              key={`${String(record.id ?? record.category ?? index)}-${index}`}
+            >
+              {diagnosticRecord(record)}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {missing.length ? (
+        <p className="mt-2">Required: {missing.join(", ")}</p>
+      ) : null}
+    </Alert>
+  );
+}
+
+function diagnosticRecord(record: Record<string, unknown>) {
+  const identity = [
+    record.type,
+    record.balance_type,
+    record.obligation_type,
+    record.category,
+    record.currency,
+    record.key,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" · ");
+  const missingFields = Array.isArray(record.missing_fields)
+    ? record.missing_fields.filter(
+        (value): value is string => typeof value === "string",
+      )
+    : [];
+  const assumptionIds = Array.isArray(record.assumption_ids)
+    ? record.assumption_ids.filter(
+        (value): value is string => typeof value === "string",
+      )
+    : [];
+  return [
+    identity,
+    typeof record.id === "string" ? record.id : null,
+    missingFields.length ? `missing ${missingFields.join(", ")}` : null,
+    assumptionIds.length ? `assumptions ${assumptionIds.join(", ")}` : null,
+  ]
+    .filter(Boolean)
+    .join(" — ");
 }
 
 function ForecastTable({ rows }: { rows: ForecastPeriodRead[] }) {

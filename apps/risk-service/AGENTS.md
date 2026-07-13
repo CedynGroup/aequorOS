@@ -35,6 +35,9 @@ This file is the starting point for agents working in `apps/risk-service`.
   complete deterministic input snapshot and SHA-256 input hash with engine,
   input-schema, and output-schema versions. Reruns must append history and never
   replace prior successful forecast periods.
+- Commit queued and running lifecycle states before synchronous execution. Build
+  each financial snapshot in a repeatable-read transaction from one effective
+  reporting period, and return paginated summaries from history endpoints.
 
 ## Commit Messages
 

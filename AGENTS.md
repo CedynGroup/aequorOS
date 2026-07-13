@@ -25,3 +25,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   Runs are immutable snapshots: reruns create a new row with current canonical
   financial data and reviewed scenario assumptions, while prior successful
   outputs and failed-run diagnostics remain available.
+- Forecast snapshots use the latest effective balance reporting period on or
+  before the requested as-of date. Only active obligations participate, and
+  active obligations require both principal and outstanding amounts.
+- Calculation history endpoints return paginated run summaries; fetch a run by
+  ID for its immutable input snapshot and forecast outputs.

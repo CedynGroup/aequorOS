@@ -257,11 +257,18 @@ def test_calculation_contracts_include_lifecycle_errors_versions_and_outputs(
     assert paths[base]["get"]["operationId"] == "listCalculationRuns"
     assert paths[base]["post"]["operationId"] == "startCalculationRun"
     assert paths[f"{base}/{{run_id}}"]["get"]["operationId"] == "getCalculationRun"
-    assert paths[f"{base}/{{run_id}}/rerun"]["post"]["operationId"] == (
-        "rerunCalculation"
-    )
+    assert paths[f"{base}/{{run_id}}/rerun"]["post"]["operationId"] == ("rerunCalculation")
     assert components["CalculationRunCreate"]["additionalProperties"] is False
     assert components["CalculationRerunCreate"]["additionalProperties"] is False
+    list_parameters = {
+        parameter["name"]: parameter for parameter in paths[base]["get"]["parameters"]
+    }
+    assert list_parameters["limit"]["schema"]["maximum"] == 100
+    assert list_parameters["offset"]["schema"]["minimum"] == 0
+    assert {"runs", "total", "limit", "offset", "has_more"} <= set(
+        components["CalculationRunListRead"]["required"]
+    )
+    assert {"inputs", "outputs"}.isdisjoint(components["CalculationRunSummaryRead"]["properties"])
     assert {
         "status",
         "engine_version",

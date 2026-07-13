@@ -44,6 +44,8 @@ export interface ListCalculationRunsRequest {
   caseId: string;
   xOrgId: string;
   scenarioId?: string | null;
+  limit?: number;
+  offset?: number;
   xUserId?: string | null;
 }
 
@@ -168,6 +170,14 @@ export class CalculationsApi extends runtime.BaseAPI {
 
     if (requestParameters["scenarioId"] != null) {
       queryParameters["scenario_id"] = requestParameters["scenarioId"];
+    }
+
+    if (requestParameters["limit"] != null) {
+      queryParameters["limit"] = requestParameters["limit"];
+    }
+
+    if (requestParameters["offset"] != null) {
+      queryParameters["offset"] = requestParameters["offset"];
     }
 
     const headerParameters: runtime.HTTPHeaders = {};

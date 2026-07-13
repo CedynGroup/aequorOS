@@ -105,6 +105,10 @@ function runList(items: CalculationRunRead[] = []): CalculationRunListRead {
     runs: items,
     latestSuccessfulRunId:
       items.find((item) => item.status === "succeeded")?.id ?? null,
+    total: items.length,
+    limit: 25,
+    offset: 0,
+    hasMore: false,
   };
 }
 
@@ -112,6 +116,7 @@ describe("CalculationsTab", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(riskApi, "scenarios").mockResolvedValue(scenarioWorkspace());
+    vi.spyOn(riskApi, "calculationRun").mockResolvedValue(run());
   });
 
   it("shows the empty state then starts and renders a successful forecast", async () => {
@@ -140,9 +145,9 @@ describe("CalculationsTab", () => {
   });
 
   it("shows running status and disables rerun while polling", async () => {
-    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(
-      runList([run({ status: "running", outputs: [] })]),
-    );
+    const running = run({ status: "running", outputs: [] });
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList([running]));
+    vi.mocked(riskApi.calculationRun).mockResolvedValue(running);
     renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
     expect(await screen.findByText("Forecast is running")).toBeInTheDocument();
     expect(
@@ -158,19 +163,37 @@ describe("CalculationsTab", () => {
       status: "failed",
       outputs: [],
       error: {
-        code: "scenario_not_ready",
-        message: "Scenario assumptions require review.",
-        details: {},
+        code: "active_obligation_amounts_missing",
+        message:
+          "Active obligations require principal and outstanding amounts.",
+        details: {
+          corrective_action: "Enter every missing amount.",
+          obligations: [
+            {
+              id: "50000000-0000-4000-8000-000000000001",
+              obligation_type: "term_loan",
+              missing_fields: ["outstanding_amount"],
+            },
+          ],
+        },
       },
       createdAt: new Date("2026-07-13T13:00:00Z"),
     });
-    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue({
-      caseId,
-      runs: [failed, successful],
-      latestSuccessfulRunId: successful.id,
-    });
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(
+      runList([failed, successful]),
+    );
+    vi.mocked(riskApi.calculationRun).mockImplementation(
+      (_tenant, _caseId, requestedRunId) =>
+        Promise.resolve(requestedRunId === failed.id ? failed : successful),
+    );
     renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
-    expect(await screen.findByText("scenario_not_ready")).toBeInTheDocument();
+    expect(
+      await screen.findByText("active_obligation_amounts_missing"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Enter every missing amount.")).toBeInTheDocument();
+    expect(
+      screen.getByText(/50000000-0000-4000-8000-000000000001/),
+    ).toHaveTextContent("missing outstanding_amount");
     expect(
       screen.getByText("Prior valid output preserved"),
     ).toBeInTheDocument();
@@ -212,6 +235,38 @@ describe("CalculationsTab", () => {
     expect(start).not.toHaveBeenCalled();
   });
 
+  it("pages through run summaries and fetches details separately", async () => {
+    const user = userEvent.setup();
+    const firstPage = { ...runList([run()]), total: 26, hasMore: true };
+    const secondRun = run({ id: "30000000-0000-4000-8000-000000000026" });
+    const list = vi
+      .spyOn(riskApi, "calculationRuns")
+      .mockImplementation((_tenant, _caseId, _scenarioId, _limit, offset) =>
+        Promise.resolve(
+          offset === 25
+            ? { ...runList([secondRun]), total: 26, offset: 25 }
+            : firstPage,
+        ),
+      );
+    vi.mocked(riskApi.calculationRun).mockImplementation(
+      (_tenant, _caseId, requestedRunId) =>
+        Promise.resolve(requestedRunId === secondRun.id ? secondRun : run()),
+    );
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+    await user.click(await screen.findByRole("button", { name: "Next" }));
+
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(tenant, caseId, undefined, 25, 25),
+    );
+    expect(await screen.findByText("30000000...0026")).toBeInTheDocument();
+    expect(riskApi.calculationRun).toHaveBeenCalledWith(
+      tenant,
+      caseId,
+      secondRun.id,
+    );
+  });
+
   it("resets scenario and run selections when the case changes", async () => {
     const user = userEvent.setup();
     const nextCaseId = "90000000-0000-4000-8000-000000000002";
@@ -243,6 +298,10 @@ describe("CalculationsTab", () => {
             : runList([run()]),
         ),
     );
+    vi.mocked(riskApi.calculationRun).mockImplementation(
+      (_tenant, requestedCaseId) =>
+        Promise.resolve(requestedCaseId === nextCaseId ? nextRun : run()),
+    );
     const start = vi
       .spyOn(riskApi, "startCalculation")
       .mockResolvedValue(nextRun);
@@ -271,13 +330,11 @@ describe("CalculationsTab", () => {
   });
 
   it("formats large decimal outputs without losing precision", async () => {
-    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(
-      runList([
-        run({
-          outputs: [{ ...output(), totalAssets: "9007199254740993.1200" }],
-        }),
-      ]),
-    );
+    const largeRun = run({
+      outputs: [{ ...output(), totalAssets: "9007199254740993.1200" }],
+    });
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList([largeRun]));
+    vi.mocked(riskApi.calculationRun).mockResolvedValue(largeRun);
     renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
 
     expect(

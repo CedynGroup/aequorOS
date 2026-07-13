@@ -75,7 +75,26 @@ class CalculationRunRead(ClosedModel):
     updated_at: datetime
 
 
+class CalculationRunSummaryRead(ClosedModel):
+    id: UUID
+    scenario_id: UUID
+    rerun_of_run_id: UUID | None
+    status: CalculationStatus
+    engine_version: str
+    input_hash: str
+    forecast_periods: int
+    as_of_date: date
+    started_at: datetime | None
+    completed_at: datetime | None
+    error: CalculationRunError
+    created_at: datetime
+
+
 class CalculationRunListRead(ClosedModel):
     case_id: UUID
-    runs: list[CalculationRunRead]
+    runs: list[CalculationRunSummaryRead]
     latest_successful_run_id: UUID | None
+    total: int
+    limit: int
+    offset: int
+    has_more: bool

@@ -221,9 +221,19 @@ export const riskApi = {
       FinancialDataWorkspaceReadFromJSON,
     );
   },
-  calculationRuns(tenant: TenantHeaders, caseId: string, scenarioId?: string) {
+  calculationRuns(
+    tenant: TenantHeaders,
+    caseId: string,
+    scenarioId?: string,
+    limit = 25,
+    offset = 0,
+  ) {
     return apiJson<CalculationRunListRead>(
-      `/cases/${caseId}/calculation-runs${toQuery({ scenario_id: scenarioId })}`,
+      `/cases/${caseId}/calculation-runs${toQuery({
+        scenario_id: scenarioId,
+        limit,
+        offset,
+      })}`,
       tenant,
       CalculationRunListReadFromJSON,
     );

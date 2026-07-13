@@ -18,13 +18,17 @@ router = APIRouter(tags=["calculations"])
 
 
 @router.get("/cases/{case_id}/calculation-runs", response_model=CalculationRunListRead)
-def list_calculation_runs(
+def list_calculation_runs(  # noqa: PLR0913
     case_id: UUID,
     db: DbSession,
     ctx: Tenant,
     scenario_id: Annotated[UUID | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CalculationRunListRead:
-    return calculations.list_runs(db, ctx, case_id, scenario_id=scenario_id)
+    return calculations.list_runs(
+        db, ctx, case_id, scenario_id=scenario_id, limit=limit, offset=offset
+    )
 
 
 @router.post(

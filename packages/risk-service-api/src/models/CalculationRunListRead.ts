@@ -13,13 +13,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { CalculationRunRead } from "./CalculationRunRead";
+import type { CalculationRunSummaryRead } from "./CalculationRunSummaryRead";
 import {
-  CalculationRunReadFromJSON,
-  CalculationRunReadFromJSONTyped,
-  CalculationRunReadToJSON,
-  CalculationRunReadToJSONTyped,
-} from "./CalculationRunRead";
+  CalculationRunSummaryReadFromJSON,
+  CalculationRunSummaryReadFromJSONTyped,
+  CalculationRunSummaryReadToJSON,
+  CalculationRunSummaryReadToJSONTyped,
+} from "./CalculationRunSummaryRead";
 import type { LatestSuccessfulRunId } from "./LatestSuccessfulRunId";
 import {
   LatestSuccessfulRunIdFromJSON,
@@ -42,16 +42,40 @@ export interface CalculationRunListRead {
   caseId: string;
   /**
    *
+   * @type {boolean}
+   * @memberof CalculationRunListRead
+   */
+  hasMore: boolean;
+  /**
+   *
    * @type {LatestSuccessfulRunId}
    * @memberof CalculationRunListRead
    */
   latestSuccessfulRunId: LatestSuccessfulRunId;
   /**
    *
-   * @type {Array<CalculationRunRead>}
+   * @type {number}
    * @memberof CalculationRunListRead
    */
-  runs: Array<CalculationRunRead>;
+  limit: number;
+  /**
+   *
+   * @type {number}
+   * @memberof CalculationRunListRead
+   */
+  offset: number;
+  /**
+   *
+   * @type {Array<CalculationRunSummaryRead>}
+   * @memberof CalculationRunListRead
+   */
+  runs: Array<CalculationRunSummaryRead>;
+  /**
+   *
+   * @type {number}
+   * @memberof CalculationRunListRead
+   */
+  total: number;
 }
 
 /**
@@ -61,12 +85,16 @@ export function instanceOfCalculationRunListRead(
   value: object,
 ): value is CalculationRunListRead {
   if (!("caseId" in value) || value["caseId"] === undefined) return false;
+  if (!("hasMore" in value) || value["hasMore"] === undefined) return false;
   if (
     !("latestSuccessfulRunId" in value) ||
     value["latestSuccessfulRunId"] === undefined
   )
     return false;
+  if (!("limit" in value) || value["limit"] === undefined) return false;
+  if (!("offset" in value) || value["offset"] === undefined) return false;
   if (!("runs" in value) || value["runs"] === undefined) return false;
+  if (!("total" in value) || value["total"] === undefined) return false;
   return true;
 }
 
@@ -86,10 +114,14 @@ export function CalculationRunListReadFromJSONTyped(
   return {
     ...json,
     caseId: json["case_id"],
+    hasMore: json["has_more"],
     latestSuccessfulRunId: LatestSuccessfulRunIdFromJSON(
       json["latest_successful_run_id"],
     ),
-    runs: (json["runs"] as Array<any>).map(CalculationRunReadFromJSON),
+    limit: json["limit"],
+    offset: json["offset"],
+    runs: (json["runs"] as Array<any>).map(CalculationRunSummaryReadFromJSON),
+    total: json["total"],
   };
 }
 
@@ -109,9 +141,13 @@ export function CalculationRunListReadToJSONTyped(
 
   return {
     case_id: value["caseId"],
+    has_more: value["hasMore"],
     latest_successful_run_id: LatestSuccessfulRunIdToJSON(
       value["latestSuccessfulRunId"],
     ),
-    runs: (value["runs"] as Array<any>).map(CalculationRunReadToJSON),
+    limit: value["limit"],
+    offset: value["offset"],
+    runs: (value["runs"] as Array<any>).map(CalculationRunSummaryReadToJSON),
+    total: value["total"],
   };
 }

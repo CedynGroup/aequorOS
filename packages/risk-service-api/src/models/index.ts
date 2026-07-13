@@ -20,6 +20,7 @@ export * from "./CalculationRerunCreate";
 export * from "./CalculationRunCreate";
 export * from "./CalculationRunListRead";
 export * from "./CalculationRunRead";
+export * from "./CalculationRunSummaryRead";
 export * from "./CalculationStatus";
 export * from "./CaseAssign";
 export * from "./CaseBulkActionErrorRead";

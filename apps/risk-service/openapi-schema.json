@@ -504,6 +504,10 @@
             "title": "Case Id",
             "type": "string"
           },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
           "latest_successful_run_id": {
             "anyOf": [
               {
@@ -516,18 +520,34 @@
             ],
             "title": "Latest Successful Run Id"
           },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
           "runs": {
             "items": {
-              "$ref": "#/components/schemas/CalculationRunRead"
+              "$ref": "#/components/schemas/CalculationRunSummaryRead"
             },
             "title": "Runs",
             "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
           "case_id",
           "runs",
-          "latest_successful_run_id"
+          "latest_successful_run_id",
+          "total",
+          "limit",
+          "offset",
+          "has_more"
         ],
         "title": "CalculationRunListRead",
         "type": "object"
@@ -673,6 +693,101 @@
           "updated_at"
         ],
         "title": "CalculationRunRead",
+        "type": "object"
+      },
+      "CalculationRunSummaryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "error": {
+            "$ref": "#/components/schemas/CalculationRunError"
+          },
+          "forecast_periods": {
+            "title": "Forecast Periods",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_hash": {
+            "title": "Input Hash",
+            "type": "string"
+          },
+          "rerun_of_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rerun Of Run Id"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CalculationStatus"
+          }
+        },
+        "required": [
+          "id",
+          "scenario_id",
+          "rerun_of_run_id",
+          "status",
+          "engine_version",
+          "input_hash",
+          "forecast_periods",
+          "as_of_date",
+          "started_at",
+          "completed_at",
+          "error",
+          "created_at"
+        ],
+        "title": "CalculationRunSummaryRead",
         "type": "object"
       },
       "CalculationStatus": {
@@ -9058,6 +9173,29 @@
                 }
               ],
               "title": "Scenario Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           },
           {

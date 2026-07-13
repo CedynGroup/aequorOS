@@ -31,6 +31,7 @@ from app.schemas.scenarios import (
 )
 from app.services.audit import record_event
 from app.services.cases import get_case_or_404
+from app.services.scenario_semantics import resolve_engine_assumptions
 
 REQUIRED_CATEGORIES = (
     "growth",
@@ -458,9 +459,9 @@ def readiness_for(db: Session, ctx: TenantContext, case_id: UUID) -> ScenarioRea
 
 def _validation(scenario: ScenarioRead) -> ScenarioValidationRead:
     issues: list[ScenarioValidationIssue] = []
-    categories = {assumption.category for assumption in scenario.assumptions}
+    _, missing_categories, ambiguous_categories = resolve_engine_assumptions(scenario.assumptions)
     for category in REQUIRED_CATEGORIES:
-        if category not in categories:
+        if category in missing_categories:
             issues.append(
                 ScenarioValidationIssue(
                     code="required_category_missing",
@@ -468,6 +469,14 @@ def _validation(scenario: ScenarioRead) -> ScenarioValidationRead:
                     category=category,  # type: ignore[arg-type]
                 )
             )
+    for ambiguity in ambiguous_categories:
+        issues.append(
+            ScenarioValidationIssue(
+                code="required_category_ambiguous",
+                message=ambiguity["corrective_action"],
+                category=ambiguity["category"],
+            )
+        )
     for assumption in scenario.assumptions:
         if assumption.value is None:
             issues.append(
