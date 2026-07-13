@@ -524,6 +524,7 @@ function AssumptionRow({
     setPersistedValue(assumption.value);
   }, [assumption.updatedAt, assumption.value]);
   const nextValue = typedValue(value, valueType);
+  const validValue = isValidValue(value, valueType);
   const dirty =
     valueType !== valueTypeOf(persistedValue) || nextValue !== persistedValue;
   const update = useMutation({
@@ -588,16 +589,16 @@ function AssumptionRow({
         <Button
           size="sm"
           variant="outline"
-          disabled={
-            !dirty || !isValidValue(value, valueType) || update.isPending
-          }
+          disabled={!dirty || !validValue || update.isPending}
           onClick={() => update.mutate()}
         >
           Save
         </Button>
         <Button
           size="sm"
-          disabled={dirty || update.isPending || review.isPending}
+          disabled={
+            dirty || !validValue || update.isPending || review.isPending
+          }
           onClick={() => review.mutate()}
         >
           Review

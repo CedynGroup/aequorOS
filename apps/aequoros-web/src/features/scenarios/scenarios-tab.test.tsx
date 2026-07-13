@@ -272,6 +272,32 @@ describe("ScenariosTab", () => {
     });
   });
 
+  it.each([
+    { persistedValue: 0, invalidValue: "" },
+    { persistedValue: false, invalidValue: "invalid" },
+  ])(
+    "prevents reviewing $persistedValue while invalid text is displayed",
+    async ({ persistedValue, invalidValue }) => {
+      const user = userEvent.setup();
+      vi.spyOn(riskApi, "scenarios").mockResolvedValue(
+        workspace([
+          scenario({ assumptions: [assumption({ value: persistedValue })] }),
+        ]),
+      );
+      const review = vi
+        .spyOn(riskApi, "reviewAssumption")
+        .mockResolvedValue(mutation());
+
+      renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+      const value = await screen.findByLabelText("Revenue growth value");
+      await user.clear(value);
+      if (invalidValue) await user.type(value, invalidValue);
+
+      expect(screen.getByRole("button", { name: "Review" })).toBeDisabled();
+      expect(review).not.toHaveBeenCalled();
+    },
+  );
+
   it("renders API errors explicitly", async () => {
     vi.spyOn(riskApi, "scenarios").mockRejectedValue({
       statusCode: 503,
