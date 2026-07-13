@@ -775,9 +775,6 @@ function MutationForm({
     [config, record],
   );
   const [values, setValues] = useState<FormValues>(initialValues);
-  const [changedFields, setChangedFields] = useState<Set<string>>(
-    () => new Set(),
-  );
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
@@ -797,6 +794,11 @@ function MutationForm({
     );
     if (missing) {
       setFieldError(`${missing.label ?? labelize(missing.key)} is required.`);
+      return;
+    }
+    const changedFields = changedFieldKeys(config, initialValues, values);
+    if (mode === "update" && changedFields.size === 0) {
+      setFieldError("Change at least one field before saving a correction.");
       return;
     }
     if (!config.kind || saving) return;
@@ -935,7 +937,6 @@ function MutationForm({
 
   function updateField(key: string, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
-    setChangedFields((current) => new Set(current).add(key));
   }
 }
 
@@ -966,6 +967,22 @@ function valuesFromRecord(
   return Object.fromEntries(
     config.fields.map((field) => [field.key, inputValue(values?.[field.key])]),
   ) as FormValues;
+}
+
+function changedFieldKeys(
+  config: SectionConfig,
+  initialValues: FormValues,
+  values: FormValues,
+) {
+  return new Set(
+    config.fields
+      .map((field) => field.key)
+      .filter(
+        (key) =>
+          (optional(values, key) ?? null) !==
+          (optional(initialValues, key) ?? null),
+      ),
+  );
 }
 
 function inputValue(value: unknown) {

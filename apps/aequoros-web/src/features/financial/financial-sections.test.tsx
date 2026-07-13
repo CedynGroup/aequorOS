@@ -294,6 +294,39 @@ describe("FinancialSections", () => {
     ).toBeInTheDocument();
   });
 
+  it("rejects unchanged corrections after a field is reverted", async () => {
+    const user = userEvent.setup();
+    const update = vi.fn<FinancialReviewClient["update"]>();
+
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ update })}
+        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const form = screen.getByRole("form", { name: "Edit institution" });
+    const name = within(form).getByLabelText("Name");
+    await user.clear(name);
+    await user.type(name, "Temporary name");
+    await user.clear(name);
+    await user.type(name, " Northstar Bank ");
+    await user.type(within(form).getByLabelText("Reason"), "Review complete");
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    expect(
+      within(form).getByText(/Change at least one field/),
+    ).toBeInTheDocument();
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it("preserves failed manual-entry input and retries successfully", async () => {
     const user = userEvent.setup();
     const covenantRecord = {

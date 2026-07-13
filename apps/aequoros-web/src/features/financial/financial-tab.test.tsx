@@ -144,4 +144,46 @@ describe("FinancialTab", () => {
       await within(controls).findByText(/Validation refreshed: 1 issues/),
     ).toBeInTheDocument();
   });
+
+  it("reports a mapping refresh failure instead of declaring success", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(financialReviewClient, "workspace")
+      .mockResolvedValueOnce(emptyWorkspace())
+      .mockRejectedValueOnce(new Error("Workspace refresh failed"));
+    vi.spyOn(financialReviewClient, "map").mockResolvedValue({
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      documentId: "document-1",
+      documentExtractionId: "extraction-1",
+      created: {},
+      reused: {},
+      summary: {
+        sourceRowCount: 1,
+        mappedSourceRowCount: 1,
+        unmappedSourceRowCount: 0,
+      },
+      unmappedRows: [],
+    });
+    renderWithQuery(
+      <FinancialTab tenant={tenant} caseId="case-1" mockWorkspace={false} />,
+    );
+    const controls = await screen.findByLabelText(
+      "Map and validate financial data",
+    );
+
+    await user.type(
+      within(controls).getByLabelText("Document ID"),
+      "document-1",
+    );
+    await user.click(
+      within(controls).getByRole("button", { name: "Map financial data" }),
+    );
+
+    expect(
+      await within(controls).findByText("Workspace refresh failed"),
+    ).toBeInTheDocument();
+    expect(
+      within(controls).queryByText(/Mapping complete/),
+    ).not.toBeInTheDocument();
+  });
 });

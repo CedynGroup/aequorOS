@@ -59,7 +59,13 @@ export function FinancialTab({
               onWorkspace={(nextWorkspace) =>
                 queryClient.setQueryData(queryKey, nextWorkspace)
               }
-              onRefresh={() => void queryClient.invalidateQueries({ queryKey })}
+              onRefresh={async () => {
+                await queryClient.fetchQuery({
+                  queryKey,
+                  queryFn: () =>
+                    financialReviewClient.workspace(tenant, caseId),
+                });
+              }}
             />
           ) : null}
           <FinancialSections
@@ -90,7 +96,7 @@ function FinancialControls({
   caseId: string;
   workspace: FinancialDataWorkspaceRead;
   onWorkspace: (workspace: FinancialDataWorkspaceRead) => void;
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
 }) {
   const [documentId, setDocumentId] = useState("");
   const [extractionId, setExtractionId] = useState("");
@@ -116,10 +122,10 @@ function FinancialControls({
         documentExtractionId: trimmedExtractionId || undefined,
       });
       setMapResult(result);
+      await onRefresh();
       setSuccess(
         `Mapping complete: ${result.summary.mappedSourceRowCount} of ${result.summary.sourceRowCount} source rows mapped.`,
       );
-      onRefresh();
     } catch (caught) {
       setError(await financialErrorMessage(caught));
     } finally {
@@ -138,8 +144,8 @@ function FinancialControls({
         validationIssues: result.issues,
         validationSummary: result.summary,
       });
+      await onRefresh();
       setSuccess(`Validation refreshed: ${result.issueCount} issues.`);
-      onRefresh();
     } catch (caught) {
       setError(await financialErrorMessage(caught));
     } finally {
