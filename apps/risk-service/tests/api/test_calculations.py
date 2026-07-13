@@ -322,6 +322,29 @@ def test_failed_run_is_persisted_and_prior_success_remains_current(
     assert body["error"]["code"] == "scenario_not_ready"
     assert body["outputs"] == []
     assert body["error"]["details"]["unreviewed_assumptions"]
+    assert body["inputs"]["snapshot_status"] == "pending"
+    assert "validation_error" not in body["inputs"]
+    assert body["input_hash"] == calculations._snapshot_hash(body["inputs"])
+    with get_sessionmaker()() as session:
+        events = list(
+            session.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.entity_id == UUID(body["id"]))
+                .order_by(AuditEvent.created_at, AuditEvent.id)
+            )
+        )
+    assert not any(
+        item.event_type == "calculation_run.input_snapshot_established" for item in events
+    )
+    rejected = next(
+        item for item in events if item.event_type == "calculation_run.input_snapshot_rejected"
+    )
+    failed_event = next(item for item in events if item.event_type == "calculation_run.failed")
+    assert rejected.details["input_hash"] == body["input_hash"]
+    assert rejected.details["input_hash_status"] == "rejected"
+    assert rejected.details["error_code"] == body["error"]["code"]
+    assert failed_event.details["input_hash"] == body["input_hash"]
+    assert failed_event.details["input_hash_status"] == "rejected"
     listing = db_client.get(f"/api/v1/cases/{case.id}/calculation-runs", headers=headers()).json()
     assert listing["latest_successful_run_id"] is None
 
@@ -422,8 +445,9 @@ def test_out_of_range_forecast_is_persisted_as_failed(
     assert run["status"] == "failed"
     assert run["error"]["code"] == "calculation_output_out_of_range"
     assert run["outputs"] == []
-    assert run["inputs"]["snapshot_status"] == "rejected"
-    assert run["inputs"]["validation_error"]["code"] == run["error"]["code"]
+    assert "snapshot_status" not in run["inputs"]
+    assert "validation_error" not in run["inputs"]
+    assert run["input_hash"] == calculations._snapshot_hash(run["inputs"])
     assert run["inputs"]["scenario"]["id"] == scenario["id"]
     assert run["inputs"]["balances"]
     assert run["inputs"]["cash_flows"]
@@ -434,6 +458,25 @@ def test_out_of_range_forecast_is_persisted_as_failed(
         )
         assert persisted is not None
         assert persisted.status == "failed"
+        events = list(
+            session.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.entity_id == UUID(run["id"]))
+                .order_by(AuditEvent.created_at, AuditEvent.id)
+            )
+        )
+    established = [
+        item for item in events if item.event_type == "calculation_run.input_snapshot_established"
+    ]
+    assert len(established) == 1
+    assert established[0].details["input_hash"] == run["input_hash"]
+    assert established[0].details["input_hash_status"] == "established"
+    assert not any(
+        item.event_type == "calculation_run.input_snapshot_rejected" for item in events
+    )
+    failed_event = next(item for item in events if item.event_type == "calculation_run.failed")
+    assert failed_event.details["input_hash"] == run["input_hash"]
+    assert failed_event.details["input_hash_status"] == "established"
 
 
 @pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity"])

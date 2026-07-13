@@ -305,14 +305,7 @@ def _create_and_execute(  # noqa: PLR0913
         )
         db.commit()
     except CalculationInputError as exc:
-        failure_snapshot = (
-            _rejected_snapshot(assembled_snapshot, exc)
-            if assembled_snapshot is not None
-            else _failure_snapshot(
-                case_id, scenario_id, forecast_periods, requested_as_of_date or now.date(), exc
-            )
-        )
-        _persist_failure(db, ctx, case_id, run.id, exc, failure_snapshot)
+        _persist_failure(db, ctx, case_id, run.id, exc, assembled_snapshot)
     except Exception:
         error = CalculationInputError(
             "calculation_error",
@@ -329,9 +322,7 @@ def _create_and_execute(  # noqa: PLR0913
             case_id,
             run.id,
             error,
-            _rejected_snapshot(assembled_snapshot, error)
-            if assembled_snapshot is not None
-            else None,
+            assembled_snapshot,
         )
     return get_run(db, ctx, case_id, run.id)
 
@@ -979,35 +970,6 @@ def _pending_snapshot(
     }
 
 
-def _failure_snapshot(
-    case_id: UUID,
-    scenario_id: UUID,
-    forecast_periods: int,
-    as_of_date: date,
-    error: CalculationInputError,
-) -> dict[str, Any]:
-    snapshot = _pending_snapshot(case_id, scenario_id, forecast_periods, as_of_date)
-    snapshot["snapshot_status"] = "rejected"
-    snapshot["validation_error"] = {
-        "code": error.code,
-        "message": error.message,
-        "details": error.details,
-    }
-    return snapshot
-
-
-def _rejected_snapshot(snapshot: dict[str, Any], error: CalculationInputError) -> dict[str, Any]:
-    return {
-        **snapshot,
-        "snapshot_status": "rejected",
-        "validation_error": {
-            "code": error.code,
-            "message": error.message,
-            "details": error.details,
-        },
-    }
-
-
 def _begin_repeatable_read(db: Session) -> None:
     bind = db.get_bind()
     if bind.dialect.name == "postgresql":
@@ -1020,14 +982,14 @@ def _persist_failure(  # noqa: PLR0913
     case_id: UUID,
     run_id: UUID,
     error: CalculationInputError,
-    snapshot: dict[str, Any] | None = None,
+    canonical_snapshot: dict[str, Any] | None = None,
 ) -> None:
     db.rollback()
     run = _run_or_404(db, ctx, case_id, run_id)
-    if snapshot is not None:
-        run.inputs = snapshot
-        run.input_hash = _snapshot_hash(snapshot)
-        run.as_of_date = date.fromisoformat(snapshot["as_of_date"])
+    if canonical_snapshot is not None:
+        run.inputs = canonical_snapshot
+        run.input_hash = _snapshot_hash(canonical_snapshot)
+        run.as_of_date = date.fromisoformat(canonical_snapshot["as_of_date"])
         record_event(
             db,
             ctx,
@@ -1041,6 +1003,23 @@ def _persist_failure(  # noqa: PLR0913
                 "input_schema_version": INPUT_SCHEMA_VERSION,
             },
         )
+        input_hash_status = "established"
+    else:
+        record_event(
+            db,
+            ctx,
+            event_type="calculation_run.input_snapshot_rejected",
+            entity_type="calculation_run",
+            entity_id=run.id,
+            details={
+                "input_hash": run.input_hash,
+                "input_hash_status": "rejected",
+                "as_of_date": run.as_of_date.isoformat(),
+                "input_schema_version": INPUT_SCHEMA_VERSION,
+                "error_code": error.code,
+            },
+        )
+        input_hash_status = "rejected"
     _mark_failed(run, error)
     record_event(
         db,
@@ -1048,7 +1027,12 @@ def _persist_failure(  # noqa: PLR0913
         event_type="calculation_run.failed",
         entity_type="calculation_run",
         entity_id=run.id,
-        details={"input_hash": run.input_hash, "output_periods": 0, "error_code": error.code},
+        details={
+            "input_hash": run.input_hash,
+            "input_hash_status": input_hash_status,
+            "output_periods": 0,
+            "error_code": error.code,
+        },
     )
     db.commit()
 
