@@ -25,6 +25,7 @@ Examples:
 - `app/features/assessments.py`
 - `app/features/findings.py`
 - `app/features/manage_scenarios.py`
+- `app/features/run_calculations.py`
 
 ### Service Layer
 
@@ -40,6 +41,7 @@ Examples:
 - creating an assessment run and running the Phase 1 assessment stub
 - updating a finding disposition
 - managing scenario and assumption lifecycles
+- creating, rerunning, and reading immutable calculation runs
 
 Service modules may use SQLAlchemy sessions, models, and infrastructure clients.
 They should keep all tenant-scoped lookups explicit and should not rely on entity
@@ -53,6 +55,7 @@ Examples:
 - `app/features/findings_service.py`
 - `app/features/jobs_service.py`
 - `app/services/scenarios.py`
+- `app/services/calculations.py`
 
 ### Domain Layer
 
@@ -68,6 +71,7 @@ Good candidates for the domain layer:
 - parser interfaces
 - assessment engine interfaces
 - future scoring logic
+- deterministic balance-sheet projection rules
 
 Domain code should not depend on:
 
@@ -343,6 +347,57 @@ readiness is true only when at least one active scenario exists and every active
 scenario passes validation. Mutation responses contain the updated scenario,
 its refreshed validation, and refreshed case readiness.
 
+### Calculation Runs And Forecast Outputs
+
+`CalculationRun` is an immutable, tenant- and case-scoped record of one
+balance-sheet forecast attempt. It stores lifecycle status, the scenario and
+optional source-run relationship, the requested horizon and as-of date, engine
+and schema versions, the canonical input snapshot, its SHA-256 hash, actor and
+timestamps, and persisted error diagnostics. Successful annual projections are
+stored as `CalculationForecastPeriod` rows. PostgreSQL RLS protects both tables,
+and service queries still filter explicitly by organization and case.
+
+Calculation resources use these routes:
+
+```text
+GET  /api/v1/cases/{case_id}/calculation-runs
+POST /api/v1/cases/{case_id}/calculation-runs
+GET  /api/v1/cases/{case_id}/calculation-runs/{run_id}
+POST /api/v1/cases/{case_id}/calculation-runs/{run_id}/rerun
+```
+
+The list route returns newest-first summaries and supports `scenario_id`,
+`limit` (1-100), and `offset`. It also returns `latest_successful_run_id` for
+the selected case and optional scenario filter. Fetch an individual run to read
+the full immutable snapshot and output periods. Starting and rerunning require
+an active same-tenant actor. A rerun appends a new row linked through
+`rerun_of_run_id`; it uses the original scenario with current canonical inputs
+and reviewed assumptions. An empty rerun body reuses the original horizon and
+defaults the as-of date to today; either value can be supplied explicitly.
+
+The first engine is synchronous. It commits `queued`, then `running`, before
+opening a repeatable-read snapshot transaction. Success and failure are both
+persisted and returned with `201`; a failed attempt does not replace the latest
+successful output. Lifecycle and input-snapshot establishment or rejection emit
+audit events. Unexpected failures expose a sanitized diagnostic rather than the
+underlying exception.
+
+Input assembly selects the latest effective balance date on or before the
+requested as-of date. When those balances identify one reporting period,
+cash-flow and active-obligation inputs are selected from that period; otherwise
+the latest eligible dated records are used. Active obligations must provide
+principal and outstanding amounts, every selected financial input must use the
+same currency, balance types must be classifiable, and the scenario must resolve
+to one reviewed value in each required category.
+
+For each annual period, the deterministic engine applies revenue growth and
+cash-flow delay to inflows, expense growth to outflows, credit usage to the
+initial available draw, and repayment behavior to scheduled debt repayment.
+It persists assets, liabilities, equity, cash, inflows, outflows, credit draw,
+debt repayment, and component details at four-decimal precision. The stored
+engine, input-schema, and output-schema versions make later engine changes
+distinguishable from reruns with changed canonical data.
+
 ## API Versioning
 
 The service uses URL path major versioning for HTTP contracts.
@@ -369,9 +424,11 @@ Examples of breaking changes:
 - changing pagination or filter behavior incompatibly
 
 Internal artifact versions are tracked separately from the HTTP API. Parser,
-extraction, prompt, and assessment engine changes should use fields such as
+extraction, prompt, assessment engine, and calculation engine changes should
+use fields such as
 `document_extractions.schema_version`, `risk_assessment_runs.engine_version`,
-and `risk_assessment_runs.prompt_version`. Those internal versions do not imply
+`risk_assessment_runs.prompt_version`, and the calculation run's engine,
+input-schema, and output-schema versions. Those internal versions do not imply
 an API version bump unless the external HTTP contract changes.
 
 ## Background Jobs

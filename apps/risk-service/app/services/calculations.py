@@ -650,7 +650,8 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
         )
     currency = currencies[0]
     numeric_assumptions = {
-        key: str(_decimal_assumption(item.value, key)) for key, item in engine_assumptions.items()
+        key: _decimal_text(_decimal_assumption(item.value, key))
+        for key, item in engine_assumptions.items()
     }
 
     snapshot: dict[str, Any] = {
@@ -932,6 +933,12 @@ def _decimal_assumption(value: Any, key: str) -> Decimal:
             },
         )
     return parsed
+
+
+def _decimal_text(value: Decimal) -> str:
+    if value == 0:
+        return "0"
+    return format(value.normalize(), "f")
 
 
 def _snapshot_hash(snapshot: dict[str, Any]) -> str:
