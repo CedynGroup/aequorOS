@@ -246,6 +246,77 @@ describe("FinancialTab", () => {
     expect(workspaceRequest).toHaveBeenCalledTimes(2);
   });
 
+  it("restarts a workspace refresh after cancelling a background fetch", async () => {
+    const user = userEvent.setup();
+    const initialWorkspace = emptyWorkspace();
+    const staleWorkspace = {
+      ...initialWorkspace,
+      validationSummary: { error: 0, warning: 1, info: 0, total: 1 },
+    };
+    const refreshedWorkspace = {
+      ...initialWorkspace,
+      validationSummary: { error: 0, warning: 0, info: 1, total: 1 },
+    };
+    let resolveBackgroundFetch:
+      | ((workspace: FinancialDataWorkspaceRead) => void)
+      | undefined;
+    const backgroundFetch = new Promise<FinancialDataWorkspaceRead>(
+      (resolve) => {
+        resolveBackgroundFetch = resolve;
+      },
+    );
+    const workspaceRequest = vi
+      .spyOn(financialReviewClient, "workspace")
+      .mockResolvedValueOnce(initialWorkspace)
+      .mockReturnValueOnce(backgroundFetch)
+      .mockResolvedValueOnce(refreshedWorkspace);
+    vi.spyOn(financialReviewClient, "map").mockResolvedValue({
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      documentId: "document-1",
+      documentExtractionId: "extraction-1",
+      created: {},
+      reused: {},
+      summary: {
+        sourceRowCount: 1,
+        mappedSourceRowCount: 1,
+        unmappedSourceRowCount: 0,
+      },
+      unmappedRows: [],
+    });
+    const { queryClient } = renderWithQuery(
+      <FinancialTab tenant={tenant} caseId="case-1" mockWorkspace={false} />,
+    );
+    const controls = await screen.findByLabelText(
+      "Map and validate financial data",
+    );
+    const queryKey = ["financial-workspace", tenant, "case-1"] as const;
+
+    void queryClient.refetchQueries({ queryKey, exact: true });
+    await waitFor(() => expect(workspaceRequest).toHaveBeenCalledTimes(2));
+    await user.type(
+      within(controls).getByLabelText("Document ID"),
+      "document-1",
+    );
+    await user.click(
+      within(controls).getByRole("button", { name: "Map financial data" }),
+    );
+
+    await waitFor(() => expect(workspaceRequest).toHaveBeenCalledTimes(3));
+    await within(controls).findByText(/Mapping complete/);
+    expect(
+      queryClient.getQueryData<FinancialDataWorkspaceRead>(queryKey)
+        ?.validationSummary,
+    ).toEqual(refreshedWorkspace.validationSummary);
+
+    resolveBackgroundFetch?.(staleWorkspace);
+    await Promise.resolve();
+    expect(
+      queryClient.getQueryData<FinancialDataWorkspaceRead>(queryKey)
+        ?.validationSummary,
+    ).toEqual(refreshedWorkspace.validationSummary);
+  });
+
   it("preserves concurrent mutations and refreshes them in order", async () => {
     const user = userEvent.setup();
     const initialWorkspace = emptyWorkspace();

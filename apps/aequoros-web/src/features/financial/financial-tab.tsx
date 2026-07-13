@@ -48,6 +48,7 @@ export function FinancialTab({
     const refresh = (previous ?? Promise.resolve())
       .catch(() => undefined)
       .then(async () => {
+        await queryClient.cancelQueries({ queryKey, exact: true });
         await queryClient.fetchQuery({
           queryKey,
           queryFn: () => financialReviewClient.workspace(tenant, caseId),
