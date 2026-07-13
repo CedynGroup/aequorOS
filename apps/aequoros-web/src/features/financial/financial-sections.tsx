@@ -109,7 +109,13 @@ const sections: SectionConfig[] = [
     kind: "reportingPeriod",
     fields: [
       { key: "label" },
-      { key: "periodType", label: "Period type", required: true },
+      {
+        key: "periodType",
+        label: "Period type",
+        required: true,
+        type: "select",
+        options: ["as_of", "day", "month", "quarter", "year", "custom"],
+      },
       { key: "startDate", label: "Start date", type: "date" },
       { key: "endDate", label: "End date", type: "date" },
       { key: "asOfDate", label: "As-of date", type: "date" },
@@ -157,6 +163,7 @@ const sections: SectionConfig[] = [
       { key: "principalAmount", label: "Principal", type: "number" },
       { key: "outstandingAmount", label: "Outstanding", type: "number" },
       { key: "currency" },
+      { key: "startDate", label: "Start date", type: "date" },
       { key: "maturityDate", label: "Maturity", type: "date" },
       { key: "interestRate", label: "Interest rate", type: "number" },
       { key: "status" },
@@ -207,11 +214,11 @@ export function FinancialSections({
   tenant?: TenantHeaders;
   caseId?: string;
   client?: FinancialReviewClient;
-  onMutation?: (workspace: FinancialDataWorkspaceRead) => void;
+  onMutation?: (workspace: FinancialDataWorkspaceRead) => Promise<void> | void;
 }) {
   const [focusedCell, setFocusedCell] = useState<string>();
-  const activeIssues = workspace.validationIssues.filter(
-    (issue) => issue.status !== "resolved",
+  const openIssues = workspace.validationIssues.filter(
+    (issue) => issue.status === "open",
   );
 
   function focusIssue(issue: FinancialValidationIssueRead) {
@@ -234,11 +241,9 @@ export function FinancialSections({
 
   return (
     <div className="space-y-4">
-      <ValidationPanel
-        issues={activeIssues}
-        workspace={workspace}
-        onSelect={focusIssue}
-      />
+      <ValidationPanel issues={openIssues} onSelect={focusIssue} />
+
+      <ManualEditHistory edits={workspace.manualEdits} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -271,16 +276,78 @@ export function FinancialSections({
   );
 }
 
+function ManualEditHistory({
+  edits,
+}: {
+  edits: FinancialDataWorkspaceRead["manualEdits"];
+}) {
+  return (
+    <section className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))]">
+      <div className="border-b border-[rgb(var(--border))] px-3 py-2">
+        <h2 className="text-sm font-semibold">Manual edit history</h2>
+        <p className="text-xs text-[rgb(var(--muted-foreground))]">
+          Audited corrections with their previous value and reason.
+        </p>
+      </div>
+      {edits.length === 0 ? (
+        <div className="px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
+          No manual edits recorded.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-xs">
+            <thead>
+              <tr className="bg-[rgb(var(--surface-2))]">
+                <th className="px-3 py-2 font-medium">Record / field</th>
+                <th className="px-3 py-2 font-medium">Previous</th>
+                <th className="px-3 py-2 font-medium">New</th>
+                <th className="px-3 py-2 font-medium">Reason</th>
+                <th className="px-3 py-2 font-medium">Edited by</th>
+              </tr>
+            </thead>
+            <tbody>
+              {edits.map((edit) => (
+                <tr
+                  key={edit.id}
+                  className="border-t border-[rgb(var(--border))]"
+                >
+                  <td className="px-3 py-2">
+                    <div>{labelize(edit.recordTable)}</div>
+                    <div className="text-[11px] text-[rgb(var(--muted-foreground))]">
+                      {labelize(edit.fieldName)} · {truncateId(edit.recordId)}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    {renderCell(edit.previousValue)}
+                  </td>
+                  <td className="px-3 py-2">{renderCell(edit.newValue)}</td>
+                  <td className="px-3 py-2">
+                    {edit.reason ?? "No reason recorded"}
+                  </td>
+                  <td className="px-3 py-2">{edit.editedBy ?? "Unknown"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ValidationPanel({
   issues,
-  workspace,
   onSelect,
 }: {
   issues: FinancialValidationIssueRead[];
-  workspace: FinancialDataWorkspaceRead;
   onSelect: (issue: FinancialValidationIssueRead) => void;
 }) {
-  const summary = workspace.validationSummary;
+  const summary = { error: 0, warning: 0, info: 0, total: issues.length };
+  for (const issue of issues) {
+    if (issue.severity === "error") summary.error += 1;
+    if (issue.severity === "warning") summary.warning += 1;
+    if (issue.severity === "info") summary.info += 1;
+  }
   return (
     <section
       id="financial-validation"
@@ -376,7 +443,7 @@ function FinancialSection({
   tenant?: TenantHeaders;
   caseId?: string;
   client?: FinancialReviewClient;
-  onMutation?: (workspace: FinancialDataWorkspaceRead) => void;
+  onMutation?: (workspace: FinancialDataWorkspaceRead) => Promise<void> | void;
   focusedCell?: string;
 }) {
   const [adding, setAdding] = useState(false);
@@ -433,8 +500,8 @@ function FinancialSection({
           caseId={caseId}
           client={client}
           onCancel={() => setAdding(false)}
-          onMutation={(response) => {
-            onMutation?.(
+          onMutation={async (response) => {
+            await onMutation?.(
               workspaceAfterMutation(workspace, config, response, false),
             );
             setSuccessMessage(
@@ -496,10 +563,10 @@ function FinancialSection({
                             tenant,
                             caseId,
                             client,
-                            onMutation: (
+                            onMutation: async (
                               response: FinancialMutationResponse,
                             ) => {
-                              onMutation?.(
+                              await onMutation?.(
                                 workspaceAfterMutation(
                                   workspace,
                                   config,
@@ -700,7 +767,7 @@ function MutationForm({
   caseId: string;
   client: FinancialReviewClient;
   onCancel: () => void;
-  onMutation: (response: FinancialMutationResponse) => void;
+  onMutation: (response: FinancialMutationResponse) => Promise<void> | void;
 }) {
   const initialValues = useMemo(
     () => valuesFromRecord(config, record),
@@ -710,10 +777,15 @@ function MutationForm({
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
+  const [mutationSaved, setMutationSaved] = useState(false);
   const [fieldError, setFieldError] = useState<string>();
   const lastSubmit = useRef<(() => Promise<void>) | null>(null);
 
   async function submit() {
+    if (mutationSaved) {
+      await lastSubmit.current?.();
+      return;
+    }
     const trimmedReason = reason.trim();
     if (!trimmedReason) {
       setFieldError(
@@ -726,6 +798,11 @@ function MutationForm({
     );
     if (missing) {
       setFieldError(`${missing.label ?? labelize(missing.key)} is required.`);
+      return;
+    }
+    const changedFields = changedFieldKeys(config, initialValues, values);
+    if (mode === "update" && changedFields.size === 0) {
+      setFieldError("Change at least one field before saving a correction.");
       return;
     }
     if (!config.kind || saving) return;
@@ -746,16 +823,33 @@ function MutationForm({
               tenant,
               caseId,
               record!.id,
-              buildUpdatePayload(config.kind, values, trimmedReason),
+              buildUpdatePayload(
+                config.kind,
+                values,
+                changedFields,
+                trimmedReason,
+              ),
             );
-      onMutation(response);
+      setMutationSaved(true);
+      lastSubmit.current = async () => {
+        setSaving(true);
+        setError(undefined);
+        try {
+          await onMutation(response);
+        } catch (caught) {
+          setError(await financialErrorMessage(caught));
+        } finally {
+          setSaving(false);
+        }
+      };
+      await onMutation(response);
     } catch (caught) {
       setError(await financialErrorMessage(caught));
     } finally {
       setSaving(false);
     }
   }
-  lastSubmit.current = submit;
+  if (!mutationSaved) lastSubmit.current = submit;
 
   return (
     <form
@@ -793,12 +887,7 @@ function MutationForm({
               <select
                 aria-label={field.label ?? labelize(field.key)}
                 value={values[field.key] ?? ""}
-                onChange={(event) =>
-                  setValues((current) => ({
-                    ...current,
-                    [field.key]: event.target.value,
-                  }))
-                }
+                onChange={(event) => updateField(field.key, event.target.value)}
                 className="h-8 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2.5 text-sm outline-none focus:border-[rgb(var(--focus))]"
               >
                 <option value="">Select…</option>
@@ -814,12 +903,7 @@ function MutationForm({
                 type={field.type ?? "text"}
                 step={field.type === "number" ? "any" : undefined}
                 value={values[field.key] ?? ""}
-                onChange={(event) =>
-                  setValues((current) => ({
-                    ...current,
-                    [field.key]: event.target.value,
-                  }))
-                }
+                onChange={(event) => updateField(field.key, event.target.value)}
               />
             )}
           </label>
@@ -841,7 +925,10 @@ function MutationForm({
       ) : null}
       {error ? (
         <Alert title="Financial change failed" tone="danger">
-          <span>{error} Your input has been preserved.</span>
+          <span>
+            {mutationSaved ? "Change saved, but refresh failed. " : null}
+            {error} Your input has been preserved.
+          </span>
           <Button
             type="button"
             size="sm"
@@ -850,22 +937,29 @@ function MutationForm({
             disabled={saving}
             onClick={() => void lastSubmit.current?.()}
           >
-            <RotateCcw className="size-3.5" /> Retry
+            <RotateCcw className="size-3.5" />
+            {mutationSaved ? "Retry refresh" : "Retry"}
           </Button>
         </Alert>
       ) : null}
       <div className="flex justify-end">
-        <Button type="submit" disabled={saving}>
+        <Button type="submit" disabled={saving || mutationSaved}>
           {saving ? <Loader2 className="size-4 animate-spin" /> : null}
           {saving
             ? "Saving…"
-            : mode === "create"
-              ? `Add ${config.singular}`
-              : "Save correction"}
+            : mutationSaved
+              ? "Change saved"
+              : mode === "create"
+                ? `Add ${config.singular}`
+                : "Save correction"}
         </Button>
       </div>
     </form>
   );
+
+  function updateField(key: string, value: string) {
+    setValues((current) => ({ ...current, [key]: value }));
+  }
 }
 
 function workspaceAfterMutation(
@@ -897,6 +991,22 @@ function valuesFromRecord(
   ) as FormValues;
 }
 
+function changedFieldKeys(
+  config: SectionConfig,
+  initialValues: FormValues,
+  values: FormValues,
+) {
+  return new Set(
+    config.fields
+      .map((field) => field.key)
+      .filter(
+        (key) =>
+          (optional(values, key) ?? null) !==
+          (optional(initialValues, key) ?? null),
+      ),
+  );
+}
+
 function inputValue(value: unknown) {
   if (value == null) return "";
   if (value instanceof Date) return value.toISOString().slice(0, 10);
@@ -909,8 +1019,7 @@ function optional(values: FormValues, key: string) {
 }
 
 function optionalDate(values: FormValues, key: string) {
-  const value = optional(values, key);
-  return value ? new Date(`${value}T00:00:00Z`) : undefined;
+  return optional(values, key);
 }
 
 function buildCreatePayload(
@@ -962,6 +1071,7 @@ function buildCreatePayload(
         principalAmount: optional(values, "principalAmount"),
         outstandingAmount: optional(values, "outstandingAmount"),
         currency: optional(values, "currency"),
+        startDate: optionalDate(values, "startDate"),
         maturityDate: optionalDate(values, "maturityDate"),
         interestRate: optional(values, "interestRate"),
         status: optional(values, "status"),
@@ -988,70 +1098,76 @@ function buildCreatePayload(
 function buildUpdatePayload(
   kind: EditableFinancialKind,
   values: FormValues,
+  changedFields: ReadonlySet<string>,
   reason: string,
 ): FinancialUpdatePayload {
+  const changed = (key: string) =>
+    changedFields.has(key) ? (optional(values, key) ?? null) : undefined;
   switch (kind) {
     case "institution":
       return {
-        name: optional(values, "name"),
-        institutionType: optional(values, "institutionType"),
-        referenceCode: optional(values, "referenceCode"),
+        name: changed("name"),
+        institutionType: changed("institutionType"),
+        referenceCode: changed("referenceCode"),
         reason,
       } as FinancialInstitutionUpdate;
     case "account":
       return {
-        accountName: optional(values, "accountName"),
-        accountNumber: optional(values, "accountNumber"),
-        accountType: optional(values, "accountType"),
-        currency: optional(values, "currency"),
-        institutionId: optional(values, "institutionId"),
-        status: optional(values, "status"),
+        accountName: changed("accountName"),
+        accountNumber: changed("accountNumber"),
+        accountType: changed("accountType"),
+        currency: changed("currency"),
+        institutionId: changed("institutionId"),
+        status: changed("status"),
         reason,
       } as FinancialAccountUpdate;
     case "reportingPeriod":
       return {
-        label: optional(values, "label"),
-        periodType: optional(values, "periodType"),
-        startDate: optionalDate(values, "startDate"),
-        endDate: optionalDate(values, "endDate"),
-        asOfDate: optionalDate(values, "asOfDate"),
+        label: changed("label"),
+        periodType: changed("periodType"),
+        startDate: changed("startDate"),
+        endDate: changed("endDate"),
+        asOfDate: changed("asOfDate"),
         reason,
       } as FinancialReportingPeriodUpdate;
     case "balance":
       return {
-        balanceType: optional(values, "balanceType"),
-        amount: optional(values, "amount"),
-        currency: optional(values, "currency"),
-        asOfDate: optionalDate(values, "asOfDate"),
-        accountId: optional(values, "accountId"),
-        reportingPeriodId: optional(values, "reportingPeriodId"),
+        balanceType: changed("balanceType"),
+        amount: changed("amount"),
+        currency: changed("currency"),
+        asOfDate: changed("asOfDate"),
+        accountId: changed("accountId"),
+        reportingPeriodId: changed("reportingPeriodId"),
         reason,
       } as FinancialBalanceUpdate;
     case "obligation":
       return {
-        obligationType: optional(values, "obligationType"),
-        facilityType: optional(values, "facilityType"),
-        principalAmount: optional(values, "principalAmount"),
-        outstandingAmount: optional(values, "outstandingAmount"),
-        currency: optional(values, "currency"),
-        maturityDate: optionalDate(values, "maturityDate"),
-        interestRate: optional(values, "interestRate"),
-        status: optional(values, "status"),
-        institutionId: optional(values, "institutionId"),
-        accountId: optional(values, "accountId"),
-        reportingPeriodId: optional(values, "reportingPeriodId"),
+        obligationType: changed("obligationType"),
+        facilityType: changed("facilityType"),
+        principalAmount: changed("principalAmount"),
+        outstandingAmount: changed("outstandingAmount"),
+        currency: changed("currency"),
+        startDate: changed("startDate"),
+        maturityDate: changed("maturityDate"),
+        interestRate: changed("interestRate"),
+        status: changed("status"),
+        institutionId: changed("institutionId"),
+        accountId: changed("accountId"),
+        reportingPeriodId: changed("reportingPeriodId"),
         reason,
       } as FinancialObligationUpdate;
     case "covenant":
       return {
-        name: optional(values, "name"),
-        metric: optional(values, "metric"),
-        operator: optional(values, "operator"),
-        threshold: optional(values, "threshold"),
-        actualValue: optional(values, "actualValue"),
-        complianceStatus: optional(values, "complianceStatus"),
-        obligationId: optional(values, "obligationId"),
-        reportingPeriodId: optional(values, "reportingPeriodId"),
+        name: changed("name"),
+        metric: changed("metric"),
+        operator: changed("operator"),
+        threshold: changed("threshold"),
+        actualValue: changed("actualValue"),
+        complianceStatus: changedFields.has("complianceStatus")
+          ? optional(values, "complianceStatus")
+          : undefined,
+        obligationId: changed("obligationId"),
+        reportingPeriodId: changed("reportingPeriodId"),
         reason,
       } as FinancialCovenantUpdate;
   }

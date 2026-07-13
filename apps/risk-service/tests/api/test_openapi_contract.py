@@ -202,3 +202,45 @@ def test_canonical_mutation_contracts_use_resource_specific_allowlisted_paths(
         assert components[f"{model_name}Update"]["additionalProperties"] is False
 
     assert "/api/v1/cases/{case_id}/financial-data/{entity_type}/{entity_id}" not in paths
+
+
+def test_scenario_contracts_are_case_scoped_closed_and_generated(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+    components = schema["components"]["schemas"]
+    base = "/api/v1/cases/{case_id}/scenarios"
+
+    assert paths[base]["get"]["operationId"] == "listCaseScenarios"
+    assert paths[f"{base}/initialize"]["post"]["operationId"] == "initializeCaseScenarios"
+    assert paths[f"{base}/readiness"]["get"]["operationId"] == ("getCaseScenarioReadiness")
+    assert paths[f"{base}/{{scenario_id}}/validation"]["get"]["operationId"] == (
+        "validateCaseScenario"
+    )
+    assert f"{base}/{{scenario_id}}/copy" in paths
+    assert f"{base}/{{scenario_id}}/archive" in paths
+    assumption_path = f"{base}/{{scenario_id}}/assumptions/{{assumption_id}}"
+    assert paths[assumption_path]["patch"]["operationId"] == "updateScenarioAssumption"
+    assert f"{assumption_path}/review" in paths
+
+    for name in (
+        "ScenarioInitialize",
+        "ScenarioCreate",
+        "ScenarioUpdate",
+        "ScenarioCopy",
+        "ScenarioArchive",
+        "AssumptionCreate",
+        "AssumptionUpdate",
+        "AssumptionReview",
+    ):
+        assert components[name]["additionalProperties"] is False
+    assert {"scenarios", "readiness", "case_id"} <= set(
+        components["ScenarioWorkspaceRead"]["required"]
+    )
+    assert "assumptions" in components["ScenarioRead"]["required"]
+    assert components["AssumptionValue"]["anyOf"] == [
+        {"type": "string"},
+        {"type": "integer"},
+        {"type": "number"},
+        {"type": "boolean"},
+        {"type": "null"},
+    ]

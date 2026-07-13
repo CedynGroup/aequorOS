@@ -28,6 +28,9 @@ This file is the starting point for agents working in `apps/risk-service`.
   `/api/v1/cases/{case_id}/financial-workspace/*` routes. Keep their OpenAPI and
   generated-client contracts aligned; successful mutations return the record plus
   refreshed validation and persist per-field history with actor and reason.
+- Scenario mutations use resource-specific `/api/v1/cases/{case_id}/scenarios/*`
+  routes. Keep assumption history, audit events, validation, and readiness in the
+  same transaction; editing an assumption resets it to draft until reviewed.
 
 ## Commit Messages
 

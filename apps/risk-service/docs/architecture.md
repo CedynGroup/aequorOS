@@ -24,6 +24,7 @@ Examples:
 - `app/features/documents.py`
 - `app/features/assessments.py`
 - `app/features/findings.py`
+- `app/features/manage_scenarios.py`
 
 ### Service Layer
 
@@ -38,6 +39,7 @@ Examples:
 - creating a parse job and running the Phase 1 parser stub
 - creating an assessment run and running the Phase 1 assessment stub
 - updating a finding disposition
+- managing scenario and assumption lifecycles
 
 Service modules may use SQLAlchemy sessions, models, and infrastructure clients.
 They should keep all tenant-scoped lookups explicit and should not rely on entity
@@ -50,6 +52,7 @@ Examples:
 - `app/features/assessments_service.py`
 - `app/features/findings_service.py`
 - `app/features/jobs_service.py`
+- `app/services/scenarios.py`
 
 ### Domain Layer
 
@@ -132,7 +135,7 @@ FastAPI route
 
 `RiskCase` is the top-level review workspace. Most tenant-owned workflow data is
 scoped to a case through `case_id`, including uploaded documents, assessments,
-findings, and financial workspace records.
+findings, financial workspace records, and scenarios.
 
 ### Documents
 
@@ -286,6 +289,59 @@ validation checks required identifying fields, recommends an obligation or
 facility link, and reports an error if a supplied compliance status disagrees
 with the deterministic comparison. The full workspace read includes covenants,
 manual edit history, source links, validation issues, and validation summary.
+
+### Scenarios And Structured Assumptions
+
+`RiskScenario` represents an active or archived baseline, downside, or custom
+case scenario. Baseline and downside initialization is idempotent for active
+defaults and creates five system-provenance assumptions for each scenario:
+growth, expenses, cash-flow timing, credit usage, and repayment behavior.
+Custom scenarios start empty. Copying any active scenario creates a custom
+scenario, preserves source identifiers in assumption provenance, and resets all
+copied assumptions to `draft`.
+
+The initialized defaults are:
+
+| Assumption      | Unit    | Baseline | Downside |
+| --------------- | ------- | -------: | -------: |
+| Revenue growth  | `ratio` |      0.0 |     -0.1 |
+| Expense growth  | `ratio` |      0.0 |      0.1 |
+| Cash-flow delay | `days`  |        0 |       30 |
+| Credit usage    | `ratio` |      0.0 |      0.8 |
+| Repayment rate  | `ratio` |      1.0 |      0.5 |
+
+`ScenarioAssumption` stores a typed JSON scalar value, unit, provenance, and
+review state. Assumption keys are unique within a scenario. Manual creation,
+editing, and review require a non-empty reason and an active same-tenant user.
+An edit records reviewer-edit provenance and clears the previous reviewer and
+review timestamp, so the changed value must be reviewed again. Each assumption
+mutation writes `ScenarioAssumptionHistory`; scenario and assumption mutations
+also emit audit events in the same transaction.
+
+Scenario resources use these routes:
+
+```text
+GET   /api/v1/cases/{case_id}/scenarios
+POST  /api/v1/cases/{case_id}/scenarios/initialize
+POST  /api/v1/cases/{case_id}/scenarios
+GET   /api/v1/cases/{case_id}/scenarios/readiness
+GET   /api/v1/cases/{case_id}/scenarios/{scenario_id}
+PATCH /api/v1/cases/{case_id}/scenarios/{scenario_id}
+POST  /api/v1/cases/{case_id}/scenarios/{scenario_id}/copy
+POST  /api/v1/cases/{case_id}/scenarios/{scenario_id}/archive
+GET   /api/v1/cases/{case_id}/scenarios/{scenario_id}/validation
+POST  /api/v1/cases/{case_id}/scenarios/{scenario_id}/assumptions
+PATCH /api/v1/cases/{case_id}/scenarios/{scenario_id}/assumptions/{assumption_id}
+POST  /api/v1/cases/{case_id}/scenarios/{scenario_id}/assumptions/{assumption_id}/review
+```
+
+List requests omit archived scenarios unless `include_archived=true`; archived
+scenarios remain readable but are immutable. Scenario validation requires at
+least one non-null assumption in every required category and requires every
+assumption, including `other` assumptions, to be reviewed. Case calculation
+readiness is true only when at least one active scenario exists and every active
+scenario passes validation. Mutation responses contain the updated scenario,
+its refreshed validation, and refreshed case readiness.
 
 ## API Versioning
 

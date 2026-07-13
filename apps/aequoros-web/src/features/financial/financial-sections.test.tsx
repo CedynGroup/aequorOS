@@ -184,6 +184,46 @@ describe("FinancialSections", () => {
     expect(cell).toHaveClass("bg-amber-100");
   });
 
+  it("shows only open issues and summarizes the displayed issues", () => {
+    const data = workspace();
+    const issue = data.validationIssues[0];
+    data.validationIssues = [
+      issue,
+      {
+        ...issue,
+        id: "issue-dismissed",
+        severity: "error",
+        status: "dismissed",
+        message: "Dismissed institution issue",
+      },
+      {
+        ...issue,
+        id: "issue-resolved",
+        severity: "info",
+        status: "resolved",
+        message: "Resolved institution issue",
+        resolvedAt: issue.createdAt,
+      },
+    ];
+    data.validationSummary = { error: 1, info: 1, total: 3, warning: 1 };
+
+    render(<FinancialSections workspace={data} mocked={false} />);
+
+    expect(
+      screen.getByRole("button", { name: /Confirm institution name/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Dismissed institution issue"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Resolved institution issue"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("0 errors")).toBeInTheDocument();
+    expect(screen.getByText("1 warnings")).toBeInTheDocument();
+    expect(screen.getByText("0 info")).toBeInTheDocument();
+    expect(screen.getByText("1 total")).toBeInTheDocument();
+  });
+
   it("drills into source document and row metadata", async () => {
     const user = userEvent.setup();
     render(<FinancialSections workspace={workspace()} mocked={false} />);
@@ -194,6 +234,32 @@ describe("FinancialSections", () => {
     expect(within(drilldown).getByText(/row 7/)).toBeInTheDocument();
     expect(within(drilldown).getByText(/Balance Sheet/)).toBeInTheDocument();
     expect(within(drilldown).getByText(/Northstar Bank/)).toBeInTheDocument();
+  });
+
+  it("renders manual edit audit history", () => {
+    const data = workspace();
+    data.manualEdits = [
+      {
+        id: "edit-1",
+        organizationId: tenant.orgId,
+        caseId: "case-1",
+        recordTable: "financial_institutions",
+        recordId: "institution-1",
+        fieldName: "reference_code",
+        previousValue: "OLD",
+        newValue: "NSB",
+        reason: "Matched audited statement",
+        editedBy: "reviewer@example.com",
+        createdAt: new Date("2026-07-13T12:00:00Z"),
+      },
+    ];
+
+    render(<FinancialSections workspace={data} mocked={false} />);
+
+    expect(screen.getByText("Manual edit history")).toBeInTheDocument();
+    expect(screen.getByText("OLD")).toBeInTheDocument();
+    expect(screen.getByText("Matched audited statement")).toBeInTheDocument();
+    expect(screen.getByText("reviewer@example.com")).toBeInTheDocument();
   });
 
   it("requires a reason and applies refreshed validation after an inline correction", async () => {
@@ -263,6 +329,97 @@ describe("FinancialSections", () => {
         validationSummary: expect.objectContaining({ total: 0 }),
       }),
     );
+    expect(
+      screen.getByText(/Saved institution correction/),
+    ).toBeInTheDocument();
+  });
+
+  it("rejects unchanged corrections after a field is reverted", async () => {
+    const user = userEvent.setup();
+    const update = vi.fn<FinancialReviewClient["update"]>();
+
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ update })}
+        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const form = screen.getByRole("form", { name: "Edit institution" });
+    const name = within(form).getByLabelText("Name");
+    await user.clear(name);
+    await user.type(name, "Temporary name");
+    await user.clear(name);
+    await user.type(name, " Northstar Bank ");
+    await user.type(within(form).getByLabelText("Reason"), "Review complete");
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    expect(
+      within(form).getByText(/Change at least one field/),
+    ).toBeInTheDocument();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("retries a failed workspace refresh without repeating the mutation", async () => {
+    const user = userEvent.setup();
+    const updated = {
+      ...workspace().institutions[0],
+      name: "Northstar Commercial Bank",
+    };
+    const update = vi.fn<FinancialReviewClient["update"]>().mockResolvedValue({
+      record: updated,
+      validation: validation(),
+    } as FinancialInstitutionMutationResponse);
+    const onMutation = vi
+      .fn<(workspace: FinancialDataWorkspaceRead) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("Workspace refresh failed"))
+      .mockResolvedValueOnce(undefined);
+
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ update })}
+        onMutation={onMutation}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const form = screen.getByRole("form", { name: "Edit institution" });
+    await user.clear(within(form).getByLabelText("Name"));
+    await user.type(
+      within(form).getByLabelText("Name"),
+      "Northstar Commercial Bank",
+    );
+    await user.type(
+      within(form).getByLabelText("Reason"),
+      "Corrected against audited statement",
+    );
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    expect(
+      await within(form).findByText(/Change saved, but refresh failed/),
+    ).toBeInTheDocument();
+    expect(
+      within(form).getByRole("button", { name: "Change saved" }),
+    ).toBeDisabled();
+    await user.click(
+      within(form).getByRole("button", { name: "Retry refresh" }),
+    );
+
+    await waitFor(() => expect(onMutation).toHaveBeenCalledTimes(2));
+    expect(update).toHaveBeenCalledTimes(1);
     expect(
       screen.getByText(/Saved institution correction/),
     ).toBeInTheDocument();
@@ -347,5 +504,263 @@ describe("FinancialSections", () => {
       }),
     );
     expect(screen.getByText(/Added covenant/)).toBeInTheDocument();
+  });
+
+  it("submits date-only strings for financial dates", async () => {
+    const user = userEvent.setup();
+    const create = vi.fn<FinancialReviewClient["create"]>();
+
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ create })}
+        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Add reporting period" }),
+    );
+    const form = screen.getByRole("form", { name: "Add reporting period" });
+    await user.selectOptions(
+      within(form).getByLabelText("Period type"),
+      "year",
+    );
+    fireEvent.change(within(form).getByLabelText("Start date"), {
+      target: { value: "2025-01-01" },
+    });
+    fireEvent.change(within(form).getByLabelText("End date"), {
+      target: { value: "2025-12-31" },
+    });
+    fireEvent.change(within(form).getByLabelText("As-of date"), {
+      target: { value: "2025-12-31" },
+    });
+    await user.type(
+      within(form).getByLabelText("Reason"),
+      "Add audited reporting period",
+    );
+    await user.click(
+      within(form).getByRole("button", { name: "Add reporting period" }),
+    );
+
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    expect(create).toHaveBeenCalledWith(
+      "reportingPeriod",
+      tenant,
+      "case-1",
+      expect.objectContaining({
+        periodType: "year",
+        startDate: "2025-01-01",
+        endDate: "2025-12-31",
+        asOfDate: "2025-12-31",
+      }),
+    );
+  });
+
+  it("sends null only for optional fields intentionally cleared", async () => {
+    const user = userEvent.setup();
+    const response = {
+      record: { ...workspace().institutions[0], referenceCode: null },
+      validation: validation(),
+    } as FinancialInstitutionMutationResponse;
+    const update = vi
+      .fn<FinancialReviewClient["update"]>()
+      .mockResolvedValue(response);
+
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ update })}
+        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const form = screen.getByRole("form", { name: "Edit institution" });
+    await user.clear(within(form).getByLabelText("Reference code"));
+    await user.type(within(form).getByLabelText("Reason"), "Remove bad code");
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    const payload = vi.mocked(update).mock.calls[0]?.[4] as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(payload).toMatchObject({
+      referenceCode: null,
+      reason: "Remove bad code",
+    });
+    expect(payload.name).toBeUndefined();
+  });
+
+  it("omits untouched covenant compliance when inputs change", async () => {
+    const user = userEvent.setup();
+    const data = workspace();
+    const covenant = {
+      id: "covenant-1",
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      name: "Leverage ratio",
+      metric: "debt_to_ebitda",
+      operator: "lte" as const,
+      threshold: "3.5",
+      actualValue: "3.2",
+      complianceStatus: "compliant" as const,
+      obligationId: null,
+      reportingPeriodId: null,
+      metadata: {},
+      reportingContext: {},
+      sourceRecord: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    data.covenants = [covenant];
+    const response = {
+      record: { ...covenant, threshold: "3.0" },
+      validation: validation(),
+    } as FinancialCovenantMutationResponse;
+    const update = vi
+      .fn<FinancialReviewClient["update"]>()
+      .mockResolvedValue(response);
+
+    render(
+      <FinancialSections
+        workspace={data}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ update })}
+        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+      />,
+    );
+
+    const section = screen.getByText("Covenants").closest("section")!;
+    await user.click(within(section).getByRole("button", { name: "Edit" }));
+    const form = within(section).getByRole("form", { name: "Edit covenant" });
+    await user.clear(within(form).getByLabelText("Threshold"));
+    await user.type(within(form).getByLabelText("Threshold"), "3.0");
+    await user.type(within(form).getByLabelText("Reason"), "Correct threshold");
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    const payload = vi.mocked(update).mock.calls[0]?.[4] as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(payload).toMatchObject({
+      threshold: "3",
+      reason: "Correct threshold",
+    });
+    expect(payload.complianceStatus).toBeUndefined();
+  });
+
+  it("submits an explicitly corrected covenant compliance status", async () => {
+    const user = userEvent.setup();
+    const data = workspace();
+    const covenant = {
+      id: "covenant-1",
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      name: "Leverage ratio",
+      metric: "debt_to_ebitda",
+      operator: "lte" as const,
+      threshold: "3.5",
+      actualValue: "3.2",
+      complianceStatus: "compliant" as const,
+      obligationId: null,
+      reportingPeriodId: null,
+      metadata: {},
+      reportingContext: {},
+      sourceRecord: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    data.covenants = [covenant];
+    const update = vi.fn<FinancialReviewClient["update"]>().mockResolvedValue({
+      record: { ...covenant, complianceStatus: "non_compliant" },
+      validation: validation(),
+    } as FinancialCovenantMutationResponse);
+
+    render(
+      <FinancialSections
+        workspace={data}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ update })}
+        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+      />,
+    );
+
+    const section = screen.getByText("Covenants").closest("section")!;
+    await user.click(within(section).getByRole("button", { name: "Edit" }));
+    const form = within(section).getByRole("form", { name: "Edit covenant" });
+    await user.selectOptions(
+      within(form).getByLabelText("Compliance"),
+      "non_compliant",
+    );
+    await user.type(within(form).getByLabelText("Reason"), "Override status");
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(update).toHaveBeenCalledWith(
+      "covenant",
+      tenant,
+      "case-1",
+      "covenant-1",
+      expect.objectContaining({
+        complianceStatus: "non_compliant",
+        reason: "Override status",
+      }),
+    );
+  });
+
+  it("includes obligation start date in manual entry", async () => {
+    const user = userEvent.setup();
+    const create = vi.fn<FinancialReviewClient["create"]>();
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ create })}
+        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add obligation" }));
+    const form = screen.getByRole("form", { name: "Add obligation" });
+    await user.type(
+      within(form).getByLabelText("Obligation type"),
+      "term_loan",
+    );
+    fireEvent.change(within(form).getByLabelText("Start date"), {
+      target: { value: "2025-01-01" },
+    });
+    await user.type(within(form).getByLabelText("Reason"), "Add missing loan");
+    await user.click(
+      within(form).getByRole("button", { name: "Add obligation" }),
+    );
+
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    expect(create).toHaveBeenCalledWith(
+      "obligation",
+      tenant,
+      "case-1",
+      expect.objectContaining({ startDate: "2025-01-01" }),
+    );
   });
 });

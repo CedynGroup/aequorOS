@@ -377,3 +377,45 @@ def test_postgres_financial_workspace_rls_isolates_tenant_rows(
 
         assert visible_to_org_one == 1
         assert visible_to_org_two == 0
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_postgres_migrations_create_scenario_tables_indexes_and_rls(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    tables = {"risk_scenarios", "scenario_assumptions", "scenario_assumption_history"}
+    assert migrated_postgres_schema.tables(tables) == tables
+    assert migrated_postgres_schema.indexes(
+        {
+            "ix_risk_scenarios_case_id",
+            "uq_risk_scenarios_active_default",
+            "ix_scenario_assumptions_scenario_id",
+            "uq_scenario_assumptions_key",
+            "ix_scenario_assumption_history_assumption_id",
+        }
+    ) == {
+        "ix_risk_scenarios_case_id",
+        "uq_risk_scenarios_active_default",
+        "ix_scenario_assumptions_scenario_id",
+        "uq_scenario_assumptions_key",
+        "ix_scenario_assumption_history_assumption_id",
+    }
+    assert migrated_postgres_schema.policies(tables) == {
+        f"{table}_tenant_isolation" for table in tables
+    }
+    assert migrated_postgres_schema.constraints(
+        {
+            "ck_risk_scenarios_type",
+            "ck_scenario_assumptions_category",
+            "ck_scenario_assumptions_review_status",
+            "uq_risk_scenarios_id_organization_id_case_id",
+        }
+    ) == {
+        "ck_risk_scenarios_type",
+        "ck_scenario_assumptions_category",
+        "ck_scenario_assumptions_review_status",
+        "uq_risk_scenarios_id_organization_id_case_id",
+    }

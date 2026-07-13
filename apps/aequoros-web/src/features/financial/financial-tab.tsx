@@ -1,4 +1,7 @@
-import type { FinancialDataWorkspaceRead } from "@aequoros/risk-service-api";
+import type {
+  FinancialDataWorkspaceRead,
+  FinancialWorkspaceMapResponse,
+} from "@aequoros/risk-service-api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -56,7 +59,14 @@ export function FinancialTab({
               onWorkspace={(nextWorkspace) =>
                 queryClient.setQueryData(queryKey, nextWorkspace)
               }
-              onRefresh={() => void queryClient.invalidateQueries({ queryKey })}
+              onRefresh={async () => {
+                await queryClient.fetchQuery({
+                  queryKey,
+                  queryFn: () =>
+                    financialReviewClient.workspace(tenant, caseId),
+                  staleTime: 0,
+                });
+              }}
             />
           ) : null}
           <FinancialSections
@@ -65,9 +75,13 @@ export function FinancialTab({
             tenant={tenant}
             caseId={caseId}
             client={financialReviewClient}
-            onMutation={(nextWorkspace) => {
+            onMutation={async (nextWorkspace) => {
               queryClient.setQueryData(queryKey, nextWorkspace);
-              void queryClient.invalidateQueries({ queryKey });
+              await queryClient.fetchQuery({
+                queryKey,
+                queryFn: () => financialReviewClient.workspace(tenant, caseId),
+                staleTime: 0,
+              });
             }}
           />
         </>
@@ -87,31 +101,36 @@ function FinancialControls({
   caseId: string;
   workspace: FinancialDataWorkspaceRead;
   onWorkspace: (workspace: FinancialDataWorkspaceRead) => void;
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
 }) {
   const [documentId, setDocumentId] = useState("");
   const [extractionId, setExtractionId] = useState("");
   const [pending, setPending] = useState<"map" | "validate">();
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
+  const [mapResult, setMapResult] = useState<FinancialWorkspaceMapResponse>();
 
   async function mapWorkspace() {
-    if (!documentId.trim() && !extractionId.trim()) {
-      setError("Enter a document ID or document extraction ID to map.");
+    const trimmedDocumentId = documentId.trim();
+    const trimmedExtractionId = extractionId.trim();
+    if (Boolean(trimmedDocumentId) === Boolean(trimmedExtractionId)) {
+      setError("Enter exactly one document ID or document extraction ID.");
       return;
     }
     setPending("map");
     setError(undefined);
     setSuccess(undefined);
+    setMapResult(undefined);
     try {
       const result = await financialReviewClient.map(tenant, caseId, {
-        documentId: documentId.trim() || undefined,
-        documentExtractionId: extractionId.trim() || undefined,
+        documentId: trimmedDocumentId || undefined,
+        documentExtractionId: trimmedExtractionId || undefined,
       });
+      setMapResult(result);
+      await onRefresh();
       setSuccess(
-        `Mapping complete: ${result.summary.sourceRowCount} source rows reviewed.`,
+        `Mapping complete: ${result.summary.mappedSourceRowCount} of ${result.summary.sourceRowCount} source rows mapped.`,
       );
-      onRefresh();
     } catch (caught) {
       setError(await financialErrorMessage(caught));
     } finally {
@@ -130,8 +149,8 @@ function FinancialControls({
         validationIssues: result.issues,
         validationSummary: result.summary,
       });
+      await onRefresh();
       setSuccess(`Validation refreshed: ${result.issueCount} issues.`);
-      onRefresh();
     } catch (caught) {
       setError(await financialErrorMessage(caught));
     } finally {
@@ -205,6 +224,29 @@ function FinancialControls({
           <CheckCircle2 className="mr-1 inline size-3.5" />
           {success}
         </output>
+      ) : null}
+      {mapResult?.summary.unmappedSourceRowCount ? (
+        <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
+          <div className="font-semibold">
+            {mapResult.summary.unmappedSourceRowCount} unmapped source rows need
+            review
+          </div>
+          <div className="mt-2 space-y-2" aria-label="Unmapped source rows">
+            {mapResult.unmappedRows.map((row) => (
+              <div
+                key={row.sourceRowId}
+                className="rounded border border-amber-200 bg-white p-2"
+              >
+                <div className="font-medium">
+                  Row {row.rowIndex}: {row.reason}
+                </div>
+                <code className="mt-1 block break-all text-[10px]">
+                  {JSON.stringify(row.locator)}
+                </code>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : null}
     </section>
   );

@@ -5,6 +5,7 @@ export const DEFAULT_API_BASE_URL = "http://127.0.0.1:8003/api/v1";
 export const tabs = [
   "overview",
   "financial",
+  "scenarios",
   "findings",
   "decisions",
   "documents",
