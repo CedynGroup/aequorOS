@@ -219,8 +219,8 @@ export function FinancialSections({
   ) => Promise<void> | void;
 }) {
   const [focusedCell, setFocusedCell] = useState<string>();
-  const activeIssues = workspace.validationIssues.filter(
-    (issue) => issue.status !== "resolved",
+  const openIssues = workspace.validationIssues.filter(
+    (issue) => issue.status === "open",
   );
 
   function focusIssue(issue: FinancialValidationIssueRead) {
@@ -244,8 +244,7 @@ export function FinancialSections({
   return (
     <div className="space-y-4">
       <ValidationPanel
-        issues={activeIssues}
-        workspace={workspace}
+        issues={openIssues}
         onSelect={focusIssue}
       />
 
@@ -343,14 +342,17 @@ function ManualEditHistory({
 
 function ValidationPanel({
   issues,
-  workspace,
   onSelect,
 }: {
   issues: FinancialValidationIssueRead[];
-  workspace: FinancialDataWorkspaceRead;
   onSelect: (issue: FinancialValidationIssueRead) => void;
 }) {
-  const summary = workspace.validationSummary;
+  const summary = { error: 0, warning: 0, info: 0, total: issues.length };
+  for (const issue of issues) {
+    if (issue.severity === "error") summary.error += 1;
+    if (issue.severity === "warning") summary.warning += 1;
+    if (issue.severity === "info") summary.info += 1;
+  }
   return (
     <section
       id="financial-validation"

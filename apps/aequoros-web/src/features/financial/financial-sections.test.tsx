@@ -184,6 +184,46 @@ describe("FinancialSections", () => {
     expect(cell).toHaveClass("bg-amber-100");
   });
 
+  it("shows only open issues and summarizes the displayed issues", () => {
+    const data = workspace();
+    const issue = data.validationIssues[0];
+    data.validationIssues = [
+      issue,
+      {
+        ...issue,
+        id: "issue-dismissed",
+        severity: "error",
+        status: "dismissed",
+        message: "Dismissed institution issue",
+      },
+      {
+        ...issue,
+        id: "issue-resolved",
+        severity: "info",
+        status: "resolved",
+        message: "Resolved institution issue",
+        resolvedAt: issue.createdAt,
+      },
+    ];
+    data.validationSummary = { error: 1, info: 1, total: 3, warning: 1 };
+
+    render(<FinancialSections workspace={data} mocked={false} />);
+
+    expect(
+      screen.getByRole("button", { name: /Confirm institution name/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Dismissed institution issue"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Resolved institution issue"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("0 errors")).toBeInTheDocument();
+    expect(screen.getByText("1 warnings")).toBeInTheDocument();
+    expect(screen.getByText("0 info")).toBeInTheDocument();
+    expect(screen.getByText("1 total")).toBeInTheDocument();
+  });
+
   it("drills into source document and row metadata", async () => {
     const user = userEvent.setup();
     render(<FinancialSections workspace={workspace()} mocked={false} />);
