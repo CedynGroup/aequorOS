@@ -471,9 +471,7 @@ def test_out_of_range_forecast_is_persisted_as_failed(
     assert len(established) == 1
     assert established[0].details["input_hash"] == run["input_hash"]
     assert established[0].details["input_hash_status"] == "established"
-    assert not any(
-        item.event_type == "calculation_run.input_snapshot_rejected" for item in events
-    )
+    assert not any(item.event_type == "calculation_run.input_snapshot_rejected" for item in events)
     failed_event = next(item for item in events if item.event_type == "calculation_run.failed")
     assert failed_event.details["input_hash"] == run["input_hash"]
     assert failed_event.details["input_hash_status"] == "established"

@@ -505,9 +505,7 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
             "period_start_date": (
                 selected_period_start.isoformat() if selected_period_start else None
             ),
-            "period_end_date": (
-                selected_period_end.isoformat() if selected_period_end else None
-            ),
+            "period_end_date": (selected_period_end.isoformat() if selected_period_end else None),
         }
         for item in cash_flows
         if selected_period is not None
