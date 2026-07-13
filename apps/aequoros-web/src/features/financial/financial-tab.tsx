@@ -1,7 +1,7 @@
 import type { FinancialDataWorkspaceRead } from "@aequoros/risk-service-api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 
 import { Alert, Button, Input, Label, Skeleton } from "../../components/ui";
 import type { TenantHeaders } from "../../lib/api";
@@ -12,6 +12,10 @@ import {
   financialReviewClient,
 } from "./financial-client";
 import { FinancialSections } from "./financial-sections";
+
+type WorkspaceUpdater = (
+  workspace: FinancialDataWorkspaceRead,
+) => FinancialDataWorkspaceRead;
 
 export function FinancialTab({
   tenant,
@@ -37,6 +41,27 @@ export function FinancialTab({
     caseId,
     mockWorkspace,
   ]);
+  const refreshQueues = useRef(new Map<string, Promise<void>>());
+
+  function refreshWorkspace() {
+    const previous = refreshQueues.current.get(workspaceIdentity);
+    const refresh = (previous ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(async () => {
+        await queryClient.fetchQuery({
+          queryKey,
+          queryFn: () => financialReviewClient.workspace(tenant, caseId),
+          staleTime: 0,
+        });
+      })
+      .finally(() => {
+        if (refreshQueues.current.get(workspaceIdentity) === refresh) {
+          refreshQueues.current.delete(workspaceIdentity);
+        }
+      });
+    refreshQueues.current.set(workspaceIdentity, refresh);
+    return refresh;
+  }
 
   return (
     <div className="space-y-3">
@@ -59,17 +84,10 @@ export function FinancialTab({
               tenant={tenant}
               caseId={caseId}
               workspace={workspace}
-              onWorkspace={(nextWorkspace) =>
-                queryClient.setQueryData(queryKey, nextWorkspace)
+              onWorkspace={(updateWorkspace) =>
+                queryClient.setQueryData(queryKey, updateWorkspace)
               }
-              onRefresh={async () => {
-                await queryClient.fetchQuery({
-                  queryKey,
-                  queryFn: () =>
-                    financialReviewClient.workspace(tenant, caseId),
-                  staleTime: 0,
-                });
-              }}
+              onRefresh={refreshWorkspace}
             />
           ) : null}
           <FinancialSections
@@ -78,13 +96,9 @@ export function FinancialTab({
             tenant={tenant}
             caseId={caseId}
             client={financialReviewClient}
-            onMutation={async (nextWorkspace) => {
-              queryClient.setQueryData(queryKey, nextWorkspace);
-              await queryClient.fetchQuery({
-                queryKey,
-                queryFn: () => financialReviewClient.workspace(tenant, caseId),
-                staleTime: 0,
-              });
+            onMutation={async (updateWorkspace) => {
+              queryClient.setQueryData(queryKey, updateWorkspace);
+              await refreshWorkspace();
             }}
           />
         </Fragment>
@@ -103,7 +117,7 @@ function FinancialControls({
   tenant: TenantHeaders;
   caseId: string;
   workspace: FinancialDataWorkspaceRead;
-  onWorkspace: (workspace: FinancialDataWorkspaceRead) => void;
+  onWorkspace: (updateWorkspace: WorkspaceUpdater) => void;
   onRefresh: () => Promise<void>;
 }) {
   const [documentId, setDocumentId] = useState("");
@@ -150,11 +164,11 @@ function FinancialControls({
     setSuccess(undefined);
     try {
       const result = await financialReviewClient.validate(tenant, caseId);
-      onWorkspace({
-        ...workspace,
+      onWorkspace((currentWorkspace) => ({
+        ...currentWorkspace,
         validationIssues: result.issues,
         validationSummary: result.summary,
-      });
+      }));
       await onRefresh();
       setSuccess(`Validation refreshed: ${result.issueCount} issues.`);
     } catch (caught) {

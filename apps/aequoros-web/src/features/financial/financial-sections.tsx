@@ -233,7 +233,11 @@ export function FinancialSections({
   tenant?: TenantHeaders;
   caseId?: string;
   client?: FinancialReviewClient;
-  onMutation?: (workspace: FinancialDataWorkspaceRead) => Promise<void> | void;
+  onMutation?: (
+    updateWorkspace: (
+      workspace: FinancialDataWorkspaceRead,
+    ) => FinancialDataWorkspaceRead,
+  ) => Promise<void> | void;
 }) {
   const [focusedCell, setFocusedCell] = useState<string>();
   const openIssues = workspace.validationIssues.filter(
@@ -487,7 +491,11 @@ function FinancialSection({
   tenant?: TenantHeaders;
   caseId?: string;
   client?: FinancialReviewClient;
-  onMutation?: (workspace: FinancialDataWorkspaceRead) => Promise<void> | void;
+  onMutation?: (
+    updateWorkspace: (
+      workspace: FinancialDataWorkspaceRead,
+    ) => FinancialDataWorkspaceRead,
+  ) => Promise<void> | void;
   focusedCell?: string;
 }) {
   const [adding, setAdding] = useState(false);
@@ -545,8 +553,13 @@ function FinancialSection({
           client={client}
           onCancel={() => setAdding(false)}
           onMutation={async (response) => {
-            await onMutation?.(
-              workspaceAfterMutation(workspace, config, response, false),
+            await onMutation?.((currentWorkspace) =>
+              workspaceAfterMutation(
+                currentWorkspace,
+                config,
+                response,
+                false,
+              ),
             );
             setSuccessMessage(
               `Added ${config.singular}. Validation refreshed: ${response.validation.issueCount} issues.`,
@@ -606,9 +619,9 @@ function FinancialSection({
                             onMutation: async (
                               response: FinancialMutationResponse,
                             ) => {
-                              await onMutation?.(
+                              await onMutation?.((currentWorkspace) =>
                                 workspaceAfterMutation(
-                                  workspace,
+                                  currentWorkspace,
                                   config,
                                   response,
                                   true,
@@ -1012,7 +1025,7 @@ function workspaceAfterMutation(
 ): FinancialDataWorkspaceRead {
   const current = workspace[config.collection] as FinancialRecord[];
   const record = response.record as FinancialRecord;
-  const records = replace
+  const records = replace || current.some((item) => item.id === record.id)
     ? current.map((item) => (item.id === record.id ? record : item))
     : [...current, record];
   return {

@@ -17,6 +17,10 @@ import type { TenantHeaders } from "../../lib/api";
 import type { FinancialReviewClient } from "./financial-client";
 import { FinancialSections } from "./financial-sections";
 
+type WorkspaceUpdater = (
+  workspace: FinancialDataWorkspaceRead,
+) => FinancialDataWorkspaceRead;
+
 const tenant: TenantHeaders = { orgId: "org-1", userId: "user-1" };
 
 beforeAll(() => {
@@ -358,7 +362,7 @@ describe("FinancialSections", () => {
     const update = vi
       .fn<FinancialReviewClient["update"]>()
       .mockResolvedValue(response);
-    const onMutation = vi.fn<(workspace: FinancialDataWorkspaceRead) => void>();
+    const onMutation = vi.fn<(updateWorkspace: WorkspaceUpdater) => void>();
 
     render(
       <FinancialSections
@@ -404,7 +408,8 @@ describe("FinancialSections", () => {
         }),
       ),
     );
-    expect(onMutation).toHaveBeenCalledWith(
+    const updateWorkspace = onMutation.mock.calls[0]?.[0];
+    expect(updateWorkspace?.(workspace())).toEqual(
       expect.objectContaining({
         institutions: [
           expect.objectContaining({ name: "Northstar Commercial Bank" }),
@@ -428,7 +433,7 @@ describe("FinancialSections", () => {
         tenant={tenant}
         caseId="case-1"
         client={client({ update })}
-        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+        onMutation={vi.fn<(updateWorkspace: WorkspaceUpdater) => void>()}
       />,
     );
 
@@ -461,7 +466,7 @@ describe("FinancialSections", () => {
       validation: validation(),
     } as FinancialInstitutionMutationResponse);
     const onMutation = vi
-      .fn<(workspace: FinancialDataWorkspaceRead) => Promise<void>>()
+      .fn<(updateWorkspace: WorkspaceUpdater) => Promise<void>>()
       .mockRejectedValueOnce(new Error("Workspace refresh failed"))
       .mockResolvedValueOnce(undefined);
 
@@ -536,7 +541,7 @@ describe("FinancialSections", () => {
       .fn<FinancialReviewClient["create"]>()
       .mockRejectedValueOnce(new Error("Temporary server failure"))
       .mockResolvedValueOnce(response);
-    const onMutation = vi.fn<(workspace: FinancialDataWorkspaceRead) => void>();
+    const onMutation = vi.fn<(updateWorkspace: WorkspaceUpdater) => void>();
 
     render(
       <FinancialSections
@@ -581,7 +586,7 @@ describe("FinancialSections", () => {
         reason: "Missing covenant from source mapping",
       }),
     );
-    expect(onMutation).toHaveBeenCalledWith(
+    expect(onMutation.mock.calls[0]?.[0](workspace())).toEqual(
       expect.objectContaining({
         covenants: [expect.objectContaining({ id: "covenant-1" })],
       }),
@@ -600,7 +605,7 @@ describe("FinancialSections", () => {
         tenant={tenant}
         caseId="case-1"
         client={client({ create })}
-        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+        onMutation={vi.fn<(updateWorkspace: WorkspaceUpdater) => void>()}
       />,
     );
 
@@ -660,7 +665,7 @@ describe("FinancialSections", () => {
         tenant={tenant}
         caseId="case-1"
         client={client({ update })}
-        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+        onMutation={vi.fn<(updateWorkspace: WorkspaceUpdater) => void>()}
       />,
     );
 
@@ -721,7 +726,7 @@ describe("FinancialSections", () => {
         tenant={tenant}
         caseId="case-1"
         client={client({ update })}
-        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+        onMutation={vi.fn<(updateWorkspace: WorkspaceUpdater) => void>()}
       />,
     );
 
@@ -781,7 +786,7 @@ describe("FinancialSections", () => {
         tenant={tenant}
         caseId="case-1"
         client={client({ update })}
-        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+        onMutation={vi.fn<(updateWorkspace: WorkspaceUpdater) => void>()}
       />,
     );
 
@@ -844,7 +849,7 @@ describe("FinancialSections", () => {
         tenant={tenant}
         caseId="case-1"
         client={client({ update })}
-        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+        onMutation={vi.fn<(updateWorkspace: WorkspaceUpdater) => void>()}
       />,
     );
 
@@ -883,7 +888,7 @@ describe("FinancialSections", () => {
         tenant={tenant}
         caseId="case-1"
         client={client({ create })}
-        onMutation={vi.fn<(workspace: FinancialDataWorkspaceRead) => void>()}
+        onMutation={vi.fn<(updateWorkspace: WorkspaceUpdater) => void>()}
       />,
     );
 

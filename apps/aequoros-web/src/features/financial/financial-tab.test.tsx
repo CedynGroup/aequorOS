@@ -246,6 +246,128 @@ describe("FinancialTab", () => {
     expect(workspaceRequest).toHaveBeenCalledTimes(2);
   });
 
+  it("preserves concurrent mutations and refreshes them in order", async () => {
+    const user = userEvent.setup();
+    const initialWorkspace = emptyWorkspace();
+    let resolveFirstRefresh:
+      | ((workspace: FinancialDataWorkspaceRead) => void)
+      | undefined;
+    const firstRefresh = new Promise<FinancialDataWorkspaceRead>((resolve) => {
+      resolveFirstRefresh = resolve;
+    });
+    const institution = {
+      id: "institution-1",
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      name: "Northstar Bank",
+      institutionType: null,
+      referenceCode: null,
+      metadata: {},
+      createdAt: new Date("2026-07-13T12:00:00Z"),
+      updatedAt: new Date("2026-07-13T12:00:00Z"),
+    };
+    const account = {
+      id: "account-1",
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      accountName: "Operating account",
+      accountNumber: null,
+      accountType: null,
+      currency: null,
+      status: null,
+      institutionId: null,
+      metadata: {},
+      createdAt: new Date("2026-07-13T12:00:00Z"),
+      updatedAt: new Date("2026-07-13T12:00:00Z"),
+    };
+    const finalWorkspace = {
+      ...initialWorkspace,
+      institutions: [institution],
+      accounts: [account],
+    } as FinancialDataWorkspaceRead;
+    const workspaceRequest = vi
+      .spyOn(financialReviewClient, "workspace")
+      .mockResolvedValueOnce(initialWorkspace)
+      .mockReturnValueOnce(firstRefresh)
+      .mockResolvedValueOnce(finalWorkspace);
+    vi.spyOn(financialReviewClient, "create").mockImplementation(
+      async (kind) =>
+        ({
+          record: kind === "institution" ? institution : account,
+          validation: {
+            organizationId: tenant.orgId,
+            caseId: "case-1",
+            issueCount: 0,
+            issues: [],
+            summary: { error: 0, warning: 0, info: 0, total: 0 },
+          },
+        }) as Awaited<ReturnType<typeof financialReviewClient.create>>,
+    );
+    const { queryClient } = renderWithQuery(
+      <FinancialTab tenant={tenant} caseId="case-1" mockWorkspace={false} />,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "Add institution" }),
+    );
+    const institutionForm = screen.getByRole("form", {
+      name: "Add institution",
+    });
+    await user.type(
+      within(institutionForm).getByLabelText("Name"),
+      institution.name,
+    );
+    await user.type(
+      within(institutionForm).getByLabelText("Reason"),
+      "Add verified institution",
+    );
+    await user.click(
+      within(institutionForm).getByRole("button", { name: "Add institution" }),
+    );
+    await waitFor(() => expect(workspaceRequest).toHaveBeenCalledTimes(2));
+
+    await user.click(screen.getByRole("button", { name: "Add account" }));
+    const accountForm = screen.getByRole("form", { name: "Add account" });
+    await user.type(
+      within(accountForm).getByLabelText("Account name"),
+      account.accountName,
+    );
+    await user.type(
+      within(accountForm).getByLabelText("Reason"),
+      "Add verified account",
+    );
+    await user.click(
+      within(accountForm).getByRole("button", { name: "Add account" }),
+    );
+
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<FinancialDataWorkspaceRead>([
+        "financial-workspace",
+        tenant,
+        "case-1",
+      ]);
+      expect(cached?.institutions).toHaveLength(1);
+      expect(cached?.accounts).toHaveLength(1);
+    });
+    expect(workspaceRequest).toHaveBeenCalledTimes(2);
+
+    resolveFirstRefresh?.({
+      ...initialWorkspace,
+      institutions: [institution],
+    } as FinancialDataWorkspaceRead);
+
+    await waitFor(() => expect(workspaceRequest).toHaveBeenCalledTimes(3));
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<FinancialDataWorkspaceRead>([
+        "financial-workspace",
+        tenant,
+        "case-1",
+      ]);
+      expect(cached?.institutions).toHaveLength(1);
+      expect(cached?.accounts).toHaveLength(1);
+    });
+  });
+
   it("keeps demo mode read-only when the workspace request succeeds", async () => {
     vi.spyOn(financialReviewClient, "workspace").mockResolvedValue(
       emptyWorkspace(),
