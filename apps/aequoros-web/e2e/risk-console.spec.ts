@@ -88,39 +88,56 @@ test("renders financial workspace and findings for the selected case", async ({
 test("initializes, edits, reviews, copies, archives, and tenant-isolates scenarios", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const console = new RiskConsolePage(page);
   await console.gotoSelectedCase("scenarios");
+  const scenariosPanel = page.getByRole("tabpanel", { name: "Scenarios" });
 
   const initialize = page.getByRole("button", {
     name: "Initialize baseline and downside",
   });
+  const baselineHeading = page.getByRole("heading", { name: "Baseline" });
+  await expect(initialize.or(baselineHeading)).toBeVisible();
   if (await initialize.isVisible()) await initialize.click();
-  await expect(page.getByText("Baseline", { exact: true })).toBeVisible();
-  await expect(page.getByText("Downside", { exact: true })).toBeVisible();
+  await expect(baselineHeading).toBeVisible();
+  const downside = page.getByRole("button", { name: /^Downside / });
+  await expect(downside).toBeVisible();
 
-  const growth = page.getByLabel("Revenue growth value").first();
-  await growth.fill("0.04");
-  await page.getByRole("button", { name: "Save" }).first().click();
-  await expect(page.getByText("Revenue growth saved")).toBeVisible();
+  const growth = page
+    .getByLabel("Revenue growth value", { exact: true })
+    .first();
+  await growth.fill((await growth.inputValue()) === "0.04" ? "0.05" : "0.04");
+  await growth
+    .locator("..")
+    .getByRole("button", { name: "Save", exact: true })
+    .click();
+  await expect(scenariosPanel.getByText("Revenue growth saved")).toBeVisible();
 
   for (const button of await page
-    .getByRole("button", { name: "Review" })
+    .locator("button:enabled")
+    .filter({ hasText: /^Review$/ })
     .all()) {
     await button.click();
   }
-  await page.getByText("Downside", { exact: true }).click();
+  await downside.click();
   for (const button of await page
-    .getByRole("button", { name: "Review" })
+    .locator("button:enabled")
+    .filter({ hasText: /^Review$/ })
     .all()) {
     await button.click();
   }
   await expect(page.getByText("Ready for calculations")).toBeVisible();
+  expect(
+    await scenariosPanel.evaluate(
+      (panel) => panel.scrollWidth <= panel.clientWidth,
+    ),
+  ).toBe(true);
 
   await page.getByLabel("Copy scenario name").fill("Downside liquidity copy");
   await page.getByRole("button", { name: "Copy scenario" }).click();
-  await expect(page.getByText("Scenario copied")).toBeVisible();
+  await expect(scenariosPanel.getByText("Scenario copied")).toBeVisible();
   await page.getByRole("button", { name: "Archive scenario" }).click();
-  await expect(page.getByText("Scenario archived")).toBeVisible();
+  await expect(scenariosPanel.getByText("Scenario archived")).toBeVisible();
   await expect(
     page.getByText("Downside liquidity copy", { exact: true }),
   ).not.toBeVisible();

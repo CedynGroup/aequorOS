@@ -127,11 +127,11 @@ export function ScenariosTab({
     workspace.scenarios.find((scenario) => scenario.id === selectedId) ??
     workspace.scenarios[0];
   return (
-    <div className="space-y-3">
+    <div className="@container/scenarios space-y-3">
       {savedMessage ? (
         <Alert title="Saved successfully">{savedMessage}</Alert>
       ) : null}
-      <div className="grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="grid gap-3 @4xl/scenarios:grid-cols-[240px_minmax(0,1fr)]">
         <Panel>
           <PanelHeader
             title="Scenarios"
@@ -299,7 +299,7 @@ function ScenarioEditor({
     updateScenario.error ?? copy.error ?? archive.error ?? add.error;
 
   return (
-    <Panel>
+    <Panel className="@container/editor min-w-0">
       <PanelHeader
         title={scenario.name}
         meta={`${labelize(scenario.scenarioType)} scenario`}
@@ -308,7 +308,7 @@ function ScenarioEditor({
         }
       />
       <div className="space-y-4 p-3">
-        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] md:items-end">
+        <div className="grid gap-2 @2xl/editor:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] @2xl/editor:items-end">
           <div>
             <Label>Scenario name</Label>
             <Input
@@ -407,7 +407,7 @@ function ScenarioEditor({
         </div>
         <div className="rounded-md border border-dashed border-[rgb(var(--border))] p-3">
           <div className="mb-2 text-sm font-medium">Add assumption</div>
-          <div className="grid gap-2 md:grid-cols-6">
+          <div className="grid gap-2 @2xl/editor:grid-cols-3 @4xl/editor:grid-cols-6">
             <select
               aria-label="Assumption category"
               className="h-8 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2 text-sm"
@@ -546,7 +546,7 @@ function AssumptionRow({
     onSuccess: () => onSaved(`${assumption.label} reviewed`),
   });
   return (
-    <div className="grid gap-2 rounded-md border border-[rgb(var(--border))] p-2 md:grid-cols-[minmax(0,1fr)_100px_160px_auto] md:items-center">
+    <div className="grid gap-2 rounded-md border border-[rgb(var(--border))] p-2 @2xl/editor:grid-cols-[minmax(0,1fr)_100px_160px_auto] @2xl/editor:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">
@@ -605,7 +605,7 @@ function AssumptionRow({
         </Button>
       </div>
       {update.isError || review.isError ? (
-        <div className="md:col-span-4">
+        <div className="@2xl/editor:col-span-4">
           <ErrorPanel error={update.error ?? review.error} />
         </div>
       ) : null}
