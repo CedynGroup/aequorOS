@@ -4,7 +4,7 @@ import calendar
 import hashlib
 import json
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -147,25 +147,44 @@ def list_runs(  # noqa: PLR0913
     offset: int = 0,
 ) -> CalculationRunListRead:
     get_case_or_404(db, ctx.organization_id, case_id)
-    stmt = select(CalculationRun).where(
+    conditions = (
         CalculationRun.organization_id == ctx.organization_id,
         CalculationRun.case_id == case_id,
     )
     if scenario_id is not None:
-        stmt = stmt.where(CalculationRun.scenario_id == scenario_id)
-    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        conditions += (CalculationRun.scenario_id == scenario_id,)
+    total = db.scalar(select(func.count()).select_from(CalculationRun).where(*conditions)) or 0
     latest = db.scalar(
-        stmt.with_only_columns(CalculationRun.id)
+        select(CalculationRun.id)
+        .where(*conditions)
         .where(CalculationRun.status == "succeeded")
         .order_by(CalculationRun.created_at.desc(), CalculationRun.id.desc())
         .limit(1)
     )
+    summary_columns = (
+        CalculationRun.id,
+        CalculationRun.scenario_id,
+        CalculationRun.rerun_of_run_id,
+        CalculationRun.status,
+        CalculationRun.engine_version,
+        CalculationRun.input_hash,
+        CalculationRun.forecast_periods,
+        CalculationRun.as_of_date,
+        CalculationRun.started_at,
+        CalculationRun.completed_at,
+        CalculationRun.error_code,
+        CalculationRun.error_message,
+        CalculationRun.error_details,
+        CalculationRun.created_at,
+    )
     rows = list(
-        db.scalars(
-            stmt.order_by(CalculationRun.created_at.desc(), CalculationRun.id.desc())
+        db.execute(
+            select(*summary_columns)
+            .where(*conditions)
+            .order_by(CalculationRun.created_at.desc(), CalculationRun.id.desc())
             .limit(limit)
             .offset(offset)
-        )
+        ).mappings()
     )
     return CalculationRunListRead(
         case_id=case_id,
@@ -235,6 +254,7 @@ def _create_and_execute(  # noqa: PLR0913
     run.started_at = now
     db.commit()
 
+    assembled_snapshot: dict[str, Any] | None = None
     try:
         _begin_repeatable_read(db)
         snapshot, as_of_date = build_input_snapshot(
@@ -245,6 +265,7 @@ def _create_and_execute(  # noqa: PLR0913
             forecast_periods,
             requested_as_of_date,
         )
+        assembled_snapshot = snapshot
         run.inputs = snapshot
         run.input_hash = _snapshot_hash(snapshot)
         run.as_of_date = as_of_date
@@ -270,25 +291,33 @@ def _create_and_execute(  # noqa: PLR0913
         )
         db.commit()
     except CalculationInputError as exc:
-        failure_snapshot = _failure_snapshot(
-            case_id, scenario_id, forecast_periods, requested_as_of_date or now.date(), exc
+        failure_snapshot = (
+            _rejected_snapshot(assembled_snapshot, exc)
+            if assembled_snapshot is not None
+            else _failure_snapshot(
+                case_id, scenario_id, forecast_periods, requested_as_of_date or now.date(), exc
+            )
         )
         _persist_failure(db, ctx, case_id, run.id, exc, failure_snapshot)
     except Exception:
+        error = CalculationInputError(
+            "calculation_error",
+            "The balance-sheet forecast could not be calculated.",
+            {
+                "corrective_action": (
+                    "Review the run inputs and retry. Contact support if it fails again."
+                )
+            },
+        )
         _persist_failure(
             db,
             ctx,
             case_id,
             run.id,
-            CalculationInputError(
-                "calculation_error",
-                "The balance-sheet forecast could not be calculated.",
-                {
-                    "corrective_action": (
-                        "Review the run inputs and retry. Contact support if it fails again."
-                    )
-                },
-            ),
+            error,
+            _rejected_snapshot(assembled_snapshot, error)
+            if assembled_snapshot is not None
+            else None,
         )
     return get_run(db, ctx, case_id, run.id)
 
@@ -841,7 +870,7 @@ def _decimal_assumption(value: Any, key: str) -> Decimal:
             },
         )
     try:
-        return Decimal(str(value))
+        parsed = Decimal(str(value))
     except (InvalidOperation, ValueError) as exc:
         raise CalculationInputError(
             "invalid_assumption",
@@ -851,6 +880,18 @@ def _decimal_assumption(value: Any, key: str) -> Decimal:
                 "corrective_action": "Enter a numeric value and review the assumption again.",
             },
         ) from exc
+    if not parsed.is_finite():
+        raise CalculationInputError(
+            "invalid_assumption",
+            f"{key} must be a finite numeric value.",
+            {
+                "assumption": key,
+                "corrective_action": (
+                    "Enter a finite numeric value and review the assumption again."
+                ),
+            },
+        )
+    return parsed
 
 
 def _snapshot_hash(snapshot: dict[str, Any]) -> str:
@@ -943,6 +984,18 @@ def _failure_snapshot(
     return snapshot
 
 
+def _rejected_snapshot(snapshot: dict[str, Any], error: CalculationInputError) -> dict[str, Any]:
+    return {
+        **snapshot,
+        "snapshot_status": "rejected",
+        "validation_error": {
+            "code": error.code,
+            "message": error.message,
+            "details": error.details,
+        },
+    }
+
+
 def _begin_repeatable_read(db: Session) -> None:
     bind = db.get_bind()
     if bind.dialect.name == "postgresql":
@@ -983,20 +1036,27 @@ def _error_read(run: CalculationRun) -> CalculationErrorRead | None:
     )
 
 
-def _read_summary(run: CalculationRun) -> CalculationRunSummaryRead:
+def _read_summary(run: Mapping[Any, Any]) -> CalculationRunSummaryRead:
+    error = None
+    if run["error_code"] and run["error_message"]:
+        error = CalculationErrorRead(
+            code=run["error_code"],
+            message=run["error_message"],
+            details=run["error_details"],
+        )
     return CalculationRunSummaryRead(
-        id=run.id,
-        scenario_id=run.scenario_id,
-        rerun_of_run_id=run.rerun_of_run_id,
-        status=run.status,  # type: ignore[arg-type]
-        engine_version=run.engine_version,
-        input_hash=run.input_hash,
-        forecast_periods=run.forecast_periods,
-        as_of_date=run.as_of_date,
-        started_at=run.started_at,
-        completed_at=run.completed_at,
-        error=_error_read(run),
-        created_at=run.created_at,
+        id=run["id"],
+        scenario_id=run["scenario_id"],
+        rerun_of_run_id=run["rerun_of_run_id"],
+        status=run["status"],
+        engine_version=run["engine_version"],
+        input_hash=run["input_hash"],
+        forecast_periods=run["forecast_periods"],
+        as_of_date=run["as_of_date"],
+        started_at=run["started_at"],
+        completed_at=run["completed_at"],
+        error=error,
+        created_at=run["created_at"],
     )
 
 

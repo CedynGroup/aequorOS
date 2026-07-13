@@ -338,12 +338,30 @@ def test_out_of_range_forecast_is_persisted_as_failed(
     assert run["status"] == "failed"
     assert run["error"]["code"] == "calculation_output_out_of_range"
     assert run["outputs"] == []
+    assert run["inputs"]["snapshot_status"] == "rejected"
+    assert run["inputs"]["validation_error"]["code"] == run["error"]["code"]
+    assert run["inputs"]["scenario"]["id"] == scenario["id"]
+    assert run["inputs"]["balances"]
+    assert run["inputs"]["cash_flows"]
+    assert run["inputs"]["obligations"]
     with get_sessionmaker()() as session:
         persisted = session.scalar(
             select(CalculationRun).where(CalculationRun.id == UUID(run["id"]))
         )
         assert persisted is not None
         assert persisted.status == "failed"
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity"])
+def test_non_finite_assumption_is_rejected(value: str) -> None:
+    with pytest.raises(calculations.CalculationInputError) as raised:
+        calculations._decimal_assumption(value, "revenue_growth_rate")
+
+    assert raised.value.code == "invalid_assumption"
+    assert raised.value.details == {
+        "assumption": "revenue_growth_rate",
+        "corrective_action": "Enter a finite numeric value and review the assumption again.",
+    }
 
 
 def test_only_active_obligations_participate(db_client: TestClient) -> None:

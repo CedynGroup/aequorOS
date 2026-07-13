@@ -205,6 +205,45 @@ describe("CalculationsTab", () => {
     expect(await screen.findByText("$4,550.00")).toBeInTheDocument();
   });
 
+  it("fetches the latest successful run outside the current history page", async () => {
+    const user = userEvent.setup();
+    const successful = run();
+    const failed = run({
+      id: "30000000-0000-4000-8000-000000000002",
+      status: "failed",
+      outputs: [],
+      error: {
+        code: "invalid_assumption",
+        message: "A reviewed assumption is invalid.",
+        details: { corrective_action: "Correct and review the assumption." },
+      },
+    });
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue({
+      ...runList([failed]),
+      latestSuccessfulRunId: successful.id,
+      total: 26,
+      hasMore: true,
+    });
+    vi.mocked(riskApi.calculationRun).mockImplementation(
+      (_tenant, _caseId, requestedRunId) =>
+        Promise.resolve(requestedRunId === failed.id ? failed : successful),
+    );
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Review the latest successful forecast",
+      }),
+    );
+
+    expect(await screen.findByText("$4,550.00")).toBeInTheDocument();
+    expect(riskApi.calculationRun).toHaveBeenCalledWith(
+      tenant,
+      caseId,
+      successful.id,
+    );
+  });
+
   it("reruns current inputs and exposes query errors", async () => {
     const user = userEvent.setup();
     vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList([run()]));

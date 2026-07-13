@@ -66,9 +66,7 @@ export function CalculationsTab({
   const selectedRun = useQuery({
     queryKey: ["calculation-run", tenant, caseId, selectedRunId],
     queryFn: () => riskApi.calculationRun(tenant, caseId, selectedRunId),
-    enabled: Boolean(
-      selectedRunId && runs.data?.runs.some((run) => run.id === selectedRunId),
-    ),
+    enabled: Boolean(selectedRunId),
     refetchInterval: (query) =>
       query.state.data &&
       (["queued", "running"] as CalculationStatus[]).includes(
@@ -96,7 +94,8 @@ export function CalculationsTab({
   useEffect(() => {
     if (!runs.data) return;
     setSelectedRunId((current) =>
-      runs.data.runs.some((run) => run.id === current)
+      runs.data.runs.some((run) => run.id === current) ||
+      current === runs.data.latestSuccessfulRunId
         ? current
         : (runs.data.runs[0]?.id ?? ""),
     );
@@ -150,9 +149,8 @@ export function CalculationsTab({
       </Alert>
     );
   }
-  const selectedSummary = runs.data?.runs.find(
-    (run) => run.id === selectedRunId,
-  );
+  const selectedSummary =
+    runs.data?.runs.find((run) => run.id === selectedRunId) ?? selectedRun.data;
   const isSubmitting = start.isPending || rerun.isPending;
 
   return (
