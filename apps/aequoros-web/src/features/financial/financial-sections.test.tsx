@@ -455,6 +455,75 @@ describe("FinancialSections", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it("does not submit untouched fields changed by a workspace refresh", async () => {
+    const user = userEvent.setup();
+    const update = vi.fn<FinancialReviewClient["update"]>().mockResolvedValue({
+      record: {
+        ...workspace().institutions[0],
+        name: "Northstar Commercial Bank",
+        referenceCode: "CURRENT",
+      },
+      validation: validation(),
+    } as FinancialInstitutionMutationResponse);
+    const onMutation = vi.fn<(updateWorkspace: WorkspaceUpdater) => void>();
+    const reviewClient = client({ update });
+    const initialWorkspace = workspace();
+    const { rerender } = render(
+      <FinancialSections
+        workspace={initialWorkspace}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={reviewClient}
+        onMutation={onMutation}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const form = screen.getByRole("form", { name: "Edit institution" });
+    await user.clear(within(form).getByLabelText("Name"));
+    await user.type(
+      within(form).getByLabelText("Name"),
+      "Northstar Commercial Bank",
+    );
+
+    const refreshedWorkspace = workspace();
+    refreshedWorkspace.institutions[0] = {
+      ...refreshedWorkspace.institutions[0],
+      referenceCode: "CURRENT",
+    };
+    rerender(
+      <FinancialSections
+        workspace={refreshedWorkspace}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={reviewClient}
+        onMutation={onMutation}
+      />,
+    );
+
+    await user.type(
+      within(form).getByLabelText("Reason"),
+      "Corrected against audited statement",
+    );
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect(update).toHaveBeenCalledWith(
+      "institution",
+      tenant,
+      "case-1",
+      "institution-1",
+      {
+        name: "Northstar Commercial Bank",
+        reason: "Corrected against audited statement",
+      },
+    );
+  });
+
   it("retries a failed workspace refresh without repeating the mutation", async () => {
     const user = userEvent.setup();
     const updated = {

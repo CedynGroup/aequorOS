@@ -822,10 +822,7 @@ function MutationForm({
   onCancel: () => void;
   onMutation: (response: FinancialMutationResponse) => Promise<void> | void;
 }) {
-  const initialValues = useMemo(
-    () => valuesFromRecord(config, record),
-    [config, record],
-  );
+  const [initialValues] = useState(() => valuesFromRecord(config, record));
   const [values, setValues] = useState<FormValues>(initialValues);
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
