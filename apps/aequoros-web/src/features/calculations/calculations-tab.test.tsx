@@ -454,6 +454,19 @@ describe("CalculationsTab", () => {
     ).toBeInTheDocument();
   });
 
+  it("falls back to plain text for invalid currency codes", async () => {
+    const invalidCurrencyRun = run({
+      outputs: [{ ...output(), currency: "US1" }],
+    });
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(
+      runList([invalidCurrencyRun]),
+    );
+    vi.mocked(riskApi.calculationRun).mockResolvedValue(invalidCurrencyRun);
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+
+    expect(await screen.findByText("US1 4550.0000")).toBeInTheDocument();
+  });
+
   it("renders loading prerequisites and request errors explicitly", async () => {
     vi.spyOn(riskApi, "calculationRuns").mockRejectedValue({
       statusCode: 503,

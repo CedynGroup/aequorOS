@@ -526,11 +526,17 @@ function formatMoney(value: string, currency: string) {
   const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
   if (!match) return `${currency} ${value}`;
 
-  const formatter = new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  });
+  let formatter: Intl.NumberFormat;
+  try {
+    formatter = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    });
+  } catch (error) {
+    if (error instanceof RangeError) return `${currency} ${value}`;
+    throw error;
+  }
   const resolvedOptions = formatter.resolvedOptions();
   const minimumFractionDigits = resolvedOptions.minimumFractionDigits ?? 0;
   const maximumFractionDigits = resolvedOptions.maximumFractionDigits ?? 2;
