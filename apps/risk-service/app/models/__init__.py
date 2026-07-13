@@ -27,6 +27,7 @@ from app.models.risk import (
     RiskScore,
     StoredObject,
 )
+from app.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
 from app.models.user import User
 
 __all__ = [
@@ -54,6 +55,9 @@ __all__ = [
     "RiskFinding",
     "RiskFindingEvidence",
     "RiskScore",
+    "RiskScenario",
+    "ScenarioAssumption",
+    "ScenarioAssumptionHistory",
     "StoredObject",
     "User",
 ]

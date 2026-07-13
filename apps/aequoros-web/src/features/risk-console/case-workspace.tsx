@@ -1,12 +1,6 @@
-import type {
-  CaseRead,
-} from "@aequoros/risk-service-api";
+import type { CaseRead } from "@aequoros/risk-service-api";
 import { Loader2 } from "lucide-react";
-import {
-  lazy,
-  Suspense,
-  type ReactNode,
-} from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 
 import {
   Alert,
@@ -26,19 +20,34 @@ import { DecisionBadge, RiskBadge, StatusBadge, relative } from "./format";
 import type { UpdateSearch } from "./types";
 
 const FinancialTab = lazy(() =>
-  import("../financial/financial-tab").then((module) => ({ default: module.FinancialTab })),
+  import("../financial/financial-tab").then((module) => ({
+    default: module.FinancialTab,
+  })),
+);
+const ScenariosTab = lazy(() =>
+  import("../scenarios/scenarios-tab").then((module) => ({
+    default: module.ScenariosTab,
+  })),
 );
 const FindingsTab = lazy(() =>
-  import("../findings/findings-tab").then((module) => ({ default: module.FindingsTab })),
+  import("../findings/findings-tab").then((module) => ({
+    default: module.FindingsTab,
+  })),
 );
 const DecisionsTab = lazy(() =>
-  import("../decisions/decisions-tab").then((module) => ({ default: module.DecisionsTab })),
+  import("../decisions/decisions-tab").then((module) => ({
+    default: module.DecisionsTab,
+  })),
 );
 const DocumentsTab = lazy(() =>
-  import("../documents/documents-tab").then((module) => ({ default: module.DocumentsTab })),
+  import("../documents/documents-tab").then((module) => ({
+    default: module.DocumentsTab,
+  })),
 );
 const ReportTab = lazy(() =>
-  import("../reports/report-tab").then((module) => ({ default: module.ReportTab })),
+  import("../reports/report-tab").then((module) => ({
+    default: module.ReportTab,
+  })),
 );
 
 export function CaseWorkspace({
@@ -70,11 +79,17 @@ export function CaseWorkspace({
       <PanelHeader
         title="Case Detail"
         meta={caseId ? truncateId(caseId) : "Select a case from the queue"}
-        actions={caseQuery.isFetching ? <Loader2 className="size-4 animate-spin" /> : null}
+        actions={
+          caseQuery.isFetching ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : null
+        }
       />
       {!caseId ? (
         <div className="p-4">
-          <Alert title="No case selected">Select a case from the queue or current case selector.</Alert>
+          <Alert title="No case selected">
+            Select a case from the queue or current case selector.
+          </Alert>
         </div>
       ) : caseQuery.isError && !mockCaseData ? (
         <div className="p-4">
@@ -82,12 +97,18 @@ export function CaseWorkspace({
         </div>
       ) : (
         <>
-          <CaseSummary data={mockCaseData ?? (caseQuery.data as CaseRead | undefined)} />
-          <Tabs value={activeTab} onValueChange={(tab) => updateSearch({ tab: tab as ConsoleTab })}>
+          <CaseSummary
+            data={mockCaseData ?? (caseQuery.data as CaseRead | undefined)}
+          />
+          <Tabs
+            value={activeTab}
+            onValueChange={(tab) => updateSearch({ tab: tab as ConsoleTab })}
+          >
             <div className="border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-2">
               <TabsList className="flex flex-wrap gap-1">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="financial">Financial Workspace</TabsTrigger>
+                <TabsTrigger value="scenarios">Scenarios</TabsTrigger>
                 <TabsTrigger value="findings">Findings</TabsTrigger>
                 <TabsTrigger value="decisions">Decisions</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -95,11 +116,24 @@ export function CaseWorkspace({
               </TabsList>
             </div>
             <TabsContent value="overview" className="m-0 p-3">
-              <OverviewTab caseData={mockCaseData ?? (caseQuery.data as CaseRead | undefined)} />
+              <OverviewTab
+                caseData={
+                  mockCaseData ?? (caseQuery.data as CaseRead | undefined)
+                }
+              />
             </TabsContent>
             <TabsContent value="financial" className="m-0 p-3">
               <LazyTabBoundary>
-                <FinancialTab tenant={tenant} caseId={caseId} mockWorkspace={mockWorkspace} />
+                <FinancialTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mockWorkspace={mockWorkspace}
+                />
+              </LazyTabBoundary>
+            </TabsContent>
+            <TabsContent value="scenarios" className="m-0 p-3">
+              <LazyTabBoundary>
+                <ScenariosTab tenant={tenant} caseId={caseId} />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="findings" className="m-0 p-3">
@@ -119,7 +153,12 @@ export function CaseWorkspace({
             </TabsContent>
             <TabsContent value="report" className="m-0 p-3">
               <LazyTabBoundary>
-                <ReportTab tenant={tenant} caseId={caseId} mode={reportMode} setMode={(report) => updateSearch({ report })} />
+                <ReportTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mode={reportMode}
+                  setMode={(report) => updateSearch({ report })}
+                />
               </LazyTabBoundary>
             </TabsContent>
           </Tabs>
@@ -131,9 +170,7 @@ export function CaseWorkspace({
 
 function LazyTabBoundary({ children }: { children: ReactNode }) {
   return (
-    <Suspense fallback={<Skeleton className="h-96" />}>
-      {children}
-    </Suspense>
+    <Suspense fallback={<Skeleton className="h-96" />}>{children}</Suspense>
   );
 }
 
@@ -179,12 +216,21 @@ function OverviewTab({ caseData }: { caseData?: CaseRead }) {
         <KeyValue label="Case type" value={caseData.caseType} />
         <KeyValue label="Subject" value={caseData.subjectName ?? "None"} />
         <KeyValue label="Subject type" value={caseData.subjectType ?? "None"} />
-        <KeyValue label="Archive action" value="Unavailable in this UI unless exposed by the new API contract" />
+        <KeyValue
+          label="Archive action"
+          value="Unavailable in this UI unless exposed by the new API contract"
+        />
       </InfoBlock>
       <InfoBlock title="Risk">
-        <KeyValue label="Risk score" value={caseData.riskScore?.toString() ?? "Not scored"} />
+        <KeyValue
+          label="Risk score"
+          value={caseData.riskScore?.toString() ?? "Not scored"}
+        />
         <KeyValue label="Risk level" value={labelize(caseData.riskLevel)} />
-        <KeyValue label="Scoring version" value={caseData.scoringVersion ?? "None"} />
+        <KeyValue
+          label="Scoring version"
+          value={caseData.scoringVersion ?? "None"}
+        />
         <KeyValue label="Decision" value={labelize(caseData.decision)} />
       </InfoBlock>
       <InfoBlock title="Metadata">
@@ -194,17 +240,26 @@ function OverviewTab({ caseData }: { caseData?: CaseRead }) {
       </InfoBlock>
       <InfoBlock title="Controls">
         <Alert title="Assign, unassign, and archive">
-          Use the Case Queue bulk action dialog. Single-case actions are left disabled to avoid calling deprecated routes.
+          Use the Case Queue bulk action dialog. Single-case actions are left
+          disabled to avoid calling deprecated routes.
         </Alert>
       </InfoBlock>
     </div>
   );
 }
 
-function InfoBlock({ title, children }: { title: string; children: ReactNode }) {
+function InfoBlock({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <div className="rounded-md border border-[rgb(var(--border))] p-3">
-      <div className="mb-2 text-xs font-semibold uppercase tracking-[0.04em] text-[rgb(var(--muted-foreground))]">{title}</div>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-[0.04em] text-[rgb(var(--muted-foreground))]">
+        {title}
+      </div>
       <div className="space-y-2">{children}</div>
     </div>
   );

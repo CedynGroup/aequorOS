@@ -6,7 +6,8 @@ The service is built with FastAPI, Pydantic settings, SQLAlchemy, Alembic, and P
 
 ## Current Surface
 
-The service currently provides the backend foundation and financial-data APIs:
+The service currently provides the backend foundation, financial-data APIs, and
+case scenario management:
 
 - Health and readiness endpoints under `/api/health`
 - Centralized environment-based settings
@@ -16,6 +17,8 @@ The service currently provides the backend foundation and financial-data APIs:
 - SQLAlchemy models and Alembic migrations for tenant-owned risk and financial records
 - Canonical financial-workspace mapping, validation, manual entry, and correction
 - Covenant persistence, mapping, deterministic compliance validation, and correction
+- Tenant-scoped baseline, downside, and custom scenarios with structured assumptions
+- Scenario creation, editing, copying, archiving, review, validation, and calculation readiness
 - Audit events, per-field manual edit history, and source-record traceability
 
 Production risk calculations, full ingestion pipelines, auth, background workers,
@@ -96,6 +99,16 @@ periods, balances, obligations, and covenants. These mutations require both
 Successful responses contain the updated `record` and the case's refreshed
 `validation` state. See `docs/architecture.md` for the complete contract and
 correction-history behavior.
+
+Case scenarios are read from `GET /api/v1/cases/{case_id}/scenarios`. Initialize
+the baseline and downside defaults with `POST .../scenarios/initialize`, or use
+the resource-specific scenario, copy, archive, assumption, and review routes
+below that path. All mutations require `X-Org-Id`, `X-User-Id`, and a non-empty
+`reason`. An active scenario is calculation-ready only when it has a non-null,
+reviewed assumption in each required category: growth, expenses, cash-flow
+timing, credit usage, and repayment behavior. Editing or copying an assumption
+resets its review state to `draft`. Mutation responses include the scenario's
+refreshed validation and the case's refreshed readiness state.
 
 ## Run Tests
 

@@ -1,4 +1,10 @@
 import {
+  type AssumptionCreate,
+  AssumptionCreateToJSON,
+  type AssumptionReview,
+  AssumptionReviewToJSON,
+  type AssumptionUpdate,
+  AssumptionUpdateToJSON,
   type CaseBulkActionRead,
   CaseBulkActionReadFromJSON,
   type CaseDecisionCreate,
@@ -40,6 +46,22 @@ import {
   type RiskLevel,
   type RiskReportPayload,
   RiskReportPayloadFromJSON,
+  type ScenarioArchive,
+  ScenarioArchiveToJSON,
+  type ScenarioCopy,
+  ScenarioCopyToJSON,
+  type ScenarioCreate,
+  ScenarioCreateToJSON,
+  type ScenarioInitialize,
+  ScenarioInitializeToJSON,
+  type ScenarioMutationResponse,
+  ScenarioMutationResponseFromJSON,
+  type ScenarioUpdate,
+  ScenarioUpdateToJSON,
+  type ScenarioValidationRead,
+  ScenarioValidationReadFromJSON,
+  type ScenarioWorkspaceRead,
+  ScenarioWorkspaceReadFromJSON,
   type UploadRequest,
   type UploadRequestResponse,
   UploadRequestResponseFromJSON,
@@ -136,7 +158,9 @@ export async function apiText(
   return response.text();
 }
 
-function toQuery(params: Record<string, string | number | boolean | undefined>) {
+function toQuery(
+  params: Record<string, string | number | boolean | undefined>,
+) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") query.set(key, String(value));
@@ -187,6 +211,134 @@ export const riskApi = {
       `/cases/${caseId}/financial-workspace`,
       tenant,
       FinancialDataWorkspaceReadFromJSON,
+    );
+  },
+  scenarios(tenant: TenantHeaders, caseId: string, includeArchived = false) {
+    return apiJson<ScenarioWorkspaceRead>(
+      `/cases/${caseId}/scenarios${toQuery({ include_archived: includeArchived })}`,
+      tenant,
+      ScenarioWorkspaceReadFromJSON,
+    );
+  },
+  scenarioValidation(
+    tenant: TenantHeaders,
+    caseId: string,
+    scenarioId: string,
+  ) {
+    return apiJson<ScenarioValidationRead>(
+      `/cases/${caseId}/scenarios/${scenarioId}/validation`,
+      tenant,
+      ScenarioValidationReadFromJSON,
+    );
+  },
+  initializeScenarios(
+    tenant: TenantHeaders,
+    caseId: string,
+    payload: ScenarioInitialize,
+  ) {
+    return apiJson<ScenarioWorkspaceRead>(
+      `/cases/${caseId}/scenarios/initialize`,
+      tenant,
+      ScenarioWorkspaceReadFromJSON,
+      {
+        method: "POST",
+        body: JSON.stringify(ScenarioInitializeToJSON(payload)),
+      },
+    );
+  },
+  createScenario(
+    tenant: TenantHeaders,
+    caseId: string,
+    payload: ScenarioCreate,
+  ) {
+    return apiJson<ScenarioMutationResponse>(
+      `/cases/${caseId}/scenarios`,
+      tenant,
+      ScenarioMutationResponseFromJSON,
+      { method: "POST", body: JSON.stringify(ScenarioCreateToJSON(payload)) },
+    );
+  },
+  updateScenario(
+    tenant: TenantHeaders,
+    caseId: string,
+    scenarioId: string,
+    payload: ScenarioUpdate,
+  ) {
+    return apiJson<ScenarioMutationResponse>(
+      `/cases/${caseId}/scenarios/${scenarioId}`,
+      tenant,
+      ScenarioMutationResponseFromJSON,
+      { method: "PATCH", body: JSON.stringify(ScenarioUpdateToJSON(payload)) },
+    );
+  },
+  copyScenario(
+    tenant: TenantHeaders,
+    caseId: string,
+    scenarioId: string,
+    payload: ScenarioCopy,
+  ) {
+    return apiJson<ScenarioMutationResponse>(
+      `/cases/${caseId}/scenarios/${scenarioId}/copy`,
+      tenant,
+      ScenarioMutationResponseFromJSON,
+      { method: "POST", body: JSON.stringify(ScenarioCopyToJSON(payload)) },
+    );
+  },
+  archiveScenario(
+    tenant: TenantHeaders,
+    caseId: string,
+    scenarioId: string,
+    payload: ScenarioArchive,
+  ) {
+    return apiJson<ScenarioMutationResponse>(
+      `/cases/${caseId}/scenarios/${scenarioId}/archive`,
+      tenant,
+      ScenarioMutationResponseFromJSON,
+      { method: "POST", body: JSON.stringify(ScenarioArchiveToJSON(payload)) },
+    );
+  },
+  createAssumption(
+    tenant: TenantHeaders,
+    caseId: string,
+    scenarioId: string,
+    payload: AssumptionCreate,
+  ) {
+    return apiJson<ScenarioMutationResponse>(
+      `/cases/${caseId}/scenarios/${scenarioId}/assumptions`,
+      tenant,
+      ScenarioMutationResponseFromJSON,
+      { method: "POST", body: JSON.stringify(AssumptionCreateToJSON(payload)) },
+    );
+  },
+  updateAssumption(
+    tenant: TenantHeaders,
+    caseId: string,
+    scenarioId: string,
+    assumptionId: string,
+    payload: AssumptionUpdate,
+  ) {
+    return apiJson<ScenarioMutationResponse>(
+      `/cases/${caseId}/scenarios/${scenarioId}/assumptions/${assumptionId}`,
+      tenant,
+      ScenarioMutationResponseFromJSON,
+      {
+        method: "PATCH",
+        body: JSON.stringify(AssumptionUpdateToJSON(payload)),
+      },
+    );
+  },
+  reviewAssumption(
+    tenant: TenantHeaders,
+    caseId: string,
+    scenarioId: string,
+    assumptionId: string,
+    payload: AssumptionReview,
+  ) {
+    return apiJson<ScenarioMutationResponse>(
+      `/cases/${caseId}/scenarios/${scenarioId}/assumptions/${assumptionId}/review`,
+      tenant,
+      ScenarioMutationResponseFromJSON,
+      { method: "POST", body: JSON.stringify(AssumptionReviewToJSON(payload)) },
     );
   },
   createFinancialCashFlow(
@@ -311,10 +463,8 @@ export const riskApi = {
     );
   },
   findings(tenant: TenantHeaders, caseId: string) {
-    return apiJson<FindingRead[]>(
-      `/cases/${caseId}/findings`,
-      tenant,
-      (json) => (json as unknown[]).map(FindingReadFromJSON),
+    return apiJson<FindingRead[]>(`/cases/${caseId}/findings`, tenant, (json) =>
+      (json as unknown[]).map(FindingReadFromJSON),
     );
   },
   createFinding(tenant: TenantHeaders, caseId: string, payload: FindingCreate) {
@@ -338,7 +488,11 @@ export const riskApi = {
       },
     );
   },
-  updateFinding(tenant: TenantHeaders, findingId: string, payload: FindingUpdate) {
+  updateFinding(
+    tenant: TenantHeaders,
+    findingId: string,
+    payload: FindingUpdate,
+  ) {
     return apiJson<FindingRead>(
       `/findings/${findingId}`,
       tenant,

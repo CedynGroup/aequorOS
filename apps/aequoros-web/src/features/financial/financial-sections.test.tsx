@@ -15,6 +15,7 @@ describe("FinancialSections", () => {
       balances: [],
       cashFlows: [],
       obligations: [],
+      covenants: [],
       sourceRows: [],
       recordSourceLinks: [],
       manualEdits: [],
