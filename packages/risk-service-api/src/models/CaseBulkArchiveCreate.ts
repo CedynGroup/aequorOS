@@ -19,7 +19,6 @@ import { mapValues } from "../runtime";
  * @interface CaseBulkArchiveCreate
  */
 export interface CaseBulkArchiveCreate {
-  [key: string]: any | any;
   /**
    *
    * @type {string}
@@ -78,7 +77,6 @@ export function CaseBulkArchiveCreateToJSONTyped(
   }
 
   return {
-    ...value,
     action: value["action"],
     case_ids: value["caseIds"],
   };

@@ -12,19 +12,20 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from "../runtime";
 /**
  *
  * @export
  * @interface Confidence
  */
-export interface Confidence {}
+export type Confidence = number | string | null;
 
 /**
  * Check if a given object implements the Confidence interface.
  */
-export function instanceOfConfidence(value: object): value is Confidence {
-  return true;
+export function instanceOfConfidence(value: unknown): value is Confidence {
+  return (
+    typeof value === "number" || typeof value === "string" || value === null
+  );
 }
 
 export function ConfidenceFromJSON(json: any): Confidence {

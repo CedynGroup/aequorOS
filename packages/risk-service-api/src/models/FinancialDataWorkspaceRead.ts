@@ -13,6 +13,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { FinancialCovenantRead } from "./FinancialCovenantRead";
+import {
+  FinancialCovenantReadFromJSON,
+  FinancialCovenantReadFromJSONTyped,
+  FinancialCovenantReadToJSON,
+  FinancialCovenantReadToJSONTyped,
+} from "./FinancialCovenantRead";
 import type { FinancialValidationIssueRead } from "./FinancialValidationIssueRead";
 import {
   FinancialValidationIssueReadFromJSON,
@@ -123,6 +130,12 @@ export interface FinancialDataWorkspaceRead {
   cashFlows: Array<FinancialCashFlowRead>;
   /**
    *
+   * @type {Array<FinancialCovenantRead>}
+   * @memberof FinancialDataWorkspaceRead
+   */
+  covenants: Array<FinancialCovenantRead>;
+  /**
+   *
    * @type {Array<FinancialInstitutionRead>}
    * @memberof FinancialDataWorkspaceRead
    */
@@ -187,6 +200,7 @@ export function instanceOfFinancialDataWorkspaceRead(
   if (!("balances" in value) || value["balances"] === undefined) return false;
   if (!("caseId" in value) || value["caseId"] === undefined) return false;
   if (!("cashFlows" in value) || value["cashFlows"] === undefined) return false;
+  if (!("covenants" in value) || value["covenants"] === undefined) return false;
   if (!("institutions" in value) || value["institutions"] === undefined)
     return false;
   if (!("manualEdits" in value) || value["manualEdits"] === undefined)
@@ -238,6 +252,9 @@ export function FinancialDataWorkspaceReadFromJSONTyped(
     cashFlows: (json["cash_flows"] as Array<any>).map(
       FinancialCashFlowReadFromJSON,
     ),
+    covenants: (json["covenants"] as Array<any>).map(
+      FinancialCovenantReadFromJSON,
+    ),
     institutions: (json["institutions"] as Array<any>).map(
       FinancialInstitutionReadFromJSON,
     ),
@@ -286,6 +303,9 @@ export function FinancialDataWorkspaceReadToJSONTyped(
     case_id: value["caseId"],
     cash_flows: (value["cashFlows"] as Array<any>).map(
       FinancialCashFlowReadToJSON,
+    ),
+    covenants: (value["covenants"] as Array<any>).map(
+      FinancialCovenantReadToJSON,
     ),
     institutions: (value["institutions"] as Array<any>).map(
       FinancialInstitutionReadToJSON,

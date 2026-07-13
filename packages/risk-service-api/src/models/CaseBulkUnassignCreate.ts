@@ -19,7 +19,6 @@ import { mapValues } from "../runtime";
  * @interface CaseBulkUnassignCreate
  */
 export interface CaseBulkUnassignCreate {
-  [key: string]: any | any;
   /**
    *
    * @type {string}
@@ -80,7 +79,6 @@ export function CaseBulkUnassignCreateToJSONTyped(
   }
 
   return {
-    ...value,
     action: value["action"],
     case_ids: value["caseIds"],
   };

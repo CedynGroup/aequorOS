@@ -27,7 +27,6 @@ import {
  * @interface CaseBulkUpdateStatusCreate
  */
 export interface CaseBulkUpdateStatusCreate {
-  [key: string]: any | any;
   /**
    *
    * @type {string}
@@ -96,7 +95,6 @@ export function CaseBulkUpdateStatusCreateToJSONTyped(
   }
 
   return {
-    ...value,
     action: value["action"],
     case_ids: value["caseIds"],
     status: CaseStatusToJSON(value["status"]),

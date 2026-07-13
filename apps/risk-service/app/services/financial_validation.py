@@ -12,6 +12,7 @@ from app.models import (
     FinancialAccount,
     FinancialBalance,
     FinancialCashFlow,
+    FinancialCovenant,
     FinancialInstitution,
     FinancialManualEditHistory,
     FinancialObligation,
@@ -43,6 +44,7 @@ TABLE_BY_ENTITY_TYPE: dict[FinancialValidationEntityType, RecordTable] = {
     "balance": "financial_balances",
     "cash_flow": "financial_cash_flows",
     "obligation": "financial_obligations",
+    "covenant": "financial_covenants",
 }
 
 
@@ -50,6 +52,8 @@ def validate_financial_data(
     db: Session,
     ctx: TenantContext,
     case_id: UUID,
+    *,
+    commit: bool = True,
 ) -> FinancialValidationRunResponse:
     case = get_case_or_404(db, ctx.organization_id, case_id)
     drafts = evaluate_financial_validation(load_validation_dataset(db, ctx, case.id))
@@ -78,7 +82,10 @@ def validate_financial_data(
             for draft in drafts
         ]
     )
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
 
     issues = validation_issue_reads(list_validation_issue_models(db, ctx, case.id))
     return FinancialValidationRunResponse(
@@ -164,6 +171,7 @@ def load_validation_dataset(
         balances=list(db.scalars(financial_stmt(FinancialBalance, ctx, case_id))),
         cash_flows=list(db.scalars(financial_stmt(FinancialCashFlow, ctx, case_id))),
         obligations=list(db.scalars(financial_stmt(FinancialObligation, ctx, case_id))),
+        covenants=list(db.scalars(financial_stmt(FinancialCovenant, ctx, case_id))),
         links=list(db.scalars(financial_stmt(FinancialRecordSourceLink, ctx, case_id))),
         manual_edits=list(db.scalars(financial_stmt(FinancialManualEditHistory, ctx, case_id))),
     )

@@ -23,6 +23,7 @@ export const FinancialValidationEntityType = {
   Balance: "balance",
   CashFlow: "cash_flow",
   Obligation: "obligation",
+  Covenant: "covenant",
 } as const;
 export type FinancialValidationEntityType =
   (typeof FinancialValidationEntityType)[keyof typeof FinancialValidationEntityType];

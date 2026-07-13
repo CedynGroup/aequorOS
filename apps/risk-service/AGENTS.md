@@ -24,6 +24,10 @@ This file is the starting point for agents working in `apps/risk-service`.
 - Preserve deterministic in-process job stubs until worker infrastructure is introduced.
 - Add regression tests for tenant isolation, state transitions, and
   storage/database edge cases.
+- Canonical financial manual entry and correction use resource-specific
+  `/api/v1/cases/{case_id}/financial-workspace/*` routes. Keep their OpenAPI and
+  generated-client contracts aligned; successful mutations return the record plus
+  refreshed validation and persist per-field history with actor and reason.
 
 ## Commit Messages
 

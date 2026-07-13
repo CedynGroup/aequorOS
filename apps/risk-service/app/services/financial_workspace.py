@@ -10,6 +10,7 @@ from app.models import (
     FinancialAccount,
     FinancialBalance,
     FinancialCashFlow,
+    FinancialCovenant,
     FinancialInstitution,
     FinancialManualEditHistory,
     FinancialObligation,
@@ -47,6 +48,7 @@ def get_financial_workspace(
         obligations=list(
             db.scalars(financial_stmt(FinancialObligation, ctx.organization_id, case_id))
         ),
+        covenants=list(db.scalars(financial_stmt(FinancialCovenant, ctx.organization_id, case_id))),
         source_rows=list(
             db.scalars(financial_stmt(FinancialSourceRow, ctx.organization_id, case_id))
         ),

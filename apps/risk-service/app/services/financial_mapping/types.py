@@ -17,6 +17,7 @@ type CountKey = Literal[
     "balances",
     "cash_flows",
     "obligations",
+    "covenants",
     "record_source_links",
 ]
 type MapperCounts = dict[str, int]
@@ -55,6 +56,12 @@ type FieldAlias = Literal[
     "drawn",
     "currency",
     "ccy",
+    "covenant_name",
+    "covenant_metric",
+    "covenant_operator",
+    "covenant_threshold",
+    "covenant_actual_value",
+    "covenant_compliance_status",
 ]
 type RecordTable = Literal[
     "financial_institutions",
@@ -63,6 +70,7 @@ type RecordTable = Literal[
     "financial_balances",
     "financial_cash_flows",
     "financial_obligations",
+    "financial_covenants",
 ]
 
 INSTITUTION_ALIASES: tuple[FieldAlias, ...] = (
@@ -110,6 +118,12 @@ OBLIGATION_AMOUNT_ALIASES: tuple[FieldAlias, ...] = (
     "drawn",
 )
 CURRENCY_ALIASES: tuple[FieldAlias, ...] = ("currency", "ccy")
+COVENANT_NAME_ALIASES: tuple[FieldAlias, ...] = ("covenant_name",)
+COVENANT_METRIC_ALIASES: tuple[FieldAlias, ...] = ("covenant_metric",)
+COVENANT_OPERATOR_ALIASES: tuple[FieldAlias, ...] = ("covenant_operator",)
+COVENANT_THRESHOLD_ALIASES: tuple[FieldAlias, ...] = ("covenant_threshold",)
+COVENANT_ACTUAL_ALIASES: tuple[FieldAlias, ...] = ("covenant_actual_value",)
+COVENANT_STATUS_ALIASES: tuple[FieldAlias, ...] = ("covenant_compliance_status",)
 SUPPORTED_FIELD_NAMES = {
     *INSTITUTION_ALIASES,
     *ACCOUNT_ALIASES,
@@ -121,6 +135,12 @@ SUPPORTED_FIELD_NAMES = {
     *CASH_FLOW_DATE_ALIASES,
     *OBLIGATION_AMOUNT_ALIASES,
     *CURRENCY_ALIASES,
+    *COVENANT_NAME_ALIASES,
+    *COVENANT_METRIC_ALIASES,
+    *COVENANT_OPERATOR_ALIASES,
+    *COVENANT_THRESHOLD_ALIASES,
+    *COVENANT_ACTUAL_ALIASES,
+    *COVENANT_STATUS_ALIASES,
 }
 
 COUNT_KEYS: tuple[CountKey, ...] = (
@@ -131,6 +151,7 @@ COUNT_KEYS: tuple[CountKey, ...] = (
     "balances",
     "cash_flows",
     "obligations",
+    "covenants",
     "record_source_links",
 )
 

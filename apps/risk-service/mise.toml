@@ -82,7 +82,7 @@ uv run openapi-generator-cli generate \
   --skip-validate-spec
 
 echo "Restoring source-first package.json configuration..."
-uv run python scripts/fix-api-client-package.py "$OPENAPI_CLIENT/package.json"
+uv run python scripts/fix-api-client-package.py "$OPENAPI_CLIENT/package.json" openapi-schema.json
 
 echo "Formatting generated TypeScript code..."
 (cd "$ROOT" && pnpm -w exec prettier --write packages/risk-service-api/src/ packages/risk-service-api/README.md)

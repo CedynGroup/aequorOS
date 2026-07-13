@@ -1622,6 +1622,104 @@
         "title": "EvidenceRead",
         "type": "object"
       },
+      "FinancialAccountCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "account_name": {
+            "minLength": 1,
+            "title": "Account Name",
+            "type": "string"
+          },
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "account_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialCurrency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "institution_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Id"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "active",
+                  "inactive",
+                  "closed",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "reason",
+          "account_name"
+        ],
+        "title": "FinancialAccountCreate",
+        "type": "object"
+      },
+      "FinancialAccountMutationResponse": {
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/FinancialAccountRead"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/FinancialValidationRunResponse"
+          }
+        },
+        "required": [
+          "record",
+          "validation"
+        ],
+        "title": "FinancialAccountMutationResponse",
+        "type": "object"
+      },
       "FinancialAccountRead": {
         "properties": {
           "account_name": {
@@ -1730,6 +1828,192 @@
         "title": "FinancialAccountRead",
         "type": "object"
       },
+      "FinancialAccountUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "account_name": {
+            "default": "",
+            "minLength": 1,
+            "title": "Account Name",
+            "type": "string"
+          },
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "account_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialCurrency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "institution_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Id"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonObject-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "active",
+                  "inactive",
+                  "closed",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "FinancialAccountUpdate",
+        "type": "object"
+      },
+      "FinancialAmount": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+            "type": "string"
+          }
+        ]
+      },
+      "FinancialBalanceCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/FinancialAmount"
+          },
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date"
+          },
+          "balance_type": {
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialCurrency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "reporting_period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Period Id"
+          }
+        },
+        "required": [
+          "reason",
+          "balance_type",
+          "amount"
+        ],
+        "title": "FinancialBalanceCreate",
+        "type": "object"
+      },
+      "FinancialBalanceMutationResponse": {
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/FinancialBalanceRead"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/FinancialValidationRunResponse"
+          }
+        },
+        "required": [
+          "record",
+          "validation"
+        ],
+        "title": "FinancialBalanceMutationResponse",
+        "type": "object"
+      },
       "FinancialBalanceRead": {
         "properties": {
           "account_id": {
@@ -1832,6 +2116,83 @@
           "updated_at"
         ],
         "title": "FinancialBalanceRead",
+        "type": "object"
+      },
+      "FinancialBalanceUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/FinancialAmount",
+            "default": "0"
+          },
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date"
+          },
+          "balance_type": {
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2",
+            "default": ""
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialCurrency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonObject-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "reporting_period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Period Id"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "FinancialBalanceUpdate",
         "type": "object"
       },
       "FinancialCashFlowCreate": {
@@ -2125,6 +2486,331 @@
         "title": "FinancialCashFlowUpdate",
         "type": "object"
       },
+      "FinancialCovenantAmount": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,21}0*$)\\d{0,14}\\.\\d{0,6}0*$)",
+            "type": "string"
+          }
+        ]
+      },
+      "FinancialCovenantComplianceStatus": {
+        "enum": [
+          "compliant",
+          "non_compliant",
+          "unknown"
+        ],
+        "type": "string"
+      },
+      "FinancialCovenantCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialCovenantAmount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "compliance_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialCovenantComplianceStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "metric": {
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "obligation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obligation Id"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/FinancialCovenantOperator"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "reporting_context": {
+            "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "reporting_period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Period Id"
+          },
+          "source_record": {
+            "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "threshold": {
+            "$ref": "#/components/schemas/FinancialCovenantAmount"
+          }
+        },
+        "required": [
+          "reason",
+          "name",
+          "metric",
+          "operator",
+          "threshold"
+        ],
+        "title": "FinancialCovenantCreate",
+        "type": "object"
+      },
+      "FinancialCovenantMutationResponse": {
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/FinancialCovenantRead"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/FinancialValidationRunResponse"
+          }
+        },
+        "required": [
+          "record",
+          "validation"
+        ],
+        "title": "FinancialCovenantMutationResponse",
+        "type": "object"
+      },
+      "FinancialCovenantOperator": {
+        "enum": [
+          "lt",
+          "lte",
+          "eq",
+          "gte",
+          "gt"
+        ],
+        "type": "string"
+      },
+      "FinancialCovenantRead": {
+        "properties": {
+          "actual_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Value"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "compliance_status": {
+            "$ref": "#/components/schemas/FinancialCovenantComplianceStatus"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/JsonObject-Output"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "obligation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obligation Id"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/FinancialCovenantOperator"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "title": "Organization Id",
+            "type": "string"
+          },
+          "reporting_context": {
+            "$ref": "#/components/schemas/JsonObject-Output"
+          },
+          "reporting_period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Period Id"
+          },
+          "source_record": {
+            "$ref": "#/components/schemas/JsonObject-Output"
+          },
+          "threshold": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Threshold",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "organization_id",
+          "case_id",
+          "obligation_id",
+          "reporting_period_id",
+          "name",
+          "metric",
+          "operator",
+          "threshold",
+          "actual_value",
+          "compliance_status",
+          "source_record",
+          "reporting_context",
+          "metadata",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "FinancialCovenantRead",
+        "type": "object"
+      },
+      "FinancialCovenantUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialCovenantAmount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "compliance_status": {
+            "$ref": "#/components/schemas/FinancialCovenantComplianceStatus",
+            "default": "unknown"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "metric": {
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2",
+            "default": ""
+          },
+          "name": {
+            "default": "",
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "obligation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obligation Id"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/FinancialCovenantOperator",
+            "default": "eq"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "reporting_context": {
+            "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "reporting_period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Period Id"
+          },
+          "source_record": {
+            "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "threshold": {
+            "$ref": "#/components/schemas/FinancialCovenantAmount",
+            "default": "0"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "FinancialCovenantUpdate",
+        "type": "object"
+      },
+      "FinancialCurrency": {
+        "maxLength": 3,
+        "minLength": 3,
+        "type": "string"
+      },
       "FinancialDataWorkspaceRead": {
         "properties": {
           "accounts": {
@@ -2151,6 +2837,13 @@
               "$ref": "#/components/schemas/FinancialCashFlowRead"
             },
             "title": "Cash Flows",
+            "type": "array"
+          },
+          "covenants": {
+            "items": {
+              "$ref": "#/components/schemas/FinancialCovenantRead"
+            },
+            "title": "Covenants",
             "type": "array"
           },
           "institutions": {
@@ -2220,6 +2913,7 @@
           "balances",
           "cash_flows",
           "obligations",
+          "covenants",
           "source_rows",
           "record_source_links",
           "manual_edits",
@@ -2227,6 +2921,64 @@
           "validation_summary"
         ],
         "title": "FinancialDataWorkspaceRead",
+        "type": "object"
+      },
+      "FinancialInstitutionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "institution_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "reference_code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "reason",
+          "name"
+        ],
+        "title": "FinancialInstitutionCreate",
+        "type": "object"
+      },
+      "FinancialInstitutionMutationResponse": {
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/FinancialInstitutionRead"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/FinancialValidationRunResponse"
+          }
+        },
+        "required": [
+          "record",
+          "validation"
+        ],
+        "title": "FinancialInstitutionMutationResponse",
         "type": "object"
       },
       "FinancialInstitutionRead": {
@@ -2298,6 +3050,55 @@
           "updated_at"
         ],
         "title": "FinancialInstitutionRead",
+        "type": "object"
+      },
+      "FinancialInstitutionUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "institution_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonObject-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "default": "",
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "reference_code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "FinancialInstitutionUpdate",
         "type": "object"
       },
       "FinancialManualEditRead": {
@@ -2379,6 +3180,176 @@
           "created_at"
         ],
         "title": "FinancialManualEditRead",
+        "type": "object"
+      },
+      "FinancialMutationReason": {
+        "maxLength": 2000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "FinancialObligationCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialCurrency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "details": {
+            "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "facility_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "institution_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Id"
+          },
+          "interest_rate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialRate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maturity_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity Date"
+          },
+          "obligation_type": {
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2"
+          },
+          "outstanding_amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialAmount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "principal_amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialAmount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "reporting_period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Period Id"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "active",
+                  "inactive",
+                  "closed",
+                  "matured",
+                  "defaulted",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "reason",
+          "obligation_type"
+        ],
+        "title": "FinancialObligationCreate",
+        "type": "object"
+      },
+      "FinancialObligationMutationResponse": {
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/FinancialObligationRead"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/FinancialValidationRunResponse"
+          }
+        },
+        "required": [
+          "record",
+          "validation"
+        ],
+        "title": "FinancialObligationMutationResponse",
         "type": "object"
       },
       "FinancialObligationRead": {
@@ -2568,6 +3539,173 @@
         "title": "FinancialObligationRead",
         "type": "object"
       },
+      "FinancialObligationUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialCurrency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "details": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonObject-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "facility_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "institution_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Id"
+          },
+          "interest_rate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialRate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maturity_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity Date"
+          },
+          "obligation_type": {
+            "$ref": "#/components/schemas/app__schemas__financial_workspace__FinancialString120__2",
+            "default": ""
+          },
+          "outstanding_amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialAmount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "principal_amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinancialAmount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "reporting_period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Period Id"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "active",
+                  "inactive",
+                  "closed",
+                  "matured",
+                  "defaulted",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "FinancialObligationUpdate",
+        "type": "object"
+      },
+      "FinancialRate": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,4}|(?=[\\d.]{1,11}0*$)\\d{0,4}\\.\\d{0,6}0*$)",
+            "type": "string"
+          }
+        ]
+      },
       "FinancialRecordSourceLinkRead": {
         "properties": {
           "case_id": {
@@ -2656,6 +3794,98 @@
           "created_at"
         ],
         "title": "FinancialRecordSourceLinkRead",
+        "type": "object"
+      },
+      "FinancialReportingPeriodCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/JsonObject-Input"
+          },
+          "period_type": {
+            "enum": [
+              "as_of",
+              "day",
+              "month",
+              "quarter",
+              "year",
+              "custom"
+            ],
+            "title": "Period Type",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          }
+        },
+        "required": [
+          "reason",
+          "period_type"
+        ],
+        "title": "FinancialReportingPeriodCreate",
+        "type": "object"
+      },
+      "FinancialReportingPeriodMutationResponse": {
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/FinancialReportingPeriodRead"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/FinancialValidationRunResponse"
+          }
+        },
+        "required": [
+          "record",
+          "validation"
+        ],
+        "title": "FinancialReportingPeriodMutationResponse",
         "type": "object"
       },
       "FinancialReportingPeriodRead": {
@@ -2756,6 +3986,89 @@
         "title": "FinancialReportingPeriodRead",
         "type": "object"
       },
+      "FinancialReportingPeriodUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonObject-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "period_type": {
+            "default": "custom",
+            "enum": [
+              "as_of",
+              "day",
+              "month",
+              "quarter",
+              "year",
+              "custom"
+            ],
+            "title": "Period Type",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/FinancialMutationReason"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "FinancialReportingPeriodUpdate",
+        "type": "object"
+      },
       "FinancialSourceRowRead": {
         "properties": {
           "case_id": {
@@ -2841,7 +4154,8 @@
           "reporting_period",
           "balance",
           "cash_flow",
-          "obligation"
+          "obligation",
+          "covenant"
         ],
         "type": "string"
       },
@@ -4483,6 +5797,15 @@
         ],
         "title": "UploadRequestResponse",
         "type": "object"
+      },
+      "app__schemas__financial_workspace__FinancialString120__1": {
+        "maxLength": 120,
+        "type": "string"
+      },
+      "app__schemas__financial_workspace__FinancialString120__2": {
+        "maxLength": 120,
+        "minLength": 1,
+        "type": "string"
       }
     }
   },
@@ -7440,6 +8763,514 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/financial-workspace/accounts": {
+      "post": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "createCaseFinancialAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialAccountCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialAccountMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Create Case Financial Account",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-workspace/accounts/{account_id}": {
+      "patch": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "updateCaseFinancialAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialAccountUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialAccountMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Update Case Financial Account",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-workspace/balances": {
+      "post": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "createCaseFinancialBalance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialBalanceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialBalanceMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Create Case Financial Balance",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-workspace/balances/{balance_id}": {
+      "patch": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "updateCaseFinancialBalance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "balance_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Balance Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialBalanceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialBalanceMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Update Case Financial Balance",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/financial-workspace/cash-flows": {
       "post": {
         "operationId": "createCaseFinancialCashFlow",
@@ -7706,6 +9537,514 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/financial-workspace/covenants": {
+      "post": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "createCaseFinancialCovenant",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialCovenantCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialCovenantMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Create Case Financial Covenant",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-workspace/covenants/{covenant_id}": {
+      "patch": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "updateCaseFinancialCovenant",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "covenant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Covenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialCovenantUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialCovenantMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Update Case Financial Covenant",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-workspace/institutions": {
+      "post": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "createCaseFinancialInstitution",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialInstitutionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialInstitutionMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Create Case Financial Institution",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-workspace/institutions/{institution_id}": {
+      "patch": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "updateCaseFinancialInstitution",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "institution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Institution Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialInstitutionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialInstitutionMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Update Case Financial Institution",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/financial-workspace/map": {
       "post": {
         "operationId": "mapCaseFinancialWorkspace",
@@ -7829,6 +10168,514 @@
           }
         },
         "summary": "Map Case Financial Workspace",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-workspace/obligations": {
+      "post": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "createCaseFinancialObligation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialObligationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialObligationMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Create Case Financial Obligation",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-workspace/obligations/{obligation_id}": {
+      "patch": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "updateCaseFinancialObligation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "obligation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Obligation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialObligationUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialObligationMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Update Case Financial Obligation",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-workspace/reporting-periods": {
+      "post": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "createCaseFinancialReportingPeriod",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialReportingPeriodCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialReportingPeriodMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Create Case Financial Reporting Period",
+        "tags": [
+          "financial-data"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial-workspace/reporting-periods/{reporting_period_id}": {
+      "patch": {
+        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "operationId": "updateCaseFinancialReportingPeriod",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "reporting_period_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Reporting Period Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialReportingPeriodUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialReportingPeriodMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Update Case Financial Reporting Period",
         "tags": [
           "financial-data"
         ]

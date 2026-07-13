@@ -40,6 +40,13 @@ def get_tenant_context(
     return TenantContext(organization_id=organization_id, actor_user_id=actor_user_id)
 
 
+def get_mutation_tenant_context(
+    x_org_id: Annotated[str, Header(alias="X-Org-Id")],
+    x_user_id: Annotated[str, Header(alias="X-User-Id")],
+) -> TenantContext:
+    return get_tenant_context(x_org_id=x_org_id, x_user_id=x_user_id)
+
+
 def get_tenant_db_session(
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
 ) -> Iterator[Session]:
@@ -84,4 +91,5 @@ def validate_tenant_context(session: Session, ctx: TenantContext) -> None:
 
 DbSession = Annotated[Session, Depends(get_tenant_db_session)]
 Tenant = Annotated[TenantContext, Depends(get_tenant_context)]
+MutationTenant = Annotated[TenantContext, Depends(get_mutation_tenant_context)]
 Storage = Annotated[ObjectStorage, Depends(get_object_storage)]

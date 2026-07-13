@@ -15,10 +15,28 @@
 import * as runtime from "../runtime";
 import type {
   ErrorResponse,
+  FinancialAccountCreate,
+  FinancialAccountMutationResponse,
+  FinancialAccountUpdate,
+  FinancialBalanceCreate,
+  FinancialBalanceMutationResponse,
+  FinancialBalanceUpdate,
   FinancialCashFlowCreate,
   FinancialCashFlowRead,
   FinancialCashFlowUpdate,
+  FinancialCovenantCreate,
+  FinancialCovenantMutationResponse,
+  FinancialCovenantUpdate,
   FinancialDataWorkspaceRead,
+  FinancialInstitutionCreate,
+  FinancialInstitutionMutationResponse,
+  FinancialInstitutionUpdate,
+  FinancialObligationCreate,
+  FinancialObligationMutationResponse,
+  FinancialObligationUpdate,
+  FinancialReportingPeriodCreate,
+  FinancialReportingPeriodMutationResponse,
+  FinancialReportingPeriodUpdate,
   FinancialValidationEntityType,
   FinancialValidationIssueRead,
   FinancialValidationRunResponse,
@@ -29,14 +47,50 @@ import type {
 import {
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
+  FinancialAccountCreateFromJSON,
+  FinancialAccountCreateToJSON,
+  FinancialAccountMutationResponseFromJSON,
+  FinancialAccountMutationResponseToJSON,
+  FinancialAccountUpdateFromJSON,
+  FinancialAccountUpdateToJSON,
+  FinancialBalanceCreateFromJSON,
+  FinancialBalanceCreateToJSON,
+  FinancialBalanceMutationResponseFromJSON,
+  FinancialBalanceMutationResponseToJSON,
+  FinancialBalanceUpdateFromJSON,
+  FinancialBalanceUpdateToJSON,
   FinancialCashFlowCreateFromJSON,
   FinancialCashFlowCreateToJSON,
   FinancialCashFlowReadFromJSON,
   FinancialCashFlowReadToJSON,
   FinancialCashFlowUpdateFromJSON,
   FinancialCashFlowUpdateToJSON,
+  FinancialCovenantCreateFromJSON,
+  FinancialCovenantCreateToJSON,
+  FinancialCovenantMutationResponseFromJSON,
+  FinancialCovenantMutationResponseToJSON,
+  FinancialCovenantUpdateFromJSON,
+  FinancialCovenantUpdateToJSON,
   FinancialDataWorkspaceReadFromJSON,
   FinancialDataWorkspaceReadToJSON,
+  FinancialInstitutionCreateFromJSON,
+  FinancialInstitutionCreateToJSON,
+  FinancialInstitutionMutationResponseFromJSON,
+  FinancialInstitutionMutationResponseToJSON,
+  FinancialInstitutionUpdateFromJSON,
+  FinancialInstitutionUpdateToJSON,
+  FinancialObligationCreateFromJSON,
+  FinancialObligationCreateToJSON,
+  FinancialObligationMutationResponseFromJSON,
+  FinancialObligationMutationResponseToJSON,
+  FinancialObligationUpdateFromJSON,
+  FinancialObligationUpdateToJSON,
+  FinancialReportingPeriodCreateFromJSON,
+  FinancialReportingPeriodCreateToJSON,
+  FinancialReportingPeriodMutationResponseFromJSON,
+  FinancialReportingPeriodMutationResponseToJSON,
+  FinancialReportingPeriodUpdateFromJSON,
+  FinancialReportingPeriodUpdateToJSON,
   FinancialValidationEntityTypeFromJSON,
   FinancialValidationEntityTypeToJSON,
   FinancialValidationIssueReadFromJSON,
@@ -51,11 +105,53 @@ import {
   FinancialWorkspaceMapResponseToJSON,
 } from "../models/index";
 
+export interface CreateCaseFinancialAccountRequest {
+  caseId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialAccountCreate: FinancialAccountCreate;
+}
+
+export interface CreateCaseFinancialBalanceRequest {
+  caseId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialBalanceCreate: FinancialBalanceCreate;
+}
+
 export interface CreateCaseFinancialCashFlowRequest {
   caseId: string;
   xOrgId: string;
   financialCashFlowCreate: FinancialCashFlowCreate;
   xUserId?: string | null;
+}
+
+export interface CreateCaseFinancialCovenantRequest {
+  caseId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialCovenantCreate: FinancialCovenantCreate;
+}
+
+export interface CreateCaseFinancialInstitutionRequest {
+  caseId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialInstitutionCreate: FinancialInstitutionCreate;
+}
+
+export interface CreateCaseFinancialObligationRequest {
+  caseId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialObligationCreate: FinancialObligationCreate;
+}
+
+export interface CreateCaseFinancialReportingPeriodRequest {
+  caseId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialReportingPeriodCreate: FinancialReportingPeriodCreate;
 }
 
 export interface GetCaseFinancialWorkspaceRequest {
@@ -79,12 +175,60 @@ export interface MapCaseFinancialWorkspaceRequest {
   xUserId?: string | null;
 }
 
+export interface UpdateCaseFinancialAccountRequest {
+  caseId: string;
+  accountId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialAccountUpdate: FinancialAccountUpdate;
+}
+
+export interface UpdateCaseFinancialBalanceRequest {
+  caseId: string;
+  balanceId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialBalanceUpdate: FinancialBalanceUpdate;
+}
+
 export interface UpdateCaseFinancialCashFlowRequest {
   caseId: string;
   cashFlowId: string;
   xOrgId: string;
   financialCashFlowUpdate: FinancialCashFlowUpdate;
   xUserId?: string | null;
+}
+
+export interface UpdateCaseFinancialCovenantRequest {
+  caseId: string;
+  covenantId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialCovenantUpdate: FinancialCovenantUpdate;
+}
+
+export interface UpdateCaseFinancialInstitutionRequest {
+  caseId: string;
+  institutionId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialInstitutionUpdate: FinancialInstitutionUpdate;
+}
+
+export interface UpdateCaseFinancialObligationRequest {
+  caseId: string;
+  obligationId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialObligationUpdate: FinancialObligationUpdate;
+}
+
+export interface UpdateCaseFinancialReportingPeriodRequest {
+  caseId: string;
+  reportingPeriodId: string;
+  xOrgId: string;
+  xUserId: string;
+  financialReportingPeriodUpdate: FinancialReportingPeriodUpdate;
 }
 
 export interface ValidateCaseFinancialDataRequest {
@@ -97,6 +241,178 @@ export interface ValidateCaseFinancialDataRequest {
  *
  */
 export class FinancialDataApi extends runtime.BaseAPI {
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Account
+   */
+  async createCaseFinancialAccountRaw(
+    requestParameters: CreateCaseFinancialAccountRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialAccountMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling createCaseFinancialAccount().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialAccount().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialAccount().',
+      );
+    }
+
+    if (requestParameters["financialAccountCreate"] == null) {
+      throw new runtime.RequiredError(
+        "financialAccountCreate",
+        'Required parameter "financialAccountCreate" was null or undefined when calling createCaseFinancialAccount().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/accounts`.replace(
+          `{${"case_id"}}`,
+          encodeURIComponent(String(requestParameters["caseId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialAccountCreateToJSON(
+          requestParameters["financialAccountCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialAccountMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Account
+   */
+  async createCaseFinancialAccount(
+    requestParameters: CreateCaseFinancialAccountRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialAccountMutationResponse> {
+    const response = await this.createCaseFinancialAccountRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Balance
+   */
+  async createCaseFinancialBalanceRaw(
+    requestParameters: CreateCaseFinancialBalanceRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialBalanceMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling createCaseFinancialBalance().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialBalance().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialBalance().',
+      );
+    }
+
+    if (requestParameters["financialBalanceCreate"] == null) {
+      throw new runtime.RequiredError(
+        "financialBalanceCreate",
+        'Required parameter "financialBalanceCreate" was null or undefined when calling createCaseFinancialBalance().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/balances`.replace(
+          `{${"case_id"}}`,
+          encodeURIComponent(String(requestParameters["caseId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialBalanceCreateToJSON(
+          requestParameters["financialBalanceCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialBalanceMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Balance
+   */
+  async createCaseFinancialBalance(
+    requestParameters: CreateCaseFinancialBalanceRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialBalanceMutationResponse> {
+    const response = await this.createCaseFinancialBalanceRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Create Case Financial Cash Flow
    */
@@ -168,6 +484,350 @@ export class FinancialDataApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<FinancialCashFlowRead> {
     const response = await this.createCaseFinancialCashFlowRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Covenant
+   */
+  async createCaseFinancialCovenantRaw(
+    requestParameters: CreateCaseFinancialCovenantRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialCovenantMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling createCaseFinancialCovenant().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialCovenant().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialCovenant().',
+      );
+    }
+
+    if (requestParameters["financialCovenantCreate"] == null) {
+      throw new runtime.RequiredError(
+        "financialCovenantCreate",
+        'Required parameter "financialCovenantCreate" was null or undefined when calling createCaseFinancialCovenant().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/covenants`.replace(
+          `{${"case_id"}}`,
+          encodeURIComponent(String(requestParameters["caseId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialCovenantCreateToJSON(
+          requestParameters["financialCovenantCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialCovenantMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Covenant
+   */
+  async createCaseFinancialCovenant(
+    requestParameters: CreateCaseFinancialCovenantRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialCovenantMutationResponse> {
+    const response = await this.createCaseFinancialCovenantRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Institution
+   */
+  async createCaseFinancialInstitutionRaw(
+    requestParameters: CreateCaseFinancialInstitutionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialInstitutionMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling createCaseFinancialInstitution().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialInstitution().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialInstitution().',
+      );
+    }
+
+    if (requestParameters["financialInstitutionCreate"] == null) {
+      throw new runtime.RequiredError(
+        "financialInstitutionCreate",
+        'Required parameter "financialInstitutionCreate" was null or undefined when calling createCaseFinancialInstitution().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/institutions`.replace(
+          `{${"case_id"}}`,
+          encodeURIComponent(String(requestParameters["caseId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialInstitutionCreateToJSON(
+          requestParameters["financialInstitutionCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialInstitutionMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Institution
+   */
+  async createCaseFinancialInstitution(
+    requestParameters: CreateCaseFinancialInstitutionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialInstitutionMutationResponse> {
+    const response = await this.createCaseFinancialInstitutionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Obligation
+   */
+  async createCaseFinancialObligationRaw(
+    requestParameters: CreateCaseFinancialObligationRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialObligationMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling createCaseFinancialObligation().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialObligation().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialObligation().',
+      );
+    }
+
+    if (requestParameters["financialObligationCreate"] == null) {
+      throw new runtime.RequiredError(
+        "financialObligationCreate",
+        'Required parameter "financialObligationCreate" was null or undefined when calling createCaseFinancialObligation().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/obligations`.replace(
+          `{${"case_id"}}`,
+          encodeURIComponent(String(requestParameters["caseId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialObligationCreateToJSON(
+          requestParameters["financialObligationCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialObligationMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Obligation
+   */
+  async createCaseFinancialObligation(
+    requestParameters: CreateCaseFinancialObligationRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialObligationMutationResponse> {
+    const response = await this.createCaseFinancialObligationRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Reporting Period
+   */
+  async createCaseFinancialReportingPeriodRaw(
+    requestParameters: CreateCaseFinancialReportingPeriodRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialReportingPeriodMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling createCaseFinancialReportingPeriod().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialReportingPeriod().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialReportingPeriod().',
+      );
+    }
+
+    if (requestParameters["financialReportingPeriodCreate"] == null) {
+      throw new runtime.RequiredError(
+        "financialReportingPeriodCreate",
+        'Required parameter "financialReportingPeriodCreate" was null or undefined when calling createCaseFinancialReportingPeriod().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/reporting-periods`.replace(
+          `{${"case_id"}}`,
+          encodeURIComponent(String(requestParameters["caseId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialReportingPeriodCreateToJSON(
+          requestParameters["financialReportingPeriodCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialReportingPeriodMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Create Case Financial Reporting Period
+   */
+  async createCaseFinancialReportingPeriod(
+    requestParameters: CreateCaseFinancialReportingPeriodRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialReportingPeriodMutationResponse> {
+    const response = await this.createCaseFinancialReportingPeriodRaw(
       requestParameters,
       initOverrides,
     );
@@ -390,6 +1050,202 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Account
+   */
+  async updateCaseFinancialAccountRaw(
+    requestParameters: UpdateCaseFinancialAccountRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialAccountMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling updateCaseFinancialAccount().',
+      );
+    }
+
+    if (requestParameters["accountId"] == null) {
+      throw new runtime.RequiredError(
+        "accountId",
+        'Required parameter "accountId" was null or undefined when calling updateCaseFinancialAccount().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialAccount().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialAccount().',
+      );
+    }
+
+    if (requestParameters["financialAccountUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "financialAccountUpdate",
+        'Required parameter "financialAccountUpdate" was null or undefined when calling updateCaseFinancialAccount().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/accounts/{account_id}`
+          .replace(
+            `{${"case_id"}}`,
+            encodeURIComponent(String(requestParameters["caseId"])),
+          )
+          .replace(
+            `{${"account_id"}}`,
+            encodeURIComponent(String(requestParameters["accountId"])),
+          ),
+        method: "PATCH",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialAccountUpdateToJSON(
+          requestParameters["financialAccountUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialAccountMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Account
+   */
+  async updateCaseFinancialAccount(
+    requestParameters: UpdateCaseFinancialAccountRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialAccountMutationResponse> {
+    const response = await this.updateCaseFinancialAccountRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Balance
+   */
+  async updateCaseFinancialBalanceRaw(
+    requestParameters: UpdateCaseFinancialBalanceRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialBalanceMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling updateCaseFinancialBalance().',
+      );
+    }
+
+    if (requestParameters["balanceId"] == null) {
+      throw new runtime.RequiredError(
+        "balanceId",
+        'Required parameter "balanceId" was null or undefined when calling updateCaseFinancialBalance().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialBalance().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialBalance().',
+      );
+    }
+
+    if (requestParameters["financialBalanceUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "financialBalanceUpdate",
+        'Required parameter "financialBalanceUpdate" was null or undefined when calling updateCaseFinancialBalance().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/balances/{balance_id}`
+          .replace(
+            `{${"case_id"}}`,
+            encodeURIComponent(String(requestParameters["caseId"])),
+          )
+          .replace(
+            `{${"balance_id"}}`,
+            encodeURIComponent(String(requestParameters["balanceId"])),
+          ),
+        method: "PATCH",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialBalanceUpdateToJSON(
+          requestParameters["financialBalanceUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialBalanceMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Balance
+   */
+  async updateCaseFinancialBalance(
+    requestParameters: UpdateCaseFinancialBalanceRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialBalanceMutationResponse> {
+    const response = await this.updateCaseFinancialBalanceRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Update Case Financial Cash Flow
    */
   async updateCaseFinancialCashFlowRaw(
@@ -472,6 +1328,398 @@ export class FinancialDataApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<FinancialCashFlowRead> {
     const response = await this.updateCaseFinancialCashFlowRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Covenant
+   */
+  async updateCaseFinancialCovenantRaw(
+    requestParameters: UpdateCaseFinancialCovenantRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialCovenantMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling updateCaseFinancialCovenant().',
+      );
+    }
+
+    if (requestParameters["covenantId"] == null) {
+      throw new runtime.RequiredError(
+        "covenantId",
+        'Required parameter "covenantId" was null or undefined when calling updateCaseFinancialCovenant().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialCovenant().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialCovenant().',
+      );
+    }
+
+    if (requestParameters["financialCovenantUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "financialCovenantUpdate",
+        'Required parameter "financialCovenantUpdate" was null or undefined when calling updateCaseFinancialCovenant().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/covenants/{covenant_id}`
+          .replace(
+            `{${"case_id"}}`,
+            encodeURIComponent(String(requestParameters["caseId"])),
+          )
+          .replace(
+            `{${"covenant_id"}}`,
+            encodeURIComponent(String(requestParameters["covenantId"])),
+          ),
+        method: "PATCH",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialCovenantUpdateToJSON(
+          requestParameters["financialCovenantUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialCovenantMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Covenant
+   */
+  async updateCaseFinancialCovenant(
+    requestParameters: UpdateCaseFinancialCovenantRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialCovenantMutationResponse> {
+    const response = await this.updateCaseFinancialCovenantRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Institution
+   */
+  async updateCaseFinancialInstitutionRaw(
+    requestParameters: UpdateCaseFinancialInstitutionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialInstitutionMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling updateCaseFinancialInstitution().',
+      );
+    }
+
+    if (requestParameters["institutionId"] == null) {
+      throw new runtime.RequiredError(
+        "institutionId",
+        'Required parameter "institutionId" was null or undefined when calling updateCaseFinancialInstitution().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialInstitution().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialInstitution().',
+      );
+    }
+
+    if (requestParameters["financialInstitutionUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "financialInstitutionUpdate",
+        'Required parameter "financialInstitutionUpdate" was null or undefined when calling updateCaseFinancialInstitution().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/institutions/{institution_id}`
+          .replace(
+            `{${"case_id"}}`,
+            encodeURIComponent(String(requestParameters["caseId"])),
+          )
+          .replace(
+            `{${"institution_id"}}`,
+            encodeURIComponent(String(requestParameters["institutionId"])),
+          ),
+        method: "PATCH",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialInstitutionUpdateToJSON(
+          requestParameters["financialInstitutionUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialInstitutionMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Institution
+   */
+  async updateCaseFinancialInstitution(
+    requestParameters: UpdateCaseFinancialInstitutionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialInstitutionMutationResponse> {
+    const response = await this.updateCaseFinancialInstitutionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Obligation
+   */
+  async updateCaseFinancialObligationRaw(
+    requestParameters: UpdateCaseFinancialObligationRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialObligationMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling updateCaseFinancialObligation().',
+      );
+    }
+
+    if (requestParameters["obligationId"] == null) {
+      throw new runtime.RequiredError(
+        "obligationId",
+        'Required parameter "obligationId" was null or undefined when calling updateCaseFinancialObligation().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialObligation().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialObligation().',
+      );
+    }
+
+    if (requestParameters["financialObligationUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "financialObligationUpdate",
+        'Required parameter "financialObligationUpdate" was null or undefined when calling updateCaseFinancialObligation().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/obligations/{obligation_id}`
+          .replace(
+            `{${"case_id"}}`,
+            encodeURIComponent(String(requestParameters["caseId"])),
+          )
+          .replace(
+            `{${"obligation_id"}}`,
+            encodeURIComponent(String(requestParameters["obligationId"])),
+          ),
+        method: "PATCH",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialObligationUpdateToJSON(
+          requestParameters["financialObligationUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialObligationMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Obligation
+   */
+  async updateCaseFinancialObligation(
+    requestParameters: UpdateCaseFinancialObligationRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialObligationMutationResponse> {
+    const response = await this.updateCaseFinancialObligationRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Reporting Period
+   */
+  async updateCaseFinancialReportingPeriodRaw(
+    requestParameters: UpdateCaseFinancialReportingPeriodRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FinancialReportingPeriodMutationResponse>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling updateCaseFinancialReportingPeriod().',
+      );
+    }
+
+    if (requestParameters["reportingPeriodId"] == null) {
+      throw new runtime.RequiredError(
+        "reportingPeriodId",
+        'Required parameter "reportingPeriodId" was null or undefined when calling updateCaseFinancialReportingPeriod().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialReportingPeriod().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialReportingPeriod().',
+      );
+    }
+
+    if (requestParameters["financialReportingPeriodUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "financialReportingPeriodUpdate",
+        'Required parameter "financialReportingPeriodUpdate" was null or undefined when calling updateCaseFinancialReportingPeriod().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/financial-workspace/reporting-periods/{reporting_period_id}`
+          .replace(
+            `{${"case_id"}}`,
+            encodeURIComponent(String(requestParameters["caseId"])),
+          )
+          .replace(
+            `{${"reporting_period_id"}}`,
+            encodeURIComponent(String(requestParameters["reportingPeriodId"])),
+          ),
+        method: "PATCH",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FinancialReportingPeriodUpdateToJSON(
+          requestParameters["financialReportingPeriodUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FinancialReportingPeriodMutationResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Update Case Financial Reporting Period
+   */
+  async updateCaseFinancialReportingPeriod(
+    requestParameters: UpdateCaseFinancialReportingPeriodRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FinancialReportingPeriodMutationResponse> {
+    const response = await this.updateCaseFinancialReportingPeriodRaw(
       requestParameters,
       initOverrides,
     );

@@ -15,6 +15,7 @@ from app.models import (
     FinancialAccount,
     FinancialBalance,
     FinancialCashFlow,
+    FinancialCovenant,
     FinancialInstitution,
     FinancialObligation,
     FinancialReportingPeriod,
@@ -48,11 +49,29 @@ def canonical_dedupe_key(kind: str, parts: list[object | None]) -> str:
     return f"{kind}:{digest}"
 
 
+def canonical_account_dedupe_key(
+    institution_id: UUID | None,
+    account_number: str | None,
+    account_name: str,
+    currency: str | None,
+) -> str:
+    parts: list[object | None] = [institution_id]
+    normalized_account_number = normalize_text(account_number)
+    if normalized_account_number:
+        parts.append(normalized_account_number)
+    parts.extend([normalize_text(account_name), currency])
+    return canonical_dedupe_key(
+        "account",
+        parts,
+    )
+
+
 def existing_by_dedupe[
     T: (
         FinancialAccount,
         FinancialBalance,
         FinancialCashFlow,
+        FinancialCovenant,
         FinancialInstitution,
         FinancialObligation,
         FinancialReportingPeriod,
@@ -78,6 +97,7 @@ def add_or_get_by_dedupe[  # noqa: PLR0913
         FinancialAccount,
         FinancialBalance,
         FinancialCashFlow,
+        FinancialCovenant,
         FinancialInstitution,
         FinancialObligation,
         FinancialReportingPeriod,
@@ -194,11 +214,7 @@ def get_or_create_account(  # noqa: PLR0913
     currency: str | None,
     metadata: JsonObject,
 ) -> tuple[FinancialAccount, bool]:
-    normalized_account_name = normalize_text(account_name)
-    dedupe_key = canonical_dedupe_key(
-        "account",
-        [institution_id, normalized_account_name, currency],
-    )
+    dedupe_key = canonical_account_dedupe_key(institution_id, None, account_name, currency)
 
     account = FinancialAccount(
         organization_id=ctx.organization_id,
@@ -394,3 +410,54 @@ def get_or_create_obligation(  # noqa: PLR0913
         case_id,
         dedupe_key,
     )
+
+
+def get_or_create_covenant(  # noqa: PLR0913
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    *,
+    source_row_id: UUID,
+    obligation_id: UUID | None,
+    reporting_period_id: UUID | None,
+    name: str,
+    metric: str,
+    operator: str,
+    threshold: Decimal,
+    actual_value: Decimal | None,
+    compliance_status: str,
+    source_record: JsonObject,
+    reporting_context: JsonObject,
+    metadata: JsonObject,
+) -> tuple[FinancialCovenant, bool]:
+    linked = linked_record(db, ctx, case_id, source_row_id, "financial_covenants")
+    if isinstance(linked, FinancialCovenant):
+        return linked, False
+    dedupe_key = canonical_dedupe_key(
+        "covenant",
+        [
+            obligation_id,
+            reporting_period_id,
+            normalize_text(name),
+            normalize_text(metric),
+            operator,
+            threshold,
+        ],
+    )
+    covenant = FinancialCovenant(
+        organization_id=ctx.organization_id,
+        case_id=case_id,
+        dedupe_key=dedupe_key,
+        obligation_id=obligation_id,
+        reporting_period_id=reporting_period_id,
+        name=name,
+        metric=normalize_text(metric),
+        operator=operator,
+        threshold=threshold,
+        actual_value=actual_value,
+        compliance_status=compliance_status,
+        source_record=source_record,
+        reporting_context=reporting_context,
+        metadata_=metadata,
+    )
+    return add_or_get_by_dedupe(db, covenant, FinancialCovenant, ctx, case_id, dedupe_key)

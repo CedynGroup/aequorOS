@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Literal, Protocol, cast
 from uuid import UUID
@@ -10,6 +10,7 @@ from app.models import (
     FinancialAccount,
     FinancialBalance,
     FinancialCashFlow,
+    FinancialCovenant,
     FinancialInstitution,
     FinancialManualEditHistory,
     FinancialObligation,
@@ -27,6 +28,7 @@ type RecordTable = Literal[
     "financial_balances",
     "financial_cash_flows",
     "financial_obligations",
+    "financial_covenants",
 ]
 
 type FinancialValidationRecord = (
@@ -36,6 +38,7 @@ type FinancialValidationRecord = (
     | FinancialBalance
     | FinancialCashFlow
     | FinancialObligation
+    | FinancialCovenant
 )
 
 INSTITUTION_NAME_REQUIRED = "institution_name_required"
@@ -57,6 +60,8 @@ OBLIGATION_CURRENCY_REQUIRED = "obligation_currency_required"
 OBLIGATION_OUTSTANDING_EXCEEDS_PRINCIPAL = "obligation_outstanding_exceeds_principal"
 FACILITY_AVAILABLE_AMOUNT_MISMATCH = "facility_available_amount_mismatch"
 SOURCE_TRACEABILITY_MISSING = "source_traceability_missing"
+COVENANT_COMPLIANCE_STATUS_MISMATCH = "covenant_compliance_status_mismatch"
+COVENANT_OBLIGATION_REQUIRED = "covenant_obligation_required"
 
 AVAILABLE_AMOUNT_FIELDS = (
     "available_amount",
@@ -92,6 +97,7 @@ class FinancialValidationDataset:
     obligations: list[FinancialObligation]
     links: list[FinancialRecordSourceLink]
     manual_edits: list[FinancialManualEditHistory]
+    covenants: list[FinancialCovenant] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -362,6 +368,50 @@ def validate_cash_flow_review_fields(
         )
 
 
+def validate_covenant(
+    covenant: FinancialCovenant,
+    _context: ValidationContext,
+) -> Iterable[IssueDraft]:
+    if covenant.obligation_id is None:
+        yield issue(
+            covenant,
+            "financial_covenants",
+            "warning",
+            COVENANT_OBLIGATION_REQUIRED,
+            "obligation_id",
+            "Covenant should be linked to an obligation or facility when available.",
+        )
+    if covenant.actual_value is None:
+        expected = "unknown"
+    else:
+        comparisons = {
+            "lt": covenant.actual_value < covenant.threshold,
+            "lte": covenant.actual_value <= covenant.threshold,
+            "eq": covenant.actual_value == covenant.threshold,
+            "gte": covenant.actual_value >= covenant.threshold,
+            "gt": covenant.actual_value > covenant.threshold,
+        }
+        expected = "compliant" if comparisons[covenant.operator] else "non_compliant"
+    if covenant.compliance_status != expected:
+        yield issue(
+            covenant,
+            "financial_covenants",
+            "error",
+            COVENANT_COMPLIANCE_STATUS_MISMATCH,
+            "compliance_status",
+            "Covenant compliance status does not match its operator, threshold, and actual value.",
+            {
+                "actual_status": covenant.compliance_status,
+                "expected_status": expected,
+                "operator": covenant.operator,
+                "threshold": decimal_json(covenant.threshold),
+                "actual_value": decimal_json(covenant.actual_value)
+                if covenant.actual_value is not None
+                else None,
+            },
+        )
+
+
 def issue(  # noqa: PLR0913
     record: object,
     record_table: RecordTable,
@@ -539,6 +589,34 @@ OBLIGATION_VALIDATION_SPEC = EntityValidationSpec[FinancialObligation](
     record_rules=(validate_obligation_amounts,),
 )
 
+COVENANT_VALIDATION_SPEC = EntityValidationSpec[FinancialCovenant](
+    table="financial_covenants",
+    records=lambda dataset: dataset.covenants,
+    fields=(
+        FieldRule(
+            field="name",
+            code="covenant_name_required",
+            message="Covenant name is required.",
+            value=lambda covenant: covenant.name,
+            is_missing=is_blank_value,
+        ),
+        FieldRule(
+            field="metric",
+            code="covenant_metric_required",
+            message="Covenant metric is required.",
+            value=lambda covenant: covenant.metric,
+            is_missing=is_blank_value,
+        ),
+        FieldRule(
+            field="threshold",
+            code="covenant_threshold_required",
+            message="Covenant threshold is required.",
+            value=lambda covenant: covenant.threshold,
+        ),
+    ),
+    record_rules=(validate_covenant,),
+)
+
 ENTITY_VALIDATION_SPECS: tuple[FinancialValidationSpec, ...] = (
     INSTITUTION_VALIDATION_SPEC,
     ACCOUNT_VALIDATION_SPEC,
@@ -546,4 +624,5 @@ ENTITY_VALIDATION_SPECS: tuple[FinancialValidationSpec, ...] = (
     BALANCE_VALIDATION_SPEC,
     CASH_FLOW_VALIDATION_SPEC,
     OBLIGATION_VALIDATION_SPEC,
+    COVENANT_VALIDATION_SPEC,
 )

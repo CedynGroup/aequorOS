@@ -183,6 +183,7 @@ def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
         "financial_balances",
         "financial_cash_flows",
         "financial_obligations",
+        "financial_covenants",
         "financial_source_rows",
         "financial_record_source_links",
         "financial_manual_edit_history",
@@ -203,6 +204,9 @@ def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
         "uq_financial_cash_flows_dedupe_key",
         "ix_financial_obligations_case_id",
         "uq_financial_obligations_dedupe_key",
+        "ix_financial_covenants_case_id",
+        "ix_financial_covenants_obligation_id",
+        "uq_financial_covenants_dedupe_key",
         "ix_financial_source_rows_case_id",
         "uq_financial_source_rows_extraction_row",
         "ix_financial_record_source_links_case_id",
@@ -227,6 +231,8 @@ def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
             "ck_financial_cash_flows_category",
             "ck_financial_obligations_currency",
             "ck_financial_obligations_status",
+            "ck_financial_covenants_operator",
+            "ck_financial_covenants_compliance_status",
             "ck_financial_record_source_links_confidence",
             "ck_financial_record_source_links_record_table",
             "ck_financial_manual_edit_history_record_table",
@@ -241,6 +247,7 @@ def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
             "uq_financial_reporting_periods_id_organization_id_case_id",
             "uq_financial_balances_id_organization_id_case_id",
             "uq_financial_obligations_id_organization_id_case_id",
+            "uq_financial_covenants_id_organization_id_case_id",
             "uq_financial_source_rows_id_organization_id_case_id",
         }
     ) == {
@@ -255,6 +262,8 @@ def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
         "ck_financial_cash_flows_category",
         "ck_financial_obligations_currency",
         "ck_financial_obligations_status",
+        "ck_financial_covenants_operator",
+        "ck_financial_covenants_compliance_status",
         "ck_financial_record_source_links_confidence",
         "ck_financial_record_source_links_record_table",
         "ck_financial_manual_edit_history_record_table",
@@ -269,6 +278,7 @@ def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
         "uq_financial_reporting_periods_id_organization_id_case_id",
         "uq_financial_balances_id_organization_id_case_id",
         "uq_financial_obligations_id_organization_id_case_id",
+        "uq_financial_covenants_id_organization_id_case_id",
         "uq_financial_source_rows_id_organization_id_case_id",
     }
 
