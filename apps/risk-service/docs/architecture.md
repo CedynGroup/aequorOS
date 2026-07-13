@@ -178,6 +178,7 @@ Canonical records include:
 - `FinancialAccount`
 - `FinancialReportingPeriod`
 - `FinancialBalance`
+- `FinancialCashFlow`
 - `FinancialObligation`
 - `FinancialCovenant`
 
@@ -255,10 +256,11 @@ PATCH /api/v1/cases/{case_id}/financial-workspace/{resource}/{record_id}
 ```
 
 Supported resources are `institutions`, `accounts`, `reporting-periods`,
-`balances`, `obligations`, and `covenants`. Request schemas explicitly allowlist
-the writable fields for each resource and reject unknown fields. Both
-`X-Org-Id` and an active, same-tenant `X-User-Id` are required. Every create or
-update requires a non-empty `reason` explaining the manual change.
+`balances`, `cash-flows`, `obligations`, and `covenants`. Request schemas
+explicitly allowlist the writable fields for each resource and reject unknown
+fields. Both `X-Org-Id` and an active, same-tenant `X-User-Id` are required.
+Every create or update requires a non-empty `reason` explaining the manual
+change.
 
 Create operations mark record metadata with manual provenance. Corrections
 preserve existing metadata and source links, mark the record as corrected, and

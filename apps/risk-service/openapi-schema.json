@@ -9411,7 +9411,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/accounts": {
       "post": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "createCaseFinancialAccount",
         "parameters": [
           {
@@ -9533,7 +9533,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/accounts/{account_id}": {
       "patch": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "updateCaseFinancialAccount",
         "parameters": [
           {
@@ -9665,7 +9665,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/balances": {
       "post": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "createCaseFinancialBalance",
         "parameters": [
           {
@@ -9787,7 +9787,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/balances/{balance_id}": {
       "patch": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "updateCaseFinancialBalance",
         "parameters": [
           {
@@ -9919,7 +9919,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/cash-flows": {
       "post": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "createCaseFinancialCashFlow",
         "parameters": [
           {
@@ -10041,7 +10041,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/cash-flows/{cash_flow_id}": {
       "patch": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "updateCaseFinancialCashFlow",
         "parameters": [
           {
@@ -10173,7 +10173,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/covenants": {
       "post": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "createCaseFinancialCovenant",
         "parameters": [
           {
@@ -10295,7 +10295,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/covenants/{covenant_id}": {
       "patch": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "updateCaseFinancialCovenant",
         "parameters": [
           {
@@ -10427,7 +10427,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/institutions": {
       "post": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "createCaseFinancialInstitution",
         "parameters": [
           {
@@ -10549,7 +10549,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/institutions/{institution_id}": {
       "patch": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "updateCaseFinancialInstitution",
         "parameters": [
           {
@@ -10809,7 +10809,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/obligations": {
       "post": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "createCaseFinancialObligation",
         "parameters": [
           {
@@ -10931,7 +10931,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/obligations/{obligation_id}": {
       "patch": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "updateCaseFinancialObligation",
         "parameters": [
           {
@@ -11063,7 +11063,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/reporting-periods": {
       "post": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "createCaseFinancialReportingPeriod",
         "parameters": [
           {
@@ -11185,7 +11185,7 @@
     },
     "/api/v1/cases/{case_id}/financial-workspace/reporting-periods/{reporting_period_id}": {
       "patch": {
-        "description": "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
+        "description": "Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.",
         "operationId": "updateCaseFinancialReportingPeriod",
         "parameters": [
           {

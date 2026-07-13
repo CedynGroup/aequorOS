@@ -94,11 +94,11 @@ Business API endpoints use URL path major versioning under `/api/v1`. See
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
 `PATCH` routes below that path support institutions, accounts, reporting
-periods, balances, obligations, and covenants. These mutations require both
-`X-Org-Id` and `X-User-Id`; each request body requires a non-empty `reason`.
-Successful responses contain the updated `record` and the case's refreshed
-`validation` state. See `docs/architecture.md` for the complete contract and
-correction-history behavior.
+periods, balances, cash flows, obligations, and covenants. These mutations
+require both `X-Org-Id` and `X-User-Id`; each request body requires a non-empty
+`reason`. Successful responses contain the updated `record` and the case's
+refreshed `validation` state. See `docs/architecture.md` for the complete
+contract and correction-history behavior.
 
 Case scenarios are read from `GET /api/v1/cases/{case_id}/scenarios`. Initialize
 the baseline and downside defaults with `POST .../scenarios/initialize`, or use

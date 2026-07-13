@@ -147,5 +147,5 @@ Browser-mode Vitest tests use Playwright for DOM-heavy component interactions:
 - `src/features/risk-console/risk-console.browser.test.tsx`: Radix select portal behavior and dialog rendering in Chromium
 
 The Playwright E2E suite includes `e2e/financial-review.spec.ts` for source
-drilldown and the upload, map, validate, correct, retry, revalidate, and manual
-covenant-entry journey.
+drilldown and the upload, map, validate, correct, retry, revalidate, cash-flow
+entry, and covenant-entry journeys.

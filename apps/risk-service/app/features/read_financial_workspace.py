@@ -59,9 +59,9 @@ from app.services.financial_mapping.service import map_financial_workspace
 router = APIRouter(tags=["financial-data"])
 
 MUTATION_DESCRIPTION = (
-    "Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. "
-    "Only fields declared by this resource schema are accepted. The response includes "
-    "the updated record and validation refreshed after the write."
+    "Resource-specific canonical financial mutation contract. Only fields declared by "
+    "this resource schema are accepted. The response includes the updated record and "
+    "validation refreshed after the write."
 )
 
 
