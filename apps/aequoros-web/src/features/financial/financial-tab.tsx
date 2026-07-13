@@ -64,6 +64,7 @@ export function FinancialTab({
                   queryKey,
                   queryFn: () =>
                     financialReviewClient.workspace(tenant, caseId),
+                  staleTime: 0,
                 });
               }}
             />
@@ -80,6 +81,7 @@ export function FinancialTab({
                 queryKey,
                 queryFn: () =>
                   financialReviewClient.workspace(tenant, caseId),
+                staleTime: 0,
               });
             }}
           />

@@ -789,6 +789,10 @@ function MutationForm({
   const lastSubmit = useRef<(() => Promise<void>) | null>(null);
 
   async function submit() {
+    if (mutationSaved) {
+      await lastSubmit.current?.();
+      return;
+    }
     const trimmedReason = reason.trim();
     if (!trimmedReason) {
       setFieldError(
@@ -946,10 +950,12 @@ function MutationForm({
         </Alert>
       ) : null}
       <div className="flex justify-end">
-        <Button type="submit" disabled={saving}>
+        <Button type="submit" disabled={saving || mutationSaved}>
           {saving ? <Loader2 className="size-4 animate-spin" /> : null}
           {saving
             ? "Saving…"
+            : mutationSaved
+              ? "Change saved"
             : mode === "create"
               ? `Add ${config.singular}`
               : "Save correction"}

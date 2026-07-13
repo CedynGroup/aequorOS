@@ -1,5 +1,6 @@
 import type { FinancialDataWorkspaceRead } from "@aequoros/risk-service-api";
-import { screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -185,5 +186,51 @@ describe("FinancialTab", () => {
     expect(
       within(controls).queryByText(/Mapping complete/),
     ).not.toBeInTheDocument();
+  });
+
+  it("forces a workspace refresh despite the production stale time", async () => {
+    const user = userEvent.setup();
+    const workspaceRequest = vi
+      .spyOn(financialReviewClient, "workspace")
+      .mockResolvedValue(emptyWorkspace());
+    vi.spyOn(financialReviewClient, "map").mockResolvedValue({
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      documentId: "document-1",
+      documentExtractionId: "extraction-1",
+      created: {},
+      reused: {},
+      summary: {
+        sourceRowCount: 1,
+        mappedSourceRowCount: 1,
+        unmappedSourceRowCount: 0,
+      },
+      unmappedRows: [],
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, staleTime: 20_000 },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FinancialTab tenant={tenant} caseId="case-1" mockWorkspace={false} />
+      </QueryClientProvider>,
+    );
+    const controls = await screen.findByLabelText(
+      "Map and validate financial data",
+    );
+
+    await user.type(
+      within(controls).getByLabelText("Document ID"),
+      "document-1",
+    );
+    await user.click(
+      within(controls).getByRole("button", { name: "Map financial data" }),
+    );
+
+    await within(controls).findByText(/Mapping complete/);
+    expect(workspaceRequest).toHaveBeenCalledTimes(2);
   });
 });

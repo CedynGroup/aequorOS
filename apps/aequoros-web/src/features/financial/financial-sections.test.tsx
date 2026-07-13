@@ -373,6 +373,9 @@ describe("FinancialSections", () => {
     expect(
       await within(form).findByText(/Change saved, but refresh failed/),
     ).toBeInTheDocument();
+    expect(
+      within(form).getByRole("button", { name: "Change saved" }),
+    ).toBeDisabled();
     await user.click(
       within(form).getByRole("button", { name: "Retry refresh" }),
     );
