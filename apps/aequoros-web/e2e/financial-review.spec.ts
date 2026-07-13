@@ -480,9 +480,7 @@ test("uploads, maps, validates, retries correction, revalidates, and manually ad
   const covenantEditForm = covenantSection.getByRole("form", {
     name: "Edit covenant",
   });
-  await covenantEditForm
-    .getByLabel("Compliance")
-    .selectOption("__automatic__");
+  await covenantEditForm.getByLabel("Compliance").selectOption("__automatic__");
   await covenantEditForm
     .getByLabel("Reason")
     .fill("Recalculate covenant compliance");

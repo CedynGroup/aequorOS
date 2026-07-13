@@ -432,13 +432,11 @@ describe("FinancialSections", () => {
       validation: validation(),
     } as FinancialInstitutionMutationResponse;
     let resolveUpdate!: (value: FinancialInstitutionMutationResponse) => void;
-    const update = vi
-      .fn<FinancialReviewClient["update"]>()
-      .mockReturnValue(
-        new Promise<FinancialInstitutionMutationResponse>((resolve) => {
-          resolveUpdate = resolve;
-        }),
-      );
+    const update = vi.fn<FinancialReviewClient["update"]>().mockReturnValue(
+      new Promise<FinancialInstitutionMutationResponse>((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
 
     render(
       <FinancialSections
