@@ -212,9 +212,7 @@ def test_scenario_contracts_are_case_scoped_closed_and_generated(client: TestCli
 
     assert paths[base]["get"]["operationId"] == "listCaseScenarios"
     assert paths[f"{base}/initialize"]["post"]["operationId"] == "initializeCaseScenarios"
-    assert paths[f"{base}/readiness"]["get"]["operationId"] == (
-        "getCaseScenarioReadiness"
-    )
+    assert paths[f"{base}/readiness"]["get"]["operationId"] == ("getCaseScenarioReadiness")
     assert paths[f"{base}/{{scenario_id}}/validation"]["get"]["operationId"] == (
         "validateCaseScenario"
     )
