@@ -90,12 +90,13 @@ The web app uses a feature-based split so each operational surface owns its UI a
 - `src/features/risk-console/shell.tsx`: sidebar and top-bar console chrome
 - `src/features/risk-console/case-queue-panel.tsx`: queue filters, table, selection, and pagination
 - `src/features/risk-console/bulk-actions.tsx`: bulk action dialog, mutation, and result rendering
-- `src/features/risk-console/case-workspace.tsx`: detail summary, overview, financial, decisions, documents, findings, and report tabs
+- `src/features/risk-console/case-workspace.tsx`: detail summary, overview, financial, scenarios, decisions, documents, findings, and report tabs
 - `src/features/risk-console/format.tsx`: risk/status/decision badges and date formatting
 - `src/features/risk-console/types.ts`: feature-local queue/search helper types
 - `src/features/documents/documents-tab.tsx`: document upload-request, completion, parse, and download URL workflows
 - `src/features/findings/findings-tab.tsx`: manual finding creation and finding status updates
 - `src/features/financial/financial-sections.tsx`: financial workspace section/table rendering
+- `src/features/scenarios/scenarios-tab.tsx`: scenario initialization, lifecycle, assumption editing and review, validation, and readiness
 - `src/features/demo-data/demo-data.ts`: frontend-only fallback/demo data helpers
 - `src/shared/route-ui.tsx`: route-level empty, error, and data-list helpers
 - `src/routes/risk-console.tsx`: thin route export for TanStack Router wiring
@@ -108,6 +109,7 @@ Vitest tests are colocated with the module they protect:
 - `src/features/documents/documents-tab.test.tsx`: document controls, upload request payloads, lifecycle actions
 - `src/features/findings/findings-tab.test.tsx`: finding create/update controls and payloads
 - `src/features/financial/financial-sections.test.tsx`: all financial workspace sections render
+- `src/features/scenarios/scenarios-tab.test.tsx`: scenario loading, empty, error, lifecycle, validation, editing, review, and save states
 - `src/features/demo-data/demo-data.test.ts`: fallback/demo data filtering and detail construction
 - `src/routes/search.test.ts`: typed search-param parsing
 - `src/features/risk-console/risk-console.test.tsx`: bulk action result grouping

@@ -113,18 +113,18 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
     .click();
   await expect(scenariosPanel.getByText("Revenue growth saved")).toBeVisible();
 
-  for (const button of await page
-    .locator("button:enabled")
-    .filter({ hasText: /^Review$/ })
-    .all()) {
-    await button.click();
+  const reviewButtons = page.getByRole("button", {
+    name: "Review",
+    exact: true,
+  });
+  for (let index = 0; index < (await reviewButtons.count()); index += 1) {
+    await expect(reviewButtons.nth(index)).toBeEnabled();
+    await reviewButtons.nth(index).click();
   }
   await downside.click();
-  for (const button of await page
-    .locator("button:enabled")
-    .filter({ hasText: /^Review$/ })
-    .all()) {
-    await button.click();
+  for (let index = 0; index < (await reviewButtons.count()); index += 1) {
+    await expect(reviewButtons.nth(index)).toBeEnabled();
+    await reviewButtons.nth(index).click();
   }
   await expect(page.getByText("Ready for calculations")).toBeVisible();
   expect(
