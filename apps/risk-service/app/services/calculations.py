@@ -342,16 +342,30 @@ def build_input_snapshot(  # noqa: PLR0913
     )
     derived_as_of = max((item.as_of_date for item in balances if item.as_of_date), default=None)
     as_of_date = requested_as_of_date or derived_as_of or scenario.created_at.date()
-    currencies = sorted(
-        {item.currency for item in [*balances, *cash_flows, *obligations] if item.currency}
-    )
+    financial_inputs = [
+        *(("balance", item) for item in balances),
+        *(("cash_flow", item) for item in cash_flows),
+        *(("obligation", item) for item in obligations),
+    ]
+    missing_currency_inputs = [
+        {"type": input_type, "id": str(item.id)}
+        for input_type, item in financial_inputs
+        if not item.currency
+    ]
+    if missing_currency_inputs:
+        raise CalculationInputError(
+            "missing_currency",
+            "Every financial input must have a reporting currency.",
+            {"inputs": missing_currency_inputs},
+        )
+    currencies = sorted({item.currency for _, item in financial_inputs})
     if len(currencies) > 1:
         raise CalculationInputError(
             "multiple_currencies",
             "The first forecast supports one reporting currency per case.",
             {"currencies": currencies},
         )
-    currency = currencies[0] if currencies else "USD"
+    currency = currencies[0]
     numeric_assumptions = {
         key: str(_decimal_assumption(by_key[key].value, key)) for key in REQUIRED_ASSUMPTIONS
     }

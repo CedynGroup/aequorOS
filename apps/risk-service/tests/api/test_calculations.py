@@ -267,6 +267,45 @@ def test_calculation_rejects_mixed_currencies_across_all_inputs(
     }
 
 
+@pytest.mark.parametrize(
+    ("input_model", "input_type"),
+    [
+        (FinancialBalance, "balance"),
+        (FinancialCashFlow, "cash_flow"),
+        (FinancialObligation, "obligation"),
+    ],
+)
+def test_calculation_rejects_missing_currencies_across_all_inputs(
+    db_client: TestClient,
+    input_model: type[FinancialBalance] | type[FinancialCashFlow] | type[FinancialObligation],
+    input_type: str,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    with get_sessionmaker()() as session:
+        input_row = session.scalar(select(input_model).where(input_model.case_id == case.id))
+        assert input_row is not None
+        input_id = input_row.id
+        input_row.currency = None
+        session.commit()
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "failed"
+    assert run["error"] == {
+        "code": "missing_currency",
+        "message": "Every financial input must have a reporting currency.",
+        "details": {"inputs": [{"type": input_type, "id": str(input_id)}]},
+    }
+
+
 def test_out_of_range_forecast_is_persisted_as_failed(
     db_client: TestClient,
 ) -> None:
