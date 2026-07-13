@@ -1,7 +1,7 @@
 import type { FinancialDataWorkspaceRead } from "@aequoros/risk-service-api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { Alert, Button, Input, Label, Skeleton } from "../../components/ui";
 import type { TenantHeaders } from "../../lib/api";
@@ -31,6 +31,12 @@ export function FinancialTab({
   const workspace =
     query.data ??
     (mockWorkspace ? emptyWorkspace(tenant.orgId, caseId) : undefined);
+  const workspaceIdentity = JSON.stringify([
+    tenant.orgId,
+    tenant.userId,
+    caseId,
+    mockWorkspace,
+  ]);
 
   return (
     <div className="space-y-3">
@@ -47,7 +53,7 @@ export function FinancialTab({
           <Skeleton className="h-96" />
         </div>
       ) : (
-        <>
+        <Fragment key={workspaceIdentity}>
           {!mockWorkspace ? (
             <FinancialControls
               tenant={tenant}
@@ -81,7 +87,7 @@ export function FinancialTab({
               });
             }}
           />
-        </>
+        </Fragment>
       )}
     </div>
   );

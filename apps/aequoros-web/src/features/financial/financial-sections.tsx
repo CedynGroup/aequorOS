@@ -57,6 +57,7 @@ type RecordCollection =
 
 type FinancialRecord = { id: string };
 type FormValues = Record<string, string>;
+type RecordSourceLinks = FinancialDataWorkspaceRead["recordSourceLinks"];
 
 type FieldConfig = {
   key: string;
@@ -238,6 +239,20 @@ export function FinancialSections({
   const openIssues = workspace.validationIssues.filter(
     (issue) => issue.status === "open",
   );
+  const recordSourceLinksByTable = useMemo(() => {
+    const tableIndex = new Map<string, Map<string, RecordSourceLinks>>();
+    for (const link of workspace.recordSourceLinks) {
+      let recordIndex = tableIndex.get(link.recordTable);
+      if (!recordIndex) {
+        recordIndex = new Map();
+        tableIndex.set(link.recordTable, recordIndex);
+      }
+      const links = recordIndex.get(link.recordId);
+      if (links) links.push(link);
+      else recordIndex.set(link.recordId, [link]);
+    }
+    return tableIndex;
+  }, [workspace.recordSourceLinks]);
 
   function focusIssue(issue: FinancialValidationIssueRead) {
     const recordId = issue.recordId ?? issue.entityId;
@@ -278,10 +293,19 @@ export function FinancialSections({
 
       {sections.map((section) => (
         <FinancialSection
-          key={section.collection}
+          key={JSON.stringify([
+            section.collection,
+            tenant?.orgId,
+            tenant?.userId,
+            caseId,
+            mocked,
+          ])}
           config={section}
           rows={workspace[section.collection] as FinancialRecord[]}
           workspace={workspace}
+          recordSourceLinksByRecord={recordSourceLinksByTable.get(
+            section.table,
+          )}
           mocked={mocked}
           tenant={tenant}
           caseId={caseId}
@@ -447,6 +471,7 @@ function FinancialSection({
   config,
   rows,
   workspace,
+  recordSourceLinksByRecord,
   mocked,
   tenant,
   caseId,
@@ -457,6 +482,7 @@ function FinancialSection({
   config: SectionConfig;
   rows: FinancialRecord[];
   workspace: FinancialDataWorkspaceRead;
+  recordSourceLinksByRecord?: ReadonlyMap<string, RecordSourceLinks>;
   mocked: boolean;
   tenant?: TenantHeaders;
   caseId?: string;
@@ -510,7 +536,7 @@ function FinancialSection({
         </output>
       ) : null}
 
-      {adding && config.kind && tenant && caseId && client ? (
+      {adding && !mocked && config.kind && tenant && caseId && client ? (
         <MutationForm
           mode="create"
           config={config}
@@ -554,11 +580,7 @@ function FinancialSection({
             </thead>
             <tbody>
               {rows.map((row) => {
-                const links = workspace.recordSourceLinks.filter(
-                  (link) =>
-                    link.recordId === row.id &&
-                    link.recordTable === config.table,
-                );
+                const links = recordSourceLinksByRecord?.get(row.id) ?? [];
                 return (
                   <FinancialRecordRows
                     key={row.id}
@@ -567,7 +589,7 @@ function FinancialSection({
                     links={links}
                     workspace={workspace}
                     focusedCell={focusedCell}
-                    editing={editingId === row.id}
+                    editing={!mocked && editingId === row.id}
                     sourceOpen={sourceId === row.id}
                     onEdit={() =>
                       setEditingId(editingId === row.id ? undefined : row.id)
@@ -576,7 +598,7 @@ function FinancialSection({
                       setSourceId(sourceId === row.id ? undefined : row.id)
                     }
                     mutationProps={
-                      config.kind && tenant && caseId && client
+                      config.kind && !mocked && tenant && caseId && client
                         ? {
                             tenant,
                             caseId,

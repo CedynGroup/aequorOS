@@ -169,6 +169,50 @@ describe("FinancialSections", () => {
     ).toBeInTheDocument();
   });
 
+  it("closes active mutation forms when demo mode activates", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add institution" }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(
+      screen.getByRole("form", { name: "Add institution" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("form", { name: "Edit institution" }),
+    ).toBeInTheDocument();
+
+    rerender(
+      <FinancialSections
+        workspace={workspace()}
+        mocked
+        tenant={tenant}
+        caseId="case-1"
+        client={client()}
+      />,
+    );
+    expect(screen.queryByRole("form")).not.toBeInTheDocument();
+
+    rerender(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client()}
+      />,
+    );
+    expect(screen.queryByRole("form")).not.toBeInTheDocument();
+  });
+
   it("constrains account and obligation statuses to contract values", async () => {
     const user = userEvent.setup();
     render(

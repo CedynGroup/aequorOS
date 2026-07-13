@@ -293,4 +293,40 @@ describe("FinancialTab", () => {
     expect(within(unmapped).getByText(/Row 12/)).toBeInTheDocument();
     expect(within(unmapped).getByText(/500000/)).toBeInTheDocument();
   });
+
+  it("resets open mutation forms when the case identity changes", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(financialReviewClient, "workspace").mockImplementation(
+      async (requestTenant, requestCaseId) => ({
+        ...emptyWorkspace(),
+        organizationId: requestTenant.orgId,
+        caseId: requestCaseId,
+      }),
+    );
+    const { queryClient, rerender } = renderWithQuery(
+      <FinancialTab tenant={tenant} caseId="case-1" mockWorkspace={false} />,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "Add institution" }),
+    );
+    await user.type(
+      within(
+        screen.getByRole("form", { name: "Add institution" }),
+      ).getByLabelText("Name"),
+      "case one draft",
+    );
+    queryClient.setQueryData(["financial-workspace", tenant, "case-2"], {
+      ...emptyWorkspace(),
+      caseId: "case-2",
+    });
+
+    rerender(
+      <FinancialTab tenant={tenant} caseId="case-2" mockWorkspace={false} />,
+    );
+
+    expect(
+      screen.queryByRole("form", { name: "Add institution" }),
+    ).not.toBeInTheDocument();
+  });
 });
