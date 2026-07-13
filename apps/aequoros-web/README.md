@@ -25,6 +25,26 @@ RISK_DEMO_DATABASE_URL=postgresql://postgres:postgres@localhost:15432/risk_servi
 
 The seed runs direct inserts and needs a local admin database role because application roles are protected by row-level security.
 
+## Financial Review
+
+The Financial tab loads the case's canonical financial workspace through the
+generated `FinancialDataApi` client. Reviewers can map a document or completed
+document extraction, re-run validation, navigate open validation issues to the
+affected field, inspect source-row metadata and raw values, and review the
+manual edit audit history.
+
+Institutions, accounts, reporting periods, balances, obligations, and covenants
+support inline correction and manual entry. Every change requires a non-empty
+reason, and a successful mutation immediately applies the validation state
+returned by the API before refreshing the workspace. Failed submissions retain
+their inputs and can be retried; a failed refresh after a successful mutation
+can be retried without submitting the mutation again.
+
+Cash flows are read-only because their generated create and update contracts do
+not yet require a reason or return refreshed validation. Add cash-flow editing
+only after those contracts provide the same audit and validation guarantees as
+the other canonical resources. Frontend-only demo records are also read-only.
+
 ## Checks
 
 ```bash
@@ -95,7 +115,9 @@ The web app uses a feature-based split so each operational surface owns its UI a
 - `src/features/risk-console/types.ts`: feature-local queue/search helper types
 - `src/features/documents/documents-tab.tsx`: document upload-request, completion, parse, and download URL workflows
 - `src/features/findings/findings-tab.tsx`: manual finding creation and finding status updates
-- `src/features/financial/financial-sections.tsx`: financial workspace section/table rendering
+- `src/features/financial/financial-client.ts`: generated-client adapter for financial workspace reads, mapping, validation, and supported mutations
+- `src/features/financial/financial-tab.tsx`: financial workspace loading, mapping, and revalidation controls
+- `src/features/financial/financial-sections.tsx`: grouped records, validation navigation, source traceability, audit history, and mutation forms
 - `src/features/scenarios/scenarios-tab.tsx`: scenario initialization, lifecycle, assumption editing and review, validation, and readiness
 - `src/features/demo-data/demo-data.ts`: frontend-only fallback/demo data helpers
 - `src/shared/route-ui.tsx`: route-level empty, error, and data-list helpers
@@ -108,7 +130,9 @@ Vitest tests are colocated with the module they protect:
 - `src/lib/api.test.ts`: headers, error envelopes, API route/payload serialization
 - `src/features/documents/documents-tab.test.tsx`: document controls, upload request payloads, lifecycle actions
 - `src/features/findings/findings-tab.test.tsx`: finding create/update controls and payloads
-- `src/features/financial/financial-sections.test.tsx`: all financial workspace sections render
+- `src/features/financial/financial-client.test.ts`: generated client routing, headers, serialization, and mutation decoding
+- `src/features/financial/financial-tab.test.tsx`: loading, mapping, revalidation, and refresh failure states
+- `src/features/financial/financial-sections.test.tsx`: grouped review, validation focus, source traceability, audit history, and supported mutations
 - `src/features/scenarios/scenarios-tab.test.tsx`: scenario loading, empty, error, lifecycle, validation, editing, review, and save states
 - `src/features/demo-data/demo-data.test.ts`: fallback/demo data filtering and detail construction
 - `src/routes/search.test.ts`: typed search-param parsing
@@ -117,3 +141,7 @@ Vitest tests are colocated with the module they protect:
 Browser-mode Vitest tests use Playwright for DOM-heavy component interactions:
 
 - `src/features/risk-console/risk-console.browser.test.tsx`: Radix select portal behavior and dialog rendering in Chromium
+
+The Playwright E2E suite includes `e2e/financial-review.spec.ts` for source
+drilldown and the upload, map, validate, correct, retry, revalidate, and manual
+covenant-entry journey.
