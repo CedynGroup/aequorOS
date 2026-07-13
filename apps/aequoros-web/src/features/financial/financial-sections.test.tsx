@@ -373,12 +373,10 @@ describe("FinancialSections", () => {
       ...workspace().institutions[0],
       name: "Northstar Commercial Bank",
     };
-    const update = vi
-      .fn<FinancialReviewClient["update"]>()
-      .mockResolvedValue({
-        record: updated,
-        validation: validation(),
-      } as FinancialInstitutionMutationResponse);
+    const update = vi.fn<FinancialReviewClient["update"]>().mockResolvedValue({
+      record: updated,
+      validation: validation(),
+    } as FinancialInstitutionMutationResponse);
     const onMutation = vi
       .fn<(workspace: FinancialDataWorkspaceRead) => Promise<void>>()
       .mockRejectedValueOnce(new Error("Workspace refresh failed"))

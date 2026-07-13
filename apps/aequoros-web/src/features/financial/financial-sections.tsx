@@ -214,9 +214,7 @@ export function FinancialSections({
   tenant?: TenantHeaders;
   caseId?: string;
   client?: FinancialReviewClient;
-  onMutation?: (
-    workspace: FinancialDataWorkspaceRead,
-  ) => Promise<void> | void;
+  onMutation?: (workspace: FinancialDataWorkspaceRead) => Promise<void> | void;
 }) {
   const [focusedCell, setFocusedCell] = useState<string>();
   const openIssues = workspace.validationIssues.filter(
@@ -243,10 +241,7 @@ export function FinancialSections({
 
   return (
     <div className="space-y-4">
-      <ValidationPanel
-        issues={openIssues}
-        onSelect={focusIssue}
-      />
+      <ValidationPanel issues={openIssues} onSelect={focusIssue} />
 
       <ManualEditHistory edits={workspace.manualEdits} />
 
@@ -448,9 +443,7 @@ function FinancialSection({
   tenant?: TenantHeaders;
   caseId?: string;
   client?: FinancialReviewClient;
-  onMutation?: (
-    workspace: FinancialDataWorkspaceRead,
-  ) => Promise<void> | void;
+  onMutation?: (workspace: FinancialDataWorkspaceRead) => Promise<void> | void;
   focusedCell?: string;
 }) {
   const [adding, setAdding] = useState(false);
@@ -774,9 +767,7 @@ function MutationForm({
   caseId: string;
   client: FinancialReviewClient;
   onCancel: () => void;
-  onMutation: (
-    response: FinancialMutationResponse,
-  ) => Promise<void> | void;
+  onMutation: (response: FinancialMutationResponse) => Promise<void> | void;
 }) {
   const initialValues = useMemo(
     () => valuesFromRecord(config, record),
@@ -958,9 +949,9 @@ function MutationForm({
             ? "Saving…"
             : mutationSaved
               ? "Change saved"
-            : mode === "create"
-              ? `Add ${config.singular}`
-              : "Save correction"}
+              : mode === "create"
+                ? `Add ${config.singular}`
+                : "Save correction"}
         </Button>
       </div>
     </form>

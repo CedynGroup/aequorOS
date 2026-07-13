@@ -79,8 +79,7 @@ export function FinancialTab({
               queryClient.setQueryData(queryKey, nextWorkspace);
               await queryClient.fetchQuery({
                 queryKey,
-                queryFn: () =>
-                  financialReviewClient.workspace(tenant, caseId),
+                queryFn: () => financialReviewClient.workspace(tenant, caseId),
                 staleTime: 0,
               });
             }}
