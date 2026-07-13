@@ -13,21 +13,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { ForecastPeriods } from "./ForecastPeriods";
-import {
-  ForecastPeriodsFromJSON,
-  ForecastPeriodsFromJSONTyped,
-  ForecastPeriodsToJSON,
-  ForecastPeriodsToJSONTyped,
-} from "./ForecastPeriods";
-import type { AsOfDate } from "./AsOfDate";
-import {
-  AsOfDateFromJSON,
-  AsOfDateFromJSONTyped,
-  AsOfDateToJSON,
-  AsOfDateToJSONTyped,
-} from "./AsOfDate";
-
 /**
  *
  * @export
@@ -36,16 +21,16 @@ import {
 export interface CalculationRerunCreate {
   /**
    *
-   * @type {AsOfDate}
+   * @type {Date}
    * @memberof CalculationRerunCreate
    */
-  asOfDate?: AsOfDate;
+  asOfDate?: Date | null;
   /**
    *
-   * @type {ForecastPeriods}
+   * @type {number}
    * @memberof CalculationRerunCreate
    */
-  forecastPeriods?: ForecastPeriods;
+  forecastPeriods?: number | null;
 }
 
 /**
@@ -71,15 +56,10 @@ export function CalculationRerunCreateFromJSONTyped(
     return json;
   }
   return {
-    ...json,
     asOfDate:
-      json["as_of_date"] == null
-        ? undefined
-        : AsOfDateFromJSON(json["as_of_date"]),
+      json["as_of_date"] == null ? undefined : new Date(json["as_of_date"]),
     forecastPeriods:
-      json["forecast_periods"] == null
-        ? undefined
-        : ForecastPeriodsFromJSON(json["forecast_periods"]),
+      json["forecast_periods"] == null ? undefined : json["forecast_periods"],
   };
 }
 
@@ -98,7 +78,10 @@ export function CalculationRerunCreateToJSONTyped(
   }
 
   return {
-    as_of_date: AsOfDateToJSON(value["asOfDate"]),
-    forecast_periods: ForecastPeriodsToJSON(value["forecastPeriods"]),
+    as_of_date:
+      value["asOfDate"] == null
+        ? undefined
+        : (value["asOfDate"] as any).toISOString().substring(0, 10),
+    forecast_periods: value["forecastPeriods"],
   };
 }

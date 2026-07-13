@@ -20,27 +20,6 @@ import {
   CalculationErrorReadToJSON,
   CalculationErrorReadToJSONTyped,
 } from "./CalculationErrorRead";
-import type { RerunOfRunId } from "./RerunOfRunId";
-import {
-  RerunOfRunIdFromJSON,
-  RerunOfRunIdFromJSONTyped,
-  RerunOfRunIdToJSON,
-  RerunOfRunIdToJSONTyped,
-} from "./RerunOfRunId";
-import type { CompletedAt } from "./CompletedAt";
-import {
-  CompletedAtFromJSON,
-  CompletedAtFromJSONTyped,
-  CompletedAtToJSON,
-  CompletedAtToJSONTyped,
-} from "./CompletedAt";
-import type { StartedAt } from "./StartedAt";
-import {
-  StartedAtFromJSON,
-  StartedAtFromJSONTyped,
-  StartedAtToJSON,
-  StartedAtToJSONTyped,
-} from "./StartedAt";
 import type { CalculationStatus } from "./CalculationStatus";
 import {
   CalculationStatusFromJSON,
@@ -63,10 +42,10 @@ export interface CalculationRunSummaryRead {
   asOfDate: Date;
   /**
    *
-   * @type {CompletedAt}
+   * @type {Date}
    * @memberof CalculationRunSummaryRead
    */
-  completedAt: CompletedAt;
+  completedAt: Date | null;
   /**
    *
    * @type {Date}
@@ -105,10 +84,10 @@ export interface CalculationRunSummaryRead {
   inputHash: string;
   /**
    *
-   * @type {RerunOfRunId}
+   * @type {string}
    * @memberof CalculationRunSummaryRead
    */
-  rerunOfRunId: RerunOfRunId;
+  rerunOfRunId: string | null;
   /**
    *
    * @type {string}
@@ -117,10 +96,10 @@ export interface CalculationRunSummaryRead {
   scenarioId: string;
   /**
    *
-   * @type {StartedAt}
+   * @type {Date}
    * @memberof CalculationRunSummaryRead
    */
-  startedAt: StartedAt;
+  startedAt: Date | null;
   /**
    *
    * @type {CalculationStatus}
@@ -169,18 +148,18 @@ export function CalculationRunSummaryReadFromJSONTyped(
     return json;
   }
   return {
-    ...json,
     asOfDate: new Date(json["as_of_date"]),
-    completedAt: CompletedAtFromJSON(json["completed_at"]),
+    completedAt:
+      json["completed_at"] == null ? null : new Date(json["completed_at"]),
     createdAt: new Date(json["created_at"]),
     engineVersion: json["engine_version"],
     error: CalculationErrorReadFromJSON(json["error"]),
     forecastPeriods: json["forecast_periods"],
     id: json["id"],
     inputHash: json["input_hash"],
-    rerunOfRunId: RerunOfRunIdFromJSON(json["rerun_of_run_id"]),
+    rerunOfRunId: json["rerun_of_run_id"],
     scenarioId: json["scenario_id"],
-    startedAt: StartedAtFromJSON(json["started_at"]),
+    startedAt: json["started_at"] == null ? null : new Date(json["started_at"]),
     status: CalculationStatusFromJSON(json["status"]),
   };
 }
@@ -201,16 +180,22 @@ export function CalculationRunSummaryReadToJSONTyped(
 
   return {
     as_of_date: value["asOfDate"].toISOString().substring(0, 10),
-    completed_at: CompletedAtToJSON(value["completedAt"]),
+    completed_at:
+      value["completedAt"] == null
+        ? null
+        : (value["completedAt"] as any).toISOString(),
     created_at: value["createdAt"].toISOString(),
     engine_version: value["engineVersion"],
     error: CalculationErrorReadToJSON(value["error"]),
     forecast_periods: value["forecastPeriods"],
     id: value["id"],
     input_hash: value["inputHash"],
-    rerun_of_run_id: RerunOfRunIdToJSON(value["rerunOfRunId"]),
+    rerun_of_run_id: value["rerunOfRunId"],
     scenario_id: value["scenarioId"],
-    started_at: StartedAtToJSON(value["startedAt"]),
+    started_at:
+      value["startedAt"] == null
+        ? null
+        : (value["startedAt"] as any).toISOString(),
     status: CalculationStatusToJSON(value["status"]),
   };
 }

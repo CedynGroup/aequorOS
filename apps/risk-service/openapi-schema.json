@@ -433,7 +433,7 @@
                 "type": "null"
               }
             ],
-            "title": "As Of Date"
+            "title": "Calculation Rerun As Of Date"
           },
           "forecast_periods": {
             "anyOf": [
@@ -465,7 +465,7 @@
                 "type": "null"
               }
             ],
-            "title": "As Of Date"
+            "title": "Calculation Run As Of Date"
           },
           "forecast_periods": {
             "default": 3,
@@ -575,7 +575,7 @@
                 "type": "null"
               }
             ],
-            "title": "Completed At"
+            "title": "Calculation Run Completed At"
           },
           "created_at": {
             "format": "date-time",
@@ -659,7 +659,7 @@
                 "type": "null"
               }
             ],
-            "title": "Started At"
+            "title": "Calculation Run Started At"
           },
           "status": {
             "$ref": "#/components/schemas/CalculationStatus"
@@ -713,7 +713,7 @@
                 "type": "null"
               }
             ],
-            "title": "Completed At"
+            "title": "Calculation Run Summary Completed At"
           },
           "created_at": {
             "format": "date-time",
@@ -767,7 +767,7 @@
                 "type": "null"
               }
             ],
-            "title": "Started At"
+            "title": "Calculation Run Summary Started At"
           },
           "status": {
             "$ref": "#/components/schemas/CalculationStatus"

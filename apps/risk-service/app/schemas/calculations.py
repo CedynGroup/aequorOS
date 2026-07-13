@@ -17,12 +17,12 @@ class ClosedModel(BaseModel):
 class CalculationRunCreate(ClosedModel):
     scenario_id: UUID
     forecast_periods: int = Field(default=3, ge=1, le=12)
-    as_of_date: date | None = None
+    as_of_date: date | None = Field(default=None, title="Calculation Run As Of Date")
 
 
 class CalculationRerunCreate(ClosedModel):
     forecast_periods: int | None = Field(default=None, ge=1, le=12)
-    as_of_date: date | None = None
+    as_of_date: date | None = Field(default=None, title="Calculation Rerun As Of Date")
 
 
 class CalculationErrorRead(ClosedModel):
@@ -66,8 +66,8 @@ class CalculationRunRead(ClosedModel):
     inputs: dict[str, Any]
     forecast_periods: int
     as_of_date: date
-    started_at: datetime | None
-    completed_at: datetime | None
+    started_at: datetime | None = Field(title="Calculation Run Started At")
+    completed_at: datetime | None = Field(title="Calculation Run Completed At")
     error: CalculationRunError
     outputs: list[ForecastPeriodRead]
     created_by: UUID
@@ -84,8 +84,8 @@ class CalculationRunSummaryRead(ClosedModel):
     input_hash: str
     forecast_periods: int
     as_of_date: date
-    started_at: datetime | None
-    completed_at: datetime | None
+    started_at: datetime | None = Field(title="Calculation Run Summary Started At")
+    completed_at: datetime | None = Field(title="Calculation Run Summary Completed At")
     error: CalculationRunError
     created_at: datetime
 

@@ -13,14 +13,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { AsOfDate } from "./AsOfDate";
-import {
-  AsOfDateFromJSON,
-  AsOfDateFromJSONTyped,
-  AsOfDateToJSON,
-  AsOfDateToJSONTyped,
-} from "./AsOfDate";
-
 /**
  *
  * @export
@@ -29,10 +21,10 @@ import {
 export interface CalculationRunCreate {
   /**
    *
-   * @type {AsOfDate}
+   * @type {Date}
    * @memberof CalculationRunCreate
    */
-  asOfDate?: AsOfDate;
+  asOfDate?: Date | null;
   /**
    *
    * @type {number}
@@ -70,11 +62,8 @@ export function CalculationRunCreateFromJSONTyped(
     return json;
   }
   return {
-    ...json,
     asOfDate:
-      json["as_of_date"] == null
-        ? undefined
-        : AsOfDateFromJSON(json["as_of_date"]),
+      json["as_of_date"] == null ? undefined : new Date(json["as_of_date"]),
     forecastPeriods:
       json["forecast_periods"] == null ? undefined : json["forecast_periods"],
     scenarioId: json["scenario_id"],
@@ -94,7 +83,10 @@ export function CalculationRunCreateToJSONTyped(
   }
 
   return {
-    as_of_date: AsOfDateToJSON(value["asOfDate"]),
+    as_of_date:
+      value["asOfDate"] == null
+        ? undefined
+        : (value["asOfDate"] as any).toISOString().substring(0, 10),
     forecast_periods: value["forecastPeriods"],
     scenario_id: value["scenarioId"],
   };

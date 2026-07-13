@@ -27,27 +27,6 @@ import {
   CalculationErrorReadToJSON,
   CalculationErrorReadToJSONTyped,
 } from "./CalculationErrorRead";
-import type { RerunOfRunId } from "./RerunOfRunId";
-import {
-  RerunOfRunIdFromJSON,
-  RerunOfRunIdFromJSONTyped,
-  RerunOfRunIdToJSON,
-  RerunOfRunIdToJSONTyped,
-} from "./RerunOfRunId";
-import type { CompletedAt } from "./CompletedAt";
-import {
-  CompletedAtFromJSON,
-  CompletedAtFromJSONTyped,
-  CompletedAtToJSON,
-  CompletedAtToJSONTyped,
-} from "./CompletedAt";
-import type { StartedAt } from "./StartedAt";
-import {
-  StartedAtFromJSON,
-  StartedAtFromJSONTyped,
-  StartedAtToJSON,
-  StartedAtToJSONTyped,
-} from "./StartedAt";
 import type { CalculationStatus } from "./CalculationStatus";
 import {
   CalculationStatusFromJSON,
@@ -76,10 +55,10 @@ export interface CalculationRunRead {
   caseId: string;
   /**
    *
-   * @type {CompletedAt}
+   * @type {Date}
    * @memberof CalculationRunRead
    */
-  completedAt: CompletedAt;
+  completedAt: Date | null;
   /**
    *
    * @type {Date}
@@ -154,10 +133,10 @@ export interface CalculationRunRead {
   outputs: Array<ForecastPeriodRead>;
   /**
    *
-   * @type {RerunOfRunId}
+   * @type {string}
    * @memberof CalculationRunRead
    */
-  rerunOfRunId: RerunOfRunId;
+  rerunOfRunId: string | null;
   /**
    *
    * @type {string}
@@ -166,10 +145,10 @@ export interface CalculationRunRead {
   scenarioId: string;
   /**
    *
-   * @type {StartedAt}
+   * @type {Date}
    * @memberof CalculationRunRead
    */
-  startedAt: StartedAt;
+  startedAt: Date | null;
   /**
    *
    * @type {CalculationStatus}
@@ -239,10 +218,10 @@ export function CalculationRunReadFromJSONTyped(
     return json;
   }
   return {
-    ...json,
     asOfDate: new Date(json["as_of_date"]),
     caseId: json["case_id"],
-    completedAt: CompletedAtFromJSON(json["completed_at"]),
+    completedAt:
+      json["completed_at"] == null ? null : new Date(json["completed_at"]),
     createdAt: new Date(json["created_at"]),
     createdBy: json["created_by"],
     engineVersion: json["engine_version"],
@@ -255,9 +234,9 @@ export function CalculationRunReadFromJSONTyped(
     organizationId: json["organization_id"],
     outputSchemaVersion: json["output_schema_version"],
     outputs: (json["outputs"] as Array<any>).map(ForecastPeriodReadFromJSON),
-    rerunOfRunId: RerunOfRunIdFromJSON(json["rerun_of_run_id"]),
+    rerunOfRunId: json["rerun_of_run_id"],
     scenarioId: json["scenario_id"],
-    startedAt: StartedAtFromJSON(json["started_at"]),
+    startedAt: json["started_at"] == null ? null : new Date(json["started_at"]),
     status: CalculationStatusFromJSON(json["status"]),
     updatedAt: new Date(json["updated_at"]),
   };
@@ -278,7 +257,10 @@ export function CalculationRunReadToJSONTyped(
   return {
     as_of_date: value["asOfDate"].toISOString().substring(0, 10),
     case_id: value["caseId"],
-    completed_at: CompletedAtToJSON(value["completedAt"]),
+    completed_at:
+      value["completedAt"] == null
+        ? null
+        : (value["completedAt"] as any).toISOString(),
     created_at: value["createdAt"].toISOString(),
     created_by: value["createdBy"],
     engine_version: value["engineVersion"],
@@ -291,9 +273,12 @@ export function CalculationRunReadToJSONTyped(
     organization_id: value["organizationId"],
     output_schema_version: value["outputSchemaVersion"],
     outputs: (value["outputs"] as Array<any>).map(ForecastPeriodReadToJSON),
-    rerun_of_run_id: RerunOfRunIdToJSON(value["rerunOfRunId"]),
+    rerun_of_run_id: value["rerunOfRunId"],
     scenario_id: value["scenarioId"],
-    started_at: StartedAtToJSON(value["startedAt"]),
+    started_at:
+      value["startedAt"] == null
+        ? null
+        : (value["startedAt"] as any).toISOString(),
     status: CalculationStatusToJSON(value["status"]),
     updated_at: value["updatedAt"].toISOString(),
   };

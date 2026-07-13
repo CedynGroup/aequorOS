@@ -66,6 +66,10 @@ set -euo pipefail
 
 ROOT="$(cd ../.. && pwd)"
 OPENAPI_CLIENT="$ROOT/packages/risk-service-api"
+CLIENT_SCHEMA="openapi-client-schema.json"
+
+trap 'rm -f "$CLIENT_SCHEMA"' EXIT
+uv run python scripts/prepare_openapi_client_schema.py openapi-schema.json "$CLIENT_SCHEMA"
 
 echo "Generating TypeScript client from OpenAPI schema..."
 echo "Cleaning old generated files..."
@@ -74,7 +78,7 @@ rm -rf "$OPENAPI_CLIENT/dist"
 rm -rf "$OPENAPI_CLIENT/.openapi-generator"
 
 uv run openapi-generator-cli generate \
-  -i openapi-schema.json \
+  -i "$CLIENT_SCHEMA" \
   -g typescript-fetch \
   -o "$OPENAPI_CLIENT" \
   -c openapi-config.yaml \
