@@ -244,6 +244,7 @@ def _create_and_execute(  # noqa: PLR0913
             "case_id": str(case_id),
             "scenario_id": str(scenario_id),
             "input_hash": input_hash,
+            "input_hash_status": "pending",
             "engine_version": ENGINE_VERSION,
             "rerun_of_run_id": str(rerun_of_run_id) if rerun_of_run_id else None,
         },
@@ -263,12 +264,25 @@ def _create_and_execute(  # noqa: PLR0913
             case_id,
             scenario_id,
             forecast_periods,
-            requested_as_of_date,
+            as_of_date,
         )
         assembled_snapshot = snapshot
         run.inputs = snapshot
         run.input_hash = _snapshot_hash(snapshot)
         run.as_of_date = as_of_date
+        record_event(
+            db,
+            ctx,
+            event_type="calculation_run.input_snapshot_established",
+            entity_type="calculation_run",
+            entity_id=run.id,
+            details={
+                "input_hash": run.input_hash,
+                "input_hash_status": "established",
+                "as_of_date": as_of_date.isoformat(),
+                "input_schema_version": INPUT_SCHEMA_VERSION,
+            },
+        )
         for value in calculate_forecast(snapshot):
             db.add(
                 CalculationForecastPeriod(
@@ -328,7 +342,7 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
     case_id: UUID,
     scenario_id: UUID,
     forecast_periods: int,
-    requested_as_of_date: date | None,
+    as_of_date: date,
 ) -> tuple[dict[str, Any], date]:
     scenario = db.scalar(
         select(RiskScenario).where(
@@ -454,8 +468,6 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
                 ),
             },
         )
-    derived_as_of = max((value for value in balance_dates.values() if value), default=None)
-    as_of_date = requested_as_of_date or derived_as_of or scenario.created_at.date()
     eligible_balance_dates = [
         value for value in balance_dates.values() if value is not None and value <= as_of_date
     ]
@@ -1016,6 +1028,19 @@ def _persist_failure(  # noqa: PLR0913
         run.inputs = snapshot
         run.input_hash = _snapshot_hash(snapshot)
         run.as_of_date = date.fromisoformat(snapshot["as_of_date"])
+        record_event(
+            db,
+            ctx,
+            event_type="calculation_run.input_snapshot_established",
+            entity_type="calculation_run",
+            entity_id=run.id,
+            details={
+                "input_hash": run.input_hash,
+                "input_hash_status": "established",
+                "as_of_date": run.as_of_date.isoformat(),
+                "input_schema_version": INPUT_SCHEMA_VERSION,
+            },
+        )
     _mark_failed(run, error)
     record_event(
         db,

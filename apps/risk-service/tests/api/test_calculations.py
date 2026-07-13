@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime, tzinfo
 from decimal import Decimal
 from uuid import UUID
 
@@ -125,7 +125,7 @@ def test_calculation_correctness_persistence_and_reproducible_rerun(
     run = started.json()
     assert run["status"] == "succeeded"
     assert run["engine_version"] == "balance-sheet-v1.0.0"
-    assert run["as_of_date"] == "2026-06-30"
+    assert run["as_of_date"] == run["inputs"]["as_of_date"]
     assert len(run["input_hash"]) == 64
     assert [
         (row["total_assets"], row["total_liabilities"], row["total_equity"])
@@ -173,6 +173,90 @@ def test_calculation_correctness_persistence_and_reproducible_rerun(
                 AuditEvent.event_type == "calculation_run.succeeded",
             )
         )
+
+
+def test_default_as_of_date_excludes_future_balances_unless_explicit(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> FixedDatetime:
+            return cls(2026, 7, 13, tzinfo=UTC)
+
+    monkeypatch.setattr(calculations, "datetime", FixedDatetime)
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    with get_sessionmaker()() as session:
+        future_balance = FinancialBalance(
+            organization_id=ORG_1,
+            case_id=case.id,
+            dedupe_key="forecast:future-cash",
+            balance_type="cash",
+            amount=Decimal("9000"),
+            currency="USD",
+            as_of_date=date(2027, 6, 30),
+        )
+        session.add(future_balance)
+        session.commit()
+        future_balance_id = str(future_balance.id)
+
+    default_run = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"], "forecast_periods": 1},
+    ).json()
+    future_run = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={
+            "scenario_id": scenario["id"],
+            "forecast_periods": 1,
+            "as_of_date": "2027-06-30",
+        },
+    ).json()
+
+    assert default_run["status"] == "succeeded"
+    assert default_run["as_of_date"] == "2026-07-13"
+    assert default_run["inputs"]["effective_balance_date"] == "2026-06-30"
+    assert future_balance_id not in {item["id"] for item in default_run["inputs"]["balances"]}
+    assert future_run["status"] == "succeeded"
+    assert future_run["as_of_date"] == "2027-06-30"
+    assert future_run["inputs"]["effective_balance_date"] == "2027-06-30"
+    assert [item["id"] for item in future_run["inputs"]["balances"]] == [future_balance_id]
+
+
+def test_audit_binds_pending_run_to_established_input_hash(db_client: TestClient) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+
+    run = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+
+    with get_sessionmaker()() as session:
+        events = list(
+            session.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.entity_id == UUID(run["id"]))
+                .order_by(AuditEvent.created_at, AuditEvent.id)
+            )
+        )
+    started = next(item for item in events if item.event_type == "calculation_run.started")
+    established = next(
+        item for item in events if item.event_type == "calculation_run.input_snapshot_established"
+    )
+    assert started.details["input_hash_status"] == "pending"
+    assert started.details["input_hash"] != run["input_hash"]
+    assert established.details == {
+        "input_hash": run["input_hash"],
+        "input_hash_status": "established",
+        "as_of_date": run["as_of_date"],
+        "input_schema_version": run["input_schema_version"],
+    }
 
 
 def test_rerun_after_assumption_change_versions_inputs_without_replacing_output(
