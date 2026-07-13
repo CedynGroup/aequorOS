@@ -31,6 +31,9 @@ class CalculationErrorRead(ClosedModel):
     details: dict[str, Any] | None = None
 
 
+type CalculationRunError = CalculationErrorRead | None
+
+
 class ForecastPeriodRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -65,7 +68,7 @@ class CalculationRunRead(ClosedModel):
     as_of_date: date
     started_at: datetime | None
     completed_at: datetime | None
-    error: CalculationErrorRead | None
+    error: CalculationRunError
     outputs: list[ForecastPeriodRead]
     created_by: UUID
     created_at: datetime

@@ -38,6 +38,7 @@ ENGINE_VERSION = "balance-sheet-v1.0.0"
 INPUT_SCHEMA_VERSION = "calculation-input-v1"
 OUTPUT_SCHEMA_VERSION = "balance-sheet-output-v1"
 MONEY = Decimal("0.0001")
+MAX_STORED_MONEY = Decimal("9999999999999999.9999")
 LIABILITY_TYPES = {"liability", "liabilities", "debt", "payable", "payables", "loan"}
 REQUIRED_ASSUMPTIONS = {
     "revenue_growth_rate",
@@ -341,7 +342,9 @@ def build_input_snapshot(  # noqa: PLR0913
     )
     derived_as_of = max((item.as_of_date for item in balances if item.as_of_date), default=None)
     as_of_date = requested_as_of_date or derived_as_of or scenario.created_at.date()
-    currencies = sorted({item.currency for item in balances if item.currency})
+    currencies = sorted(
+        {item.currency for item in [*balances, *cash_flows, *obligations] if item.currency}
+    )
     if len(currencies) > 1:
         raise CalculationInputError(
             "multiple_currencies",
@@ -393,6 +396,7 @@ def build_input_snapshot(  # noqa: PLR0913
                 "direction": item.direction,
                 "amount": str(item.amount),
                 "category": item.category,
+                "currency": item.currency,
                 "cash_flow_date": item.cash_flow_date.isoformat() if item.cash_flow_date else None,
                 "updated_at": item.updated_at.isoformat(),
             }
@@ -403,6 +407,7 @@ def build_input_snapshot(  # noqa: PLR0913
                 "id": str(item.id),
                 "principal_amount": str(item.principal_amount or 0),
                 "outstanding_amount": str(item.outstanding_amount or 0),
+                "currency": item.currency,
                 "status": item.status,
                 "updated_at": item.updated_at.isoformat(),
             }
@@ -530,7 +535,27 @@ def _snapshot_hash(snapshot: dict[str, Any]) -> str:
 
 
 def _money(value: Decimal) -> Decimal:
-    return value.quantize(MONEY, rounding=ROUND_HALF_UP)
+    if not value.is_finite():
+        raise CalculationInputError(
+            "calculation_output_out_of_range",
+            "A forecast value exceeds the supported monetary range.",
+            {"maximum_absolute_value": str(MAX_STORED_MONEY)},
+        )
+    try:
+        rounded = value.quantize(MONEY, rounding=ROUND_HALF_UP)
+    except InvalidOperation as exc:
+        raise CalculationInputError(
+            "calculation_output_out_of_range",
+            "A forecast value exceeds the supported monetary range.",
+            {"maximum_absolute_value": str(MAX_STORED_MONEY)},
+        ) from exc
+    if abs(rounded) > MAX_STORED_MONEY:
+        raise CalculationInputError(
+            "calculation_output_out_of_range",
+            "A forecast value exceeds the supported monetary range.",
+            {"maximum_absolute_value": str(MAX_STORED_MONEY)},
+        )
+    return rounded
 
 
 def _add_months(value: date, months: int) -> date:

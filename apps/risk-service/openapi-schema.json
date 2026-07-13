@@ -486,6 +486,16 @@
         "title": "CalculationRunCreate",
         "type": "object"
       },
+      "CalculationRunError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CalculationErrorRead"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "CalculationRunListRead": {
         "additionalProperties": false,
         "properties": {
@@ -562,14 +572,7 @@
             "type": "string"
           },
           "error": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CalculationErrorRead"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/CalculationRunError"
           },
           "forecast_periods": {
             "title": "Forecast Periods",

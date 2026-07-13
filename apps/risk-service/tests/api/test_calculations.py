@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -234,6 +235,75 @@ def test_failed_run_is_persisted_and_prior_success_remains_current(
     assert body["error"]["details"]["unreviewed_assumptions"]
     listing = db_client.get(f"/api/v1/cases/{case.id}/calculation-runs", headers=headers()).json()
     assert listing["latest_successful_run_id"] is None
+
+
+@pytest.mark.parametrize("input_model", [FinancialCashFlow, FinancialObligation])
+def test_calculation_rejects_mixed_currencies_across_all_inputs(
+    db_client: TestClient,
+    input_model: type[FinancialCashFlow] | type[FinancialObligation],
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    with get_sessionmaker()() as session:
+        input_row = session.scalar(select(input_model).where(input_model.case_id == case.id))
+        assert input_row is not None
+        input_row.currency = "EUR"
+        session.commit()
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "failed"
+    assert run["error"] == {
+        "code": "multiple_currencies",
+        "message": "The first forecast supports one reporting currency per case.",
+        "details": {"currencies": ["EUR", "USD"]},
+    }
+
+
+def test_out_of_range_forecast_is_persisted_as_failed(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    with get_sessionmaker()() as session:
+        session.add(
+            FinancialBalance(
+                organization_id=ORG_1,
+                case_id=case.id,
+                dedupe_key="forecast:max-equipment",
+                balance_type="equipment",
+                amount=Decimal("9999999999999999.9999"),
+                currency="USD",
+                as_of_date=date(2026, 6, 30),
+            )
+        )
+        session.commit()
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "failed"
+    assert run["error"]["code"] == "calculation_output_out_of_range"
+    assert run["outputs"] == []
+    with get_sessionmaker()() as session:
+        persisted = session.scalar(
+            select(CalculationRun).where(CalculationRun.id == UUID(run["id"]))
+        )
+        assert persisted is not None
+        assert persisted.status == "failed"
 
 
 def test_calculation_runs_are_tenant_scoped(db_client: TestClient) -> None:

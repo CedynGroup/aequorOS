@@ -62,16 +62,33 @@ export function CalculationsTab({
   const [selectedRunId, setSelectedRunId] = useState("");
 
   useEffect(() => {
-    if (!scenarioId && scenarios.data?.scenarios[0]) {
-      setScenarioId(scenarios.data.scenarios[0].id);
-    }
-  }, [scenarioId, scenarios.data]);
+    if (!scenarios.data) return;
+    setScenarioId((current) =>
+      scenarios.data.scenarios.some((scenario) => scenario.id === current)
+        ? current
+        : (scenarios.data.scenarios[0]?.id ?? ""),
+    );
+  }, [scenarios.data]);
 
   useEffect(() => {
-    if (!selectedRunId && runs.data?.runs[0]) {
-      setSelectedRunId(runs.data.runs[0].id);
-    }
-  }, [runs.data, selectedRunId]);
+    if (!runs.data) return;
+    setSelectedRunId((current) =>
+      runs.data.runs.some((run) => run.id === current)
+        ? current
+        : (runs.data.runs[0]?.id ?? ""),
+    );
+  }, [runs.data]);
+
+  const parsedForecastPeriods = Number(forecastPeriods);
+  const validForecastPeriods =
+    Number.isInteger(parsedForecastPeriods) &&
+    parsedForecastPeriods >= 1 &&
+    parsedForecastPeriods <= 12;
+  const activeScenarioId = scenarios.data?.scenarios.some(
+    (scenario) => scenario.id === scenarioId,
+  )
+    ? scenarioId
+    : (scenarios.data?.scenarios[0]?.id ?? "");
 
   const refreshRuns = async (run: CalculationRunRead, message: string) => {
     setSelectedRunId(run.id);
@@ -82,8 +99,8 @@ export function CalculationsTab({
   const start = useMutation({
     mutationFn: () =>
       riskApi.startCalculation(tenant, caseId, {
-        scenarioId,
-        forecastPeriods: Number(forecastPeriods),
+        scenarioId: activeScenarioId,
+        forecastPeriods: parsedForecastPeriods,
       }),
     onSuccess: (run) => refreshRuns(run, "Forecast completed"),
   });
@@ -129,7 +146,7 @@ export function CalculationsTab({
             <Label>Scenario</Label>
             <Select
               ariaLabel="Forecast scenario"
-              value={scenarioId}
+              value={activeScenarioId}
               onValueChange={setScenarioId}
               placeholder="Choose a scenario"
             >
@@ -147,16 +164,14 @@ export function CalculationsTab({
               type="number"
               min={1}
               max={12}
+              step={1}
               value={forecastPeriods}
               onChange={(event) => setForecastPeriods(event.target.value)}
             />
           </div>
           <Button
             disabled={
-              isSubmitting ||
-              !scenarioId ||
-              Number(forecastPeriods) < 1 ||
-              Number(forecastPeriods) > 12
+              isSubmitting || !activeScenarioId || !validForecastPeriods
             }
             onClick={() => start.mutate()}
           >
@@ -352,13 +367,57 @@ function ForecastTable({ rows }: { rows: ForecastPeriodRead[] }) {
 function MoneyCell({ row, value }: { row: ForecastPeriodRead; value: string }) {
   return (
     <td className="p-2 font-mono tabular-nums">
-      {new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency: row.currency,
-        maximumFractionDigits: 2,
-      }).format(Number(value))}
+      {formatMoney(value, row.currency)}
     </td>
   );
+}
+
+function formatMoney(value: string, currency: string) {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
+  if (!match) return `${currency} ${value}`;
+
+  const formatter = new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  });
+  const resolvedOptions = formatter.resolvedOptions();
+  const minimumFractionDigits = resolvedOptions.minimumFractionDigits ?? 0;
+  const maximumFractionDigits = resolvedOptions.maximumFractionDigits ?? 2;
+  const rounded = roundDecimal(match[2], match[3] ?? "", maximumFractionDigits);
+  const groupedInteger = new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 0,
+  }).format(BigInt(rounded.integer));
+  const decimalSeparator =
+    formatter.formatToParts(0.1).find((part) => part.type === "decimal")
+      ?.value ?? ".";
+  const fraction = rounded.fraction.padEnd(minimumFractionDigits, "0");
+  const formattedNumber = `${groupedInteger}${fraction ? decimalSeparator + fraction : ""}`;
+  const parts = formatter.formatToParts(match[1] ? -0 : 0);
+  let insertedNumber = false;
+
+  return parts
+    .map((part) => {
+      if (["integer", "group", "decimal", "fraction"].includes(part.type)) {
+        if (insertedNumber) return "";
+        insertedNumber = true;
+        return formattedNumber;
+      }
+      return part.value;
+    })
+    .join("");
+}
+
+function roundDecimal(integer: string, fraction: string, digits: number) {
+  const keptFraction = fraction.slice(0, digits).padEnd(digits, "0");
+  const shouldRoundUp = Number(fraction[digits] ?? "0") >= 5;
+  const scale = 10n ** BigInt(digits);
+  const scaled = BigInt(integer) * scale + BigInt(keptFraction || "0");
+  const rounded = scaled + (shouldRoundUp ? 1n : 0n);
+  const roundedInteger = rounded / scale;
+  const roundedFraction =
+    digits > 0 ? (rounded % scale).toString().padStart(digits, "0") : "";
+  return { integer: roundedInteger.toString(), fraction: roundedFraction };
 }
 
 function dateOnly(value: Date) {

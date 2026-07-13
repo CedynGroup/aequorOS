@@ -20,6 +20,13 @@ import {
   ForecastPeriodReadToJSON,
   ForecastPeriodReadToJSONTyped,
 } from "./ForecastPeriodRead";
+import type { CalculationErrorRead } from "./CalculationErrorRead";
+import {
+  CalculationErrorReadFromJSON,
+  CalculationErrorReadFromJSONTyped,
+  CalculationErrorReadToJSON,
+  CalculationErrorReadToJSONTyped,
+} from "./CalculationErrorRead";
 import type { RerunOfRunId } from "./RerunOfRunId";
 import {
   RerunOfRunIdFromJSON,
@@ -34,13 +41,6 @@ import {
   CompletedAtToJSON,
   CompletedAtToJSONTyped,
 } from "./CompletedAt";
-import type { CalculationRunReadError } from "./CalculationRunReadError";
-import {
-  CalculationRunReadErrorFromJSON,
-  CalculationRunReadErrorFromJSONTyped,
-  CalculationRunReadErrorToJSON,
-  CalculationRunReadErrorToJSONTyped,
-} from "./CalculationRunReadError";
 import type { StartedAt } from "./StartedAt";
 import {
   StartedAtFromJSON,
@@ -100,10 +100,10 @@ export interface CalculationRunRead {
   engineVersion: string;
   /**
    *
-   * @type {CalculationRunReadError}
+   * @type {CalculationErrorRead}
    * @memberof CalculationRunRead
    */
-  error: CalculationRunReadError;
+  error: CalculationErrorRead | null;
   /**
    *
    * @type {number}
@@ -246,7 +246,7 @@ export function CalculationRunReadFromJSONTyped(
     createdAt: new Date(json["created_at"]),
     createdBy: json["created_by"],
     engineVersion: json["engine_version"],
-    error: CalculationRunReadErrorFromJSON(json["error"]),
+    error: CalculationErrorReadFromJSON(json["error"]),
     forecastPeriods: json["forecast_periods"],
     id: json["id"],
     inputHash: json["input_hash"],
@@ -282,7 +282,7 @@ export function CalculationRunReadToJSONTyped(
     created_at: value["createdAt"].toISOString(),
     created_by: value["createdBy"],
     engine_version: value["engineVersion"],
-    error: CalculationRunReadErrorToJSON(value["error"]),
+    error: CalculationErrorReadToJSON(value["error"]),
     forecast_periods: value["forecastPeriods"],
     id: value["id"],
     input_hash: value["inputHash"],

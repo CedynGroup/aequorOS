@@ -90,7 +90,7 @@ function run(overrides: Partial<CalculationRunRead> = {}): CalculationRunRead {
     asOfDate: new Date("2026-06-30T00:00:00Z"),
     startedAt: now.toISOString(),
     completedAt: now.toISOString(),
-    error: null as unknown as CalculationRunRead["error"],
+    error: null,
     outputs: [output()],
     createdBy: tenant.userId,
     createdAt: now,
@@ -195,6 +195,94 @@ describe("CalculationsTab", () => {
     await waitFor(() =>
       expect(rerun).toHaveBeenCalledWith(tenant, caseId, run().id),
     );
+  });
+
+  it("rejects fractional forecast periods", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+    const start = vi.spyOn(riskApi, "startCalculation");
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+    const periods = await screen.findByRole("spinbutton", {
+      name: "Forecast periods",
+    });
+    await user.clear(periods);
+    await user.type(periods, "1.5");
+
+    expect(screen.getByRole("button", { name: "Run forecast" })).toBeDisabled();
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it("resets scenario and run selections when the case changes", async () => {
+    const user = userEvent.setup();
+    const nextCaseId = "90000000-0000-4000-8000-000000000002";
+    const nextScenarioId = "20000000-0000-4000-8000-000000000002";
+    const nextScenario = {
+      ...scenario(),
+      id: nextScenarioId,
+      caseId: nextCaseId,
+      name: "New case baseline",
+    };
+    const nextRun = run({
+      id: "30000000-0000-4000-8000-000000000002",
+      caseId: nextCaseId,
+      scenarioId: nextScenarioId,
+    });
+    vi.mocked(riskApi.scenarios).mockImplementation(
+      (_tenant, requestedCaseId) =>
+        Promise.resolve(
+          requestedCaseId === nextCaseId
+            ? scenarioWorkspace([nextScenario])
+            : scenarioWorkspace(),
+        ),
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockImplementation(
+      (_tenant, requestedCaseId) =>
+        Promise.resolve(
+          requestedCaseId === nextCaseId
+            ? runList([nextRun])
+            : runList([run()]),
+        ),
+    );
+    const start = vi
+      .spyOn(riskApi, "startCalculation")
+      .mockResolvedValue(nextRun);
+    const rerun = vi
+      .spyOn(riskApi, "rerunCalculation")
+      .mockResolvedValue(nextRun);
+    const view = renderWithQuery(
+      <CalculationsTab tenant={tenant} caseId={caseId} />,
+    );
+    await screen.findByText("Baseline");
+
+    view.rerender(<CalculationsTab tenant={tenant} caseId={nextCaseId} />);
+    await screen.findByText("New case baseline");
+    await user.click(screen.getByRole("button", { name: "Run forecast" }));
+    await user.click(
+      screen.getByRole("button", { name: "Rerun current inputs" }),
+    );
+
+    await waitFor(() =>
+      expect(start).toHaveBeenCalledWith(tenant, nextCaseId, {
+        scenarioId: nextScenarioId,
+        forecastPeriods: 3,
+      }),
+    );
+    expect(rerun).toHaveBeenCalledWith(tenant, nextCaseId, nextRun.id);
+  });
+
+  it("formats large decimal outputs without losing precision", async () => {
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(
+      runList([
+        run({
+          outputs: [{ ...output(), totalAssets: "9007199254740993.1200" }],
+        }),
+      ]),
+    );
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("$9,007,199,254,740,993.12"),
+    ).toBeInTheDocument();
   });
 
   it("renders loading prerequisites and request errors explicitly", async () => {
