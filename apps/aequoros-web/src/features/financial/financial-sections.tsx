@@ -940,7 +940,9 @@ function MutationForm({
                 onChange={(event) => updateField(field.key, event.target.value)}
                 className="h-8 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2.5 text-sm outline-none focus:border-[rgb(var(--focus))]"
               >
-                <option value="">Select…</option>
+                {field.options?.includes(automaticCompliance) ? null : (
+                  <option value="">Select…</option>
+                )}
                 {field.options?.map((option) => (
                   <option key={option} value={option}>
                     {option === automaticCompliance

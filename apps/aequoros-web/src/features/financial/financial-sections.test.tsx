@@ -925,10 +925,11 @@ describe("FinancialSections", () => {
     const section = screen.getByText("Covenants").closest("section")!;
     await user.click(within(section).getByRole("button", { name: "Edit" }));
     const form = within(section).getByRole("form", { name: "Edit covenant" });
-    await user.selectOptions(
-      within(form).getByLabelText("Compliance"),
-      "__automatic__",
-    );
+    const complianceSelect = within(form).getByLabelText("Compliance");
+    expect(
+      within(complianceSelect).queryByRole("option", { name: "Select…" }),
+    ).not.toBeInTheDocument();
+    await user.selectOptions(complianceSelect, "__automatic__");
     await user.type(
       within(form).getByLabelText("Reason"),
       "Recalculate from corrected values",
