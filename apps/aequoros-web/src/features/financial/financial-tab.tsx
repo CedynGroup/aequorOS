@@ -74,9 +74,13 @@ export function FinancialTab({
             tenant={tenant}
             caseId={caseId}
             client={financialReviewClient}
-            onMutation={(nextWorkspace) => {
+            onMutation={async (nextWorkspace) => {
               queryClient.setQueryData(queryKey, nextWorkspace);
-              void queryClient.invalidateQueries({ queryKey });
+              await queryClient.fetchQuery({
+                queryKey,
+                queryFn: () =>
+                  financialReviewClient.workspace(tenant, caseId),
+              });
             }}
           />
         </>

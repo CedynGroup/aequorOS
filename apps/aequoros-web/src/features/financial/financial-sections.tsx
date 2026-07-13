@@ -214,7 +214,9 @@ export function FinancialSections({
   tenant?: TenantHeaders;
   caseId?: string;
   client?: FinancialReviewClient;
-  onMutation?: (workspace: FinancialDataWorkspaceRead) => void;
+  onMutation?: (
+    workspace: FinancialDataWorkspaceRead,
+  ) => Promise<void> | void;
 }) {
   const [focusedCell, setFocusedCell] = useState<string>();
   const activeIssues = workspace.validationIssues.filter(
@@ -444,7 +446,9 @@ function FinancialSection({
   tenant?: TenantHeaders;
   caseId?: string;
   client?: FinancialReviewClient;
-  onMutation?: (workspace: FinancialDataWorkspaceRead) => void;
+  onMutation?: (
+    workspace: FinancialDataWorkspaceRead,
+  ) => Promise<void> | void;
   focusedCell?: string;
 }) {
   const [adding, setAdding] = useState(false);
@@ -501,8 +505,8 @@ function FinancialSection({
           caseId={caseId}
           client={client}
           onCancel={() => setAdding(false)}
-          onMutation={(response) => {
-            onMutation?.(
+          onMutation={async (response) => {
+            await onMutation?.(
               workspaceAfterMutation(workspace, config, response, false),
             );
             setSuccessMessage(
@@ -564,10 +568,10 @@ function FinancialSection({
                             tenant,
                             caseId,
                             client,
-                            onMutation: (
+                            onMutation: async (
                               response: FinancialMutationResponse,
                             ) => {
-                              onMutation?.(
+                              await onMutation?.(
                                 workspaceAfterMutation(
                                   workspace,
                                   config,
@@ -768,7 +772,9 @@ function MutationForm({
   caseId: string;
   client: FinancialReviewClient;
   onCancel: () => void;
-  onMutation: (response: FinancialMutationResponse) => void;
+  onMutation: (
+    response: FinancialMutationResponse,
+  ) => Promise<void> | void;
 }) {
   const initialValues = useMemo(
     () => valuesFromRecord(config, record),
@@ -778,6 +784,7 @@ function MutationForm({
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
+  const [mutationSaved, setMutationSaved] = useState(false);
   const [fieldError, setFieldError] = useState<string>();
   const lastSubmit = useRef<(() => Promise<void>) | null>(null);
 
@@ -826,14 +833,26 @@ function MutationForm({
                 trimmedReason,
               ),
             );
-      onMutation(response);
+      setMutationSaved(true);
+      lastSubmit.current = async () => {
+        setSaving(true);
+        setError(undefined);
+        try {
+          await onMutation(response);
+        } catch (caught) {
+          setError(await financialErrorMessage(caught));
+        } finally {
+          setSaving(false);
+        }
+      };
+      await onMutation(response);
     } catch (caught) {
       setError(await financialErrorMessage(caught));
     } finally {
       setSaving(false);
     }
   }
-  lastSubmit.current = submit;
+  if (!mutationSaved) lastSubmit.current = submit;
 
   return (
     <form
@@ -909,7 +928,10 @@ function MutationForm({
       ) : null}
       {error ? (
         <Alert title="Financial change failed" tone="danger">
-          <span>{error} Your input has been preserved.</span>
+          <span>
+            {mutationSaved ? "Change saved, but refresh failed. " : null}
+            {error} Your input has been preserved.
+          </span>
           <Button
             type="button"
             size="sm"
@@ -918,7 +940,8 @@ function MutationForm({
             disabled={saving}
             onClick={() => void lastSubmit.current?.()}
           >
-            <RotateCcw className="size-3.5" /> Retry
+            <RotateCcw className="size-3.5" />
+            {mutationSaved ? "Retry refresh" : "Retry"}
           </Button>
         </Alert>
       ) : null}

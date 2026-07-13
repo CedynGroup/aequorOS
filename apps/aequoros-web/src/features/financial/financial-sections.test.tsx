@@ -327,6 +327,63 @@ describe("FinancialSections", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it("retries a failed workspace refresh without repeating the mutation", async () => {
+    const user = userEvent.setup();
+    const updated = {
+      ...workspace().institutions[0],
+      name: "Northstar Commercial Bank",
+    };
+    const update = vi
+      .fn<FinancialReviewClient["update"]>()
+      .mockResolvedValue({
+        record: updated,
+        validation: validation(),
+      } as FinancialInstitutionMutationResponse);
+    const onMutation = vi
+      .fn<(workspace: FinancialDataWorkspaceRead) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("Workspace refresh failed"))
+      .mockResolvedValueOnce(undefined);
+
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ update })}
+        onMutation={onMutation}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const form = screen.getByRole("form", { name: "Edit institution" });
+    await user.clear(within(form).getByLabelText("Name"));
+    await user.type(
+      within(form).getByLabelText("Name"),
+      "Northstar Commercial Bank",
+    );
+    await user.type(
+      within(form).getByLabelText("Reason"),
+      "Corrected against audited statement",
+    );
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    expect(
+      await within(form).findByText(/Change saved, but refresh failed/),
+    ).toBeInTheDocument();
+    await user.click(
+      within(form).getByRole("button", { name: "Retry refresh" }),
+    );
+
+    await waitFor(() => expect(onMutation).toHaveBeenCalledTimes(2));
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByText(/Saved institution correction/),
+    ).toBeInTheDocument();
+  });
+
   it("preserves failed manual-entry input and retries successfully", async () => {
     const user = userEvent.setup();
     const covenantRecord = {
