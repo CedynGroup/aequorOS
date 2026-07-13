@@ -226,7 +226,7 @@ def update_scenario(
     payload: ScenarioUpdate,
 ) -> ScenarioMutationResponse:
     _require_actor(ctx)
-    scenario = _active_scenario_or_404(db, ctx, case_id, scenario_id)
+    scenario = _active_scenario_or_404(db, ctx, case_id, scenario_id, for_update=True)
     changes = payload.model_dump(exclude={"reason"}, exclude_unset=True)
     if "name" in changes and changes["name"] is not None:
         changes["name"] = changes["name"].strip()
@@ -256,7 +256,7 @@ def copy_scenario(
     db: Session, ctx: TenantContext, case_id: UUID, scenario_id: UUID, payload: ScenarioCopy
 ) -> ScenarioMutationResponse:
     _require_actor(ctx)
-    source = _active_scenario_or_404(db, ctx, case_id, scenario_id)
+    source = _active_scenario_or_404(db, ctx, case_id, scenario_id, for_update=True)
     copy = RiskScenario(
         organization_id=ctx.organization_id,
         case_id=case_id,
@@ -315,7 +315,7 @@ def archive_scenario(
     db: Session, ctx: TenantContext, case_id: UUID, scenario_id: UUID, payload: ScenarioArchive
 ) -> ScenarioMutationResponse:
     _require_actor(ctx)
-    scenario = _active_scenario_or_404(db, ctx, case_id, scenario_id)
+    scenario = _active_scenario_or_404(db, ctx, case_id, scenario_id, for_update=True)
     scenario.archived_at = datetime.now(UTC)
     record_event(
         db,
@@ -340,7 +340,7 @@ def create_assumption(
     payload: AssumptionCreate,
 ) -> ScenarioMutationResponse:
     _require_actor(ctx)
-    _active_scenario_or_404(db, ctx, case_id, scenario_id)
+    _active_scenario_or_404(db, ctx, case_id, scenario_id, for_update=True)
     values = payload.model_dump(exclude={"reason"})
     values["provenance"] = {**values["provenance"], "source": "manual"}
     assumption = ScenarioAssumption(
@@ -376,11 +376,13 @@ def update_assumption(  # noqa: PLR0913
     payload: AssumptionUpdate,
 ) -> ScenarioMutationResponse:
     _require_actor(ctx)
-    _active_scenario_or_404(db, ctx, case_id, scenario_id)
-    assumption = _assumption_or_404(db, ctx, case_id, scenario_id, assumption_id)
+    _active_scenario_or_404(db, ctx, case_id, scenario_id, for_update=True)
+    assumption = _assumption_or_404(db, ctx, case_id, scenario_id, assumption_id, for_update=True)
     changes = payload.model_dump(exclude={"reason"}, exclude_unset=True)
-    if "provenance" in changes and changes["provenance"] is not None:
-        changes["provenance"] = {**changes["provenance"], "source": "reviewer_edit"}
+    changes["provenance"] = {
+        **changes.get("provenance", assumption.provenance),
+        "source": "reviewer_edit",
+    }
     previous = {field: getattr(assumption, field) for field in changes}
     for field, value in changes.items():
         setattr(assumption, field, value)
@@ -422,8 +424,8 @@ def review_assumption(  # noqa: PLR0913
     payload: AssumptionReview,
 ) -> ScenarioMutationResponse:
     _require_actor(ctx)
-    _active_scenario_or_404(db, ctx, case_id, scenario_id)
-    assumption = _assumption_or_404(db, ctx, case_id, scenario_id, assumption_id)
+    _active_scenario_or_404(db, ctx, case_id, scenario_id, for_update=True)
+    assumption = _assumption_or_404(db, ctx, case_id, scenario_id, assumption_id, for_update=True)
     assumption.review_status = "reviewed"
     assumption.reviewed_by = ctx.actor_user_id
     assumption.reviewed_at = datetime.now(UTC)
@@ -546,24 +548,35 @@ def _assumption_rows(db: Session, scenario_id: UUID) -> list[ScenarioAssumption]
 
 
 def _scenario_or_404(
-    db: Session, ctx: TenantContext, case_id: UUID, scenario_id: UUID
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    scenario_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> RiskScenario:
-    scenario = db.scalar(
-        select(RiskScenario).where(
-            RiskScenario.id == scenario_id,
-            RiskScenario.organization_id == ctx.organization_id,
-            RiskScenario.case_id == case_id,
-        )
+    stmt = select(RiskScenario).where(
+        RiskScenario.id == scenario_id,
+        RiskScenario.organization_id == ctx.organization_id,
+        RiskScenario.case_id == case_id,
     )
+    if for_update:
+        stmt = stmt.with_for_update()
+    scenario = db.scalar(stmt)
     if scenario is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found.")
     return scenario
 
 
 def _active_scenario_or_404(
-    db: Session, ctx: TenantContext, case_id: UUID, scenario_id: UUID
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    scenario_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> RiskScenario:
-    scenario = _scenario_or_404(db, ctx, case_id, scenario_id)
+    scenario = _scenario_or_404(db, ctx, case_id, scenario_id, for_update=for_update)
     if scenario.archived_at is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Archived scenarios are read-only."
@@ -571,21 +584,24 @@ def _active_scenario_or_404(
     return scenario
 
 
-def _assumption_or_404(
+def _assumption_or_404(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
     case_id: UUID,
     scenario_id: UUID,
     assumption_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> ScenarioAssumption:
-    assumption = db.scalar(
-        select(ScenarioAssumption).where(
-            ScenarioAssumption.id == assumption_id,
-            ScenarioAssumption.organization_id == ctx.organization_id,
-            ScenarioAssumption.case_id == case_id,
-            ScenarioAssumption.scenario_id == scenario_id,
-        )
+    stmt = select(ScenarioAssumption).where(
+        ScenarioAssumption.id == assumption_id,
+        ScenarioAssumption.organization_id == ctx.organization_id,
+        ScenarioAssumption.case_id == case_id,
+        ScenarioAssumption.scenario_id == scenario_id,
     )
+    if for_update:
+        stmt = stmt.with_for_update()
+    assumption = db.scalar(stmt)
     if assumption is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assumption not found.")
     return assumption

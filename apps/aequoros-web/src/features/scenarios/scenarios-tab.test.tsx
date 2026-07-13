@@ -146,7 +146,15 @@ describe("ScenariosTab", () => {
       .mockResolvedValue(mutation());
     const updateScenario = vi
       .spyOn(riskApi, "updateScenario")
-      .mockResolvedValue(mutation(scenario({ name: "Operating plan" })));
+      .mockResolvedValueOnce(mutation(scenario({ name: "Operating plan" })))
+      .mockResolvedValueOnce(
+        mutation(
+          scenario({
+            name: "Operating plan",
+            description: "Updated operating plan",
+          }),
+        ),
+      );
     const review = vi
       .spyOn(riskApi, "reviewAssumption")
       .mockResolvedValue(mutation());
@@ -162,7 +170,7 @@ describe("ScenariosTab", () => {
     renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
     const scenarioName = await screen.findByLabelText("Scenario name");
     await user.clear(scenarioName);
-    await user.type(scenarioName, "Operating plan");
+    await user.type(scenarioName, "  Operating plan  ");
     await user.click(screen.getByRole("button", { name: "Save details" }));
     await waitFor(() => {
       expect(updateScenario).toHaveBeenCalledWith(
@@ -170,12 +178,30 @@ describe("ScenariosTab", () => {
         caseId,
         scenario().id,
         {
-          name: "Operating plan",
-          description: "Default baseline scenario",
+          name: "  Operating plan  ",
           reason: "Update scenario details",
         },
       );
     });
+    expect(scenarioName).toHaveValue("Operating plan");
+    expect(screen.getByRole("button", { name: "Save details" })).toBeDisabled();
+
+    const scenarioDescription = screen.getByLabelText("Scenario description");
+    await user.clear(scenarioDescription);
+    await user.type(scenarioDescription, "Updated operating plan");
+    await user.click(screen.getByRole("button", { name: "Save details" }));
+    await waitFor(() => {
+      expect(updateScenario).toHaveBeenLastCalledWith(
+        tenant,
+        caseId,
+        scenario().id,
+        {
+          description: "Updated operating plan",
+          reason: "Update scenario details",
+        },
+      );
+    });
+    expect(scenarioDescription).toHaveValue("Updated operating plan");
 
     const value = await screen.findByLabelText("Revenue growth value");
     await user.clear(value);

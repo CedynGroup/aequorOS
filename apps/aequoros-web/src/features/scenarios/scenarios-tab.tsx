@@ -218,6 +218,10 @@ function ScenarioEditor({
   const [copyName, setCopyName] = useState(`${scenario.name} copy`);
   const [name, setName] = useState(scenario.name);
   const [description, setDescription] = useState(scenario.description ?? "");
+  const [savedDetails, setSavedDetails] = useState({
+    name: scenario.name,
+    description: scenario.description ?? "",
+  });
   const [newAssumption, setNewAssumption] = useState({
     category: "other" as AssumptionCategory,
     key: "",
@@ -227,13 +231,26 @@ function ScenarioEditor({
     unit: "",
   });
   const updateScenario = useMutation({
-    mutationFn: () =>
-      riskApi.updateScenario(tenant, caseId, scenario.id, {
-        name,
-        description: description || null,
+    mutationFn: () => {
+      const changes = {
+        ...(name !== savedDetails.name ? { name } : {}),
+        ...(description !== savedDetails.description
+          ? { description: description || null }
+          : {}),
         reason: "Update scenario details",
-      }),
-    onSuccess: () => onSaved("Scenario details saved"),
+      };
+      return riskApi.updateScenario(tenant, caseId, scenario.id, changes);
+    },
+    onSuccess: async (result) => {
+      const details = {
+        name: result.scenario.name,
+        description: result.scenario.description ?? "",
+      };
+      setName(details.name);
+      setDescription(details.description);
+      setSavedDetails(details);
+      await onSaved("Scenario details saved");
+    },
   });
   const copy = useMutation({
     mutationFn: () =>
@@ -314,8 +331,8 @@ function ScenarioEditor({
             disabled={
               !name.trim() ||
               updateScenario.isPending ||
-              (name === scenario.name &&
-                description === (scenario.description ?? ""))
+              (name === savedDetails.name &&
+                description === savedDetails.description)
             }
             onClick={() => updateScenario.mutate()}
           >

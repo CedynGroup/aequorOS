@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
+from datetime import UTC, datetime
 from uuid import UUID
 
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
-from app.models import AuditEvent, ScenarioAssumptionHistory
+from app.models import AuditEvent, RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
+from app.schemas.scenarios import AssumptionUpdate
+from app.services.scenarios import update_assumption
 from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_2, headers
+from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 
 
 def initialize(client: TestClient, case_id: UUID) -> dict:
@@ -48,7 +56,12 @@ def test_default_scenario_lifecycle_validation_review_and_readiness(
         json={"value": 0.04, "reason": "Reviewer adjusted the operating plan"},
     )
     assert updated.status_code == 200, updated.text
-    assert updated.json()["scenario"]["assumptions"][0]["review_status"] == "draft"
+    updated_assumption = updated.json()["scenario"]["assumptions"][0]
+    assert updated_assumption["review_status"] == "draft"
+    assert updated_assumption["provenance"] == {
+        "source": "reviewer_edit",
+        "scenario_type": "baseline",
+    }
 
     for scenario in workspace["scenarios"]:
         for item in scenario["assumptions"]:
@@ -263,6 +276,98 @@ def test_duplicate_assumption_returns_conflict_and_rolls_back(db_client: TestCli
     workspace = db_client.get(f"/api/v1/cases/{case.id}/scenarios", headers=headers()).json()
     current = next(item for item in workspace["scenarios"] if item["id"] == scenario["id"])
     assert len(current["assumptions"]) == len(scenario["assumptions"])
+
+
+def test_concurrent_review_and_edit_serialize_on_the_assumption(db_client: TestClient) -> None:
+    sessionmaker = get_sessionmaker()
+    with sessionmaker() as dialect_session:
+        if dialect_session.get_bind().dialect.name != "postgresql":
+            pytest.skip("PostgreSQL row locks are required for concurrency coverage.")
+
+    case = CaseFactory(db_client).create()
+    scenario = initialize(db_client, case.id)["scenarios"][0]
+    assumption_id = UUID(scenario["assumptions"][0]["id"])
+
+    with sessionmaker() as review_session:
+        assumption = review_session.scalar(
+            select(ScenarioAssumption)
+            .where(ScenarioAssumption.id == assumption_id)
+            .with_for_update()
+        )
+        assert assumption is not None
+        assumption.review_status = "reviewed"
+        assumption.reviewed_by = USER_1
+        assumption.reviewed_at = datetime.now(UTC)
+        review_session.flush()
+
+        def edit_assumption() -> str:
+            with sessionmaker() as edit_session:
+                result = update_assumption(
+                    edit_session,
+                    TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+                    case.id,
+                    UUID(scenario["id"]),
+                    assumption_id,
+                    AssumptionUpdate(value=0.07, reason="Concurrent reviewer edit"),
+                )
+                return result.scenario.assumptions[0].review_status
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(edit_assumption)
+            with pytest.raises(FutureTimeoutError):
+                future.result(timeout=0.2)
+            review_session.commit()
+            assert future.result(timeout=5) == "draft"
+
+    with sessionmaker() as verification_session:
+        persisted = verification_session.get(ScenarioAssumption, assumption_id)
+        assert persisted is not None
+        assert persisted.review_status == "draft"
+        assert persisted.reviewed_by is None
+        assert persisted.reviewed_at is None
+        assert persisted.provenance["source"] == "reviewer_edit"
+
+
+def test_concurrent_archive_prevents_an_assumption_edit(db_client: TestClient) -> None:
+    sessionmaker = get_sessionmaker()
+    with sessionmaker() as dialect_session:
+        if dialect_session.get_bind().dialect.name != "postgresql":
+            pytest.skip("PostgreSQL row locks are required for concurrency coverage.")
+
+    case = CaseFactory(db_client).create()
+    scenario = initialize(db_client, case.id)["scenarios"][0]
+    scenario_id = UUID(scenario["id"])
+    assumption_id = UUID(scenario["assumptions"][0]["id"])
+
+    with sessionmaker() as archive_session:
+        archived = archive_session.scalar(
+            select(RiskScenario).where(RiskScenario.id == scenario_id).with_for_update()
+        )
+        assert archived is not None
+        archived.archived_at = datetime.now(UTC)
+        archive_session.flush()
+
+        def edit_assumption() -> int:
+            with sessionmaker() as edit_session:
+                try:
+                    update_assumption(
+                        edit_session,
+                        TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+                        case.id,
+                        scenario_id,
+                        assumption_id,
+                        AssumptionUpdate(value=0.09, reason="Late concurrent edit"),
+                    )
+                except HTTPException as exc:
+                    return exc.status_code
+                return 200
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(edit_assumption)
+            with pytest.raises(FutureTimeoutError):
+                future.result(timeout=0.2)
+            archive_session.commit()
+            assert future.result(timeout=5) == 409
 
 
 def test_scenario_endpoints_enforce_tenant_isolation(db_client: TestClient) -> None:
