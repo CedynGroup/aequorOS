@@ -244,6 +244,79 @@ describe("CalculationsTab", () => {
     );
   });
 
+  it("keeps history visible while an off-page run is loading", async () => {
+    const user = userEvent.setup();
+    const successful = run();
+    const failed = run({
+      id: "30000000-0000-4000-8000-000000000002",
+      status: "failed",
+      outputs: [],
+      error: { code: "failed", message: "Forecast failed", details: null },
+    });
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue({
+      ...runList([failed]),
+      latestSuccessfulRunId: successful.id,
+      total: 26,
+      hasMore: true,
+    });
+    vi.mocked(riskApi.calculationRun).mockImplementation(
+      (_tenant, _caseId, requestedRunId) =>
+        requestedRunId === failed.id
+          ? Promise.resolve(failed)
+          : new Promise<CalculationRunRead>(() => undefined),
+    );
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Review the latest successful forecast",
+      }),
+    );
+
+    expect(screen.getByText("Run history")).toBeInTheDocument();
+    expect(screen.queryByText("No calculation runs")).not.toBeInTheDocument();
+  });
+
+  it("shows an off-page run retrieval error without hiding history", async () => {
+    const user = userEvent.setup();
+    const failed = run({
+      id: "30000000-0000-4000-8000-000000000002",
+      status: "failed",
+      outputs: [],
+      error: { code: "failed", message: "Forecast failed", details: null },
+    });
+    const successfulRunId = "30000000-0000-4000-8000-000000000003";
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue({
+      ...runList([failed]),
+      latestSuccessfulRunId: successfulRunId,
+      total: 26,
+      hasMore: true,
+    });
+    vi.mocked(riskApi.calculationRun).mockImplementation(
+      (_tenant, _caseId, requestedRunId) =>
+        requestedRunId === failed.id
+          ? Promise.resolve(failed)
+          : Promise.reject({
+              statusCode: 503,
+              code: "unavailable",
+              message: "Run details unavailable",
+            }),
+    );
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Review the latest successful forecast",
+      }),
+    );
+
+    expect(
+      await screen.findByText("Run details unavailable"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Run history")).toBeInTheDocument();
+    expect(screen.queryByText("No calculation runs")).not.toBeInTheDocument();
+  });
+
   it("reruns current inputs and exposes query errors", async () => {
     const user = userEvent.setup();
     vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList([run()]));

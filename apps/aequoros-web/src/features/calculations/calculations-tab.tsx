@@ -151,6 +151,7 @@ export function CalculationsTab({
   }
   const selectedSummary =
     runs.data?.runs.find((run) => run.id === selectedRunId) ?? selectedRun.data;
+  const hasRunHistory = Boolean(runs.data?.runs.length || selectedRunId);
   const isSubmitting = start.isPending || rerun.isPending;
 
   return (
@@ -207,7 +208,7 @@ export function CalculationsTab({
         ) : null}
       </Panel>
 
-      {!selectedSummary ? (
+      {!hasRunHistory ? (
         <Alert title="No calculation runs">
           Select a scenario and run the first forecast. Outputs and failures
           will remain here as versioned history.
@@ -217,7 +218,7 @@ export function CalculationsTab({
           <RunHistory
             runs={runs.data?.runs ?? []}
             total={runs.data?.total ?? 0}
-            selectedRunId={selectedSummary.id}
+            selectedRunId={selectedSummary?.id ?? selectedRunId}
             onSelect={setSelectedRunId}
             hasMore={runs.data?.hasMore ?? false}
             offset={runs.data?.offset ?? 0}
