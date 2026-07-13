@@ -1,0 +1,13 @@
+# Project agent memory
+
+This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
+
+- Financial review UI code lives under `apps/aequoros-web/src/features/financial` and must call
+  `FinancialDataApi` from `packages/risk-service-api`; do not duplicate OpenAPI payloads or
+  hand-roll financial workspace requests.
+- Canonical institution, account, reporting-period, balance, obligation, and covenant mutations
+  require a non-empty reason and return refreshed validation. Cash-flow create/update contracts
+  do not yet provide the same guarantees, so cash flows remain read-only in the review UI until
+  the generated contracts add required reasons and refreshed-validation mutation responses.
+- Validate web changes with `pnpm --filter @aequoros/aequoros-web typecheck`, `lint`, `test`, and
+  `build`; deterministic financial review journeys are in `e2e/financial-review.spec.ts`.
