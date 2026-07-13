@@ -1,4 +1,7 @@
-import type { FinancialDataWorkspaceRead } from "@aequoros/risk-service-api";
+import type {
+  FinancialDataWorkspaceRead,
+  FinancialWorkspaceMapResponse,
+} from "@aequoros/risk-service-api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -94,6 +97,7 @@ function FinancialControls({
   const [pending, setPending] = useState<"map" | "validate">();
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
+  const [mapResult, setMapResult] = useState<FinancialWorkspaceMapResponse>();
 
   async function mapWorkspace() {
     const trimmedDocumentId = documentId.trim();
@@ -105,13 +109,15 @@ function FinancialControls({
     setPending("map");
     setError(undefined);
     setSuccess(undefined);
+    setMapResult(undefined);
     try {
       const result = await financialReviewClient.map(tenant, caseId, {
         documentId: trimmedDocumentId || undefined,
         documentExtractionId: trimmedExtractionId || undefined,
       });
+      setMapResult(result);
       setSuccess(
-        `Mapping complete: ${result.summary.sourceRowCount} source rows reviewed.`,
+        `Mapping complete: ${result.summary.mappedSourceRowCount} of ${result.summary.sourceRowCount} source rows mapped.`,
       );
       onRefresh();
     } catch (caught) {
@@ -207,6 +213,29 @@ function FinancialControls({
           <CheckCircle2 className="mr-1 inline size-3.5" />
           {success}
         </output>
+      ) : null}
+      {mapResult?.summary.unmappedSourceRowCount ? (
+        <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
+          <div className="font-semibold">
+            {mapResult.summary.unmappedSourceRowCount} unmapped source rows need
+            review
+          </div>
+          <div className="mt-2 space-y-2" aria-label="Unmapped source rows">
+            {mapResult.unmappedRows.map((row) => (
+              <div
+                key={row.sourceRowId}
+                className="rounded border border-amber-200 bg-white p-2"
+              >
+                <div className="font-medium">
+                  Row {row.rowIndex}: {row.reason}
+                </div>
+                <code className="mt-1 block break-all text-[10px]">
+                  {JSON.stringify(row.locator)}
+                </code>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : null}
     </section>
   );

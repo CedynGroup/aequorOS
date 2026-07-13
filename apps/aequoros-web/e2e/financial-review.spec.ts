@@ -203,11 +203,18 @@ async function installFinancialBackend(page: Page) {
         created: { institutions: 1 },
         reused: {},
         summary: {
-          source_row_count: 1,
+          source_row_count: 2,
           mapped_source_row_count: 1,
-          unmapped_source_row_count: 0,
+          unmapped_source_row_count: 1,
         },
-        unmapped_rows: [],
+        unmapped_rows: [
+          {
+            source_row_id: "source-unmapped",
+            row_index: 9,
+            reason: "No canonical record matched",
+            locator: { sheet: "Debt", cell: "A9" },
+          },
+        ],
       });
     if (
       path === `/api/v1/cases/${northstarCase.id}/financial-data/validate` &&
@@ -369,8 +376,11 @@ test("uploads, maps, validates, retries correction, revalidates, and manually ad
   await page.getByLabel("Document ID").fill(documentId);
   await page.getByRole("button", { name: "Map financial data" }).click();
   await expect(
-    page.getByText(/Mapping complete: 1 source rows reviewed/),
+    page.getByText(/Mapping complete: 1 of 2 source rows mapped/),
   ).toBeVisible();
+  await expect(page.getByLabel("Unmapped source rows")).toContainText(
+    "Row 9: No canonical record matched",
+  );
   await page.getByRole("button", { name: "Revalidate" }).click();
   await expect(page.getByText(/Validation refreshed: 1 issues/)).toBeVisible();
 

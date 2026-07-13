@@ -65,10 +65,17 @@ describe("FinancialTab", () => {
       reused: {},
       summary: {
         sourceRowCount: 3,
-        mappedSourceRowCount: 3,
-        unmappedSourceRowCount: 0,
+        mappedSourceRowCount: 2,
+        unmappedSourceRowCount: 1,
       },
-      unmappedRows: [],
+      unmappedRows: [
+        {
+          sourceRowId: "source-3",
+          rowIndex: 8,
+          reason: "No canonical record matched",
+          locator: { sheet: "Debt", cell: "A8" },
+        },
+      ],
     });
     const validate = vi
       .spyOn(financialReviewClient, "validate")
@@ -118,8 +125,14 @@ describe("FinancialTab", () => {
       }),
     );
     expect(
-      await within(controls).findByText(/3 source rows reviewed/),
+      await within(controls).findByText(/2 of 3 source rows mapped/),
     ).toBeInTheDocument();
+    const unmapped = within(controls).getByLabelText("Unmapped source rows");
+    expect(within(unmapped).getByText(/Row 8/)).toBeInTheDocument();
+    expect(
+      within(unmapped).getByText(/No canonical record matched/),
+    ).toBeInTheDocument();
+    expect(within(unmapped).getByText(/Debt/)).toBeInTheDocument();
 
     await user.click(
       within(controls).getByRole("button", { name: "Revalidate" }),
