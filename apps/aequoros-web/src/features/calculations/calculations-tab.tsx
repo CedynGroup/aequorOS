@@ -465,9 +465,17 @@ function diagnosticRecord(record: Record<string, unknown>) {
         (value): value is string => typeof value === "string",
       )
     : [];
+  const periodBounds =
+    "period_start_date" in record || "period_end_date" in record
+      ? `period ${String(record.period_start_date ?? "unbounded")} to ${String(record.period_end_date ?? "unbounded")}`
+      : null;
   return [
     identity,
     typeof record.id === "string" ? record.id : null,
+    typeof record.cash_flow_date === "string"
+      ? `cash-flow date ${record.cash_flow_date}`
+      : null,
+    periodBounds,
     missingFields.length ? `missing ${missingFields.join(", ")}` : null,
     assumptionIds.length ? `assumptions ${assumptionIds.join(", ")}` : null,
   ]

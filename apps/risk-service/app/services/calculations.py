@@ -491,6 +491,43 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
         )
     selected_period_id = next(iter(selected_period_ids)) if len(selected_period_ids) == 1 else None
 
+    selected_period = periods_by_id.get(selected_period_id) if selected_period_id else None
+    selected_period_start = selected_period.start_date if selected_period else None
+    selected_period_end = (
+        selected_period.end_date or selected_period.as_of_date if selected_period else None
+    )
+    cash_flows_outside_period = [
+        {
+            "id": str(item.id),
+            "category": item.category,
+            "cash_flow_date": item.cash_flow_date.isoformat(),
+            "reporting_period_id": str(selected_period_id),
+            "period_start_date": (
+                selected_period_start.isoformat() if selected_period_start else None
+            ),
+            "period_end_date": (
+                selected_period_end.isoformat() if selected_period_end else None
+            ),
+        }
+        for item in cash_flows
+        if selected_period is not None
+        and item.reporting_period_id == selected_period_id
+        and item.cash_flow_date is not None
+        and not _date_in_period(item.cash_flow_date, selected_period)
+    ]
+    if cash_flows_outside_period:
+        raise CalculationInputError(
+            "cash_flow_date_outside_reporting_period",
+            "Cash-flow dates must fall within their linked reporting period.",
+            {
+                "cash_flows": cash_flows_outside_period,
+                "corrective_action": (
+                    "Correct each listed cash-flow date or reporting period in the review "
+                    "workspace, then run the forecast again."
+                ),
+            },
+        )
+
     undated_cash_flows = [
         {"id": str(item.id), "category": item.category}
         for item in cash_flows

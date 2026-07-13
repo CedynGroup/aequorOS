@@ -562,6 +562,83 @@ def test_undated_cash_flow_without_reporting_period_is_actionable_failure(
     assert "cash-flow date" in run["error"]["details"]["corrective_action"]
 
 
+def test_cash_flows_outside_selected_reporting_period_name_every_record(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    with get_sessionmaker()() as session:
+        reporting_period = FinancialReportingPeriod(
+            organization_id=ORG_1,
+            case_id=case.id,
+            dedupe_key="forecast:period:2026",
+            period_type="year",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31),
+            label="2026",
+        )
+        session.add(reporting_period)
+        session.flush()
+        session.add(
+            FinancialBalance(
+                organization_id=ORG_1,
+                case_id=case.id,
+                dedupe_key="forecast:period-cash",
+                reporting_period_id=reporting_period.id,
+                balance_type="cash",
+                amount=Decimal("1000"),
+                currency="USD",
+            )
+        )
+        cash_flows = [
+            FinancialCashFlow(
+                organization_id=ORG_1,
+                case_id=case.id,
+                dedupe_key=f"forecast:outside-flow:{cash_flow_date.isoformat()}",
+                reporting_period_id=reporting_period.id,
+                amount=Decimal("100"),
+                currency="USD",
+                direction="inflow",
+                category="operations",
+                cash_flow_date=cash_flow_date,
+            )
+            for cash_flow_date in (date(2025, 12, 31), date(2027, 1, 1))
+        ]
+        session.add_all(cash_flows)
+        session.commit()
+        expected = sorted(
+            [
+                {
+                    "id": str(item.id),
+                    "category": "operations",
+                    "cash_flow_date": str(item.cash_flow_date),
+                    "reporting_period_id": str(reporting_period.id),
+                    "period_start_date": "2026-01-01",
+                    "period_end_date": "2026-12-31",
+                }
+                for item in cash_flows
+            ],
+            key=lambda item: item["id"],
+        )
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"], "as_of_date": "2026-12-31"},
+    )
+
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "failed"
+    assert run["error"]["code"] == "cash_flow_date_outside_reporting_period"
+    assert run["error"]["details"]["cash_flows"] == expected
+    assert "review workspace" in run["error"]["details"]["corrective_action"]
+    persisted = db_client.get(
+        f"/api/v1/cases/{case.id}/calculation-runs/{run['id']}", headers=headers()
+    ).json()
+    assert persisted["error"] == run["error"]
+
+
 def test_active_obligations_missing_amounts_name_every_record(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)

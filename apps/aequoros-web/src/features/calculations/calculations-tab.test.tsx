@@ -205,6 +205,45 @@ describe("CalculationsTab", () => {
     expect(await screen.findByText("$4,550.00")).toBeInTheDocument();
   });
 
+  it("shows cash-flow dates and period bounds in failure diagnostics", async () => {
+    const failed = run({
+      status: "failed",
+      outputs: [],
+      error: {
+        code: "cash_flow_date_outside_reporting_period",
+        message:
+          "Cash-flow dates must fall within their linked reporting period.",
+        details: {
+          corrective_action:
+            "Correct each listed record in the review workspace.",
+          cash_flows: [
+            {
+              id: "60000000-0000-4000-8000-000000000001",
+              category: "operations",
+              cash_flow_date: "2027-01-01",
+              period_start_date: "2026-01-01",
+              period_end_date: "2026-12-31",
+            },
+          ],
+        },
+      },
+    });
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList([failed]));
+    vi.mocked(riskApi.calculationRun).mockResolvedValue(failed);
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("cash_flow_date_outside_reporting_period"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/60000000-0000-4000-8000-000000000001/),
+    ).toHaveTextContent(
+      "cash-flow date 2027-01-01 — period 2026-01-01 to 2026-12-31",
+    );
+    expect(screen.getByText(/review workspace/)).toBeInTheDocument();
+  });
+
   it("fetches the latest successful run outside the current history page", async () => {
     const user = userEvent.setup();
     const successful = run();
