@@ -21,9 +21,7 @@ mise run risk-service:openapi-client
 
 The generation target exports `openapi-schema.json`, clears stale generated
 client files, regenerates the `typescript-fetch` client, formats generated
-TypeScript, and restores source-first package metadata. It also derives a
-deterministic package version from the OpenAPI schema so unchanged contracts
-produce unchanged package metadata.
+TypeScript, and restores source-first package metadata.
 
 ## Verification
 
@@ -34,38 +32,5 @@ mise run risk-service:api-typecheck
 ## Usage
 
 ```ts
-import {
-  Configuration,
-  FinancialDataApi,
-  type FinancialCovenantCreate,
-} from "@aequoros/risk-service-api";
-
-const api = new FinancialDataApi(
-  new Configuration({
-    basePath: "http://localhost:8000",
-    headers: {
-      "X-Org-Id": organizationId,
-      "X-User-Id": actorUserId,
-    },
-  }),
-);
-
-const covenant: FinancialCovenantCreate = {
-  reason: "Add covenant from signed facility agreement",
-  name: "Minimum debt service coverage",
-  metric: "debt_service_coverage_ratio",
-  operator: "gte",
-  threshold: 1.25,
-};
-
-const result = await api.createCaseFinancialCovenant({
-  caseId,
-  xOrgId: organizationId,
-  xUserId: actorUserId,
-  financialCovenantCreate: covenant,
-});
+import { Configuration, HealthApi } from "@aequoros/risk-service-api";
 ```
-
-The financial mutation methods require tenant and actor headers and return both
-the canonical record and refreshed case validation. Generated operation names
-and request parameter objects are the source of truth for exact call signatures.

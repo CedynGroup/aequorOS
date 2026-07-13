@@ -6,6 +6,10 @@ export const apiBaseUrl =
 export const healthUrl = apiBaseUrl.replace(/\/api\/v1\/?$/, "/api/health/ready");
 
 export async function isRiskServiceReady(request: APIRequestContext) {
-  const response = await request.get(healthUrl);
-  return response.ok();
+  try {
+    const response = await request.get(healthUrl);
+    return response.ok();
+  } catch {
+    return false;
+  }
 }

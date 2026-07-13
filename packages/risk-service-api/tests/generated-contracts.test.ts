@@ -1,6 +1,6 @@
 import { AccountId, instanceOfAccountId } from "../src/models/AccountId";
 import { AsOfDate, instanceOfAsOfDate } from "../src/models/AsOfDate";
-import type { FinancialAccountUpdateMetadata } from "../src/models/FinancialAccountUpdateMetadata";
+import type { FinancialAccountUpdate } from "../src/models/FinancialAccountUpdate";
 import {
   FinancialAmount,
   instanceOfFinancialAmount,
@@ -9,6 +9,13 @@ import {
   FinancialBalanceCreate,
   FinancialBalanceCreateToJSON,
 } from "../src/models/FinancialBalanceCreate";
+import type { AssumptionValue } from "../src/models/AssumptionValue";
+import {
+  AssumptionUpdate,
+  AssumptionUpdateToJSON,
+} from "../src/models/AssumptionUpdate";
+import type { ScenarioRead } from "../src/models/ScenarioRead";
+import type { ScenarioAssumptionRead } from "../src/models/ScenarioAssumptionRead";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <
@@ -22,7 +29,16 @@ type AmountContract = Assert<Equal<FinancialAmount, number | string>>;
 type AccountIdContract = Assert<Equal<AccountId, string | null>>;
 type DateContract = Assert<Equal<AsOfDate, string | null>>;
 type MetadataContract = Assert<
-  Equal<FinancialAccountUpdateMetadata, { [key: string]: any } | null>
+  Equal<
+    FinancialAccountUpdate["metadata"],
+    { [key: string]: any } | null | undefined
+  >
+>;
+type AssumptionValueContract = Assert<
+  Equal<AssumptionValue, string | number | boolean | null>
+>;
+type ScenarioAssumptionsContract = Assert<
+  Equal<ScenarioRead["assumptions"], Array<ScenarioAssumptionRead>>
 >;
 
 const closedPayload: FinancialBalanceCreate = {
@@ -45,6 +61,10 @@ const serialized = FinancialBalanceCreateToJSON(payload) as unknown as Record<
   string,
   unknown
 >;
+const assumptionSerialized = AssumptionUpdateToJSON({
+  value: 0.05,
+  reason: "Reviewer update",
+} satisfies AssumptionUpdate) as unknown as Record<string, unknown>;
 
 assert(
   serialized.account_id === payload.accountId,
@@ -60,6 +80,14 @@ assert(
   "camelCase balanceType leaked into JSON",
 );
 assert(!("unexpected" in serialized), "unknown property leaked into JSON");
+assert(
+  assumptionSerialized.value === 0.05,
+  "assumption value was not serialized",
+);
+assert(
+  assumptionSerialized.reason === "Reviewer update",
+  "assumption reason was not serialized",
+);
 assert(instanceOfFinancialAmount(125.5), "number amount was rejected");
 assert(instanceOfFinancialAmount("125.5"), "string amount was rejected");
 assert(!instanceOfFinancialAmount({}), "object was accepted as an amount");
@@ -82,4 +110,6 @@ void (0 as unknown as AmountContract);
 void (0 as unknown as AccountIdContract);
 void (0 as unknown as DateContract);
 void (0 as unknown as MetadataContract);
+void (0 as unknown as AssumptionValueContract);
+void (0 as unknown as ScenarioAssumptionsContract);
 void closedPayload;

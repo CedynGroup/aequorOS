@@ -37,10 +37,21 @@ describe("risk API helpers", () => {
 
   it("attaches tenant and user headers", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ items: [], total: 0, limit: 12, offset: 0, page: 1, pages: 0, has_more: false }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({
+          items: [],
+          total: 0,
+          limit: 12,
+          offset: 0,
+          page: 1,
+          pages: 0,
+          has_more: false,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
 
     await riskApi.listCases(tenant, {
@@ -242,7 +253,9 @@ describe("risk API helpers", () => {
 
     const [createUrl, createInit] = fetchMock.mock.calls[0];
     const [updateUrl, updateInit] = fetchMock.mock.calls[1];
-    expect(String(createUrl)).toContain("/cases/case-1/financial-workspace/cash-flows");
+    expect(String(createUrl)).toContain(
+      "/cases/case-1/financial-workspace/cash-flows",
+    );
     expect(requestJsonBody(createInit)).toMatchObject({
       amount: "1000",
       cash_flow_date: "2026-04-15",
@@ -256,6 +269,62 @@ describe("risk API helpers", () => {
     expect(requestJsonBody(updateInit)).toMatchObject({
       amount: "1250",
       reason: "Reviewer correction",
+    });
+  });
+
+  it("uses case-scoped scenario endpoints and serializes assumption updates", async () => {
+    const responseBody = {
+      scenario: {
+        id: "scenario-1",
+        organization_id: DEFAULT_ORG_ID,
+        case_id: "case-1",
+        name: "Baseline",
+        description: null,
+        scenario_type: "baseline",
+        copied_from_scenario_id: null,
+        created_by: DEFAULT_USER_ID,
+        archived_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        assumptions: [],
+      },
+      validation: {
+        scenario_id: "scenario-1",
+        complete: false,
+        issue_count: 1,
+        issues: [],
+      },
+      readiness: {
+        case_id: "case-1",
+        ready: false,
+        scenario_count: 1,
+        complete_scenario_count: 0,
+        incomplete_scenario_ids: ["scenario-1"],
+      },
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await riskApi.updateAssumption(
+      tenant,
+      "case-1",
+      "scenario-1",
+      "assumption-1",
+      { value: 0.05, reason: "Reviewer update" },
+    );
+
+    const [url, init] = firstFetchCall(fetchMock);
+    expect(String(url)).toContain(
+      "/cases/case-1/scenarios/scenario-1/assumptions/assumption-1",
+    );
+    expect(init?.method).toBe("PATCH");
+    expect(requestJsonBody(init)).toEqual({
+      reason: "Reviewer update",
+      value: 0.05,
     });
   });
 
@@ -283,7 +352,9 @@ describe("risk API helpers", () => {
   });
 
   it("detects normalized API errors", () => {
-    expect(isApiError({ statusCode: 409, code: "conflict", message: "Conflict" })).toBe(true);
+    expect(
+      isApiError({ statusCode: 409, code: "conflict", message: "Conflict" }),
+    ).toBe(true);
     expect(isApiError(new Error("Nope"))).toBe(false);
   });
 });

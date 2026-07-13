@@ -25,6 +25,7 @@ export function emptyWorkspace(organizationId: string, caseId: string): Financia
     balances: [],
     cashFlows: [],
     obligations: [],
+    covenants: [],
     sourceRows: [],
     recordSourceLinks: [],
     manualEdits: [],
