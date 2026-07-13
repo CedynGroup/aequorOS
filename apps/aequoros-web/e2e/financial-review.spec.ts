@@ -5,6 +5,12 @@ import { demoTenant, northstarCase } from "./support/test-data";
 const now = "2026-07-13T12:00:00Z";
 const documentId = "70000000-0000-4000-8000-000000000001";
 const institutionId = "71000000-0000-4000-8000-000000000001";
+const evidenceDir = process.env.NO_MISTAKES_EVIDENCE_DIR;
+
+async function captureEvidence(page: Page, name: string) {
+  if (!evidenceDir) return;
+  await page.screenshot({ path: `${evidenceDir}/${name}.png`, fullPage: true });
+}
 
 type MockState = {
   institutionName: string;
@@ -395,6 +401,17 @@ test("reviews validation and drills into mapped source metadata", async ({
   await expect(
     page.getByText(/intentionally keeps cash flows read-only/),
   ).toBeVisible();
+  await captureEvidence(page, "financial-review-source-traceability");
+
+  await page.getByRole("button", { name: "Demo seed data" }).click();
+  await expect(page.getByText("Editing disabled for demo data")).toBeVisible();
+  await expect(
+    page.getByLabel("Map and validate financial data"),
+  ).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add institution" }),
+  ).not.toBeVisible();
+  await captureEvidence(page, "financial-review-demo-read-only");
 });
 
 test("uploads, maps, validates, retries correction, revalidates, and manually adds a covenant", async ({
@@ -415,6 +432,15 @@ test("uploads, maps, validates, retries correction, revalidates, and manually ad
   await expect(page.getByLabel("Unmapped source rows")).toContainText(
     "term_loan",
   );
+
+  await page.getByRole("tab", { name: "Overview" }).click();
+  await page.getByRole("tab", { name: "Financial Workspace" }).click();
+  await expect(page.getByLabel("Unmapped source rows")).toContainText("Row 9");
+  await page.reload();
+  await expect(page.getByLabel("Unmapped source rows")).toContainText(
+    "term_loan",
+  );
+  await captureEvidence(page, "financial-review-unmapped-row");
   await page.getByRole("button", { name: "Revalidate" }).click();
   await expect(page.getByText(/Validation refreshed: 1 issues/)).toBeVisible();
 
@@ -429,6 +455,7 @@ test("uploads, maps, validates, retries correction, revalidates, and manually ad
   await expect(editForm.getByLabel("Name")).toHaveValue(
     "Northstar Commercial Bank",
   );
+  await captureEvidence(page, "financial-review-recoverable-error");
   await editForm.getByRole("button", { name: "Retry" }).click();
   await expect(page.getByText(/Saved institution correction/)).toBeVisible();
   await expect(page.getByText("Northstar Commercial Bank")).toBeVisible();
@@ -463,4 +490,5 @@ test("uploads, maps, validates, retries correction, revalidates, and manually ad
     .getByRole("button", { name: "Save correction" })
     .click();
   await expect(page.getByText(/Saved covenant correction/)).toBeVisible();
+  await captureEvidence(page, "financial-review-completed-covenant");
 });

@@ -16,5 +16,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   require a non-empty reason and return refreshed validation. Cash-flow create/update contracts
   do not yet provide the same guarantees, so cash flows remain read-only in the review UI until
   the generated contracts add required reasons and refreshed-validation mutation responses.
+- Keep every financial mutation disabled while demo mode is active. Constrain account and
+  obligation statuses to generated contract values; automatic covenant compliance recalculation
+  must omit `complianceStatus` so the backend derives it from the covenant inputs.
 - Validate web changes with `pnpm --filter @aequoros/aequoros-web typecheck`, `lint`, `test`, and
   `build`; deterministic financial review journeys are in `e2e/financial-review.spec.ts`.
