@@ -21,6 +21,7 @@ from app.models import (
     FinancialObligation,
     FinancialReportingPeriod,
     LiquidityAnalysisResult,
+    RiskCase,
     RiskFinding,
     RiskFindingEvidence,
 )
@@ -772,6 +773,45 @@ def test_generic_finding_update_rejects_liquidity_workflow_findings(
         )
     assert {finding.status for finding in persisted} == {"open", "superseded"}
     assert generic_review_events == []
+
+
+def test_generic_liquidity_review_rejects_before_case_lock(
+    db_client: TestClient,
+) -> None:
+    session_factory = get_sessionmaker()
+    with session_factory() as dialect_session:
+        if dialect_session.get_bind().dialect.name != "postgresql":
+            pytest.skip("PostgreSQL row locks are required for concurrency coverage.")
+
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+    finding_id = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers()
+    ).json()["findings"][0]["id"]
+
+    with ThreadPoolExecutor(max_workers=1) as executor, session_factory() as lock_session:
+        locked_case = lock_session.scalar(
+            select(RiskCase).where(RiskCase.id == case.id).with_for_update()
+        )
+        assert locked_case is not None
+        future = executor.submit(
+            db_client.patch,
+            f"/api/v1/findings/{finding_id}",
+            headers=headers(),
+            json={"status": "acknowledged"},
+        )
+        response = future.result(timeout=1)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["message"] == (
+        "Liquidity workflow findings are read-only in the generic findings endpoint."
+    )
 
 
 def test_liquidity_rerun_supersedes_prior_scenario_findings(db_client: TestClient) -> None:

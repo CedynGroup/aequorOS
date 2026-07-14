@@ -84,6 +84,7 @@ function runList(
     caseId: "case-1",
     runs: items,
     latestSuccessfulRunId: items[0]?.id ?? null,
+    latestSuccessfulRunsByScenario: [],
     total: items.length,
     limit: 25,
     offset: 0,
@@ -641,6 +642,40 @@ describe("LiquidityTab", () => {
       });
     });
   });
+
+  it.each([
+    ["demo", "Mutation unavailable in demo mode", "Demo mode · read only"],
+    [
+      "retired-case",
+      "Liquidity mutations unavailable for retired case",
+      "Retired case · read only",
+    ],
+  ] as const)(
+    "disables every liquidity review mutation for %s workspaces",
+    async (mutationDisabledReason, alertTitle, readOnlyText) => {
+      vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(summary());
+      const review = vi.spyOn(liquidityReviewClient, "review");
+
+      renderWithQuery(
+        <LiquidityTab
+          tenant={tenant}
+          caseId="case-1"
+          mutationDisabled
+          mutationDisabledReason={mutationDisabledReason}
+        />,
+      );
+
+      expect(await screen.findByText(alertTitle)).toBeInTheDocument();
+      expect(await screen.findByText(readOnlyText)).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Acknowledge" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Dismiss" }),
+      ).not.toBeInTheDocument();
+      expect(review).not.toHaveBeenCalled();
+    },
+  );
 
   it("renders summary load errors", async () => {
     vi.spyOn(liquidityReviewClient, "summary").mockRejectedValue(

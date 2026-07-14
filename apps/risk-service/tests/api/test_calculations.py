@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from decimal import Decimal
 from typing import Any
@@ -459,6 +460,60 @@ def test_publication_establishes_repeatable_read_before_loading_run(
     assert response.status_code == 201, response.text
     assert response.json()["status"] == "succeeded"
     assert call_order[:2] == ["isolation", "load"]
+
+
+def test_publication_lock_acquisition_failure_persists_failed_run(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+
+    @contextmanager
+    def fail_lock(*_args: Any, **_kwargs: Any):
+        raise RuntimeError("publication lock unavailable")
+        yield
+
+    monkeypatch.setattr(calculations, "serialize_finding_publication", fail_lock)
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "failed"
+    assert run["error"]["code"] == "finding_publication_lock_error"
+    assert run["error"]["details"]["diagnostic"] == "publication lock unavailable"
+
+
+def test_publication_lock_cleanup_failure_preserves_successful_run(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+
+    @contextmanager
+    def fail_unlock(db: Session, *_args: Any, **_kwargs: Any):
+        yield db
+        raise RuntimeError("publication unlock unavailable")
+
+    monkeypatch.setattr(calculations, "serialize_finding_publication", fail_unlock)
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "succeeded"
+    assert run["error"] is None
+    assert run["outputs"]
 
 
 def test_rerun_after_assumption_change_versions_inputs_without_replacing_output(

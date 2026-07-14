@@ -237,7 +237,7 @@ def get_run(db: Session, ctx: TenantContext, case_id: UUID, run_id: UUID) -> Cal
     return _read_run(db, _run_or_404(db, ctx, case_id, run_id))
 
 
-def _create_and_execute(  # noqa: PLR0913
+def _create_and_execute(  # noqa: PLR0913, PLR0915
     db: Session,
     ctx: TenantContext,
     case_id: UUID,
@@ -293,107 +293,132 @@ def _create_and_execute(  # noqa: PLR0913
 
     run_id = run.id
     assembled_snapshot: dict[str, Any] | None = None
-    with serialize_finding_publication(db, ctx, case_id, scenario_id) as publication_db:
-        try:
-            _begin_repeatable_read(publication_db)
-            run = _run_or_404(publication_db, ctx, case_id, run_id)
-            snapshot, as_of_date = build_input_snapshot(
-                publication_db,
-                ctx,
-                case_id,
-                scenario_id,
-                forecast_periods,
-                as_of_date,
-            )
-            assembled_snapshot = snapshot
-            run.inputs = snapshot
-            run.input_hash = _snapshot_hash(snapshot)
-            run.as_of_date = as_of_date
-            record_event(
-                publication_db,
-                ctx,
-                event_type="calculation_run.input_snapshot_established",
-                entity_type="calculation_run",
-                entity_id=run.id,
-                details={
-                    "input_hash": run.input_hash,
-                    "input_hash_status": "established",
-                    "as_of_date": as_of_date.isoformat(),
-                    "input_schema_version": INPUT_SCHEMA_VERSION,
-                },
-            )
-            forecast_rows: list[CalculationForecastPeriod] = []
-            for value in calculate_forecast(snapshot):
-                forecast_row = CalculationForecastPeriod(
-                    organization_id=ctx.organization_id,
-                    case_id=case_id,
-                    run_id=run.id,
-                    **value.__dict__,
-                )
-                publication_db.add(forecast_row)
-                forecast_rows.append(forecast_row)
-            publication_db.flush()
+    lifecycle_persisted = False
+    try:
+        with serialize_finding_publication(db, ctx, case_id, scenario_id) as publication_db:
             try:
-                liquidity_result = calculate_liquidity_metrics(forecast_rows)
-            except ValueError as exc:
-                raise CalculationInputError(
-                    "liquidity_output_invalid",
-                    "Liquidity metrics could not be calculated from the forecast outputs.",
-                    {
-                        "forecast_outputs": [
-                            {
-                                "id": str(item.id),
-                                "period_number": item.period_number,
-                                "currency": item.currency,
-                            }
-                            for item in forecast_rows
-                        ],
-                        "diagnostic": str(exc),
-                        "corrective_action": (
-                            "Review the named forecast outputs and rerun the calculation."
-                        ),
+                _begin_repeatable_read(publication_db)
+                run = _run_or_404(publication_db, ctx, case_id, run_id)
+                snapshot, as_of_date = build_input_snapshot(
+                    publication_db,
+                    ctx,
+                    case_id,
+                    scenario_id,
+                    forecast_periods,
+                    as_of_date,
+                )
+                assembled_snapshot = snapshot
+                run.inputs = snapshot
+                run.input_hash = _snapshot_hash(snapshot)
+                run.as_of_date = as_of_date
+                record_event(
+                    publication_db,
+                    ctx,
+                    event_type="calculation_run.input_snapshot_established",
+                    entity_type="calculation_run",
+                    entity_id=run.id,
+                    details={
+                        "input_hash": run.input_hash,
+                        "input_hash_status": "established",
+                        "as_of_date": as_of_date.isoformat(),
+                        "input_schema_version": INPUT_SCHEMA_VERSION,
                     },
-                ) from exc
-            generate_liquidity_findings(
-                publication_db,
-                ctx,
-                run,
-                forecast_rows,
-                publication_locked=True,
-                result=liquidity_result,
-            )
-            run.status = "succeeded"
-            run.completed_at = datetime.now(UTC)
-            record_event(
-                publication_db,
-                ctx,
-                event_type="calculation_run.succeeded",
-                entity_type="calculation_run",
-                entity_id=run.id,
-                details={"input_hash": run.input_hash, "output_periods": forecast_periods},
-            )
-            publication_db.commit()
-        except CalculationInputError as exc:
-            _persist_failure(
-                publication_db,
-                ctx,
-                case_id,
-                run_id,
-                exc,
-                assembled_snapshot,
-            )
-        except Exception:
-            error = CalculationInputError(
-                "calculation_error",
-                "The balance-sheet forecast could not be calculated.",
-                {
-                    "corrective_action": (
-                        "Review the run inputs and retry. Contact support if it fails again."
+                )
+                forecast_rows: list[CalculationForecastPeriod] = []
+                for value in calculate_forecast(snapshot):
+                    forecast_row = CalculationForecastPeriod(
+                        organization_id=ctx.organization_id,
+                        case_id=case_id,
+                        run_id=run.id,
+                        **value.__dict__,
                     )
+                    publication_db.add(forecast_row)
+                    forecast_rows.append(forecast_row)
+                publication_db.flush()
+                try:
+                    liquidity_result = calculate_liquidity_metrics(forecast_rows)
+                except ValueError as exc:
+                    raise CalculationInputError(
+                        "liquidity_output_invalid",
+                        "Liquidity metrics could not be calculated from the forecast outputs.",
+                        {
+                            "forecast_outputs": [
+                                {
+                                    "id": str(item.id),
+                                    "period_number": item.period_number,
+                                    "currency": item.currency,
+                                }
+                                for item in forecast_rows
+                            ],
+                            "diagnostic": str(exc),
+                            "corrective_action": (
+                                "Review the named forecast outputs and rerun the calculation."
+                            ),
+                        },
+                    ) from exc
+                generate_liquidity_findings(
+                    publication_db,
+                    ctx,
+                    run,
+                    forecast_rows,
+                    publication_locked=True,
+                    result=liquidity_result,
+                )
+                run.status = "succeeded"
+                run.completed_at = datetime.now(UTC)
+                record_event(
+                    publication_db,
+                    ctx,
+                    event_type="calculation_run.succeeded",
+                    entity_type="calculation_run",
+                    entity_id=run.id,
+                    details={"input_hash": run.input_hash, "output_periods": forecast_periods},
+                )
+                publication_db.commit()
+                lifecycle_persisted = True
+            except CalculationInputError as exc:
+                _persist_failure(
+                    publication_db,
+                    ctx,
+                    case_id,
+                    run_id,
+                    exc,
+                    assembled_snapshot,
+                )
+                lifecycle_persisted = True
+            except Exception:
+                error = CalculationInputError(
+                    "calculation_error",
+                    "The balance-sheet forecast could not be calculated.",
+                    {
+                        "corrective_action": (
+                            "Review the run inputs and retry. Contact support if it fails again."
+                        )
+                    },
+                )
+                _persist_failure(
+                    publication_db,
+                    ctx,
+                    case_id,
+                    run_id,
+                    error,
+                    assembled_snapshot,
+                )
+                lifecycle_persisted = True
+    except Exception as exc:
+        if not lifecycle_persisted:
+            error = CalculationInputError(
+                "finding_publication_lock_error",
+                "Liquidity finding publication could not be serialized.",
+                {
+                    "diagnostic": str(exc),
+                    "corrective_action": (
+                        "Retry the calculation. Contact support if it fails again."
+                    ),
                 },
             )
             _persist_failure(
-                publication_db,
+                db,
                 ctx,
                 case_id,
                 run_id,

@@ -170,7 +170,12 @@ export function CaseWorkspace({
             </TabsContent>
             <TabsContent value="liquidity" className="m-0 p-3">
               <LazyTabBoundary>
-                <LiquidityTab tenant={tenant} caseId={caseId} />
+                <LiquidityTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                  mutationDisabledReason={caseRetired ? "retired-case" : "demo"}
+                />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="findings" className="m-0 p-3">

@@ -37,6 +37,20 @@ vi.mock("../findings/findings-tab", () => ({
   ),
 }));
 
+vi.mock("../liquidity/liquidity-tab", () => ({
+  LiquidityTab: ({
+    mutationDisabled,
+    mutationDisabledReason,
+  }: {
+    mutationDisabled: boolean;
+    mutationDisabledReason: string;
+  }) => (
+    <div>
+      Liquidity controls: {String(mutationDisabled)} · {mutationDisabledReason}
+    </div>
+  ),
+}));
+
 type WorkspaceProps = Parameters<typeof CaseWorkspace>[0];
 
 const tenant: TenantHeaders = {
@@ -201,6 +215,31 @@ describe("CaseWorkspace", () => {
 
     expect(
       await screen.findByText("Finding controls: true · demo"),
+    ).toBeInTheDocument();
+  });
+
+  it("retires liquidity mutations when the selected case is archived", async () => {
+    renderWorkspace({
+      activeTab: "liquidity",
+      mockCaseData: {
+        ...mockCase(DEFAULT_ORG_ID, caseId),
+        archivedAt: new Date("2026-07-14T12:00:00Z"),
+      },
+    });
+
+    expect(
+      await screen.findByText("Liquidity controls: true · retired-case"),
+    ).toBeInTheDocument();
+  });
+
+  it("disables liquidity mutations in demo mode", async () => {
+    renderWorkspace({
+      activeTab: "liquidity",
+      mockWorkspace: true,
+    });
+
+    expect(
+      await screen.findByText("Liquidity controls: true · demo"),
     ).toBeInTheDocument();
   });
 });

@@ -31,9 +31,13 @@ import { liquidityReviewClient } from "./liquidity-client";
 export function LiquidityTab({
   tenant,
   caseId,
+  mutationDisabled = false,
+  mutationDisabledReason = "demo",
 }: {
   tenant: TenantHeaders;
   caseId: string;
+  mutationDisabled?: boolean;
+  mutationDisabledReason?: "demo" | "retired-case";
 }) {
   const [scenarioId, setScenarioId] = useState("");
   const [runId, setRunId] = useState("");
@@ -188,6 +192,8 @@ export function LiquidityTab({
       caseId={caseId}
       scenarioName={selectedScenario.name}
       scenarioArchived={Boolean(selectedScenario.archivedAt)}
+      mutationDisabled={mutationDisabled}
+      mutationDisabledReason={mutationDisabledReason}
       summary={query.data}
     />
   );
@@ -274,6 +280,18 @@ export function LiquidityTab({
           </div>
         </div>
       </Panel>
+      {mutationDisabled ? (
+        mutationDisabledReason === "retired-case" ? (
+          <Alert title="Liquidity mutations unavailable for retired case">
+            Historical liquidity analysis remains available for review, but
+            archived cases cannot update findings.
+          </Alert>
+        ) : (
+          <Alert title="Mutation unavailable in demo mode">
+            Switch to live API data to review liquidity findings.
+          </Alert>
+        )
+      ) : null}
       {analysis}
     </div>
   );
@@ -284,12 +302,16 @@ function LiquidityAnalysis({
   caseId,
   scenarioName,
   scenarioArchived,
+  mutationDisabled,
+  mutationDisabledReason,
   summary,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   scenarioName: string;
   scenarioArchived: boolean;
+  mutationDisabled: boolean;
+  mutationDisabledReason: "demo" | "retired-case";
   summary: LiquiditySummaryRead;
 }) {
   return (
@@ -327,7 +349,13 @@ function LiquidityAnalysis({
               tenant={tenant}
               caseId={caseId}
               finding={finding}
-              readOnly={scenarioArchived}
+              readOnlyReason={
+                mutationDisabled
+                  ? mutationDisabledReason
+                  : scenarioArchived
+                    ? "archived-scenario"
+                    : null
+              }
             />
           ))
         ) : (
@@ -366,12 +394,12 @@ function LiquidityFindingCard({
   tenant,
   caseId,
   finding,
-  readOnly,
+  readOnlyReason,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   finding: LiquidityFindingRead;
-  readOnly: boolean;
+  readOnlyReason: "archived-scenario" | "demo" | "retired-case" | null;
 }) {
   const queryClient = useQueryClient();
   const [dismissReason, setDismissReason] = useState("");
@@ -432,7 +460,7 @@ function LiquidityFindingCard({
         </details>
       }
     >
-      {!resolved && !readOnly ? (
+      {!resolved && !readOnlyReason ? (
         <div className="grid gap-2 border-t border-[rgb(var(--border))] pt-2 md:grid-cols-[1fr_auto_auto]">
           <Input
             aria-label={`Dismissal reason for ${finding.title}`}
@@ -466,9 +494,13 @@ function LiquidityFindingCard({
             Dismiss
           </Button>
         </div>
-      ) : readOnly ? (
+      ) : readOnlyReason ? (
         <div className="border-t border-[rgb(var(--border))] pt-2 font-medium text-[rgb(var(--muted-foreground))]">
-          Archived scenario · read only
+          {readOnlyReason === "archived-scenario"
+            ? "Archived scenario · read only"
+            : readOnlyReason === "retired-case"
+              ? "Retired case · read only"
+              : "Demo mode · read only"}
         </div>
       ) : finding.dispositionReason ? (
         <div className="border-t border-[rgb(var(--border))] pt-2 text-[rgb(var(--muted-foreground))]">
