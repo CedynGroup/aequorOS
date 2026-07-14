@@ -124,7 +124,11 @@ export function CaseQueuePanel({
       {
         accessorKey: "riskScore",
         header: "Score",
-        cell: ({ row }) => row.original.riskScore ?? "n/a",
+        cell: ({ row }) => (
+          <span title={row.original.scoreRunReference ?? undefined}>
+            {row.original.riskScore ?? "n/a"}
+          </span>
+        ),
       },
       {
         accessorKey: "riskLevel",

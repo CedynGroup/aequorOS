@@ -1,6 +1,7 @@
 import type { CaseRead } from "@aequoros/risk-service-api";
 import { Loader2 } from "lucide-react";
 import { lazy, Suspense, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   Alert,
@@ -13,6 +14,7 @@ import {
   TabsTrigger,
 } from "../../components/ui";
 import type { TenantHeaders } from "../../lib/api";
+import { riskApi } from "../../lib/api";
 import type { ConsoleTab, ReportMode } from "../../lib/constants";
 import { formatJson, labelize } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
@@ -137,7 +139,12 @@ export function CaseWorkspace({
               </TabsList>
             </div>
             <TabsContent value="overview" className="m-0 p-3">
-              <OverviewTab caseData={selectedCase} />
+              <OverviewTab
+                tenant={tenant}
+                caseId={caseId}
+                caseData={selectedCase}
+                loadScores={!mockCaseData}
+              />
             </TabsContent>
             <TabsContent value="financial" className="m-0 p-3">
               <LazyTabBoundary>
@@ -262,8 +269,24 @@ function CaseSummary({ data }: { data?: CaseRead }) {
   );
 }
 
-function OverviewTab({ caseData }: { caseData?: CaseRead }) {
+function OverviewTab({
+  tenant,
+  caseId,
+  caseData,
+  loadScores,
+}: {
+  tenant: TenantHeaders;
+  caseId: string;
+  caseData?: CaseRead;
+  loadScores: boolean;
+}) {
+  const scoresQuery = useQuery({
+    queryKey: ["case-scores", tenant, caseId],
+    queryFn: () => riskApi.scores(tenant, caseId),
+    enabled: loadScores && caseData?.riskScore != null,
+  });
   if (!caseData) return <Skeleton className="h-52" />;
+  const latestScore = scoresQuery.data?.[0];
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <InfoBlock title="Workflow">
@@ -285,6 +308,12 @@ function OverviewTab({ caseData }: { caseData?: CaseRead }) {
           label="Scoring version"
           value={caseData.scoringVersion ?? "None"}
         />
+        {caseData.riskScore != null ? (
+          <KeyValue
+            label="Assessment run"
+            value={latestScore?.runReference ?? "Reference unavailable"}
+          />
+        ) : null}
         <KeyValue label="Decision" value={labelize(caseData.decision)} />
       </InfoBlock>
       <InfoBlock title="Metadata">

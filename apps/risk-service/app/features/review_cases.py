@@ -12,7 +12,7 @@ from app.domain.risk_constants import (
     CaseStatus,
     RiskLevel,
 )
-from app.models import RiskCase, RiskScore
+from app.models import RiskCase
 from app.schemas.cases import (
     CaseAssign,
     CaseCreate,
@@ -23,6 +23,7 @@ from app.schemas.cases import (
     ScoreRead,
 )
 from app.services import cases as cases_service
+from app.services.assessment_references import assessment_run_references
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -109,8 +110,24 @@ def assign_case(case_id: UUID, payload: CaseAssign, db: DbSession, ctx: Tenant) 
 
 
 @router.get("/{case_id}/scores", response_model=list[ScoreRead])
-def list_case_scores(case_id: UUID, db: DbSession, ctx: Tenant) -> list[RiskScore]:
-    return cases_service.list_case_scores(db, ctx, case_id)
+def list_case_scores(case_id: UUID, db: DbSession, ctx: Tenant) -> list[ScoreRead]:
+    scores = cases_service.list_case_scores(db, ctx, case_id)
+    references = assessment_run_references(
+        db,
+        ctx.organization_id,
+        {score.run_id for score in scores if score.run_id is not None},
+    )
+    return [
+        ScoreRead.model_validate(
+            {
+                **score.__dict__,
+                "run_reference": references.get(score.run_id)
+                if score.run_id is not None
+                else None,
+            }
+        )
+        for score in scores
+    ]
 
 
 @router.post("/{case_id}/archive", response_model=CaseRead)

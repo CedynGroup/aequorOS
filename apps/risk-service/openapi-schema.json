@@ -1946,6 +1946,17 @@
             ],
             "title": "Risk Score"
           },
+          "score_run_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Run Reference"
+          },
           "status": {
             "$ref": "#/components/schemas/CaseStatus"
           },
@@ -1993,6 +2004,7 @@
           "assignee_display_name",
           "assignee_email",
           "risk_score",
+          "score_run_reference",
           "risk_level",
           "decision",
           "findings_count",
@@ -7838,6 +7850,17 @@
             ],
             "title": "Run Id"
           },
+          "run_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Reference"
+          },
           "score": {
             "title": "Score",
             "type": "integer"
@@ -7853,6 +7876,7 @@
           "case_id",
           "assessment_id",
           "run_id",
+          "run_reference",
           "score",
           "risk_level",
           "scoring_version",

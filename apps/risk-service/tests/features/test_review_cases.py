@@ -437,9 +437,19 @@ def test_case_queue_filters_sorting_and_pagination(db_client: TestClient) -> Non
     assert response.status_code == 200
     assert response.json()[0]["score"] == 45
     assert response.json()[0]["risk_level"] == "medium"
+    assert_run_reference(
+        db_client,
+        response.json()[0]["run_id"],
+        response.json()[0]["run_reference"],
+        response.json()[0]["created_at"],
+    )
     assert response.json()[0]["input_snapshot"] == {
         "structured_data": {"vendor_criticality": "critical"}
     }
+
+    queue = db_client.get("/api/v1/cases?q=Beta", headers=headers())
+    assert queue.status_code == 200
+    assert queue.json()["items"][0]["score_run_reference"] == response.json()[0]["run_reference"]
 
     response = db_client.get(f"/api/v1/cases/{active_case_id}/scores", headers=headers(ORG_2))
     assert response.status_code == 404

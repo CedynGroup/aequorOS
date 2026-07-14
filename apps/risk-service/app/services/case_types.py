@@ -95,6 +95,7 @@ class CaseQueueItem:
     open_findings_count: int
     assignee_display_name: str | None
     assignee_email: str | None
+    score_run_reference: str | None
 
 
 @dataclass(frozen=True)

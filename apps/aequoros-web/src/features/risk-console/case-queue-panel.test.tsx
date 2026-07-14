@@ -66,6 +66,10 @@ describe("CaseQueuePanel", () => {
     expect(screen.getByText("In Review")).toBeInTheDocument();
     expect(screen.getByText("High")).toBeInTheDocument();
     expect(screen.getByText("Needs More Info")).toBeInTheDocument();
+    expect(screen.getByText("82")).toHaveAttribute(
+      "title",
+      expect.stringMatching(/^Demo score \d{4}-\d{2}-\d{2} run 1$/),
+    );
   });
 
   it("sends search filter changes back to route search state", () => {

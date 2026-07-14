@@ -15,7 +15,7 @@ from app.api.deps import TenantContext
 from app.domain.risk_constants import CaseStatus
 from app.models import RiskAssessment, RiskFinding, RiskScore
 from app.schemas.common import JsonObject, JsonValue
-from app.services.assessments import assessment_run_references
+from app.services.assessment_references import assessment_run_references
 from app.services.cases import get_case_or_404, list_case_decisions, user_display_names
 
 UUID_PATTERN = re.compile(

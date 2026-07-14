@@ -76,6 +76,8 @@ import {
   ScenarioValidationReadFromJSON,
   type ScenarioWorkspaceRead,
   ScenarioWorkspaceReadFromJSON,
+  type ScoreRead,
+  ScoreReadFromJSON,
   type UploadRequest,
   type UploadRequestResponse,
   UploadRequestResponseFromJSON,
@@ -201,6 +203,11 @@ export const riskApi = {
   },
   getCase(tenant: TenantHeaders, caseId: string) {
     return apiJson<CaseRead>(`/cases/${caseId}`, tenant, CaseReadFromJSON);
+  },
+  scores(tenant: TenantHeaders, caseId: string) {
+    return apiJson<ScoreRead[]>(`/cases/${caseId}/scores`, tenant, (json) =>
+      (json as unknown[]).map(ScoreReadFromJSON),
+    );
   },
   caseTaxonomy(tenant: TenantHeaders) {
     return apiJson<CaseTaxonomyRead>(

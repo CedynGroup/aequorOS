@@ -162,6 +162,7 @@ class CaseQueueItemRead(BaseModel):
     assignee_display_name: str | None
     assignee_email: str | None
     risk_score: int | None
+    score_run_reference: str | None
     risk_level: RiskLevel | None
     decision: CaseDecision | None
     findings_count: int
@@ -184,6 +185,7 @@ class CaseQueueItemRead(BaseModel):
             assignee_display_name=item.assignee_display_name,
             assignee_email=item.assignee_email,
             risk_score=case.risk_score,
+            score_run_reference=item.score_run_reference,
             risk_level=RiskLevel(case.risk_level) if case.risk_level is not None else None,
             decision=CaseDecision(case.decision) if case.decision is not None else None,
             findings_count=item.findings_count,
@@ -291,6 +293,7 @@ class ScoreRead(BaseModel):
     case_id: UUID
     assessment_id: UUID | None
     run_id: UUID | None
+    run_reference: str | None
     score: int
     risk_level: RiskLevel
     scoring_version: str

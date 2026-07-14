@@ -131,6 +131,41 @@ describe("CaseWorkspace", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the assessment reference beside a live case score", async () => {
+    vi.spyOn(riskApi, "scores").mockResolvedValue([
+      {
+        id: "score-1",
+        organizationId: DEFAULT_ORG_ID,
+        caseId,
+        assessmentId: "assessment-1",
+        runId: "run-1",
+        runReference: "Score 2026-07-14 run 2",
+        score: 82,
+        riskLevel: "high",
+        scoringVersion: "demo-v1",
+        inputHash: "a".repeat(64),
+        inputSnapshot: {},
+        ruleResults: [],
+        createdAt: new Date("2026-07-14T12:00:00Z"),
+      },
+    ]);
+    const caseData = mockCase(DEFAULT_ORG_ID, caseId);
+
+    renderWorkspace({
+      mockCaseData: undefined,
+      caseQuery: {
+        data: caseData,
+        error: null,
+        isError: false,
+        isFetching: false,
+      },
+    });
+
+    expect(
+      await screen.findByText("Score 2026-07-14 run 2"),
+    ).toBeInTheDocument();
+  });
+
   it("keeps analysis verticals in case-detail tabs rather than workflow navigation", () => {
     renderWorkspace();
 
@@ -211,7 +246,9 @@ describe("CaseWorkspace", () => {
 
     renderWorkspace({ activeTab: "decisions" });
 
-    expect(await screen.findByText("Decided by Ama Mensah")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Decided by Ama Mensah"),
+    ).toBeInTheDocument();
     expect(screen.queryByText(DEFAULT_USER_ID)).not.toBeInTheDocument();
   });
 

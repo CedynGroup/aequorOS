@@ -192,6 +192,7 @@ function mockQueueItem(
     assigneeDisplayName: "Demo Analyst",
     assigneeEmail: "analyst@aequoros.local",
     riskScore,
+    scoreRunReference: `Demo score ${new Date(updatedTime).toISOString().slice(0, 10)} run 1`,
     riskLevel,
     decision,
     findingsCount: openFindingsCount + 1,

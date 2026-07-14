@@ -35,5 +35,6 @@ def test_uuid_redaction_covers_underscore_adjacent_keys_and_values() -> None:
     key, value = next(iter(sanitized.items()))
     assert key.startswith("finding_[internal identifier alias ")
     assert value == "evidence_[internal identifier redacted]_source"
+    assert isinstance(value, str)
     assert UUID_PATTERN.search(key) is None
     assert UUID_PATTERN.search(value) is None
