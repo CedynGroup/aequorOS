@@ -297,6 +297,25 @@ describe("CalculationsTab", () => {
     expect(riskApi.calculationRun).not.toHaveBeenCalled();
   });
 
+  it.each([
+    "calculation-run-not-a-uuid-forecast-period-1",
+    `calculation-run-${run().id}-forecast-period-0`,
+    `calculation-run-${run().id}-forecast-period-1.5`,
+    `calculation-run-${run().id}-forecast-period-invalid`,
+  ])("ignores malformed calculation evidence fragment %s", async (target) => {
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+
+    expect(await screen.findByText("No calculation runs")).toBeInTheDocument();
+    expect(riskApi.calculationRun).not.toHaveBeenCalled();
+  });
+
   it("shows the empty state then starts and renders a successful forecast", async () => {
     const user = userEvent.setup();
     vi.spyOn(riskApi, "calculationRuns")
