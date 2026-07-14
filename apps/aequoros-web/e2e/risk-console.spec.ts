@@ -289,11 +289,17 @@ test("reviews liquidity metrics, evidence, finding status, and tenant isolation"
     },
   );
   expect(run.ok()).toBe(true);
-  expect((await run.json()).status).toBe("succeeded");
+  const runPayload = await run.json();
+  expect(runPayload.status).toBe("succeeded");
 
   const console = new RiskConsolePage(page);
   await console.gotoSelectedCase("liquidity");
   await expect(page.getByText("Liquidity risk summary")).toBeVisible();
+  await expect(page.getByLabel("Liquidity scenario")).toBeVisible();
+  await expect(page.getByLabel("Liquidity forecast run")).toBeVisible();
+  await expect(
+    page.getByText(new RegExp(`run ${runPayload.id.slice(0, 8)}`)),
+  ).toBeVisible();
   await expect(page.getByText("Minimum cash balance")).toBeVisible();
   await expect(page.getByText(/Supporting evidence \(/).first()).toBeVisible();
   await page

@@ -14,6 +14,7 @@ export interface LiquidityReviewClient {
     tenant: TenantHeaders,
     caseId: string,
     scenarioId?: string,
+    runId?: string,
   ): Promise<LiquiditySummaryRead>;
   review(
     tenant: TenantHeaders,
@@ -29,12 +30,13 @@ function generatedLiquidityApi() {
 }
 
 export const liquidityReviewClient: LiquidityReviewClient = {
-  summary(tenant, caseId, scenarioId) {
+  summary(tenant, caseId, scenarioId, runId) {
     return generatedLiquidityApi().getLiquiditySummary({
       caseId,
       xOrgId: tenant.orgId,
       xUserId: tenant.userId,
       scenarioId,
+      runId,
     });
   },
   review(tenant, caseId, findingId, payload) {

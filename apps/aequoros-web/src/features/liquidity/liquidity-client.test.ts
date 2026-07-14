@@ -27,11 +27,18 @@ describe("liquidityReviewClient", () => {
       ),
     );
 
-    const summary = await liquidityReviewClient.summary(tenant, "case-1");
+    const summary = await liquidityReviewClient.summary(
+      tenant,
+      "case-1",
+      "scenario-1",
+      "run-1",
+    );
 
     expect(summary.status).toBe("not_calculated");
     const [url, request] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("/api/v1/cases/case-1/liquidity/summary");
+    expect(String(url)).toContain("scenario_id=scenario-1");
+    expect(String(url)).toContain("run_id=run-1");
     expect(new Headers(request?.headers).get("X-Org-Id")).toBe(DEFAULT_ORG_ID);
     expect(new Headers(request?.headers).get("X-User-Id")).toBe(
       DEFAULT_USER_ID,

@@ -1,12 +1,16 @@
 import type {
+  CalculationRunListRead,
+  CalculationRunSummaryRead,
   LiquidityFindingRead,
   LiquiditySummaryRead,
+  ScenarioRead,
+  ScenarioWorkspaceRead,
 } from "@aequoros/risk-service-api";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { TenantHeaders } from "../../lib/api";
+import { riskApi, type TenantHeaders } from "../../lib/api";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
 import { liquidityReviewClient } from "./liquidity-client";
@@ -16,6 +20,75 @@ const tenant: TenantHeaders = {
   orgId: DEFAULT_ORG_ID,
   userId: DEFAULT_USER_ID,
 };
+const now = new Date("2026-07-13T12:00:00Z");
+
+function scenario(id = "scenario-1", name = "Baseline"): ScenarioRead {
+  return {
+    id,
+    organizationId: tenant.orgId,
+    caseId: "case-1",
+    name,
+    description: null,
+    scenarioType: "baseline",
+    copiedFromScenarioId: null,
+    createdBy: tenant.userId,
+    archivedAt: null,
+    createdAt: now,
+    updatedAt: now,
+    assumptions: [],
+  };
+}
+
+function scenarioWorkspace(
+  items: ScenarioRead[] = [scenario()],
+): ScenarioWorkspaceRead {
+  return {
+    caseId: "case-1",
+    scenarios: items,
+    readiness: {
+      caseId: "case-1",
+      ready: true,
+      scenarioCount: items.length,
+      completeScenarioCount: items.length,
+      incompleteScenarioIds: [],
+    },
+  };
+}
+
+function run(
+  id = "run-1",
+  scenarioId = "scenario-1",
+  createdAt = now,
+): CalculationRunSummaryRead {
+  return {
+    id,
+    scenarioId,
+    rerunOfRunId: null,
+    status: "succeeded",
+    engineVersion: "balance-sheet-v1.0.0",
+    inputHash: "a".repeat(64),
+    forecastPeriods: 3,
+    asOfDate: new Date("2026-07-13T00:00:00Z"),
+    startedAt: createdAt,
+    completedAt: createdAt,
+    error: null,
+    createdAt,
+  };
+}
+
+function runList(
+  items: CalculationRunSummaryRead[] = [run()],
+): CalculationRunListRead {
+  return {
+    caseId: "case-1",
+    runs: items,
+    latestSuccessfulRunId: items[0]?.id ?? null,
+    total: items.length,
+    limit: 25,
+    offset: 0,
+    hasMore: false,
+  };
+}
 
 function finding(
   overrides: Partial<LiquidityFindingRead> = {},
@@ -77,7 +150,17 @@ function summary(
 }
 
 describe("LiquidityTab", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    Object.defineProperties(Element.prototype, {
+      hasPointerCapture: { configurable: true, value: () => false },
+      releasePointerCapture: { configurable: true, value: () => undefined },
+      scrollIntoView: { configurable: true, value: () => undefined },
+      setPointerCapture: { configurable: true, value: () => undefined },
+    });
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(scenarioWorkspace());
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+  });
 
   it("renders explicit loading and empty states", async () => {
     vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue({
@@ -111,6 +194,7 @@ describe("LiquidityTab", () => {
     expect(
       await screen.findByText("Liquidity risk summary"),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Baseline · run run-1/)).toBeInTheDocument();
     expect(screen.getByText("-$500")).toBeInTheDocument();
     expect(
       screen.getByText("Thin liquidity sources coverage"),
@@ -122,6 +206,71 @@ describe("LiquidityTab", () => {
       "href",
       "/cases/case-1?tab=calculations#calculation-run-run-1-forecast-period-1",
     );
+  });
+
+  it("selects an explicit scenario and run and scopes the summary", async () => {
+    const user = userEvent.setup();
+    const olderRun = run(
+      "run-older",
+      "scenario-1",
+      new Date("2026-07-12T12:00:00Z"),
+    );
+    const downsideRun = run("run-2", "scenario-2");
+    vi.mocked(riskApi.scenarios).mockResolvedValue(
+      scenarioWorkspace([scenario(), scenario("scenario-2", "Downside")]),
+    );
+    vi.mocked(riskApi.calculationRuns).mockImplementation(
+      (_tenant, _caseId, requestedScenarioId) =>
+        Promise.resolve(
+          requestedScenarioId === "scenario-2"
+            ? runList([downsideRun])
+            : runList([run(), olderRun]),
+        ),
+    );
+    const loadSummary = vi
+      .spyOn(liquidityReviewClient, "summary")
+      .mockImplementation(
+        (_tenant, _caseId, requestedScenarioId, requestedRunId) =>
+          Promise.resolve(
+            summary({
+              scenarioId: requestedScenarioId,
+              calculationRunId: requestedRunId,
+            }),
+          ),
+      );
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    await waitFor(() =>
+      expect(loadSummary).toHaveBeenCalledWith(
+        tenant,
+        "case-1",
+        "scenario-1",
+        "run-1",
+      ),
+    );
+    await user.click(screen.getByLabelText("Liquidity forecast run"));
+    await user.click(await screen.findByRole("option", { name: /run-older/ }));
+    await waitFor(() =>
+      expect(loadSummary).toHaveBeenCalledWith(
+        tenant,
+        "case-1",
+        "scenario-1",
+        "run-older",
+      ),
+    );
+
+    await user.click(screen.getByLabelText("Liquidity scenario"));
+    await user.click(await screen.findByRole("option", { name: "Downside" }));
+    await waitFor(() =>
+      expect(loadSummary).toHaveBeenCalledWith(
+        tenant,
+        "case-1",
+        "scenario-2",
+        "run-2",
+      ),
+    );
+    expect(screen.getByText(/Downside · run run-2/)).toBeInTheDocument();
   });
 
   it("acknowledges and dismisses findings with explicit mutation states", async () => {

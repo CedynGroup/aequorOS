@@ -2,14 +2,26 @@ import type {
   LiquidityFindingRead,
   LiquidityMetricRead,
   LiquidityReviewAction,
+  LiquiditySummaryRead,
 } from "@aequoros/risk-service-api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { Alert, Button, Input, Label, Skeleton } from "../../components/ui";
-import type { TenantHeaders } from "../../lib/api";
+import {
+  Alert,
+  Button,
+  Input,
+  Label,
+  Panel,
+  PanelHeader,
+  Select,
+  SelectItem,
+  Skeleton,
+} from "../../components/ui";
+import { riskApi, type TenantHeaders } from "../../lib/api";
+import { truncateId } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { FindingReviewCard } from "../findings/finding-review-card";
 import { liquidityReviewClient } from "./liquidity-client";
@@ -21,12 +33,52 @@ export function LiquidityTab({
   tenant: TenantHeaders;
   caseId: string;
 }) {
+  const [scenarioId, setScenarioId] = useState("");
+  const [runId, setRunId] = useState("");
+  const scenarios = useQuery({
+    queryKey: ["scenarios", tenant, caseId],
+    queryFn: () => riskApi.scenarios(tenant, caseId),
+  });
+  const availableScenarios = scenarios.data?.scenarios ?? [];
+  const selectedScenario =
+    availableScenarios.find((scenario) => scenario.id === scenarioId) ??
+    availableScenarios[0];
+  const runs = useQuery({
+    queryKey: ["calculation-runs", tenant, caseId, selectedScenario?.id],
+    queryFn: () =>
+      riskApi.calculationRuns(tenant, caseId, selectedScenario?.id),
+    enabled: Boolean(selectedScenario),
+  });
+  const successfulRuns =
+    runs.data?.runs.filter((run) => run.status === "succeeded") ?? [];
+  const selectedRun =
+    successfulRuns.find((run) => run.id === runId) ??
+    successfulRuns.find((run) => run.id === runs.data?.latestSuccessfulRunId) ??
+    successfulRuns[0];
   const query = useQuery({
-    queryKey: ["liquidity-summary", tenant, caseId],
-    queryFn: () => liquidityReviewClient.summary(tenant, caseId),
+    queryKey: [
+      "liquidity-summary",
+      tenant,
+      caseId,
+      selectedScenario?.id,
+      selectedRun?.id,
+    ],
+    queryFn: () =>
+      liquidityReviewClient.summary(
+        tenant,
+        caseId,
+        selectedScenario?.id,
+        selectedRun?.id,
+      ),
+    enabled: Boolean(selectedScenario && selectedRun),
   });
 
-  if (query.isLoading) {
+  useEffect(() => {
+    setScenarioId("");
+    setRunId("");
+  }, [caseId, tenant.orgId]);
+
+  if (scenarios.isLoading) {
     return (
       <div aria-label="Loading liquidity analysis" className="space-y-3">
         <Skeleton className="h-24" />
@@ -34,32 +86,133 @@ export function LiquidityTab({
       </div>
     );
   }
-  if (query.error) return <ErrorPanel error={query.error} />;
-  if (!query.data || query.data.status === "not_calculated") {
+  if (scenarios.error) return <ErrorPanel error={scenarios.error} />;
+  if (!selectedScenario) {
     return (
       <Alert title="No liquidity analysis">
-        Run a successful balance-sheet forecast to calculate liquidity metrics
-        and findings.
+        Initialize a scenario and run a successful balance-sheet forecast to
+        calculate liquidity metrics and findings.
       </Alert>
     );
   }
 
+  const selectScenario = (value: string) => {
+    setScenarioId(value);
+    setRunId("");
+  };
+
+  const analysis = runs.isLoading ? (
+    <div aria-label="Loading liquidity analysis" className="space-y-3">
+      <Skeleton className="h-24" />
+      <Skeleton className="h-52" />
+    </div>
+  ) : runs.error ? (
+    <ErrorPanel error={runs.error} />
+  ) : !selectedRun ? (
+    <Alert title="No liquidity analysis">
+      Run a successful balance-sheet forecast for {selectedScenario.name} to
+      calculate liquidity metrics and findings.
+    </Alert>
+  ) : query.isLoading ? (
+    <div aria-label="Loading liquidity analysis" className="space-y-3">
+      <Skeleton className="h-24" />
+      <Skeleton className="h-52" />
+    </div>
+  ) : query.error ? (
+    <ErrorPanel error={query.error} />
+  ) : !query.data || query.data.status === "not_calculated" ? (
+    <Alert title="No liquidity analysis">
+      Run a successful balance-sheet forecast to calculate liquidity metrics and
+      findings.
+    </Alert>
+  ) : (
+    <LiquidityAnalysis
+      tenant={tenant}
+      caseId={caseId}
+      scenarioName={selectedScenario.name}
+      summary={query.data}
+    />
+  );
+
+  return (
+    <div className="space-y-4">
+      <Panel>
+        <PanelHeader
+          title="Liquidity analysis context"
+          meta="Choose the scenario and successful forecast run to review"
+        />
+        <div className="grid gap-3 p-3 sm:grid-cols-2">
+          <div>
+            <Label>Scenario</Label>
+            <Select
+              ariaLabel="Liquidity scenario"
+              value={selectedScenario.id}
+              onValueChange={selectScenario}
+              placeholder="Choose a scenario"
+            >
+              {availableScenarios.map((scenario) => (
+                <SelectItem key={scenario.id} value={scenario.id}>
+                  {scenario.name}
+                </SelectItem>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label>Run</Label>
+            {selectedRun ? (
+              <Select
+                ariaLabel="Liquidity forecast run"
+                value={selectedRun.id}
+                onValueChange={setRunId}
+                placeholder="Choose a successful run"
+              >
+                {successfulRuns.map((run) => (
+                  <SelectItem key={run.id} value={run.id}>
+                    {truncateId(run.id)} · {run.createdAt.toLocaleString()}
+                  </SelectItem>
+                ))}
+              </Select>
+            ) : (
+              <span className="block h-8 pt-1.5 text-sm text-[rgb(var(--muted-foreground))]">
+                No successful runs
+              </span>
+            )}
+          </div>
+        </div>
+      </Panel>
+      {analysis}
+    </div>
+  );
+}
+
+function LiquidityAnalysis({
+  tenant,
+  caseId,
+  scenarioName,
+  summary,
+}: {
+  tenant: TenantHeaders;
+  caseId: string;
+  scenarioName: string;
+  summary: LiquiditySummaryRead;
+}) {
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Liquidity risk summary</h2>
           <p className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
-            Forecast input {query.data.calculationInputHash?.slice(0, 12)} · as
-            of {formatDate(query.data.asOfDate)}
+            {scenarioName} · run {truncateId(summary.calculationRunId ?? "")} ·
+            forecast input {summary.calculationInputHash?.slice(0, 12)} · as of{" "}
+            {formatDate(summary.asOfDate)}
           </p>
         </div>
         <span className="text-xs text-[rgb(var(--muted-foreground))]">
-          {query.data.findings.length} findings
+          {summary.findings.length} findings
         </span>
       </header>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-        {query.data.metrics.map((metric) => (
+        {summary.metrics.map((metric) => (
           <MetricCard key={metric.key} metric={metric} />
         ))}
       </div>
@@ -68,8 +221,8 @@ export function LiquidityTab({
         className="space-y-2"
       >
         <Label id="liquidity-findings-heading">Liquidity findings</Label>
-        {query.data.findings.length ? (
-          query.data.findings.map((finding) => (
+        {summary.findings.length ? (
+          summary.findings.map((finding) => (
             <LiquidityFindingCard
               key={finding.id}
               tenant={tenant}
