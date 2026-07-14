@@ -1,5 +1,6 @@
 import type {
   CalculationRunListRead,
+  CalculationStatus,
   CaseDecision,
   FinancialDataWorkspaceRead,
   FindingRead,
@@ -13,6 +14,7 @@ import { Skeleton } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import type { ConsoleTab } from "../../lib/constants";
 import { cn, labelize } from "../../lib/utils";
+import type { MockCaseHealthData } from "../demo-data/demo-data";
 
 type HealthTone = "danger" | "muted" | "success" | "warning";
 
@@ -20,28 +22,40 @@ export function CaseHealthHeader({
   tenant,
   caseId,
   decision,
+  demoData,
   onNavigate,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   decision: CaseDecision | null | undefined;
+  demoData?: MockCaseHealthData;
   onNavigate: (tab: ConsoleTab) => void;
 }) {
   const financial = useQuery({
     queryKey: ["financial-workspace", tenant, caseId],
     queryFn: () => riskApi.financialWorkspace(tenant, caseId),
+    enabled: !demoData,
   });
   const scenarios = useQuery({
     queryKey: ["scenarios", tenant, caseId, false],
     queryFn: () => riskApi.scenarios(tenant, caseId, false),
+    enabled: !demoData,
   });
   const runs = useQuery({
     queryKey: ["calculation-runs", tenant, caseId, 0],
     queryFn: () => riskApi.calculationRuns(tenant, caseId),
+    enabled: !demoData,
+    refetchInterval: (query) =>
+      query.state.data?.runs.some((run) =>
+        (["queued", "running"] as CalculationStatus[]).includes(run.status),
+      )
+        ? 1000
+        : false,
   });
   const findings = useQuery({
     queryKey: ["findings", tenant, caseId],
     queryFn: () => riskApi.findings(tenant, caseId),
+    enabled: !demoData,
   });
 
   return (
@@ -51,23 +65,39 @@ export function CaseHealthHeader({
       className="grid min-w-0 grid-cols-2 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] sm:grid-cols-3 xl:grid-cols-6"
     >
       <HealthLink label="Validation" tab="financial" onNavigate={onNavigate}>
-        <QueryState query={financial} render={validationState} />
+        <QueryState
+          query={financial}
+          data={demoData?.financial}
+          render={validationState}
+        />
       </HealthLink>
       <HealthLink label="Scenarios" tab="scenarios" onNavigate={onNavigate}>
-        <QueryState query={scenarios} render={scenarioState} />
+        <QueryState
+          query={scenarios}
+          data={demoData?.scenarios}
+          render={scenarioState}
+        />
       </HealthLink>
       <HealthLink
         label="Latest forecast"
         tab="calculations"
         onNavigate={onNavigate}
       >
-        <QueryState query={runs} render={runState} />
+        <QueryState query={runs} data={demoData?.runs} render={runState} />
       </HealthLink>
       <HealthLink label="Findings" tab="findings" onNavigate={onNavigate}>
-        <QueryState query={findings} render={findingState} />
+        <QueryState
+          query={findings}
+          data={demoData?.findings}
+          render={findingState}
+        />
       </HealthLink>
       <HealthLink label="Covenants" tab="financial" onNavigate={onNavigate}>
-        <QueryState query={financial} render={covenantState} />
+        <QueryState
+          query={financial}
+          data={demoData?.financial}
+          render={covenantState}
+        />
       </HealthLink>
       <HealthLink label="Decision" tab="decisions" onNavigate={onNavigate}>
         {decision === undefined ? (
@@ -115,11 +145,14 @@ function HealthLink({
 
 function QueryState<T>({
   query,
+  data,
   render,
 }: {
   query: { data?: T; isError: boolean; isLoading: boolean };
+  data?: T;
   render: (data: T) => ReactNode;
 }) {
+  if (data) return render(data);
   if (query.isLoading) return <HealthSkeleton />;
   if (query.isError || !query.data)
     return <HealthValue tone="muted">Unknown</HealthValue>;

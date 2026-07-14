@@ -249,7 +249,10 @@ describe("CaseWorkspace", () => {
           activeTab={activeTab}
           reportMode="json"
           updateSearch={(next) => {
-            if (next.tab) setActiveTab(next.tab);
+            if (next.tab) {
+              const tab = next.tab;
+              window.setTimeout(() => setActiveTab(tab), 25);
+            }
           }}
           caseQuery={{
             data: undefined,

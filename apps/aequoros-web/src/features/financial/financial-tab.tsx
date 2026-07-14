@@ -6,7 +6,7 @@ import { Fragment, useRef, useState } from "react";
 import { Alert, Button, Input, Label, Skeleton } from "../../components/ui";
 import type { TenantHeaders } from "../../lib/api";
 import { ErrorPanel } from "../../shared/route-ui";
-import { emptyWorkspace } from "../demo-data/demo-data";
+import { mockCaseHealth } from "../demo-data/demo-data";
 import {
   financialErrorMessage,
   financialReviewClient,
@@ -31,10 +31,11 @@ export function FinancialTab({
   const query = useQuery({
     queryKey,
     queryFn: () => financialReviewClient.workspace(tenant, caseId),
+    enabled: !mockWorkspace,
   });
-  const workspace =
-    query.data ??
-    (mockWorkspace ? emptyWorkspace(tenant.orgId, caseId) : undefined);
+  const workspace = mockWorkspace
+    ? mockCaseHealth(tenant.orgId, caseId).financial
+    : query.data;
   const workspaceIdentity = JSON.stringify([
     tenant.orgId,
     tenant.userId,
