@@ -567,15 +567,13 @@ def get_summary(
                 RiskFinding.case_id == case_id,
                 RiskFinding.risk_type == RISK_TYPE,
                 RiskFinding.source == "deterministic_rule",
+                RiskFinding.details["liquidity"]["workflow_id"].as_string() == WORKFLOW_ID,
+                RiskFinding.details["liquidity"]["calculation_run_id"].as_string() == str(run.id),
             )
             .order_by(RiskFinding.created_at.desc(), RiskFinding.id.desc())
         )
     )
-    findings = [
-        _finding_read(db, ctx, item)
-        for item in finding_rows
-        if item.details.get("liquidity", {}).get("calculation_run_id") == str(run.id)
-    ]
+    findings = [_finding_read(db, ctx, item) for item in finding_rows]
     severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     findings.sort(key=lambda item: severity_rank[item.severity])
     return LiquiditySummaryRead(

@@ -627,9 +627,11 @@ def test_postgres_migrations_create_liquidity_analysis_results_with_rls(
 ) -> None:
     tables = {"liquidity_analysis_results"}
     assert migrated_postgres_schema.tables(tables) == tables
-    assert migrated_postgres_schema.indexes({"ix_liquidity_analysis_results_case_id"}) == {
-        "ix_liquidity_analysis_results_case_id"
+    indexes = {
+        "ix_liquidity_analysis_results_case_id",
+        "ix_risk_findings_liquidity_calculation_run",
     }
+    assert migrated_postgres_schema.indexes(indexes) == indexes
     assert migrated_postgres_schema.policies(tables) == {
         "liquidity_analysis_results_tenant_isolation"
     }

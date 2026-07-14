@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
-from sqlalchemy import create_engine, delete, select
+from sqlalchemy import create_engine, delete, event, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import TenantContext
@@ -936,6 +936,7 @@ def test_liquidity_summary_ranks_findings_by_severity(db_client: TestClient) -> 
                     rule_version="liquidity-v1.0.0",
                     details={
                         "liquidity": {
+                            "workflow_id": "liquidity_analysis",
                             "calculation_run_id": run["id"],
                             "scenario_id": scenario["id"],
                             "input_hash": run["input_hash"],
@@ -953,6 +954,43 @@ def test_liquidity_summary_ranks_findings_by_severity(db_client: TestClient) -> 
     assert [rank[item["severity"]] for item in findings] == sorted(
         rank[item["severity"]] for item in findings
     )
+
+
+def test_liquidity_summary_loads_only_findings_for_selected_run(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    first = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+    second = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs/{first['id']}/rerun",
+        headers=headers(),
+        json={},
+    ).json()
+    loaded_run_ids: list[str | None] = []
+
+    def observe_finding_load(finding: RiskFinding, _context: object) -> None:
+        loaded_run_ids.append(finding.details.get("liquidity", {}).get("calculation_run_id"))
+
+    event.listen(RiskFinding, "load", observe_finding_load)
+    try:
+        response = db_client.get(
+            f"/api/v1/cases/{case.id}/liquidity/summary",
+            headers=headers(),
+            params={"run_id": first["id"]},
+        )
+    finally:
+        event.remove(RiskFinding, "load", observe_finding_load)
+
+    assert response.status_code == 200, response.text
+    assert loaded_run_ids
+    assert set(loaded_run_ids) == {first["id"]}
+    assert second["id"] not in loaded_run_ids
 
 
 def test_concurrent_publication_keeps_only_newest_run_findings(

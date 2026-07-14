@@ -17,6 +17,7 @@ depends_on = None
 
 TENANT_ID_EXPR = "nullif(current_setting('app.organization_id', true), '')::uuid"
 TABLE = "liquidity_analysis_results"
+FINDING_RUN_INDEX = "ix_risk_findings_liquidity_calculation_run"
 
 
 def upgrade() -> None:
@@ -38,6 +39,19 @@ def upgrade() -> None:
         sa.UniqueConstraint("run_id", name="uq_liquidity_analysis_results_run_id"),
     )
     op.create_index("ix_liquidity_analysis_results_case_id", TABLE, ["case_id"])
+    op.execute(
+        f"""
+        CREATE INDEX {FINDING_RUN_INDEX}
+        ON risk_findings (
+            organization_id,
+            case_id,
+            ((details -> 'liquidity' ->> 'calculation_run_id'))
+        )
+        WHERE risk_type = 'liquidity_risk'
+          AND source = 'deterministic_rule'
+          AND details -> 'liquidity' ->> 'workflow_id' = 'liquidity_analysis'
+        """
+    )
     op.execute(f"ALTER TABLE {TABLE} ENABLE ROW LEVEL SECURITY")
     op.execute(f"ALTER TABLE {TABLE} FORCE ROW LEVEL SECURITY")
     op.execute(
@@ -54,4 +68,5 @@ def downgrade() -> None:
     op.execute(f"DROP POLICY IF EXISTS {TABLE}_tenant_isolation ON {TABLE}")
     op.execute(f"ALTER TABLE {TABLE} NO FORCE ROW LEVEL SECURITY")
     op.execute(f"ALTER TABLE {TABLE} DISABLE ROW LEVEL SECURITY")
+    op.drop_index(FINDING_RUN_INDEX, table_name="risk_findings")
     op.drop_table(TABLE)

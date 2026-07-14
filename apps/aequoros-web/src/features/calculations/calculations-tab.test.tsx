@@ -176,6 +176,56 @@ describe("CalculationsTab", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("makes archived runs selected from history read-only", async () => {
+    const user = userEvent.setup();
+    const activeRun = run();
+    const archivedScenarioId = "20000000-0000-4000-8000-000000000002";
+    const archivedRun = run({
+      id: "30000000-0000-4000-8000-000000000002",
+      scenarioId: archivedScenarioId,
+      createdAt: new Date("2026-07-12T12:00:00Z"),
+    });
+    vi.mocked(riskApi.scenarios).mockResolvedValue(
+      scenarioWorkspace([
+        scenario(),
+        {
+          ...scenario(),
+          id: archivedScenarioId,
+          name: "Archived downside",
+          archivedAt: now,
+        },
+      ]),
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(
+      runList([activeRun, archivedRun]),
+    );
+    vi.mocked(riskApi.calculationRun).mockImplementation(
+      (_tenant, _caseId, requestedRunId) =>
+        Promise.resolve(
+          requestedRunId === archivedRun.id ? archivedRun : activeRun,
+        ),
+    );
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+    await user.click(
+      await screen.findByRole("button", { name: /30000000\.\.\.0002/ }),
+    );
+
+    expect(
+      await screen.findByText("Archived forecast audit"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Archived scenario · read only"),
+    ).toBeInTheDocument();
+    expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, caseId, true);
+    expect(
+      screen.queryByRole("button", { name: "Run forecast" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Rerun current inputs" }),
+    ).not.toBeInTheDocument();
+  });
+
   it.each([
     "calculation-run-not-a-uuid-forecast-period-1",
     `calculation-run-${run().id}-forecast-period-0`,

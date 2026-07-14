@@ -52,8 +52,8 @@ export function CalculationsTab({
   const [runOffset, setRunOffset] = useState(0);
   const runsKey = ["calculation-runs", tenant, caseId, runOffset] as const;
   const scenarios = useQuery({
-    queryKey: ["scenarios", tenant, caseId, Boolean(deepLink)],
-    queryFn: () => riskApi.scenarios(tenant, caseId, Boolean(deepLink)),
+    queryKey: ["scenarios", tenant, caseId, true],
+    queryFn: () => riskApi.scenarios(tenant, caseId, true),
   });
   const runs = useQuery({
     queryKey: runsKey,
@@ -93,9 +93,12 @@ export function CalculationsTab({
   useEffect(() => {
     if (!scenarios.data) return;
     setScenarioId((current) =>
-      scenarios.data.scenarios.some((scenario) => scenario.id === current)
+      scenarios.data.scenarios.some(
+        (scenario) => scenario.id === current && !scenario.archivedAt,
+      )
         ? current
-        : (scenarios.data.scenarios[0]?.id ?? ""),
+        : (scenarios.data.scenarios.find((scenario) => !scenario.archivedAt)
+            ?.id ?? ""),
     );
   }, [scenarios.data]);
 
@@ -122,10 +125,11 @@ export function CalculationsTab({
     parsedForecastPeriods >= 1 &&
     parsedForecastPeriods <= 12;
   const activeScenarioId = scenarios.data?.scenarios.some(
-    (scenario) => scenario.id === scenarioId,
+    (scenario) => scenario.id === scenarioId && !scenario.archivedAt,
   )
     ? scenarioId
-    : (scenarios.data?.scenarios[0]?.id ?? "");
+    : (scenarios.data?.scenarios.find((scenario) => !scenario.archivedAt)?.id ??
+      "");
 
   const refreshRuns = async (run: CalculationRunRead, message: string) => {
     setRunOffset(0);
@@ -167,9 +171,11 @@ export function CalculationsTab({
   const selectedSummary =
     runs.data?.runs.find((run) => run.id === selectedRunId) ?? selectedRun.data;
   const selectedScenario = availableScenarios.find(
-    (scenario) => scenario.id === selectedRun.data?.scenarioId,
+    (scenario) =>
+      scenario.id ===
+      (selectedRun.data?.scenarioId ?? selectedSummary?.scenarioId),
   );
-  const archivedAudit = Boolean(deepLink && selectedScenario?.archivedAt);
+  const archivedAudit = Boolean(selectedScenario?.archivedAt);
   const hasRunHistory = Boolean(runs.data?.runs.length || selectedRunId);
   const isSubmitting = start.isPending || rerun.isPending;
 
