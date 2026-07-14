@@ -424,6 +424,36 @@ describe("ScenariosTab", () => {
     });
   });
 
+  it("invalidates every tenant and case-scoped scenario variant after a mutation", async () => {
+    const user = userEvent.setup();
+    const target = `scenario-${scenario().id}-assumption-${assumption().id}`;
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(workspace());
+    vi.spyOn(riskApi, "updateScenario").mockResolvedValue(
+      mutation(scenario({ name: "Operating plan" })),
+    );
+
+    const { queryClient } = renderWithQuery(
+      <ScenariosTab tenant={tenant} caseId={caseId} />,
+    );
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+    const scenarioName = await screen.findByLabelText("Scenario name");
+    await user.clear(scenarioName);
+    await user.type(scenarioName, "Operating plan");
+    await user.click(screen.getByRole("button", { name: "Save details" }));
+
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ["scenarios", tenant, caseId],
+      }),
+    );
+    expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, caseId, true);
+  });
+
   it("ignores malformed scenario evidence fragments", async () => {
     window.history.replaceState(
       null,

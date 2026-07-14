@@ -90,7 +90,11 @@ function runs(
   };
 }
 
-function finding(severity: string, id: string): FindingRead {
+function finding(
+  severity: string,
+  id: string,
+  status: FindingRead["status"] = "open",
+): FindingRead {
   return {
     id,
     organizationId: tenant.orgId,
@@ -101,7 +105,7 @@ function finding(severity: string, id: string): FindingRead {
     title: `${severity} finding`,
     summary: "Summary",
     severity,
-    status: "open",
+    status,
     source: "manual",
     ruleId: null,
     ruleVersion: null,
@@ -256,6 +260,47 @@ describe("CaseHealthHeader", () => {
     expect(screen.getByTitle("Forecast #7 · Succeeded")).toBeInTheDocument();
     expect(screen.getByText("Compliant")).toBeInTheDocument();
     expect(screen.getByText("Approved")).toBeInTheDocument();
+  });
+
+  it("counts only active findings and separates historical findings", async () => {
+    installQueries({
+      findingList: [
+        finding("critical", "finding-1", "resolved"),
+        finding("high", "finding-2", "open"),
+        finding("medium", "finding-3", "needs_review"),
+        finding("high", "finding-4", "dismissed"),
+        finding("low", "finding-5", "acknowledged"),
+        finding("critical", "finding-6", "accepted"),
+        finding("critical", "finding-7", "superseded"),
+      ],
+    });
+    renderHeader(null);
+
+    expect(
+      await screen.findByLabelText(
+        "0 critical, 1 high, 1 medium, 0 low, 5 historical",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("+5 historical")).toHaveClass(
+      "text-[rgb(var(--muted-foreground))]",
+    );
+  });
+
+  it("shows historical traceability when no findings are active", async () => {
+    installQueries({
+      findingList: [
+        finding("critical", "finding-1", "resolved"),
+        finding("high", "finding-2", "dismissed"),
+      ],
+    });
+    renderHeader(null);
+
+    expect(
+      await screen.findByLabelText("No active findings, 2 historical"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("+2 historical")).toBeInTheDocument();
+    expect(screen.queryByText("C0")).not.toBeInTheDocument();
+    expect(screen.queryByText("H0")).not.toBeInTheDocument();
   });
 
   it.each(["queued", "running"] as const)(

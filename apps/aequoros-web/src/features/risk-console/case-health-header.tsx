@@ -256,10 +256,26 @@ function runState(list: CalculationRunListRead) {
 function findingState(findings: FindingRead[]) {
   if (!findings.length)
     return <HealthValue tone="muted">No findings</HealthValue>;
-  const counts = countSeverities(findings);
+  const activeFindings = findings.filter(
+    (finding) =>
+      finding.status === "open" || finding.status === "needs_review",
+  );
+  const historicalCount = findings.length - activeFindings.length;
+  if (!activeFindings.length)
+    return (
+      <span
+        aria-label={`No active findings, ${historicalCount} historical`}
+        className="flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-xs font-semibold text-[rgb(var(--muted-foreground))] tabular-nums"
+      >
+        <span>No active</span>
+        <span>+{historicalCount} historical</span>
+      </span>
+    );
+  const counts = countSeverities(activeFindings);
   const summary = (["critical", "high", "medium", "low"] as const)
     .map((severity) => `${counts[severity]} ${severity}`)
-    .join(", ");
+    .join(", ")
+    .concat(historicalCount ? `, ${historicalCount} historical` : "");
   return (
     <span
       aria-label={summary}
@@ -269,6 +285,11 @@ function findingState(findings: FindingRead[]) {
       <SeverityCount severity="high" count={counts.high} />
       <SeverityCount severity="medium" count={counts.medium} />
       <SeverityCount severity="low" count={counts.low} />
+      {historicalCount ? (
+        <span className="text-[rgb(var(--muted-foreground))]">
+          +{historicalCount} historical
+        </span>
+      ) : null}
     </span>
   );
 }
