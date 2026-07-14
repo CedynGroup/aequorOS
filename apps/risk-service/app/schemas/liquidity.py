@@ -66,6 +66,7 @@ class LiquiditySummaryRead(ClosedModel):
     scenario_id: UUID | None
     calculation_run_id: UUID | None
     calculation_input_hash: str | None
+    analysis_version: str | None
     status: LiquiditySummaryStatus
     currency: str | None
     as_of_date: date | None = Field(title="Liquidity Summary As Of Date")

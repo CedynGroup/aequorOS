@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Literal, cast
 from uuid import UUID
@@ -15,6 +16,7 @@ from app.domain.risk_constants import LIQUIDITY_RISK_TYPE, FindingStatus
 from app.models import (
     CalculationForecastPeriod,
     CalculationRun,
+    LiquidityAnalysisResult,
     RiskFinding,
     RiskFindingEvidence,
 )
@@ -215,6 +217,27 @@ def generate_findings(
 ) -> None:
     result = calculate_metrics(periods)
     _lock_finding_publication(db, ctx, run)
+    analysis = db.scalar(
+        select(LiquidityAnalysisResult).where(
+            LiquidityAnalysisResult.organization_id == ctx.organization_id,
+            LiquidityAnalysisResult.case_id == run.case_id,
+            LiquidityAnalysisResult.run_id == run.id,
+        )
+    )
+    if analysis is None:
+        analysis = LiquidityAnalysisResult(
+            organization_id=ctx.organization_id,
+            case_id=run.case_id,
+            run_id=run.id,
+            analysis_version=RULE_VERSION,
+            result={
+                "currency": periods[0].currency,
+                "metrics": [metric.model_dump(mode="json") for metric in result.metrics],
+            },
+            generated_at=datetime.now(UTC),
+        )
+        db.add(analysis)
+        db.flush()
     newer_run_id = db.scalar(
         select(CalculationRun.id).where(
             CalculationRun.organization_id == ctx.organization_id,
@@ -413,6 +436,7 @@ def get_summary(
             scenario_id=scenario_id,
             calculation_run_id=None,
             calculation_input_hash=None,
+            analysis_version=None,
             status="not_calculated",
             currency=None,
             as_of_date=None,
@@ -420,18 +444,21 @@ def get_summary(
             findings=[],
             generated_at=None,
         )
-    periods = list(
-        db.scalars(
-            select(CalculationForecastPeriod)
-            .where(
-                CalculationForecastPeriod.organization_id == ctx.organization_id,
-                CalculationForecastPeriod.case_id == case_id,
-                CalculationForecastPeriod.run_id == run.id,
-            )
-            .order_by(CalculationForecastPeriod.period_number)
+    analysis = db.scalar(
+        select(LiquidityAnalysisResult).where(
+            LiquidityAnalysisResult.organization_id == ctx.organization_id,
+            LiquidityAnalysisResult.case_id == case_id,
+            LiquidityAnalysisResult.run_id == run.id,
         )
     )
-    result = calculate_metrics(periods)
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The selected calculation run has no persisted liquidity analysis.",
+        )
+    metrics = [
+        LiquidityMetricRead.model_validate(metric) for metric in analysis.result.get("metrics", [])
+    ]
     finding_rows = list(
         db.scalars(
             select(RiskFinding)
@@ -456,12 +483,13 @@ def get_summary(
         scenario_id=run.scenario_id,
         calculation_run_id=run.id,
         calculation_input_hash=run.input_hash,
+        analysis_version=analysis.analysis_version,
         status="ready",
-        currency=periods[0].currency,
+        currency=cast(str, analysis.result["currency"]),
         as_of_date=run.as_of_date,
-        metrics=result.metrics,
+        metrics=metrics,
         findings=findings,
-        generated_at=run.completed_at,
+        generated_at=analysis.generated_at,
     )
 
 

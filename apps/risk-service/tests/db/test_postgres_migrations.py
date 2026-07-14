@@ -616,3 +616,23 @@ def test_postgres_capital_rls_isolates_tenant_rows(
 
         assert visible_to_org_one == 1
         assert visible_to_org_two == 0
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_postgres_migrations_create_liquidity_analysis_results_with_rls(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    tables = {"liquidity_analysis_results"}
+    assert migrated_postgres_schema.tables(tables) == tables
+    assert migrated_postgres_schema.indexes({"ix_liquidity_analysis_results_case_id"}) == {
+        "ix_liquidity_analysis_results_case_id"
+    }
+    assert migrated_postgres_schema.policies(tables) == {
+        "liquidity_analysis_results_tenant_isolation"
+    }
+    assert migrated_postgres_schema.constraints({"uq_liquidity_analysis_results_run_id"}) == {
+        "uq_liquidity_analysis_results_run_id"
+    }

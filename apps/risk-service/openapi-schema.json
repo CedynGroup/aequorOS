@@ -6557,6 +6557,17 @@
       "LiquiditySummaryRead": {
         "additionalProperties": false,
         "properties": {
+          "analysis_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Version"
+          },
           "as_of_date": {
             "anyOf": [
               {
@@ -6655,6 +6666,7 @@
           "scenario_id",
           "calculation_run_id",
           "calculation_input_hash",
+          "analysis_version",
           "status",
           "currency",
           "as_of_date",

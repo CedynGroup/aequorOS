@@ -127,11 +127,49 @@ describe("ScenariosTab", () => {
       "",
       `${window.location.pathname}#${target}`,
     );
-    vi.spyOn(riskApi, "scenarios").mockResolvedValue(workspace());
+    const archivedScenario = scenario({
+      name: "Archived downside",
+      archivedAt: now,
+    });
+    const scenarios = vi
+      .spyOn(riskApi, "scenarios")
+      .mockResolvedValue(workspace([archivedScenario]));
 
     renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
 
     await waitFor(() => expect(document.activeElement?.id).toBe(target));
+    expect(scenarios).toHaveBeenCalledWith(tenant, caseId, true);
+  });
+
+  it("keeps normal scenario navigation active-only", async () => {
+    const scenarios = vi
+      .spyOn(riskApi, "scenarios")
+      .mockResolvedValue(workspace());
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+
+    expect(await screen.findByLabelText("Scenario name")).toHaveValue(
+      "Baseline",
+    );
+    expect(scenarios).toHaveBeenCalledWith(tenant, caseId, false);
+  });
+
+  it("ignores malformed scenario evidence fragments", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#scenario-not-a-uuid-assumption-also-invalid`,
+    );
+    const scenarios = vi
+      .spyOn(riskApi, "scenarios")
+      .mockResolvedValue(workspace());
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+
+    expect(await screen.findByLabelText("Scenario name")).toHaveValue(
+      "Baseline",
+    );
+    expect(scenarios).toHaveBeenCalledWith(tenant, caseId, false);
   });
 
   it("renders an explicit empty state and initializes baseline and downside", async () => {

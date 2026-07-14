@@ -1,5 +1,9 @@
 from app.models.audit_event import AuditEvent
-from app.models.calculation import CalculationForecastPeriod, CalculationRun
+from app.models.calculation import (
+    CalculationForecastPeriod,
+    CalculationRun,
+    LiquidityAnalysisResult,
+)
 from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
 from app.models.financial import (
     FinancialAccount,
@@ -39,6 +43,7 @@ __all__ = [
     "CapitalProjectionFinding",
     "CalculationForecastPeriod",
     "CalculationRun",
+    "LiquidityAnalysisResult",
     "Document",
     "DocumentChunk",
     "DocumentExtraction",

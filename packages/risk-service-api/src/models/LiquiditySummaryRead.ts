@@ -48,6 +48,13 @@ import {
   CurrencyToJSON,
   CurrencyToJSONTyped,
 } from "./Currency";
+import type { AnalysisVersion } from "./AnalysisVersion";
+import {
+  AnalysisVersionFromJSON,
+  AnalysisVersionFromJSONTyped,
+  AnalysisVersionToJSON,
+  AnalysisVersionToJSONTyped,
+} from "./AnalysisVersion";
 import type { LiquidityFindingRead } from "./LiquidityFindingRead";
 import {
   LiquidityFindingReadFromJSON,
@@ -83,6 +90,12 @@ import {
  * @interface LiquiditySummaryRead
  */
 export interface LiquiditySummaryRead {
+  /**
+   *
+   * @type {AnalysisVersion}
+   * @memberof LiquiditySummaryRead
+   */
+  analysisVersion: AnalysisVersion;
   /**
    *
    * @type {LiquiditySummaryAsOfDate}
@@ -151,6 +164,8 @@ export interface LiquiditySummaryRead {
 export function instanceOfLiquiditySummaryRead(
   value: object,
 ): value is LiquiditySummaryRead {
+  if (!("analysisVersion" in value) || value["analysisVersion"] === undefined)
+    return false;
   if (!("asOfDate" in value) || value["asOfDate"] === undefined) return false;
   if (
     !("calculationInputHash" in value) ||
@@ -184,6 +199,7 @@ export function LiquiditySummaryReadFromJSONTyped(
   }
   return {
     ...json,
+    analysisVersion: AnalysisVersionFromJSON(json["analysis_version"]),
     asOfDate: LiquiditySummaryAsOfDateFromJSON(json["as_of_date"]),
     calculationInputHash: CalculationInputHashFromJSON(
       json["calculation_input_hash"],
@@ -214,6 +230,7 @@ export function LiquiditySummaryReadToJSONTyped(
   }
 
   return {
+    analysis_version: AnalysisVersionToJSON(value["analysisVersion"]),
     as_of_date: LiquiditySummaryAsOfDateToJSON(value["asOfDate"]),
     calculation_input_hash: CalculationInputHashToJSON(
       value["calculationInputHash"],

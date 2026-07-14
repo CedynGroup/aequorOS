@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
@@ -15,7 +15,9 @@ from app.models import (
     CalculationForecastPeriod,
     CalculationRun,
     FinancialBalance,
+    FinancialObligation,
     FinancialReportingPeriod,
+    LiquidityAnalysisResult,
     RiskFinding,
 )
 from app.services import liquidity
@@ -66,6 +68,7 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
         "scenario_id": None,
         "calculation_run_id": None,
         "calculation_input_hash": None,
+        "analysis_version": None,
         "status": "not_calculated",
         "currency": None,
         "as_of_date": None,
@@ -110,6 +113,7 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
     assert summary["status"] == "ready"
     assert summary["calculation_run_id"] == run["id"]
     assert summary["calculation_input_hash"] == run["input_hash"]
+    assert summary["analysis_version"] == "liquidity-v1.0.0"
     assert {metric["key"] for metric in summary["metrics"]} == {
         "minimum_cash_balance",
         "peak_liquidity_gap",
@@ -237,6 +241,69 @@ def test_liquidity_review_rolls_back_when_audit_event_fails(
         )
     assert "finding.status_changed" not in event_types
     assert "liquidity_finding.reviewed" not in event_types
+
+
+def test_liquidity_summary_reads_immutable_persisted_metrics(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    run = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+    first = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary",
+        headers=headers(),
+        params={"run_id": run["id"]},
+    ).json()
+
+    def reject_recalculation(_periods: object) -> object:
+        raise AssertionError("historical liquidity metrics were recalculated")
+
+    monkeypatch.setattr(liquidity, "calculate_metrics", reject_recalculation)
+    historical = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary",
+        headers=headers(),
+        params={"run_id": run["id"]},
+    )
+
+    assert historical.status_code == 200, historical.text
+    assert historical.json()["analysis_version"] == "liquidity-v1.0.0"
+    assert historical.json()["metrics"] == first["metrics"]
+
+
+def test_zero_finding_run_persists_liquidity_analysis(db_client: TestClient) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    with get_sessionmaker()() as session:
+        session.execute(delete(FinancialObligation).where(FinancialObligation.case_id == case.id))
+        session.commit()
+
+    run = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+    summary = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary",
+        headers=headers(),
+        params={"run_id": run["id"]},
+    )
+
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["findings"] == []
+    assert summary.json()["metrics"]
+    with get_sessionmaker()() as session:
+        analysis = session.scalar(
+            select(LiquidityAnalysisResult).where(LiquidityAnalysisResult.run_id == UUID(run["id"]))
+        )
+    assert analysis is not None
+    assert analysis.analysis_version == "liquidity-v1.0.0"
 
 
 def test_liquidity_review_rejects_findings_not_owned_by_workflow(

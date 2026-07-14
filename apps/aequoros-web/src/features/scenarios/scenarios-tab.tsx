@@ -52,10 +52,11 @@ export function ScenariosTab({
 }) {
   const queryClient = useQueryClient();
   const deepLink = scenarioDeepLink();
-  const queryKey = ["scenarios", tenant, caseId] as const;
+  const includeArchived = deepLink !== null;
+  const queryKey = ["scenarios", tenant, caseId, includeArchived] as const;
   const query = useQuery({
     queryKey,
-    queryFn: () => riskApi.scenarios(tenant, caseId),
+    queryFn: () => riskApi.scenarios(tenant, caseId, includeArchived),
   });
   const [selectedId, setSelectedId] = useState(
     () => deepLink?.scenarioId ?? "",
@@ -637,7 +638,18 @@ function scenarioDeepLink() {
   if (!targetId.startsWith(prefix) || !targetId.includes(separator))
     return null;
   const scenarioId = targetId.slice(prefix.length, targetId.indexOf(separator));
-  return scenarioId ? { scenarioId, targetId } : null;
+  const assumptionId = targetId.slice(
+    targetId.indexOf(separator) + separator.length,
+  );
+  return isUuid(scenarioId) && isUuid(assumptionId)
+    ? { scenarioId, targetId }
+    : null;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 function valueTypeOf(value: AssumptionValue): AssumptionValueType {

@@ -2,6 +2,7 @@
 /* eslint-disable */
 export * from "./AccountId";
 export * from "./AccountNumber";
+export * from "./AnalysisVersion";
 export * from "./AsOfDate";
 export * from "./AssessmentCreate";
 export * from "./AssessmentRead";

@@ -146,6 +146,7 @@ function summary(
     scenarioId: "scenario-1",
     calculationRunId: "run-1",
     calculationInputHash: "abcdef1234567890",
+    analysisVersion: "liquidity-v1.0.0",
     status: "ready",
     currency: "USD",
     asOfDate: "2026-07-13",
