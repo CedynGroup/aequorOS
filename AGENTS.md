@@ -9,6 +9,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Regenerate scenario and other API contracts with
   `mise run risk-service:openapi-client`; validate the generated package with
   `pnpm --filter @aequoros/risk-service-api test`.
+- Keep `packages/risk-service-api/src` excluded centrally from style linting and
+  formatting; generated files must contain no inline suppressions, while type-checking,
+  package tests, and freshness checks remain required.
 - Financial review UI code lives under `apps/aequoros-web/src/features/financial` and must call
   `FinancialDataApi` from `packages/risk-service-api`; do not duplicate OpenAPI payloads or
   hand-roll financial workspace requests.

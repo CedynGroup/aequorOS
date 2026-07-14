@@ -18,6 +18,10 @@ TypeScript client generated from the AequorOS Risk Service OpenAPI schema.
 Generated `src/` code is committed so frontend consumers do not need Python or
 the OpenAPI generator installed.
 
+Generated source is excluded centrally from style linting and formatting.
+TypeScript type-checking, package tests, and deterministic regeneration freshness
+checks remain enforced.
+
 ## Regenerating
 
 From the repo root:
@@ -362,7 +366,17 @@ def patch_closed_models(package_root: Path, schema_path: Path) -> None:
             model_path.write_text(patched, encoding="utf-8")
 
 
+def remove_lint_suppression_headers(package_root: Path) -> None:
+    suppression_header = "/* tslint:disable */\n/* eslint-disable */\n"
+    for source_path in (package_root / "src").rglob("*.ts"):
+        text = source_path.read_text(encoding="utf-8")
+        if not text.startswith(suppression_header):
+            raise ValueError(f"Expected lint suppression header in {source_path}")
+        source_path.write_text(text.removeprefix(suppression_header), encoding="utf-8")
+
+
 def patch_generated_source(package_root: Path, schema_path: Path) -> None:
+    remove_lint_suppression_headers(package_root)
     patch_error_body(package_root)
     patch_payload(package_root)
     patch_primitive_aliases(package_root, schema_path)

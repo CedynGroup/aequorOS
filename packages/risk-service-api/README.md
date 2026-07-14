@@ -5,6 +5,10 @@ TypeScript client generated from the AequorOS Risk Service OpenAPI schema.
 Generated `src/` code is committed so frontend consumers do not need Python or
 the OpenAPI generator installed.
 
+Generated source is excluded centrally from style linting and formatting.
+TypeScript type-checking, package tests, and deterministic regeneration freshness
+checks remain enforced.
+
 ## Regenerating
 
 From the repo root:
