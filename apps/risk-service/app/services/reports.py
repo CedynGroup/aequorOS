@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from hashlib import sha256
 from html import escape
 from uuid import UUID
 
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.risk_constants import CaseStatus
-from app.models import RiskAssessment, RiskFinding, RiskScore
+from app.models import RiskAssessment, RiskAssessmentRun, RiskFinding, RiskScore
 from app.schemas.common import JsonObject, JsonValue
 from app.services.cases import get_case_or_404, list_case_decisions, user_display_names
 
@@ -67,6 +68,7 @@ class ReportAssessment(BaseModel):
 
 class ReportScore(BaseModel):
     assessment: str | None
+    run_reference: str | None
     score: int
     risk_level: str
     scoring_version: str
@@ -127,6 +129,12 @@ def report_payload(db: Session, ctx: TenantContext, case_id: UUID) -> RiskReport
         {case.assigned_to_user_id, *(decision.decided_by for decision in decisions)},
     )
     assessment_names = {assessment.id: assessment.name for assessment in assessments}
+    run_references = assessment_run_references(
+        db,
+        ctx.organization_id,
+        {score.run_id for score in scores if score.run_id is not None},
+        assessment_names,
+    )
     return RiskReportPayload(
         case=ReportCase(
             title=case.title,
@@ -190,6 +198,9 @@ def report_payload(db: Session, ctx: TenantContext, case_id: UUID) -> RiskReport
                     if score.assessment_id is not None
                     else None
                 ),
+                run_reference=(
+                    run_references.get(score.run_id) if score.run_id is not None else None
+                ),
                 score=score.score,
                 risk_level=score.risk_level,
                 scoring_version=score.scoring_version,
@@ -202,11 +213,61 @@ def report_payload(db: Session, ctx: TenantContext, case_id: UUID) -> RiskReport
     )
 
 
+def assessment_run_references(
+    db: Session,
+    organization_id: UUID,
+    run_ids: set[UUID],
+    assessment_names: dict[UUID, str],
+) -> dict[UUID, str]:
+    if not run_ids:
+        return {}
+    selected_runs = list(
+        db.scalars(
+            select(RiskAssessmentRun).where(
+                RiskAssessmentRun.organization_id == organization_id,
+                RiskAssessmentRun.id.in_(run_ids),
+            )
+        )
+    )
+    assessment_ids = {run.assessment_id for run in selected_runs}
+    all_runs = list(
+        db.scalars(
+            select(RiskAssessmentRun)
+            .where(
+                RiskAssessmentRun.organization_id == organization_id,
+                RiskAssessmentRun.assessment_id.in_(assessment_ids),
+            )
+            .order_by(
+                RiskAssessmentRun.assessment_id,
+                RiskAssessmentRun.created_at,
+                RiskAssessmentRun.id,
+            )
+        )
+    )
+    ordinals: dict[UUID, int] = {}
+    counts: dict[UUID, int] = {}
+    for run in all_runs:
+        counts[run.assessment_id] = counts.get(run.assessment_id, 0) + 1
+        ordinals[run.id] = counts[run.assessment_id]
+    return {
+        run.id: (
+            f"{assessment_names.get(run.assessment_id, 'Assessment')} "
+            f"{run.created_at.date().isoformat()} run {ordinals[run.id]}"
+        )
+        for run in selected_runs
+    }
+
+
 def sanitize_report_object(value: JsonObject) -> JsonObject:
     return {
-        UUID_PATTERN.sub(REDACTED_IDENTIFIER, key): sanitize_report_value(item)
+        UUID_PATTERN.sub(identifier_key_alias, key): sanitize_report_value(item)
         for key, item in value.items()
     }
+
+
+def identifier_key_alias(match: re.Match[str]) -> str:
+    digest = sha256(match.group(0).encode()).hexdigest()
+    return f"[internal identifier alias {digest}]"
 
 
 def sanitize_report_value(value: JsonValue) -> JsonValue:

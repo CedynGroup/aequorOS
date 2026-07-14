@@ -7142,6 +7142,17 @@
             "title": "Rule Results",
             "type": "array"
           },
+          "run_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Reference"
+          },
           "score": {
             "title": "Score",
             "type": "integer"
@@ -7153,6 +7164,7 @@
         },
         "required": [
           "assessment",
+          "run_reference",
           "score",
           "risk_level",
           "scoring_version",

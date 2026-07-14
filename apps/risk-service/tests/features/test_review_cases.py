@@ -179,6 +179,9 @@ def test_case_decision_history_and_completed_report(db_client: TestClient) -> No
     assert response.json()["scores"][0]["score"] == 45
     assert response.json()["decisions"][0]["decided_by"] == "Demo User One"
     assert response.json()["scores"][0]["assessment"] == "Score"
+    assert response.json()["scores"][0]["run_reference"] == (
+        f"Score {response.json()['scores'][0]['created_at'][:10]} run 1"
+    )
     assert len(response.json()["scores"][0]["input_hash"]) == 64
     assert response.json()["scores"][0]["rule_results"] == [
         {

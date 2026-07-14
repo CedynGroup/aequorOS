@@ -49,6 +49,12 @@ export interface ReportScore {
   ruleResults: Array<{ [key: string]: any }>;
   /**
    *
+   * @type {string}
+   * @memberof ReportScore
+   */
+  runReference: string | null;
+  /**
+   *
    * @type {number}
    * @memberof ReportScore
    */
@@ -71,6 +77,8 @@ export function instanceOfReportScore(value: object): value is ReportScore {
   if (!("inputHash" in value) || value["inputHash"] === undefined) return false;
   if (!("riskLevel" in value) || value["riskLevel"] === undefined) return false;
   if (!("ruleResults" in value) || value["ruleResults"] === undefined)
+    return false;
+  if (!("runReference" in value) || value["runReference"] === undefined)
     return false;
   if (!("score" in value) || value["score"] === undefined) return false;
   if (!("scoringVersion" in value) || value["scoringVersion"] === undefined)
@@ -95,6 +103,7 @@ export function ReportScoreFromJSONTyped(
     inputHash: json["input_hash"],
     riskLevel: json["risk_level"],
     ruleResults: json["rule_results"],
+    runReference: json["run_reference"],
     score: json["score"],
     scoringVersion: json["scoring_version"],
   };
@@ -118,6 +127,7 @@ export function ReportScoreToJSONTyped(
     input_hash: value["inputHash"],
     risk_level: value["riskLevel"],
     rule_results: value["ruleResults"],
+    run_reference: value["runReference"],
     score: value["score"],
     scoring_version: value["scoringVersion"],
   };
