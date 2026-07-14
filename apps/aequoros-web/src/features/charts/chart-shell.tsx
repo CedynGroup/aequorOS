@@ -4,13 +4,15 @@ import { Alert, Skeleton } from "../../components/ui";
 
 export function ChartBoundary({
   title,
+  resetKey,
   children,
 }: {
   title: string;
+  resetKey: string;
   children: ReactNode;
 }) {
   return (
-    <ChartErrorBoundary title={title}>
+    <ChartErrorBoundary key={resetKey} title={title}>
       <Suspense fallback={<ChartLoading title={title} />}>{children}</Suspense>
     </ChartErrorBoundary>
   );

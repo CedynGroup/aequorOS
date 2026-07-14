@@ -119,7 +119,8 @@ export function LiquidityCoverageChart({
 }: {
   series: LiquidityCoverageSeries;
 }) {
-  if (series.availability !== "ready") {
+  const threshold = series.threshold;
+  if (series.availability !== "ready" || !threshold) {
     return <ChartState title="Liquidity coverage" reason={series.reason} />;
   }
   const data = series.points.map((point) => ({
@@ -128,10 +129,7 @@ export function LiquidityCoverageChart({
     coverage: point.coverage?.pixel ?? null,
     coverageDecimal: point.coverage?.decimal ?? null,
   }));
-  const values = [
-    ...series.points.map((point) => point.coverage),
-    series.threshold,
-  ];
+  const values = [...series.points.map((point) => point.coverage), threshold];
 
   return (
     <ChartFrame
@@ -164,13 +162,13 @@ export function LiquidityCoverageChart({
           />
           <Tooltip content={<CoverageTooltip />} />
           <ReferenceLine
-            y={series.threshold.pixel}
+            y={threshold.pixel}
             stroke="rgb(var(--warning))"
             strokeDasharray="5 4"
             strokeWidth={2}
             className="liquidity-threshold-line"
             label={{
-              value: `${formatDecimal(series.threshold.decimal, 2)}x threshold`,
+              value: `${formatDecimal(threshold.decimal, 2)}x threshold`,
               position: "insideTopRight",
               fill: "rgb(var(--warning))",
               fontSize: 11,
@@ -472,8 +470,12 @@ function TooltipRow({ label, value }: { label: string; value: string }) {
 
 function tooltipHeading(point: TooltipDatum) {
   return point.periodEnd
-    ? `Period ${point.periodNumber} · ${point.periodEnd.toLocaleDateString()}`
+    ? `Period ${point.periodNumber} · ${formatChartDate(point.periodEnd)}`
     : `Period ${point.periodNumber}`;
+}
+
+export function formatChartDate(value: Date) {
+  return value.toLocaleDateString(undefined, { timeZone: "UTC" });
 }
 
 function money(value: string | null | undefined, currency: string) {

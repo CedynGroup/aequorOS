@@ -343,7 +343,10 @@ function LiquidityAnalysis({
           {summary.findings.length} findings
         </span>
       </header>
-      <ChartBoundary title="Liquidity coverage">
+      <ChartBoundary
+        title="Liquidity coverage"
+        resetKey={`${summary.calculationRunId}:${summary.analysisVersion}`}
+      >
         <LiquidityCoverageChart
           series={liquidityCoverageToSeries(run, summary)}
         />

@@ -130,7 +130,9 @@ describe("liquidityCoverageToSeries", () => {
       decimal: "0.1667",
       pixel: 0.1667,
     });
-    expect(series.threshold.decimal).toBe("1.20");
+    expect(series.threshold).toBeNull();
+    expect(series.availability).toBe("unavailable");
+    expect(series.reason).toContain("persisted classification threshold");
   });
 
   it("renders non-positive uses as a gap with the persisted diagnostic", () => {
@@ -155,7 +157,7 @@ describe("liquidityCoverageToSeries", () => {
       }),
     );
 
-    expect(series.availability).toBe("ready");
+    expect(series.availability).toBe("unavailable");
     expect(
       series.points.map((point) => point.coverage?.decimal ?? null),
     ).toEqual(["1.2000", null, "1.2000"]);

@@ -506,7 +506,7 @@ function RunOutput({
           </>
         ) : null}
         {run.status === "succeeded" ? (
-          <ChartBoundary title="Forecast trajectory">
+          <ChartBoundary title="Forecast trajectory" resetKey={run.id}>
             <ForecastTrajectoryChart series={forecastRunToSeries(run)} />
           </ChartBoundary>
         ) : null}

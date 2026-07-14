@@ -443,7 +443,10 @@ function ScenarioComparison({
         meta="Latest successful projections"
       />
       <div className="px-3 pt-1">
-        <ChartBoundary title="Capital comparison">
+        <ChartBoundary
+          title="Capital comparison"
+          resetKey={`${comparison?.baseline?.id ?? "none"}:${comparison?.downside?.id ?? "none"}`}
+        >
           <CapitalComparisonChart
             series={capitalComparisonToSeries(comparison)}
           />

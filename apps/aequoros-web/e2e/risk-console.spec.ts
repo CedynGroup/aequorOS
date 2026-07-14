@@ -551,8 +551,9 @@ test("reviews liquidity metrics, evidence, finding status, and tenant isolation"
     page.getByText(/Baseline · deterministic forecast/),
   ).toBeVisible();
   await expect(page.getByText("Minimum cash balance")).toBeVisible();
+  await expect(page.getByText("Liquidity coverage unavailable")).toBeVisible();
   await expect(
-    page.locator('svg[aria-label="Liquidity sources coverage chart"]'),
+    page.getByText(/persisted classification threshold is not available/),
   ).toBeVisible();
   await expect(page.getByText(/Supporting evidence \(/).first()).toBeVisible();
   await page

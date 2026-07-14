@@ -105,23 +105,23 @@ export interface LiquidityCoverageSeries {
   reason: string | null;
   points: LiquidityCoveragePoint[];
   unavailableSpans: UnavailableSpan[];
-  threshold: DecimalChartValue;
+  threshold: DecimalChartValue | null;
 }
 
-const COVERAGE_THRESHOLD = "1.20";
+const MISSING_LIQUIDITY_THRESHOLD_REASON =
+  "The persisted classification threshold is not available in the liquidity analysis contract.";
 
 export function liquidityCoverageToSeries(
   run: CalculationRunRead,
   summary: LiquiditySummaryRead,
 ): LiquidityCoverageSeries {
-  const threshold = decimalChartValue(COVERAGE_THRESHOLD)!;
   if (!run.outputs.length) {
     return {
-      availability: "empty",
-      reason: "This run has no forecast periods to chart.",
+      availability: "unavailable",
+      reason: MISSING_LIQUIDITY_THRESHOLD_REASON,
       points: [],
       unavailableSpans: [],
-      threshold,
+      threshold: null,
     };
   }
 
@@ -155,14 +155,14 @@ export function liquidityCoverageToSeries(
   const hasValue = points.some((point) => point.coverage);
 
   return {
-    availability: hasValue ? "ready" : "unavailable",
+    availability: "unavailable",
     reason: hasValue
-      ? null
+      ? MISSING_LIQUIDITY_THRESHOLD_REASON
       : (metric?.diagnostic ??
         "Sources coverage is not meaningful for the persisted forecast."),
     points,
     unavailableSpans,
-    threshold,
+    threshold: null,
   };
 }
 

@@ -9,8 +9,17 @@ import type {
 import {
   CapitalComparisonChart,
   ForecastTrajectoryChart,
+  formatChartDate,
   LiquidityCoverageChart,
 } from "./analysis-charts";
+
+describe("formatChartDate", () => {
+  it("preserves a UTC date-only value in negative UTC offsets", () => {
+    expect(formatChartDate(new Date("2027-12-31T00:00:00Z"))).toBe(
+      "12/31/2027",
+    );
+  });
+});
 
 describe("ForecastTrajectoryChart", () => {
   it("renders accessible SVG points and preserves a missing-period gap", () => {
