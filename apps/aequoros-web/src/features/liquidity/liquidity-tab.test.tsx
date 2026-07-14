@@ -1,5 +1,6 @@
 import type {
   CalculationRunListRead,
+  CalculationRunRead,
   CalculationRunSummaryRead,
   LiquidityFindingRead,
   LiquiditySummaryRead,
@@ -90,6 +91,22 @@ function runList(
   };
 }
 
+function runDetail(
+  item: CalculationRunSummaryRead = run(),
+): CalculationRunRead {
+  return {
+    ...item,
+    caseId: "case-1",
+    createdBy: tenant.userId,
+    inputSchemaVersion: "balance-sheet-input-v1",
+    inputs: {},
+    organizationId: tenant.orgId,
+    outputSchemaVersion: "balance-sheet-output-v1",
+    outputs: [],
+    updatedAt: item.createdAt,
+  };
+}
+
 function finding(
   overrides: Partial<LiquidityFindingRead> = {},
 ): LiquidityFindingRead {
@@ -160,6 +177,9 @@ describe("LiquidityTab", () => {
     });
     vi.spyOn(riskApi, "scenarios").mockResolvedValue(scenarioWorkspace());
     vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+    vi.spyOn(riskApi, "calculationRun").mockImplementation(
+      (_tenant, _caseId, runId) => Promise.resolve(runDetail(run(runId))),
+    );
   });
 
   it("renders explicit loading and empty states", async () => {
@@ -271,6 +291,82 @@ describe("LiquidityTab", () => {
       ),
     );
     expect(screen.getByText(/Downside · run run-2/)).toBeInTheDocument();
+  });
+
+  it("keeps the latest successful run selectable outside the current history page", async () => {
+    const user = userEvent.setup();
+    const latest = run(
+      "run-latest-success",
+      "scenario-1",
+      new Date("2026-07-01T12:00:00Z"),
+    );
+    const historical = run(
+      "run-historical-success",
+      "scenario-1",
+      new Date("2026-06-30T12:00:00Z"),
+    );
+    const failedPage = Array.from({ length: 25 }, (_, index) => ({
+      ...run(`run-failed-${index}`),
+      status: "failed" as const,
+    }));
+    vi.mocked(riskApi.calculationRuns).mockImplementation(
+      (_tenant, _caseId, _scenarioId, _limit, offset) =>
+        Promise.resolve({
+          ...runList(offset === 25 ? [historical] : failedPage),
+          latestSuccessfulRunId: latest.id,
+          total: 26,
+          offset: offset ?? 0,
+          hasMore: offset !== 25,
+        }),
+    );
+    vi.mocked(riskApi.calculationRun).mockImplementation(
+      (_tenant, _caseId, requestedRunId) =>
+        Promise.resolve(
+          runDetail(requestedRunId === historical.id ? historical : latest),
+        ),
+    );
+    const loadSummary = vi
+      .spyOn(liquidityReviewClient, "summary")
+      .mockImplementation((_tenant, _caseId, scenarioId, calculationRunId) =>
+        Promise.resolve(summary({ scenarioId, calculationRunId })),
+      );
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    await waitFor(() =>
+      expect(loadSummary).toHaveBeenCalledWith(
+        tenant,
+        "case-1",
+        "scenario-1",
+        latest.id,
+      ),
+    );
+    expect(screen.getByLabelText("Liquidity forecast run")).toHaveTextContent(
+      "run-late...cess",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() =>
+      expect(riskApi.calculationRuns).toHaveBeenCalledWith(
+        tenant,
+        "case-1",
+        "scenario-1",
+        25,
+        25,
+      ),
+    );
+    await user.click(screen.getByLabelText("Liquidity forecast run"));
+    await user.click(
+      await screen.findByRole("option", { name: /run-hist\.\.\.cess/ }),
+    );
+    await waitFor(() =>
+      expect(loadSummary).toHaveBeenCalledWith(
+        tenant,
+        "case-1",
+        "scenario-1",
+        historical.id,
+      ),
+    );
   });
 
   it("acknowledges and dismisses findings with explicit mutation states", async () => {

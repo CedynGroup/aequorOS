@@ -31,6 +31,7 @@ from app.services.audit import record_event
 from app.services.cases import get_case_or_404
 
 RULE_VERSION = "liquidity-v1.0.0"
+WORKFLOW_ID = "liquidity_analysis"
 RISK_TYPE = LIQUIDITY_RISK_TYPE
 NEGATIVE_CASH_RULE_ID = "liquidity.negative_cash"
 SOURCES_COVERAGE_RULE_ID = "liquidity.sources_coverage"
@@ -285,6 +286,8 @@ def generate_findings(
             rule_version=RULE_VERSION,
             details={
                 "liquidity": {
+                    "workflow_id": WORKFLOW_ID,
+                    "rule_version": RULE_VERSION,
                     "calculation_run_id": str(run.id),
                     "scenario_id": str(run.scenario_id),
                     "input_hash": run.input_hash,
@@ -507,12 +510,17 @@ def _finding_calculation_run(
     if (
         finding.risk_type != RISK_TYPE
         or finding.source != "deterministic_rule"
-        or finding.rule_id not in RULE_IDS
-        or finding.rule_version != RULE_VERSION
+        or not finding.rule_id
+        or not finding.rule_version
     ):
         return None
     liquidity = finding.details.get("liquidity")
     if not isinstance(liquidity, dict):
+        return None
+    if (
+        liquidity.get("workflow_id") != WORKFLOW_ID
+        or liquidity.get("rule_version") != finding.rule_version
+    ):
         return None
     try:
         calculation_run_id = UUID(str(liquidity.get("calculation_run_id")))

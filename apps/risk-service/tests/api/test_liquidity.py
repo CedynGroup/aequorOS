@@ -315,6 +315,34 @@ def test_liquidity_review_rejects_findings_not_owned_by_workflow(
     assert "liquidity_finding.reviewed" not in event_types
 
 
+def test_liquidity_review_uses_finding_producing_rule_version(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+    finding = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers()
+    ).json()["findings"][0]
+
+    monkeypatch.setattr(liquidity, "RULE_VERSION", "liquidity-v2.0.0")
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/liquidity/findings/{finding['id']}/review",
+        headers=headers(),
+        json={"action": "acknowledge", "reason": "Historical analysis reviewed"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "acknowledged"
+    assert response.json()["rule_version"] == "liquidity-v1.0.0"
+
+
 def test_liquidity_rerun_supersedes_prior_scenario_findings(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)

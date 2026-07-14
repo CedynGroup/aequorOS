@@ -35,6 +35,7 @@ export function LiquidityTab({
 }) {
   const [scenarioId, setScenarioId] = useState("");
   const [runId, setRunId] = useState("");
+  const [runOffset, setRunOffset] = useState(0);
   const scenarios = useQuery({
     queryKey: ["scenarios", tenant, caseId],
     queryFn: () => riskApi.scenarios(tenant, caseId),
@@ -44,38 +45,61 @@ export function LiquidityTab({
     availableScenarios.find((scenario) => scenario.id === scenarioId) ??
     availableScenarios[0];
   const runs = useQuery({
-    queryKey: ["calculation-runs", tenant, caseId, selectedScenario?.id],
+    queryKey: [
+      "calculation-runs",
+      tenant,
+      caseId,
+      selectedScenario?.id,
+      runOffset,
+    ],
     queryFn: () =>
-      riskApi.calculationRuns(tenant, caseId, selectedScenario?.id),
+      riskApi.calculationRuns(
+        tenant,
+        caseId,
+        selectedScenario?.id,
+        25,
+        runOffset,
+      ),
     enabled: Boolean(selectedScenario),
   });
-  const successfulRuns =
+  const pageSuccessfulRuns =
     runs.data?.runs.filter((run) => run.status === "succeeded") ?? [];
-  const selectedRun =
-    successfulRuns.find((run) => run.id === runId) ??
-    successfulRuns.find((run) => run.id === runs.data?.latestSuccessfulRunId) ??
-    successfulRuns[0];
+  const selectedRunId = runId || runs.data?.latestSuccessfulRunId || "";
+  const selectedRun = useQuery({
+    queryKey: ["calculation-run", tenant, caseId, selectedRunId],
+    queryFn: () => riskApi.calculationRun(tenant, caseId, selectedRunId),
+    enabled: Boolean(selectedRunId),
+  });
+  const selectableRuns = selectedRun.data
+    ? [
+        selectedRun.data,
+        ...pageSuccessfulRuns.filter((run) => run.id !== selectedRun.data.id),
+      ]
+    : pageSuccessfulRuns;
   const query = useQuery({
     queryKey: [
       "liquidity-summary",
       tenant,
       caseId,
       selectedScenario?.id,
-      selectedRun?.id,
+      selectedRun.data?.id,
     ],
     queryFn: () =>
       liquidityReviewClient.summary(
         tenant,
         caseId,
         selectedScenario?.id,
-        selectedRun?.id,
+        selectedRun.data?.id,
       ),
-    enabled: Boolean(selectedScenario && selectedRun),
+    enabled: Boolean(
+      selectedScenario && selectedRun.data?.status === "succeeded",
+    ),
   });
 
   useEffect(() => {
     setScenarioId("");
     setRunId("");
+    setRunOffset(0);
   }, [caseId, tenant.orgId]);
 
   if (scenarios.isLoading) {
@@ -99,6 +123,7 @@ export function LiquidityTab({
   const selectScenario = (value: string) => {
     setScenarioId(value);
     setRunId("");
+    setRunOffset(0);
   };
 
   const analysis = runs.isLoading ? (
@@ -108,10 +133,21 @@ export function LiquidityTab({
     </div>
   ) : runs.error ? (
     <ErrorPanel error={runs.error} />
-  ) : !selectedRun ? (
+  ) : !selectedRunId ? (
     <Alert title="No liquidity analysis">
       Run a successful balance-sheet forecast for {selectedScenario.name} to
       calculate liquidity metrics and findings.
+    </Alert>
+  ) : selectedRun.isLoading ? (
+    <div aria-label="Loading liquidity analysis" className="space-y-3">
+      <Skeleton className="h-24" />
+      <Skeleton className="h-52" />
+    </div>
+  ) : selectedRun.error ? (
+    <ErrorPanel error={selectedRun.error} />
+  ) : selectedRun.data?.status !== "succeeded" ? (
+    <Alert title="No liquidity analysis">
+      Select a successful balance-sheet forecast to review liquidity analysis.
     </Alert>
   ) : query.isLoading ? (
     <div aria-label="Loading liquidity analysis" className="space-y-3">
@@ -159,24 +195,54 @@ export function LiquidityTab({
           </div>
           <div>
             <Label>Run</Label>
-            {selectedRun ? (
+            {selectedRunId &&
+            selectableRuns.some((run) => run.id === selectedRunId) ? (
               <Select
                 ariaLabel="Liquidity forecast run"
-                value={selectedRun.id}
+                value={selectedRunId}
                 onValueChange={setRunId}
                 placeholder="Choose a successful run"
               >
-                {successfulRuns.map((run) => (
+                {selectableRuns.map((run) => (
                   <SelectItem key={run.id} value={run.id}>
                     {truncateId(run.id)} · {run.createdAt.toLocaleString()}
                   </SelectItem>
                 ))}
               </Select>
+            ) : selectedRunId ? (
+              <span className="block h-8 pt-1.5 text-sm text-[rgb(var(--muted-foreground))]">
+                Loading successful run…
+              </span>
             ) : (
               <span className="block h-8 pt-1.5 text-sm text-[rgb(var(--muted-foreground))]">
                 No successful runs
               </span>
             )}
+            {runs.data && (runs.data.offset > 0 || runs.data.hasMore) ? (
+              <div className="mt-2 flex justify-between gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={runs.data.offset === 0}
+                  onClick={() =>
+                    setRunOffset((current) => Math.max(0, current - 25))
+                  }
+                >
+                  Previous
+                </Button>
+                <span className="self-center text-xs text-[rgb(var(--muted-foreground))]">
+                  {runs.data.total} runs
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!runs.data.hasMore}
+                  onClick={() => setRunOffset((current) => current + 25)}
+                >
+                  Next
+                </Button>
+              </div>
+            ) : null}
           </div>
         </div>
       </Panel>

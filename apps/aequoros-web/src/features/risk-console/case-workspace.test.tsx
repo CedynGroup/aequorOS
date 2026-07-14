@@ -103,6 +103,16 @@ describe("CaseWorkspace", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps analysis verticals in case-detail tabs rather than workflow navigation", () => {
+    renderWorkspace();
+
+    expect(screen.getByRole("tab", { name: "Forecast" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Liquidity" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Liquidity" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("loads HTML reports in the report preview mode", async () => {
     const reportHtml = vi
       .spyOn(riskApi, "reportHtml")
