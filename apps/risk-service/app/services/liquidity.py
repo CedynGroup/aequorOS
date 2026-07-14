@@ -32,6 +32,12 @@ from app.services.cases import get_case_or_404
 
 RULE_VERSION = "liquidity-v1.0.0"
 RISK_TYPE = LIQUIDITY_RISK_TYPE
+NEGATIVE_CASH_RULE_ID = "liquidity.negative_cash"
+SOURCES_COVERAGE_RULE_ID = "liquidity.sources_coverage"
+CREDIT_RELIANCE_RULE_ID = "liquidity.credit_reliance"
+RULE_IDS = frozenset(
+    (NEGATIVE_CASH_RULE_ID, SOURCES_COVERAGE_RULE_ID, CREDIT_RELIANCE_RULE_ID)
+)
 MONEY = Decimal("0.0001")
 RATIO = Decimal("0.0001")
 type EvidenceSourceType = Literal["forecast_output", "canonical_input", "scenario_assumption"]
@@ -143,7 +149,7 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
     if first_negative is not None:
         concerns.append(
             {
-                "rule_id": "liquidity.negative_cash",
+                "rule_id": NEGATIVE_CASH_RULE_ID,
                 "severity": "critical" if first_negative.period_number == 1 else "high",
                 "title": "Projected cash shortfall",
                 "summary": (
@@ -167,7 +173,7 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
     if minimum_coverage < Decimal("1.20"):
         concerns.append(
             {
-                "rule_id": "liquidity.sources_coverage",
+                "rule_id": SOURCES_COVERAGE_RULE_ID,
                 "severity": "high" if minimum_coverage < Decimal(1) else "medium",
                 "title": "Thin liquidity sources coverage",
                 "summary": (
@@ -185,7 +191,7 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
     if credit_reliance > Decimal("0.25"):
         concerns.append(
             {
-                "rule_id": "liquidity.credit_reliance",
+                "rule_id": CREDIT_RELIANCE_RULE_ID,
                 "severity": "high" if credit_reliance > Decimal("0.50") else "medium",
                 "title": "Elevated reliance on credit",
                 "summary": f"Credit draws fund {credit_reliance} of projected liquidity uses.",
@@ -465,7 +471,7 @@ def review_finding(
 ) -> LiquidityFindingRead:
     get_case_or_404(db, ctx.organization_id, case_id)
     finding = findings_service.get_finding_or_404(db, ctx.organization_id, finding_id)
-    if finding.case_id != case_id or finding.risk_type != RISK_TYPE:
+    if finding.case_id != case_id or _finding_calculation_run(db, ctx, finding) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Liquidity finding not found."
         )
@@ -493,6 +499,32 @@ def review_finding(
     db.commit()
     db.refresh(updated)
     return _finding_read(db, ctx, updated)
+
+
+def _finding_calculation_run(
+    db: Session, ctx: TenantContext, finding: RiskFinding
+) -> CalculationRun | None:
+    if (
+        finding.risk_type != RISK_TYPE
+        or finding.source != "deterministic_rule"
+        or finding.rule_id not in RULE_IDS
+        or finding.rule_version != RULE_VERSION
+    ):
+        return None
+    liquidity = finding.details.get("liquidity")
+    if not isinstance(liquidity, dict):
+        return None
+    try:
+        calculation_run_id = UUID(str(liquidity.get("calculation_run_id")))
+    except ValueError:
+        return None
+    return db.scalar(
+        select(CalculationRun).where(
+            CalculationRun.id == calculation_run_id,
+            CalculationRun.organization_id == ctx.organization_id,
+            CalculationRun.case_id == finding.case_id,
+        )
+    )
 
 
 def _finding_read(db: Session, ctx: TenantContext, finding: RiskFinding) -> LiquidityFindingRead:
