@@ -1,5 +1,9 @@
 export function workspaceHash() {
-  return decodeURIComponent(window.location.hash.slice(1));
+  try {
+    return decodeURIComponent(window.location.hash.slice(1));
+  } catch {
+    return "";
+  }
 }
 
 export function focusWorkspaceTarget(targetId: string) {

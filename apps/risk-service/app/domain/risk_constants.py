@@ -14,9 +14,10 @@ ASSESSMENT_TYPES = [
     "financial_statement_review",
 ]
 
+LIQUIDITY_RISK_TYPE = "liquidity_risk"
 RISK_TYPES = [
     "concentration_risk",
-    "liquidity_risk",
+    LIQUIDITY_RISK_TYPE,
     "leverage_risk",
     "cash_flow_risk",
     "documentation_gap",

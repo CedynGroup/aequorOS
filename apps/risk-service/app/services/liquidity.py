@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Literal, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.risk_constants import FindingStatus
+from app.domain.risk_constants import LIQUIDITY_RISK_TYPE, FindingStatus
 from app.models import (
     CalculationForecastPeriod,
     CalculationRun,
@@ -30,7 +31,7 @@ from app.services.audit import record_event
 from app.services.cases import get_case_or_404
 
 RULE_VERSION = "liquidity-v1.0.0"
-RISK_TYPE = "liquidity"
+RISK_TYPE = LIQUIDITY_RISK_TYPE
 MONEY = Decimal("0.0001")
 RATIO = Decimal("0.0001")
 type EvidenceSourceType = Literal["forecast_output", "canonical_input", "scenario_assumption"]
@@ -206,6 +207,7 @@ def generate_findings(
     periods: list[CalculationForecastPeriod],
 ) -> None:
     result = calculate_metrics(periods)
+    _lock_finding_publication(db, ctx, run)
     newer_run_id = db.scalar(
         select(CalculationRun.id).where(
             CalculationRun.organization_id == ctx.organization_id,
@@ -362,6 +364,16 @@ def generate_findings(
         entity_id=run.id,
         details={"finding_count": len(result.concerns), "rule_version": RULE_VERSION},
     )
+
+
+def _lock_finding_publication(
+    db: Session, ctx: TenantContext, run: CalculationRun
+) -> None:
+    if db.get_bind().dialect.name != "postgresql":
+        return
+    scope = f"{ctx.organization_id}:{run.case_id}:{run.scenario_id}".encode()
+    lock_key = int.from_bytes(hashlib.sha256(scope).digest()[:8], signed=True)
+    db.execute(select(func.pg_advisory_xact_lock(lock_key)))
 
 
 def get_summary(

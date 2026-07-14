@@ -1,10 +1,14 @@
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
+from app.domain.risk_constants import LIQUIDITY_RISK_TYPE
 from app.models import AuditEvent, CalculationForecastPeriod, CalculationRun, RiskFinding
 from app.services.liquidity import generate_findings
 from tests.api.factories import CaseFactory
@@ -116,6 +120,9 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
     assert reviewed.json()["status"] == "acknowledged"
 
     with get_sessionmaker()() as session:
+        persisted_finding = session.get(RiskFinding, UUID(finding["id"]))
+        assert persisted_finding is not None
+        assert persisted_finding.risk_type == LIQUIDITY_RISK_TYPE
         assert session.scalar(
             select(AuditEvent).where(
                 AuditEvent.entity_id == UUID(finding["id"]),
@@ -223,7 +230,7 @@ def test_stale_run_completion_does_not_replace_newer_findings(db_client: TestCli
             session.scalars(
                 select(RiskFinding).where(
                     RiskFinding.case_id == case.id,
-                    RiskFinding.risk_type == "liquidity",
+                    RiskFinding.risk_type == LIQUIDITY_RISK_TYPE,
                     RiskFinding.status == "open",
                 )
             )
@@ -248,7 +255,7 @@ def test_liquidity_summary_ranks_findings_by_severity(db_client: TestClient) -> 
                 RiskFinding(
                     organization_id=ORG_1,
                     case_id=case.id,
-                    risk_type="liquidity",
+                    risk_type=LIQUIDITY_RISK_TYPE,
                     title=f"{severity} finding",
                     summary="Severity ordering regression fixture.",
                     rationale="Severity ordering regression fixture.",
@@ -276,3 +283,109 @@ def test_liquidity_summary_ranks_findings_by_severity(db_client: TestClient) -> 
     assert [rank[item["severity"]] for item in findings] == sorted(
         rank[item["severity"]] for item in findings
     )
+
+
+def test_concurrent_publication_keeps_only_newest_run_findings(
+    db_client: TestClient,
+) -> None:
+    sessionmaker = get_sessionmaker()
+    with sessionmaker() as dialect_session:
+        if dialect_session.get_bind().dialect.name != "postgresql":
+            pytest.skip("PostgreSQL advisory locks are required for concurrency coverage.")
+
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    older = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+    newer = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs/{older['id']}/rerun",
+        headers=headers(),
+        json={},
+    ).json()
+
+    with sessionmaker() as setup_session:
+        runs = list(
+            setup_session.scalars(
+                select(CalculationRun).where(
+                    CalculationRun.id.in_((UUID(older["id"]), UUID(newer["id"])))
+                )
+            )
+        )
+        for run in runs:
+            run.status = "running"
+        findings = list(
+            setup_session.scalars(
+                select(RiskFinding).where(
+                    RiskFinding.case_id == case.id,
+                    RiskFinding.risk_type == LIQUIDITY_RISK_TYPE,
+                )
+            )
+        )
+        for finding in findings:
+            finding.status = "superseded"
+        setup_session.commit()
+
+    with sessionmaker() as newer_session:
+        newer_run = newer_session.get(CalculationRun, UUID(newer["id"]))
+        assert newer_run is not None
+        newer_periods = list(
+            newer_session.scalars(
+                select(CalculationForecastPeriod).where(
+                    CalculationForecastPeriod.run_id == newer_run.id
+                )
+            )
+        )
+        generate_findings(
+            newer_session,
+            TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+            newer_run,
+            newer_periods,
+        )
+        newer_run.status = "succeeded"
+        newer_session.flush()
+
+        def publish_older() -> None:
+            with sessionmaker() as older_session:
+                older_run = older_session.get(CalculationRun, UUID(older["id"]))
+                assert older_run is not None
+                older_periods = list(
+                    older_session.scalars(
+                        select(CalculationForecastPeriod).where(
+                            CalculationForecastPeriod.run_id == older_run.id
+                        )
+                    )
+                )
+                generate_findings(
+                    older_session,
+                    TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+                    older_run,
+                    older_periods,
+                )
+                older_run.status = "succeeded"
+                older_session.commit()
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(publish_older)
+            with pytest.raises(FutureTimeoutError):
+                future.result(timeout=0.2)
+            newer_session.commit()
+            future.result(timeout=5)
+
+    with sessionmaker() as verification_session:
+        current = list(
+            verification_session.scalars(
+                select(RiskFinding).where(
+                    RiskFinding.case_id == case.id,
+                    RiskFinding.risk_type == LIQUIDITY_RISK_TYPE,
+                    RiskFinding.status == "open",
+                )
+            )
+        )
+    assert current
+    assert {item.details["liquidity"]["calculation_run_id"] for item in current} == {
+        newer["id"]
+    }

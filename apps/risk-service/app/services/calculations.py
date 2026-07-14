@@ -12,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -37,6 +37,7 @@ from app.schemas.calculations import (
 )
 from app.services.audit import record_event
 from app.services.cases import get_case_or_404
+from app.services.liquidity import calculate_metrics as calculate_liquidity_metrics
 from app.services.liquidity import generate_findings as generate_liquidity_findings
 from app.services.scenario_semantics import resolve_engine_assumptions
 
@@ -329,7 +330,7 @@ def _create_and_execute(  # noqa: PLR0913
             forecast_rows.append(forecast_row)
         db.flush()
         try:
-            generate_liquidity_findings(db, ctx, run, forecast_rows)
+            calculate_liquidity_metrics(forecast_rows)
         except ValueError as exc:
             raise CalculationInputError(
                 "liquidity_output_invalid",
@@ -349,6 +350,9 @@ def _create_and_execute(  # noqa: PLR0913
                     ),
                 },
             ) from exc
+        db.commit()
+        _begin_read_committed(db)
+        generate_liquidity_findings(db, ctx, run, forecast_rows)
         run.status = "succeeded"
         run.completed_at = datetime.now(UTC)
         record_event(
@@ -1074,6 +1078,12 @@ def _begin_repeatable_read(db: Session) -> None:
         db.connection(execution_options={"isolation_level": "REPEATABLE READ"})
 
 
+def _begin_read_committed(db: Session) -> None:
+    bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        db.connection(execution_options={"isolation_level": "READ COMMITTED"})
+
+
 def _persist_failure(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
@@ -1084,6 +1094,13 @@ def _persist_failure(  # noqa: PLR0913
 ) -> None:
     db.rollback()
     run = _run_or_404(db, ctx, case_id, run_id)
+    db.execute(
+        delete(CalculationForecastPeriod).where(
+            CalculationForecastPeriod.organization_id == ctx.organization_id,
+            CalculationForecastPeriod.case_id == case_id,
+            CalculationForecastPeriod.run_id == run.id,
+        )
+    )
     if canonical_snapshot is not None:
         run.inputs = canonical_snapshot
         run.input_hash = _snapshot_hash(canonical_snapshot)
