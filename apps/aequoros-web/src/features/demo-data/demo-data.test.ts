@@ -59,6 +59,14 @@ describe("demo data helpers", () => {
 
     expect(health.financial.caseId).toBe(caseId);
     expect(health.financial.institutions).toHaveLength(1);
+    expect(health.financial.accounts).toHaveLength(1);
+    expect(health.financial.reportingPeriods).toHaveLength(1);
+    expect(health.financial.balances).toHaveLength(3);
+    expect(health.financial.cashFlows).toHaveLength(2);
+    expect(health.financial.obligations).toHaveLength(1);
+    expect(health.financial.obligations[0]?.reportingPeriodId).toBe(
+      health.financial.reportingPeriods[0]?.id,
+    );
     expect(health.financial.covenants[0]?.complianceStatus).toBe(
       "non_compliant",
     );
@@ -68,6 +76,17 @@ describe("demo data helpers", () => {
       completeScenarioCount: 2,
     });
     expect(health.runs.latestSuccessfulRunId).toBe(health.runs.runs[0]?.id);
+    expect(health.calculationRun.id).toBe(health.runs.runs[0]?.id);
+    expect(health.calculationRun.outputs).toHaveLength(3);
+    expect(health.calculationRun.inputs).toMatchObject({
+      reportingPeriodId: health.financial.reportingPeriods[0]?.id,
+      scenarioId: health.scenarios.scenarios[0]?.id,
+    });
+    expect(
+      Object.values(health.scenarioValidations).every(
+        (validation) => validation.complete && validation.issueCount === 0,
+      ),
+    ).toBe(true);
     expect(health.findings).toHaveLength(4);
   });
 });

@@ -4,7 +4,7 @@ import type {
   FindingRead,
   ScenarioWorkspaceRead,
 } from "@aequoros/risk-service-api";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -354,6 +354,7 @@ describe("CaseHealthHeader", () => {
       }),
     ).toBeInTheDocument();
     expect(riskApi.calculationRuns).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(riskApi.findings).toHaveBeenCalledTimes(2));
   });
 
   it("renders complete demo health without making live requests", () => {

@@ -3,6 +3,7 @@ import type {
   AssumptionValue,
   ScenarioAssumptionRead,
   ScenarioRead,
+  ScenarioValidationRead,
 } from "@aequoros/risk-service-api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -32,6 +33,7 @@ import {
   workspaceHash,
 } from "../../lib/workspace-deep-link";
 import { ErrorPanel } from "../../shared/route-ui";
+import type { MockCaseHealthData } from "../demo-data/demo-data";
 
 const categories: AssumptionCategory[] = [
   "growth",
@@ -53,10 +55,12 @@ export function ScenariosTab({
   tenant,
   caseId,
   mutationDisabled = false,
+  demoData,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   mutationDisabled?: boolean;
+  demoData?: MockCaseHealthData;
 }) {
   const queryClient = useQueryClient();
   const deepLink = scenarioDeepLink();
@@ -66,7 +70,9 @@ export function ScenariosTab({
   const query = useQuery({
     queryKey,
     queryFn: () => riskApi.scenarios(tenant, caseId, includeArchived),
+    enabled: !demoData,
   });
+  const workspace = demoData?.scenarios ?? query.data;
   const [selectedId, setSelectedId] = useState(
     () => deepLink?.scenarioId ?? "",
   );
@@ -74,20 +80,20 @@ export function ScenariosTab({
   const [savedMessage, setSavedMessage] = useState("");
 
   useEffect(() => {
-    if (!selectedId && query.data?.scenarios[0])
-      setSelectedId(query.data.scenarios[0].id);
-  }, [query.data, selectedId]);
+    if (!selectedId && workspace?.scenarios[0])
+      setSelectedId(workspace.scenarios[0].id);
+  }, [selectedId, workspace]);
 
   useEffect(() => {
     if (
-      query.data &&
+      workspace &&
       deepLink?.targetId &&
       !focusedDeepLinks.current.has(deepLink.targetId) &&
       focusWorkspaceTarget(deepLink.targetId)
     ) {
       focusedDeepLinks.current.add(deepLink.targetId);
     }
-  }, [deepLink?.targetId, query.data, selectedId]);
+  }, [deepLink?.targetId, selectedId, workspace]);
 
   const refresh = async (message: string) => {
     setSavedMessage(message);
@@ -122,9 +128,8 @@ export function ScenariosTab({
     },
   });
 
-  if (query.isLoading) return <Skeleton className="h-96" />;
-  if (query.isError) return <ErrorPanel error={query.error} />;
-  const workspace = query.data;
+  if (!demoData && query.isLoading) return <Skeleton className="h-96" />;
+  if (!demoData && query.isError) return <ErrorPanel error={query.error} />;
   if (!workspace)
     return <Alert title="Scenario workspace unavailable" tone="danger" />;
   if (!workspace.scenarios.length) {
@@ -193,7 +198,7 @@ export function ScenariosTab({
                 </span>
               </button>
             ))}
-            {!auditMode ? (
+            {!auditMode && !demoData ? (
               <div className="border-t border-[rgb(var(--border))] pt-3">
                 <Label>Custom scenario name</Label>
                 <Input
@@ -224,7 +229,8 @@ export function ScenariosTab({
           tenant={tenant}
           caseId={caseId}
           scenario={selected}
-          readOnly={auditMode}
+          readOnlyReason={demoData ? "demo" : auditMode ? "archived" : null}
+          validationData={demoData?.scenarioValidations[selected.id]}
           onSaved={refresh}
           onSelected={setSelectedId}
         />
@@ -237,21 +243,26 @@ function ScenarioEditor({
   tenant,
   caseId,
   scenario,
-  readOnly,
+  readOnlyReason,
+  validationData,
   onSaved,
   onSelected,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   scenario: ScenarioRead;
-  readOnly: boolean;
+  readOnlyReason: "archived" | "demo" | null;
+  validationData?: ScenarioValidationRead;
   onSaved: (message: string) => Promise<void>;
   onSelected: (id: string) => void;
 }) {
   const validation = useQuery({
     queryKey: ["scenario-validation", tenant, caseId, scenario.id],
     queryFn: () => riskApi.scenarioValidation(tenant, caseId, scenario.id),
+    enabled: !validationData,
   });
+  const validationResult = validationData ?? validation.data;
+  const readOnly = readOnlyReason !== null;
   const [copyName, setCopyName] = useState(`${scenario.name} copy`);
   const [name, setName] = useState(scenario.name);
   const [description, setDescription] = useState(scenario.description ?? "");
@@ -338,10 +349,10 @@ function ScenarioEditor({
   });
   const actionError =
     updateScenario.error ?? copy.error ?? archive.error ?? add.error;
-  const validationPassed = validation.data
+  const validationPassed = validationResult
     ? readOnly
-      ? validation.data.issueCount === 0
-      : validation.data.complete
+      ? validationResult.issueCount === 0
+      : validationResult.complete
     : false;
 
   return (
@@ -351,15 +362,27 @@ function ScenarioEditor({
         meta={`${labelize(scenario.scenarioType)} scenario`}
         actions={
           <div className="flex gap-2">
-            {readOnly ? <Badge tone="warning">Archived</Badge> : null}
+            {readOnly ? (
+              <Badge tone="warning">
+                {readOnlyReason === "demo" ? "Read only" : "Archived"}
+              </Badge>
+            ) : null}
             <Badge tone="info">{scenario.assumptions.length} inputs</Badge>
           </div>
         }
       />
       <div className="space-y-4 p-3">
         {readOnly ? (
-          <Alert title="Archived scenario audit mode">
-            This historical scenario is read-only.
+          <Alert
+            title={
+              readOnlyReason === "demo"
+                ? "Demo scenario · read only"
+                : "Archived scenario audit mode"
+            }
+          >
+            {readOnlyReason === "demo"
+              ? "This reviewed demo scenario is frontend-only and immutable."
+              : "This historical scenario is read-only."}
           </Alert>
         ) : null}
         <div className="grid gap-2 @2xl/editor:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] @2xl/editor:items-end">
@@ -397,19 +420,23 @@ function ScenarioEditor({
             </Button>
           ) : null}
         </div>
-        {validation.isLoading ? <Skeleton className="h-16" /> : null}
-        {validation.isError ? <ErrorPanel error={validation.error} /> : null}
+        {!validationData && validation.isLoading ? (
+          <Skeleton className="h-16" />
+        ) : null}
+        {!validationData && validation.isError ? (
+          <ErrorPanel error={validation.error} />
+        ) : null}
         {validationPassed ? (
           <Alert title="Scenario validation passed">
             All required assumptions are present and reviewed.
           </Alert>
-        ) : validation.data ? (
+        ) : validationResult ? (
           <Alert
-            title={`${validation.data.issueCount} validation issues`}
+            title={`${validationResult.issueCount} validation issues`}
             tone="warning"
           >
             <ul className="list-disc space-y-1 pl-4">
-              {validation.data.issues.slice(0, 6).map((issue) => (
+              {validationResult.issues.slice(0, 6).map((issue) => (
                 <li
                   key={`${issue.code}-${issue.assumptionId ?? issue.category ?? "scenario"}`}
                 >

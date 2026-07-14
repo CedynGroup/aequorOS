@@ -28,6 +28,7 @@ import {
   workspaceHash,
 } from "../../lib/workspace-deep-link";
 import { ErrorPanel } from "../../shared/route-ui";
+import type { MockCaseHealthData } from "../demo-data/demo-data";
 
 const runTone: Record<
   CalculationStatus,
@@ -44,11 +45,13 @@ export function CalculationsTab({
   caseId,
   mutationDisabled = false,
   mutationDisabledReason = "demo",
+  demoData,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   mutationDisabled?: boolean;
   mutationDisabledReason?: "demo" | "retired-case";
+  demoData?: MockCaseHealthData;
 }) {
   const queryClient = useQueryClient();
   const deepLink = calculationDeepLink();
@@ -58,11 +61,13 @@ export function CalculationsTab({
   const scenarios = useQuery({
     queryKey: ["scenarios", tenant, caseId, true],
     queryFn: () => riskApi.scenarios(tenant, caseId, true),
+    enabled: !demoData,
   });
   const runs = useQuery({
     queryKey: runsKey,
     queryFn: () =>
       riskApi.calculationRuns(tenant, caseId, undefined, 25, runOffset),
+    enabled: !demoData,
     refetchInterval: (query) =>
       query.state.data?.runs.some((run) =>
         (["queued", "running"] as CalculationStatus[]).includes(run.status),
@@ -78,7 +83,7 @@ export function CalculationsTab({
   const selectedRun = useQuery({
     queryKey: ["calculation-run", tenant, caseId, selectedRunId],
     queryFn: () => riskApi.calculationRun(tenant, caseId, selectedRunId),
-    enabled: Boolean(selectedRunId),
+    enabled: Boolean(selectedRunId) && !demoData,
     refetchInterval: (query) =>
       query.state.data &&
       (["queued", "running"] as CalculationStatus[]).includes(
@@ -87,6 +92,13 @@ export function CalculationsTab({
         ? 1000
         : false,
   });
+  const scenarioWorkspace = demoData?.scenarios ?? scenarios.data;
+  const runList = demoData?.runs ?? runs.data;
+  const selectedRunData = demoData
+    ? !selectedRunId || selectedRunId === demoData.calculationRun.id
+      ? demoData.calculationRun
+      : undefined
+    : selectedRun.data;
 
   useEffect(() => {
     setRunOffset(0);
@@ -95,58 +107,63 @@ export function CalculationsTab({
   }, [caseId, deepLink?.runId, tenant.orgId]);
 
   useEffect(() => {
-    if (!scenarios.data) return;
+    if (!scenarioWorkspace) return;
     setScenarioId((current) =>
-      scenarios.data.scenarios.some(
+      scenarioWorkspace.scenarios.some(
         (scenario) => scenario.id === current && !scenario.archivedAt,
       )
         ? current
-        : (scenarios.data.scenarios.find((scenario) => !scenario.archivedAt)
+        : (scenarioWorkspace.scenarios.find((scenario) => !scenario.archivedAt)
             ?.id ?? ""),
     );
-  }, [scenarios.data]);
+  }, [scenarioWorkspace]);
 
   useEffect(() => {
-    if (!runs.data) return;
+    if (!runList) return;
     setSelectedRunId((current) =>
-      runs.data.runs.some((run) => run.id === current) ||
-      current === runs.data.latestSuccessfulRunId ||
-      current === deepLink?.runId
+      runList.runs.some((run) => run.id === current) ||
+      current === runList.latestSuccessfulRunId ||
+      (current === deepLink?.runId && !demoData)
         ? current
-        : (runs.data.runs[0]?.id ?? ""),
+        : (runList.runs[0]?.id ?? ""),
     );
-  }, [deepLink?.runId, runs.data]);
+  }, [deepLink?.runId, demoData, runList]);
 
   useEffect(() => {
     if (
-      selectedRun.data &&
+      selectedRunData &&
       deepLink?.targetId &&
       !focusedDeepLinks.current.has(deepLink.targetId) &&
       focusWorkspaceTarget(deepLink.targetId)
     ) {
       focusedDeepLinks.current.add(deepLink.targetId);
     }
-  }, [deepLink?.targetId, selectedRun.data]);
+  }, [deepLink?.targetId, selectedRunData]);
 
   const parsedForecastPeriods = Number(forecastPeriods);
   const validForecastPeriods =
     Number.isInteger(parsedForecastPeriods) &&
     parsedForecastPeriods >= 1 &&
     parsedForecastPeriods <= 12;
-  const activeScenarioId = scenarios.data?.scenarios.some(
+  const activeScenarioId = scenarioWorkspace?.scenarios.some(
     (scenario) => scenario.id === scenarioId && !scenario.archivedAt,
   )
     ? scenarioId
-    : (scenarios.data?.scenarios.find((scenario) => !scenario.archivedAt)?.id ??
-      "");
+    : (scenarioWorkspace?.scenarios.find((scenario) => !scenario.archivedAt)
+        ?.id ?? "");
 
   const refreshRuns = async (run: CalculationRunRead, message: string) => {
     setRunOffset(0);
     setSelectedRunId(run.id);
     queryClient.setQueryData(["calculation-run", tenant, caseId, run.id], run);
-    await queryClient.invalidateQueries({
-      queryKey: ["calculation-runs", tenant, caseId],
-    });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["calculation-runs", tenant, caseId],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["findings", tenant, caseId],
+      }),
+    ]);
     if (run.status === "failed") toast.error(run.error?.message ?? message);
     else toast.success(message);
   };
@@ -164,12 +181,13 @@ export function CalculationsTab({
     onSuccess: (run) => refreshRuns(run, "Forecast rerun completed"),
   });
 
-  if (scenarios.isLoading || runs.isLoading)
+  if (!demoData && (scenarios.isLoading || runs.isLoading))
     return <Skeleton className="h-96" />;
-  if (scenarios.isError) return <ErrorPanel error={scenarios.error} />;
-  if (runs.isError) return <ErrorPanel error={runs.error} />;
+  if (!demoData && scenarios.isError)
+    return <ErrorPanel error={scenarios.error} />;
+  if (!demoData && runs.isError) return <ErrorPanel error={runs.error} />;
 
-  const availableScenarios = scenarios.data?.scenarios ?? [];
+  const availableScenarios = scenarioWorkspace?.scenarios ?? [];
   if (!availableScenarios.length) {
     return (
       <Alert title="No scenarios available">
@@ -178,17 +196,17 @@ export function CalculationsTab({
     );
   }
   const selectedSummary =
-    runs.data?.runs.find((run) => run.id === selectedRunId) ?? selectedRun.data;
+    runList?.runs.find((run) => run.id === selectedRunId) ?? selectedRunData;
   const selectedScenario = availableScenarios.find(
     (scenario) =>
       scenario.id ===
-      (selectedRun.data?.scenarioId ?? selectedSummary?.scenarioId),
+      (selectedRunData?.scenarioId ?? selectedSummary?.scenarioId),
   );
   const activeScenarios = availableScenarios.filter(
     (scenario) => !scenario.archivedAt,
   );
   const archivedAudit = Boolean(selectedScenario?.archivedAt);
-  const hasRunHistory = Boolean(runs.data?.runs.length || selectedRunId);
+  const hasRunHistory = Boolean(runList?.runs.length || selectedRunId);
   const isSubmitting = start.isPending || rerun.isPending;
 
   return (
@@ -294,7 +312,7 @@ export function CalculationsTab({
       ) : (
         <div className="grid gap-3 @5xl/calculations:grid-cols-[250px_minmax(0,1fr)]">
           <RunHistory
-            runs={runs.data?.runs ?? []}
+            runs={runList?.runs ?? []}
             scenarioNames={
               new Map(
                 availableScenarios.map((scenario) => [
@@ -303,24 +321,24 @@ export function CalculationsTab({
                 ]),
               )
             }
-            total={runs.data?.total ?? 0}
+            total={runList?.total ?? 0}
             selectedRunId={selectedSummary?.id ?? selectedRunId}
             onSelect={setSelectedRunId}
-            hasMore={runs.data?.hasMore ?? false}
-            offset={runs.data?.offset ?? 0}
+            hasMore={runList?.hasMore ?? false}
+            offset={runList?.offset ?? 0}
             onPrevious={() =>
               setRunOffset((current) => Math.max(0, current - 25))
             }
             onNext={() => setRunOffset((current) => current + 25)}
           />
-          {selectedRun.isLoading ? (
+          {!demoData && selectedRun.isLoading ? (
             <Skeleton className="h-72" />
-          ) : selectedRun.isError ? (
+          ) : !demoData && selectedRun.isError ? (
             <ErrorPanel error={selectedRun.error} />
-          ) : selectedRun.data ? (
+          ) : selectedRunData ? (
             <RunOutput
-              run={selectedRun.data}
-              latestSuccessfulRunId={runs.data?.latestSuccessfulRunId}
+              run={selectedRunData}
+              latestSuccessfulRunId={runList?.latestSuccessfulRunId}
               isRerunning={rerun.isPending}
               readOnlyReason={
                 mutationDisabled
@@ -329,10 +347,10 @@ export function CalculationsTab({
                     ? "archived-scenario"
                     : null
               }
-              onRerun={() => rerun.mutate(selectedRun.data.id)}
+              onRerun={() => rerun.mutate(selectedRunData.id)}
               onShowLatest={() =>
-                runs.data?.latestSuccessfulRunId &&
-                setSelectedRunId(runs.data.latestSuccessfulRunId)
+                runList?.latestSuccessfulRunId &&
+                setSelectedRunId(runList.latestSuccessfulRunId)
               }
             />
           ) : null}

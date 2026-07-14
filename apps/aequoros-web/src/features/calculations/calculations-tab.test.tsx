@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
+import { mockCaseHealth } from "../demo-data/demo-data";
 import { CalculationsTab } from "./calculations-tab";
 
 const tenant: TenantHeaders = {
@@ -278,6 +279,34 @@ describe("CalculationsTab", () => {
     },
   );
 
+  it("renders complete demo forecasts without live queries or mutations", async () => {
+    const calculationRuns = vi.spyOn(riskApi, "calculationRuns");
+    const start = vi.spyOn(riskApi, "startCalculation");
+    const rerun = vi.spyOn(riskApi, "rerunCalculation");
+    const demoData = mockCaseHealth(tenant.orgId, caseId);
+
+    renderWithQuery(
+      <CalculationsTab
+        tenant={tenant}
+        caseId={caseId}
+        mutationDisabled
+        mutationDisabledReason="demo"
+        demoData={demoData}
+      />,
+    );
+
+    expect(
+      await screen.findByText("Projected balance sheet outputs"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Demo mode · read only")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run forecast" })).toBeDisabled();
+    expect(riskApi.scenarios).not.toHaveBeenCalled();
+    expect(calculationRuns).not.toHaveBeenCalled();
+    expect(riskApi.calculationRun).not.toHaveBeenCalled();
+    expect(start).not.toHaveBeenCalled();
+    expect(rerun).not.toHaveBeenCalled();
+  });
+
   it.each([
     "calculation-run-not-a-uuid-forecast-period-1",
     `calculation-run-${run().id}-forecast-period-0`,
@@ -407,7 +436,10 @@ describe("CalculationsTab", () => {
       .spyOn(riskApi, "startCalculation")
       .mockResolvedValue(run());
 
-    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+    const { queryClient } = renderWithQuery(
+      <CalculationsTab tenant={tenant} caseId={caseId} />,
+    );
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
     expect(await screen.findByText("No calculation runs")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Run forecast" }));
 
@@ -421,6 +453,9 @@ describe("CalculationsTab", () => {
       await screen.findByText("Projected balance sheet outputs"),
     ).toBeInTheDocument();
     expect(screen.getByText("$4,550.00")).toBeInTheDocument();
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["findings", tenant, caseId],
+    });
   });
 
   it("shows running status and disables rerun while polling", async () => {
@@ -645,13 +680,19 @@ describe("CalculationsTab", () => {
     const rerun = vi
       .spyOn(riskApi, "rerunCalculation")
       .mockResolvedValue(run({ id: "new-run", rerunOfRunId: run().id }));
-    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+    const { queryClient } = renderWithQuery(
+      <CalculationsTab tenant={tenant} caseId={caseId} />,
+    );
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
     await user.click(
       await screen.findByRole("button", { name: "Rerun current inputs" }),
     );
     await waitFor(() =>
       expect(rerun).toHaveBeenCalledWith(tenant, caseId, run().id),
     );
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["findings", tenant, caseId],
+    });
   });
 
   it("rejects fractional forecast periods", async () => {
