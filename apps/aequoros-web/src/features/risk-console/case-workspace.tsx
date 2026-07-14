@@ -1,6 +1,6 @@
 import type { CaseRead } from "@aequoros/risk-service-api";
 import { Loader2 } from "lucide-react";
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, type ReactNode, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import {
@@ -20,6 +20,7 @@ import { formatJson, labelize } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { focusWorkspaceTarget } from "../../lib/workspace-deep-link";
 import { CaseHealthHeader } from "./case-health-header";
+import { mockCaseHealth } from "../demo-data/demo-data";
 import { DecisionBadge, RiskBadge, StatusBadge, relative } from "./format";
 import type { UpdateSearch } from "./types";
 import type { MockCaseRead } from "../demo-data/demo-data";
@@ -98,6 +99,15 @@ export function CaseWorkspace({
   const caseRetired = Boolean(
     selectedCase?.archivedAt || selectedCase?.status === "archived",
   );
+  const [pendingHealthTab, setPendingHealthTab] =
+    useState<ConsoleTab | null>(null);
+
+  useEffect(() => {
+    if (pendingHealthTab !== activeTab) return;
+    if (focusWorkspaceTarget(`case-health-target-${activeTab}`)) {
+      setPendingHealthTab(null);
+    }
+  }, [activeTab, pendingHealthTab]);
 
   return (
     <Panel className="min-h-[640px] overflow-hidden">
@@ -127,11 +137,12 @@ export function CaseWorkspace({
             tenant={tenant}
             caseId={caseId}
             decision={selectedCase?.decision}
+            demoData={
+              mockWorkspace ? mockCaseHealth(tenant.orgId, caseId) : undefined
+            }
             onNavigate={(tab) => {
+              setPendingHealthTab(tab);
               updateSearch({ tab });
-              requestAnimationFrame(() =>
-                focusWorkspaceTarget(`case-health-target-${tab}`),
-              );
             }}
           />
           <Tabs

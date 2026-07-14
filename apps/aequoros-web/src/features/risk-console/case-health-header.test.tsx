@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import type { ConsoleTab } from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
+import { mockCaseHealth } from "../demo-data/demo-data";
 import { CaseHealthHeader } from "./case-health-header";
 
 const tenant: TenantHeaders = { orgId: "org-1", userId: "user-1" };
@@ -290,6 +291,52 @@ describe("CaseHealthHeader", () => {
       expect(screen.getByText("Rejected")).toBeInTheDocument();
     },
   );
+
+  it("polls an active latest forecast until it reaches a terminal state", async () => {
+    installQueries({ runList: runs("running") });
+    vi.mocked(riskApi.calculationRuns)
+      .mockResolvedValueOnce(runs("running"))
+      .mockResolvedValue(runs("succeeded"));
+
+    renderHeader(null);
+
+    expect(
+      await screen.findByTitle("Forecast #7 · Running"),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByTitle("Forecast #7 · Succeeded", undefined, {
+        timeout: 2500,
+      }),
+    ).toBeInTheDocument();
+    expect(riskApi.calculationRuns).toHaveBeenCalledTimes(2);
+  });
+
+  it("renders complete demo health without making live requests", () => {
+    const financialWorkspace = vi.spyOn(riskApi, "financialWorkspace");
+    const scenarios = vi.spyOn(riskApi, "scenarios");
+    const calculationRuns = vi.spyOn(riskApi, "calculationRuns");
+    const findings = vi.spyOn(riskApi, "findings");
+
+    renderWithQuery(
+      <CaseHealthHeader
+        tenant={tenant}
+        caseId={caseId}
+        decision="needs_more_info"
+        demoData={mockCaseHealth(tenant.orgId, caseId)}
+        onNavigate={vi.fn<(tab: ConsoleTab) => void>()}
+      />,
+    );
+
+    expect(screen.getByText("Validated")).toBeInTheDocument();
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.getByTitle("Forecast #1 · Succeeded")).toBeInTheDocument();
+    expect(screen.getByText("Non-compliant")).toBeInTheDocument();
+    expect(screen.getByText("Needs More Info")).toBeInTheDocument();
+    expect(financialWorkspace).not.toHaveBeenCalled();
+    expect(scenarios).not.toHaveBeenCalled();
+    expect(calculationRuns).not.toHaveBeenCalled();
+    expect(findings).not.toHaveBeenCalled();
+  });
 
   it("renders unknown states when health queries fail", async () => {
     vi.spyOn(riskApi, "financialWorkspace").mockRejectedValue(

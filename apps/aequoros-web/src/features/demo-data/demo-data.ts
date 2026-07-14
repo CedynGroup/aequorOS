@@ -1,5 +1,7 @@
 import {
   type CaseDecision,
+  type CalculationRunListRead,
+  type CalculationRunSummaryRead,
   type CaseQueueItemRead,
   type CaseRead,
   CaseSort,
@@ -7,8 +9,11 @@ import {
   CaseStatus,
   type CaseStatus as CaseStatusType,
   type FinancialDataWorkspaceRead,
+  type FindingRead,
   RiskLevel,
   type RiskLevel as RiskLevelType,
+  type ScenarioRead,
+  type ScenarioWorkspaceRead,
 } from "@aequoros/risk-service-api";
 
 import { DEFAULT_USER_ID } from "../../lib/constants";
@@ -20,6 +25,13 @@ export const DEMO_CASE_IDS = [
   "90000000-0000-4000-8000-000000000003",
   "90000000-0000-4000-8000-000000000004",
 ] as const;
+
+export type MockCaseHealthData = {
+  financial: FinancialDataWorkspaceRead;
+  findings: FindingRead[];
+  runs: CalculationRunListRead;
+  scenarios: ScenarioWorkspaceRead;
+};
 
 export function emptyWorkspace(
   organizationId: string,
@@ -40,6 +52,171 @@ export function emptyWorkspace(
     manualEdits: [],
     validationIssues: [],
     validationSummary: { error: 0, info: 0, total: 0, warning: 0 },
+  };
+}
+
+export function mockCaseHealth(
+  organizationId: string,
+  caseId: string,
+): MockCaseHealthData {
+  const caseData = mockCase(organizationId, caseId);
+  const queueItem =
+    mockCases(organizationId).find((item) => item.id === caseId) ??
+    mockCases(organizationId)[0];
+  const adverse =
+    caseData.riskLevel === RiskLevel.High ||
+    caseData.riskLevel === RiskLevel.Critical;
+  const timestamp = new Date("2026-07-01T12:00:00Z");
+  const scenarioId = `${caseId}-baseline`;
+  const scenarioCategories = [
+    "growth",
+    "expenses",
+    "cash_flow_timing",
+    "credit_usage",
+    "repayment_behavior",
+  ] as const;
+  const scenarios: ScenarioRead[] = (["baseline", "downside"] as const).map(
+    (scenarioType) => {
+      const id = `${caseId}-${scenarioType}`;
+      return {
+        id,
+        organizationId,
+        caseId,
+        name: scenarioType === "baseline" ? "Baseline" : "Downside",
+        description: "Reviewed demo scenario",
+        scenarioType,
+        copiedFromScenarioId: null,
+        createdBy: DEFAULT_USER_ID,
+        archivedAt: null,
+        assumptions: scenarioCategories.map((category) => ({
+          id: `${id}-${category}`,
+          organizationId,
+          caseId,
+          scenarioId: id,
+          category,
+          key: `${category}_assumption`,
+          label: `${category.replaceAll("_", " ")} assumption`,
+          value: scenarioType === "baseline" ? 1 : -1,
+          unit: "percent",
+          provenance: { mocked: true },
+          reviewStatus: "reviewed",
+          reviewedAt: timestamp,
+          reviewedBy: DEFAULT_USER_ID,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    },
+  );
+  const run: CalculationRunSummaryRead = {
+    id: `${caseId}-forecast-1`,
+    scenarioId,
+    rerunOfRunId: null,
+    status: "succeeded",
+    engineVersion: "balance-sheet-v1.0.0",
+    inputHash: "d".repeat(64),
+    forecastPeriods: 3,
+    asOfDate: timestamp,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    error: null,
+    createdAt: timestamp,
+  };
+  const findingSeverities = Array.from(
+    { length: queueItem.openFindingsCount },
+    (_, index) =>
+      index === 0 && caseData.riskLevel === RiskLevel.Critical
+        ? "critical"
+        : adverse
+          ? "high"
+          : "medium",
+  );
+  const findings: FindingRead[] = findingSeverities.map((severity, index) => ({
+    id: `${caseId}-finding-${index + 1}`,
+    organizationId,
+    caseId,
+    assessmentId: null,
+    runId: run.id,
+    riskType: "covenant",
+    title: `Demo ${severity} finding`,
+    summary: "Seeded case-health finding",
+    severity,
+    status: "open",
+    source: "demo",
+    ruleId: null,
+    ruleVersion: null,
+    rationale: null,
+    likelihood: null,
+    impact: null,
+    confidence: null,
+    scoreImpact: null,
+    dispositionReason: null,
+    details: { mocked: true },
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }));
+
+  return {
+    financial: {
+      ...emptyWorkspace(organizationId, caseId),
+      institutions: [
+        {
+          id: `${caseId}-institution`,
+          organizationId,
+          caseId,
+          name: caseData.subjectName ?? "Demo institution",
+          institutionType: "borrower",
+          referenceCode: "DEMO-001",
+          metadata: { mocked: true },
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+      ],
+      covenants: [
+        {
+          id: `${caseId}-covenant`,
+          organizationId,
+          caseId,
+          obligationId: null,
+          reportingPeriodId: null,
+          name: "Minimum debt service coverage",
+          metric: "debt_service_coverage_ratio",
+          operator: "gte",
+          threshold: "1.25",
+          actualValue: adverse ? "1.10" : "1.60",
+          complianceStatus: adverse ? "non_compliant" : "compliant",
+          reportingContext: { mocked: true },
+          sourceRecord: { mocked: true },
+          metadata: { mocked: true },
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+      ],
+    },
+    scenarios: {
+      caseId,
+      scenarios,
+      readiness: {
+        caseId,
+        ready: true,
+        scenarioCount: 2,
+        completeScenarioCount: 2,
+        incompleteScenarioIds: [],
+      },
+    },
+    runs: {
+      caseId,
+      runs: [run],
+      latestSuccessfulRunId: run.id,
+      latestSuccessfulRunsByScenario: [run],
+      total: 1,
+      limit: 25,
+      offset: 0,
+      hasMore: false,
+    },
+    findings,
   };
 }
 

@@ -2,7 +2,12 @@ import { CaseSort, RiskLevel } from "@aequoros/risk-service-api";
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_USER_ID } from "../../lib/constants";
-import { emptyWorkspace, mockCase, mockCaseList } from "./demo-data";
+import {
+  emptyWorkspace,
+  mockCase,
+  mockCaseHealth,
+  mockCaseList,
+} from "./demo-data";
 
 describe("demo data helpers", () => {
   it("returns every financial workspace section as an empty array", () => {
@@ -46,5 +51,23 @@ describe("demo data helpers", () => {
     expect(detail.organizationId).toBe("org-1");
     expect(detail.assignedToUserId).toBe(DEFAULT_USER_ID);
     expect(detail.metadata).toMatchObject({ mocked: true });
+  });
+
+  it("creates internally consistent case-health data for demo cases", () => {
+    const caseId = "90000000-0000-4000-8000-000000000001";
+    const health = mockCaseHealth("org-1", caseId);
+
+    expect(health.financial.caseId).toBe(caseId);
+    expect(health.financial.institutions).toHaveLength(1);
+    expect(health.financial.covenants[0]?.complianceStatus).toBe(
+      "non_compliant",
+    );
+    expect(health.scenarios.readiness).toMatchObject({
+      ready: true,
+      scenarioCount: 2,
+      completeScenarioCount: 2,
+    });
+    expect(health.runs.latestSuccessfulRunId).toBe(health.runs.runs[0]?.id);
+    expect(health.findings).toHaveLength(4);
   });
 });
