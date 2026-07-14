@@ -110,6 +110,15 @@ technical review. Both representations omit entity identifiers and redact UUIDs
 that appear inside nested report evidence while preserving distinct aliases for
 UUID-bearing object keys.
 
+## Forecast Review
+
+Successful runs show a lazy-loaded balance-sheet trajectory chart for projected
+assets, liabilities, and equity before the authoritative output table. Chart
+labels and tooltips retain the API's original decimal strings; missing periods
+or non-plottable values remain disconnected and are listed as annotated gaps.
+An empty, unavailable, loading, or failed visualization does not hide the run's
+tabular output.
+
 ## Capital Review
 
 The Capital tab lists immutable projection attempts and successful forecast runs
@@ -121,6 +130,11 @@ immutable reporting currency, compare the latest baseline and downside
 projections, and review generated findings with their forecast evidence. The
 comparison explains incompatible as-of dates, reporting currencies, or horizons
 instead of presenting misleading deltas.
+
+Compatible comparisons include a lazy-loaded equity-to-assets chart for the
+baseline and downside projections. The API remains responsible for determining
+comparison compatibility, and the comparison table remains authoritative when
+the visualization is empty, unavailable, loading, or fails to render.
 
 Projection and finding mutations are disabled in demo mode and for retired
 cases. Loading, API failure, no-run, no-projection, failed-attempt, incomplete
@@ -134,6 +148,12 @@ peak gap, sources coverage, credit reliance, and cash runway, including backend
 diagnostics for unavailable metrics. Severity-ranked findings show rationale
 and deep-linked evidence for forecast outputs, canonical financial inputs, and
 scenario assumptions.
+
+The tab reserves a lazy-loaded sources-coverage chart for per-period values and
+the persisted classification threshold. The current liquidity contract does not
+expose that threshold, so the UI explicitly marks the chart unavailable rather
+than re-deriving a classification boundary; metrics and findings remain
+available below it.
 
 Open findings can be acknowledged or dismissed; dismissal requires a reason.
 Mutation errors remain visible and successful reviews refresh both the
@@ -161,7 +181,9 @@ generated liquidity metrics, findings, and evidence, then checks
 persisted failure history, preservation of prior output, and tenant isolation.
 The capital journey creates baseline and downside forecasts and projections,
 reviews indicators and finding evidence, compares aligned scenarios, exercises
-API error and comparison-diagnostic states, and verifies tenant isolation.
+API error and comparison-diagnostic states, and verifies tenant isolation. These
+journeys also smoke-test the forecast and capital SVG charts and the explicit
+liquidity-chart unavailable state.
 From the repository root:
 
 ```bash
@@ -226,6 +248,9 @@ The web app uses a feature-based split so each operational surface owns its UI a
 - `src/features/capital/capital-tab.tsx`: projection generation and history, indicators, scenario comparison, findings, and evidence review
 - `src/features/liquidity/liquidity-client.ts`: generated-client adapter for liquidity summary and finding review requests
 - `src/features/liquidity/liquidity-tab.tsx`: scenario/run selection, metric diagnostics, evidence links, and finding review states
+- `src/features/charts/analysis-chart-adapters.ts`: pure generated-DTO adapters for forecast, liquidity, and capital chart series
+- `src/features/charts/analysis-charts.tsx`: lazy-loaded Recharts visualizations, annotated gaps, accessible SVG metadata, and reduced-motion behavior
+- `src/features/charts/chart-shell.tsx`: visualization loading and failure isolation that preserves authoritative content
 - `src/features/demo-data/demo-data.ts`: frontend-only fallback/demo data helpers
 - `src/shared/route-ui.tsx`: route-level empty, error, and data-list helpers
 - `src/routes/risk-console.tsx`: thin route export for TanStack Router wiring
@@ -247,6 +272,9 @@ Vitest tests are colocated with the module they protect:
 - `src/features/capital/capital-tab.test.tsx`: capital loading, empty, failure, success, comparison, evidence, pagination, and mutation-disabled states
 - `src/features/liquidity/liquidity-client.test.ts`: generated client routing, headers, query filters, and review payloads
 - `src/features/liquidity/liquidity-tab.test.tsx`: liquidity loading, empty, unavailable, historical-run, evidence, review, and error states
+- `src/features/charts/analysis-chart-adapters.test.ts`: decimal preservation, missing periods, liquidity-threshold availability, and comparison-basis series states
+- `src/features/charts/analysis-charts.test.tsx`: SVG points, labels, threshold, gap annotations, and unavailable states
+- `src/features/charts/chart-shell.test.tsx`: lazy-loading fallback and chart-failure isolation
 - `src/features/demo-data/demo-data.test.ts`: fallback/demo data filtering and detail construction
 - `src/routes/search.test.ts`: typed search-param parsing
 - `src/features/risk-console/risk-console.test.tsx`: bulk action result grouping
@@ -258,7 +286,8 @@ Browser-mode Vitest tests use Playwright for DOM-heavy component interactions:
 The Playwright E2E suite includes `e2e/financial-review.spec.ts` for source
 drilldown and the upload, map, validate, correct, retry, revalidate, cash-flow
 entry, and covenant-entry journeys. `e2e/capital-projection.spec.ts` covers the
-deterministic capital projection, comparison, finding-evidence, failure, and
-tenant-isolation workflow. `e2e/risk-console.spec.ts` also verifies the compact
-scenario table and that the console has no horizontal overflow at 1440x1000 and
-1280x800 viewports.
+deterministic capital projection, comparison chart, finding-evidence, failure,
+and tenant-isolation workflow. `e2e/risk-console.spec.ts` covers forecast-chart
+rendering and the liquidity-chart unavailable state in its seeded analysis
+journeys, and also verifies the compact scenario table and that the console has
+no horizontal overflow at 1440x1000 and 1280x800 viewports.
