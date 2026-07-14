@@ -149,6 +149,14 @@ scoped to a case through `case_id`, including uploaded documents, assessments,
 findings, financial workspace records, scenarios, calculation runs, and capital
 projections.
 
+Case detail responses resolve `assignee_display_name`; queue items additionally
+include a human-readable reference for the latest scored assessment run. Score
+and assessment-run reads expose the same reference, formatted from the
+assessment name, UTC creation date, and a stable one-based ordinal among runs
+with that name on that date. Decision reads resolve
+`decided_by_display_name`. These presentation fields supplement rather than
+replace the internal identifiers used for API relationships.
+
 ### Documents
 
 `Document` represents a file known to the service, usually an uploaded PDF,
@@ -208,6 +216,10 @@ the original row payload in `raw_payload`, plus row location details in
 source row and field that produced them. Mapper-created links should include
 field-level details such as `field_name` and `source_field` so reviewers can
 trace a canonical value back to the originating extraction row.
+
+Financial workspace reads resolve `edited_by_display_name` on manual edit
+history. The underlying editor identifier remains available for audit and API
+relationships.
 
 ### Financial Mapping Flow
 
@@ -403,6 +415,10 @@ principal and outstanding amounts, every selected financial input must use the
 same currency, balance types must be classifiable, and the scenario must resolve
 to one reviewed value in each required category.
 
+Input diagnostics identify reporting periods, balances, cash flows,
+obligations, and ambiguous assumptions with business labels rather than record
+IDs. The immutable input snapshot retains identifiers for audit and replay.
+
 For each annual period, the deterministic engine applies revenue growth and
 cash-flow delay to inflows, expense growth to outflows, credit usage to the
 initial available draw, and repayment behavior to scheduled debt repayment.
@@ -512,6 +528,23 @@ findings on active scenarios can be reviewed; reviewed, superseded, and archived
 scenario findings are read-only. Reviews and automatic publication or
 supersession emit audit events. Liquidity workflow findings are also protected
 from mutation through the generic findings update route.
+
+### Case Reports
+
+Completed cases expose a report at:
+
+```text
+GET /api/v1/cases/{case_id}/report
+```
+
+The route returns JSON by default and HTML when content negotiation selects
+`text/html`. Reports are presentation artifacts rather than relationship
+contracts: entity IDs are omitted, assignees and decision actors are rendered
+as display names, assessments are rendered by name, and score runs use the
+stable assessment-run reference. UUID values nested in finding details and
+score rule results are redacted. UUIDs embedded in object keys become distinct
+deterministic aliases so separate evidence entries do not collapse into one
+key. The report remains tenant-scoped, and only completed cases are eligible.
 
 ## API Versioning
 

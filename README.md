@@ -49,5 +49,6 @@ Open `http://127.0.0.1:5173/cases`. See the [risk-service setup](apps/risk-servi
 the [web console guide](apps/aequoros-web/README.md), and the
 [ten-minute demo playbook](docs/demo-playbook.md) for the full presenter journey.
 
-The reset command is idempotent and deletes only the fixed demo tenant. It refuses to operate if
-that tenant identifier belongs to an organization with an unexpected name.
+The reset command is idempotent and replaces only the fixed demo tenant in one transaction. It
+refuses to operate if that tenant identifier belongs to an organization with an unexpected name,
+and a failed reset leaves the previous portfolio intact.
