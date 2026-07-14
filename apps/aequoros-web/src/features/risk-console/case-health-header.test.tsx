@@ -376,6 +376,7 @@ describe("CaseHealthHeader", () => {
     expect(screen.getByText("Validated")).toBeInTheDocument();
     expect(screen.getByText("Ready")).toBeInTheDocument();
     expect(screen.getByTitle("Forecast #1 · Succeeded")).toBeInTheDocument();
+    expect(screen.getByText("+1 historical")).toBeInTheDocument();
     expect(screen.getByText("Non-compliant")).toBeInTheDocument();
     expect(screen.getByText("Needs More Info")).toBeInTheDocument();
     expect(financialWorkspace).not.toHaveBeenCalled();

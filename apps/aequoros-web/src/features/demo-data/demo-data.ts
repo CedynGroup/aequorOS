@@ -3,6 +3,7 @@ import {
   type CalculationRunRead,
   type CalculationRunListRead,
   type CalculationRunSummaryRead,
+  type CaseDecisionRead,
   type CaseQueueItemRead,
   type CaseRead,
   CaseSort,
@@ -30,6 +31,7 @@ export const DEMO_CASE_IDS = [
 
 export type MockCaseHealthData = {
   calculationRun: CalculationRunRead;
+  decisions: CaseDecisionRead[];
   financial: FinancialDataWorkspaceRead;
   findings: FindingRead[];
   runs: CalculationRunListRead;
@@ -201,6 +203,45 @@ export function mockCaseHealth(
     createdAt: timestamp,
     updatedAt: timestamp,
   }));
+  findings.push({
+    id: `${caseId}-finding-resolved`,
+    organizationId,
+    caseId,
+    assessmentId: null,
+    runId: run.id,
+    riskType: "covenant",
+    title: "Resolved demo covenant finding",
+    summary: "Historical demo finding retained for audit traceability",
+    severity: "medium",
+    status: "resolved",
+    source: "demo",
+    ruleId: null,
+    ruleVersion: null,
+    rationale: null,
+    likelihood: null,
+    impact: null,
+    confidence: null,
+    scoreImpact: null,
+    dispositionReason: "Resolved after reviewer verification.",
+    details: { mocked: true },
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+
+  const decisions: CaseDecisionRead[] = caseData.decision
+    ? [
+        {
+          id: `${caseId}-decision-1`,
+          organizationId,
+          caseId,
+          decision: caseData.decision,
+          previousDecision: null,
+          reason: "Seeded decision for the read-only demo workflow.",
+          decidedBy: DEFAULT_USER_ID,
+          createdAt: caseData.decidedAt ?? timestamp,
+        },
+      ]
+    : [];
 
   return {
     financial: {
@@ -351,6 +392,7 @@ export function mockCaseHealth(
       ]),
     ),
     calculationRun,
+    decisions,
     runs: {
       caseId,
       runs: [run],
@@ -438,7 +480,7 @@ export function mockCase(organizationId: string, caseId: string): MockCaseRead {
     decidedAt: queueItem.decision
       ? new Date(queueItem.updatedAt.getTime() - 600_000)
       : null,
-    description: `Read-only presenter view for ${queueItem.subjectName ?? "this borrower"}.`,
+    description: `Read-only presenter view for ${queueItem.subjectName ?? "this borrower"} with a populated, validated financial workspace and complete review workflow.`,
     metadata: {
       mocked: true,
       source: "aequoros-web demo seed",

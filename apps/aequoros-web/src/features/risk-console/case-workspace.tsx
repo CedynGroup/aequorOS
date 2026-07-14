@@ -293,6 +293,8 @@ export function CaseWorkspace({
                   tenant={tenant}
                   caseId={caseId}
                   mutationDisabled={mockWorkspace || caseRetired}
+                  mutationDisabledReason={caseRetired ? "retired-case" : "demo"}
+                  demoDecisions={demoData?.decisions}
                 />
               </LazyTabBoundary>
             </TabsContent>

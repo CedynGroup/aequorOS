@@ -210,6 +210,9 @@ describe("FindingsTab", () => {
     );
 
     expect(await screen.findAllByText(/Demo high finding/)).not.toHaveLength(0);
+    expect(
+      screen.getByText("Resolved demo covenant finding"),
+    ).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Update" })[0]).toBeDisabled();
     expect(findings).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
