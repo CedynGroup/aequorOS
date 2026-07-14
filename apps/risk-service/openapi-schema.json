@@ -9774,6 +9774,16 @@
           },
           {
             "in": "query",
+            "name": "active_scenarios_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Active Scenarios Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {

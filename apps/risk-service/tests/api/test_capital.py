@@ -579,6 +579,12 @@ def test_archived_capital_inputs_are_retired_without_hiding_history(
         json={"calculation_run_id": run["id"]},
     )
     assert retired_case_projection.status_code == 409
+    finding_update = db_client.patch(
+        f"/api/v1/findings/{created['findings'][0]['finding']['id']}",
+        headers=headers(),
+        json={"status": "acknowledged"},
+    )
+    assert finding_update.status_code == 409
     retired_comparison = db_client.get(
         f"/api/v1/cases/{case.id}/capital-comparison", headers=headers()
     )

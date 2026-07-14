@@ -450,23 +450,13 @@ describe("CapitalTab", () => {
       id: "failed-run",
       status: "failed" as const,
     };
-    vi.mocked(riskApi.calculationRuns).mockImplementation(
-      async (_tenant, _caseId, requestedScenarioId) =>
-        requestedScenarioId
-          ? {
-              ...runList(),
-              runs: [failedRun],
-              total: 101,
-              hasMore: true,
-            }
-          : {
-              ...runList(),
-              latestSuccessfulRunId: "archived-scenario-run",
-              runs: [failedRun],
-              total: 101,
-              hasMore: true,
-            },
-    );
+    vi.mocked(riskApi.calculationRuns).mockResolvedValue({
+      ...runList(),
+      latestSuccessfulRunId: runId,
+      runs: [failedRun],
+      total: 101,
+      hasMore: true,
+    });
     const calculationRun = vi
       .spyOn(riskApi, "calculationRun")
       .mockResolvedValue({
@@ -484,10 +474,12 @@ describe("CapitalTab", () => {
     expect(riskApi.calculationRuns).toHaveBeenCalledWith(
       tenant,
       caseId,
-      scenarioId,
-      1,
+      undefined,
+      100,
       0,
+      true,
     );
+    expect(riskApi.calculationRuns).toHaveBeenCalledTimes(1);
   });
 
   it("explains and disables retired-case capital controls", async () => {

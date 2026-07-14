@@ -143,6 +143,7 @@ def list_runs(  # noqa: PLR0913
     case_id: UUID,
     *,
     scenario_id: UUID | None = None,
+    active_scenarios_only: bool = False,
     limit: int = 25,
     offset: int = 0,
 ) -> CalculationRunListRead:
@@ -153,6 +154,13 @@ def list_runs(  # noqa: PLR0913
     )
     if scenario_id is not None:
         conditions += (CalculationRun.scenario_id == scenario_id,)
+    if active_scenarios_only:
+        active_scenario_ids = select(RiskScenario.id).where(
+            RiskScenario.organization_id == ctx.organization_id,
+            RiskScenario.case_id == case_id,
+            RiskScenario.archived_at.is_(None),
+        )
+        conditions += (CalculationRun.scenario_id.in_(active_scenario_ids),)
     total = db.scalar(select(func.count()).select_from(CalculationRun).where(*conditions)) or 0
     latest = db.scalar(
         select(CalculationRun.id)

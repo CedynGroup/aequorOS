@@ -45,9 +45,11 @@ type FindingStatusForm = z.infer<typeof findingStatusSchema>;
 export function FindingsTab({
   tenant,
   caseId,
+  mutationDisabled = false,
 }: {
   tenant: TenantHeaders;
   caseId: string;
+  mutationDisabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const form = useForm<FindingForm>({
@@ -87,12 +89,33 @@ export function FindingsTab({
         onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
       >
         <Label>Create manual finding</Label>
-        <Input placeholder="Risk type" {...form.register("riskType")} />
-        <Input placeholder="Title" {...form.register("title")} />
-        <Textarea placeholder="Summary" {...form.register("summary")} />
-        <Input placeholder="Severity" {...form.register("severity")} />
+        {mutationDisabled ? (
+          <div className="text-xs text-[rgb(var(--muted-foreground))]">
+            Finding mutations are unavailable for retired cases.
+          </div>
+        ) : null}
+        <Input
+          disabled={mutationDisabled}
+          placeholder="Risk type"
+          {...form.register("riskType")}
+        />
+        <Input
+          disabled={mutationDisabled}
+          placeholder="Title"
+          {...form.register("title")}
+        />
+        <Textarea
+          disabled={mutationDisabled}
+          placeholder="Summary"
+          {...form.register("summary")}
+        />
+        <Input
+          disabled={mutationDisabled}
+          placeholder="Severity"
+          {...form.register("severity")}
+        />
         {mutation.isError ? <ErrorPanel error={mutation.error} /> : null}
-        <Button type="submit" disabled={mutation.isPending}>
+        <Button type="submit" disabled={mutationDisabled || mutation.isPending}>
           Create finding
         </Button>
       </form>
@@ -106,6 +129,7 @@ export function FindingsTab({
             key={finding.id}
             finding={finding}
             tenant={tenant}
+            disabled={mutationDisabled}
           />
         ))}
       </DataList>

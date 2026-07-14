@@ -23,6 +23,12 @@ vi.mock("../capital/capital-tab", () => ({
   ),
 }));
 
+vi.mock("../findings/findings-tab", () => ({
+  FindingsTab: ({ mutationDisabled }: { mutationDisabled: boolean }) => (
+    <div>Finding controls: {String(mutationDisabled)}</div>
+  ),
+}));
+
 type WorkspaceProps = Parameters<typeof CaseWorkspace>[0];
 
 const tenant: TenantHeaders = {
@@ -139,5 +145,17 @@ describe("CaseWorkspace", () => {
     expect(
       await screen.findByText("Capital controls: true · retired-case"),
     ).toBeInTheDocument();
+  });
+
+  it("retires shared finding mutations when the selected case is archived", async () => {
+    renderWorkspace({
+      activeTab: "findings",
+      mockCaseData: {
+        ...mockCase(DEFAULT_ORG_ID, caseId),
+        status: "archived",
+      },
+    });
+
+    expect(await screen.findByText("Finding controls: true")).toBeInTheDocument();
   });
 });

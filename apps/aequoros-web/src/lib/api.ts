@@ -231,12 +231,14 @@ export const riskApi = {
     scenarioId?: string,
     limit = 25,
     offset = 0,
+    activeScenariosOnly = false,
   ) {
     return apiJson<CalculationRunListRead>(
       `/cases/${caseId}/calculation-runs${toQuery({
         scenario_id: scenarioId,
         limit,
         offset,
+        active_scenarios_only: activeScenariosOnly || undefined,
       })}`,
       tenant,
       CalculationRunListReadFromJSON,

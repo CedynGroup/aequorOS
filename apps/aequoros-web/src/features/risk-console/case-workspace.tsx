@@ -85,7 +85,9 @@ export function CaseWorkspace({
   mockWorkspace: boolean;
 }) {
   const selectedCase = mockCaseData ?? (caseQuery.data as CaseRead | undefined);
-  const caseRetired = Boolean(selectedCase?.archivedAt);
+  const caseRetired = Boolean(
+    selectedCase?.archivedAt || selectedCase?.status === "archived",
+  );
 
   return (
     <Panel className="min-h-[640px] overflow-hidden">
@@ -162,7 +164,11 @@ export function CaseWorkspace({
             </TabsContent>
             <TabsContent value="findings" className="m-0 p-3">
               <LazyTabBoundary>
-                <FindingsTab tenant={tenant} caseId={caseId} />
+                <FindingsTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mutationDisabled={caseRetired}
+                />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="decisions" className="m-0 p-3">

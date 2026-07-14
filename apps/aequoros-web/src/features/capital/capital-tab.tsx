@@ -56,10 +56,6 @@ export function CapitalTab({
     queryKey: ["scenarios", tenant, caseId, "capital"],
     queryFn: () => riskApi.scenarios(tenant, caseId, true),
   });
-  const runs = useQuery({
-    queryKey: ["calculation-runs", tenant, caseId, "capital"],
-    queryFn: () => riskApi.calculationRuns(tenant, caseId, undefined, 100, 0),
-  });
   const attempts = useQuery({
     queryKey: ["capital-projections", tenant, caseId, attemptOffset],
     queryFn: () =>
@@ -86,59 +82,33 @@ export function CapitalTab({
       ),
     [scenarios.data],
   );
-  const activeScenarioIds = useMemo(
-    () =>
-      scenarios.data?.scenarios
-        .filter((scenario) => scenario.archivedAt === null)
-        .map((scenario) => scenario.id) ?? [],
-    [scenarios.data],
-  );
-  const latestActiveRuns = useQuery({
-    queryKey: [
-      "calculation-runs",
-      tenant,
-      caseId,
-      "capital-latest-active",
-      activeScenarioIds,
-    ],
+  const runs = useQuery({
+    queryKey: ["calculation-runs", tenant, caseId, "capital-active"],
     queryFn: async () => {
-      const candidates = await Promise.all(
-        activeScenarioIds.map(async (scenarioId) => {
-          const page = await riskApi.calculationRuns(
-            tenant,
-            caseId,
-            scenarioId,
-            1,
-            0,
-          );
-          const latestId = page.latestSuccessfulRunId;
-          if (!latestId) return null;
-          return (
-            page.runs.find((run) => run.id === latestId) ??
-            riskApi.calculationRun(tenant, caseId, latestId)
-          );
-        }),
+      const page = await riskApi.calculationRuns(
+        tenant,
+        caseId,
+        undefined,
+        100,
+        0,
+        true,
       );
-      return candidates.filter((run) => run !== null);
+      const latestId = page.latestSuccessfulRunId;
+      if (!latestId || page.runs.some((run) => run.id === latestId)) return page;
+      const latest = await riskApi.calculationRun(tenant, caseId, latestId);
+      return { ...page, runs: [...page.runs, latest] };
     },
-    enabled: scenarios.isSuccess,
   });
   const successfulRuns = useMemo(() => {
-    const page =
+    return (
       runs.data?.runs.filter((run) => {
         const scenario = scenariosById.get(run.scenarioId);
         return run.status === "succeeded" && scenario?.archivedAt === null;
-      }) ?? [];
-    const fallback =
-      latestActiveRuns.data?.filter(
-        (run) =>
-          run.status === "succeeded" &&
-          !page.some((pageRun) => pageRun.id === run.id),
-      ) ?? [];
-    return [...page, ...fallback].sort(
+      }) ?? []
+    ).sort(
       (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
     );
-  }, [latestActiveRuns.data, runs.data, scenariosById]);
+  }, [runs.data, scenariosById]);
 
   useEffect(() => {
     setAttemptOffset(0);
@@ -188,6 +158,7 @@ export function CapitalTab({
         queryClient.invalidateQueries({ queryKey: ["capital-summary"] }),
         queryClient.invalidateQueries({ queryKey: ["capital-comparison"] }),
         queryClient.invalidateQueries({ queryKey: ["findings"] }),
+        queryClient.invalidateQueries({ queryKey: ["capital-projection"] }),
       ]);
       if (projection.status === "failed") {
         toast.error(projection.error?.message ?? "Capital projection failed");
@@ -200,7 +171,6 @@ export function CapitalTab({
   if (
     scenarios.isLoading ||
     runs.isLoading ||
-    latestActiveRuns.isLoading ||
     attempts.isLoading ||
     (projectionId && selectedAttempt.isLoading) ||
     summary.isLoading ||
@@ -210,8 +180,6 @@ export function CapitalTab({
   }
   if (scenarios.isError) return <ErrorPanel error={scenarios.error} />;
   if (runs.isError) return <ErrorPanel error={runs.error} />;
-  if (latestActiveRuns.isError)
-    return <ErrorPanel error={latestActiveRuns.error} />;
   if (attempts.isError) return <ErrorPanel error={attempts.error} />;
   if (selectedAttempt.isError)
     return <ErrorPanel error={selectedAttempt.error} />;

@@ -153,6 +153,19 @@ def test_calculation_correctness_persistence_and_reproducible_rerun(
     assert listing["latest_successful_run_id"] == repeated["id"]
     assert len(listing["runs"]) == 2
 
+    archived = db_client.post(
+        f"/api/v1/cases/{case.id}/scenarios/{scenario['id']}/archive",
+        headers=headers(),
+        json={"reason": "Retire scenario"},
+    )
+    assert archived.status_code == 200
+    active_listing = db_client.get(
+        f"/api/v1/cases/{case.id}/calculation-runs?active_scenarios_only=true",
+        headers=headers(),
+    ).json()
+    assert active_listing["runs"] == []
+    assert active_listing["latest_successful_run_id"] is None
+
     with get_sessionmaker()() as session:
         assert session.scalar(select(CalculationRun).where(CalculationRun.id == UUID(run["id"])))
         assert (

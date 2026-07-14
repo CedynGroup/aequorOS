@@ -97,4 +97,24 @@ describe("FindingsTab", () => {
       });
     });
   });
+
+  it("keeps archived-case findings visible but disables mutations", async () => {
+    vi.spyOn(riskApi, "findings").mockResolvedValue([finding()]);
+    const createFinding = vi.spyOn(riskApi, "createFinding");
+    const updateFinding = vi.spyOn(riskApi, "updateFinding");
+
+    renderWithQuery(
+      <FindingsTab tenant={tenant} caseId="case-1" mutationDisabled />,
+    );
+
+    expect(await screen.findByText("Cash conversion cycle widened")).toBeInTheDocument();
+    expect(
+      screen.getByText("Finding mutations are unavailable for retired cases."),
+    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Title")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create finding" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
+    expect(createFinding).not.toHaveBeenCalled();
+    expect(updateFinding).not.toHaveBeenCalled();
+  });
 });

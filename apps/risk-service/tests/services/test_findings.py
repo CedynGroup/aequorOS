@@ -67,6 +67,28 @@ def test_update_finding_status_records_audit_event(
     assert "finding.status_changed" in event_types
 
 
+def test_update_finding_rejects_archived_case(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    factories, finding = create_finding(db_session, service_factories)
+    case = db_session.get(RiskCase, finding.case_id)
+    assert case is not None
+    case.archived_at = utc_now()
+    db_session.commit()
+    command = findings.UpdateFindingCommand(
+        fields_set={"status"},
+        update_data={"status": "acknowledged"},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        findings.update_finding(db_session, factories.ctx, finding.id, command)
+
+    assert exc.value.status_code == 409
+    db_session.refresh(finding)
+    assert finding.status != "acknowledged"
+
+
 def attach_finding_evidence(db_session: Session, finding: RiskFinding) -> None:
     chunk = db_session.scalar(
         select(DocumentChunk).where(DocumentChunk.organization_id == finding.organization_id)

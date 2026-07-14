@@ -163,6 +163,8 @@ def update_finding(
             detail="Generated finding fields cannot be updated through this endpoint.",
         )
     finding = get_finding_or_404(db, ctx.organization_id, finding_id)
+    case = get_case_or_404(db, ctx.organization_id, finding.case_id)
+    ensure_case_is_not_archived(case)
     update_data = command.update_data
     status_value = update_data.get("status")
     if "status" in update_data and (
