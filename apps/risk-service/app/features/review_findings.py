@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
-from app.api.deps import DbSession, Tenant
+from app.api.deps import DbSession, MutationTenant, Tenant
 from app.models import RiskFinding
 from app.schemas.findings import (
     EvidenceRead,
@@ -68,7 +68,7 @@ def list_assessment_findings(assessment_id: UUID, db: DbSession, ctx: Tenant) ->
 
 @router.patch("/findings/{finding_id}", response_model=FindingRead)
 def update_finding(
-    finding_id: UUID, payload: FindingUpdate, db: DbSession, ctx: Tenant
+    finding_id: UUID, payload: FindingUpdate, db: DbSession, ctx: MutationTenant
 ) -> RiskFinding:
     return findings_service.update_finding(db, ctx, finding_id, payload.to_command())
 

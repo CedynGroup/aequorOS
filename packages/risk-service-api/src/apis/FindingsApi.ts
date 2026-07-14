@@ -77,8 +77,8 @@ export interface ListFindingsRequest {
 export interface UpdateFindingRequest {
   findingId: string;
   xOrgId: string;
+  xUserId: string;
   findingUpdate: FindingUpdate;
-  xUserId?: string | null;
 }
 
 /**
@@ -510,6 +510,13 @@ export class FindingsApi extends runtime.BaseAPI {
       throw new runtime.RequiredError(
         "xOrgId",
         'Required parameter "xOrgId" was null or undefined when calling updateFinding().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling updateFinding().',
       );
     }
 

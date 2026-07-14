@@ -160,6 +160,11 @@ def create_case_finding(
 def update_finding(
     db: Session, ctx: TenantContext, finding_id: UUID, command: UpdateFindingCommand
 ) -> RiskFinding:
+    if ctx.actor_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="X-User-Id header is required.",
+        )
     disallowed = {"title", "summary", "severity", "rationale"} & command.fields_set
     if disallowed:
         raise HTTPException(

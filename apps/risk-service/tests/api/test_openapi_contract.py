@@ -56,6 +56,12 @@ def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient
     assert case_parameters["limit"]["schema"]["maximum"] == 200
     assert case_parameters["offset"]["schema"]["minimum"] == 0
 
+    finding_update_parameters = {
+        parameter["name"]: parameter
+        for parameter in paths["/api/v1/findings/{finding_id}"]["patch"]["parameters"]
+    }
+    assert finding_update_parameters["X-User-Id"]["required"] is True
+
     error_ref = case_list_operation["responses"]["422"]["content"]["application/json"]["schema"][
         "$ref"
     ]

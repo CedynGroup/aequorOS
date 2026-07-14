@@ -16818,17 +16818,10 @@
           {
             "in": "header",
             "name": "X-User-Id",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
+              "title": "X-User-Id",
+              "type": "string"
             }
           }
         ],

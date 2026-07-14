@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -58,6 +60,30 @@ def test_update_finding_rejects_empty_review(
         findings.update_finding(db_session, factories.ctx, finding.id, command)
 
     assert exc.value.status_code == 400
+    db_session.refresh(finding)
+    assert "reviewed_by" not in finding.details
+    assert "reviewed_at" not in finding.details
+
+
+def test_update_finding_rejects_missing_actor(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    factories, finding = create_finding(db_session, service_factories)
+    command = findings.UpdateFindingCommand(
+        update_data={"status": "acknowledged"},
+        fields_set={"status"},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        findings.update_finding(
+            db_session,
+            replace(factories.ctx, actor_user_id=None),
+            finding.id,
+            command,
+        )
+
+    assert exc.value.status_code == 401
     db_session.refresh(finding)
     assert "reviewed_by" not in finding.details
     assert "reviewed_at" not in finding.details
