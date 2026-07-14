@@ -1,6 +1,7 @@
 import type {
   CalculationRunListRead,
   FinancialDataWorkspaceRead,
+  FinancialValidationIssueRead,
   FindingRead,
   ScenarioWorkspaceRead,
 } from "@aequoros/risk-service-api";
@@ -54,6 +55,32 @@ function scenario(
       incompleteScenarioIds: [],
       ...overrides,
     },
+  };
+}
+
+function validationIssue(
+  severity: "error" | "info" | "warning",
+  status = "open",
+): FinancialValidationIssueRead {
+  return {
+    caseId,
+    code: null,
+    createdAt: now,
+    details: {},
+    entityId: null,
+    entityType: null,
+    field: null,
+    fieldName: "workspace",
+    id: `${severity}-${status}`,
+    issueKey: `${severity}-${status}`,
+    message: `${severity} validation issue`,
+    organizationId: tenant.orgId,
+    recordId: null,
+    recordTable: null,
+    resolvedAt: status === "open" ? null : now,
+    ruleId: `${severity}-rule`,
+    severity,
+    status,
   };
 }
 
@@ -198,6 +225,11 @@ describe("CaseHealthHeader", () => {
         institutions: [
           {} as FinancialDataWorkspaceRead["institutions"][number],
         ],
+        validationIssues: [
+          validationIssue("error"),
+          { ...validationIssue("error"), id: "error-open-2" },
+          validationIssue("warning"),
+        ],
         validationSummary: { error: 2, warning: 1, info: 0, total: 3 },
         covenants: [
           {
@@ -262,6 +294,25 @@ describe("CaseHealthHeader", () => {
     expect(screen.getByText("Approved")).toBeInTheDocument();
   });
 
+  it("excludes resolved validation issues from current health", async () => {
+    installQueries({
+      workspace: financial({
+        institutions: [
+          {} as FinancialDataWorkspaceRead["institutions"][number],
+        ],
+        validationIssues: [
+          validationIssue("error", "resolved"),
+          validationIssue("warning", "resolved"),
+        ],
+        validationSummary: { error: 1, warning: 1, info: 0, total: 2 },
+      }),
+    });
+    renderHeader(null);
+
+    expect(await screen.findByText("Validated")).toBeInTheDocument();
+    expect(screen.queryByText(/errors|warnings/)).not.toBeInTheDocument();
+  });
+
   it("counts only active findings and separates historical findings", async () => {
     installQueries({
       findingList: [
@@ -310,6 +361,10 @@ describe("CaseHealthHeader", () => {
         workspace: financial({
           institutions: [
             {} as FinancialDataWorkspaceRead["institutions"][number],
+          ],
+          validationIssues: [
+            validationIssue("warning"),
+            { ...validationIssue("warning"), id: "warning-open-2" },
           ],
           validationSummary: { error: 0, warning: 2, info: 0, total: 2 },
           covenants: [
