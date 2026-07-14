@@ -224,8 +224,8 @@ export function CapitalTab({
             ) : null
           }
         />
-        <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-          <div>
+        <div className="grid gap-3 p-3">
+          <div className="min-w-0">
             <Label>Successful forecast run</Label>
             <Select
               ariaLabel="Capital forecast run"
@@ -233,6 +233,7 @@ export function CapitalTab({
               onValueChange={setRunId}
               placeholder="Choose a forecast run"
               disabled={mutationDisabled}
+              className="w-full min-w-0"
             >
               {successfulRuns.map((run) => (
                 <SelectItem key={run.id} value={run.id}>
@@ -282,8 +283,8 @@ export function CapitalTab({
             title="Projection attempt history"
             meta={`${attempts.data.total} immutable attempt${attempts.data.total === 1 ? "" : "s"}`}
           />
-          <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-            <div>
+          <div className="grid gap-3 p-3">
+            <div className="min-w-0">
               <Label>Projection attempt</Label>
               <Select
                 ariaLabel="Capital projection attempt"
@@ -293,6 +294,7 @@ export function CapitalTab({
                   setProjectionId(value);
                 }}
                 placeholder="Choose a projection attempt"
+                className="w-full min-w-0"
               >
                 {attempts.data.projections.map((attempt) => (
                   <SelectItem key={attempt.id} value={attempt.id}>

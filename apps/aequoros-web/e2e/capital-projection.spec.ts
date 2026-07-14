@@ -8,6 +8,12 @@ const runId = "30000000-0000-4000-8000-000000000001";
 const projectionId = "40000000-0000-4000-8000-000000000001";
 const scenarioId = "20000000-0000-4000-8000-000000000001";
 
+async function captureEvidence(page: Page, filename: string) {
+  const evidenceDir = process.env.NO_MISTAKES_EVIDENCE_DIR;
+  if (!evidenceDir) return;
+  await page.screenshot({ path: `${evidenceDir}/${filename}`, fullPage: true });
+}
+
 async function json(route: Route, body: unknown, status = 200) {
   await route.fulfill({
     status,
@@ -217,6 +223,7 @@ async function installBackend(
           },
         ],
         latest_successful_run_id: runId,
+        latest_successful_runs_by_scenario: [],
         total: 1,
         limit: 100,
         offset: 0,
@@ -347,6 +354,7 @@ test("projects capital, compares scenarios, reviews evidence, and enforces tenan
   await expect(page.getByText("Evidence", { exact: true })).toBeVisible();
   await expect(page.getByText("Downside delta")).toBeVisible();
   await expect(page.getByText("-$25.00")).toBeVisible();
+  await captureEvidence(page, "capital-projection-success.png");
 
   await page
     .getByLabel("Tenant org id")
@@ -383,4 +391,5 @@ test("rejects incompatible capital comparison bases", async ({ page }) => {
   await expect(page.getByText("3 periods")).toBeVisible();
   await expect(page.getByText(/Rerun the other scenario/)).toBeVisible();
   await expect(page.getByText("Downside delta")).toHaveCount(0);
+  await captureEvidence(page, "capital-comparison-diagnostic.png");
 });
