@@ -1,5 +1,5 @@
 import type { CaseDecisionRead } from "@aequoros/risk-service-api";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
@@ -357,15 +357,32 @@ describe("CaseWorkspace", () => {
     expect(screen.queryByText(DEFAULT_USER_ID)).not.toBeInTheDocument();
   });
 
-  it("disables decision mutations in demo mode", async () => {
-    vi.spyOn(riskApi, "decisions").mockResolvedValue([]);
+  it("renders matching demo decision history without live requests or mutations", async () => {
+    const decisions = vi.spyOn(riskApi, "decisions");
+    const createDecision = vi.spyOn(riskApi, "createDecision");
 
-    renderWorkspace({ activeTab: "decisions", mockWorkspace: true });
+    renderWorkspace({
+      activeTab: "decisions",
+      mockWorkspace: true,
+    });
 
     expect(
-      await screen.findByRole("button", { name: "Submit decision" }),
-    ).toBeDisabled();
+      await screen.findByText(
+        "Seeded decision for the read-only demo workflow.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Decision mutations are unavailable in demo mode."),
+    ).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Reason")).toBeDisabled();
+    const submit = screen.getByRole("button", { name: "Submit decision" });
+    expect(submit).toBeDisabled();
+    fireEvent.submit(submit.closest("form")!);
+
+    await waitFor(() => {
+      expect(decisions).not.toHaveBeenCalled();
+      expect(createDecision).not.toHaveBeenCalled();
+    });
   });
 
   it("retires capital mutations when the selected case is archived", async () => {

@@ -87,6 +87,20 @@ describe("demo data helpers", () => {
         (validation) => validation.complete && validation.issueCount === 0,
       ),
     ).toBe(true);
-    expect(health.findings).toHaveLength(4);
+    expect(health.findings).toHaveLength(5);
+    expect(
+      health.findings.filter((finding) =>
+        ["open", "needs_review"].includes(finding.status),
+      ),
+    ).toHaveLength(4);
+    expect(
+      health.findings.filter((finding) => finding.status === "resolved"),
+    ).toHaveLength(1);
+    expect(health.decisions).toMatchObject([
+      { decision: "needs_more_info", caseId },
+    ]);
+    expect(mockCase("org-1", caseId).description).toContain(
+      "populated, validated financial workspace",
+    );
   });
 });

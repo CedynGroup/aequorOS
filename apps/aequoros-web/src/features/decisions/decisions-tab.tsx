@@ -30,10 +30,14 @@ export function DecisionsTab({
   tenant,
   caseId,
   mutationDisabled = false,
+  mutationDisabledReason = "retired-case",
+  demoDecisions,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   mutationDisabled?: boolean;
+  mutationDisabledReason?: "demo" | "retired-case";
+  demoDecisions?: CaseDecisionRead[];
 }) {
   const queryClient = useQueryClient();
   const form = useForm<DecisionForm>({
@@ -43,7 +47,9 @@ export function DecisionsTab({
   const query = useQuery({
     queryKey: ["decisions", tenant, caseId],
     queryFn: () => riskApi.decisions(tenant, caseId),
+    enabled: demoDecisions === undefined,
   });
+  const decisions = demoDecisions ?? query.data;
   const mutation = useMutation({
     mutationFn: (values: DecisionForm) =>
       riskApi.createDecision(tenant, caseId, {
@@ -61,9 +67,18 @@ export function DecisionsTab({
     <div className="grid gap-3 lg:grid-cols-[280px_1fr]">
       <form
         className="space-y-3 rounded-md border border-[rgb(var(--border))] p-3"
-        onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
+        onSubmit={form.handleSubmit((values) => {
+          if (!mutationDisabled) mutation.mutate(values);
+        })}
       >
         <Label>Record decision</Label>
+        {mutationDisabled ? (
+          <div className="text-xs text-[rgb(var(--muted-foreground))]">
+            {mutationDisabledReason === "retired-case"
+              ? "Decision mutations are unavailable for retired cases."
+              : "Decision mutations are unavailable in demo mode."}
+          </div>
+        ) : null}
         <Select
           disabled={mutationDisabled}
           value={form.watch("decision")}
@@ -89,11 +104,11 @@ export function DecisionsTab({
         </Button>
       </form>
       <DataList
-        loading={query.isLoading}
-        error={query.error}
+        loading={demoDecisions === undefined && query.isLoading}
+        error={demoDecisions === undefined ? query.error : null}
         empty="No decisions recorded"
       >
-        {query.data?.map((decision: CaseDecisionRead) => (
+        {decisions?.map((decision: CaseDecisionRead) => (
           <div
             key={decision.id}
             className="grid gap-1 rounded-md border border-[rgb(var(--border))] p-3 text-xs"
