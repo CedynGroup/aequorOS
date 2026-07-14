@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -16,6 +17,7 @@ from app.models import (
     RiskAssessment,
     RiskAssessmentRun,
 )
+from app.schemas.assessments import AssessmentRunRead
 from app.services.audit import record_event
 from app.services.cases import ensure_case_is_not_archived, get_case_or_404
 from app.services.scoring import SCORING_VERSION, run_scoring
@@ -54,6 +56,73 @@ def get_run_or_404(db: Session, organization_id: UUID, run_id: UUID) -> RiskAsse
             status_code=status.HTTP_404_NOT_FOUND, detail="Assessment run not found."
         )
     return run
+
+
+def assessment_run_references(
+    db: Session, organization_id: UUID, run_ids: set[UUID]
+) -> dict[UUID, str]:
+    if not run_ids:
+        return {}
+    selected_rows = db.execute(
+        select(RiskAssessmentRun, RiskAssessment.name)
+        .join(RiskAssessment, RiskAssessment.id == RiskAssessmentRun.assessment_id)
+        .where(
+            RiskAssessmentRun.organization_id == organization_id,
+            RiskAssessment.organization_id == organization_id,
+            RiskAssessmentRun.id.in_(run_ids),
+        )
+    ).all()
+    assessment_names = {name for _, name in selected_rows}
+    candidate_rows = db.execute(
+        select(RiskAssessmentRun, RiskAssessment.name)
+        .join(RiskAssessment, RiskAssessment.id == RiskAssessmentRun.assessment_id)
+        .where(
+            RiskAssessmentRun.organization_id == organization_id,
+            RiskAssessment.organization_id == organization_id,
+            RiskAssessment.name.in_(assessment_names),
+        )
+        .order_by(
+            RiskAssessment.name,
+            RiskAssessmentRun.created_at,
+            RiskAssessmentRun.id,
+        )
+    ).all()
+    counts: dict[tuple[str, date], int] = {}
+    references: dict[UUID, str] = {}
+    for run, assessment_name in candidate_rows:
+        run_date = run.created_at.date()
+        group = (assessment_name, run_date)
+        counts[group] = counts.get(group, 0) + 1
+        references[run.id] = (
+            f"{assessment_name} {run_date.isoformat()} run {counts[group]}"
+        )
+    return {run.id: references[run.id] for run, _ in selected_rows}
+
+
+def assessment_run_read(run: RiskAssessmentRun, reference: str) -> AssessmentRunRead:
+    return AssessmentRunRead(
+        id=run.id,
+        reference=reference,
+        organization_id=run.organization_id,
+        assessment_id=run.assessment_id,
+        status=run.status,
+        engine_version=run.engine_version,
+        prompt_version=run.prompt_version,
+        input_hash=run.input_hash,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        summary=run.summary,
+        error=run.error,
+        created_at=run.created_at,
+    )
+
+
+def get_assessment_run_read(
+    db: Session, organization_id: UUID, run_id: UUID
+) -> AssessmentRunRead:
+    run = get_run_or_404(db, organization_id, run_id)
+    references = assessment_run_references(db, organization_id, {run.id})
+    return assessment_run_read(run, references[run.id])
 
 
 def create_assessment(db: Session, ctx: TenantContext, payload) -> RiskAssessment:
@@ -199,9 +268,9 @@ def run_deterministic_assessment(
 
 def list_assessment_runs(
     db: Session, ctx: TenantContext, assessment_id: UUID
-) -> list[RiskAssessmentRun]:
+) -> list[AssessmentRunRead]:
     get_assessment_or_404(db, ctx.organization_id, assessment_id)
-    return list(
+    runs = list(
         db.scalars(
             select(RiskAssessmentRun)
             .where(
@@ -211,3 +280,7 @@ def list_assessment_runs(
             .order_by(RiskAssessmentRun.created_at.desc())
         )
     )
+    references = assessment_run_references(
+        db, ctx.organization_id, {run.id for run in runs}
+    )
+    return [assessment_run_read(run, references[run.id]) for run in runs]

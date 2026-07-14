@@ -36,6 +36,18 @@ def acknowledge_open_findings(client: TestClient, case_id: str) -> dict[str, dic
     return reviews
 
 
+def assert_run_reference(
+    client: TestClient,
+    run_id: str,
+    reference: str,
+    score_created_at: str,
+) -> None:
+    assert reference == f"Score {score_created_at[:10]} run 1"
+    response = client.get(f"/api/v1/assessment-runs/{run_id}", headers=headers())
+    assert response.status_code == 200, response.text
+    assert response.json()["reference"] == reference
+
+
 def test_cases_are_org_scoped_and_archivable(db_client: TestClient) -> None:
     cases = CaseFactory(db_client)
     case_id = str(cases.create().id)
@@ -132,7 +144,7 @@ def test_case_decision_history_and_completed_report(db_client: TestClient) -> No
         )
         .id
     )
-    score_case(db_client, case_id)
+    scoring_run = score_case(db_client, case_id)
     finding = db_client.post(
         f"/api/v1/cases/{case_id}/findings",
         headers=headers(),
@@ -179,8 +191,11 @@ def test_case_decision_history_and_completed_report(db_client: TestClient) -> No
     assert response.json()["scores"][0]["score"] == 45
     assert response.json()["decisions"][0]["decided_by"] == "Demo User One"
     assert response.json()["scores"][0]["assessment"] == "Score"
-    assert response.json()["scores"][0]["run_reference"] == (
-        f"Score {response.json()['scores'][0]['created_at'][:10]} run 1"
+    assert_run_reference(
+        db_client,
+        scoring_run["run_id"],
+        response.json()["scores"][0]["run_reference"],
+        response.json()["scores"][0]["created_at"],
     )
     assert len(response.json()["scores"][0]["input_hash"]) == 64
     assert response.json()["scores"][0]["rule_results"] == [

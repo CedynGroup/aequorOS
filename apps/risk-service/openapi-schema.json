@@ -181,6 +181,10 @@
             ],
             "title": "Prompt Version"
           },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
           "started_at": {
             "anyOf": [
               {
@@ -205,6 +209,7 @@
         },
         "required": [
           "id",
+          "reference",
           "organization_id",
           "assessment_id",
           "status",

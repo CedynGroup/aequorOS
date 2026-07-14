@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from app.schemas.common import JsonObject
-from app.services.reports import sanitize_report_object
+from app.services.reports import UUID_PATTERN, sanitize_report_object
 
 
 def test_uuid_bearing_object_keys_receive_distinct_stable_aliases() -> None:
@@ -22,3 +22,18 @@ def test_uuid_bearing_object_keys_receive_distinct_stable_aliases() -> None:
     assert {"value": "uppercase"} in sanitized.values()
     assert {"value": "second"} in sanitized.values()
     assert all(str(first_id) not in key and str(second_id) not in key for key in sanitized)
+
+
+def test_uuid_redaction_covers_underscore_adjacent_keys_and_values() -> None:
+    identifier = uuid4()
+    details: JsonObject = {
+        f"finding_{identifier}": f"evidence_{identifier}_source",
+    }
+
+    sanitized = sanitize_report_object(details)
+
+    key, value = next(iter(sanitized.items()))
+    assert key.startswith("finding_[internal identifier alias ")
+    assert value == "evidence_[internal identifier redacted]_source"
+    assert UUID_PATTERN.search(key) is None
+    assert UUID_PATTERN.search(value) is None

@@ -13,12 +13,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.risk_constants import CaseStatus
-from app.models import RiskAssessment, RiskAssessmentRun, RiskFinding, RiskScore
+from app.models import RiskAssessment, RiskFinding, RiskScore
 from app.schemas.common import JsonObject, JsonValue
+from app.services.assessments import assessment_run_references
 from app.services.cases import get_case_or_404, list_case_decisions, user_display_names
 
 UUID_PATTERN = re.compile(
-    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+    r"(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])",
     re.IGNORECASE,
 )
 REDACTED_IDENTIFIER = "[internal identifier redacted]"
@@ -133,7 +134,6 @@ def report_payload(db: Session, ctx: TenantContext, case_id: UUID) -> RiskReport
         db,
         ctx.organization_id,
         {score.run_id for score in scores if score.run_id is not None},
-        assessment_names,
     )
     return RiskReportPayload(
         case=ReportCase(
@@ -211,51 +211,6 @@ def report_payload(db: Session, ctx: TenantContext, case_id: UUID) -> RiskReport
             for score in scores
         ],
     )
-
-
-def assessment_run_references(
-    db: Session,
-    organization_id: UUID,
-    run_ids: set[UUID],
-    assessment_names: dict[UUID, str],
-) -> dict[UUID, str]:
-    if not run_ids:
-        return {}
-    selected_runs = list(
-        db.scalars(
-            select(RiskAssessmentRun).where(
-                RiskAssessmentRun.organization_id == organization_id,
-                RiskAssessmentRun.id.in_(run_ids),
-            )
-        )
-    )
-    assessment_ids = {run.assessment_id for run in selected_runs}
-    all_runs = list(
-        db.scalars(
-            select(RiskAssessmentRun)
-            .where(
-                RiskAssessmentRun.organization_id == organization_id,
-                RiskAssessmentRun.assessment_id.in_(assessment_ids),
-            )
-            .order_by(
-                RiskAssessmentRun.assessment_id,
-                RiskAssessmentRun.created_at,
-                RiskAssessmentRun.id,
-            )
-        )
-    )
-    ordinals: dict[UUID, int] = {}
-    counts: dict[UUID, int] = {}
-    for run in all_runs:
-        counts[run.assessment_id] = counts.get(run.assessment_id, 0) + 1
-        ordinals[run.id] = counts[run.assessment_id]
-    return {
-        run.id: (
-            f"{assessment_names.get(run.assessment_id, 'Assessment')} "
-            f"{run.created_at.date().isoformat()} run {ordinals[run.id]}"
-        )
-        for run in selected_runs
-    }
 
 
 def sanitize_report_object(value: JsonObject) -> JsonObject:
