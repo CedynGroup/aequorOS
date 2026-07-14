@@ -157,9 +157,17 @@ export function LiquidityTab({
   ) : query.error ? (
     <ErrorPanel error={query.error} />
   ) : !query.data || query.data.status === "not_calculated" ? (
-    <Alert title="No liquidity analysis">
-      Run a successful balance-sheet forecast to calculate liquidity metrics and
-      findings.
+    <Alert title="Liquidity analysis not available for this run">
+      <span>
+        Liquidity analysis not available for this run — rerun to generate it.
+      </span>{" "}
+      <a
+        className="font-medium text-[rgb(var(--primary))] underline"
+        href={`/cases/${caseId}?tab=calculations#calculation-run-${selectedRun.data.id}-forecast-period-1`}
+      >
+        Open Forecast to rerun
+      </a>
+      .
     </Alert>
   ) : (
     <LiquidityAnalysis

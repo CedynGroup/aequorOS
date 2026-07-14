@@ -139,6 +139,20 @@ describe("ScenariosTab", () => {
 
     await waitFor(() => expect(document.activeElement?.id).toBe(target));
     expect(scenarios).toHaveBeenCalledWith(tenant, caseId, true);
+    expect(screen.getByText("Archived")).toBeInTheDocument();
+    expect(
+      screen.getByText("Archived scenario audit mode"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Scenario name")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Revenue growth value type")).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Save details" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy scenario" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Archive scenario" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add assumption" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review" })).toBeNull();
+    expect(screen.queryByLabelText("Custom scenario name")).toBeNull();
   });
 
   it("keeps normal scenario navigation active-only", async () => {

@@ -140,6 +140,7 @@ export function ScenariosTab({
   const selected =
     workspace.scenarios.find((scenario) => scenario.id === selectedId) ??
     workspace.scenarios[0];
+  const auditMode = selected.archivedAt !== null;
   return (
     <div className="@container/scenarios space-y-3">
       {savedMessage ? (
@@ -172,31 +173,34 @@ export function ScenariosTab({
                 <span className="text-xs text-[rgb(var(--muted-foreground))]">
                   {labelize(scenario.scenarioType)} ·{" "}
                   {scenario.assumptions.length} assumptions
+                  {scenario.archivedAt ? " · Archived" : ""}
                 </span>
               </button>
             ))}
-            <div className="border-t border-[rgb(var(--border))] pt-3">
-              <Label>Custom scenario name</Label>
-              <Input
-                aria-label="Custom scenario name"
-                value={customName}
-                onChange={(event) => setCustomName(event.target.value)}
-                placeholder="Management case"
-              />
-              <Button
-                className="mt-2 w-full"
-                variant="outline"
-                disabled={!customName.trim() || create.isPending}
-                onClick={() => create.mutate()}
-              >
-                Create custom scenario
-              </Button>
-              {create.isError ? (
-                <div className="mt-2">
-                  <ErrorPanel error={create.error} />
-                </div>
-              ) : null}
-            </div>
+            {!auditMode ? (
+              <div className="border-t border-[rgb(var(--border))] pt-3">
+                <Label>Custom scenario name</Label>
+                <Input
+                  aria-label="Custom scenario name"
+                  value={customName}
+                  onChange={(event) => setCustomName(event.target.value)}
+                  placeholder="Management case"
+                />
+                <Button
+                  className="mt-2 w-full"
+                  variant="outline"
+                  disabled={!customName.trim() || create.isPending}
+                  onClick={() => create.mutate()}
+                >
+                  Create custom scenario
+                </Button>
+                {create.isError ? (
+                  <div className="mt-2">
+                    <ErrorPanel error={create.error} />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </Panel>
         <ScenarioEditor
@@ -204,6 +208,7 @@ export function ScenariosTab({
           tenant={tenant}
           caseId={caseId}
           scenario={selected}
+          readOnly={auditMode}
           onSaved={refresh}
           onSelected={setSelectedId}
         />
@@ -216,12 +221,14 @@ function ScenarioEditor({
   tenant,
   caseId,
   scenario,
+  readOnly,
   onSaved,
   onSelected,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   scenario: ScenarioRead;
+  readOnly: boolean;
   onSaved: (message: string) => Promise<void>;
   onSelected: (id: string) => void;
 }) {
@@ -318,16 +325,25 @@ function ScenarioEditor({
         title={scenario.name}
         meta={`${labelize(scenario.scenarioType)} scenario`}
         actions={
-          <Badge tone="info">{scenario.assumptions.length} inputs</Badge>
+          <div className="flex gap-2">
+            {readOnly ? <Badge tone="warning">Archived</Badge> : null}
+            <Badge tone="info">{scenario.assumptions.length} inputs</Badge>
+          </div>
         }
       />
       <div className="space-y-4 p-3">
+        {readOnly ? (
+          <Alert title="Archived scenario audit mode">
+            This historical scenario is read-only.
+          </Alert>
+        ) : null}
         <div className="grid gap-2 @2xl/editor:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] @2xl/editor:items-end">
           <div>
             <Label>Scenario name</Label>
             <Input
               aria-label="Scenario name"
               value={name}
+              readOnly={readOnly}
               onChange={(event) => setName(event.target.value)}
             />
           </div>
@@ -337,21 +353,24 @@ function ScenarioEditor({
               aria-label="Scenario description"
               className="min-h-8"
               value={description}
+              readOnly={readOnly}
               onChange={(event) => setDescription(event.target.value)}
             />
           </div>
-          <Button
-            variant="outline"
-            disabled={
-              !name.trim() ||
-              updateScenario.isPending ||
-              (name === savedDetails.name &&
-                description === savedDetails.description)
-            }
-            onClick={() => updateScenario.mutate()}
-          >
-            Save details
-          </Button>
+          {!readOnly ? (
+            <Button
+              variant="outline"
+              disabled={
+                !name.trim() ||
+                updateScenario.isPending ||
+                (name === savedDetails.name &&
+                  description === savedDetails.description)
+              }
+              onClick={() => updateScenario.mutate()}
+            >
+              Save details
+            </Button>
+          ) : null}
         </div>
         {validation.isLoading ? <Skeleton className="h-16" /> : null}
         {validation.isError ? <ErrorPanel error={validation.error} /> : null}
@@ -375,30 +394,32 @@ function ScenarioEditor({
             </ul>
           </Alert>
         ) : null}
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-52 flex-1">
-            <Label>Copy name</Label>
-            <Input
-              aria-label="Copy scenario name"
-              value={copyName}
-              onChange={(event) => setCopyName(event.target.value)}
-            />
+        {!readOnly ? (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-52 flex-1">
+              <Label>Copy name</Label>
+              <Input
+                aria-label="Copy scenario name"
+                value={copyName}
+                onChange={(event) => setCopyName(event.target.value)}
+              />
+            </div>
+            <Button
+              variant="outline"
+              disabled={!copyName.trim() || copy.isPending}
+              onClick={() => copy.mutate()}
+            >
+              Copy scenario
+            </Button>
+            <Button
+              variant="danger"
+              disabled={archive.isPending}
+              onClick={() => archive.mutate()}
+            >
+              Archive scenario
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            disabled={!copyName.trim() || copy.isPending}
-            onClick={() => copy.mutate()}
-          >
-            Copy scenario
-          </Button>
-          <Button
-            variant="danger"
-            disabled={archive.isPending}
-            onClick={() => archive.mutate()}
-          >
-            Archive scenario
-          </Button>
-        </div>
+        ) : null}
         {actionError ? <ErrorPanel error={actionError} /> : null}
         <div className="space-y-2">
           {scenario.assumptions.length ? (
@@ -409,6 +430,7 @@ function ScenarioEditor({
                 caseId={caseId}
                 scenarioId={scenario.id}
                 assumption={assumption}
+                readOnly={readOnly}
                 onSaved={onSaved}
               />
             ))
@@ -419,97 +441,105 @@ function ScenarioEditor({
             </Alert>
           )}
         </div>
-        <div className="rounded-md border border-dashed border-[rgb(var(--border))] p-3">
-          <div className="mb-2 text-sm font-medium">Add assumption</div>
-          <div className="grid gap-2 @2xl/editor:grid-cols-3 @4xl/editor:grid-cols-6">
-            <select
-              aria-label="Assumption category"
-              className="h-8 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2 text-sm"
-              value={newAssumption.category}
-              onChange={(event) =>
-                setNewAssumption({
-                  ...newAssumption,
-                  category: event.target.value as AssumptionCategory,
-                })
+        {!readOnly ? (
+          <div className="rounded-md border border-dashed border-[rgb(var(--border))] p-3">
+            <div className="mb-2 text-sm font-medium">Add assumption</div>
+            <div className="grid gap-2 @2xl/editor:grid-cols-3 @4xl/editor:grid-cols-6">
+              <select
+                aria-label="Assumption category"
+                className="h-8 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2 text-sm"
+                value={newAssumption.category}
+                onChange={(event) =>
+                  setNewAssumption({
+                    ...newAssumption,
+                    category: event.target.value as AssumptionCategory,
+                  })
+                }
+              >
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {labelize(category)}
+                  </option>
+                ))}
+              </select>
+              <Input
+                aria-label="Assumption key"
+                placeholder="input_key"
+                value={newAssumption.key}
+                onChange={(event) =>
+                  setNewAssumption({
+                    ...newAssumption,
+                    key: event.target.value,
+                  })
+                }
+              />
+              <Input
+                aria-label="Assumption label"
+                placeholder="Label"
+                value={newAssumption.label}
+                onChange={(event) =>
+                  setNewAssumption({
+                    ...newAssumption,
+                    label: event.target.value,
+                  })
+                }
+              />
+              <select
+                aria-label="New assumption value type"
+                className="h-8 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2 text-sm"
+                value={newAssumption.valueType}
+                onChange={(event) =>
+                  setNewAssumption({
+                    ...newAssumption,
+                    valueType: event.target.value as AssumptionValueType,
+                  })
+                }
+              >
+                {valueTypes.map((valueType) => (
+                  <option key={valueType} value={valueType}>
+                    {labelize(valueType)}
+                  </option>
+                ))}
+              </select>
+              <Input
+                aria-label="New assumption value"
+                placeholder="Value"
+                value={newAssumption.value}
+                disabled={newAssumption.valueType === "null"}
+                onChange={(event) =>
+                  setNewAssumption({
+                    ...newAssumption,
+                    value: event.target.value,
+                  })
+                }
+              />
+              <Input
+                aria-label="Assumption unit"
+                placeholder="Unit"
+                value={newAssumption.unit}
+                onChange={(event) =>
+                  setNewAssumption({
+                    ...newAssumption,
+                    unit: event.target.value,
+                  })
+                }
+              />
+            </div>
+            <Button
+              className="mt-2"
+              variant="outline"
+              disabled={
+                !newAssumption.key.trim() ||
+                !newAssumption.label.trim() ||
+                !isValidValue(newAssumption.value, newAssumption.valueType) ||
+                add.isPending
               }
+              onClick={() => add.mutate()}
             >
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {labelize(category)}
-                </option>
-              ))}
-            </select>
-            <Input
-              aria-label="Assumption key"
-              placeholder="input_key"
-              value={newAssumption.key}
-              onChange={(event) =>
-                setNewAssumption({ ...newAssumption, key: event.target.value })
-              }
-            />
-            <Input
-              aria-label="Assumption label"
-              placeholder="Label"
-              value={newAssumption.label}
-              onChange={(event) =>
-                setNewAssumption({
-                  ...newAssumption,
-                  label: event.target.value,
-                })
-              }
-            />
-            <select
-              aria-label="New assumption value type"
-              className="h-8 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2 text-sm"
-              value={newAssumption.valueType}
-              onChange={(event) =>
-                setNewAssumption({
-                  ...newAssumption,
-                  valueType: event.target.value as AssumptionValueType,
-                })
-              }
-            >
-              {valueTypes.map((valueType) => (
-                <option key={valueType} value={valueType}>
-                  {labelize(valueType)}
-                </option>
-              ))}
-            </select>
-            <Input
-              aria-label="New assumption value"
-              placeholder="Value"
-              value={newAssumption.value}
-              disabled={newAssumption.valueType === "null"}
-              onChange={(event) =>
-                setNewAssumption({
-                  ...newAssumption,
-                  value: event.target.value,
-                })
-              }
-            />
-            <Input
-              aria-label="Assumption unit"
-              placeholder="Unit"
-              value={newAssumption.unit}
-              onChange={(event) =>
-                setNewAssumption({ ...newAssumption, unit: event.target.value })
-              }
-            />
+              Add assumption
+            </Button>
           </div>
-          <Button
-            className="mt-2"
-            variant="outline"
-            disabled={
-              !newAssumption.key.trim() ||
-              !newAssumption.label.trim() ||
-              !isValidValue(newAssumption.value, newAssumption.valueType) ||
-              add.isPending
-            }
-            onClick={() => add.mutate()}
-          >
-            Add assumption
-          </Button>
-        </div>
+        ) : null}
       </div>
     </Panel>
   );
@@ -520,12 +550,14 @@ function AssumptionRow({
   caseId,
   scenarioId,
   assumption,
+  readOnly,
   onSaved,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   scenarioId: string;
   assumption: ScenarioAssumptionRead;
+  readOnly: boolean;
   onSaved: (message: string) => Promise<void>;
 }) {
   const initialType = valueTypeOf(assumption.value);
@@ -587,6 +619,7 @@ function AssumptionRow({
         aria-label={`${assumption.label} value type`}
         className="h-8 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2 text-sm"
         value={valueType}
+        disabled={readOnly}
         onChange={(event) =>
           setValueType(event.target.value as AssumptionValueType)
         }
@@ -600,28 +633,30 @@ function AssumptionRow({
       <Input
         aria-label={`${assumption.label} value`}
         value={value}
-        disabled={valueType === "null"}
+        disabled={readOnly || valueType === "null"}
         onChange={(event) => setValue(event.target.value)}
       />
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!dirty || !validValue || update.isPending}
-          onClick={() => update.mutate()}
-        >
-          Save
-        </Button>
-        <Button
-          size="sm"
-          disabled={
-            dirty || !validValue || update.isPending || review.isPending
-          }
-          onClick={() => review.mutate()}
-        >
-          Review
-        </Button>
-      </div>
+      {!readOnly ? (
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!dirty || !validValue || update.isPending}
+            onClick={() => update.mutate()}
+          >
+            Save
+          </Button>
+          <Button
+            size="sm"
+            disabled={
+              dirty || !validValue || update.isPending || review.isPending
+            }
+            onClick={() => review.mutate()}
+          >
+            Review
+          </Button>
+        </div>
+      ) : null}
       {update.isError || review.isError ? (
         <div className="@2xl/editor:col-span-4">
           <ErrorPanel error={update.error ?? review.error} />

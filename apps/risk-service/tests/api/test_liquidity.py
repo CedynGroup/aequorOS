@@ -59,6 +59,49 @@ def test_liquidity_openapi_contracts(client: TestClient) -> None:
         assert components[name]["additionalProperties"] is False
 
 
+def test_legacy_successful_run_returns_honest_unavailable_summary(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    run_response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"], "forecast_periods": 2},
+    )
+    assert run_response.status_code == 201, run_response.text
+    run = run_response.json()
+    with get_sessionmaker()() as session:
+        session.execute(
+            delete(LiquidityAnalysisResult).where(
+                LiquidityAnalysisResult.run_id == UUID(run["id"])
+            )
+        )
+        session.commit()
+
+    response = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary",
+        headers=headers(),
+        params={"run_id": run["id"]},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "case_id": str(case.id),
+        "scenario_id": scenario["id"],
+        "calculation_run_id": run["id"],
+        "calculation_input_hash": run["input_hash"],
+        "analysis_version": None,
+        "status": "not_calculated",
+        "currency": None,
+        "as_of_date": run["as_of_date"],
+        "metrics": [],
+        "findings": [],
+        "generated_at": None,
+    }
+
+
 def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     empty = db_client.get(f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers())

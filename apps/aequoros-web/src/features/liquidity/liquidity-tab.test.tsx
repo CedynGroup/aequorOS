@@ -203,8 +203,16 @@ describe("LiquidityTab", () => {
       screen.getByLabelText("Loading liquidity analysis"),
     ).toBeInTheDocument();
     expect(
-      await screen.findByText("No liquidity analysis"),
+      await screen.findByText(
+        "Liquidity analysis not available for this run — rerun to generate it.",
+      ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open Forecast to rerun" }),
+    ).toHaveAttribute(
+      "href",
+      "/cases/case-1?tab=calculations#calculation-run-run-1-forecast-period-1",
+    );
   });
 
   it("renders metrics, shared finding card, and evidence links", async () => {

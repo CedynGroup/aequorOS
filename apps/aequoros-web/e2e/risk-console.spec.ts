@@ -87,6 +87,7 @@ test("renders financial workspace and findings for the selected case", async ({
 
 test("initializes, edits, reviews, copies, archives, and tenant-isolates scenarios", async ({
   page,
+  request,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const console = new RiskConsolePage(page);
@@ -141,6 +142,35 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await expect(
     page.getByText("Downside liquidity copy", { exact: true }),
   ).not.toBeVisible();
+
+  const archivedResponse = await request.get(
+    `${apiBaseUrl}/cases/${northstarCase.id}/scenarios?include_archived=true`,
+    {
+      headers: {
+        "X-Org-Id": demoTenant.orgId,
+        "X-User-Id": demoTenant.userId,
+      },
+    },
+  );
+  expect(archivedResponse.ok()).toBe(true);
+  const archivedWorkspace = await archivedResponse.json();
+  const archivedScenario = archivedWorkspace.scenarios.find(
+    (scenario: { name: string }) => scenario.name === "Downside liquidity copy",
+  );
+  expect(archivedScenario).toBeTruthy();
+  const archivedAssumption = archivedScenario.assumptions[0];
+  await page.goto(
+    `/cases/${northstarCase.id}?tab=scenarios#scenario-${archivedScenario.id}-assumption-${archivedAssumption.id}`,
+  );
+  await expect(page.getByText("Archived scenario audit mode")).toBeVisible();
+  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save details" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("button", { name: "Review" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Add assumption" }),
+  ).toHaveCount(0);
 
   await page
     .getByLabel("Tenant org id")
@@ -333,6 +363,7 @@ test("renders liquidity empty and error states", async ({ page }) => {
         scenario_id: null,
         calculation_run_id: null,
         calculation_input_hash: null,
+        analysis_version: null,
         status: "not_calculated",
         currency: null,
         as_of_date: null,
@@ -344,7 +375,19 @@ test("renders liquidity empty and error states", async ({ page }) => {
   });
   const console = new RiskConsolePage(page);
   await console.gotoSelectedCase("liquidity");
-  await expect(page.getByText("No liquidity analysis")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Liquidity analysis not available for this run — rerun to generate it.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Open Forecast to rerun" }),
+  ).toHaveAttribute(
+    "href",
+    new RegExp(
+      `^/cases/${northstarCase.id}\\?tab=calculations#calculation-run-[0-9a-f-]+-forecast-period-1$`,
+    ),
+  );
 
   await page.unroute(summaryPattern);
   await page.route(summaryPattern, async (route) => {
@@ -363,6 +406,21 @@ test("renders liquidity empty and error states", async ({ page }) => {
   });
   await page.reload();
   await expect(page.getByText("Request failed")).toBeVisible();
+});
+
+test("ignores malformed calculation evidence links", async ({ page }) => {
+  let malformedRunRequests = 0;
+  await page.route("**/calculation-runs/not-a-uuid", async (route) => {
+    malformedRunRequests += 1;
+    await route.abort();
+  });
+
+  await page.goto(
+    `/cases/${northstarCase.id}?tab=calculations#calculation-run-not-a-uuid-forecast-period-0`,
+  );
+
+  await expect(page.getByRole("tabpanel", { name: "Forecast" })).toBeVisible();
+  expect(malformedRunRequests).toBe(0);
 });
 
 test("renders JSON and HTML reports without deprecated endpoints", async ({

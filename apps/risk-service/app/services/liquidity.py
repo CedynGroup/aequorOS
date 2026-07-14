@@ -452,9 +452,18 @@ def get_summary(
         )
     )
     if analysis is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="The selected calculation run has no persisted liquidity analysis.",
+        return LiquiditySummaryRead(
+            case_id=case_id,
+            scenario_id=run.scenario_id,
+            calculation_run_id=run.id,
+            calculation_input_hash=run.input_hash,
+            analysis_version=None,
+            status="not_calculated",
+            currency=None,
+            as_of_date=run.as_of_date,
+            metrics=[],
+            findings=[],
+            generated_at=None,
         )
     metrics = [
         LiquidityMetricRead.model_validate(metric) for metric in analysis.result.get("metrics", [])

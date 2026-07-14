@@ -551,7 +551,20 @@ function calculationDeepLink() {
   if (!targetId.startsWith(prefix) || !targetId.includes(separator))
     return null;
   const runId = targetId.slice(prefix.length, targetId.indexOf(separator));
-  return runId ? { runId, targetId } : null;
+  const period = targetId.slice(targetId.indexOf(separator) + separator.length);
+  const periodNumber = Number(period);
+  return isUuid(runId) &&
+    /^\d+$/.test(period) &&
+    Number.isSafeInteger(periodNumber) &&
+    periodNumber > 0
+    ? { runId, targetId }
+    : null;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 function MoneyCell({ row, value }: { row: ForecastPeriodRead; value: string }) {
