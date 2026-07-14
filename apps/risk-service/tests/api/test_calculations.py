@@ -332,6 +332,41 @@ def test_audit_binds_pending_run_to_established_input_hash(db_client: TestClient
     }
 
 
+def test_failure_after_snapshot_commit_does_not_duplicate_established_event(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+
+    def fail_publication(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("publication failed")
+
+    monkeypatch.setattr(calculations, "generate_liquidity_findings", fail_publication)
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "failed"
+    assert run["outputs"] == []
+    with get_sessionmaker()() as session:
+        established = list(
+            session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id == UUID(run["id"]),
+                    AuditEvent.event_type == "calculation_run.input_snapshot_established",
+                )
+            )
+        )
+    assert len(established) == 1
+    assert established[0].details["input_hash"] == run["input_hash"]
+
+
 def test_rerun_after_assumption_change_versions_inputs_without_replacing_output(
     db_client: TestClient,
 ) -> None:

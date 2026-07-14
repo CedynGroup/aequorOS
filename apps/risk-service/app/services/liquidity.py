@@ -310,6 +310,11 @@ def generate_findings(
             )
         )
         for source_type, collection, records in (
+            (
+                "canonical_input",
+                "reportingPeriods",
+                [run.inputs["reporting_period"]] if run.inputs.get("reporting_period") else [],
+            ),
             ("canonical_input", "balances", run.inputs.get("balances", [])),
             ("canonical_input", "cashFlows", run.inputs.get("cash_flows", [])),
             ("canonical_input", "obligations", run.inputs.get("obligations", [])),
@@ -536,9 +541,13 @@ def _money(value: Decimal) -> Decimal:
 def _source_label(source_type: str, record: dict[str, Any]) -> str:
     if source_type == "scenario_assumption":
         return f"Scenario assumption: {record.get('key', record['id'])}"
-    return (
-        f"Canonical record: {record.get('balance_type') or record.get('category') or record['id']}"
+    label = (
+        record.get("label")
+        or record.get("balance_type")
+        or record.get("category")
+        or record["id"]
     )
+    return f"Canonical record: {label}"
 
 
 def _source_url(

@@ -291,6 +291,7 @@ def _create_and_execute(  # noqa: PLR0913
     db.commit()
 
     assembled_snapshot: dict[str, Any] | None = None
+    snapshot_event_persisted = False
     try:
         _begin_repeatable_read(db)
         snapshot, as_of_date = build_input_snapshot(
@@ -351,6 +352,7 @@ def _create_and_execute(  # noqa: PLR0913
                 },
             ) from exc
         db.commit()
+        snapshot_event_persisted = True
         _begin_read_committed(db)
         generate_liquidity_findings(db, ctx, run, forecast_rows)
         run.status = "succeeded"
@@ -365,7 +367,15 @@ def _create_and_execute(  # noqa: PLR0913
         )
         db.commit()
     except CalculationInputError as exc:
-        _persist_failure(db, ctx, case_id, run.id, exc, assembled_snapshot)
+        _persist_failure(
+            db,
+            ctx,
+            case_id,
+            run.id,
+            exc,
+            assembled_snapshot,
+            snapshot_event_persisted=snapshot_event_persisted,
+        )
     except Exception:
         error = CalculationInputError(
             "calculation_error",
@@ -383,6 +393,7 @@ def _create_and_execute(  # noqa: PLR0913
             run.id,
             error,
             assembled_snapshot,
+            snapshot_event_persisted=snapshot_event_persisted,
         )
     return get_run(db, ctx, case_id, run.id)
 
@@ -1091,6 +1102,8 @@ def _persist_failure(  # noqa: PLR0913
     run_id: UUID,
     error: CalculationInputError,
     canonical_snapshot: dict[str, Any] | None = None,
+    *,
+    snapshot_event_persisted: bool = False,
 ) -> None:
     db.rollback()
     run = _run_or_404(db, ctx, case_id, run_id)
@@ -1105,19 +1118,20 @@ def _persist_failure(  # noqa: PLR0913
         run.inputs = canonical_snapshot
         run.input_hash = _snapshot_hash(canonical_snapshot)
         run.as_of_date = date.fromisoformat(canonical_snapshot["as_of_date"])
-        record_event(
-            db,
-            ctx,
-            event_type="calculation_run.input_snapshot_established",
-            entity_type="calculation_run",
-            entity_id=run.id,
-            details={
-                "input_hash": run.input_hash,
-                "input_hash_status": "established",
-                "as_of_date": run.as_of_date.isoformat(),
-                "input_schema_version": INPUT_SCHEMA_VERSION,
-            },
-        )
+        if not snapshot_event_persisted:
+            record_event(
+                db,
+                ctx,
+                event_type="calculation_run.input_snapshot_established",
+                entity_type="calculation_run",
+                entity_id=run.id,
+                details={
+                    "input_hash": run.input_hash,
+                    "input_hash_status": "established",
+                    "as_of_date": run.as_of_date.isoformat(),
+                    "input_schema_version": INPUT_SCHEMA_VERSION,
+                },
+            )
         input_hash_status = "established"
     else:
         record_event(

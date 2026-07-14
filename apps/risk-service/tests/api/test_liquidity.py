@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
+from datetime import date
 from uuid import UUID
 
 import pytest
@@ -9,7 +10,14 @@ from sqlalchemy import select
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
 from app.domain.risk_constants import LIQUIDITY_RISK_TYPE
-from app.models import AuditEvent, CalculationForecastPeriod, CalculationRun, RiskFinding
+from app.models import (
+    AuditEvent,
+    CalculationForecastPeriod,
+    CalculationRun,
+    FinancialBalance,
+    FinancialReportingPeriod,
+    RiskFinding,
+)
 from app.services import liquidity
 from app.services.liquidity import generate_findings
 from tests.api.factories import CaseFactory
@@ -68,6 +76,25 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
 
     scenario = _ready_scenario(db_client, case.id)
     _financial_inputs(case.id)
+    with get_sessionmaker()() as session:
+        reporting_period = FinancialReportingPeriod(
+            organization_id=ORG_1,
+            case_id=case.id,
+            dedupe_key="liquidity:evidence:reporting-period",
+            period_type="year",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31),
+            label="2026",
+        )
+        session.add(reporting_period)
+        session.flush()
+        balances = list(
+            session.scalars(select(FinancialBalance).where(FinancialBalance.case_id == case.id))
+        )
+        for balance in balances:
+            balance.reporting_period_id = reporting_period.id
+        reporting_period_id = reporting_period.id
+        session.commit()
     run = db_client.post(
         f"/api/v1/cases/{case.id}/calculation-runs",
         headers=headers(),
@@ -104,6 +131,15 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
     assert any(
         "tab=financial#financial-obligations-" in evidence["source_url"]
         for evidence in finding["evidence"]
+    )
+    reporting_period_evidence = next(
+        evidence
+        for evidence in finding["evidence"]
+        if evidence["locator"].get("record_id") == str(reporting_period_id)
+    )
+    assert reporting_period_evidence["label"] == "Canonical record: 2026"
+    assert reporting_period_evidence["source_url"] == (
+        f"/cases/{case.id}?tab=financial#financial-reportingPeriods-{reporting_period_id}"
     )
 
     invalid = db_client.post(
