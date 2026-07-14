@@ -92,7 +92,9 @@ export function ScenariosTab({
   const refresh = async (message: string) => {
     setSavedMessage(message);
     toast.success(message);
-    await queryClient.invalidateQueries({ queryKey });
+    await queryClient.invalidateQueries({
+      queryKey: ["scenarios", tenant, caseId],
+    });
     await queryClient.invalidateQueries({
       queryKey: ["scenario-validation", tenant, caseId],
     });
