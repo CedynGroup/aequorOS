@@ -36,11 +36,7 @@ function formatDecimalParts(
   const resolvedOptions = formatter.resolvedOptions();
   const minimumFractionDigits = resolvedOptions.minimumFractionDigits ?? 0;
   const maximumFractionDigits = resolvedOptions.maximumFractionDigits ?? 2;
-  const rounded = roundDecimal(
-    match[2],
-    match[3] ?? "",
-    maximumFractionDigits,
-  );
+  const rounded = roundDecimal(match[2], match[3] ?? "", maximumFractionDigits);
   const groupedInteger = new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 0,
   }).format(BigInt(rounded.integer));
