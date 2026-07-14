@@ -37,6 +37,22 @@ forecast, liquidity, capital, finding, and decision mutations are disabled.
 Archived cases are likewise read-only. Document download links remain
 available because they do not mutate case data.
 
+## Console Navigation And Scenario Review
+
+The top bar provides named demo organization and case selectors. Selecting an
+organization also selects its seeded user context, clears the current case, and
+returns to the case queue. The queue can be hidden so the selected case uses the
+full workspace width; case detail routes start with it hidden, including at
+mobile widths.
+
+Scenario assumptions are presented in a compact table with label, type, value,
+unit, review status, and actions. Ratio assumptions are entered as percentages
+with a `%` suffix while the API continues to store decimal ratios; for example,
+entering `5` persists `0.05`. Other recognized units appear as input suffixes.
+Forecast horizons show a `years` suffix. Capital ratios and liquidity ratio
+metrics use percentage formatting with up to two decimal places, except minimum
+sources coverage, which remains a multiple such as `1.20x`.
+
 ## Financial Review
 
 The Financial tab loads the case's canonical financial workspace through the
@@ -221,10 +237,12 @@ Vitest tests are colocated with the module they protect:
 
 Browser-mode Vitest tests use Playwright for DOM-heavy component interactions:
 
-- `src/features/risk-console/risk-console.browser.test.tsx`: Radix select portal behavior and dialog rendering in Chromium
+- `src/features/risk-console/risk-console.browser.test.tsx`: Radix organization and case select portal behavior, mobile top-bar overflow and queue-toggle accessibility, and dialog rendering in Chromium
 
 The Playwright E2E suite includes `e2e/financial-review.spec.ts` for source
 drilldown and the upload, map, validate, correct, retry, revalidate, cash-flow
 entry, and covenant-entry journeys. `e2e/capital-projection.spec.ts` covers the
 deterministic capital projection, comparison, finding-evidence, failure, and
-tenant-isolation workflow.
+tenant-isolation workflow. `e2e/risk-console.spec.ts` also verifies the compact
+scenario table and that the console has no horizontal overflow at 1440x1000 and
+1280x800 viewports.
