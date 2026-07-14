@@ -20,7 +20,11 @@ from app.domain.risk_constants import (
 from app.models import Document, DocumentChunk, RiskFinding, RiskFindingEvidence
 from app.schemas.common import JsonObject
 from app.services.audit import record_event
-from app.services.cases import ensure_case_is_not_archived, get_case_or_404
+from app.services.cases import (
+    ensure_case_is_not_archived,
+    get_case_for_update_or_404,
+    get_case_or_404,
+)
 
 
 @dataclass(frozen=True)
@@ -162,9 +166,15 @@ def update_finding(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Generated finding fields cannot be updated through this endpoint.",
         )
+    if not {"status", "disposition_reason"} & command.fields_set:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Finding updates require a status or disposition reason.",
+        )
     finding = get_finding_or_404(db, ctx.organization_id, finding_id)
-    case = get_case_or_404(db, ctx.organization_id, finding.case_id)
+    case = get_case_for_update_or_404(db, ctx.organization_id, finding.case_id)
     ensure_case_is_not_archived(case)
+    db.refresh(finding, with_for_update=True)
     update_data = command.update_data
     status_value = update_data.get("status")
     if "status" in update_data and (

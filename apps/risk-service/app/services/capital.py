@@ -15,7 +15,6 @@ from app.models import (
     CapitalIndicator,
     CapitalProjection,
     CapitalProjectionFinding,
-    RiskCase,
     RiskFinding,
     RiskFindingEvidence,
     RiskScenario,
@@ -37,7 +36,11 @@ from app.schemas.capital import (
 )
 from app.schemas.findings import EvidenceRead, FindingRead
 from app.services.audit import record_event
-from app.services.cases import ensure_case_is_not_archived, get_case_or_404
+from app.services.cases import (
+    ensure_case_is_not_archived,
+    get_case_for_update_or_404,
+    get_case_or_404,
+)
 from app.services.findings import list_finding_evidence
 
 ENGINE_VERSION = "capital-projection-v1.0.0"
@@ -45,6 +48,8 @@ RATIO = Decimal("0.00000001")
 MONEY = Decimal("0.0001")
 RATIO_STORAGE = (RATIO, 12, 8)
 MONEY_STORAGE = (MONEY, 20, 4)
+HIGH_PRESSURE_EQUITY_RATIO = Decimal("0.10000000")
+MEDIUM_PRESSURE_EQUITY_RATIO = Decimal("0.20000000")
 
 
 class CapitalInputError(Exception):
@@ -337,9 +342,7 @@ def get_comparison(db: Session, ctx: TenantContext, case_id: UUID) -> CapitalCom
     )
 
 
-def _comparison_basis(
-    run: CalculationRun, reporting_currency: str
-) -> CapitalComparisonBasisRead:
+def _comparison_basis(run: CalculationRun, reporting_currency: str) -> CapitalComparisonBasisRead:
     return CapitalComparisonBasisRead(
         as_of_date=run.as_of_date,
         reporting_currency=reporting_currency,
@@ -353,16 +356,7 @@ def _lock_active_case_and_scenario(
     case_id: UUID,
     scenario_id: UUID,
 ) -> None:
-    case = db.scalar(
-        select(RiskCase)
-        .where(
-            RiskCase.id == case_id,
-            RiskCase.organization_id == ctx.organization_id,
-        )
-        .with_for_update()
-    )
-    if case is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found.")
+    case = get_case_for_update_or_404(db, ctx.organization_id, case_id)
     ensure_case_is_not_archived(case)
     scenario = db.scalar(
         select(RiskScenario)
@@ -411,14 +405,6 @@ def _indicator(
     equity_ratio = period.total_equity / period.total_assets
     liabilities_ratio = period.total_liabilities / period.total_assets
     equity_change = period.total_equity - opening_equity
-    if period.total_equity < 0:
-        pressure = "critical"
-    elif equity_ratio < Decimal("0.10"):
-        pressure = "high"
-    elif equity_ratio < Decimal("0.20") or equity_change < 0:
-        pressure = "medium"
-    else:
-        pressure = "low"
     evidence = {
         "calculation_run_id": str(projection.calculation_run_id),
         "forecast_period_id": str(period.id),
@@ -440,6 +426,11 @@ def _indicator(
         ),
         "equity_change": _bounded_value(equity_change, MONEY_STORAGE, "equity_change", period),
     }
+    pressure = _classify_persisted_pressure(
+        values["equity"],
+        values["equity_to_assets_ratio"],
+        values["equity_change"],
+    )
     return CapitalIndicator(
         organization_id=projection.organization_id,
         case_id=projection.case_id,
@@ -474,7 +465,7 @@ def _persist_findings(
                 item,
             )
         )
-    elif worst.equity_to_assets_ratio < Decimal("0.10"):
+    elif worst.equity_to_assets_ratio < HIGH_PRESSURE_EQUITY_RATIO:
         candidates.append(
             (
                 "capital_thin_buffer",
@@ -571,6 +562,7 @@ def _supersede_prior_findings(
                 CapitalProjection.scenario_id == projection.scenario_id,
                 CapitalProjection.id != projection.id,
             )
+            .with_for_update(of=RiskFinding)
         )
     )
     for finding in prior_findings:
@@ -590,6 +582,18 @@ def _supersede_prior_findings(
             entity_id=finding.id,
             details={"capital_projection_id": str(projection.id)},
         )
+
+
+def _classify_persisted_pressure(
+    equity: Decimal, equity_ratio: Decimal, equity_change: Decimal
+) -> str:
+    if equity < 0:
+        return "critical"
+    if equity_ratio < HIGH_PRESSURE_EQUITY_RATIO:
+        return "high"
+    if equity_ratio < MEDIUM_PRESSURE_EQUITY_RATIO or equity_change < 0:
+        return "medium"
+    return "low"
 
 
 def _read_projection(

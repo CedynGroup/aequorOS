@@ -47,6 +47,22 @@ def test_update_finding_rejects_generated_fields(
     assert exc.value.status_code == 400
 
 
+def test_update_finding_rejects_empty_review(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    factories, finding = create_finding(db_session, service_factories)
+    command = findings.UpdateFindingCommand(update_data={}, fields_set=set())
+
+    with pytest.raises(HTTPException) as exc:
+        findings.update_finding(db_session, factories.ctx, finding.id, command)
+
+    assert exc.value.status_code == 400
+    db_session.refresh(finding)
+    assert "reviewed_by" not in finding.details
+    assert "reviewed_at" not in finding.details
+
+
 def test_update_finding_status_records_audit_event(
     db_session: Session,
     service_factories: ServiceFactories,

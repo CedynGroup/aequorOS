@@ -176,9 +176,7 @@ def test_capital_projection_findings_evidence_comparison_and_tenant_isolation(
     assert summary.json()["projection"]["id"] == baseline["id"]
     assert summary.json()["projection"]["reporting_currency"] == "USD"
 
-    comparison = db_client.get(
-        f"/api/v1/cases/{case.id}/capital-comparison", headers=headers()
-    )
+    comparison = db_client.get(f"/api/v1/cases/{case.id}/capital-comparison", headers=headers())
     assert comparison.status_code == 200
     compared = comparison.json()
     assert compared["baseline"]["id"] == baseline["id"]
@@ -423,6 +421,46 @@ def test_capital_projection_persists_derived_indicator_range_diagnostic(
     assert persisted.json()["error"] == failed["error"]
 
 
+def test_capital_pressure_rounds_ratio_before_classification(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenarios(db_client, case.id)[0]
+    _financial_inputs(case.id)
+    run = _forecast(db_client, case.id, scenario["id"], forecast_periods=1)
+    with get_sessionmaker()() as session:
+        period = session.scalar(
+            select(CalculationForecastPeriod).where(
+                CalculationForecastPeriod.run_id == UUID(run["id"])
+            )
+        )
+        assert period is not None
+        period.total_assets = Decimal("1000000.0000")
+        period.total_liabilities = Decimal("900000.0001")
+        period.total_equity = Decimal("99999.9999")
+        period.components = {
+            **period.components,
+            "opening_assets": "1000000.0000",
+            "opening_liabilities": "900000.0001",
+        }
+        session.commit()
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": run["id"]},
+    )
+
+    assert response.status_code == 201, response.text
+    projection = response.json()
+    assert projection["status"] == "succeeded"
+    assert projection["indicators"][0]["equity_to_assets_ratio"] == "0.10000000"
+    assert projection["indicators"][0]["pressure_level"] == "medium"
+    assert all(
+        item["finding"]["rule_id"] != "capital_thin_buffer" for item in projection["findings"]
+    )
+
+
 def test_capital_projection_history_persists_failures_and_is_tenant_scoped(
     db_client: TestClient,
 ) -> None:
@@ -595,9 +633,7 @@ def test_archived_capital_inputs_are_retired_without_hiding_history(
     assert comparison.status_code == 200
     assert comparison.json()[scenario["scenario_type"]] is None
 
-    archived_case = db_client.post(
-        f"/api/v1/cases/{case.id}/archive", headers=headers()
-    )
+    archived_case = db_client.post(f"/api/v1/cases/{case.id}/archive", headers=headers())
     assert archived_case.status_code == 200
     retired_case_projection = db_client.post(
         f"/api/v1/cases/{case.id}/capital-projections",
@@ -616,9 +652,7 @@ def test_archived_capital_inputs_are_retired_without_hiding_history(
     )
     assert retired_comparison.status_code == 409
 
-    history = db_client.get(
-        f"/api/v1/cases/{case.id}/capital-projections", headers=headers()
-    )
+    history = db_client.get(f"/api/v1/cases/{case.id}/capital-projections", headers=headers())
     detail = db_client.get(
         f"/api/v1/cases/{case.id}/capital-projections/{created['id']}",
         headers=headers(),

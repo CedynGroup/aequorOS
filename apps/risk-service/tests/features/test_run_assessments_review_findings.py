@@ -31,6 +31,13 @@ def test_assessments_runs_findings_evidence_and_jobs(db_client: TestClient, fake
     response = db_client.patch(
         f"/api/v1/findings/{finding_id}",
         headers=headers(),
+        json={},
+    )
+    assert response.status_code == 400
+
+    response = db_client.patch(
+        f"/api/v1/findings/{finding_id}",
+        headers=headers(),
         json={"status": "dismissed"},
     )
     assert response.status_code == 400
