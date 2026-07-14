@@ -22,7 +22,8 @@ import {
   Skeleton,
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
-import { formatMoney, truncateId } from "../../lib/utils";
+import { formatMoney } from "../../lib/money";
+import { truncateId } from "../../lib/utils";
 import {
   focusWorkspaceTarget,
   workspaceHash,

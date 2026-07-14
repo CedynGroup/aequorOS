@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
 from app.models import (
     AuditEvent,
@@ -332,17 +335,25 @@ def test_audit_binds_pending_run_to_established_input_hash(db_client: TestClient
     }
 
 
-def test_failure_after_snapshot_commit_does_not_duplicate_established_event(
+def test_failure_after_liquidity_publication_rolls_back_atomic_run_result(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
     _financial_inputs(case.id)
 
-    def fail_publication(*_args: object, **_kwargs: object) -> None:
-        raise RuntimeError("publication failed")
+    original_record_event = calculations.record_event
 
-    monkeypatch.setattr(calculations, "generate_liquidity_findings", fail_publication)
+    def fail_finalization(
+        db: Session,
+        ctx: TenantContext,
+        **kwargs: Any,
+    ) -> AuditEvent:
+        if kwargs.get("event_type") == "calculation_run.succeeded":
+            raise RuntimeError("finalization failed")
+        return original_record_event(db, ctx, **kwargs)
+
+    monkeypatch.setattr(calculations, "record_event", fail_finalization)
 
     response = db_client.post(
         f"/api/v1/cases/{case.id}/calculation-runs",
@@ -363,8 +374,17 @@ def test_failure_after_snapshot_commit_does_not_duplicate_established_event(
                 )
             )
         )
+        liquidity_events = list(
+            session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id == UUID(run["id"]),
+                    AuditEvent.event_type == "liquidity_analysis.completed",
+                )
+            )
+        )
     assert len(established) == 1
     assert established[0].details["input_hash"] == run["input_hash"]
+    assert liquidity_events == []
 
 
 def test_rerun_after_assumption_change_versions_inputs_without_replacing_output(

@@ -224,7 +224,7 @@ describe("LiquidityTab", () => {
       await screen.findByText("Liquidity risk summary"),
     ).toBeInTheDocument();
     expect(screen.getByText(/Baseline · run run-1/)).toBeInTheDocument();
-    expect(screen.getByText("-$500")).toBeInTheDocument();
+    expect(screen.getByText("-$500.00")).toBeInTheDocument();
     expect(
       screen.getByText("Thin liquidity sources coverage"),
     ).toBeInTheDocument();
@@ -253,6 +253,25 @@ describe("LiquidityTab", () => {
     renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
 
     expect(await screen.findByText("US1 -500.0000")).toBeInTheDocument();
+  });
+
+  it("formats large monetary metrics without losing precision", async () => {
+    vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(
+      summary({
+        metrics: [
+          {
+            ...summary().metrics[0],
+            value: "9007199254740993.0000",
+          },
+        ],
+      }),
+    );
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    expect(
+      await screen.findByText("$9,007,199,254,740,993.00"),
+    ).toBeInTheDocument();
   });
 
   it("selects an explicit scenario and run and scopes the summary", async () => {

@@ -21,6 +21,7 @@ import {
   Skeleton,
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
+import { formatMoney } from "../../lib/money";
 import { truncateId } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { FindingReviewCard } from "../findings/finding-review-card";
@@ -444,16 +445,7 @@ function formatMetric(metric: LiquidityMetricRead) {
   const value = Number(metric.value);
   if (metric.unit === "ratio") return `${value.toFixed(2)}x`;
   if (metric.unit === "forecast_periods") return `${value} periods`;
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: metric.unit,
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch (error) {
-    if (error instanceof RangeError) return `${metric.unit} ${metric.value}`;
-    throw error;
-  }
+  return formatMoney(metric.value, metric.unit);
 }
 
 function formatDate(value: string | null | undefined) {

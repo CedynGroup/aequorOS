@@ -216,7 +216,7 @@ def generate_findings(
     periods: list[CalculationForecastPeriod],
 ) -> None:
     result = calculate_metrics(periods)
-    _lock_finding_publication(db, ctx, run)
+    lock_finding_publication(db, ctx, run.case_id, run.scenario_id)
     analysis = db.scalar(
         select(LiquidityAnalysisResult).where(
             LiquidityAnalysisResult.organization_id == ctx.organization_id,
@@ -403,10 +403,15 @@ def generate_findings(
     )
 
 
-def _lock_finding_publication(db: Session, ctx: TenantContext, run: CalculationRun) -> None:
+def lock_finding_publication(
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    scenario_id: UUID,
+) -> None:
     if db.get_bind().dialect.name != "postgresql":
         return
-    scope = f"{ctx.organization_id}:{run.case_id}:{run.scenario_id}".encode()
+    scope = f"{ctx.organization_id}:{case_id}:{scenario_id}".encode()
     lock_key = int.from_bytes(hashlib.sha256(scope).digest()[:8], signed=True)
     db.execute(select(func.pg_advisory_xact_lock(lock_key)))
 
