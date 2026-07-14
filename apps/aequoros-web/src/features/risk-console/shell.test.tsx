@@ -52,6 +52,7 @@ describe("risk console shell", () => {
       />,
     );
 
+    await user.click(screen.getByText("Connection settings", { exact: true }));
     fireEvent.change(screen.getByLabelText("Tenant org id"), {
       target: { value: "org-2" },
     });
@@ -60,9 +61,9 @@ describe("risk console shell", () => {
     });
     await user.click(screen.getByRole("button", { name: /Demo seed data/ }));
 
-    expect(screen.getByRole("combobox", { name: "Current case" })).toHaveTextContent(
-      "Covenant review - Northstar Foods",
-    );
+    expect(
+      screen.getByRole("combobox", { name: "Current case" }),
+    ).toHaveTextContent("Covenant review - Northstar Foods");
     expect(setOrgId).toHaveBeenLastCalledWith("org-2");
     expect(setUserId).toHaveBeenLastCalledWith("user-2");
     expect(seed).toHaveBeenCalledOnce();

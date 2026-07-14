@@ -76,6 +76,6 @@ def update_finding(
 @router.get("/findings/{finding_id}/evidence", response_model=list[EvidenceRead])
 def get_finding_evidence(finding_id: UUID, db: DbSession, ctx: Tenant) -> list[EvidenceRead]:
     return [
-        EvidenceRead(**evidence.__dict__)
+        EvidenceRead.model_validate(evidence, from_attributes=True)
         for evidence in findings_service.list_finding_evidence(db, ctx, finding_id)
     ]

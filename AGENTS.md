@@ -48,4 +48,5 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   verticals.
 - Restore the fixed four-case presenter portfolio with `RISK_DEMO_DATABASE_URL=... mise run
 risk-service:reset-demo`. The Core-insert reset is idempotent, deletes only the known demo
-  tenant, pre-populates analysis history, and is documented in `docs/demo-playbook.md`.
+  tenant, and pre-populates forecast, liquidity, capital, finding, decision, and report inputs in
+  explicit dependency order. The presenter journey is documented in `docs/demo-playbook.md`.

@@ -111,18 +111,23 @@ export function TopBar({
         Risk operations
       </div>
       <div className="ml-auto flex min-w-0 items-center gap-2">
-        <Input
-          className="hidden w-72 md:block"
-          value={orgId}
-          onChange={(event) => setOrgId(event.target.value)}
-          aria-label="Tenant org id"
-        />
-        <Input
-          className="hidden w-72 xl:block"
-          value={userId}
-          onChange={(event) => setUserId(event.target.value)}
-          aria-label="User id"
-        />
+        <details className="group relative hidden md:block">
+          <summary className="cursor-pointer list-none rounded-md border border-[rgb(var(--border))] px-2.5 py-1.5 text-sm font-medium">
+            Connection settings
+          </summary>
+          <div className="absolute right-0 top-10 z-30 grid w-80 gap-2 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] p-3 shadow-lg">
+            <Input
+              value={orgId}
+              onChange={(event) => setOrgId(event.target.value)}
+              aria-label="Tenant org id"
+            />
+            <Input
+              value={userId}
+              onChange={(event) => setUserId(event.target.value)}
+              aria-label="User id"
+            />
+          </div>
+        </details>
         <Select
           ariaLabel="Current case"
           className="w-44 max-w-[32vw] sm:w-56"

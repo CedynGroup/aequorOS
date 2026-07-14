@@ -38,7 +38,7 @@ import {
   Textarea,
 } from "../../components/ui";
 import type { TenantHeaders } from "../../lib/api";
-import { cn, labelize, truncateId } from "../../lib/utils";
+import { cn, labelize } from "../../lib/utils";
 import {
   focusWorkspaceTarget,
   workspaceHash,
@@ -384,7 +384,7 @@ function ManualEditHistory({
                   <td className="px-3 py-2">
                     <div>{labelize(edit.recordTable)}</div>
                     <div className="text-[11px] text-[rgb(var(--muted-foreground))]">
-                      {labelize(edit.fieldName)} · {truncateId(edit.recordId)}
+                      {labelize(edit.fieldName)}
                     </div>
                   </td>
                   <td className="px-3 py-2">
@@ -394,7 +394,13 @@ function ManualEditHistory({
                   <td className="px-3 py-2">
                     {edit.reason ?? "No reason recorded"}
                   </td>
-                  <td className="px-3 py-2">{edit.editedBy ?? "Unknown"}</td>
+                  <td className="px-3 py-2">
+                    {edit.editedBy
+                      ? isInternalId(edit.editedBy)
+                        ? "Demo reviewer"
+                        : edit.editedBy
+                      : "Unknown"}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -728,9 +734,13 @@ function FinancialRecordRows({
                 focusedCell === id && "bg-amber-100",
               )}
             >
-              {renderCell(
-                (row as unknown as Record<string, unknown>)[field.key],
-              )}
+              {field.key.endsWith("Id")
+                ? (row as unknown as Record<string, unknown>)[field.key]
+                  ? "Linked record"
+                  : "None"
+                : renderCell(
+                    (row as unknown as Record<string, unknown>)[field.key],
+                  )}
             </td>
           );
         })}
@@ -819,9 +829,7 @@ function SourceDrilldown({
             <div>
               <Label>Document / row</Label>
               <div>
-                {source?.documentId
-                  ? truncateId(source.documentId)
-                  : "No document ID"}{" "}
+                {source?.documentId ? "Source document" : "No source document"}{" "}
                 · row {source?.rowIndex ?? "n/a"}
               </div>
               <code className="break-all text-[10px]">
@@ -1362,18 +1370,10 @@ function renderCell(value: unknown) {
     return (
       <code className="break-all text-[10px]">{JSON.stringify(value)}</code>
     );
-  if (
-    typeof value === "string" &&
-    value.length > 20 &&
-    /^[0-9a-f-]{16,}$/i.test(value)
-  )
-    return (
-      <span
-        title={value}
-        className="rounded bg-[rgb(var(--muted))] px-1.5 py-0.5 font-mono text-[10px]"
-      >
-        {truncateId(value)}
-      </span>
-    );
+  if (typeof value === "string" && isInternalId(value)) return "Linked record";
   return String(value);
+}
+
+function isInternalId(value: string) {
+  return value.length > 20 && /^[0-9a-f-]{16,}$/i.test(value);
 }

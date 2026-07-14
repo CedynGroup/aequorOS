@@ -22,11 +22,19 @@ export class RiskConsolePage {
   }
 
   async gotoSelectedCase(tab = "overview") {
-    await this.page.goto(`/cases/${northstarCase.id}?tab=${tab}&archived=false`);
+    await this.page.goto(
+      `/cases/${northstarCase.id}?tab=${tab}&archived=false`,
+    );
+  }
+
+  async openConnectionSettings() {
+    await this.page.getByText("Connection settings", { exact: true }).click();
   }
 
   async expectQueueLoaded() {
-    await expect(this.page.getByRole("heading", { name: "Case Queue" })).toBeVisible();
+    await expect(
+      this.page.getByRole("heading", { name: "Case Queue" }),
+    ).toBeVisible();
     await expect(this.northstarButton()).toBeVisible();
   }
 
@@ -36,8 +44,12 @@ export class RiskConsolePage {
   }
 
   async expectNorthstarWorkspace() {
-    await expect(this.page.getByRole("heading", { name: "Case Detail" })).toBeVisible();
-    await expect(this.page.getByRole("heading", { name: northstarCase.title })).toBeVisible();
+    await expect(
+      this.page.getByRole("heading", { name: "Case Detail" }),
+    ).toBeVisible();
+    await expect(
+      this.page.getByRole("heading", { name: northstarCase.title }),
+    ).toBeVisible();
   }
 
   async searchCases(query: string) {
@@ -64,9 +76,15 @@ export class RiskConsolePage {
     await this.page.setViewportSize({ width: 390, height: 844 });
     await this.page.reload();
 
-    await expect(this.page.getByRole("heading", { name: "Case Queue" })).toBeVisible();
-    await expect(this.page.getByRole("heading", { name: northstarCase.title })).toBeVisible();
-    await expect(this.page.getByRole("tab", { name: "Financial Workspace" })).toBeVisible();
+    await expect(
+      this.page.getByRole("heading", { name: "Case Queue" }),
+    ).toBeVisible();
+    await expect(
+      this.page.getByRole("heading", { name: northstarCase.title }),
+    ).toBeVisible();
+    await expect(
+      this.page.getByRole("tab", { name: "Financial Workspace" }),
+    ).toBeVisible();
   }
 
   northstarButton() {

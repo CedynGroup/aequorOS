@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import cast
@@ -17,6 +18,9 @@ from app.db.base import Base
 from app.models import (
     CalculationForecastPeriod,
     CalculationRun,
+    CapitalIndicator,
+    CapitalProjection,
+    CapitalProjectionFinding,
     Document,
     DocumentChunk,
     DocumentExtraction,
@@ -58,12 +62,29 @@ CASE_IDS = {
     "completed": UUID("90000000-0000-4000-8000-000000000004"),
 }
 
+
+@dataclass(frozen=True)
+class SeededRun:
+    case_key: str
+    case_number: int
+    run_number: int
+    case_id: UUID
+    scenario_id: UUID
+    run_id: UUID
+    input_hash: str
+    run_time: datetime
+    periods: list[CalculationForecastPeriod]
+
+
 # Tenant-scoped deletion is intentionally explicit. Several database foreign keys
 # were added by migrations after their ORM tables were introduced, so metadata
 # sorting alone cannot guarantee a safe reset order.
 DEMO_DELETE_TABLES = (
     "jobs",
     "risk_finding_evidence",
+    "capital_projection_findings",
+    "capital_indicators",
+    "capital_projections",
     "financial_record_source_links",
     "financial_covenants",
     "financial_balances",
@@ -162,7 +183,6 @@ def reset_demo(session: Session) -> None:
     seed_financial_portfolio(session)
     seed_breach_evidence(session)
     seed_scenarios(session)
-    seed_manual_findings_and_decisions(session)
     session.commit()
 
     pre_run_analyses(session)
@@ -611,6 +631,14 @@ def seed_breach_evidence(session: Session) -> None:
             created_at=SEEDED_AT,
         ),
     )
+    session.flush()
+
+
+def seed_breach_finding(session: Session) -> None:
+    case_id = CASE_IDS["breach"]
+    covenant_id = uid(93700000, 2, 1)
+    document_id = uid(94100000, 2, 1)
+    chunk_id = uid(94110000, 2, 1)
     finding_id = uid(92000000, 2, 1)
     core_insert(
         session,
@@ -735,7 +763,7 @@ def seed_scenarios(session: Session) -> None:
     session.flush()
 
 
-def seed_manual_findings_and_decisions(session: Session) -> None:
+def seed_manual_findings(session: Session) -> None:
     completed_id = CASE_IDS["completed"]
     core_insert(
         session,
@@ -759,6 +787,11 @@ def seed_manual_findings_and_decisions(session: Session) -> None:
             updated_at=SEEDED_AT,
         ),
     )
+    session.flush()
+
+
+def seed_decisions(session: Session) -> None:
+    completed_id = CASE_IDS["completed"]
     core_insert(
         session,
         RiskCaseDecision(
@@ -787,12 +820,39 @@ def seed_manual_findings_and_decisions(session: Session) -> None:
 
 
 def pre_run_analyses(session: Session) -> None:
-    for case_number, case_key in enumerate(CASE_IDS, start=1):
+    runs = [
         seed_successful_run(session, case_key, case_number, "baseline", 1)
-    downside_periods = seed_successful_run(session, "liquidity", 3, "downside", 2)
-    if not any(period.cash < 0 for period in downside_periods):
+        for case_number, case_key in enumerate(CASE_IDS, start=1)
+    ]
+    downside = seed_successful_run(session, "liquidity", 3, "downside", 2)
+    runs.append(downside)
+    if not any(period.cash < 0 for period in downside.periods):
         raise RuntimeError("Liquidity downside must contain a projected cash shortfall.")
     seed_failed_run(session)
+    session.commit()
+
+    concerns_by_run = [(run, seed_liquidity_analysis(session, run)) for run in runs]
+    capital_by_run = [(run, seed_capital_projection(session, run)) for run in runs]
+    session.commit()
+
+    seed_breach_finding(session)
+    seed_manual_findings(session)
+    for run, concerns in concerns_by_run:
+        seed_liquidity_findings(
+            session,
+            run.case_number,
+            run.run_number,
+            run.case_id,
+            run.scenario_id,
+            run.run_id,
+            run.input_hash,
+            concerns,
+        )
+    for run, indicators in capital_by_run:
+        seed_capital_findings(session, run, indicators)
+    session.commit()
+
+    seed_decisions(session)
     session.commit()
 
 
@@ -802,7 +862,7 @@ def seed_successful_run(
     case_number: int,
     scenario_type: str,
     run_number: int,
-) -> list[CalculationForecastPeriod]:
+) -> SeededRun:
     case_id = CASE_IDS[case_key]
     scenario_number = 1 if scenario_type == "baseline" else 2
     scenario_id = uid(97000000 + scenario_number, case_number, 1)
@@ -845,33 +905,213 @@ def seed_successful_run(
         )
         core_insert(session, period)
         periods.append(period)
-    liquidity = calculate_metrics(periods)
+    session.flush()
+    return SeededRun(
+        case_key=case_key,
+        case_number=case_number,
+        run_number=run_number,
+        case_id=case_id,
+        scenario_id=scenario_id,
+        run_id=run_id,
+        input_hash=input_hash,
+        run_time=run_time,
+        periods=periods,
+    )
+
+
+def seed_liquidity_analysis(session: Session, run: SeededRun) -> list[dict[str, object]]:
+    liquidity = calculate_metrics(run.periods)
     core_insert(
         session,
         LiquidityAnalysisResult(
-            id=uid(98200000 + run_number, case_number, 1),
+            id=uid(98200000 + run.run_number, run.case_number, 1),
             organization_id=DEMO_ORG_ID,
-            case_id=case_id,
-            run_id=run_id,
+            case_id=run.case_id,
+            run_id=run.run_id,
             analysis_version=LIQUIDITY_VERSION,
             result={
-                "currency": FINANCIAL_PROFILES[case_key]["currency"],
+                "currency": FINANCIAL_PROFILES[run.case_key]["currency"],
                 "metrics": [metric.model_dump(mode="json") for metric in liquidity.metrics],
             },
-            generated_at=run_time,
+            generated_at=run.run_time,
         ),
     )
-    seed_liquidity_findings(
+    session.flush()
+    return liquidity.concerns
+
+
+def seed_capital_projection(session: Session, run: SeededRun) -> list[CapitalIndicator]:
+    projection_id = uid(98500000 + run.run_number, run.case_number, 1)
+    currency = str(FINANCIAL_PROFILES[run.case_key]["currency"])
+    core_insert(
         session,
-        case_number,
-        run_number,
-        case_id,
-        scenario_id,
-        run_id,
-        input_hash,
-        liquidity.concerns,
+        CapitalProjection(
+            id=projection_id,
+            organization_id=DEMO_ORG_ID,
+            case_id=run.case_id,
+            scenario_id=run.scenario_id,
+            calculation_run_id=run.run_id,
+            status="succeeded",
+            engine_version="capital-projection-v1.0.0",
+            input_hash=run.input_hash,
+            reporting_currency=currency,
+            started_at=run.run_time,
+            completed_at=run.run_time,
+            created_by=DEMO_USER_ID,
+            created_at=run.run_time,
+            updated_at=run.run_time,
+        ),
     )
-    return periods
+    first_components = run.periods[0].components
+    opening_equity = Decimal(str(first_components["opening_assets"])) - Decimal(
+        str(first_components["opening_liabilities"])
+    )
+    indicators: list[CapitalIndicator] = []
+    for period in run.periods:
+        equity = period.total_equity.quantize(Decimal("0.0001"))
+        equity_ratio = (period.total_equity / period.total_assets).quantize(Decimal("0.00000001"))
+        liabilities_ratio = (period.total_liabilities / period.total_assets).quantize(
+            Decimal("0.00000001")
+        )
+        equity_change = (period.total_equity - opening_equity).quantize(Decimal("0.0001"))
+        pressure = (
+            "critical"
+            if equity < 0
+            else "high"
+            if equity_ratio < Decimal("0.10")
+            else "medium"
+            if equity_ratio < Decimal("0.20") or equity_change < 0
+            else "low"
+        )
+        indicator = CapitalIndicator(
+            id=uid(
+                98600000 + run.run_number,
+                run.case_number,
+                period.period_number,
+            ),
+            organization_id=DEMO_ORG_ID,
+            case_id=run.case_id,
+            projection_id=projection_id,
+            forecast_period_id=period.id,
+            period_number=period.period_number,
+            equity=equity,
+            equity_to_assets_ratio=equity_ratio,
+            liabilities_to_assets_ratio=liabilities_ratio,
+            equity_change=equity_change,
+            pressure_level=pressure,
+            evidence={
+                "calculation_run_id": str(run.run_id),
+                "forecast_period_id": str(period.id),
+                "total_assets": str(period.total_assets),
+                "total_liabilities": str(period.total_liabilities),
+                "total_equity": str(period.total_equity),
+                "opening_equity": str(opening_equity),
+            },
+        )
+        core_insert(session, indicator)
+        indicators.append(indicator)
+    session.flush()
+    return indicators
+
+
+def seed_capital_findings(
+    session: Session, run: SeededRun, indicators: list[CapitalIndicator]
+) -> None:
+    projection_id = uid(98500000 + run.run_number, run.case_number, 1)
+    worst = min(indicators, key=lambda item: item.equity_to_assets_ratio)
+    final = indicators[-1]
+    candidates: list[tuple[str, str, str, str, CapitalIndicator]] = []
+    if any(item.equity < 0 for item in indicators):
+        item = min(indicators, key=lambda row: row.equity)
+        candidates.append(
+            (
+                "capital_negative_equity",
+                "Projected negative equity",
+                "critical",
+                f"Equity falls to {item.equity} in period {item.period_number}.",
+                item,
+            )
+        )
+    elif worst.equity_to_assets_ratio < Decimal("0.10"):
+        candidates.append(
+            (
+                "capital_thin_buffer",
+                "Projected capital buffer is thin",
+                "high",
+                "The minimum equity-to-assets ratio is "
+                f"{worst.equity_to_assets_ratio:.2%} in period {worst.period_number}.",
+                worst,
+            )
+        )
+    if final.equity_change < 0:
+        candidates.append(
+            (
+                "capital_erosion",
+                "Projected capital erosion",
+                "medium",
+                f"Equity declines by {abs(final.equity_change)} by period {final.period_number}.",
+                final,
+            )
+        )
+    for finding_number, (rule_id, title, severity, summary, indicator) in enumerate(
+        candidates, start=1
+    ):
+        finding_id = uid(98700000 + run.run_number, run.case_number, finding_number)
+        details = {
+            "capital_projection_id": str(projection_id),
+            "calculation_run_id": str(run.run_id),
+            "scenario_id": str(run.scenario_id),
+            "input_hash": run.input_hash,
+            "indicator_id": str(indicator.id),
+            "evidence": indicator.evidence,
+        }
+        core_insert(
+            session,
+            RiskFinding(
+                id=finding_id,
+                organization_id=DEMO_ORG_ID,
+                case_id=run.case_id,
+                risk_type="leverage_risk",
+                title=title,
+                summary=summary,
+                rationale=(
+                    "Deterministic capital projection rule based on immutable forecast outputs."
+                ),
+                severity=severity,
+                status="needs_review",
+                source="deterministic_rule",
+                rule_id=rule_id,
+                rule_version="capital-projection-v1.0.0",
+                details=details,
+                created_at=run.run_time,
+                updated_at=run.run_time,
+            ),
+            CapitalProjectionFinding(
+                id=uid(98800000 + run.run_number, run.case_number, finding_number),
+                organization_id=DEMO_ORG_ID,
+                case_id=run.case_id,
+                projection_id=projection_id,
+                finding_id=finding_id,
+            ),
+            RiskFindingEvidence(
+                id=uid(98900000 + run.run_number, run.case_number, finding_number),
+                organization_id=DEMO_ORG_ID,
+                finding_id=finding_id,
+                quote=summary,
+                locator={
+                    "source_type": "calculation_forecast_period",
+                    "label": f"Forecast period {indicator.period_number}",
+                    "source_url": (
+                        f"/cases/{run.case_id}?tab=calculations#calculation-run-{run.run_id}"
+                        f"-forecast-period-{indicator.period_number}"
+                    ),
+                    **details,
+                },
+                relevance=Decimal("1"),
+                created_at=run.run_time,
+            ),
+        )
+    session.flush()
 
 
 def calculation_snapshot(case_key: str, case_number: int, scenario_type: str) -> dict[str, object]:
@@ -1105,7 +1345,10 @@ def main() -> None:
     with Session(engine, autoflush=False, expire_on_commit=False) as session:
         session.info["organization_id"] = DEMO_ORG_ID
         reset_demo(session)
-    print("Demo portfolio reset complete: 4 cases, reviewed scenarios, forecasts, and liquidity.")
+    print(
+        "Demo portfolio reset complete: 4 cases, reviewed scenarios, forecasts, liquidity, "
+        "and capital."
+    )
 
 
 if __name__ == "__main__":
