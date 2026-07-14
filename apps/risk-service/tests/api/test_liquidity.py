@@ -499,6 +499,65 @@ def test_liquidity_review_rejects_terminal_findings(db_client: TestClient) -> No
         )
 
 
+def test_generic_finding_update_rejects_liquidity_workflow_findings(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    older = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+    older_finding_id = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary",
+        headers=headers(),
+        params={"run_id": older["id"]},
+    ).json()["findings"][0]["id"]
+    db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs/{older['id']}/rerun",
+        headers=headers(),
+        json={},
+    )
+    current_finding_id = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary",
+        headers=headers(),
+    ).json()["findings"][0]["id"]
+
+    for finding_id in (older_finding_id, current_finding_id):
+        response = db_client.patch(
+            f"/api/v1/findings/{finding_id}",
+            headers=headers(),
+            json={"status": "acknowledged", "disposition_reason": "Generic review"},
+        )
+        assert response.status_code == 409
+        assert response.json()["error"]["message"] == (
+            "Liquidity workflow findings are read-only in the generic findings endpoint."
+        )
+
+    with get_sessionmaker()() as session:
+        persisted = list(
+            session.scalars(
+                select(RiskFinding).where(
+                    RiskFinding.id.in_((UUID(older_finding_id), UUID(current_finding_id)))
+                )
+            )
+        )
+        generic_review_events = list(
+            session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id.in_((UUID(older_finding_id), UUID(current_finding_id))),
+                    AuditEvent.event_type.in_(
+                        ("finding.status_changed", "liquidity_finding.reviewed")
+                    ),
+                )
+            )
+        )
+    assert {finding.status for finding in persisted} == {"open", "superseded"}
+    assert generic_review_events == []
+
+
 def test_liquidity_rerun_supersedes_prior_scenario_findings(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)

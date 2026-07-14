@@ -191,4 +191,37 @@ describe("FindingsTab", () => {
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
   });
+
+  it("renders liquidity workflow findings as read-only", async () => {
+    vi.spyOn(riskApi, "findings").mockResolvedValue([
+      finding({
+        riskType: "liquidity_risk",
+        source: "deterministic_rule",
+        status: "superseded",
+        details: {
+          liquidity: {
+            workflow_id: "liquidity_analysis",
+            calculation_run_id: "run-1",
+          },
+        },
+      }),
+    ]);
+    const updateFinding = vi.spyOn(riskApi, "updateFinding");
+
+    renderWithQuery(<FindingsTab tenant={tenant} caseId="case-1" />);
+
+    expect(
+      await screen.findByText(
+        "Liquidity workflow finding — review in the Liquidity tab.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("superseded")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Update" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText("Disposition reason"),
+    ).not.toBeInTheDocument();
+    expect(updateFinding).not.toHaveBeenCalled();
+  });
 });

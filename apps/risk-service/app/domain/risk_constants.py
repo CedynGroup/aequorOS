@@ -15,6 +15,7 @@ ASSESSMENT_TYPES = [
 ]
 
 LIQUIDITY_RISK_TYPE = "liquidity_risk"
+LIQUIDITY_WORKFLOW_ID = "liquidity_analysis"
 RISK_TYPES = [
     "concentration_risk",
     LIQUIDITY_RISK_TYPE,

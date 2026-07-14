@@ -15,7 +15,11 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.risk_constants import LIQUIDITY_RISK_TYPE, FindingStatus
+from app.domain.risk_constants import (
+    LIQUIDITY_RISK_TYPE,
+    LIQUIDITY_WORKFLOW_ID,
+    FindingStatus,
+)
 from app.models import (
     CalculationForecastPeriod,
     CalculationRun,
@@ -36,7 +40,7 @@ from app.services.audit import record_event
 from app.services.cases import get_case_or_404
 
 RULE_VERSION = "liquidity-v1.0.0"
-WORKFLOW_ID = "liquidity_analysis"
+WORKFLOW_ID = LIQUIDITY_WORKFLOW_ID
 RISK_TYPE = LIQUIDITY_RISK_TYPE
 NEGATIVE_CASH_RULE_ID = "liquidity.negative_cash"
 SOURCES_COVERAGE_RULE_ID = "liquidity.sources_coverage"
@@ -581,6 +585,7 @@ def review_finding(
             ),
             disposition_reason=payload.reason.strip() if payload.reason else None,
         ).to_command(),
+        allow_liquidity_workflow=True,
     )
     record_event(
         db,

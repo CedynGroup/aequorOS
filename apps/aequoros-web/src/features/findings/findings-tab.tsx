@@ -6,7 +6,14 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { Button, Input, Label, Select, SelectItem, Textarea } from "../../components/ui";
+import {
+  Button,
+  Input,
+  Label,
+  Select,
+  SelectItem,
+  Textarea,
+} from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { labelize } from "../../lib/utils";
 import { DataList, ErrorPanel } from "../../shared/route-ui";
@@ -145,6 +152,10 @@ export function FindingReviewItem({
   onUpdated?: () => void;
   disabled?: boolean;
 }) {
+  const isLiquidityWorkflowFinding =
+    finding.riskType === "liquidity_risk" &&
+    finding.source === "deterministic_rule" &&
+    finding.details.liquidity?.workflow_id === "liquidity_analysis";
   const queryClient = useQueryClient();
   const form = useForm<FindingStatusForm>({
     resolver: zodResolver(findingStatusSchema),
@@ -184,40 +195,46 @@ export function FindingReviewItem({
       finding={finding}
       metadata={`${finding.riskType} - score impact ${finding.scoreImpact ?? "n/a"}`}
     >
-      <form
-        className="grid gap-2 border-t border-[rgb(var(--border))] pt-2 md:grid-cols-[160px_1fr_auto]"
-        onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
-      >
-        <Select
-          disabled={disabled}
-          value={form.watch("status")}
-          onValueChange={(value) =>
-            form.setValue("status", value as FindingStatusForm["status"])
-          }
-          placeholder="Status"
+      {isLiquidityWorkflowFinding ? (
+        <div className="border-t border-[rgb(var(--border))] pt-2 text-[rgb(var(--muted-foreground))]">
+          Liquidity workflow finding — review in the Liquidity tab.
+        </div>
+      ) : (
+        <form
+          className="grid gap-2 border-t border-[rgb(var(--border))] pt-2 md:grid-cols-[160px_1fr_auto]"
+          onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
         >
-          {findingStatusSchema.shape.status.options.map((status) => (
-            <SelectItem key={status} value={status}>
-              {labelize(status)}
-            </SelectItem>
-          ))}
-        </Select>
-        <Input
-          disabled={disabled}
-          placeholder="Disposition reason"
-          {...form.register("dispositionReason")}
-        />
-        <Button
-          type="submit"
-          size="sm"
-          disabled={disabled || mutation.isPending}
-        >
-          {mutation.isPending ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : null}
-          Update
-        </Button>
-      </form>
+          <Select
+            disabled={disabled}
+            value={form.watch("status")}
+            onValueChange={(value) =>
+              form.setValue("status", value as FindingStatusForm["status"])
+            }
+            placeholder="Status"
+          >
+            {findingStatusSchema.shape.status.options.map((status) => (
+              <SelectItem key={status} value={status}>
+                {labelize(status)}
+              </SelectItem>
+            ))}
+          </Select>
+          <Input
+            disabled={disabled}
+            placeholder="Disposition reason"
+            {...form.register("dispositionReason")}
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={disabled || mutation.isPending}
+          >
+            {mutation.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : null}
+            Update
+          </Button>
+        </form>
+      )}
       {mutation.isError ? <ErrorPanel error={mutation.error} /> : null}
     </FindingReviewCard>
   );

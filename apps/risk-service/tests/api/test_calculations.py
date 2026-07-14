@@ -387,6 +387,44 @@ def test_failure_after_liquidity_publication_rolls_back_atomic_run_result(
     assert liquidity_events == []
 
 
+def test_publication_establishes_repeatable_read_before_loading_run(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    call_order: list[str] = []
+    original_begin = calculations._begin_repeatable_read
+    original_load = calculations._run_or_404
+
+    def track_begin(db: Session) -> None:
+        call_order.append("isolation")
+        original_begin(db)
+
+    def track_load(
+        db: Session,
+        ctx: TenantContext,
+        case_id: UUID,
+        run_id: UUID,
+    ) -> CalculationRun:
+        call_order.append("load")
+        return original_load(db, ctx, case_id, run_id)
+
+    monkeypatch.setattr(calculations, "_begin_repeatable_read", track_begin)
+    monkeypatch.setattr(calculations, "_run_or_404", track_load)
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "succeeded"
+    assert call_order[:2] == ["isolation", "load"]
+
+
 def test_rerun_after_assumption_change_versions_inputs_without_replacing_output(
     db_client: TestClient,
 ) -> None:

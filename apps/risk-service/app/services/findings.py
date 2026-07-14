@@ -11,7 +11,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.risk_constants import (
+    DETERMINISTIC_FINDING_SOURCE,
     FINDING_STATUSES,
+    LIQUIDITY_RISK_TYPE,
+    LIQUIDITY_WORKFLOW_ID,
     MANUAL_FINDING_SOURCE,
     RISK_TYPES,
     SEVERITIES,
@@ -167,7 +170,12 @@ def update_finding(
 
 
 def apply_finding_update(
-    db: Session, ctx: TenantContext, finding_id: UUID, command: UpdateFindingCommand
+    db: Session,
+    ctx: TenantContext,
+    finding_id: UUID,
+    command: UpdateFindingCommand,
+    *,
+    allow_liquidity_workflow: bool = False,
 ) -> RiskFinding:
     if ctx.actor_user_id is None:
         raise HTTPException(
@@ -189,6 +197,11 @@ def apply_finding_update(
     case = get_case_for_update_or_404(db, ctx.organization_id, finding.case_id)
     ensure_case_is_not_archived(case)
     db.refresh(finding, with_for_update=True)
+    if is_liquidity_workflow_finding(finding) and not allow_liquidity_workflow:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Liquidity workflow findings are read-only in the generic findings endpoint.",
+        )
     update_data = command.update_data
     status_value = update_data.get("status")
     if "status" in update_data and (
@@ -227,6 +240,16 @@ def apply_finding_update(
         )
     db.flush()
     return finding
+
+
+def is_liquidity_workflow_finding(finding: RiskFinding) -> bool:
+    liquidity = finding.details.get("liquidity")
+    return (
+        finding.risk_type == LIQUIDITY_RISK_TYPE
+        and finding.source == DETERMINISTIC_FINDING_SOURCE
+        and isinstance(liquidity, dict)
+        and liquidity.get("workflow_id") == LIQUIDITY_WORKFLOW_ID
+    )
 
 
 def list_finding_evidence(

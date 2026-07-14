@@ -294,9 +294,9 @@ def _create_and_execute(  # noqa: PLR0913
     run_id = run.id
     assembled_snapshot: dict[str, Any] | None = None
     with serialize_finding_publication(db, ctx, case_id, scenario_id) as publication_db:
-        run = _run_or_404(publication_db, ctx, case_id, run_id)
         try:
             _begin_repeatable_read(publication_db)
+            run = _run_or_404(publication_db, ctx, case_id, run_id)
             snapshot, as_of_date = build_input_snapshot(
                 publication_db,
                 ctx,
@@ -377,7 +377,7 @@ def _create_and_execute(  # noqa: PLR0913
                 publication_db,
                 ctx,
                 case_id,
-                run.id,
+                run_id,
                 exc,
                 assembled_snapshot,
             )
@@ -395,7 +395,7 @@ def _create_and_execute(  # noqa: PLR0913
                 publication_db,
                 ctx,
                 case_id,
-                run.id,
+                run_id,
                 error,
                 assembled_snapshot,
             )
