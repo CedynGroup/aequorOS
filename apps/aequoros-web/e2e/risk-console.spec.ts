@@ -730,8 +730,12 @@ test("desktop and mobile viewports render the primary console without clipping t
   await page.setViewportSize({ width: 1440, height: 900 });
   await console.gotoSelectedCase();
 
-  await expect(page.getByRole("button", { name: "Show case queue" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Case Queue" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Show case queue" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Case Queue" })).toHaveCount(
+    0,
+  );
   await expect(
     page.getByRole("heading", { name: northstarCase.title }),
   ).toBeVisible();

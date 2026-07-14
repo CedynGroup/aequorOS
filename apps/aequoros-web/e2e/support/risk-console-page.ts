@@ -27,10 +27,6 @@ export class RiskConsolePage {
     );
   }
 
-  async openConnectionSettings() {
-    await this.page.getByText("Connection settings", { exact: true }).click();
-  }
-
   async expectQueueLoaded() {
     await expect(
       this.page.getByRole("heading", { name: "Case Queue" }),
