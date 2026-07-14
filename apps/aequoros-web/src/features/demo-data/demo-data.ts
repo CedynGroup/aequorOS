@@ -96,7 +96,9 @@ export function mockCaseList(
   };
 }
 
-export function mockCase(organizationId: string, caseId: string): CaseRead {
+export type MockCaseRead = CaseRead & { scoreRunReference: string };
+
+export function mockCase(organizationId: string, caseId: string): MockCaseRead {
   const queueItem =
     mockCases(organizationId).find((item) => item.id === caseId) ??
     mockCases(organizationId)[0];
@@ -116,6 +118,8 @@ export function mockCase(organizationId: string, caseId: string): CaseRead {
     },
     scoredAt: new Date(queueItem.updatedAt.getTime() - 1_800_000),
     scoringVersion: "demo-v1",
+    scoreRunReference:
+      queueItem.scoreRunReference ?? "Demo score reference unavailable",
   };
 }
 
@@ -180,19 +184,20 @@ function mockQueueItem(
   openFindingsCount: number,
   updatedTime: number,
 ): CaseQueueItemRead {
+  const subjectName = title.split(" - ")[1] ?? "Demo institution";
   return {
     id,
     organizationId,
     title,
     caseType: "financial_statement_review",
     subjectType: "institution",
-    subjectName: title.split(" - ")[1] ?? "Demo institution",
+    subjectName,
     status,
     assignedToUserId: DEFAULT_USER_ID,
     assigneeDisplayName: "Demo Analyst",
     assigneeEmail: "analyst@aequoros.local",
     riskScore,
-    scoreRunReference: `Demo score ${new Date(updatedTime).toISOString().slice(0, 10)} run 1`,
+    scoreRunReference: `${subjectName} credit assessment 2026-06-30 run 1`,
     riskLevel,
     decision,
     findingsCount: openFindingsCount + 1,

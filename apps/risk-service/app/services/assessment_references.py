@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import ColumnExpressionArgument, and_, func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models import RiskAssessment, RiskAssessmentRun
 
@@ -30,7 +31,7 @@ def assessment_run_references(
     if not selected_rows:
         return {}
 
-    groups = {(name, created_at.date()) for _, created_at, name in selected_rows}
+    groups = {(name, _as_utc(created_at).date()) for _, created_at, name in selected_rows}
     group_filters = []
     for name, run_date in groups:
         day_start = datetime.combine(run_date, time.min, tzinfo=UTC)
@@ -51,7 +52,7 @@ def assessment_run_references(
             .over(
                 partition_by=(
                     RiskAssessment.name,
-                    func.date(RiskAssessmentRun.created_at),
+                    _utc_date(db, RiskAssessmentRun.created_at),
                 ),
                 order_by=(RiskAssessmentRun.created_at, RiskAssessmentRun.id),
             )
@@ -74,6 +75,20 @@ def assessment_run_references(
         ).where(ranked_runs.c.run_id.in_(run_ids))
     ).all()
     return {
-        run_id: f"{name} {created_at.date().isoformat()} run {ordinal}"
+        run_id: f"{name} {_as_utc(created_at).date().isoformat()} run {ordinal}"
         for run_id, name, created_at, ordinal in rows
     }
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _utc_date(
+    db: Session, column: ColumnExpressionArgument[datetime]
+) -> ColumnElement[date]:
+    if db.get_bind().dialect.name == "postgresql":
+        return func.date(func.timezone("UTC", column))
+    return func.date(column)

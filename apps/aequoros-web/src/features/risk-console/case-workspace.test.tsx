@@ -166,6 +166,15 @@ describe("CaseWorkspace", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows a stable assessment reference for a frontend demo score", () => {
+    const caseData = mockCase(DEFAULT_ORG_ID, caseId);
+
+    renderWorkspace({ mockCaseData: caseData });
+
+    expect(screen.getByText(caseData.scoreRunReference)).toBeInTheDocument();
+    expect(screen.queryByText("Reference unavailable")).not.toBeInTheDocument();
+  });
+
   it("keeps analysis verticals in case-detail tabs rather than workflow navigation", () => {
     renderWorkspace();
 

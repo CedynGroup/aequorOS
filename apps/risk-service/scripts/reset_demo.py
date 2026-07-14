@@ -35,11 +35,14 @@ from app.models import (
     FinancialSourceRow,
     LiquidityAnalysisResult,
     Organization,
+    RiskAssessment,
+    RiskAssessmentRun,
     RiskCase,
     RiskCaseDecision,
     RiskFinding,
     RiskFindingEvidence,
     RiskScenario,
+    RiskScore,
     ScenarioAssumption,
     StoredObject,
     User,
@@ -180,6 +183,7 @@ def reset_demo(session: Session) -> None:
     session.flush()
 
     seed_cases(session)
+    seed_score_provenance(session)
     seed_financial_portfolio(session)
     seed_breach_evidence(session)
     seed_scenarios(session)
@@ -285,6 +289,77 @@ def seed_cases(session: Session) -> None:
                 created_by=DEMO_USER_ID,
                 created_at=SEEDED_AT,
                 updated_at=SEEDED_AT,
+            ),
+        )
+    session.flush()
+
+
+def seed_score_provenance(session: Session) -> None:
+    score_profiles = {
+        "clean": ("Volta annual credit assessment", 18, "low"),
+        "breach": ("Adom covenant credit assessment", 78, "high"),
+        "liquidity": ("Kivu liquidity credit assessment", 66, "high"),
+        "completed": ("Baobab committee credit assessment", 31, "medium"),
+    }
+    for case_number, (case_key, case_id) in enumerate(CASE_IDS.items(), start=1):
+        name, score, risk_level = score_profiles[case_key]
+        assessment_id = uid(91400000, case_number, 1)
+        run_id = uid(91500000, case_number, 1)
+        input_snapshot = {
+            "portfolio": "pan-african commercial lending",
+            "case": case_key,
+            "as_of_date": AS_OF_DATE.isoformat(),
+        }
+        input_hash = hashlib.sha256(
+            json.dumps(input_snapshot, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        rule_results = [
+            {
+                "rule_id": "demo.portfolio_credit_score",
+                "score_impact": score,
+                "details": {"case": case_key, "as_of_date": AS_OF_DATE.isoformat()},
+            }
+        ]
+        core_insert(
+            session,
+            RiskAssessment(
+                id=assessment_id,
+                organization_id=DEMO_ORG_ID,
+                case_id=case_id,
+                name=name,
+                assessment_type="borrower_risk",
+                status="completed",
+                input_snapshot=input_snapshot,
+                config_snapshot={"scoring_version": "demo-portfolio-v1"},
+                created_by=DEMO_USER_ID,
+                created_at=SEEDED_AT,
+                updated_at=SEEDED_AT,
+            ),
+            RiskAssessmentRun(
+                id=run_id,
+                organization_id=DEMO_ORG_ID,
+                assessment_id=assessment_id,
+                status="completed",
+                engine_version="demo-portfolio-v1",
+                input_hash=input_hash,
+                started_at=SEEDED_AT,
+                completed_at=SEEDED_AT,
+                summary={"risk_score": score, "risk_level": risk_level},
+                created_at=SEEDED_AT,
+            ),
+            RiskScore(
+                id=uid(91600000, case_number, 1),
+                organization_id=DEMO_ORG_ID,
+                case_id=case_id,
+                assessment_id=assessment_id,
+                run_id=run_id,
+                score=score,
+                risk_level=risk_level,
+                scoring_version="demo-portfolio-v1",
+                input_hash=input_hash,
+                input_snapshot=input_snapshot,
+                rule_results=rule_results,
+                created_at=SEEDED_AT,
             ),
         )
     session.flush()

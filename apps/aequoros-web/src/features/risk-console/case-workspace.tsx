@@ -20,6 +20,7 @@ import { formatJson, labelize } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { DecisionBadge, RiskBadge, StatusBadge, relative } from "./format";
 import type { UpdateSearch } from "./types";
+import type { MockCaseRead } from "../demo-data/demo-data";
 
 const FinancialTab = lazy(() =>
   import("../financial/financial-tab").then((module) => ({
@@ -88,7 +89,7 @@ export function CaseWorkspace({
     isError: boolean;
     isFetching: boolean;
   };
-  mockCaseData?: CaseRead;
+  mockCaseData?: MockCaseRead;
   mockWorkspace: boolean;
 }) {
   const selectedCase = mockCaseData ?? (caseQuery.data as CaseRead | undefined);
@@ -144,6 +145,7 @@ export function CaseWorkspace({
                 caseId={caseId}
                 caseData={selectedCase}
                 loadScores={!mockCaseData}
+                scoreRunReference={mockCaseData?.scoreRunReference}
               />
             </TabsContent>
             <TabsContent value="financial" className="m-0 p-3">
@@ -274,11 +276,13 @@ function OverviewTab({
   caseId,
   caseData,
   loadScores,
+  scoreRunReference,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   caseData?: CaseRead;
   loadScores: boolean;
+  scoreRunReference?: string;
 }) {
   const scoresQuery = useQuery({
     queryKey: ["case-scores", tenant, caseId],
@@ -311,7 +315,11 @@ function OverviewTab({
         {caseData.riskScore != null ? (
           <KeyValue
             label="Assessment run"
-            value={latestScore?.runReference ?? "Reference unavailable"}
+            value={
+              latestScore?.runReference ??
+              scoreRunReference ??
+              "Reference unavailable"
+            }
           />
         ) : null}
         <KeyValue label="Decision" value={labelize(caseData.decision)} />
