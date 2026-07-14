@@ -66,3 +66,35 @@ if (projection.error !== null || comparison.diagnostic !== null) {
 Capital mutations require both tenant headers. List, detail, summary, and
 comparison calls require `X-Org-Id` and accept `X-User-Id` when an actor is
 available.
+
+Calculation mutations require both tenant headers. List and detail calls
+require `X-Org-Id` and accept `X-User-Id` when an actor is available.
+
+Liquidity analysis is exposed through the generated `LiquidityApi`:
+
+```ts
+import { Configuration, LiquidityApi } from "@aequoros/risk-service-api";
+
+const liquidity = new LiquidityApi(
+  new Configuration({ basePath: "http://127.0.0.1:8003" }),
+);
+
+const summary = await liquidity.getLiquiditySummary({
+  caseId,
+  xOrgId,
+  scenarioId,
+  runId,
+});
+
+const reviewed = await liquidity.reviewLiquidityFinding({
+  caseId,
+  findingId,
+  xOrgId,
+  xUserId,
+  liquidityFindingReview: { action: "dismiss", reason: "Duplicate exposure." },
+});
+```
+
+Summary reads can omit `scenarioId` and `runId` to select the newest successful
+run. Finding review requires both tenant headers; dismissal also requires a
+non-empty reason.

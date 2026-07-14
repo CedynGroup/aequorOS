@@ -66,6 +66,21 @@ Projection and finding mutations are disabled in demo mode and for retired
 cases. Loading, API failure, no-run, no-projection, failed-attempt, incomplete
 comparison, and successful result states are rendered explicitly.
 
+## Liquidity Review
+
+The Liquidity tab uses the generated `LiquidityApi` client to review the latest
+successful forecast for a scenario or a selected run. It displays minimum cash,
+peak gap, sources coverage, credit reliance, and cash runway, including backend
+diagnostics for unavailable metrics. Severity-ranked findings show rationale
+and deep-linked evidence for forecast outputs, canonical financial inputs, and
+scenario assumptions.
+
+Open findings can be acknowledged or dismissed; dismissal requires a reason.
+Mutation errors remain visible and successful reviews refresh both the
+liquidity summary and the shared Findings tab. Archived scenarios and terminal
+findings are read-only. Successful runs created before liquidity analysis was
+introduced show a rerun prompt instead of implying that no risk was found.
+
 ## Checks
 
 ```bash
@@ -81,7 +96,8 @@ pnpm --filter @aequoros/aequoros-web build
 
 The E2E suite starts Vite automatically and expects a seeded risk-service API at
 `http://127.0.0.1:8003/api/v1`. Its forecast journey initializes and reviews a
-scenario, verifies projected output and a changed-input rerun, then checks
+scenario, verifies projected output and a changed-input rerun, reviews the
+generated liquidity metrics, findings, and evidence, then checks
 persisted failure history, preservation of prior output, and tenant isolation.
 The capital journey creates baseline and downside forecasts and projections,
 reviews indicators and finding evidence, compares aligned scenarios, exercises
@@ -137,7 +153,7 @@ The web app uses a feature-based split so each operational surface owns its UI a
 - `src/features/risk-console/shell.tsx`: sidebar and top-bar console chrome
 - `src/features/risk-console/case-queue-panel.tsx`: queue filters, table, selection, and pagination
 - `src/features/risk-console/bulk-actions.tsx`: bulk action dialog, mutation, and result rendering
-- `src/features/risk-console/case-workspace.tsx`: detail summary, overview, financial, scenarios, forecast, capital, decisions, documents, findings, and report tabs
+- `src/features/risk-console/case-workspace.tsx`: detail summary, overview, financial, scenarios, forecast, capital, liquidity, decisions, documents, findings, and report tabs
 - `src/features/risk-console/format.tsx`: risk/status/decision badges and date formatting
 - `src/features/risk-console/types.ts`: feature-local queue/search helper types
 - `src/features/documents/documents-tab.tsx`: document upload-request, completion, parse, and download URL workflows
@@ -148,6 +164,8 @@ The web app uses a feature-based split so each operational surface owns its UI a
 - `src/features/scenarios/scenarios-tab.tsx`: scenario initialization, lifecycle, assumption editing and review, validation, and readiness
 - `src/features/calculations/calculations-tab.tsx`: forecast start and rerun controls, polling, paginated run history, diagnostics, and projected outputs
 - `src/features/capital/capital-tab.tsx`: projection generation and history, indicators, scenario comparison, findings, and evidence review
+- `src/features/liquidity/liquidity-client.ts`: generated-client adapter for liquidity summary and finding review requests
+- `src/features/liquidity/liquidity-tab.tsx`: scenario/run selection, metric diagnostics, evidence links, and finding review states
 - `src/features/demo-data/demo-data.ts`: frontend-only fallback/demo data helpers
 - `src/shared/route-ui.tsx`: route-level empty, error, and data-list helpers
 - `src/routes/risk-console.tsx`: thin route export for TanStack Router wiring
@@ -165,6 +183,8 @@ Vitest tests are colocated with the module they protect:
 - `src/features/scenarios/scenarios-tab.test.tsx`: scenario loading, empty, error, lifecycle, validation, editing, review, and save states
 - `src/features/calculations/calculations-tab.test.tsx`: forecast loading, empty, running, failure, success, rerun, history, and formatting states
 - `src/features/capital/capital-tab.test.tsx`: capital loading, empty, failure, success, comparison, evidence, pagination, and mutation-disabled states
+- `src/features/liquidity/liquidity-client.test.ts`: generated client routing, headers, query filters, and review payloads
+- `src/features/liquidity/liquidity-tab.test.tsx`: liquidity loading, empty, unavailable, historical-run, evidence, review, and error states
 - `src/features/demo-data/demo-data.test.ts`: fallback/demo data filtering and detail construction
 - `src/routes/search.test.ts`: typed search-param parsing
 - `src/features/risk-console/risk-console.test.tsx`: bulk action result grouping

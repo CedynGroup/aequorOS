@@ -23,8 +23,12 @@ financial data and reviewed scenario assumptions. The risk console can start
 and rerun forecasts, generate and page through capital attempts, compare aligned
 baseline and downside projections, and render failures or successful outputs.
 
-These slices run synchronously and do not include liquidity scoring, Basel
-regulatory-capital scoring, advanced model configuration, constrained
+Successful forecasts now also persist versioned minimum-cash, peak-gap,
+sources-coverage, credit-reliance, and cash-runway metrics. Deterministic
+thresholds publish severity-ranked liquidity findings with input-hash-bound
+evidence; reviewers can acknowledge or dismiss them in the risk console. This
+slice still runs synchronously and does not include regulatory LCR/NSFR or
+stress calculations, Basel regulatory-capital scoring, advanced model configuration, constrained
 optimization, or final reporting. The broader sections below remain the target
 architecture for those later modules.
 
