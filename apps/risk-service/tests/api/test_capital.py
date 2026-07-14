@@ -152,6 +152,7 @@ def test_capital_projection_findings_evidence_comparison_and_tenant_isolation(
     baseline = projections["baseline"]
     assert baseline["status"] == "succeeded"
     assert baseline["engine_version"] == "capital-projection-v1.0.0"
+    assert baseline["reporting_currency"] == "USD"
     assert baseline["indicators"][0] == {
         **baseline["indicators"][0],
         "period_number": 1,
@@ -173,6 +174,7 @@ def test_capital_projection_findings_evidence_comparison_and_tenant_isolation(
     )
     assert summary.status_code == 200
     assert summary.json()["projection"]["id"] == baseline["id"]
+    assert summary.json()["projection"]["reporting_currency"] == "USD"
 
     comparison = db_client.get(f"/api/v1/cases/{case.id}/capital-comparison", headers=headers())
     assert comparison.status_code == 200
@@ -531,3 +533,65 @@ def test_capital_rerun_supersedes_only_unreviewed_findings_for_same_scenario(
         assert reviewed is not None
         assert reviewed.status == "acknowledged"
         assert "superseded_by_capital_projection_id" not in reviewed.details
+
+
+def test_archived_capital_inputs_are_retired_without_hiding_history(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenarios(db_client, case.id)[0]
+    _financial_inputs(case.id)
+    run = _forecast(db_client, case.id, scenario["id"])
+    created = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": run["id"]},
+    ).json()
+
+    archived_scenario = db_client.post(
+        f"/api/v1/cases/{case.id}/scenarios/{scenario['id']}/archive",
+        headers=headers(),
+        json={"reason": "Retire scenario"},
+    )
+    assert archived_scenario.status_code == 200
+    retired_scenario_projection = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": run["id"]},
+    )
+    assert retired_scenario_projection.status_code == 409
+    assert retired_scenario_projection.json()["error"]["message"] == (
+        "Archived scenarios cannot be used for capital projections."
+    )
+    comparison = db_client.get(
+        f"/api/v1/cases/{case.id}/capital-comparison", headers=headers()
+    )
+    assert comparison.status_code == 200
+    assert comparison.json()[scenario["scenario_type"]] is None
+
+    archived_case = db_client.post(
+        f"/api/v1/cases/{case.id}/archive", headers=headers()
+    )
+    assert archived_case.status_code == 200
+    retired_case_projection = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": run["id"]},
+    )
+    assert retired_case_projection.status_code == 409
+    retired_comparison = db_client.get(
+        f"/api/v1/cases/{case.id}/capital-comparison", headers=headers()
+    )
+    assert retired_comparison.status_code == 409
+
+    history = db_client.get(
+        f"/api/v1/cases/{case.id}/capital-projections", headers=headers()
+    )
+    detail = db_client.get(
+        f"/api/v1/cases/{case.id}/capital-projections/{created['id']}",
+        headers=headers(),
+    )
+    assert history.status_code == 200
+    assert history.json()["projections"][0]["id"] == created["id"]
+    assert detail.status_code == 200
+    assert detail.json()["reporting_currency"] == "USD"

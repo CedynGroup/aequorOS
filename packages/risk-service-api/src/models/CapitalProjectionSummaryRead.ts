@@ -70,6 +70,12 @@ export interface CapitalProjectionSummaryRead {
    * @type {string}
    * @memberof CapitalProjectionSummaryRead
    */
+  reportingCurrency: string;
+  /**
+   *
+   * @type {string}
+   * @memberof CapitalProjectionSummaryRead
+   */
   scenarioId: string;
   /**
    *
@@ -97,6 +103,11 @@ export function instanceOfCapitalProjectionSummaryRead(
     return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
   if (!("id" in value) || value["id"] === undefined) return false;
+  if (
+    !("reportingCurrency" in value) ||
+    value["reportingCurrency"] === undefined
+  )
+    return false;
   if (!("scenarioId" in value) || value["scenarioId"] === undefined)
     return false;
   if (!("startedAt" in value) || value["startedAt"] === undefined) return false;
@@ -123,6 +134,7 @@ export function CapitalProjectionSummaryReadFromJSONTyped(
     completedAt: CompletedAtFromJSON(json["completed_at"]),
     createdAt: new Date(json["created_at"]),
     id: json["id"],
+    reportingCurrency: json["reporting_currency"],
     scenarioId: json["scenario_id"],
     startedAt: StartedAtFromJSON(json["started_at"]),
     status: CapitalProjectionStatusFromJSON(json["status"]),
@@ -148,6 +160,7 @@ export function CapitalProjectionSummaryReadToJSONTyped(
     completed_at: CompletedAtToJSON(value["completedAt"]),
     created_at: value["createdAt"].toISOString(),
     id: value["id"],
+    reporting_currency: value["reportingCurrency"],
     scenario_id: value["scenarioId"],
     started_at: StartedAtToJSON(value["startedAt"]),
     status: CapitalProjectionStatusToJSON(value["status"]),

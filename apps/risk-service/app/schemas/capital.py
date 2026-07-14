@@ -56,6 +56,7 @@ class CapitalProjectionRead(ClosedModel):
     status: CapitalProjectionStatus
     engine_version: str
     input_hash: str
+    reporting_currency: str
     started_at: datetime | None
     completed_at: datetime | None
     error: CapitalProjectionErrorRead | None
@@ -71,6 +72,7 @@ class CapitalProjectionSummaryRead(ClosedModel):
     scenario_id: UUID
     calculation_run_id: UUID
     status: CapitalProjectionStatus
+    reporting_currency: str
     started_at: datetime | None
     completed_at: datetime | None
     created_at: datetime

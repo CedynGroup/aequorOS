@@ -146,6 +146,12 @@ export interface CapitalComparisonReadBaseline {
    * @type {string}
    * @memberof CapitalComparisonReadBaseline
    */
+  reportingCurrency: string;
+  /**
+   *
+   * @type {string}
+   * @memberof CapitalComparisonReadBaseline
+   */
   scenarioId: string;
   /**
    *
@@ -190,6 +196,11 @@ export function instanceOfCapitalComparisonReadBaseline(
   if (!("inputHash" in value) || value["inputHash"] === undefined) return false;
   if (!("organizationId" in value) || value["organizationId"] === undefined)
     return false;
+  if (
+    !("reportingCurrency" in value) ||
+    value["reportingCurrency"] === undefined
+  )
+    return false;
   if (!("scenarioId" in value) || value["scenarioId"] === undefined)
     return false;
   if (!("startedAt" in value) || value["startedAt"] === undefined) return false;
@@ -226,6 +237,7 @@ export function CapitalComparisonReadBaselineFromJSONTyped(
     ),
     inputHash: json["input_hash"],
     organizationId: json["organization_id"],
+    reportingCurrency: json["reporting_currency"],
     scenarioId: json["scenario_id"],
     startedAt: StartedAtFromJSON(json["started_at"]),
     status: CapitalProjectionStatusFromJSON(json["status"]),
@@ -262,6 +274,7 @@ export function CapitalComparisonReadBaselineToJSONTyped(
     ),
     input_hash: value["inputHash"],
     organization_id: value["organizationId"],
+    reporting_currency: value["reportingCurrency"],
     scenario_id: value["scenarioId"],
     started_at: StartedAtToJSON(value["startedAt"]),
     status: CapitalProjectionStatusToJSON(value["status"]),

@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("status", sa.String(24), nullable=False),
         sa.Column("engine_version", sa.String(80), nullable=False),
         sa.Column("input_hash", sa.String(64), nullable=False),
+        sa.Column("reporting_currency", sa.String(3), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error", postgresql.JSONB(astext_type=sa.Text()), nullable=True),

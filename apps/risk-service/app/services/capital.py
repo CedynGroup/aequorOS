@@ -15,6 +15,7 @@ from app.models import (
     CapitalIndicator,
     CapitalProjection,
     CapitalProjectionFinding,
+    RiskCase,
     RiskFinding,
     RiskFindingEvidence,
     RiskScenario,
@@ -36,7 +37,7 @@ from app.schemas.capital import (
 )
 from app.schemas.findings import EvidenceRead, FindingRead
 from app.services.audit import record_event
-from app.services.cases import get_case_or_404
+from app.services.cases import ensure_case_is_not_archived, get_case_or_404
 from app.services.findings import list_finding_evidence
 
 ENGINE_VERSION = "capital-projection-v1.0.0"
@@ -58,7 +59,6 @@ def create_projection(
     case_id: UUID,
     payload: CapitalProjectionCreate,
 ) -> CapitalProjectionRead:
-    get_case_or_404(db, ctx.organization_id, case_id)
     if ctx.actor_user_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="X-User-Id required.")
     run = db.scalar(
@@ -77,15 +77,7 @@ def create_projection(
             status_code=status.HTTP_409_CONFLICT,
             detail="Capital projection requires a successful calculation run.",
         )
-    db.execute(
-        select(RiskScenario.id)
-        .where(
-            RiskScenario.id == run.scenario_id,
-            RiskScenario.organization_id == ctx.organization_id,
-            RiskScenario.case_id == case_id,
-        )
-        .with_for_update()
-    ).scalar_one()
+    _lock_active_case_and_scenario(db, ctx, case_id, run.scenario_id)
     now = datetime.now(UTC)
     projection = CapitalProjection(
         organization_id=ctx.organization_id,
@@ -95,6 +87,7 @@ def create_projection(
         status="running",
         engine_version=ENGINE_VERSION,
         input_hash=run.input_hash,
+        reporting_currency=str(run.inputs["currency"]),
         started_at=now,
         created_by=ctx.actor_user_id,
     )
@@ -251,7 +244,8 @@ def get_summary(
 
 
 def get_comparison(db: Session, ctx: TenantContext, case_id: UUID) -> CapitalComparisonRead:
-    get_case_or_404(db, ctx.organization_id, case_id)
+    case = get_case_or_404(db, ctx.organization_id, case_id)
+    ensure_case_is_not_archived(case)
     projections: dict[str, CapitalProjection | None] = {}
     for scenario_type in ("baseline", "downside"):
         projections[scenario_type] = db.scalar(
@@ -266,6 +260,7 @@ def get_comparison(db: Session, ctx: TenantContext, case_id: UUID) -> CapitalCom
                 CapitalProjection.case_id == case_id,
                 CapitalProjection.status == "succeeded",
                 RiskScenario.scenario_type == scenario_type,
+                RiskScenario.archived_at.is_(None),
             )
             .order_by(CapitalProjection.created_at.desc(), CapitalProjection.id.desc())
             .limit(1)
@@ -291,8 +286,12 @@ def get_comparison(db: Session, ctx: TenantContext, case_id: UUID) -> CapitalCom
                 )
             )
         }
-        baseline_basis = _comparison_basis(runs[baseline.calculation_run_id])
-        downside_basis = _comparison_basis(runs[downside.calculation_run_id])
+        baseline_basis = _comparison_basis(
+            runs[baseline.calculation_run_id], baseline.reporting_currency
+        )
+        downside_basis = _comparison_basis(
+            runs[downside.calculation_run_id], downside.reporting_currency
+        )
         differing_attributes: list[CapitalComparisonBasisAttribute] = []
         if baseline_basis.as_of_date != downside_basis.as_of_date:
             differing_attributes.append("as_of_date")
@@ -338,12 +337,49 @@ def get_comparison(db: Session, ctx: TenantContext, case_id: UUID) -> CapitalCom
     )
 
 
-def _comparison_basis(run: CalculationRun) -> CapitalComparisonBasisRead:
+def _comparison_basis(
+    run: CalculationRun, reporting_currency: str
+) -> CapitalComparisonBasisRead:
     return CapitalComparisonBasisRead(
         as_of_date=run.as_of_date,
-        reporting_currency=str(run.inputs["currency"]),
+        reporting_currency=reporting_currency,
         forecast_horizon=run.forecast_periods,
     )
+
+
+def _lock_active_case_and_scenario(
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    scenario_id: UUID,
+) -> None:
+    case = db.scalar(
+        select(RiskCase)
+        .where(
+            RiskCase.id == case_id,
+            RiskCase.organization_id == ctx.organization_id,
+        )
+        .with_for_update()
+    )
+    if case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found.")
+    ensure_case_is_not_archived(case)
+    scenario = db.scalar(
+        select(RiskScenario)
+        .where(
+            RiskScenario.id == scenario_id,
+            RiskScenario.organization_id == ctx.organization_id,
+            RiskScenario.case_id == case_id,
+        )
+        .with_for_update()
+    )
+    if scenario is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found.")
+    if scenario.archived_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Archived scenarios cannot be used for capital projections.",
+        )
 
 
 def _opening_equity(period: CalculationForecastPeriod) -> Decimal:
@@ -586,6 +622,7 @@ def _read_projection(
         status=projection.status,  # type: ignore[arg-type]
         engine_version=projection.engine_version,
         input_hash=projection.input_hash,
+        reporting_currency=projection.reporting_currency,
         started_at=projection.started_at,
         completed_at=projection.completed_at,
         error=(

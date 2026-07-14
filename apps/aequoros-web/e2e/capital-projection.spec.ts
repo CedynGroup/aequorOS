@@ -48,6 +48,7 @@ function projection() {
     status: "succeeded",
     engine_version: "capital-projection-v1.0.0",
     input_hash: "a".repeat(64),
+    reporting_currency: "USD",
     started_at: now,
     completed_at: now,
     error: null,
@@ -298,6 +299,7 @@ async function installBackend(
                 scenario_id: scenarioId,
                 calculation_run_id: runId,
                 status: "succeeded",
+                reporting_currency: "USD",
                 started_at: now,
                 completed_at: now,
                 created_at: now,
@@ -344,7 +346,7 @@ test("projects capital, compares scenarios, reviews evidence, and enforces tenan
   ).toBeVisible();
   await expect(page.getByText("Evidence", { exact: true })).toBeVisible();
   await expect(page.getByText("Downside delta")).toBeVisible();
-  await expect(page.getByText("-25.00")).toBeVisible();
+  await expect(page.getByText("-$25.00")).toBeVisible();
 
   await page
     .getByLabel("Tenant org id")

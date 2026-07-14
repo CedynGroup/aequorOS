@@ -23,7 +23,7 @@ import {
   Skeleton,
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
-import { formatJson, labelize, truncateId } from "../../lib/utils";
+import { formatJson, formatMoney, labelize, truncateId } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { FindingReviewItem } from "../findings/findings-tab";
 
@@ -93,17 +93,6 @@ export function CapitalTab({
     queryKey: ["capital-comparison", tenant, caseId],
     queryFn: () => riskApi.capitalComparison(tenant, caseId),
   });
-  const successfulRuns = useMemo(() => {
-    const page =
-      runs.data?.runs.filter((run) => run.status === "succeeded") ?? [];
-    if (
-      latestRun.data?.status === "succeeded" &&
-      !page.some((run) => run.id === latestRun.data?.id)
-    ) {
-      return [latestRun.data, ...page];
-    }
-    return page;
-  }, [latestRun.data, runs.data]);
   const scenariosById = useMemo(
     () =>
       new Map(
@@ -112,6 +101,21 @@ export function CapitalTab({
       ),
     [scenarios.data],
   );
+  const successfulRuns = useMemo(() => {
+    const page =
+      runs.data?.runs.filter((run) => {
+        const scenario = scenariosById.get(run.scenarioId);
+        return run.status === "succeeded" && scenario?.archivedAt === null;
+      }) ?? [];
+    if (
+      latestRun.data?.status === "succeeded" &&
+      scenariosById.get(latestRun.data.scenarioId)?.archivedAt === null &&
+      !page.some((run) => run.id === latestRun.data?.id)
+    ) {
+      return [latestRun.data, ...page];
+    }
+    return page;
+  }, [latestRun.data, runs.data, scenariosById]);
 
   useEffect(() => {
     setAttemptOffset(0);
@@ -188,7 +192,6 @@ export function CapitalTab({
   if (selectedAttempt.isError)
     return <ErrorPanel error={selectedAttempt.error} />;
   if (summary.isError) return <ErrorPanel error={summary.error} />;
-  if (comparison.isError) return <ErrorPanel error={comparison.error} />;
 
   const projection =
     selectedAttempt.data ??
@@ -319,7 +322,10 @@ export function CapitalTab({
       ) : (
         <>
           <ProjectionSummary projection={projection} />
-          <ScenarioComparison comparison={comparison.data} />
+          <ScenarioComparison
+            comparison={comparison.data}
+            error={comparison.error}
+          />
           <CapitalFindings
             projection={projection}
             tenant={tenant}
@@ -357,7 +363,9 @@ function ProjectionSummary({ projection }: { projection: Projection }) {
                 className="border-b border-[rgb(var(--border))] last:border-0"
               >
                 <td className="p-3">{indicator.periodNumber}</td>
-                <td className="p-3 font-mono">{money(indicator.equity)}</td>
+                <td className="p-3 font-mono">
+                  {formatMoney(indicator.equity, projection.reportingCurrency)}
+                </td>
                 <td className="p-3">
                   {percent(indicator.equityToAssetsRatio)}
                 </td>
@@ -365,7 +373,10 @@ function ProjectionSummary({ projection }: { projection: Projection }) {
                   {percent(indicator.liabilitiesToAssetsRatio)}
                 </td>
                 <td className="p-3 font-mono">
-                  {money(indicator.equityChange)}
+                  {formatMoney(
+                    indicator.equityChange,
+                    projection.reportingCurrency,
+                  )}
                 </td>
                 <td className="p-3">
                   <Badge tone={pressureTone[indicator.pressureLevel]}>
@@ -383,8 +394,10 @@ function ProjectionSummary({ projection }: { projection: Projection }) {
 
 function ScenarioComparison({
   comparison,
+  error,
 }: {
   comparison?: CapitalComparisonRead;
+  error: Error | null;
 }) {
   const baseline = comparison?.baseline as Projection | null | undefined;
   const downside = comparison?.downside as Projection | null | undefined;
@@ -395,7 +408,11 @@ function ScenarioComparison({
         title="Baseline vs downside"
         meta="Latest successful projections"
       />
-      {!baseline || !downside ? (
+      {error ? (
+        <div className="p-3">
+          <ErrorPanel error={error} />
+        </div>
+      ) : !baseline || !downside ? (
         <div className="p-3">
           <Alert title="Comparison not ready">
             Generate successful projections for both baseline and downside
@@ -433,15 +450,24 @@ function ScenarioComparison({
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <span>Baseline equity</span>
                 <span className="text-right font-mono">
-                  {money(period.baselineEquity)}
+                  {formatMoney(
+                    period.baselineEquity,
+                    baseline.reportingCurrency,
+                  )}
                 </span>
                 <span>Downside equity</span>
                 <span className="text-right font-mono">
-                  {money(period.downsideEquity)}
+                  {formatMoney(
+                    period.downsideEquity,
+                    baseline.reportingCurrency,
+                  )}
                 </span>
                 <span>Downside delta</span>
                 <span className="text-right font-mono">
-                  {money(period.equityDelta)}
+                  {formatMoney(
+                    period.equityDelta,
+                    baseline.reportingCurrency,
+                  )}
                 </span>
                 <span>Ratio delta</span>
                 <span className="text-right">
@@ -559,13 +585,6 @@ function attemptLabel(
     ? `${scenario.name} (${labelize(scenario.scenarioType)})`
     : `Unknown scenario ${truncateId(attempt.scenarioId)}`;
   return `${labelize(attempt.status)} · ${scenarioLabel} · ${attempt.createdAt.toLocaleString()}`;
-}
-
-function money(value: string | number) {
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(value));
 }
 
 function percent(value: string | number) {

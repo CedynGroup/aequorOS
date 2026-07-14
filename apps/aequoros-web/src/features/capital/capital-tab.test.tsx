@@ -91,6 +91,7 @@ function projection(): CapitalProjectionRead {
     status: "succeeded",
     engineVersion: "capital-projection-v1.0.0",
     inputHash: "a".repeat(64),
+    reportingCurrency: "USD",
     startedAt: now,
     completedAt: now,
     error: null,
@@ -215,6 +216,7 @@ function projectionSummary(
     scenarioId: value.scenarioId,
     calculationRunId: value.calculationRunId,
     status: value.status,
+    reportingCurrency: value.reportingCurrency,
     startedAt: value.startedAt,
     completedAt: value.completedAt,
     createdAt: value.createdAt,
@@ -246,6 +248,27 @@ describe("CapitalTab", () => {
     ).toHaveTextContent("Operating baseline (Baseline)");
   });
 
+  it("excludes successful runs for archived scenarios", async () => {
+    vi.mocked(riskApi.scenarios).mockResolvedValue({
+      ...scenarioWorkspace(),
+      scenarios: [
+        {
+          ...scenarioWorkspace().scenarios[0],
+          archivedAt: now,
+        },
+      ],
+    });
+
+    renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("No successful forecast runs"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Generate projection" }),
+    ).toBeDisabled();
+  });
+
   it("renders an explicit loading state", () => {
     vi.mocked(riskApi.capitalSummary).mockReturnValue(new Promise(() => {}));
     const { container } = renderWithQuery(
@@ -268,6 +291,39 @@ describe("CapitalTab", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Evidence")).toBeInTheDocument();
     expect(screen.getByText("Comparison not ready")).toBeInTheDocument();
+    expect(screen.getByText("$50.00")).toBeInTheDocument();
+    expect(screen.getByText("-$100.00")).toBeInTheDocument();
+  });
+
+  it("formats supported capital amounts without Number precision loss", async () => {
+    const value = projection();
+    value.indicators[0].equity = "9999999999999998.9999";
+    vi.mocked(riskApi.capitalSummary).mockResolvedValue(summary(value));
+    vi.mocked(riskApi.capitalComparison).mockResolvedValue(comparison(value));
+
+    renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("$9,999,999,999,999,999.00"),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps projection history visible when comparison is retired", async () => {
+    const value = projection();
+    vi.mocked(riskApi.capitalProjections).mockResolvedValue(attempts([value]));
+    vi.spyOn(riskApi, "capitalProjection").mockResolvedValue(value);
+    vi.mocked(riskApi.capitalComparison).mockRejectedValue(
+      new Error("Archived cases cannot be compared"),
+    );
+
+    renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("Projected capital indicators"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Archived cases cannot be compared"),
+    ).toBeInTheDocument();
   });
 
   it("renders every incompatible comparison basis and corrective action", async () => {

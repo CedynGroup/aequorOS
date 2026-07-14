@@ -52,6 +52,7 @@ class CapitalProjection(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(24), nullable=False)
     engine_version: Mapped[str] = mapped_column(String(80), nullable=False)
     input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    reporting_currency: Mapped[str] = mapped_column(String(3), nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
