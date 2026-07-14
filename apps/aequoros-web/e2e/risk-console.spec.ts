@@ -5,6 +5,13 @@ import { RequestTracker } from "./support/request-tracker";
 import { RiskConsolePage } from "./support/risk-console-page";
 import { demoTenant, northstarCase } from "./support/test-data";
 
+const evidenceDir = process.env.NO_MISTAKES_EVIDENCE_DIR;
+
+async function captureEvidence(page: import("playwright/test").Page, name: string) {
+  if (!evidenceDir) return;
+  await page.screenshot({ path: `${evidenceDir}/${name}.png`, fullPage: true });
+}
+
 test.beforeEach(async ({ page, request }) => {
   test.skip(
     !(await isRiskServiceReady(request)),
@@ -383,6 +390,7 @@ test("reviews liquidity metrics, evidence, finding status, and tenant isolation"
   page,
   request,
 }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
   const tenantHeaders = {
     "X-Org-Id": demoTenant.orgId,
     "X-User-Id": demoTenant.userId,
@@ -444,12 +452,14 @@ test("reviews liquidity metrics, evidence, finding status, and tenant isolation"
   await expect(
     page.getByRole("link", { name: /Forecast period/ }).first(),
   ).toBeVisible();
+  await captureEvidence(page, "liquidity-summary-and-evidence");
 
   const acknowledge = page.getByRole("button", { name: "Acknowledge" }).first();
   await expect(acknowledge).toBeEnabled();
   await acknowledge.click();
   await expect(page.getByText("Liquidity finding acknowledged")).toBeVisible();
   await expect(page.getByText("Terminal finding · read only")).toBeVisible();
+  await captureEvidence(page, "liquidity-acknowledged-read-only");
 
   await page
     .getByLabel("Tenant org id")
