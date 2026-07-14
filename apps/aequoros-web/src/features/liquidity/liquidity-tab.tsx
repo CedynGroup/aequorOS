@@ -382,8 +382,12 @@ function LiquidityFindingCard({
         reason: action === "dismiss" ? dismissReason.trim() : undefined,
       }),
     onSuccess: (_updated, action) => {
-      void queryClient.invalidateQueries({ queryKey: ["liquidity-summary"] });
-      void queryClient.invalidateQueries({ queryKey: ["findings"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["liquidity-summary", tenant, caseId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["findings", tenant, caseId],
+      });
       toast.success(
         action === "dismiss"
           ? "Liquidity finding dismissed"

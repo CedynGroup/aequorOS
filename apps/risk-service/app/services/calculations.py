@@ -334,7 +334,7 @@ def _create_and_execute(  # noqa: PLR0913
                 forecast_rows.append(forecast_row)
             publication_db.flush()
             try:
-                calculate_liquidity_metrics(forecast_rows)
+                liquidity_result = calculate_liquidity_metrics(forecast_rows)
             except ValueError as exc:
                 raise CalculationInputError(
                     "liquidity_output_invalid",
@@ -360,6 +360,7 @@ def _create_and_execute(  # noqa: PLR0913
                 run,
                 forecast_rows,
                 publication_locked=True,
+                result=liquidity_result,
             )
             run.status = "succeeded"
             run.completed_at = datetime.now(UTC)

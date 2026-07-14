@@ -134,14 +134,27 @@ describe("CalculationsTab", () => {
     );
     vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
 
-    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+    const { queryClient } = renderWithQuery(
+      <CalculationsTab tenant={tenant} caseId={caseId} />,
+    );
 
     await waitFor(() => expect(document.activeElement?.id).toBe(target));
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
     expect(riskApi.calculationRun).toHaveBeenCalledWith(
       tenant,
       caseId,
       run().id,
     );
+
+    queryClient.setQueryData(
+      ["calculation-run", tenant, caseId, run().id],
+      { ...run(), completedAt: new Date("2026-07-13T13:00:00Z") },
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("$4,550.00")).toBeInTheDocument(),
+    );
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
   it("preserves an archived evidence run in read-only audit mode", async () => {

@@ -251,6 +251,42 @@ def test_active_run_listing_returns_latest_success_for_every_scenario(
     assert discovered_ids == expected_ids
 
 
+def test_successful_run_reuses_calculated_liquidity_metrics(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    original_calculate = calculations.calculate_liquidity_metrics
+    original_generate = calculations.generate_liquidity_findings
+    calculated_results: list[Any] = []
+    generated_results: list[Any] = []
+
+    def track_calculate(periods: list[CalculationForecastPeriod]) -> Any:
+        result = original_calculate(periods)
+        calculated_results.append(result)
+        return result
+
+    def track_generate(*args: Any, **kwargs: Any) -> None:
+        generated_results.append(kwargs.get("result"))
+        original_generate(*args, **kwargs)
+
+    monkeypatch.setattr(calculations, "calculate_liquidity_metrics", track_calculate)
+    monkeypatch.setattr(calculations, "generate_liquidity_findings", track_generate)
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"], "forecast_periods": 2},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "succeeded"
+    assert len(calculated_results) == 1
+    assert generated_results == calculated_results
+
+
 def test_default_as_of_date_excludes_future_balances_unless_explicit(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

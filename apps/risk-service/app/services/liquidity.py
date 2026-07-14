@@ -237,15 +237,17 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
     return LiquidityResult(metrics=metrics, concerns=concerns)
 
 
-def generate_findings(
+def generate_findings(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
     run: CalculationRun,
     periods: list[CalculationForecastPeriod],
     *,
     publication_locked: bool = False,
+    result: LiquidityResult | None = None,
 ) -> None:
-    result = calculate_metrics(periods)
+    if result is None:
+        result = calculate_metrics(periods)
     if not publication_locked:
         lock_finding_publication(db, ctx, run.case_id, run.scenario_id)
     analysis = db.scalar(

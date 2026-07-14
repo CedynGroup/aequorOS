@@ -606,7 +606,10 @@ describe("LiquidityTab", () => {
     const review = vi
       .spyOn(liquidityReviewClient, "review")
       .mockResolvedValue(finding({ status: "acknowledged" }));
-    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+    const { queryClient } = renderWithQuery(
+      <LiquidityTab tenant={tenant} caseId="case-1" />,
+    );
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 
     await user.click(
       await screen.findByRole("button", { name: "Acknowledge" }),
@@ -615,6 +618,12 @@ describe("LiquidityTab", () => {
       expect(review).toHaveBeenCalledWith(tenant, "case-1", "finding-1", {
         action: "acknowledge",
         reason: undefined,
+      });
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ["liquidity-summary", tenant, "case-1"],
+      });
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ["findings", tenant, "case-1"],
       });
     });
 

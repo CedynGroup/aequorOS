@@ -32,6 +32,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  vi.clearAllMocks();
   window.history.replaceState(null, "", window.location.pathname);
 });
 
@@ -168,9 +169,16 @@ describe("FinancialSections", () => {
       `${window.location.pathname}#${target}`,
     );
 
-    render(<FinancialSections workspace={workspace()} mocked />);
+    const { rerender } = render(
+      <FinancialSections workspace={workspace()} mocked />,
+    );
 
     await waitFor(() => expect(document.activeElement?.id).toBe(target));
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+
+    rerender(<FinancialSections workspace={workspace()} mocked />);
+
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
   it("renders grouped empty states and editable cash flows", () => {

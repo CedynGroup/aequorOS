@@ -6,7 +6,7 @@ import type {
 } from "@aequoros/risk-service-api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -49,6 +49,7 @@ export function CalculationsTab({
 }) {
   const queryClient = useQueryClient();
   const deepLink = calculationDeepLink();
+  const focusedDeepLinks = useRef(new Set<string>());
   const [runOffset, setRunOffset] = useState(0);
   const runsKey = ["calculation-runs", tenant, caseId, runOffset] as const;
   const scenarios = useQuery({
@@ -114,8 +115,13 @@ export function CalculationsTab({
   }, [deepLink?.runId, runs.data]);
 
   useEffect(() => {
-    if (selectedRun.data && deepLink?.targetId) {
-      focusWorkspaceTarget(deepLink.targetId);
+    if (
+      selectedRun.data &&
+      deepLink?.targetId &&
+      !focusedDeepLinks.current.has(deepLink.targetId) &&
+      focusWorkspaceTarget(deepLink.targetId)
+    ) {
+      focusedDeepLinks.current.add(deepLink.targetId);
     }
   }, [deepLink?.targetId, selectedRun.data]);
 

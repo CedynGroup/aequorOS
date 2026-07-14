@@ -252,9 +252,15 @@ export function FinancialSections({
   ) => Promise<void> | void;
 }) {
   const [focusedCell, setFocusedCell] = useState<string>();
+  const focusedDeepLinks = useRef(new Set<string>());
   useEffect(() => {
     const targetId = workspaceHash();
-    if (targetId.startsWith("financial-") && focusWorkspaceTarget(targetId)) {
+    if (
+      targetId.startsWith("financial-") &&
+      !focusedDeepLinks.current.has(targetId) &&
+      focusWorkspaceTarget(targetId)
+    ) {
+      focusedDeepLinks.current.add(targetId);
       setFocusedCell(targetId);
     }
   }, [workspace]);
