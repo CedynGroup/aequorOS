@@ -53,7 +53,7 @@ export interface CalculationRunListRead {
    */
   latestSuccessfulRunId: LatestSuccessfulRunId;
   /**
-   *
+   * Latest successful active-scenario runs paginated with limit and offset.
    * @type {Array<CalculationRunSummaryRead>}
    * @memberof CalculationRunListRead
    */

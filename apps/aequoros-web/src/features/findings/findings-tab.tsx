@@ -169,6 +169,18 @@ export function FindingReviewItem({
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["findings"] });
       void queryClient.invalidateQueries({ queryKey: ["cases"] });
+      if (finding.ruleVersion?.startsWith("capital-projection-")) {
+        void queryClient.invalidateQueries({
+          queryKey: ["capital-projections"],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["capital-projection"],
+        });
+        void queryClient.invalidateQueries({ queryKey: ["capital-summary"] });
+        void queryClient.invalidateQueries({
+          queryKey: ["capital-comparison"],
+        });
+      }
       onUpdated?.();
       toast.success("Finding updated");
     },

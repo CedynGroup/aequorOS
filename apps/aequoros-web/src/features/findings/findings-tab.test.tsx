@@ -98,6 +98,36 @@ describe("FindingsTab", () => {
     });
   });
 
+  it("invalidates capital views after capital finding updates", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(riskApi, "findings").mockResolvedValue([
+      finding({ ruleVersion: "capital-projection-v1.0.0" }),
+    ]);
+    vi.spyOn(riskApi, "updateFinding").mockResolvedValue(
+      finding({ ruleVersion: "capital-projection-v1.0.0" }),
+    );
+    const { queryClient } = renderWithQuery(
+      <FindingsTab tenant={tenant} caseId="case-1" />,
+    );
+    const capitalQueryKeys = [
+      ["capital-projections"],
+      ["capital-projection"],
+      ["capital-summary"],
+      ["capital-comparison"],
+    ];
+    for (const queryKey of capitalQueryKeys) {
+      queryClient.setQueryData(queryKey, {});
+    }
+
+    await user.click(await screen.findByRole("button", { name: "Update" }));
+
+    await waitFor(() => {
+      for (const queryKey of capitalQueryKeys) {
+        expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+      }
+    });
+  });
+
   it("keeps archived-case findings visible but disables mutations", async () => {
     vi.spyOn(riskApi, "findings").mockResolvedValue([finding()]);
     const createFinding = vi.spyOn(riskApi, "createFinding");

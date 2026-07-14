@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -187,6 +187,11 @@ def update_finding(
         finding.status = status_value
     if "disposition_reason" in update_data:
         finding.disposition_reason = update_data["disposition_reason"]
+    finding.details = {
+        **finding.details,
+        "reviewed_by": str(ctx.actor_user_id),
+        "reviewed_at": datetime.now(UTC).isoformat(),
+    }
     if "status" in update_data and finding.status != before_status:
         record_event(
             db,

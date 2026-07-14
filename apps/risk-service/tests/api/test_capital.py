@@ -176,7 +176,9 @@ def test_capital_projection_findings_evidence_comparison_and_tenant_isolation(
     assert summary.json()["projection"]["id"] == baseline["id"]
     assert summary.json()["projection"]["reporting_currency"] == "USD"
 
-    comparison = db_client.get(f"/api/v1/cases/{case.id}/capital-comparison", headers=headers())
+    comparison = db_client.get(
+        f"/api/v1/cases/{case.id}/capital-comparison", headers=headers()
+    )
     assert comparison.status_code == 200
     compared = comparison.json()
     assert compared["baseline"]["id"] == baseline["id"]
@@ -534,6 +536,32 @@ def test_capital_rerun_supersedes_only_unreviewed_findings_for_same_scenario(
         assert reviewed.status == "open"
         assert "superseded_by_capital_projection_id" not in reviewed.details
 
+    third_finding_id = third["findings"][0]["finding"]["id"]
+    review = db_client.patch(
+        f"/api/v1/findings/{third_finding_id}",
+        headers=headers(),
+        json={
+            "status": "needs_review",
+            "disposition_reason": "Reviewer retained for follow-up.",
+        },
+    )
+    assert review.status_code == 200, review.text
+    assert review.json()["details"]["reviewed_by"]
+    assert review.json()["details"]["reviewed_at"]
+
+    fourth = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": run["id"]},
+    )
+    assert fourth.status_code == 201, fourth.text
+    with get_sessionmaker()() as session:
+        disposition_reviewed = session.get(RiskFinding, UUID(third_finding_id))
+        assert disposition_reviewed is not None
+        assert disposition_reviewed.status == "needs_review"
+        assert disposition_reviewed.disposition_reason == "Reviewer retained for follow-up."
+        assert "superseded_by_capital_projection_id" not in disposition_reviewed.details
+
 
 def test_archived_capital_inputs_are_retired_without_hiding_history(
     db_client: TestClient,
@@ -563,9 +591,7 @@ def test_archived_capital_inputs_are_retired_without_hiding_history(
     assert retired_scenario_projection.json()["error"]["message"] == (
         "Archived scenarios cannot be used for capital projections."
     )
-    comparison = db_client.get(
-        f"/api/v1/cases/{case.id}/capital-comparison", headers=headers()
-    )
+    comparison = db_client.get(f"/api/v1/cases/{case.id}/capital-comparison", headers=headers())
     assert comparison.status_code == 200
     assert comparison.json()[scenario["scenario_type"]] is None
 

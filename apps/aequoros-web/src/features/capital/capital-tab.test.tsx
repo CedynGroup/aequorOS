@@ -472,13 +472,25 @@ describe("CapitalTab", () => {
       scenarioId: downsideScenarioId,
       createdAt: new Date(now.getTime() + 1_000),
     };
-    vi.mocked(riskApi.calculationRuns).mockResolvedValue({
-      ...runList(),
-      runs: [failedRun],
-      total: 101,
-      hasMore: true,
-      latestSuccessfulRunsByScenario: [baselineSuccess, downsideSuccess],
-    });
+    const fullPage = Array.from({ length: 100 }, (_, index) => ({
+      ...baselineSuccess,
+      id: `baseline-run-${index}`,
+      createdAt: new Date(now.getTime() - index * 1_000),
+    }));
+    vi.mocked(riskApi.calculationRuns).mockImplementation(
+      async (_tenant, _caseId, _scenarioId, _limit, offset) => {
+        const pageOffset = offset ?? 0;
+        return {
+          ...runList(),
+          runs: pageOffset === 0 ? [failedRun] : [],
+          total: 101,
+          offset: pageOffset,
+          hasMore: pageOffset === 0,
+          latestSuccessfulRunsByScenario:
+            pageOffset === 0 ? fullPage : [downsideSuccess],
+        };
+      },
+    );
 
     renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
 
@@ -494,7 +506,16 @@ describe("CapitalTab", () => {
       0,
       true,
     );
-    expect(riskApi.calculationRuns).toHaveBeenCalledTimes(1);
+    expect(riskApi.calculationRuns).toHaveBeenNthCalledWith(
+      2,
+      tenant,
+      caseId,
+      undefined,
+      100,
+      100,
+      true,
+    );
+    expect(riskApi.calculationRuns).toHaveBeenCalledTimes(2);
   });
 
   it("explains and disables retired-case capital controls", async () => {

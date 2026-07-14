@@ -521,6 +521,7 @@
             "title": "Latest Successful Run Id"
           },
           "latest_successful_runs_by_scenario": {
+            "description": "Latest successful active-scenario runs paginated with limit and offset.",
             "items": {
               "$ref": "#/components/schemas/CalculationRunSummaryRead"
             },

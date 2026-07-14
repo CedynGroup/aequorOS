@@ -94,7 +94,9 @@ class CalculationRunListRead(ClosedModel):
     case_id: UUID
     runs: list[CalculationRunSummaryRead]
     latest_successful_run_id: UUID | None
-    latest_successful_runs_by_scenario: list[CalculationRunSummaryRead]
+    latest_successful_runs_by_scenario: list[CalculationRunSummaryRead] = Field(
+        description="Latest successful active-scenario runs paginated with limit and offset."
+    )
     total: int
     limit: int
     offset: int

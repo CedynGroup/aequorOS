@@ -214,6 +214,8 @@ def list_runs(  # noqa: PLR0913
             select(*(ranked.c[column.key] for column in summary_columns))
             .where(ranked.c.rank == 1)
             .order_by(ranked.c.created_at.desc(), ranked.c.id.desc())
+            .limit(limit)
+            .offset(offset)
         ).mappings()
         latest_by_scenario = [_read_summary(row) for row in latest_rows]
     return CalculationRunListRead(

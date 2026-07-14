@@ -84,8 +84,35 @@ export function CapitalTab({
   );
   const runs = useQuery({
     queryKey: ["calculation-runs", tenant, caseId, "capital-active"],
-    queryFn: () =>
-      riskApi.calculationRuns(tenant, caseId, undefined, 100, 0, true),
+    queryFn: async () => {
+      const limit = 100;
+      const firstPage = await riskApi.calculationRuns(
+        tenant,
+        caseId,
+        undefined,
+        limit,
+        0,
+        true,
+      );
+      const latestSuccessfulRunsByScenario = [
+        ...firstPage.latestSuccessfulRunsByScenario,
+      ];
+      let page = firstPage;
+      while (page.latestSuccessfulRunsByScenario.length === limit) {
+        page = await riskApi.calculationRuns(
+          tenant,
+          caseId,
+          undefined,
+          limit,
+          page.offset + limit,
+          true,
+        );
+        latestSuccessfulRunsByScenario.push(
+          ...page.latestSuccessfulRunsByScenario,
+        );
+      }
+      return { ...firstPage, latestSuccessfulRunsByScenario };
+    },
   });
   const successfulRuns = useMemo(() => {
     const candidates = [
@@ -511,7 +538,6 @@ function CapitalFindings({
   tenant: TenantHeaders;
   mutationDisabled: boolean;
 }) {
-  const queryClient = useQueryClient();
   return (
     <Panel>
       <PanelHeader
@@ -530,17 +556,6 @@ function CapitalFindings({
               finding={finding}
               tenant={tenant}
               disabled={mutationDisabled}
-              onUpdated={() => {
-                void queryClient.invalidateQueries({
-                  queryKey: ["capital-summary"],
-                });
-                void queryClient.invalidateQueries({
-                  queryKey: ["capital-comparison"],
-                });
-                void queryClient.invalidateQueries({
-                  queryKey: ["capital-projection"],
-                });
-              }}
             />
             <div className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] p-3 text-xs">
               <div className="font-medium">Evidence</div>

@@ -565,6 +565,7 @@ def _supersede_prior_findings(
                 RiskFinding.organization_id == ctx.organization_id,
                 RiskFinding.case_id == projection.case_id,
                 RiskFinding.status == "needs_review",
+                RiskFinding.disposition_reason.is_(None),
                 CapitalProjectionFinding.organization_id == ctx.organization_id,
                 CapitalProjection.organization_id == ctx.organization_id,
                 CapitalProjection.scenario_id == projection.scenario_id,
@@ -573,6 +574,8 @@ def _supersede_prior_findings(
         )
     )
     for finding in prior_findings:
+        if finding.details.get("reviewed_by") or finding.details.get("reviewed_at"):
+            continue
         finding.status = "superseded"
         finding.disposition_reason = f"Superseded by capital projection {projection.id}."
         finding.details = {

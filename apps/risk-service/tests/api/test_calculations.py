@@ -228,16 +228,24 @@ def test_active_run_listing_returns_latest_success_for_every_scenario(
         expected_ids = {str(baseline_success.id), str(downside_success.id)}
 
     response = db_client.get(
-        f"/api/v1/cases/{case.id}/calculation-runs"
-        "?active_scenarios_only=true&limit=1",
+        f"/api/v1/cases/{case.id}/calculation-runs?active_scenarios_only=true&limit=1",
         headers=headers(),
     )
     assert response.status_code == 200, response.text
     listing = response.json()
     assert [item["id"] for item in listing["runs"]] == [str(newest_failure.id)]
-    assert {
-        item["id"] for item in listing["latest_successful_runs_by_scenario"]
-    } == expected_ids
+    assert len(listing["latest_successful_runs_by_scenario"]) == 1
+
+    second_page = db_client.get(
+        f"/api/v1/cases/{case.id}/calculation-runs?active_scenarios_only=true&limit=1&offset=1",
+        headers=headers(),
+    )
+    assert second_page.status_code == 200, second_page.text
+    discovered_ids = {
+        listing["latest_successful_runs_by_scenario"][0]["id"],
+        second_page.json()["latest_successful_runs_by_scenario"][0]["id"],
+    }
+    assert discovered_ids == expected_ids
 
 
 def test_default_as_of_date_excludes_future_balances_unless_explicit(
