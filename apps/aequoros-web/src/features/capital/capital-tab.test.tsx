@@ -444,18 +444,29 @@ describe("CapitalTab", () => {
     ).toHaveTextContent("Failed");
   });
 
-  it("fetches the latest successful run when it is outside the first page", async () => {
+  it("fetches the latest successful active-scenario run outside the first page", async () => {
     const failedRun = {
       ...runList().runs[0],
       id: "failed-run",
       status: "failed" as const,
     };
-    vi.mocked(riskApi.calculationRuns).mockResolvedValue({
-      ...runList(),
-      runs: [failedRun],
-      total: 101,
-      hasMore: true,
-    });
+    vi.mocked(riskApi.calculationRuns).mockImplementation(
+      async (_tenant, _caseId, requestedScenarioId) =>
+        requestedScenarioId
+          ? {
+              ...runList(),
+              runs: [failedRun],
+              total: 101,
+              hasMore: true,
+            }
+          : {
+              ...runList(),
+              latestSuccessfulRunId: "archived-scenario-run",
+              runs: [failedRun],
+              total: 101,
+              hasMore: true,
+            },
+    );
     const calculationRun = vi
       .spyOn(riskApi, "calculationRun")
       .mockResolvedValue({
@@ -470,6 +481,34 @@ describe("CapitalTab", () => {
       await screen.findByRole("combobox", { name: "Capital forecast run" }),
     ).toHaveTextContent("Operating baseline (Baseline)");
     expect(calculationRun).toHaveBeenCalledWith(tenant, caseId, runId);
+    expect(riskApi.calculationRuns).toHaveBeenCalledWith(
+      tenant,
+      caseId,
+      scenarioId,
+      1,
+      0,
+    );
+  });
+
+  it("explains and disables retired-case capital controls", async () => {
+    renderWithQuery(
+      <CapitalTab
+        tenant={tenant}
+        caseId={caseId}
+        mutationDisabled
+        mutationDisabledReason="retired-case"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Capital mutations unavailable for retired case"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Capital forecast run" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Generate projection" }),
+    ).toBeDisabled();
   });
 
   it("refreshes selected attempt findings after a status update", async () => {

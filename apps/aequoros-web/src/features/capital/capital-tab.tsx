@@ -40,10 +40,12 @@ export function CapitalTab({
   tenant,
   caseId,
   mutationDisabled = false,
+  mutationDisabledReason = "demo",
 }: {
   tenant: TenantHeaders;
   caseId: string;
   mutationDisabled?: boolean;
+  mutationDisabledReason?: "demo" | "retired-case";
 }) {
   const queryClient = useQueryClient();
   const [runId, setRunId] = useState("");
@@ -57,23 +59,6 @@ export function CapitalTab({
   const runs = useQuery({
     queryKey: ["calculation-runs", tenant, caseId, "capital"],
     queryFn: () => riskApi.calculationRuns(tenant, caseId, undefined, 100, 0),
-  });
-  const latestSuccessfulRunId = runs.data?.latestSuccessfulRunId;
-  const latestRunMissing = Boolean(
-    latestSuccessfulRunId &&
-    !runs.data?.runs.some((run) => run.id === latestSuccessfulRunId),
-  );
-  const latestRun = useQuery({
-    queryKey: [
-      "calculation-run",
-      tenant,
-      caseId,
-      "capital-latest-successful",
-      latestSuccessfulRunId,
-    ],
-    queryFn: () =>
-      riskApi.calculationRun(tenant, caseId, latestSuccessfulRunId ?? ""),
-    enabled: latestRunMissing,
   });
   const attempts = useQuery({
     queryKey: ["capital-projections", tenant, caseId, attemptOffset],
@@ -101,21 +86,59 @@ export function CapitalTab({
       ),
     [scenarios.data],
   );
+  const activeScenarioIds = useMemo(
+    () =>
+      scenarios.data?.scenarios
+        .filter((scenario) => scenario.archivedAt === null)
+        .map((scenario) => scenario.id) ?? [],
+    [scenarios.data],
+  );
+  const latestActiveRuns = useQuery({
+    queryKey: [
+      "calculation-runs",
+      tenant,
+      caseId,
+      "capital-latest-active",
+      activeScenarioIds,
+    ],
+    queryFn: async () => {
+      const candidates = await Promise.all(
+        activeScenarioIds.map(async (scenarioId) => {
+          const page = await riskApi.calculationRuns(
+            tenant,
+            caseId,
+            scenarioId,
+            1,
+            0,
+          );
+          const latestId = page.latestSuccessfulRunId;
+          if (!latestId) return null;
+          return (
+            page.runs.find((run) => run.id === latestId) ??
+            riskApi.calculationRun(tenant, caseId, latestId)
+          );
+        }),
+      );
+      return candidates.filter((run) => run !== null);
+    },
+    enabled: scenarios.isSuccess,
+  });
   const successfulRuns = useMemo(() => {
     const page =
       runs.data?.runs.filter((run) => {
         const scenario = scenariosById.get(run.scenarioId);
         return run.status === "succeeded" && scenario?.archivedAt === null;
       }) ?? [];
-    if (
-      latestRun.data?.status === "succeeded" &&
-      scenariosById.get(latestRun.data.scenarioId)?.archivedAt === null &&
-      !page.some((run) => run.id === latestRun.data?.id)
-    ) {
-      return [latestRun.data, ...page];
-    }
-    return page;
-  }, [latestRun.data, runs.data, scenariosById]);
+    const fallback =
+      latestActiveRuns.data?.filter(
+        (run) =>
+          run.status === "succeeded" &&
+          !page.some((pageRun) => pageRun.id === run.id),
+      ) ?? [];
+    return [...page, ...fallback].sort(
+      (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+    );
+  }, [latestActiveRuns.data, runs.data, scenariosById]);
 
   useEffect(() => {
     setAttemptOffset(0);
@@ -177,7 +200,7 @@ export function CapitalTab({
   if (
     scenarios.isLoading ||
     runs.isLoading ||
-    latestRun.isLoading ||
+    latestActiveRuns.isLoading ||
     attempts.isLoading ||
     (projectionId && selectedAttempt.isLoading) ||
     summary.isLoading ||
@@ -187,7 +210,8 @@ export function CapitalTab({
   }
   if (scenarios.isError) return <ErrorPanel error={scenarios.error} />;
   if (runs.isError) return <ErrorPanel error={runs.error} />;
-  if (latestRun.isError) return <ErrorPanel error={latestRun.error} />;
+  if (latestActiveRuns.isError)
+    return <ErrorPanel error={latestActiveRuns.error} />;
   if (attempts.isError) return <ErrorPanel error={attempts.error} />;
   if (selectedAttempt.isError)
     return <ErrorPanel error={selectedAttempt.error} />;
@@ -217,6 +241,7 @@ export function CapitalTab({
               value={runId}
               onValueChange={setRunId}
               placeholder="Choose a forecast run"
+              disabled={mutationDisabled}
             >
               {successfulRuns.map((run) => (
                 <SelectItem key={run.id} value={run.id}>
@@ -234,9 +259,16 @@ export function CapitalTab({
         </div>
         {mutationDisabled ? (
           <div className="px-3 pb-3">
-            <Alert title="Mutation unavailable in demo mode">
-              Switch to live API data to generate a capital projection.
-            </Alert>
+            {mutationDisabledReason === "retired-case" ? (
+              <Alert title="Capital mutations unavailable for retired case">
+                Historical capital projections remain available for review, but
+                archived cases cannot generate projections or update findings.
+              </Alert>
+            ) : (
+              <Alert title="Mutation unavailable in demo mode">
+                Switch to live API data to generate a capital projection.
+              </Alert>
+            )}
           </div>
         ) : !successfulRuns.length ? (
           <div className="px-3 pb-3">

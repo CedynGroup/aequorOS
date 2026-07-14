@@ -9,6 +9,20 @@ import { renderWithQuery } from "../../test/render";
 import { mockCase } from "../demo-data/demo-data";
 import { CaseWorkspace } from "./case-workspace";
 
+vi.mock("../capital/capital-tab", () => ({
+  CapitalTab: ({
+    mutationDisabled,
+    mutationDisabledReason,
+  }: {
+    mutationDisabled: boolean;
+    mutationDisabledReason: string;
+  }) => (
+    <div>
+      Capital controls: {String(mutationDisabled)} · {mutationDisabledReason}
+    </div>
+  ),
+}));
+
 type WorkspaceProps = Parameters<typeof CaseWorkspace>[0];
 
 const tenant: TenantHeaders = {
@@ -111,5 +125,19 @@ describe("CaseWorkspace", () => {
         reason: "Ready for approval",
       });
     });
+  });
+
+  it("retires capital mutations when the selected case is archived", async () => {
+    renderWorkspace({
+      activeTab: "capital",
+      mockCaseData: {
+        ...mockCase(DEFAULT_ORG_ID, caseId),
+        archivedAt: new Date("2026-07-14T12:00:00Z"),
+      },
+    });
+
+    expect(
+      await screen.findByText("Capital controls: true · retired-case"),
+    ).toBeInTheDocument();
   });
 });

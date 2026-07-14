@@ -84,6 +84,9 @@ export function CaseWorkspace({
   mockCaseData?: CaseRead;
   mockWorkspace: boolean;
 }) {
+  const selectedCase = mockCaseData ?? (caseQuery.data as CaseRead | undefined);
+  const caseRetired = Boolean(selectedCase?.archivedAt);
+
   return (
     <Panel className="min-h-[640px] overflow-hidden">
       <PanelHeader
@@ -107,9 +110,7 @@ export function CaseWorkspace({
         </div>
       ) : (
         <>
-          <CaseSummary
-            data={mockCaseData ?? (caseQuery.data as CaseRead | undefined)}
-          />
+          <CaseSummary data={selectedCase} />
           <Tabs
             value={activeTab}
             onValueChange={(tab) => updateSearch({ tab: tab as ConsoleTab })}
@@ -128,11 +129,7 @@ export function CaseWorkspace({
               </TabsList>
             </div>
             <TabsContent value="overview" className="m-0 p-3">
-              <OverviewTab
-                caseData={
-                  mockCaseData ?? (caseQuery.data as CaseRead | undefined)
-                }
-              />
+              <OverviewTab caseData={selectedCase} />
             </TabsContent>
             <TabsContent value="financial" className="m-0 p-3">
               <LazyTabBoundary>
@@ -158,7 +155,8 @@ export function CaseWorkspace({
                 <CapitalTab
                   tenant={tenant}
                   caseId={caseId}
-                  mutationDisabled={mockWorkspace}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                  mutationDisabledReason={caseRetired ? "retired-case" : "demo"}
                 />
               </LazyTabBoundary>
             </TabsContent>
