@@ -202,6 +202,11 @@ def apply_finding_update(
     case = get_case_for_update_or_404(db, ctx.organization_id, finding.case_id)
     ensure_case_is_not_archived(case)
     db.refresh(finding, with_for_update=True)
+    if is_liquidity_workflow_finding(finding) and not allow_liquidity_workflow:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Liquidity workflow findings are read-only in the generic findings endpoint.",
+        )
     update_data = command.update_data
     status_value = update_data.get("status")
     if "status" in update_data and (
