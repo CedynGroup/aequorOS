@@ -426,6 +426,7 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
   await expect(
     page.locator('svg[aria-label="Balance-sheet trajectory chart"]'),
   ).toBeVisible();
+  await captureEvidence(page, "forecast-trajectory");
   const successfulRunsResponse = await request.get(
     `${apiBaseUrl}/cases/${northstarCase.id}/calculation-runs?scenario_id=${baseline.id}`,
     { headers: tenantHeaders },
