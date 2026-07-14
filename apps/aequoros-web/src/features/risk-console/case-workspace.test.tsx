@@ -23,6 +23,20 @@ vi.mock("../capital/capital-tab", () => ({
   ),
 }));
 
+vi.mock("../calculations/calculations-tab", () => ({
+  CalculationsTab: ({
+    mutationDisabled,
+    mutationDisabledReason,
+  }: {
+    mutationDisabled: boolean;
+    mutationDisabledReason: string;
+  }) => (
+    <div>
+      Forecast controls: {String(mutationDisabled)} · {mutationDisabledReason}
+    </div>
+  ),
+}));
+
 vi.mock("../findings/findings-tab", () => ({
   FindingsTab: ({
     mutationDisabled,
@@ -215,6 +229,31 @@ describe("CaseWorkspace", () => {
 
     expect(
       await screen.findByText("Finding controls: true · demo"),
+    ).toBeInTheDocument();
+  });
+
+  it("retires forecast mutations when the selected case is archived", async () => {
+    renderWorkspace({
+      activeTab: "calculations",
+      mockCaseData: {
+        ...mockCase(DEFAULT_ORG_ID, caseId),
+        status: "archived",
+      },
+    });
+
+    expect(
+      await screen.findByText("Forecast controls: true · retired-case"),
+    ).toBeInTheDocument();
+  });
+
+  it("disables forecast mutations in demo mode", async () => {
+    renderWorkspace({
+      activeTab: "calculations",
+      mockWorkspace: true,
+    });
+
+    expect(
+      await screen.findByText("Forecast controls: true · demo"),
     ).toBeInTheDocument();
   });
 

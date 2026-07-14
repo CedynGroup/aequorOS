@@ -36,7 +36,11 @@ from app.schemas.calculations import (
     ForecastPeriodRead,
 )
 from app.services.audit import record_event
-from app.services.cases import get_case_or_404
+from app.services.cases import (
+    ensure_case_is_not_archived,
+    get_case_for_update_or_404,
+    get_case_or_404,
+)
 from app.services.liquidity import calculate_metrics as calculate_liquidity_metrics
 from app.services.liquidity import generate_findings as generate_liquidity_findings
 from app.services.liquidity import serialize_finding_publication
@@ -109,7 +113,6 @@ def start_run(
     db: Session, ctx: TenantContext, case_id: UUID, payload: CalculationRunCreate
 ) -> CalculationRunRead:
     _require_actor(ctx)
-    get_case_or_404(db, ctx.organization_id, case_id)
     return _create_and_execute(
         db,
         ctx,
@@ -247,7 +250,7 @@ def _create_and_execute(  # noqa: PLR0913, PLR0915
     *,
     rerun_of_run_id: UUID | None = None,
 ) -> CalculationRunRead:
-    _scenario_or_404(db, ctx, case_id, scenario_id)
+    _lock_active_case_and_scenario(db, ctx, case_id, scenario_id)
     now = datetime.now(UTC)
     as_of_date = requested_as_of_date or now.date()
     snapshot = _pending_snapshot(case_id, scenario_id, forecast_periods, as_of_date)
@@ -298,6 +301,12 @@ def _create_and_execute(  # noqa: PLR0913, PLR0915
         with serialize_finding_publication(db, ctx, case_id, scenario_id) as publication_db:
             try:
                 _begin_repeatable_read(publication_db)
+                _lock_active_case_and_scenario(
+                    publication_db,
+                    ctx,
+                    case_id,
+                    scenario_id,
+                )
                 run = _run_or_404(publication_db, ctx, case_id, run_id)
                 snapshot, as_of_date = build_input_snapshot(
                     publication_db,
@@ -1271,19 +1280,30 @@ def _run_or_404(db: Session, ctx: TenantContext, case_id: UUID, run_id: UUID) ->
     return row
 
 
-def _scenario_or_404(
-    db: Session, ctx: TenantContext, case_id: UUID, scenario_id: UUID
+def _lock_active_case_and_scenario(
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    scenario_id: UUID,
 ) -> RiskScenario:
+    case = get_case_for_update_or_404(db, ctx.organization_id, case_id)
+    ensure_case_is_not_archived(case)
     scenario = db.scalar(
-        select(RiskScenario).where(
+        select(RiskScenario)
+        .where(
             RiskScenario.id == scenario_id,
             RiskScenario.organization_id == ctx.organization_id,
             RiskScenario.case_id == case_id,
-            RiskScenario.archived_at.is_(None),
         )
+        .with_for_update()
     )
     if scenario is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found.")
+    if scenario.archived_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Archived scenarios cannot be used for calculations.",
+        )
     return scenario
 
 

@@ -146,10 +146,10 @@ describe("CalculationsTab", () => {
       run().id,
     );
 
-    queryClient.setQueryData(
-      ["calculation-run", tenant, caseId, run().id],
-      { ...run(), completedAt: new Date("2026-07-13T13:00:00Z") },
-    );
+    queryClient.setQueryData(["calculation-run", tenant, caseId, run().id], {
+      ...run(),
+      completedAt: new Date("2026-07-13T13:00:00Z"),
+    });
 
     await waitFor(() =>
       expect(screen.getByText("$4,550.00")).toBeInTheDocument(),
@@ -231,13 +231,52 @@ describe("CalculationsTab", () => {
       screen.getByText("Archived scenario · read only"),
     ).toBeInTheDocument();
     expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, caseId, true);
-    expect(
-      screen.queryByRole("button", { name: "Run forecast" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run forecast" })).toBeEnabled();
     expect(
       screen.queryByRole("button", { name: "Rerun current inputs" }),
     ).not.toBeInTheDocument();
   });
+
+  it.each([
+    ["demo", "Mutation unavailable in demo mode", "Demo mode · read only"],
+    [
+      "retired-case",
+      "Forecast mutations unavailable for retired case",
+      "Retired case · read only",
+    ],
+  ] as const)(
+    "disables every forecast mutation for %s workspaces",
+    async (mutationDisabledReason, panelTitle, runTitle) => {
+      const user = userEvent.setup();
+      vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList([run()]));
+      const start = vi.spyOn(riskApi, "startCalculation");
+      const rerun = vi.spyOn(riskApi, "rerunCalculation");
+
+      renderWithQuery(
+        <CalculationsTab
+          tenant={tenant}
+          caseId={caseId}
+          mutationDisabled
+          mutationDisabledReason={mutationDisabledReason}
+        />,
+      );
+
+      expect(await screen.findByText(panelTitle)).toBeInTheDocument();
+      expect(await screen.findByText(runTitle)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Run forecast" }),
+      ).toBeDisabled();
+      expect(screen.getByLabelText("Forecast scenario")).toBeDisabled();
+      expect(screen.getByLabelText("Forecast periods")).toBeDisabled();
+      expect(
+        screen.queryByRole("button", { name: "Rerun current inputs" }),
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Run forecast" }));
+      expect(start).not.toHaveBeenCalled();
+      expect(rerun).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     "calculation-run-not-a-uuid-forecast-period-1",

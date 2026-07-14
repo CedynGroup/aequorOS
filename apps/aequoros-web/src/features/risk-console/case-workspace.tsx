@@ -155,7 +155,12 @@ export function CaseWorkspace({
             </TabsContent>
             <TabsContent value="calculations" className="m-0 p-3">
               <LazyTabBoundary>
-                <CalculationsTab tenant={tenant} caseId={caseId} />
+                <CalculationsTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                  mutationDisabledReason={caseRetired ? "retired-case" : "demo"}
+                />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="capital" className="m-0 p-3">

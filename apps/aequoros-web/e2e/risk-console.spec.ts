@@ -90,6 +90,7 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   request,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
+  const tracker = new RequestTracker(page);
   const console = new RiskConsolePage(page);
   await console.gotoSelectedCase("scenarios");
   const scenariosPanel = page.getByRole("tabpanel", { name: "Scenarios" });
@@ -194,13 +195,17 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
     `/cases/${northstarCase.id}?tab=scenarios#scenario-${archivedScenario.id}-assumption-${archivedAssumption.id}`,
   );
   await expect(page.getByText("Archived scenario audit mode")).toBeVisible();
-  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save details" })).toHaveCount(
-    0,
-  );
-  await expect(page.getByRole("button", { name: "Review" })).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Add assumption" }),
+    scenariosPanel.getByText("Archived", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    scenariosPanel.getByRole("button", { name: "Save details" }),
+  ).toHaveCount(0);
+  await expect(
+    scenariosPanel.getByRole("button", { name: "Review" }),
+  ).toHaveCount(0);
+  await expect(
+    scenariosPanel.getByRole("button", { name: "Add assumption" }),
   ).toHaveCount(0);
 
   await console.gotoSelectedCase("liquidity");
@@ -208,11 +213,16 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await page
     .getByRole("option", { name: "Downside liquidity copy · Archived" })
     .click();
-  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Acknowledge" })).toHaveCount(
-    0,
-  );
-  await expect(page.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
+  const liquidityPanel = page.getByRole("tabpanel", { name: "Liquidity" });
+  await expect(
+    liquidityPanel.getByText("Archived", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    liquidityPanel.getByRole("button", { name: "Acknowledge" }),
+  ).toHaveCount(0);
+  await expect(
+    liquidityPanel.getByRole("button", { name: "Dismiss" }),
+  ).toHaveCount(0);
 
   await page.goto(`/cases/${northstarCase.id}?tab=calculations`);
   await page
@@ -224,9 +234,9 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
     .click();
   await expect(page.getByText("Archived forecast audit")).toBeVisible();
   await expect(page.getByText("Archived scenario · read only")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run forecast" })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole("button", { name: "Run forecast" }),
+  ).toBeEnabled();
   await expect(
     page.getByRole("button", { name: "Rerun current inputs" }),
   ).toHaveCount(0);
@@ -234,15 +244,38 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await page.goto(
     `/cases/${northstarCase.id}?tab=calculations#calculation-run-${archivedRun.id}-forecast-period-1`,
   );
+  const forecastPanel = page.getByRole("tabpanel", { name: "Forecast" });
   await expect(page.getByText("Archived forecast audit")).toBeVisible();
-  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
+  await expect(
+    forecastPanel.getByText("Archived", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Archived scenario · read only")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run forecast" })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole("button", { name: "Run forecast" }),
+  ).toBeEnabled();
   await expect(
     page.getByRole("button", { name: "Rerun current inputs" }),
   ).toHaveCount(0);
+
+  const calculationMutationCount = () =>
+    tracker.requests.filter(
+      (tracked) =>
+        tracked.method === "POST" &&
+        tracked.url.includes(`/cases/${northstarCase.id}/calculation-runs`),
+    ).length;
+  const mutationCountBeforeDemo = calculationMutationCount();
+  await page.getByRole("button", { name: "Demo seed data" }).click();
+  await expect(
+    page.getByText("Mutation unavailable in demo mode"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Run forecast" }),
+  ).toBeDisabled();
+  await expect(page.getByText("Demo mode · read only")).toBeVisible();
+  expect(calculationMutationCount()).toBe(mutationCountBeforeDemo);
+
+  await page.reload();
+  await expect(page.getByText("Archived forecast audit")).toBeVisible();
 
   await page
     .getByLabel("Tenant org id")

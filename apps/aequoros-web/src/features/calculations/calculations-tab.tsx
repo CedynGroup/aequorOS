@@ -43,9 +43,13 @@ const runTone: Record<
 export function CalculationsTab({
   tenant,
   caseId,
+  mutationDisabled = false,
+  mutationDisabledReason = "demo",
 }: {
   tenant: TenantHeaders;
   caseId: string;
+  mutationDisabled?: boolean;
+  mutationDisabledReason?: "demo" | "retired-case";
 }) {
   const queryClient = useQueryClient();
   const deepLink = calculationDeepLink();
@@ -181,25 +185,16 @@ export function CalculationsTab({
       scenario.id ===
       (selectedRun.data?.scenarioId ?? selectedSummary?.scenarioId),
   );
+  const activeScenarios = availableScenarios.filter(
+    (scenario) => !scenario.archivedAt,
+  );
   const archivedAudit = Boolean(selectedScenario?.archivedAt);
   const hasRunHistory = Boolean(runs.data?.runs.length || selectedRunId);
   const isSubmitting = start.isPending || rerun.isPending;
 
   return (
     <div className="@container/calculations space-y-3">
-      {archivedAudit ? (
-        <Panel>
-          <PanelHeader
-            title="Archived forecast audit"
-            meta="Historical calculation evidence is preserved read only"
-            actions={<Badge tone="warning">Archived</Badge>}
-          />
-          <div className="p-3 text-sm">
-            {selectedScenario?.name} · mutation and rerun controls are
-            unavailable in audit mode.
-          </div>
-        </Panel>
-      ) : (
+      {activeScenarios.length ? (
         <Panel>
           <PanelHeader
             title="Balance-sheet forecast"
@@ -216,14 +211,13 @@ export function CalculationsTab({
                 value={activeScenarioId}
                 onValueChange={setScenarioId}
                 placeholder="Choose a scenario"
+                disabled={mutationDisabled}
               >
-                {availableScenarios
-                  .filter((scenario) => !scenario.archivedAt)
-                  .map((scenario) => (
-                    <SelectItem key={scenario.id} value={scenario.id}>
-                      {scenario.name}
-                    </SelectItem>
-                  ))}
+                {activeScenarios.map((scenario) => (
+                  <SelectItem key={scenario.id} value={scenario.id}>
+                    {scenario.name}
+                  </SelectItem>
+                ))}
               </Select>
             </div>
             <div>
@@ -235,25 +229,57 @@ export function CalculationsTab({
                 max={12}
                 step={1}
                 value={forecastPeriods}
+                disabled={mutationDisabled}
                 onChange={(event) => setForecastPeriods(event.target.value)}
               />
             </div>
             <Button
               disabled={
-                isSubmitting || !activeScenarioId || !validForecastPeriods
+                mutationDisabled ||
+                isSubmitting ||
+                !activeScenarioId ||
+                !validForecastPeriods
               }
               onClick={() => start.mutate()}
             >
               {start.isPending ? "Starting…" : "Run forecast"}
             </Button>
           </div>
+          {mutationDisabled ? (
+            <div className="px-3 pb-3">
+              {mutationDisabledReason === "retired-case" ? (
+                <Alert title="Forecast mutations unavailable for retired case">
+                  Historical forecasts remain available for review, but archived
+                  cases cannot start or rerun calculations.
+                </Alert>
+              ) : (
+                <Alert title="Mutation unavailable in demo mode">
+                  Switch to live API data to start or rerun a forecast.
+                </Alert>
+              )}
+            </div>
+          ) : null}
           {start.isError ? (
             <div className="px-3 pb-3">
               <ErrorPanel error={start.error} />
             </div>
           ) : null}
         </Panel>
-      )}
+      ) : null}
+
+      {archivedAudit ? (
+        <Panel>
+          <PanelHeader
+            title="Archived forecast audit"
+            meta="Historical calculation evidence is preserved read only"
+            actions={<Badge tone="warning">Archived</Badge>}
+          />
+          <div className="p-3 text-sm">
+            {selectedScenario?.name} · rerun controls are unavailable in audit
+            mode.
+          </div>
+        </Panel>
+      ) : null}
 
       {!hasRunHistory ? (
         <Alert title="No calculation runs">
@@ -283,7 +309,13 @@ export function CalculationsTab({
               run={selectedRun.data}
               latestSuccessfulRunId={runs.data?.latestSuccessfulRunId}
               isRerunning={rerun.isPending}
-              readOnly={archivedAudit}
+              readOnlyReason={
+                mutationDisabled
+                  ? mutationDisabledReason
+                  : archivedAudit
+                    ? "archived-scenario"
+                    : null
+              }
               onRerun={() => rerun.mutate(selectedRun.data.id)}
               onShowLatest={() =>
                 runs.data?.latestSuccessfulRunId &&
@@ -370,18 +402,19 @@ function RunOutput({
   run,
   latestSuccessfulRunId,
   isRerunning,
-  readOnly,
+  readOnlyReason,
   onRerun,
   onShowLatest,
 }: {
   run: CalculationRunRead;
   latestSuccessfulRunId?: string | null;
   isRerunning: boolean;
-  readOnly: boolean;
+  readOnlyReason: "archived-scenario" | "demo" | "retired-case" | null;
   onRerun: () => void;
   onShowLatest: () => void;
 }) {
   const running = run.status === "queued" || run.status === "running";
+  const readOnly = readOnlyReason !== null;
   return (
     <Panel>
       <PanelHeader
@@ -404,10 +437,19 @@ function RunOutput({
         }
       />
       <div className="space-y-3 p-3">
-        {readOnly ? (
+        {readOnlyReason === "archived-scenario" ? (
           <Alert title="Archived scenario · read only" tone="warning">
             This exact historical forecast is available for audit. Rerun and
             mutation controls are unavailable.
+          </Alert>
+        ) : readOnlyReason === "retired-case" ? (
+          <Alert title="Retired case · read only" tone="warning">
+            This historical forecast remains available for review. Archived
+            cases cannot rerun calculations.
+          </Alert>
+        ) : readOnlyReason === "demo" ? (
+          <Alert title="Demo mode · read only" tone="warning">
+            Switch to live API data to rerun this forecast.
           </Alert>
         ) : null}
         {running ? (
