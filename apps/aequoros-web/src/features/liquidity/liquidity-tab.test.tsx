@@ -350,6 +350,30 @@ describe("LiquidityTab", () => {
     ).toBeInTheDocument();
   });
 
+  it("formats large ratio metrics without losing precision", async () => {
+    vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(
+      summary({
+        metrics: [
+          {
+            key: "sources_coverage",
+            label: "Sources coverage",
+            value: "99999999999999999999.0000",
+            unit: "ratio",
+            periodNumber: 1,
+            periodEnd: "2027-07-13",
+            description: "Liquidity sources divided by liquidity uses.",
+          },
+        ],
+      }),
+    );
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    expect(
+      await screen.findByText("99,999,999,999,999,999,999.00x"),
+    ).toBeInTheDocument();
+  });
+
   it("selects an explicit scenario and run and scopes the summary", async () => {
     const user = userEvent.setup();
     const olderRun = run(

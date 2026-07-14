@@ -13,10 +13,34 @@ export function formatMoney(value: string, currency: string) {
     if (error instanceof RangeError) return `${currency} ${value}`;
     throw error;
   }
+  return formatDecimalParts(match, formatter);
+}
+
+export function formatDecimal(value: string, fractionDigits: number) {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
+  if (!match) return value;
+
+  return formatDecimalParts(
+    match,
+    new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }),
+  );
+}
+
+function formatDecimalParts(
+  match: RegExpExecArray,
+  formatter: Intl.NumberFormat,
+) {
   const resolvedOptions = formatter.resolvedOptions();
   const minimumFractionDigits = resolvedOptions.minimumFractionDigits ?? 0;
   const maximumFractionDigits = resolvedOptions.maximumFractionDigits ?? 2;
-  const rounded = roundDecimal(match[2], match[3] ?? "", maximumFractionDigits);
+  const rounded = roundDecimal(
+    match[2],
+    match[3] ?? "",
+    maximumFractionDigits,
+  );
   const groupedInteger = new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 0,
   }).format(BigInt(rounded.integer));

@@ -22,7 +22,7 @@ import {
   Skeleton,
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
-import { formatMoney } from "../../lib/money";
+import { formatDecimal, formatMoney } from "../../lib/money";
 import { truncateId } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { FindingReviewCard } from "../findings/finding-review-card";
@@ -484,9 +484,9 @@ function LiquidityFindingCard({
 function formatMetric(metric: LiquidityMetricRead) {
   if (metric.availability === "unavailable" || metric.value === null)
     return "Not available";
-  const value = Number(metric.value);
-  if (metric.unit === "ratio") return `${value.toFixed(2)}x`;
-  if (metric.unit === "forecast_periods") return `${value} periods`;
+  if (metric.unit === "ratio") return `${formatDecimal(metric.value, 2)}x`;
+  if (metric.unit === "forecast_periods")
+    return `${Number(metric.value)} periods`;
   return formatMoney(metric.value, metric.unit);
 }
 
