@@ -7,6 +7,7 @@ from app.features.bulk_update_cases import router as bulk_update_cases_router
 from app.features.generate_case_reports import router as case_reports_router
 from app.features.list_case_taxonomy import router as case_taxonomy_router
 from app.features.list_taxonomy import router as taxonomy_router
+from app.features.manage_capital import router as capital_router
 from app.features.manage_documents import router as documents_router
 from app.features.manage_scenarios import router as scenarios_router
 from app.features.read_financial_workspace import router as financial_workspace_router
@@ -30,6 +31,7 @@ v1_router.include_router(documents_router)
 v1_router.include_router(financial_workspace_router)
 v1_router.include_router(scenarios_router)
 v1_router.include_router(calculations_router)
+v1_router.include_router(capital_router)
 v1_router.include_router(jobs_router)
 v1_router.include_router(assessments_router)
 v1_router.include_router(findings_router)

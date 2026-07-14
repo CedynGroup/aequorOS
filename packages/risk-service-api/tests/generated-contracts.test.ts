@@ -14,6 +14,14 @@ import {
   type CalculationRunRead,
 } from "../src/models/CalculationRunRead";
 import type { CalculationRunSummaryRead } from "../src/models/CalculationRunSummaryRead";
+import {
+  CapitalProjectionCreateToJSON,
+  type CapitalProjectionCreate,
+} from "../src/models/CapitalProjectionCreate";
+import {
+  CapitalProjectionReadFromJSON,
+  CapitalProjectionReadToJSON,
+} from "../src/models/CapitalProjectionRead";
 import type { FinancialAccountUpdate } from "../src/models/FinancialAccountUpdate";
 import {
   FinancialAmount,
@@ -129,6 +137,42 @@ const calculationReadWithoutTiming = CalculationRunReadFromJSON({
   completed_at: null,
   started_at: null,
 });
+const capitalCreateSerialized = CapitalProjectionCreateToJSON({
+  calculationRunId: "0198c7de-95bf-7000-8000-000000000004",
+} satisfies CapitalProjectionCreate) as unknown as Record<string, unknown>;
+const capitalRead = CapitalProjectionReadFromJSON({
+  id: "0198c7de-95bf-7000-8000-000000000010",
+  organization_id: "0198c7de-95bf-7000-8000-000000000005",
+  case_id: "0198c7de-95bf-7000-8000-000000000002",
+  scenario_id: "0198c7de-95bf-7000-8000-000000000001",
+  calculation_run_id: "0198c7de-95bf-7000-8000-000000000004",
+  status: "succeeded",
+  engine_version: "capital-projection-v1.0.0",
+  input_hash: "a".repeat(64),
+  started_at: "2026-07-12T14:30:00.000Z",
+  completed_at: "2026-07-12T15:30:00.000Z",
+  error: null,
+  indicators: [
+    {
+      id: "0198c7de-95bf-7000-8000-000000000011",
+      forecast_period_id: "0198c7de-95bf-7000-8000-000000000012",
+      period_number: 1,
+      equity: "125.0000",
+      equity_to_assets_ratio: "0.12500000",
+      liabilities_to_assets_ratio: "0.87500000",
+      equity_change: "-25.0000",
+      pressure_level: "medium",
+      evidence: { calculation_run_id: "0198c7de-95bf-7000-8000-000000000004" },
+    },
+  ],
+  findings: [],
+  created_by: "0198c7de-95bf-7000-8000-000000000003",
+  created_at: "2026-07-12T14:30:00.000Z",
+  updated_at: "2026-07-12T15:30:00.000Z",
+});
+const capitalReadSerialized = CapitalProjectionReadToJSON(
+  capitalRead,
+) as unknown as Record<string, unknown>;
 
 assert(
   serialized.account_id === payload.accountId,
@@ -187,6 +231,24 @@ assert(
   calculationReadWithoutTiming.startedAt === null &&
     calculationReadWithoutTiming.completedAt === null,
   "nullable calculation timestamps were not preserved",
+);
+assert(
+  capitalCreateSerialized.calculation_run_id ===
+    "0198c7de-95bf-7000-8000-000000000004",
+  "capital calculation run ID was not serialized",
+);
+assert(
+  capitalRead.indicators[0]?.equityToAssetsRatio === "0.12500000",
+  "capital indicator ratio was not decoded",
+);
+assert(
+  capitalRead.indicators[0]?.evidence.calculation_run_id ===
+    capitalRead.calculationRunId,
+  "capital evidence traceability was not decoded",
+);
+assert(
+  capitalReadSerialized.calculation_run_id === capitalRead.calculationRunId,
+  "capital projection was not serialized with snake-case run ID",
 );
 
 function assert(condition: boolean, message: string): asserts condition {

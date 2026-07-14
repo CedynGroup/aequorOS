@@ -448,3 +448,36 @@ def test_postgres_migrations_create_calculation_tables_indexes_and_rls(
         "uq_calculation_forecast_run_period",
     }
     assert migrated_postgres_schema.constraints(constraints) == constraints
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_postgres_migrations_create_capital_tables_indexes_and_rls(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    tables = {
+        "capital_projections",
+        "capital_indicators",
+        "capital_projection_findings",
+    }
+    assert migrated_postgres_schema.tables(tables) == tables
+    indexes = {
+        "ix_capital_projections_case_scenario",
+        "ix_capital_indicators_projection",
+        "ix_capital_projection_findings_projection",
+    }
+    assert migrated_postgres_schema.indexes(indexes) == indexes
+    assert migrated_postgres_schema.policies(tables) == {
+        f"{table}_tenant_isolation" for table in tables
+    }
+    constraints = {
+        "ck_capital_projections_status",
+        "ck_capital_indicators_period_number",
+        "ck_capital_indicators_pressure_level",
+        "uq_capital_projections_id_org_case",
+        "uq_capital_indicator_projection_period",
+        "uq_capital_projection_finding",
+    }
+    assert migrated_postgres_schema.constraints(constraints) == constraints
