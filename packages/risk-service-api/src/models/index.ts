@@ -30,6 +30,7 @@ export * from "./CapitalIndicatorRead";
 export * from "./CapitalPressureLevel";
 export * from "./CapitalProjectionCreate";
 export * from "./CapitalProjectionErrorRead";
+export * from "./CapitalProjectionListRead";
 export * from "./CapitalProjectionRead";
 export * from "./CapitalProjectionReadError";
 export * from "./CapitalProjectionStatus";

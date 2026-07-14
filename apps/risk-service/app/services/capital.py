@@ -5,7 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -26,6 +26,7 @@ from app.schemas.capital import (
     CapitalIndicatorRead,
     CapitalProjectionCreate,
     CapitalProjectionErrorRead,
+    CapitalProjectionListRead,
     CapitalProjectionRead,
     CapitalSummaryRead,
 )
@@ -174,6 +175,39 @@ def get_projection(
     return _read_projection(db, ctx, projection)
 
 
+def list_projections(
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    *,
+    limit: int = 25,
+    offset: int = 0,
+) -> CapitalProjectionListRead:
+    get_case_or_404(db, ctx.organization_id, case_id)
+    conditions = (
+        CapitalProjection.organization_id == ctx.organization_id,
+        CapitalProjection.case_id == case_id,
+    )
+    total = db.scalar(select(func.count()).select_from(CapitalProjection).where(*conditions)) or 0
+    projections = list(
+        db.scalars(
+            select(CapitalProjection)
+            .where(*conditions)
+            .order_by(CapitalProjection.created_at.desc(), CapitalProjection.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    )
+    return CapitalProjectionListRead(
+        case_id=case_id,
+        projections=[_read_projection(db, ctx, projection) for projection in projections],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(projections) < total,
+    )
+
+
 def get_summary(
     db: Session, ctx: TenantContext, case_id: UUID, scenario_id: UUID | None
 ) -> CapitalSummaryRead:
@@ -251,9 +285,14 @@ def get_comparison(db: Session, ctx: TenantContext, case_id: UUID) -> CapitalCom
 
 def _opening_equity(period: CalculationForecastPeriod) -> Decimal:
     try:
-        return Decimal(period.components["opening_assets"]) - Decimal(
-            period.components["opening_liabilities"]
-        )
+        opening_assets = Decimal(period.components["opening_assets"])
+        opening_liabilities = Decimal(period.components["opening_liabilities"])
+        opening_equity = opening_assets - opening_liabilities
+        if not all(
+            value.is_finite() for value in (opening_assets, opening_liabilities, opening_equity)
+        ):
+            raise InvalidOperation
+        return opening_equity
     except (InvalidOperation, KeyError, TypeError, ValueError) as exc:
         raise CapitalInputError(
             "forecast_evidence_missing",
@@ -311,6 +350,7 @@ def _persist_findings(
     run: CalculationRun,
     indicators: list[CapitalIndicator],
 ) -> None:
+    _supersede_prior_findings(db, ctx, projection)
     worst = min(indicators, key=lambda item: item.equity_to_assets_ratio)
     final = indicators[-1]
     candidates: list[tuple[str, str, str, str, CapitalIndicator]] = []
@@ -395,6 +435,50 @@ def _persist_findings(
             entity_type="risk_finding",
             entity_id=finding.id,
             details={"capital_projection_id": str(projection.id), "rule_id": rule_id},
+        )
+
+
+def _supersede_prior_findings(
+    db: Session, ctx: TenantContext, projection: CapitalProjection
+) -> None:
+    prior_findings = list(
+        db.scalars(
+            select(RiskFinding)
+            .join(
+                CapitalProjectionFinding,
+                CapitalProjectionFinding.finding_id == RiskFinding.id,
+            )
+            .join(
+                CapitalProjection,
+                CapitalProjection.id == CapitalProjectionFinding.projection_id,
+            )
+            .where(
+                RiskFinding.organization_id == ctx.organization_id,
+                RiskFinding.case_id == projection.case_id,
+                RiskFinding.status.in_({"open", "needs_review"}),
+                CapitalProjectionFinding.organization_id == ctx.organization_id,
+                CapitalProjection.organization_id == ctx.organization_id,
+                CapitalProjection.scenario_id == projection.scenario_id,
+                CapitalProjection.id != projection.id,
+            )
+        )
+    )
+    for finding in prior_findings:
+        finding.status = "superseded"
+        finding.disposition_reason = (
+            f"Superseded by capital projection {projection.id}."
+        )
+        finding.details = {
+            **finding.details,
+            "superseded_by_capital_projection_id": str(projection.id),
+        }
+        record_event(
+            db,
+            ctx,
+            event_type="capital_finding.superseded",
+            entity_type="risk_finding",
+            entity_id=finding.id,
+            details={"capital_projection_id": str(projection.id)},
         )
 
 

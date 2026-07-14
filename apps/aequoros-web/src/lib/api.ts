@@ -26,6 +26,8 @@ import {
   CapitalComparisonReadFromJSON,
   type CapitalProjectionCreate,
   CapitalProjectionCreateToJSON,
+  type CapitalProjectionListRead,
+  CapitalProjectionListReadFromJSON,
   type CapitalProjectionRead,
   CapitalProjectionReadFromJSON,
   type CapitalSummaryRead,
@@ -283,6 +285,18 @@ export const riskApi = {
       `/cases/${caseId}/capital-summary${toQuery({ scenario_id: scenarioId })}`,
       tenant,
       CapitalSummaryReadFromJSON,
+    );
+  },
+  capitalProjections(
+    tenant: TenantHeaders,
+    caseId: string,
+    limit = 25,
+    offset = 0,
+  ) {
+    return apiJson<CapitalProjectionListRead>(
+      `/cases/${caseId}/capital-projections${toQuery({ limit, offset })}`,
+      tenant,
+      CapitalProjectionListReadFromJSON,
     );
   },
   capitalComparison(tenant: TenantHeaders, caseId: string) {

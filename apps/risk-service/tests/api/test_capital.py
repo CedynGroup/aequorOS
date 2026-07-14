@@ -291,3 +291,109 @@ def test_capital_projection_persists_invalid_opening_balance_diagnostic(
     )
     assert persisted.status_code == 200
     assert persisted.json()["error"] == failed["error"]
+
+
+def test_capital_projection_history_persists_failures_and_is_tenant_scoped(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenarios(db_client, case.id)[0]
+    _financial_inputs(case.id)
+    run = _forecast(db_client, case.id, scenario["id"])
+    with get_sessionmaker()() as session:
+        period = session.scalar(
+            select(CalculationForecastPeriod).where(
+                CalculationForecastPeriod.run_id == UUID(run["id"])
+            )
+        )
+        assert period is not None
+        period.components = {**period.components, "opening_assets": "NaN"}
+        session.commit()
+
+    failed = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": run["id"]},
+    ).json()
+    assert failed["status"] == "failed"
+    assert failed["error"]["code"] == "forecast_evidence_missing"
+
+    history = db_client.get(
+        f"/api/v1/cases/{case.id}/capital-projections?limit=1&offset=0",
+        headers=headers(),
+    )
+    assert history.status_code == 200
+    body = history.json()
+    assert body["case_id"] == str(case.id)
+    assert body["total"] == 1
+    assert body["limit"] == 1
+    assert body["offset"] == 0
+    assert body["has_more"] is False
+    assert body["projections"][0]["id"] == failed["id"]
+    assert body["projections"][0]["error"] == failed["error"]
+    assert (
+        db_client.get(
+            f"/api/v1/cases/{case.id}/capital-projections", headers=headers(ORG_2)
+        ).status_code
+        == 404
+    )
+
+
+def test_capital_rerun_supersedes_only_unreviewed_findings_for_same_scenario(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenarios = _ready_scenarios(db_client, case.id)
+    scenario = scenarios[0]
+    _financial_inputs(case.id)
+    run = _forecast(db_client, case.id, scenario["id"])
+    other_run = _forecast(db_client, case.id, scenarios[1]["id"])
+    other = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": other_run["id"]},
+    ).json()
+    other_finding_id = UUID(other["findings"][0]["finding"]["id"])
+
+    first = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": run["id"]},
+    ).json()
+    first_finding_ids = [UUID(item["finding"]["id"]) for item in first["findings"]]
+    assert first_finding_ids
+
+    second = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": run["id"]},
+    ).json()
+    assert second["status"] == "succeeded"
+    second_finding_id = UUID(second["findings"][0]["finding"]["id"])
+
+    with get_sessionmaker()() as session:
+        prior = list(
+            session.scalars(select(RiskFinding).where(RiskFinding.id.in_(first_finding_ids)))
+        )
+        for finding in prior:
+            assert finding.status == "superseded"
+            assert finding.details["superseded_by_capital_projection_id"] == second["id"]
+        reviewed = session.get(RiskFinding, second_finding_id)
+        assert reviewed is not None
+        reviewed.status = "acknowledged"
+        other_finding = session.get(RiskFinding, other_finding_id)
+        assert other_finding is not None
+        assert other_finding.status == "needs_review"
+        session.commit()
+
+    third = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": run["id"]},
+    ).json()
+    assert third["status"] == "succeeded"
+    with get_sessionmaker()() as session:
+        reviewed = session.get(RiskFinding, second_finding_id)
+        assert reviewed is not None
+        assert reviewed.status == "acknowledged"
+        assert "superseded_by_capital_projection_id" not in reviewed.details

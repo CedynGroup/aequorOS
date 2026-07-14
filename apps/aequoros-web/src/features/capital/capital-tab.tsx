@@ -1,4 +1,6 @@
 import type {
+  CalculationRunRead,
+  CalculationRunSummaryRead,
   CapitalComparisonRead,
   CapitalProjectionRead,
 } from "@aequoros/risk-service-api";
@@ -43,8 +45,8 @@ export function CapitalTab({
 }) {
   const queryClient = useQueryClient();
   const [runId, setRunId] = useState("");
-  const [failedProjection, setFailedProjection] =
-    useState<CapitalProjectionRead | null>(null);
+  const [attemptOffset, setAttemptOffset] = useState(0);
+  const [projectionId, setProjectionId] = useState("");
   const scenarios = useQuery({
     queryKey: ["scenarios", tenant, caseId, "capital"],
     queryFn: () => riskApi.scenarios(tenant, caseId, true),
@@ -52,6 +54,28 @@ export function CapitalTab({
   const runs = useQuery({
     queryKey: ["calculation-runs", tenant, caseId, "capital"],
     queryFn: () => riskApi.calculationRuns(tenant, caseId, undefined, 100, 0),
+  });
+  const latestSuccessfulRunId = runs.data?.latestSuccessfulRunId;
+  const latestRunMissing = Boolean(
+    latestSuccessfulRunId &&
+    !runs.data?.runs.some((run) => run.id === latestSuccessfulRunId),
+  );
+  const latestRun = useQuery({
+    queryKey: [
+      "calculation-run",
+      tenant,
+      caseId,
+      "capital-latest-successful",
+      latestSuccessfulRunId,
+    ],
+    queryFn: () =>
+      riskApi.calculationRun(tenant, caseId, latestSuccessfulRunId ?? ""),
+    enabled: latestRunMissing,
+  });
+  const attempts = useQuery({
+    queryKey: ["capital-projections", tenant, caseId, attemptOffset],
+    queryFn: () =>
+      riskApi.capitalProjections(tenant, caseId, 25, attemptOffset),
   });
   const summary = useQuery({
     queryKey: ["capital-summary", tenant, caseId],
@@ -61,10 +85,17 @@ export function CapitalTab({
     queryKey: ["capital-comparison", tenant, caseId],
     queryFn: () => riskApi.capitalComparison(tenant, caseId),
   });
-  const successfulRuns = useMemo(
-    () => runs.data?.runs.filter((run) => run.status === "succeeded") ?? [],
-    [runs.data],
-  );
+  const successfulRuns = useMemo(() => {
+    const page =
+      runs.data?.runs.filter((run) => run.status === "succeeded") ?? [];
+    if (
+      latestRun.data?.status === "succeeded" &&
+      !page.some((run) => run.id === latestRun.data?.id)
+    ) {
+      return [latestRun.data, ...page];
+    }
+    return page;
+  }, [latestRun.data, runs.data]);
   const scenariosById = useMemo(
     () =>
       new Map(
@@ -75,8 +106,17 @@ export function CapitalTab({
   );
 
   useEffect(() => {
-    setFailedProjection(null);
+    setAttemptOffset(0);
+    setProjectionId("");
   }, [caseId, tenant.orgId]);
+
+  useEffect(() => {
+    setProjectionId((current) =>
+      attempts.data?.projections.some((projection) => projection.id === current)
+        ? current
+        : (attempts.data?.projections[0]?.id ?? ""),
+    );
+  }, [attempts.data]);
 
   useEffect(() => {
     setRunId((current) =>
@@ -92,8 +132,10 @@ export function CapitalTab({
         calculationRunId: runId,
       }),
     onSuccess: async (projection) => {
-      setFailedProjection(projection.status === "failed" ? projection : null);
+      setAttemptOffset(0);
+      setProjectionId(projection.id);
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["capital-projections"] }),
         queryClient.invalidateQueries({ queryKey: ["capital-summary"] }),
         queryClient.invalidateQueries({ queryKey: ["capital-comparison"] }),
         queryClient.invalidateQueries({ queryKey: ["findings"] }),
@@ -109,6 +151,8 @@ export function CapitalTab({
   if (
     scenarios.isLoading ||
     runs.isLoading ||
+    latestRun.isLoading ||
+    attempts.isLoading ||
     summary.isLoading ||
     comparison.isLoading
   ) {
@@ -116,11 +160,14 @@ export function CapitalTab({
   }
   if (scenarios.isError) return <ErrorPanel error={scenarios.error} />;
   if (runs.isError) return <ErrorPanel error={runs.error} />;
+  if (latestRun.isError) return <ErrorPanel error={latestRun.error} />;
+  if (attempts.isError) return <ErrorPanel error={attempts.error} />;
   if (summary.isError) return <ErrorPanel error={summary.error} />;
   if (comparison.isError) return <ErrorPanel error={comparison.error} />;
 
   const projection =
-    failedProjection ??
+    attempts.data?.projections.find((attempt) => attempt.id === projectionId) ??
+    (create.data?.id === projectionId ? create.data : undefined) ??
     (summary.data?.projection as Projection | null | undefined);
 
   return (
@@ -178,6 +225,53 @@ export function CapitalTab({
           </div>
         ) : null}
       </Panel>
+
+      {attempts.data?.projections.length ? (
+        <Panel>
+          <PanelHeader
+            title="Projection attempt history"
+            meta={`${attempts.data.total} immutable attempt${attempts.data.total === 1 ? "" : "s"}`}
+          />
+          <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <div>
+              <Label>Projection attempt</Label>
+              <Select
+                ariaLabel="Capital projection attempt"
+                value={projectionId}
+                onValueChange={setProjectionId}
+                placeholder="Choose a projection attempt"
+              >
+                {attempts.data.projections.map((attempt) => (
+                  <SelectItem key={attempt.id} value={attempt.id}>
+                    {attemptLabel(
+                      attempt,
+                      scenariosById.get(attempt.scenarioId),
+                    )}
+                  </SelectItem>
+                ))}
+              </Select>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                disabled={attemptOffset === 0}
+                onClick={() =>
+                  setAttemptOffset(Math.max(0, attemptOffset - 25))
+                }
+              >
+                Newer
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!attempts.data.hasMore}
+                onClick={() => setAttemptOffset(attemptOffset + 25)}
+              >
+                Older
+              </Button>
+            </div>
+          </div>
+        </Panel>
+      ) : null}
 
       {!projection ? (
         <Alert title="No capital projection">
@@ -366,13 +460,26 @@ function CapitalFindings({
 }
 
 function runLabel(
-  run: { id: string; scenarioId: string; createdAt: Date },
+  run: Pick<
+    CalculationRunSummaryRead | CalculationRunRead,
+    "id" | "scenarioId" | "createdAt"
+  >,
   scenario?: { name: string; scenarioType: string },
 ) {
   const scenarioLabel = scenario
     ? `${scenario.name} (${labelize(scenario.scenarioType)})`
     : `Unknown scenario ${truncateId(run.scenarioId)}`;
   return `${scenarioLabel} · ${run.createdAt.toLocaleString()} · ${truncateId(run.id)}`;
+}
+
+function attemptLabel(
+  attempt: CapitalProjectionRead,
+  scenario?: { name: string; scenarioType: string },
+) {
+  const scenarioLabel = scenario
+    ? `${scenario.name} (${labelize(scenario.scenarioType)})`
+    : `Unknown scenario ${truncateId(attempt.scenarioId)}`;
+  return `${labelize(attempt.status)} · ${scenarioLabel} · ${attempt.createdAt.toLocaleString()}`;
 }
 
 function money(value: string | number) {

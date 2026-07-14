@@ -1,6 +1,7 @@
 import type {
   CalculationRunListRead,
   CapitalComparisonRead,
+  CapitalProjectionListRead,
   CapitalProjectionRead,
   CapitalSummaryRead,
   ScenarioWorkspaceRead,
@@ -190,11 +191,25 @@ function comparison(
   } as unknown as CapitalComparisonRead;
 }
 
+function attempts(
+  values: CapitalProjectionRead[] = [],
+): CapitalProjectionListRead {
+  return {
+    caseId,
+    projections: values,
+    total: values.length,
+    limit: 25,
+    offset: 0,
+    hasMore: false,
+  };
+}
+
 describe("CapitalTab", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(riskApi, "scenarios").mockResolvedValue(scenarioWorkspace());
     vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+    vi.spyOn(riskApi, "capitalProjections").mockResolvedValue(attempts());
     vi.spyOn(riskApi, "capitalSummary").mockResolvedValue(summary(null));
     vi.spyOn(riskApi, "capitalComparison").mockResolvedValue(comparison(null));
   });
@@ -285,6 +300,50 @@ describe("CapitalTab", () => {
     expect(
       screen.queryByText("Projected capital indicators"),
     ).not.toBeInTheDocument();
+  });
+
+  it("restores failed diagnostics from immutable attempt history", async () => {
+    vi.mocked(riskApi.capitalProjections).mockResolvedValue(
+      attempts([failedProjection(), projection()]),
+    );
+    vi.mocked(riskApi.capitalSummary).mockResolvedValue(summary(projection()));
+
+    renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("Opening balance evidence is invalid"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Capital projection attempt" }),
+    ).toHaveTextContent("Failed");
+  });
+
+  it("fetches the latest successful run when it is outside the first page", async () => {
+    const failedRun = {
+      ...runList().runs[0],
+      id: "failed-run",
+      status: "failed" as const,
+    };
+    vi.mocked(riskApi.calculationRuns).mockResolvedValue({
+      ...runList(),
+      runs: [failedRun],
+      total: 101,
+      hasMore: true,
+    });
+    const calculationRun = vi
+      .spyOn(riskApi, "calculationRun")
+      .mockResolvedValue({
+        ...runList().runs[0],
+        inputSnapshot: {},
+        periods: [],
+      } as never);
+
+    renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByRole("combobox", { name: "Capital forecast run" }),
+    ).toHaveTextContent("Operating baseline (Baseline)");
+    expect(calculationRun).toHaveBeenCalledWith(tenant, caseId, runId);
   });
 
   it("shows read errors and disables mutations in demo mode", async () => {

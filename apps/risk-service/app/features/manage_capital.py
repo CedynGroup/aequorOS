@@ -9,12 +9,27 @@ from app.api.deps import DbSession, MutationTenant, Tenant
 from app.schemas.capital import (
     CapitalComparisonRead,
     CapitalProjectionCreate,
+    CapitalProjectionListRead,
     CapitalProjectionRead,
     CapitalSummaryRead,
 )
 from app.services import capital
 
 router = APIRouter(tags=["capital"])
+
+
+@router.get(
+    "/cases/{case_id}/capital-projections",
+    response_model=CapitalProjectionListRead,
+)
+def list_capital_projections(
+    case_id: UUID,
+    db: DbSession,
+    ctx: Tenant,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CapitalProjectionListRead:
+    return capital.list_projections(db, ctx, case_id, limit=limit, offset=offset)
 
 
 @router.post(

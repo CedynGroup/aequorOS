@@ -16,6 +16,7 @@ import * as runtime from "../runtime";
 import type {
   CapitalComparisonRead,
   CapitalProjectionCreate,
+  CapitalProjectionListRead,
   CapitalProjectionRead,
   CapitalSummaryRead,
   ErrorResponse,
@@ -25,6 +26,8 @@ import {
   CapitalComparisonReadToJSON,
   CapitalProjectionCreateFromJSON,
   CapitalProjectionCreateToJSON,
+  CapitalProjectionListReadFromJSON,
+  CapitalProjectionListReadToJSON,
   CapitalProjectionReadFromJSON,
   CapitalProjectionReadToJSON,
   CapitalSummaryReadFromJSON,
@@ -57,6 +60,14 @@ export interface GetCapitalSummaryRequest {
   caseId: string;
   xOrgId: string;
   scenarioId?: string | null;
+  xUserId?: string | null;
+}
+
+export interface ListCapitalProjectionsRequest {
+  caseId: string;
+  xOrgId: string;
+  limit?: number;
+  offset?: number;
   xUserId?: string | null;
 }
 
@@ -353,6 +364,79 @@ export class CapitalApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<CapitalSummaryRead> {
     const response = await this.getCapitalSummaryRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * List Capital Projections
+   */
+  async listCapitalProjectionsRaw(
+    requestParameters: ListCapitalProjectionsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<CapitalProjectionListRead>> {
+    if (requestParameters["caseId"] == null) {
+      throw new runtime.RequiredError(
+        "caseId",
+        'Required parameter "caseId" was null or undefined when calling listCapitalProjections().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling listCapitalProjections().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["limit"] != null) {
+      queryParameters["limit"] = requestParameters["limit"];
+    }
+
+    if (requestParameters["offset"] != null) {
+      queryParameters["offset"] = requestParameters["offset"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/cases/{case_id}/capital-projections`.replace(
+          `{${"case_id"}}`,
+          encodeURIComponent(String(requestParameters["caseId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      CapitalProjectionListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * List Capital Projections
+   */
+  async listCapitalProjections(
+    requestParameters: ListCapitalProjectionsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<CapitalProjectionListRead> {
+    const response = await this.listCapitalProjectionsRaw(
       requestParameters,
       initOverrides,
     );
