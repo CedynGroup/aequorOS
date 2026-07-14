@@ -4288,6 +4288,17 @@
             ],
             "title": "Edited By"
           },
+          "edited_by_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited By Display Name"
+          },
           "field_name": {
             "title": "Field Name",
             "type": "string"

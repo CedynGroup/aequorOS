@@ -1,4 +1,5 @@
 import type {
+  FinancialAccountMutationResponse,
   FinancialCashFlowMutationResponse,
   FinancialDataWorkspaceRead,
   FinancialInstitutionMutationResponse,
@@ -129,6 +130,106 @@ function workspace(): FinancialDataWorkspaceRead {
     ],
     validationSummary: { error: 0, info: 0, total: 1, warning: 1 },
   };
+}
+
+function workspaceWithRelationships(): FinancialDataWorkspaceRead {
+  const data = workspace();
+  const now = new Date("2026-07-13T12:00:00Z");
+  data.accounts = [
+    {
+      id: "account-1",
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      accountName: "Operating Account",
+      accountNumber: null,
+      accountType: "operating",
+      currency: "GHS",
+      institutionId: "institution-1",
+      status: "active",
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  data.reportingPeriods = [
+    {
+      id: "period-1",
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      label: "Q2 2026",
+      periodType: "quarter",
+      startDate: new Date("2026-04-01T00:00:00Z"),
+      endDate: new Date("2026-06-30T00:00:00Z"),
+      asOfDate: null,
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  data.balances = [
+    {
+      id: "balance-1",
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      accountId: "account-1",
+      reportingPeriodId: "period-1",
+      balanceType: "cash",
+      amount: "1250.00",
+      currency: "GHS",
+      asOfDate: new Date("2026-06-30T00:00:00Z"),
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  data.cashFlows[0] = {
+    ...data.cashFlows[0],
+    accountId: "account-1",
+    reportingPeriodId: "period-1",
+  };
+  data.obligations = [
+    {
+      id: "obligation-1",
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      accountId: "account-1",
+      institutionId: "institution-1",
+      reportingPeriodId: "period-1",
+      obligationType: "loan",
+      facilityType: "term_loan",
+      principalAmount: "5000.00",
+      outstandingAmount: "4000.00",
+      currency: "GHS",
+      startDate: new Date("2026-01-01T00:00:00Z"),
+      maturityDate: new Date("2027-01-01T00:00:00Z"),
+      interestRate: "0.12",
+      status: "active",
+      details: {},
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  data.covenants = [
+    {
+      id: "covenant-1",
+      organizationId: tenant.orgId,
+      caseId: "case-1",
+      obligationId: "obligation-1",
+      reportingPeriodId: "period-1",
+      name: "Minimum liquidity",
+      metric: "current_ratio",
+      operator: "gte",
+      threshold: "1.2",
+      actualValue: "1.4",
+      complianceStatus: "compliant",
+      sourceRecord: {},
+      reportingContext: {},
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  return data;
 }
 
 function validation(issueCount = 0) {
@@ -264,7 +365,7 @@ describe("FinancialSections", () => {
     await user.click(screen.getByRole("button", { name: "Add account" }));
     const accountForm = screen.getByRole("form", { name: "Add account" });
     expect(
-      within(accountForm)
+      within(within(accountForm).getByLabelText("Status"))
         .getAllByRole("option")
         .map((option) => option.getAttribute("value")),
     ).toEqual(["", "active", "inactive", "closed", "unknown"]);
@@ -274,7 +375,7 @@ describe("FinancialSections", () => {
       name: "Add obligation",
     });
     expect(
-      within(obligationForm)
+      within(within(obligationForm).getByLabelText("Status"))
         .getAllByRole("option")
         .map((option) => option.getAttribute("value")),
     ).toEqual([
@@ -415,6 +516,123 @@ describe("FinancialSections", () => {
     expect(screen.getByText(/Saved cash flow correction/)).toBeInTheDocument();
   });
 
+  it("uses named relationship selectors on every update form", async () => {
+    const user = userEvent.setup();
+    render(
+      <FinancialSections
+        workspace={workspaceWithRelationships()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client()}
+      />,
+    );
+
+    const expectations = [
+      ["financial_accounts", { Institution: "Northstar Bank" }],
+      [
+        "financial_balances",
+        { Account: "Operating Account", "Reporting period": "Q2 2026" },
+      ],
+      [
+        "financial_cash_flows",
+        { Account: "Operating Account", "Reporting period": "Q2 2026" },
+      ],
+      [
+        "financial_obligations",
+        {
+          Institution: "Northstar Bank",
+          Account: "Operating Account",
+          "Reporting period": "Q2 2026",
+        },
+      ],
+      [
+        "financial_covenants",
+        { Obligation: "Term Loan", "Reporting period": "Q2 2026" },
+      ],
+    ] as const;
+
+    for (const [table, relationships] of expectations) {
+      const section = document.getElementById(`financial-section-${table}`)!;
+      await user.click(within(section).getByRole("button", { name: "Edit" }));
+      const form = within(section).getByRole("form");
+      for (const [label, option] of Object.entries(relationships)) {
+        const selector = within(form).getByRole("combobox", { name: label });
+        expect(
+          within(selector).getByRole("option", { name: option }),
+        ).toBeInTheDocument();
+      }
+    }
+
+    expect(screen.queryByText("Linked record")).not.toBeInTheDocument();
+    for (const id of [
+      "institution-1",
+      "account-1",
+      "period-1",
+      "obligation-1",
+    ]) {
+      expect(screen.queryByText(id)).not.toBeInTheDocument();
+    }
+  });
+
+  it("submits relationship corrections from a named selector", async () => {
+    const user = userEvent.setup();
+    const data = workspaceWithRelationships();
+    data.institutions.push({
+      ...data.institutions[0],
+      id: "institution-2",
+      name: "Eastshore Bank",
+      referenceCode: "ESB",
+    });
+    const corrected = {
+      ...data.accounts[0],
+      institutionId: "institution-2",
+    };
+    const update = vi.fn<FinancialReviewClient["update"]>().mockResolvedValue({
+      record: corrected,
+      validation: validation(),
+    } as FinancialAccountMutationResponse);
+
+    render(
+      <FinancialSections
+        workspace={data}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ update })}
+      />,
+    );
+
+    const section = document.getElementById(
+      "financial-section-financial_accounts",
+    )!;
+    await user.click(within(section).getByRole("button", { name: "Edit" }));
+    const form = within(section).getByRole("form");
+    await user.selectOptions(
+      within(form).getByRole("combobox", { name: "Institution" }),
+      "institution-2",
+    );
+    await user.type(
+      within(form).getByLabelText("Reason"),
+      "Corrected lender association",
+    );
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(update).toHaveBeenCalledWith(
+      "account",
+      tenant,
+      "case-1",
+      "account-1",
+      {
+        institutionId: "institution-2",
+        reason: "Corrected lender association",
+      },
+    );
+  });
+
   it("navigates from a validation issue to the affected field", async () => {
     const user = userEvent.setup();
     render(<FinancialSections workspace={workspace()} mocked={false} />);
@@ -495,7 +713,8 @@ describe("FinancialSections", () => {
         previousValue: "OLD",
         newValue: "NSB",
         reason: "Matched audited statement",
-        editedBy: "reviewer@example.com",
+        editedBy: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        editedByDisplayName: "Ama Mensah",
         createdAt: new Date("2026-07-13T12:00:00Z"),
       },
     ];
@@ -505,7 +724,35 @@ describe("FinancialSections", () => {
     expect(screen.getByText("Manual edit history")).toBeInTheDocument();
     expect(screen.getByText("OLD")).toBeInTheDocument();
     expect(screen.getByText("Matched audited statement")).toBeInTheDocument();
-    expect(screen.getByText("reviewer@example.com")).toBeInTheDocument();
+    expect(screen.getByText("Ama Mensah")).toBeInTheDocument();
+    expect(screen.queryByText("Demo reviewer")).not.toBeInTheDocument();
+  });
+
+  it("uses a neutral audit label when no reviewer name is resolved", () => {
+    const data = workspace();
+    data.manualEdits = [
+      {
+        id: "edit-unknown",
+        organizationId: tenant.orgId,
+        caseId: "case-1",
+        recordTable: "financial_institutions",
+        recordId: "institution-1",
+        fieldName: "reference_code",
+        previousValue: "OLD",
+        newValue: "NSB",
+        reason: "Matched audited statement",
+        editedBy: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        editedByDisplayName: null,
+        createdAt: new Date("2026-07-13T12:00:00Z"),
+      },
+    ];
+
+    render(<FinancialSections workspace={data} mocked={false} />);
+
+    expect(screen.getByText("Unknown reviewer")).toBeInTheDocument();
+    expect(
+      screen.queryByText(data.manualEdits[0].editedBy!),
+    ).not.toBeInTheDocument();
   });
 
   it("requires a reason and applies refreshed validation after an inline correction", async () => {

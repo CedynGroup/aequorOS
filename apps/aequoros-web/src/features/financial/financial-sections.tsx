@@ -64,6 +64,10 @@ type RecordCollection =
 type FinancialRecord = { id: string };
 type FormValues = Record<string, string>;
 type RecordSourceLinks = FinancialDataWorkspaceRead["recordSourceLinks"];
+type RelationshipCollection = Extract<
+  RecordCollection,
+  "institutions" | "accounts" | "reportingPeriods" | "obligations"
+>;
 
 type FieldConfig = {
   key: string;
@@ -71,6 +75,7 @@ type FieldConfig = {
   required?: boolean;
   type?: "text" | "number" | "date" | "select";
   options?: string[];
+  relationship?: RelationshipCollection;
 };
 
 type SectionConfig = {
@@ -123,7 +128,11 @@ const sections: SectionConfig[] = [
       { key: "accountType", label: "Type" },
       { key: "currency" },
       { key: "status", type: "select", options: accountStatuses },
-      { key: "institutionId", label: "Institution ID" },
+      {
+        key: "institutionId",
+        label: "Institution",
+        relationship: "institutions",
+      },
     ],
   },
   {
@@ -157,8 +166,12 @@ const sections: SectionConfig[] = [
       { key: "amount", required: true, type: "number" },
       { key: "currency" },
       { key: "asOfDate", label: "As-of date", type: "date" },
-      { key: "accountId", label: "Account ID" },
-      { key: "reportingPeriodId", label: "Reporting period ID" },
+      { key: "accountId", label: "Account", relationship: "accounts" },
+      {
+        key: "reportingPeriodId",
+        label: "Reporting period",
+        relationship: "reportingPeriods",
+      },
     ],
   },
   {
@@ -178,8 +191,12 @@ const sections: SectionConfig[] = [
         options: ["inflow", "outflow"],
       },
       { key: "category", required: true },
-      { key: "accountId", label: "Account ID" },
-      { key: "reportingPeriodId", label: "Reporting period ID" },
+      { key: "accountId", label: "Account", relationship: "accounts" },
+      {
+        key: "reportingPeriodId",
+        label: "Reporting period",
+        relationship: "reportingPeriods",
+      },
     ],
   },
   {
@@ -198,9 +215,17 @@ const sections: SectionConfig[] = [
       { key: "maturityDate", label: "Maturity", type: "date" },
       { key: "interestRate", label: "Interest rate", type: "number" },
       { key: "status", type: "select", options: obligationStatuses },
-      { key: "institutionId", label: "Institution ID" },
-      { key: "accountId", label: "Account ID" },
-      { key: "reportingPeriodId", label: "Reporting period ID" },
+      {
+        key: "institutionId",
+        label: "Institution",
+        relationship: "institutions",
+      },
+      { key: "accountId", label: "Account", relationship: "accounts" },
+      {
+        key: "reportingPeriodId",
+        label: "Reporting period",
+        relationship: "reportingPeriods",
+      },
     ],
   },
   {
@@ -226,8 +251,16 @@ const sections: SectionConfig[] = [
         type: "select",
         options: [automaticCompliance, "unknown", "compliant", "non_compliant"],
       },
-      { key: "obligationId", label: "Obligation ID" },
-      { key: "reportingPeriodId", label: "Reporting period ID" },
+      {
+        key: "obligationId",
+        label: "Obligation",
+        relationship: "obligations",
+      },
+      {
+        key: "reportingPeriodId",
+        label: "Reporting period",
+        relationship: "reportingPeriods",
+      },
     ],
   },
 ];
@@ -395,11 +428,7 @@ function ManualEditHistory({
                     {edit.reason ?? "No reason recorded"}
                   </td>
                   <td className="px-3 py-2">
-                    {edit.editedBy
-                      ? isInternalId(edit.editedBy)
-                        ? "Demo reviewer"
-                        : edit.editedBy
-                      : "Unknown"}
+                    {edit.editedByDisplayName?.trim() || "Unknown reviewer"}
                   </td>
                 </tr>
               ))}
@@ -571,6 +600,7 @@ function FinancialSection({
         <MutationForm
           mode="create"
           config={config}
+          workspace={workspace}
           tenant={tenant}
           caseId={caseId}
           client={client}
@@ -734,10 +764,12 @@ function FinancialRecordRows({
                 focusedCell === id && "bg-amber-100",
               )}
             >
-              {field.key.endsWith("Id")
-                ? (row as unknown as Record<string, unknown>)[field.key]
-                  ? "Linked record"
-                  : "None"
+              {field.relationship
+                ? relationshipLabel(
+                    workspace,
+                    field.relationship,
+                    (row as unknown as Record<string, unknown>)[field.key],
+                  )
                 : renderCell(
                     (row as unknown as Record<string, unknown>)[field.key],
                   )}
@@ -786,6 +818,7 @@ function FinancialRecordRows({
               mode="update"
               record={row}
               config={config}
+              workspace={workspace}
               onCancel={onEdit}
               onSavingChange={onSavingChange}
               submissionBlocked={submissionBlocked}
@@ -853,6 +886,7 @@ function MutationForm({
   mode,
   record,
   config,
+  workspace,
   tenant,
   caseId,
   client,
@@ -864,6 +898,7 @@ function MutationForm({
   mode: "create" | "update";
   record?: FinancialRecord;
   config: SectionConfig & { kind?: EditableFinancialKind };
+  workspace: FinancialDataWorkspaceRead;
   tenant: TenantHeaders;
   caseId: string;
   client: FinancialReviewClient;
@@ -993,14 +1028,24 @@ function MutationForm({
               {field.label ?? labelize(field.key)}
               {field.required ? " *" : ""}
             </Label>
-            {mode === "update" && field.key.endsWith("Id") ? (
-              <Input
+            {field.relationship ? (
+              <select
                 aria-label={field.label ?? labelize(field.key)}
-                value={
-                  values[field.key] ? "Linked record retained" : "Not linked"
-                }
-                readOnly
-              />
+                value={values[field.key] ?? ""}
+                onChange={(event) => updateField(field.key, event.target.value)}
+                className="h-8 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2.5 text-sm outline-none focus:border-[rgb(var(--focus))]"
+              >
+                <option value="">None</option>
+                {relationshipOptions(
+                  workspace,
+                  field.relationship,
+                  values[field.key],
+                ).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             ) : field.type === "select" ? (
               <select
                 aria-label={field.label ?? labelize(field.key)}
@@ -1360,6 +1405,63 @@ function snakeToCamel(value: string) {
 
 function cellIdentifier(table: string, recordId: string, field: string) {
   return `financial-${table}-${recordId}-${snakeToCamel(field)}`;
+}
+
+function relationshipOptions(
+  workspace: FinancialDataWorkspaceRead,
+  collection: RelationshipCollection,
+  selectedId?: string,
+) {
+  const records: FinancialRecord[] = workspace[collection];
+  const options = records.map((record) => ({
+    value: record.id,
+    label: relationshipRecordLabel(collection, record),
+  }));
+  if (selectedId && !records.some((record) => record.id === selectedId)) {
+    options.push({ value: selectedId, label: "Unavailable linked record" });
+  }
+  return options;
+}
+
+function relationshipLabel(
+  workspace: FinancialDataWorkspaceRead,
+  collection: RelationshipCollection,
+  value: unknown,
+) {
+  if (typeof value !== "string" || !value) return "None";
+  const records: FinancialRecord[] = workspace[collection];
+  const record = records.find((candidate) => candidate.id === value);
+  return record
+    ? relationshipRecordLabel(collection, record)
+    : "Unavailable linked record";
+}
+
+function relationshipRecordLabel(
+  collection: RelationshipCollection,
+  record: FinancialRecord,
+) {
+  const values = record as unknown as Record<string, unknown>;
+  switch (collection) {
+    case "institutions":
+      return inputValue(values.name) || "Unnamed institution";
+    case "accounts":
+      return inputValue(values.accountName) || "Unnamed account";
+    case "reportingPeriods":
+      return (
+        inputValue(values.label) ||
+        (values.asOfDate
+          ? `As of ${inputValue(values.asOfDate)}`
+          : values.endDate
+            ? `${labelize(inputValue(values.periodType) || "period")} ending ${inputValue(values.endDate)}`
+            : labelize(inputValue(values.periodType) || "Unnamed period"))
+      );
+    case "obligations":
+      return labelize(
+        inputValue(values.facilityType) ||
+          inputValue(values.obligationType) ||
+          "Unnamed obligation",
+      );
+  }
 }
 
 function renderCell(value: unknown) {
