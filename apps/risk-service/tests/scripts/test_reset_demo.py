@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import (
+    Organization,
     RiskAssessment,
     RiskAssessmentRun,
     RiskFinding,
@@ -15,6 +17,48 @@ from app.services.assessment_references import assessment_run_references
 from app.services.reports import report_payload
 from scripts.reset_demo import CASE_IDS, DEMO_ORG_ID, reset_demo
 from tests.api.helpers import USER_1
+
+
+def test_demo_reset_commits_once_after_all_seed_phases(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commit = db_session.commit
+    commit_count = 0
+
+    def counting_commit() -> None:
+        nonlocal commit_count
+        commit_count += 1
+        commit()
+
+    monkeypatch.setattr(db_session, "commit", counting_commit)
+
+    reset_demo(db_session)
+
+    assert commit_count == 1
+
+
+def test_demo_reset_rolls_back_to_previous_tenant_when_seeding_fails(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    previous_name = "Demo Tenant 1"
+    reset_demo(db_session)
+    organization = db_session.get(Organization, DEMO_ORG_ID)
+    assert organization is not None
+    organization.name = previous_name
+    db_session.commit()
+
+    def fail_pre_run_analyses(_session: Session) -> None:
+        raise RuntimeError("seed failure")
+
+    monkeypatch.setattr("scripts.reset_demo.pre_run_analyses", fail_pre_run_analyses)
+
+    with pytest.raises(RuntimeError, match="seed failure"):
+        reset_demo(db_session)
+
+    assert (
+        db_session.scalar(select(Organization.name).where(Organization.id == DEMO_ORG_ID))
+        == previous_name
+    )
 
 
 def test_demo_reset_seeds_score_provenance_for_every_case(db_session: Session) -> None:

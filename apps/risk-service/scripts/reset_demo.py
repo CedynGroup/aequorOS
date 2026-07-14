@@ -138,58 +138,65 @@ def database_url() -> str:
 
 
 def reset_demo(session: Session) -> None:
-    existing_name = session.scalar(select(Organization.name).where(Organization.id == DEMO_ORG_ID))
-    if existing_name is not None and existing_name not in ALLOWED_EXISTING_ORG_NAMES:
-        raise SystemExit(
-            f"Refusing to reset organization {DEMO_ORG_ID}: unexpected name {existing_name!r}."
+    try:
+        existing_name = session.scalar(
+            select(Organization.name).where(Organization.id == DEMO_ORG_ID)
         )
+        if existing_name is not None and existing_name not in ALLOWED_EXISTING_ORG_NAMES:
+            raise SystemExit(
+                f"Refusing to reset organization {DEMO_ORG_ID}: unexpected name {existing_name!r}."
+            )
 
-    tenant_tables = {
-        table.name
-        for table in Base.metadata.tables.values()
-        if table.c.get("organization_id") is not None
-    }
-    missing_tables = tenant_tables.difference(DEMO_DELETE_TABLES)
-    if missing_tables:
-        missing = ", ".join(sorted(missing_tables))
-        raise RuntimeError(f"Demo reset deletion order is missing tenant tables: {missing}")
-    for table_name in DEMO_DELETE_TABLES:
-        table = Base.metadata.tables[table_name]
-        session.execute(delete(table).where(table.c.organization_id == DEMO_ORG_ID))
-    session.execute(delete(Organization).where(Organization.id == DEMO_ORG_ID))
-    session.flush()
+        tenant_tables = {
+            table.name
+            for table in Base.metadata.tables.values()
+            if table.c.get("organization_id") is not None
+        }
+        missing_tables = tenant_tables.difference(DEMO_DELETE_TABLES)
+        if missing_tables:
+            missing = ", ".join(sorted(missing_tables))
+            raise RuntimeError(f"Demo reset deletion order is missing tenant tables: {missing}")
+        for table_name in DEMO_DELETE_TABLES:
+            table = Base.metadata.tables[table_name]
+            session.execute(delete(table).where(table.c.organization_id == DEMO_ORG_ID))
+        session.execute(delete(Organization).where(Organization.id == DEMO_ORG_ID))
+        session.flush()
 
-    core_insert(
-        session,
-        Organization(
-            id=DEMO_ORG_ID,
-            name=DEMO_ORG_NAME,
-            created_at=SEEDED_AT,
-            updated_at=SEEDED_AT,
-        ),
-    )
-    core_insert(
-        session,
-        User(
-            id=DEMO_USER_ID,
-            organization_id=DEMO_ORG_ID,
-            email="credit.officer@demo.aequoros.test",
-            display_name="Ama Mensah",
-            is_active=True,
-            created_at=SEEDED_AT,
-            updated_at=SEEDED_AT,
-        ),
-    )
-    session.flush()
+        core_insert(
+            session,
+            Organization(
+                id=DEMO_ORG_ID,
+                name=DEMO_ORG_NAME,
+                created_at=SEEDED_AT,
+                updated_at=SEEDED_AT,
+            ),
+        )
+        core_insert(
+            session,
+            User(
+                id=DEMO_USER_ID,
+                organization_id=DEMO_ORG_ID,
+                email="credit.officer@demo.aequoros.test",
+                display_name="Ama Mensah",
+                is_active=True,
+                created_at=SEEDED_AT,
+                updated_at=SEEDED_AT,
+            ),
+        )
+        session.flush()
 
-    seed_cases(session)
-    seed_score_provenance(session)
-    seed_financial_portfolio(session)
-    seed_breach_evidence(session)
-    seed_scenarios(session)
-    session.commit()
+        seed_cases(session)
+        seed_score_provenance(session)
+        seed_financial_portfolio(session)
+        seed_breach_evidence(session)
+        seed_scenarios(session)
+        session.flush()
 
-    pre_run_analyses(session)
+        pre_run_analyses(session)
+        session.commit()
+    except BaseException:
+        session.rollback()
+        raise
 
 
 def core_insert(session: Session, *rows: object) -> None:
@@ -904,11 +911,11 @@ def pre_run_analyses(session: Session) -> None:
     if not any(period.cash < 0 for period in downside.periods):
         raise RuntimeError("Liquidity downside must contain a projected cash shortfall.")
     seed_failed_run(session)
-    session.commit()
+    session.flush()
 
     concerns_by_run = [(run, seed_liquidity_analysis(session, run)) for run in runs]
     capital_by_run = [(run, seed_capital_projection(session, run)) for run in runs]
-    session.commit()
+    session.flush()
 
     seed_breach_finding(session)
     seed_manual_findings(session)
@@ -920,10 +927,10 @@ def pre_run_analyses(session: Session) -> None:
         )
     for run, indicators in capital_by_run:
         seed_capital_findings(session, run, indicators)
-    session.commit()
+    session.flush()
 
     seed_decisions(session)
-    session.commit()
+    session.flush()
 
 
 def seed_successful_run(

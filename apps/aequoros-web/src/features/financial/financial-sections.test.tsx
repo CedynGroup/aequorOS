@@ -578,6 +578,100 @@ describe("FinancialSections", () => {
     }
   });
 
+  it("disambiguates duplicate relationship names without exposing IDs", async () => {
+    const user = userEvent.setup();
+    const data = workspaceWithRelationships();
+    const institution = data.institutions[0];
+    const account = data.accounts[0];
+    const period = data.reportingPeriods[0];
+    data.institutions = [
+      institution,
+      { ...institution, id: "institution-2", referenceCode: "NSB-2" },
+    ];
+    data.accounts = [
+      { ...account, accountNumber: "00001234" },
+      {
+        ...account,
+        id: "account-2",
+        institutionId: "institution-2",
+        accountNumber: "00005678",
+      },
+    ];
+    data.reportingPeriods = [
+      period,
+      {
+        ...period,
+        id: "period-2",
+        startDate: new Date("2026-07-01T00:00:00Z"),
+        endDate: new Date("2026-09-30T00:00:00Z"),
+      },
+    ];
+
+    render(
+      <FinancialSections
+        workspace={data}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client()}
+      />,
+    );
+
+    const accountsSection = document.getElementById(
+      "financial-section-financial_accounts",
+    )!;
+    await user.click(
+      within(accountsSection).getAllByRole("button", { name: "Edit" })[0],
+    );
+    const institutionSelector = within(accountsSection).getByRole("combobox", {
+      name: "Institution",
+    });
+    expect(
+      within(institutionSelector).getByRole("option", {
+        name: "Northstar Bank - reference NSB",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(institutionSelector).getByRole("option", {
+        name: "Northstar Bank - reference NSB-2",
+      }),
+    ).toBeInTheDocument();
+
+    const balancesSection = document.getElementById(
+      "financial-section-financial_balances",
+    )!;
+    await user.click(
+      within(balancesSection).getByRole("button", { name: "Edit" }),
+    );
+    const accountSelector = within(balancesSection).getByRole("combobox", {
+      name: "Account",
+    });
+    expect(
+      within(accountSelector).getByRole("option", {
+        name: "Operating Account - account ending 1234",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(accountSelector).getByRole("option", {
+        name: "Operating Account - account ending 5678",
+      }),
+    ).toBeInTheDocument();
+
+    const periodSelector = within(balancesSection).getByRole("combobox", {
+      name: "Reporting period",
+    });
+    expect(
+      within(periodSelector).getByRole("option", {
+        name: "Q2 2026 - 2026-04-01 to 2026-06-30",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(periodSelector).getByRole("option", {
+        name: "Q2 2026 - 2026-07-01 to 2026-09-30",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("disambiguates obligation selectors with banker-readable details", async () => {
     const user = userEvent.setup();
     const data = workspaceWithRelationships();

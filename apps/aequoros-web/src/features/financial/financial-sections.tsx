@@ -1441,39 +1441,117 @@ function relationshipLabel(
 function relationshipRecordLabels(
   workspace: FinancialDataWorkspaceRead,
   collection: RelationshipCollection,
-) {
-  const records: FinancialRecord[] = workspace[collection];
-  if (collection === "obligations") {
-    return obligationRecordLabels(workspace);
-  }
-  return new Map(
-    records.map((record) => [
-      record.id,
-      relationshipRecordLabel(collection, record),
-    ]),
-  );
-}
-
-function relationshipRecordLabel(
-  collection: Exclude<RelationshipCollection, "obligations">,
-  record: FinancialRecord,
-) {
-  const values = record as unknown as Record<string, unknown>;
+): Map<string, string> {
   switch (collection) {
     case "institutions":
-      return inputValue(values.name) || "Unnamed institution";
-    case "accounts":
-      return inputValue(values.accountName) || "Unnamed account";
-    case "reportingPeriods":
-      return (
-        inputValue(values.label) ||
-        (values.asOfDate
-          ? `As of ${inputValue(values.asOfDate)}`
-          : values.endDate
-            ? `${labelize(inputValue(values.periodType) || "period")} ending ${inputValue(values.endDate)}`
-            : labelize(inputValue(values.periodType) || "Unnamed period"))
+      return collisionSafeLabels(
+        workspace.institutions.map((institution) => ({
+          id: institution.id,
+          base: institution.name || "Unnamed institution",
+          qualifiers: [
+            institution.referenceCode
+              ? `reference ${institution.referenceCode}`
+              : undefined,
+            institution.institutionType
+              ? labelize(institution.institutionType)
+              : undefined,
+          ],
+        })),
       );
+    case "accounts": {
+      const institutionLabels: Map<string, string> = relationshipRecordLabels(
+        workspace,
+        "institutions",
+      );
+      return collisionSafeLabels(
+        workspace.accounts.map((account) => {
+          const accountNumber = account.accountNumber?.replace(/\s/g, "");
+          const lastFour = accountNumber?.slice(-4);
+          return {
+            id: account.id,
+            base: account.accountName || "Unnamed account",
+            qualifiers: [
+              lastFour ? `account ending ${lastFour}` : undefined,
+              account.institutionId
+                ? `at ${institutionLabels.get(account.institutionId) ?? "unavailable institution"}`
+                : undefined,
+              account.currency ?? undefined,
+              account.accountType ? labelize(account.accountType) : undefined,
+              accountNumber ? `account number ${accountNumber}` : undefined,
+            ],
+          };
+        }),
+      );
+    }
+    case "reportingPeriods":
+      return collisionSafeLabels(
+        workspace.reportingPeriods.map((period) => {
+          const asOfDate = inputValue(period.asOfDate);
+          const startDate = inputValue(period.startDate);
+          const endDate = inputValue(period.endDate);
+          const dateContext = asOfDate
+            ? `as of ${asOfDate}`
+            : startDate && endDate
+              ? `${startDate} to ${endDate}`
+              : endDate
+                ? `ending ${endDate}`
+                : startDate
+                  ? `starting ${startDate}`
+                  : undefined;
+          return {
+            id: period.id,
+            base:
+              period.label ||
+              (asOfDate
+                ? `As of ${asOfDate}`
+                : endDate
+                  ? `${labelize(period.periodType || "period")} ending ${endDate}`
+                  : labelize(period.periodType || "Unnamed period")),
+            qualifiers: [
+              period.label ? dateContext : undefined,
+              labelize(period.periodType),
+            ],
+          };
+        }),
+      );
+    case "obligations":
+      return obligationRecordLabels(workspace);
   }
+}
+
+function collisionSafeLabels(
+  records: Array<{
+    id: string;
+    base: string;
+    qualifiers: Array<string | undefined>;
+  }>,
+) {
+  const labels = records.map(({ id, base }) => ({ id, label: base }));
+  const qualifierCount = Math.max(
+    0,
+    ...records.map(({ qualifiers }) => qualifiers.length),
+  );
+
+  for (let index = 0; index < qualifierCount; index += 1) {
+    const counts = countLabels(labels.map(({ label }) => label));
+    labels.forEach((label, recordIndex) => {
+      const qualifier = records[recordIndex].qualifiers[index];
+      if ((counts.get(label.label) ?? 0) > 1 && qualifier) {
+        label.label = `${label.label} - ${qualifier}`;
+      }
+    });
+  }
+
+  const counts = countLabels(labels.map(({ label }) => label));
+  const occurrence = new Map<string, number>();
+  return new Map(
+    labels.map(({ id, label }) => {
+      if ((counts.get(label) ?? 0) < 2) return [id, label];
+      const entry = (occurrence.get(label) ?? 0) + 1;
+      occurrence.set(label, entry);
+      return [id, `${label} - entry ${entry}`];
+    }),
+  );
 }
 
 function obligationRecordLabels(workspace: FinancialDataWorkspaceRead) {
