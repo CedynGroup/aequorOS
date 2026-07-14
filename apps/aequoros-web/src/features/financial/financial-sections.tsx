@@ -1413,9 +1413,10 @@ function relationshipOptions(
   selectedId?: string,
 ) {
   const records: FinancialRecord[] = workspace[collection];
+  const labels = relationshipRecordLabels(workspace, collection);
   const options = records.map((record) => ({
     value: record.id,
-    label: relationshipRecordLabel(collection, record),
+    label: labels.get(record.id) ?? "Unavailable linked record",
   }));
   if (selectedId && !records.some((record) => record.id === selectedId)) {
     options.push({ value: selectedId, label: "Unavailable linked record" });
@@ -1432,12 +1433,29 @@ function relationshipLabel(
   const records: FinancialRecord[] = workspace[collection];
   const record = records.find((candidate) => candidate.id === value);
   return record
-    ? relationshipRecordLabel(collection, record)
+    ? (relationshipRecordLabels(workspace, collection).get(record.id) ??
+        "Unavailable linked record")
     : "Unavailable linked record";
 }
 
-function relationshipRecordLabel(
+function relationshipRecordLabels(
+  workspace: FinancialDataWorkspaceRead,
   collection: RelationshipCollection,
+) {
+  const records: FinancialRecord[] = workspace[collection];
+  if (collection === "obligations") {
+    return obligationRecordLabels(workspace);
+  }
+  return new Map(
+    records.map((record) => [
+      record.id,
+      relationshipRecordLabel(collection, record),
+    ]),
+  );
+}
+
+function relationshipRecordLabel(
+  collection: Exclude<RelationshipCollection, "obligations">,
   record: FinancialRecord,
 ) {
   const values = record as unknown as Record<string, unknown>;
@@ -1455,13 +1473,69 @@ function relationshipRecordLabel(
             ? `${labelize(inputValue(values.periodType) || "period")} ending ${inputValue(values.endDate)}`
             : labelize(inputValue(values.periodType) || "Unnamed period"))
       );
-    case "obligations":
-      return labelize(
-        inputValue(values.facilityType) ||
-          inputValue(values.obligationType) ||
+  }
+}
+
+function obligationRecordLabels(workspace: FinancialDataWorkspaceRead) {
+  const accounts = new Map(
+    workspace.accounts.map((account) => [account.id, account]),
+  );
+  const institutions = new Map(
+    workspace.institutions.map((institution) => [institution.id, institution]),
+  );
+  const labels = workspace.obligations.map((obligation) => {
+    const details = obligation.details as Record<string, unknown>;
+    const facilityName =
+      inputValue(details.facility_name) ||
+      inputValue(details.facilityName) ||
+      labelize(
+        obligation.facilityType ||
+          obligation.obligationType ||
           "Unnamed obligation",
       );
-  }
+    const account = obligation.accountId
+      ? accounts.get(obligation.accountId)
+      : undefined;
+    const institution = obligation.institutionId
+      ? institutions.get(obligation.institutionId)
+      : undefined;
+    const linkedName = account?.accountName || institution?.name;
+    return {
+      id: obligation.id,
+      base: linkedName ? `${facilityName} - ${linkedName}` : facilityName,
+      currency: obligation.currency,
+      accountNumber: account?.accountNumber,
+    };
+  });
+
+  const baseCounts = countLabels(labels.map(({ base }) => base));
+  const withCurrency = labels.map((label) => ({
+    ...label,
+    label:
+      (baseCounts.get(label.base) ?? 0) > 1 && label.currency
+        ? `${label.base} (${label.currency})`
+        : label.base,
+  }));
+  const currencyCounts = countLabels(withCurrency.map(({ label }) => label));
+
+  return new Map(
+    withCurrency.map(({ id, label, accountNumber }) => {
+      const lastFour = accountNumber?.replace(/\s/g, "").slice(-4);
+      return [
+        id,
+        (currencyCounts.get(label) ?? 0) > 1 && lastFour
+          ? `${label} - account ending ${lastFour}`
+          : label,
+      ];
+    }),
+  );
+}
+
+function countLabels(labels: string[]) {
+  return labels.reduce((counts, label) => {
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+    return counts;
+  }, new Map<string, number>());
 }
 
 function renderCell(value: unknown) {

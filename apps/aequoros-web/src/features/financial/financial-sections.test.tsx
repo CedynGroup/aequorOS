@@ -548,7 +548,10 @@ describe("FinancialSections", () => {
       ],
       [
         "financial_covenants",
-        { Obligation: "Term Loan", "Reporting period": "Q2 2026" },
+        {
+          Obligation: "Term Loan - Operating Account",
+          "Reporting period": "Q2 2026",
+        },
       ],
     ] as const;
 
@@ -573,6 +576,66 @@ describe("FinancialSections", () => {
     ]) {
       expect(screen.queryByText(id)).not.toBeInTheDocument();
     }
+  });
+
+  it("disambiguates obligation selectors with banker-readable details", async () => {
+    const user = userEvent.setup();
+    const data = workspaceWithRelationships();
+    const account = data.accounts[0];
+    const obligation = data.obligations[0];
+    data.accounts = [
+      { ...account, accountNumber: "00001234" },
+      { ...account, id: "account-2", accountNumber: "00005678" },
+    ];
+    data.obligations = [
+      {
+        ...obligation,
+        accountId: "account-1",
+        details: { facility_name: "Working Capital Facility" },
+      },
+      {
+        ...obligation,
+        id: "obligation-2",
+        accountId: "account-2",
+        details: { facility_name: "Working Capital Facility" },
+      },
+      {
+        ...obligation,
+        id: "obligation-3",
+        accountId: "account-1",
+        currency: "USD",
+        details: { facility_name: "Working Capital Facility" },
+      },
+    ];
+
+    render(
+      <FinancialSections
+        workspace={data}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client()}
+      />,
+    );
+
+    const section = document.getElementById(
+      "financial-section-financial_covenants",
+    )!;
+    await user.click(within(section).getByRole("button", { name: "Edit" }));
+    const selector = within(section).getByRole("combobox", {
+      name: "Obligation",
+    });
+
+    for (const label of [
+      "Working Capital Facility - Operating Account (GHS) - account ending 1234",
+      "Working Capital Facility - Operating Account (GHS) - account ending 5678",
+      "Working Capital Facility - Operating Account (USD)",
+    ]) {
+      expect(
+        within(selector).getByRole("option", { name: label }),
+      ).toBeInTheDocument();
+    }
+    expect(selector).not.toHaveTextContent(/obligation-[123]/);
   });
 
   it("submits relationship corrections from a named selector", async () => {
