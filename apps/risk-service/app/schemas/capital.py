@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
@@ -11,6 +11,9 @@ from app.schemas.findings import EvidenceRead, FindingRead
 
 type CapitalProjectionStatus = Literal["queued", "running", "succeeded", "failed"]
 type CapitalPressureLevel = Literal["low", "medium", "high", "critical"]
+type CapitalComparisonBasisAttribute = Literal[
+    "as_of_date", "reporting_currency", "forecast_horizon"
+]
 
 
 class ClosedModel(BaseModel):
@@ -98,8 +101,24 @@ class CapitalComparisonPeriodRead(ClosedModel):
     equity_to_assets_ratio_delta: Decimal
 
 
+class CapitalComparisonBasisRead(ClosedModel):
+    as_of_date: date
+    reporting_currency: str
+    forecast_horizon: int
+
+
+class CapitalComparisonDiagnosticRead(ClosedModel):
+    code: Literal["comparison_basis_mismatch"]
+    message: str
+    differing_attributes: list[CapitalComparisonBasisAttribute]
+    baseline_basis: CapitalComparisonBasisRead
+    downside_basis: CapitalComparisonBasisRead
+    corrective_action: str
+
+
 class CapitalComparisonRead(ClosedModel):
     case_id: UUID
     baseline: CapitalProjectionRead | None
     downside: CapitalProjectionRead | None
     periods: list[CapitalComparisonPeriodRead]
+    diagnostic: CapitalComparisonDiagnosticRead | None

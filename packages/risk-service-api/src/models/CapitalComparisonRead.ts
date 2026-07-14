@@ -27,6 +27,13 @@ import {
   CapitalComparisonReadBaselineToJSON,
   CapitalComparisonReadBaselineToJSONTyped,
 } from "./CapitalComparisonReadBaseline";
+import type { CapitalComparisonReadDiagnostic } from "./CapitalComparisonReadDiagnostic";
+import {
+  CapitalComparisonReadDiagnosticFromJSON,
+  CapitalComparisonReadDiagnosticFromJSONTyped,
+  CapitalComparisonReadDiagnosticToJSON,
+  CapitalComparisonReadDiagnosticToJSONTyped,
+} from "./CapitalComparisonReadDiagnostic";
 
 /**
  *
@@ -46,6 +53,12 @@ export interface CapitalComparisonRead {
    * @memberof CapitalComparisonRead
    */
   caseId: string;
+  /**
+   *
+   * @type {CapitalComparisonReadDiagnostic}
+   * @memberof CapitalComparisonRead
+   */
+  diagnostic: CapitalComparisonReadDiagnostic;
   /**
    *
    * @type {CapitalComparisonReadBaseline}
@@ -68,6 +81,8 @@ export function instanceOfCapitalComparisonRead(
 ): value is CapitalComparisonRead {
   if (!("baseline" in value) || value["baseline"] === undefined) return false;
   if (!("caseId" in value) || value["caseId"] === undefined) return false;
+  if (!("diagnostic" in value) || value["diagnostic"] === undefined)
+    return false;
   if (!("downside" in value) || value["downside"] === undefined) return false;
   if (!("periods" in value) || value["periods"] === undefined) return false;
   return true;
@@ -90,6 +105,7 @@ export function CapitalComparisonReadFromJSONTyped(
     ...json,
     baseline: CapitalComparisonReadBaselineFromJSON(json["baseline"]),
     caseId: json["case_id"],
+    diagnostic: CapitalComparisonReadDiagnosticFromJSON(json["diagnostic"]),
     downside: CapitalComparisonReadBaselineFromJSON(json["downside"]),
     periods: (json["periods"] as Array<any>).map(
       CapitalComparisonPeriodReadFromJSON,
@@ -112,6 +128,7 @@ export function CapitalComparisonReadToJSONTyped(
   return {
     baseline: CapitalComparisonReadBaselineToJSON(value["baseline"]),
     case_id: value["caseId"],
+    diagnostic: CapitalComparisonReadDiagnosticToJSON(value["diagnostic"]),
     downside: CapitalComparisonReadBaselineToJSON(value["downside"]),
     periods: (value["periods"] as Array<any>).map(
       CapitalComparisonPeriodReadToJSON,

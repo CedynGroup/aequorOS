@@ -20,6 +20,9 @@ from app.models import (
     RiskScenario,
 )
 from app.schemas.capital import (
+    CapitalComparisonBasisAttribute,
+    CapitalComparisonBasisRead,
+    CapitalComparisonDiagnosticRead,
     CapitalComparisonPeriodRead,
     CapitalComparisonRead,
     CapitalFindingRead,
@@ -274,27 +277,72 @@ def get_comparison(db: Session, ctx: TenantContext, case_id: UUID) -> CapitalCom
         _read_projection(db, ctx, projections["downside"]) if projections["downside"] else None
     )
     periods: list[CapitalComparisonPeriodRead] = []
+    diagnostic: CapitalComparisonDiagnosticRead | None = None
     if baseline and downside:
-        downside_by_period = {item.period_number: item for item in downside.indicators}
-        for base in baseline.indicators:
-            down = downside_by_period.get(base.period_number)
-            if down is None:
-                continue
-            periods.append(
-                CapitalComparisonPeriodRead(
-                    period_number=base.period_number,
-                    baseline_equity=base.equity,
-                    downside_equity=down.equity,
-                    equity_delta=_money(down.equity - base.equity),
-                    baseline_equity_to_assets_ratio=base.equity_to_assets_ratio,
-                    downside_equity_to_assets_ratio=down.equity_to_assets_ratio,
-                    equity_to_assets_ratio_delta=_ratio(
-                        down.equity_to_assets_ratio - base.equity_to_assets_ratio
+        runs = {
+            run.id: run
+            for run in db.scalars(
+                select(CalculationRun).where(
+                    CalculationRun.id.in_(
+                        [baseline.calculation_run_id, downside.calculation_run_id]
                     ),
+                    CalculationRun.organization_id == ctx.organization_id,
+                    CalculationRun.case_id == case_id,
                 )
             )
+        }
+        baseline_basis = _comparison_basis(runs[baseline.calculation_run_id])
+        downside_basis = _comparison_basis(runs[downside.calculation_run_id])
+        differing_attributes: list[CapitalComparisonBasisAttribute] = []
+        if baseline_basis.as_of_date != downside_basis.as_of_date:
+            differing_attributes.append("as_of_date")
+        if baseline_basis.reporting_currency != downside_basis.reporting_currency:
+            differing_attributes.append("reporting_currency")
+        if baseline_basis.forecast_horizon != downside_basis.forecast_horizon:
+            differing_attributes.append("forecast_horizon")
+        if differing_attributes:
+            diagnostic = CapitalComparisonDiagnosticRead(
+                code="comparison_basis_mismatch",
+                message="Baseline and downside projections use incompatible forecast bases.",
+                differing_attributes=differing_attributes,
+                baseline_basis=baseline_basis,
+                downside_basis=downside_basis,
+                corrective_action=(
+                    "Rerun the other scenario using the matching as-of date, reporting currency, "
+                    "and forecast horizon, then generate a new capital projection."
+                ),
+            )
+        else:
+            downside_by_period = {item.period_number: item for item in downside.indicators}
+            for base in baseline.indicators:
+                down = downside_by_period[base.period_number]
+                periods.append(
+                    CapitalComparisonPeriodRead(
+                        period_number=base.period_number,
+                        baseline_equity=base.equity,
+                        downside_equity=down.equity,
+                        equity_delta=_money(down.equity - base.equity),
+                        baseline_equity_to_assets_ratio=base.equity_to_assets_ratio,
+                        downside_equity_to_assets_ratio=down.equity_to_assets_ratio,
+                        equity_to_assets_ratio_delta=_ratio(
+                            down.equity_to_assets_ratio - base.equity_to_assets_ratio
+                        ),
+                    )
+                )
     return CapitalComparisonRead(
-        case_id=case_id, baseline=baseline, downside=downside, periods=periods
+        case_id=case_id,
+        baseline=baseline,
+        downside=downside,
+        periods=periods,
+        diagnostic=diagnostic,
+    )
+
+
+def _comparison_basis(run: CalculationRun) -> CapitalComparisonBasisRead:
+    return CapitalComparisonBasisRead(
+        as_of_date=run.as_of_date,
+        reporting_currency=str(run.inputs["currency"]),
+        forecast_horizon=run.forecast_periods,
     )
 
 

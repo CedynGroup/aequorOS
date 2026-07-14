@@ -116,7 +116,11 @@ function projection() {
   };
 }
 
-async function installBackend(page: Page, failSummary = false) {
+async function installBackend(
+  page: Page,
+  failSummary = false,
+  incompatibleComparison = false,
+) {
   let generated = false;
   await page.route("http://127.0.0.1:8003/api/v1/**", async (route) => {
     const request = route.request();
@@ -162,6 +166,34 @@ async function installBackend(page: Page, failSummary = false) {
         scored_at: now,
         scoring_version: "v1",
         archived_at: null,
+      });
+    }
+    if (path.endsWith("/scenarios") && method === "GET") {
+      return json(route, {
+        case_id: northstarCase.id,
+        scenarios: [
+          {
+            id: scenarioId,
+            organization_id: demoTenant.orgId,
+            case_id: northstarCase.id,
+            name: "Operating baseline",
+            description: null,
+            scenario_type: "baseline",
+            copied_from_scenario_id: null,
+            created_by: demoTenant.userId,
+            archived_at: null,
+            created_at: now,
+            updated_at: now,
+            assumptions: [],
+          },
+        ],
+        readiness: {
+          case_id: northstarCase.id,
+          ready: true,
+          scenario_count: 1,
+          complete_scenario_count: 1,
+          incomplete_scenario_ids: [],
+        },
       });
     }
     if (path.endsWith("/calculation-runs") && method === "GET") {
@@ -215,19 +247,67 @@ async function installBackend(page: Page, failSummary = false) {
         case_id: northstarCase.id,
         baseline: generated ? projection() : null,
         downside: generated ? projection() : null,
-        periods: generated
+        diagnostic:
+          generated && incompatibleComparison
+            ? {
+                code: "comparison_basis_mismatch",
+                message:
+                  "Baseline and downside projections use incompatible forecast bases.",
+                differing_attributes: [
+                  "as_of_date",
+                  "reporting_currency",
+                  "forecast_horizon",
+                ],
+                baseline_basis: {
+                  as_of_date: "2026-06-30",
+                  reporting_currency: "USD",
+                  forecast_horizon: 2,
+                },
+                downside_basis: {
+                  as_of_date: "2026-07-01",
+                  reporting_currency: "EUR",
+                  forecast_horizon: 3,
+                },
+                corrective_action:
+                  "Rerun the other scenario using the matching as-of date, reporting currency, and forecast horizon, then generate a new capital projection.",
+              }
+            : null,
+        periods:
+          generated && !incompatibleComparison
+            ? [
+                {
+                  period_number: 1,
+                  baseline_equity: "75.0000",
+                  downside_equity: "50.0000",
+                  equity_delta: "-25.0000",
+                  baseline_equity_to_assets_ratio: "0.07500000",
+                  downside_equity_to_assets_ratio: "0.05263158",
+                  equity_to_assets_ratio_delta: "-0.02236842",
+                },
+              ]
+            : [],
+      });
+    }
+    if (path.endsWith("/capital-projections") && method === "GET") {
+      return json(route, {
+        case_id: northstarCase.id,
+        projections: generated
           ? [
               {
-                period_number: 1,
-                baseline_equity: "75.0000",
-                downside_equity: "50.0000",
-                equity_delta: "-25.0000",
-                baseline_equity_to_assets_ratio: "0.07500000",
-                downside_equity_to_assets_ratio: "0.05263158",
-                equity_to_assets_ratio_delta: "-0.02236842",
+                id: projectionId,
+                scenario_id: scenarioId,
+                calculation_run_id: runId,
+                status: "succeeded",
+                started_at: now,
+                completed_at: now,
+                created_at: now,
               },
             ]
           : [],
+        total: generated ? 1 : 0,
+        limit: 25,
+        offset: 0,
+        has_more: false,
       });
     }
     if (path.endsWith("/capital-projections") && method === "POST") {
@@ -279,4 +359,26 @@ test("shows capital API errors", async ({ page }) => {
   await installBackend(page, true);
   await console.gotoSelectedCase("capital");
   await expect(page.getByText("Capital service unavailable.")).toBeVisible();
+});
+
+test("rejects incompatible capital comparison bases", async ({ page }) => {
+  const console = new RiskConsolePage(page);
+  await console.seedTenantStorage();
+  await installBackend(page, false, true);
+  await console.gotoSelectedCase("capital");
+
+  await page.getByRole("button", { name: "Generate projection" }).click();
+  await expect(
+    page.getByText(
+      "Baseline and downside projections use incompatible forecast bases.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByText("2026-06-30")).toBeVisible();
+  await expect(page.getByText("2026-07-01")).toBeVisible();
+  await expect(page.getByText("USD")).toBeVisible();
+  await expect(page.getByText("EUR")).toBeVisible();
+  await expect(page.getByText("2 periods")).toBeVisible();
+  await expect(page.getByText("3 periods")).toBeVisible();
+  await expect(page.getByText(/Rerun the other scenario/)).toBeVisible();
+  await expect(page.getByText("Downside delta")).toHaveCount(0);
 });

@@ -799,6 +799,80 @@
         ],
         "type": "string"
       },
+      "CapitalComparisonBasisAttribute": {
+        "enum": [
+          "as_of_date",
+          "reporting_currency",
+          "forecast_horizon"
+        ],
+        "type": "string"
+      },
+      "CapitalComparisonBasisRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "forecast_horizon": {
+            "title": "Forecast Horizon",
+            "type": "integer"
+          },
+          "reporting_currency": {
+            "title": "Reporting Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of_date",
+          "reporting_currency",
+          "forecast_horizon"
+        ],
+        "title": "CapitalComparisonBasisRead",
+        "type": "object"
+      },
+      "CapitalComparisonDiagnosticRead": {
+        "additionalProperties": false,
+        "properties": {
+          "baseline_basis": {
+            "$ref": "#/components/schemas/CapitalComparisonBasisRead"
+          },
+          "code": {
+            "const": "comparison_basis_mismatch",
+            "title": "Code",
+            "type": "string"
+          },
+          "corrective_action": {
+            "title": "Corrective Action",
+            "type": "string"
+          },
+          "differing_attributes": {
+            "items": {
+              "$ref": "#/components/schemas/CapitalComparisonBasisAttribute"
+            },
+            "title": "Differing Attributes",
+            "type": "array"
+          },
+          "downside_basis": {
+            "$ref": "#/components/schemas/CapitalComparisonBasisRead"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "differing_attributes",
+          "baseline_basis",
+          "downside_basis",
+          "corrective_action"
+        ],
+        "title": "CapitalComparisonDiagnosticRead",
+        "type": "object"
+      },
       "CapitalComparisonPeriodRead": {
         "additionalProperties": false,
         "properties": {
@@ -867,6 +941,16 @@
             "title": "Case Id",
             "type": "string"
           },
+          "diagnostic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalComparisonDiagnosticRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "downside": {
             "anyOf": [
               {
@@ -889,7 +973,8 @@
           "case_id",
           "baseline",
           "downside",
-          "periods"
+          "periods",
+          "diagnostic"
         ],
         "title": "CapitalComparisonRead",
         "type": "object"

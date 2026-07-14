@@ -107,11 +107,24 @@ def _financial_inputs(case_id: UUID) -> None:
         session.commit()
 
 
-def _forecast(client: TestClient, case_id: UUID, scenario_id: str) -> dict:
+def _forecast(
+    client: TestClient,
+    case_id: UUID,
+    scenario_id: str,
+    *,
+    forecast_periods: int = 2,
+    as_of_date: str | None = None,
+) -> dict:
+    payload: dict[str, object] = {
+        "scenario_id": scenario_id,
+        "forecast_periods": forecast_periods,
+    }
+    if as_of_date is not None:
+        payload["as_of_date"] = as_of_date
     response = client.post(
         f"/api/v1/cases/{case_id}/calculation-runs",
         headers=headers(),
-        json={"scenario_id": scenario_id, "forecast_periods": 2},
+        json=payload,
     )
     assert response.status_code == 201, response.text
     assert response.json()["status"] == "succeeded"
@@ -215,6 +228,69 @@ def test_capital_summary_is_explicitly_empty(db_client: TestClient) -> None:
         "case_id": str(case.id),
         "scenario_id": None,
         "projection": None,
+    }
+
+
+def test_capital_comparison_rejects_incompatible_forecast_bases(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenarios = _ready_scenarios(db_client, case.id)
+    _financial_inputs(case.id)
+    baseline_run = _forecast(db_client, case.id, scenarios[0]["id"])
+    baseline = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": baseline_run["id"]},
+    ).json()
+
+    with get_sessionmaker()() as session:
+        for model in (FinancialBalance, FinancialCashFlow, FinancialObligation):
+            for record in session.scalars(select(model).where(model.case_id == case.id)):
+                record.currency = "EUR"
+        session.commit()
+
+    downside_run = _forecast(
+        db_client,
+        case.id,
+        scenarios[1]["id"],
+        forecast_periods=3,
+        as_of_date="2026-07-01",
+    )
+    downside = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": downside_run["id"]},
+    ).json()
+
+    response = db_client.get(f"/api/v1/cases/{case.id}/capital-comparison", headers=headers())
+    assert response.status_code == 200
+    comparison = response.json()
+    assert comparison["baseline"]["id"] == baseline["id"]
+    assert comparison["downside"]["id"] == downside["id"]
+    assert comparison["periods"] == []
+    assert comparison["diagnostic"] == {
+        "code": "comparison_basis_mismatch",
+        "message": "Baseline and downside projections use incompatible forecast bases.",
+        "differing_attributes": [
+            "as_of_date",
+            "reporting_currency",
+            "forecast_horizon",
+        ],
+        "baseline_basis": {
+            "as_of_date": baseline_run["as_of_date"],
+            "reporting_currency": "USD",
+            "forecast_horizon": 2,
+        },
+        "downside_basis": {
+            "as_of_date": "2026-07-01",
+            "reporting_currency": "EUR",
+            "forecast_horizon": 3,
+        },
+        "corrective_action": (
+            "Rerun the other scenario using the matching as-of date, reporting currency, "
+            "and forecast horizon, then generate a new capital projection."
+        ),
     }
 
 

@@ -1,6 +1,7 @@
 import type {
   CalculationRunRead,
   CalculationRunSummaryRead,
+  CapitalComparisonBasisRead,
   CapitalComparisonRead,
   CapitalProjectionRead,
   CapitalProjectionSummaryRead,
@@ -387,6 +388,7 @@ function ScenarioComparison({
 }) {
   const baseline = comparison?.baseline as Projection | null | undefined;
   const downside = comparison?.downside as Projection | null | undefined;
+  const diagnostic = comparison?.diagnostic;
   return (
     <Panel>
       <PanelHeader
@@ -398,6 +400,26 @@ function ScenarioComparison({
           <Alert title="Comparison not ready">
             Generate successful projections for both baseline and downside
             scenarios.
+          </Alert>
+        </div>
+      ) : diagnostic ? (
+        <div className="p-3">
+          <Alert title="Comparison not ready" tone="danger">
+            <div>{diagnostic.message}</div>
+            <dl className="mt-2 grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1 text-xs">
+              <dt className="font-medium">Basis</dt>
+              <dd className="font-medium">Baseline</dd>
+              <dd className="font-medium">Downside</dd>
+              {diagnostic.differingAttributes.map((attribute) => (
+                <ComparisonBasisDifference
+                  key={attribute}
+                  attribute={attribute}
+                  baseline={diagnostic.baselineBasis}
+                  downside={diagnostic.downsideBasis}
+                />
+              ))}
+            </dl>
+            <div className="mt-2">{diagnostic.correctiveAction}</div>
           </Alert>
         </div>
       ) : (
@@ -431,6 +453,30 @@ function ScenarioComparison({
         </div>
       )}
     </Panel>
+  );
+}
+
+function ComparisonBasisDifference({
+  attribute,
+  baseline,
+  downside,
+}: {
+  attribute: "as_of_date" | "reporting_currency" | "forecast_horizon";
+  baseline: CapitalComparisonBasisRead;
+  downside: CapitalComparisonBasisRead;
+}) {
+  const value = (basis: CapitalComparisonBasisRead) => {
+    if (attribute === "as_of_date")
+      return basis.asOfDate.toISOString().slice(0, 10);
+    if (attribute === "reporting_currency") return basis.reportingCurrency;
+    return `${basis.forecastHorizon} periods`;
+  };
+  return (
+    <>
+      <dt>{labelize(attribute)}</dt>
+      <dd>{value(baseline)}</dd>
+      <dd>{value(downside)}</dd>
+    </>
   );
 }
 

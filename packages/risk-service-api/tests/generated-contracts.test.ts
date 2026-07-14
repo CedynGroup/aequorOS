@@ -15,6 +15,10 @@ import {
 } from "../src/models/CalculationRunRead";
 import type { CalculationRunSummaryRead } from "../src/models/CalculationRunSummaryRead";
 import {
+  CapitalComparisonReadFromJSON,
+  CapitalComparisonReadToJSON,
+} from "../src/models/CapitalComparisonRead";
+import {
   CapitalProjectionCreateToJSON,
   type CapitalProjectionCreate,
 } from "../src/models/CapitalProjectionCreate";
@@ -189,6 +193,35 @@ const capitalSummaryRead = CapitalProjectionSummaryReadFromJSON({
 const capitalSummarySerialized = CapitalProjectionSummaryReadToJSON(
   capitalSummaryRead,
 ) as unknown as Record<string, unknown>;
+const capitalComparison = CapitalComparisonReadFromJSON({
+  case_id: "0198c7de-95bf-7000-8000-000000000002",
+  baseline: null,
+  downside: null,
+  periods: [],
+  diagnostic: {
+    code: "comparison_basis_mismatch",
+    message: "Forecast bases differ.",
+    differing_attributes: [
+      "as_of_date",
+      "reporting_currency",
+      "forecast_horizon",
+    ],
+    baseline_basis: {
+      as_of_date: "2026-06-30",
+      reporting_currency: "USD",
+      forecast_horizon: 2,
+    },
+    downside_basis: {
+      as_of_date: "2026-07-01",
+      reporting_currency: "EUR",
+      forecast_horizon: 3,
+    },
+    corrective_action: "Rerun the other scenario.",
+  },
+});
+const capitalComparisonSerialized = CapitalComparisonReadToJSON(
+  capitalComparison,
+) as unknown as Record<string, any>;
 
 assert(
   serialized.account_id === payload.accountId,
@@ -273,6 +306,20 @@ assert(
 assert(
   capitalSummarySerialized.scenario_id === capitalSummaryRead.scenarioId,
   "capital projection summary scenario ID was not serialized",
+);
+assert(
+  capitalComparison.diagnostic.baselineBasis.asOfDate instanceof Date,
+  "capital comparison basis date was not decoded",
+);
+assert(
+  capitalComparison.diagnostic.differingAttributes.join(",") ===
+    "as_of_date,reporting_currency,forecast_horizon",
+  "capital comparison differing attributes were not decoded",
+);
+assert(
+  capitalComparisonSerialized.diagnostic.downside_basis.reporting_currency ===
+    "EUR",
+  "capital comparison diagnostic was not serialized with snake-case basis fields",
 );
 
 function assert(condition: boolean, message: string): asserts condition {

@@ -190,6 +190,7 @@ function comparison(
     baseline: value,
     downside: null,
     periods: [],
+    diagnostic: null,
   } as unknown as CapitalComparisonRead;
 }
 
@@ -267,6 +268,53 @@ describe("CapitalTab", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Evidence")).toBeInTheDocument();
     expect(screen.getByText("Comparison not ready")).toBeInTheDocument();
+  });
+
+  it("renders every incompatible comparison basis and corrective action", async () => {
+    const value = projection();
+    vi.mocked(riskApi.capitalSummary).mockResolvedValue(summary(value));
+    vi.mocked(riskApi.capitalComparison).mockResolvedValue({
+      caseId,
+      baseline: value,
+      downside: {
+        ...value,
+        scenarioId: "20000000-0000-4000-8000-000000000002",
+      },
+      periods: [],
+      diagnostic: {
+        code: "comparison_basis_mismatch",
+        message:
+          "Baseline and downside projections use incompatible forecast bases.",
+        differingAttributes: [
+          "as_of_date",
+          "reporting_currency",
+          "forecast_horizon",
+        ],
+        baselineBasis: {
+          asOfDate: new Date("2026-06-30T00:00:00Z"),
+          reportingCurrency: "USD",
+          forecastHorizon: 2,
+        },
+        downsideBasis: {
+          asOfDate: new Date("2026-07-01T00:00:00Z"),
+          reportingCurrency: "EUR",
+          forecastHorizon: 3,
+        },
+        correctiveAction:
+          "Rerun the other scenario using the matching as-of date, reporting currency, and forecast horizon, then generate a new capital projection.",
+      },
+    } as CapitalComparisonRead);
+
+    renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
+
+    expect(await screen.findByText("Comparison not ready")).toBeInTheDocument();
+    expect(screen.getByText("2026-06-30")).toBeInTheDocument();
+    expect(screen.getByText("2026-07-01")).toBeInTheDocument();
+    expect(screen.getByText("USD")).toBeInTheDocument();
+    expect(screen.getByText("EUR")).toBeInTheDocument();
+    expect(screen.getByText("2 periods")).toBeInTheDocument();
+    expect(screen.getByText("3 periods")).toBeInTheDocument();
+    expect(screen.getByText(/Rerun the other scenario/)).toBeInTheDocument();
   });
 
   it("generates a projection and exposes mutation state", async () => {
