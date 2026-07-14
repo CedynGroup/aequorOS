@@ -62,13 +62,14 @@ describe("CaseQueuePanel", () => {
 
     expect(screen.getByText("Case Queue")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Select cases" })).toBeDisabled();
-    expect(screen.getByText("Covenant review - Northstar Foods")).toBeInTheDocument();
-    expect(screen.getByText("In Review")).toBeInTheDocument();
-    expect(screen.getByText("High")).toBeInTheDocument();
-    expect(screen.getByText("Needs More Info")).toBeInTheDocument();
-    expect(screen.getByText("82")).toHaveAttribute(
+    expect(
+      screen.getByText("Annual review — Volta Aluminium Industries Plc"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("In Review")).toHaveLength(2);
+    expect(screen.getByText("Low")).toBeInTheDocument();
+    expect(screen.getByText("18")).toHaveAttribute(
       "title",
-      expect.stringMatching(/^Demo score \d{4}-\d{2}-\d{2} run 1$/),
+      "Volta annual credit assessment 2026-07-01 run 1",
     );
   });
 
@@ -110,7 +111,9 @@ describe("CaseQueuePanel", () => {
 
     renderQueue({ selectedIds: [data.items[0].id] });
 
-    expect(screen.getByRole("button", { name: "Bulk actions (1)" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Bulk actions (1)" }),
+    ).toBeEnabled();
   });
 
   it("renders empty and API error states distinctly", () => {
@@ -123,7 +126,9 @@ describe("CaseQueuePanel", () => {
       },
     });
 
-    expect(screen.getByText("No cases match the current filters.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No cases match the current filters."),
+    ).toBeInTheDocument();
 
     rerender(
       <CaseQueuePanel

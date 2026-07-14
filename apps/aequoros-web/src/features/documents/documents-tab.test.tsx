@@ -24,8 +24,25 @@ describe("DocumentsTab", () => {
     renderWithQuery(<DocumentsTab tenant={tenant} caseId="case-1" />);
 
     expect(await screen.findByText("Request upload")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create request" })).toBeInTheDocument();
-    expect(await screen.findByText("No documents uploaded")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create request" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("No documents uploaded"),
+    ).toBeInTheDocument();
+  });
+
+  it("disables document mutations in demo mode", async () => {
+    vi.spyOn(riskApi, "documents").mockResolvedValue([]);
+
+    renderWithQuery(
+      <DocumentsTab tenant={tenant} caseId="case-1" mutationDisabled />,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Create request" }),
+    ).toBeDisabled();
+    expect(screen.getByPlaceholderText("Filename")).toBeDisabled();
   });
 
   it("submits upload requests with normalized form values", async () => {

@@ -353,7 +353,7 @@ def _create_and_execute(  # noqa: PLR0913, PLR0915
                         {
                             "forecast_outputs": [
                                 {
-                                    "id": str(item.id),
+                                    "label": f"Forecast period {item.period_number}",
                                     "period_number": item.period_number,
                                     "currency": item.currency,
                                 }
@@ -473,7 +473,9 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
     )
     unreviewed = sorted(item.key for item in assumptions if item.review_status != "reviewed")
     missing_values = [
-        {"id": str(item.id), "key": item.key} for item in assumptions if item.value is None
+        {"label": item.label or item.key, "key": item.key}
+        for item in assumptions
+        if item.value is None
     ]
     if missing_categories or ambiguous_categories or unreviewed or missing_values:
         raise CalculationInputError(
@@ -489,7 +491,7 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
                 ),
                 "assumptions": [
                     {
-                        "id": str(item.id),
+                        "label": item.label or item.key,
                         "key": item.key,
                         "value": item.value,
                         "review_status": item.review_status,
@@ -555,7 +557,7 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
         for item in balances
     }
     undated_balances = [
-        {"id": str(item.id), "balance_type": item.balance_type}
+        {"label": _financial_input_label("balance", item), "balance_type": item.balance_type}
         for item in balances
         if balance_dates[item.id] is None
     ]
@@ -592,7 +594,9 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
             "financial_period_ambiguous",
             "Balances resolve to multiple reporting periods for the same effective date.",
             {
-                "reporting_period_ids": sorted(str(value) for value in selected_period_ids),
+                "reporting_periods": sorted(
+                    _reporting_period_label(periods_by_id[value]) for value in selected_period_ids
+                ),
                 "effective_date": effective_balance_date.isoformat(),
                 "corrective_action": (
                     "Assign the selected balances to one reporting period and run the "
@@ -609,10 +613,10 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
     )
     cash_flows_outside_period = [
         {
-            "id": str(item.id),
+            "label": _financial_input_label("cash_flow", item),
             "category": item.category,
             "cash_flow_date": item.cash_flow_date.isoformat(),
-            "reporting_period_id": str(selected_period_id),
+            "reporting_period": _reporting_period_label(selected_period),
             "period_start_date": (
                 selected_period_start.isoformat() if selected_period_start else None
             ),
@@ -638,7 +642,7 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
         )
 
     undated_cash_flows = [
-        {"id": str(item.id), "category": item.category}
+        {"label": _financial_input_label("cash_flow", item), "category": item.category}
         for item in cash_flows
         if _record_effective_date(
             item.cash_flow_date,
@@ -679,7 +683,7 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
     )
     incomplete_obligations = [
         {
-            "id": str(item.id),
+            "label": _financial_input_label("obligation", item),
             "dedupe_key": item.dedupe_key,
             "obligation_type": item.obligation_type,
             "missing_fields": [
@@ -707,7 +711,7 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
             },
         )
     unknown_balances = [
-        {"id": str(item.id), "balance_type": item.balance_type}
+        {"label": _financial_input_label("balance", item), "balance_type": item.balance_type}
         for item in balances
         if _normalized_balance_type(item.balance_type) not in ASSET_TYPES | LIABILITY_TYPES
     ]
@@ -728,7 +732,7 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
         *(("obligation", item) for item in obligations),
     ]
     missing_currency_inputs = [
-        {"type": input_type, "id": str(item.id)}
+        {"type": input_type, "label": _financial_input_label(input_type, item)}
         for input_type, item in financial_inputs
         if not item.currency
     ]
@@ -749,7 +753,11 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
             {
                 "currencies": currencies,
                 "inputs": [
-                    {"type": input_type, "id": str(item.id), "currency": item.currency}
+                    {
+                        "type": input_type,
+                        "label": _financial_input_label(input_type, item),
+                        "currency": item.currency,
+                    }
                     for input_type, item in financial_inputs
                 ],
                 "corrective_action": (
@@ -835,6 +843,27 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
         ],
     }
     return snapshot, as_of_date
+
+
+def _financial_input_label(input_type: str, item: Any) -> str:
+    if input_type == "balance":
+        return str(item.balance_type).replace("_", " ").title()
+    if input_type == "cash_flow":
+        category = item.category or "Cash flow"
+        return f"{category} {str(item.direction).replace('_', ' ')}"
+    label = str(item.obligation_type).replace("_", " ").title()
+    return f"{label} ({item.currency})" if item.currency else label
+
+
+def _reporting_period_label(period: FinancialReportingPeriod) -> str:
+    if period.label:
+        return period.label
+    effective_date = period.end_date or period.as_of_date
+    return (
+        f"{period.period_type.replace('_', ' ').title()} ending {effective_date.isoformat()}"
+        if effective_date
+        else period.period_type.replace("_", " ").title()
+    )
 
 
 def _record_effective_date(

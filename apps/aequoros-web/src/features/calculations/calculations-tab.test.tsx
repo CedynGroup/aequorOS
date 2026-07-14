@@ -470,9 +470,12 @@ describe("CalculationsTab", () => {
       await screen.findByText("active_obligation_amounts_missing"),
     ).toBeInTheDocument();
     expect(screen.getByText("Enter every missing amount.")).toBeInTheDocument();
+    expect(screen.getByText(/term_loan/)).toHaveTextContent(
+      "missing outstanding_amount",
+    );
     expect(
-      screen.getByText(/50000000-0000-4000-8000-000000000001/),
-    ).toHaveTextContent("missing outstanding_amount");
+      screen.queryByText(/50000000-0000-4000-8000-000000000001/),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText("Prior valid output preserved"),
     ).toBeInTheDocument();
@@ -515,11 +518,12 @@ describe("CalculationsTab", () => {
     expect(
       await screen.findByText("cash_flow_date_outside_reporting_period"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/60000000-0000-4000-8000-000000000001/),
-    ).toHaveTextContent(
+    expect(screen.getByText(/operations/)).toHaveTextContent(
       "cash-flow date 2027-01-01 — period 2026-01-01 to 2026-12-31",
     );
+    expect(
+      screen.queryByText(/60000000-0000-4000-8000-000000000001/),
+    ).not.toBeInTheDocument();
     expect(screen.getByText(/review workspace/)).toBeInTheDocument();
   });
 

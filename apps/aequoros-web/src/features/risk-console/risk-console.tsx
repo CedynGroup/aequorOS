@@ -1,9 +1,5 @@
 import { CaseSort } from "@aequoros/risk-service-api";
-import {
-  useMatch,
-  useNavigate,
-  useRouter,
-} from "@tanstack/react-router";
+import { useMatch, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -17,7 +13,7 @@ import {
 } from "../../lib/constants";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { usePersistentState } from "../../lib/persistent-state";
-import { mockCase, mockCaseList } from "../demo-data/demo-data";
+import { DEMO_CASE_IDS, mockCase, mockCaseList } from "../demo-data/demo-data";
 import { CaseQueuePanel } from "./case-queue-panel";
 import { CaseWorkspace } from "./case-workspace";
 import { Sidebar, TopBar } from "./shell";
@@ -30,12 +26,21 @@ export function RiskConsoleRoute() {
   const match = useMatch({ strict: false });
   const params = match.params as { caseId?: string };
   const search = match.search as SearchState;
-  const [orgId, setOrgId] = usePersistentState("aequoros.orgId", DEFAULT_ORG_ID);
-  const [userId, setUserId] = usePersistentState("aequoros.userId", DEFAULT_USER_ID);
+  const [orgId, setOrgId] = usePersistentState(
+    "aequoros.orgId",
+    DEFAULT_ORG_ID,
+  );
+  const [userId, setUserId] = usePersistentState(
+    "aequoros.userId",
+    DEFAULT_USER_ID,
+  );
   const [lastCaseId, setLastCaseId] = usePersistentState("aequoros.caseId", "");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [mockWorkspace, setMockWorkspace] = useState(false);
-  const tenant = useMemo<TenantHeaders>(() => ({ orgId, userId }), [orgId, userId]);
+  const tenant = useMemo<TenantHeaders>(
+    () => ({ orgId, userId }),
+    [orgId, userId],
+  );
 
   const activeTab: ConsoleTab =
     search.tab && isConsoleTab(search.tab) ? search.tab : "overview";
@@ -72,8 +77,17 @@ export function RiskConsoleRoute() {
     queryFn: () => riskApi.getCase(tenant, caseId ?? ""),
     enabled: Boolean(caseId),
   });
-  const demoList = mockWorkspace ? mockCaseList(tenant.orgId, filters, page) : undefined;
-  const demoCase = mockWorkspace && caseId ? mockCase(tenant.orgId, caseId) : undefined;
+  const demoList = mockWorkspace
+    ? mockCaseList(tenant.orgId, filters, page)
+    : undefined;
+  const workspaceCaseId =
+    mockWorkspace && !DEMO_CASE_IDS.some((id) => id === caseId)
+      ? DEMO_CASE_IDS[0]
+      : caseId;
+  const demoCase =
+    mockWorkspace && workspaceCaseId
+      ? mockCase(tenant.orgId, workspaceCaseId)
+      : undefined;
 
   const updateSearch = (next: Partial<SearchState>) => {
     void navigate({
@@ -111,7 +125,7 @@ export function RiskConsoleRoute() {
           setOrgId={setOrgId}
           setUserId={setUserId}
           cases={demoList?.items ?? casesQuery.data?.items ?? []}
-          caseId={caseId}
+          caseId={workspaceCaseId}
           chooseCase={chooseCase}
           refresh={refresh}
           seed={() => {
@@ -128,7 +142,7 @@ export function RiskConsoleRoute() {
             selected={selected}
             setSelected={setSelected}
             chooseCase={chooseCase}
-            activeCaseId={caseId}
+            activeCaseId={workspaceCaseId}
             selectedIds={selectedIds}
             tenant={tenant}
             updateSearch={updateSearch}
@@ -136,7 +150,7 @@ export function RiskConsoleRoute() {
           />
           <CaseWorkspace
             tenant={tenant}
-            caseId={caseId}
+            caseId={workspaceCaseId}
             activeTab={activeTab}
             reportMode={reportMode}
             updateSearch={updateSearch}

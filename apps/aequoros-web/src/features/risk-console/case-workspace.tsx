@@ -159,7 +159,11 @@ export function CaseWorkspace({
             </TabsContent>
             <TabsContent value="scenarios" className="m-0 p-3">
               <LazyTabBoundary>
-                <ScenariosTab tenant={tenant} caseId={caseId} />
+                <ScenariosTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="calculations" className="m-0 p-3">
@@ -204,12 +208,20 @@ export function CaseWorkspace({
             </TabsContent>
             <TabsContent value="decisions" className="m-0 p-3">
               <LazyTabBoundary>
-                <DecisionsTab tenant={tenant} caseId={caseId} />
+                <DecisionsTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="documents" className="m-0 p-3">
               <LazyTabBoundary>
-                <DocumentsTab tenant={tenant} caseId={caseId} />
+                <DocumentsTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="report" className="m-0 p-3">
@@ -260,7 +272,9 @@ function CaseSummary({ data }: { data?: CaseRead }) {
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-[rgb(var(--muted-foreground))]">
         <span>Assignee</span>
         <span>
-          {data.assignedToUserId ? "Assigned reviewer" : "Unassigned"}
+          {data.assignedToUserId
+            ? data.assigneeDisplayName?.trim() || "Unknown reviewer"
+            : "Unassigned"}
         </span>
         <span>Created</span>
         <span>{relative(data.createdAt)}</span>

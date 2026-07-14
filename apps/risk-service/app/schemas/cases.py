@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -136,6 +136,7 @@ class CaseRead(BaseModel):
     description: str | None
     status: CaseStatus
     assigned_to_user_id: UUID | None
+    assignee_display_name: str | None = None
     assigned_at: datetime | None
     risk_score: int | None
     risk_level: RiskLevel | None
@@ -148,6 +149,10 @@ class CaseRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None
+
+    @classmethod
+    def from_case(cls, case: Any, assignee_display_name: str | None) -> CaseRead:
+        return cls.model_validate({**case.__dict__, "assignee_display_name": assignee_display_name})
 
 
 class CaseQueueItemRead(BaseModel):

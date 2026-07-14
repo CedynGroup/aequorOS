@@ -441,4 +441,22 @@ describe("ScenariosTab", () => {
       await screen.findByText("Scenario service unavailable"),
     ).toBeInTheDocument();
   });
+
+  it("renders scenarios read-only in demo mode", async () => {
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(workspace());
+
+    renderWithQuery(
+      <ScenariosTab tenant={tenant} caseId={caseId} mutationDisabled />,
+    );
+
+    expect(await screen.findByLabelText("Scenario name")).toHaveAttribute(
+      "readonly",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Save details" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add assumption" }),
+    ).not.toBeInTheDocument();
+  });
 });

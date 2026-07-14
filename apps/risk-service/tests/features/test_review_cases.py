@@ -97,6 +97,9 @@ def test_case_queue_filters_assignment_summary_and_reports(db_client: TestClient
     )
     assert response.status_code == 200, response.text
     assert response.json()["assigned_to_user_id"] == str(USER_1)
+    assert response.json()["assignee_display_name"] == "Demo User One"
+    detail = db_client.get(f"/api/v1/cases/{high_case_id}", headers=headers())
+    assert detail.json()["assignee_display_name"] == "Demo User One"
 
     response = db_client.post(
         f"/api/v1/cases/{low_case_id}/assign",

@@ -121,8 +121,9 @@ describe("CaseWorkspace", () => {
     renderWorkspace();
 
     expect(
-      screen.getByText("Covenant review - Northstar Foods"),
+      screen.getByText("Annual review — Volta Aluminium Industries Plc"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Ama Mensah")).toBeInTheDocument();
     expect(
       screen.getByText("Assign, unassign, and archive"),
     ).toBeInTheDocument();
@@ -259,6 +260,17 @@ describe("CaseWorkspace", () => {
       await screen.findByText("Decided by Ama Mensah"),
     ).toBeInTheDocument();
     expect(screen.queryByText(DEFAULT_USER_ID)).not.toBeInTheDocument();
+  });
+
+  it("disables decision mutations in demo mode", async () => {
+    vi.spyOn(riskApi, "decisions").mockResolvedValue([]);
+
+    renderWorkspace({ activeTab: "decisions", mockWorkspace: true });
+
+    expect(
+      await screen.findByRole("button", { name: "Submit decision" }),
+    ).toBeDisabled();
+    expect(screen.getByPlaceholderText("Reason")).toBeDisabled();
   });
 
   it("retires capital mutations when the selected case is archived", async () => {

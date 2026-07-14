@@ -28,7 +28,7 @@ import {
   Switch,
 } from "../../components/ui";
 import type { TenantHeaders } from "../../lib/api";
-import { cn, labelize, truncateId } from "../../lib/utils";
+import { cn, labelize } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { BulkActionDialog } from "./bulk-actions";
 import { DecisionBadge, RiskBadge, StatusBadge, relative } from "./format";
@@ -55,7 +55,11 @@ export function CaseQueuePanel({
     isLoading: boolean;
   };
   mockList?: CaseListData;
-  taxonomy?: { statuses: string[]; riskLevels: string[]; sortOptions: string[] };
+  taxonomy?: {
+    statuses: string[];
+    riskLevels: string[];
+    sortOptions: string[];
+  };
   filters: CaseQueueFilters;
   page: number;
   selected: Record<string, boolean>;
@@ -70,7 +74,8 @@ export function CaseQueuePanel({
     () => mockList?.items ?? query.data?.items ?? [],
     [mockList?.items, query.data?.items],
   );
-  const allSelected = rows.length > 0 && rows.every((item) => selected[item.id]);
+  const allSelected =
+    rows.length > 0 && rows.every((item) => selected[item.id]);
   const columns = useMemo<ColumnDef<CaseQueueItemRead>[]>(
     () => [
       {
@@ -119,7 +124,8 @@ export function CaseQueuePanel({
         accessorKey: "assigneeDisplayName",
         header: "Assignee",
         cell: ({ row }) =>
-          row.original.assigneeDisplayName ?? truncateId(row.original.assignedToUserId),
+          row.original.assigneeDisplayName?.trim() ||
+          (row.original.assignedToUserId ? "Unknown reviewer" : "Unassigned"),
       },
       {
         accessorKey: "riskScore",
@@ -163,7 +169,13 @@ export function CaseQueuePanel({
       <PanelHeader
         title="Case Queue"
         meta={`${mockList?.total ?? query.data?.total ?? 0} cases${mockList ? " mocked" : ""}`}
-        actions={<BulkActionDialog selectedIds={selectedIds} tenant={tenant} />}
+        actions={
+          <BulkActionDialog
+            selectedIds={selectedIds}
+            tenant={tenant}
+            mutationDisabled={Boolean(mockList)}
+          />
+        }
       />
       <div className="flex flex-wrap items-center gap-2 border-b border-[rgb(var(--border))] p-3">
         <div className="relative min-w-52 flex-1">
@@ -172,10 +184,18 @@ export function CaseQueuePanel({
             className="pl-8"
             value={filters.q}
             placeholder="Search cases"
-            onChange={(event) => updateSearch({ q: event.target.value, page: 1 })}
+            onChange={(event) =>
+              updateSearch({ q: event.target.value, page: 1 })
+            }
           />
         </div>
-        <Select value={filters.status} onValueChange={(value) => updateSearch({ status: value as CaseStatusType | "all", page: 1 })} placeholder="Status">
+        <Select
+          value={filters.status}
+          onValueChange={(value) =>
+            updateSearch({ status: value as CaseStatusType | "all", page: 1 })
+          }
+          placeholder="Status"
+        >
           <SelectItem value="all">All statuses</SelectItem>
           {(taxonomy?.statuses ?? Object.values(CaseStatus)).map((status) => (
             <SelectItem key={status} value={status}>
@@ -183,7 +203,13 @@ export function CaseQueuePanel({
             </SelectItem>
           ))}
         </Select>
-        <Select value={filters.risk} onValueChange={(value) => updateSearch({ risk: value as RiskLevelType | "all", page: 1 })} placeholder="Risk">
+        <Select
+          value={filters.risk}
+          onValueChange={(value) =>
+            updateSearch({ risk: value as RiskLevelType | "all", page: 1 })
+          }
+          placeholder="Risk"
+        >
           <SelectItem value="all">All risks</SelectItem>
           {(taxonomy?.riskLevels ?? Object.values(RiskLevel)).map((risk) => (
             <SelectItem key={risk} value={risk}>
@@ -191,7 +217,13 @@ export function CaseQueuePanel({
             </SelectItem>
           ))}
         </Select>
-        <Select value={filters.sort} onValueChange={(value) => updateSearch({ sort: value as CaseSortType })} placeholder="Sort">
+        <Select
+          value={filters.sort}
+          onValueChange={(value) =>
+            updateSearch({ sort: value as CaseSortType })
+          }
+          placeholder="Sort"
+        >
           {(taxonomy?.sortOptions ?? Object.values(CaseSort)).map((sort) => (
             <SelectItem key={sort} value={sort}>
               {labelize(sort)}
@@ -199,7 +231,10 @@ export function CaseQueuePanel({
           ))}
         </Select>
         <div className="flex items-center gap-2 text-xs text-[rgb(var(--muted-foreground))]">
-          <Switch checked={filters.archived} onCheckedChange={(archived) => updateSearch({ archived, page: 1 })} />
+          <Switch
+            checked={filters.archived}
+            onCheckedChange={(archived) => updateSearch({ archived, page: 1 })}
+          />
           <span>Archived</span>
         </div>
       </div>
@@ -218,10 +253,19 @@ export function CaseQueuePanel({
           <table className="w-full min-w-[920px] border-collapse text-left text-sm">
             <thead>
               {table.getHeaderGroups().map((group) => (
-                <tr key={group.id} className="border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))]">
+                <tr
+                  key={group.id}
+                  className="border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))]"
+                >
                   {group.headers.map((header) => (
-                    <th key={header.id} className="h-9 px-2 text-xs font-semibold uppercase tracking-[0.04em] text-[rgb(var(--muted-foreground))]">
-                      {flexRender(header.column.columnDef.header, header.getContext())}
+                    <th
+                      key={header.id}
+                      className="h-9 px-2 text-xs font-semibold uppercase tracking-[0.04em] text-[rgb(var(--muted-foreground))]"
+                    >
+                      {flexRender(
+                        header.column.columnDef.header,
+                        header.getContext(),
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -230,7 +274,10 @@ export function CaseQueuePanel({
             <tbody>
               {table.getRowModel().rows.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length} className="h-24 px-3 text-center text-sm text-[rgb(var(--muted-foreground))]">
+                  <td
+                    colSpan={columns.length}
+                    className="h-24 px-3 text-center text-sm text-[rgb(var(--muted-foreground))]"
+                  >
                     No cases match the current filters.
                   </td>
                 </tr>
@@ -244,8 +291,14 @@ export function CaseQueuePanel({
                     )}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="h-10 px-2 align-middle text-xs">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      <td
+                        key={cell.id}
+                        className="h-10 px-2 align-middle text-xs"
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
                       </td>
                     ))}
                   </tr>
@@ -257,14 +310,25 @@ export function CaseQueuePanel({
       )}
       <div className="flex items-center justify-between border-t border-[rgb(var(--border))] p-3 text-xs text-[rgb(var(--muted-foreground))]">
         <span>
-          Page {mockList?.pages ?? query.data?.pages ? page : 0} of {mockList?.pages ?? query.data?.pages ?? 0}
+          Page {(mockList?.pages ?? query.data?.pages) ? page : 0} of{" "}
+          {mockList?.pages ?? query.data?.pages ?? 0}
         </span>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => updateSearch({ page: page - 1 })}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => updateSearch({ page: page - 1 })}
+          >
             <ArrowLeft className="size-3.5" />
             Prev
           </Button>
-          <Button variant="outline" size="sm" disabled={!(mockList?.hasMore ?? query.data?.hasMore)} onClick={() => updateSearch({ page: page + 1 })}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!(mockList?.hasMore ?? query.data?.hasMore)}
+            onClick={() => updateSearch({ page: page + 1 })}
+          >
             Next
             <ArrowRight className="size-3.5" />
           </Button>

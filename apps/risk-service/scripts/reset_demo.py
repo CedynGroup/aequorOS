@@ -49,7 +49,7 @@ from app.models import (
 )
 from app.services.calculations import calculate_forecast
 from app.services.liquidity import RULE_VERSION as LIQUIDITY_VERSION
-from app.services.liquidity import calculate_metrics
+from app.services.liquidity import calculate_metrics, liquidity_finding_evidence
 
 DEMO_ORG_ID = UUID("11111111-1111-4111-8111-111111111111")
 DEMO_USER_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
@@ -915,12 +915,7 @@ def pre_run_analyses(session: Session) -> None:
     for run, concerns in concerns_by_run:
         seed_liquidity_findings(
             session,
-            run.case_number,
-            run.run_number,
-            run.case_id,
-            run.scenario_id,
-            run.run_id,
-            run.input_hash,
+            run,
             concerns,
         )
     for run, indicators in capital_by_run:
@@ -1294,25 +1289,29 @@ def calculation_snapshot(case_key: str, case_number: int, scenario_type: str) ->
     }
 
 
-def seed_liquidity_findings(  # noqa: PLR0913
+def seed_liquidity_findings(
     session: Session,
-    case_number: int,
-    run_number: int,
-    case_id: UUID,
-    scenario_id: UUID,
-    run_id: UUID,
-    input_hash: str,
+    seeded_run: SeededRun,
     concerns: list[dict[str, object]],
 ) -> None:
+    run = session.get(CalculationRun, seeded_run.run_id)
+    if run is None:
+        raise RuntimeError(
+            f"Calculation run {seeded_run.run_id} is unavailable for liquidity evidence."
+        )
     for finding_number, concern in enumerate(concerns, start=1):
-        finding_id = uid(98300000 + run_number, case_number, finding_number)
+        finding_id = uid(
+            98300000 + seeded_run.run_number,
+            seeded_run.case_number,
+            finding_number,
+        )
         rule_id = str(concern["rule_id"])
         core_insert(
             session,
             RiskFinding(
                 id=finding_id,
                 organization_id=DEMO_ORG_ID,
-                case_id=case_id,
+                case_id=seeded_run.case_id,
                 risk_type="liquidity_risk",
                 title=str(concern["title"]),
                 summary=str(concern["summary"]),
@@ -1326,9 +1325,9 @@ def seed_liquidity_findings(  # noqa: PLR0913
                     "liquidity": {
                         "workflow_id": "liquidity_analysis",
                         "rule_version": LIQUIDITY_VERSION,
-                        "calculation_run_id": str(run_id),
-                        "scenario_id": str(scenario_id),
-                        "input_hash": input_hash,
+                        "calculation_run_id": str(seeded_run.run_id),
+                        "scenario_id": str(seeded_run.scenario_id),
+                        "input_hash": seeded_run.input_hash,
                         "metrics": [],
                     }
                 },
@@ -1336,33 +1335,23 @@ def seed_liquidity_findings(  # noqa: PLR0913
                 updated_at=SEEDED_AT,
             ),
         )
-        period = concern["period"]
-        if not isinstance(period, CalculationForecastPeriod):
-            raise RuntimeError(f"Liquidity concern {rule_id} has no forecast period.")
-        core_insert(
-            session,
-            RiskFindingEvidence(
-                id=uid(98400000 + run_number, case_number, finding_number),
-                organization_id=DEMO_ORG_ID,
-                finding_id=finding_id,
-                quote=str(concern["rationale"]),
-                locator={
-                    "source_type": "forecast_output",
-                    "label": f"Forecast period {period.period_number}",
-                    "source_url": (
-                        f"/cases/{case_id}?tab=calculations#calculation-run-{run_id}"
-                        f"-forecast-period-{period.period_number}"
+        for evidence_number, evidence in enumerate(
+            liquidity_finding_evidence(run, concern), start=1
+        ):
+            core_insert(
+                session,
+                RiskFindingEvidence(
+                    id=uid(
+                        98400000 + seeded_run.run_number,
+                        seeded_run.case_number,
+                        finding_number * 100 + evidence_number,
                     ),
-                    "calculation_run_id": str(run_id),
-                    "forecast_period_id": str(period.id),
-                    "period_number": period.period_number,
-                    "period_end": period.period_end.isoformat(),
-                    "input_hash": input_hash,
-                },
-                relevance=Decimal("1"),
-                created_at=SEEDED_AT,
-            ),
-        )
+                    organization_id=DEMO_ORG_ID,
+                    finding_id=finding_id,
+                    created_at=SEEDED_AT,
+                    **evidence,
+                ),
+            )
 
 
 def seed_failed_run(session: Session) -> None:

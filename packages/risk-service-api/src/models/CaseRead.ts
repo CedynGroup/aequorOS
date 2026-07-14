@@ -62,6 +62,12 @@ export interface CaseRead {
    * @type {string}
    * @memberof CaseRead
    */
+  assigneeDisplayName?: string | null;
+  /**
+   *
+   * @type {string}
+   * @memberof CaseRead
+   */
   caseType: string;
   /**
    *
@@ -220,6 +226,10 @@ export function CaseReadFromJSONTyped(
     assignedAt:
       json["assigned_at"] == null ? null : new Date(json["assigned_at"]),
     assignedToUserId: json["assigned_to_user_id"],
+    assigneeDisplayName:
+      json["assignee_display_name"] == null
+        ? undefined
+        : json["assignee_display_name"],
     caseType: json["case_type"],
     createdAt: new Date(json["created_at"]),
     createdBy: json["created_by"],
@@ -263,6 +273,7 @@ export function CaseReadToJSONTyped(
         ? null
         : (value["assignedAt"] as any).toISOString(),
     assigned_to_user_id: value["assignedToUserId"],
+    assignee_display_name: value["assigneeDisplayName"],
     case_type: value["caseType"],
     created_at: value["createdAt"].toISOString(),
     created_by: value["createdBy"],

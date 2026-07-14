@@ -529,7 +529,7 @@ function DiagnosticDetails({
   const missing = [
     "missing_categories",
     "unreviewed_assumptions",
-    "reporting_period_ids",
+    "reporting_periods",
   ]
     .flatMap((key) => (Array.isArray(details[key]) ? details[key] : []))
     .filter((item): item is string => typeof item === "string");
@@ -557,6 +557,7 @@ function DiagnosticDetails({
 
 function diagnosticRecord(record: Record<string, unknown>) {
   const identity = [
+    record.label,
     record.type,
     record.balance_type,
     record.obligation_type,
@@ -571,8 +572,8 @@ function diagnosticRecord(record: Record<string, unknown>) {
         (value): value is string => typeof value === "string",
       )
     : [];
-  const assumptionIds = Array.isArray(record.assumption_ids)
-    ? record.assumption_ids.filter(
+  const assumptions = Array.isArray(record.assumptions)
+    ? record.assumptions.filter(
         (value): value is string => typeof value === "string",
       )
     : [];
@@ -582,13 +583,12 @@ function diagnosticRecord(record: Record<string, unknown>) {
       : null;
   return [
     identity,
-    typeof record.id === "string" ? record.id : null,
     typeof record.cash_flow_date === "string"
       ? `cash-flow date ${record.cash_flow_date}`
       : null,
     periodBounds,
     missingFields.length ? `missing ${missingFields.join(", ")}` : null,
-    assumptionIds.length ? `assumptions ${assumptionIds.join(", ")}` : null,
+    assumptions.length ? `assumptions ${assumptions.join(", ")}` : null,
   ]
     .filter(Boolean)
     .join(" — ");

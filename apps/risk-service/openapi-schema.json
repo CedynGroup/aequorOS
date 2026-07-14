@@ -2053,6 +2053,17 @@
             ],
             "title": "Assigned To User Id"
           },
+          "assignee_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Display Name"
+          },
           "case_type": {
             "title": "Case Type",
             "type": "string"

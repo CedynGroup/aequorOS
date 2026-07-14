@@ -4,7 +4,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import RiskAssessment, RiskAssessmentRun, RiskScore
+from app.models import (
+    RiskAssessment,
+    RiskAssessmentRun,
+    RiskFinding,
+    RiskFindingEvidence,
+    RiskScore,
+)
 from app.services.assessment_references import assessment_run_references
 from app.services.reports import report_payload
 from scripts.reset_demo import CASE_IDS, DEMO_ORG_ID, reset_demo
@@ -45,3 +51,28 @@ def test_demo_reset_seeds_score_provenance_for_every_case(db_session: Session) -
     assert report.scores[0].run_reference in references.values()
     assert report.scores[0].input_hash
     assert report.scores[0].rule_results
+
+
+def test_demo_reset_seeds_complete_liquidity_evidence(db_session: Session) -> None:
+    reset_demo(db_session)
+
+    findings = list(
+        db_session.scalars(
+            select(RiskFinding).where(
+                RiskFinding.organization_id == DEMO_ORG_ID,
+                RiskFinding.risk_type == "liquidity_risk",
+            )
+        )
+    )
+    assert findings
+    for finding in findings:
+        evidence = list(
+            db_session.scalars(
+                select(RiskFindingEvidence).where(RiskFindingEvidence.finding_id == finding.id)
+            )
+        )
+        assert {item.locator["source_type"] for item in evidence} == {
+            "forecast_output",
+            "canonical_input",
+            "scenario_assumption",
+        }

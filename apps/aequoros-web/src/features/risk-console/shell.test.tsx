@@ -63,7 +63,7 @@ describe("risk console shell", () => {
 
     expect(
       screen.getByRole("combobox", { name: "Current case" }),
-    ).toHaveTextContent("Covenant review - Northstar Foods");
+    ).toHaveTextContent("Covenant exception — Adom Textiles & Garments Ltd");
     expect(setOrgId).toHaveBeenLastCalledWith("org-2");
     expect(setUserId).toHaveBeenLastCalledWith("user-2");
     expect(seed).toHaveBeenCalledOnce();

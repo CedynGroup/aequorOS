@@ -775,17 +775,18 @@ def test_calculation_rejects_mixed_currencies_across_all_inputs(
 
 
 @pytest.mark.parametrize(
-    ("input_model", "input_type"),
+    ("input_model", "input_type", "expected_label"),
     [
-        (FinancialBalance, "balance"),
-        (FinancialCashFlow, "cash_flow"),
-        (FinancialObligation, "obligation"),
+        (FinancialBalance, "balance", "Cash"),
+        (FinancialCashFlow, "cash_flow", "operations inflow"),
+        (FinancialObligation, "obligation", "Revolver"),
     ],
 )
 def test_calculation_rejects_missing_currencies_across_all_inputs(
     db_client: TestClient,
     input_model: type[FinancialBalance] | type[FinancialCashFlow] | type[FinancialObligation],
     input_type: str,
+    expected_label: str,
 ) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -793,7 +794,6 @@ def test_calculation_rejects_missing_currencies_across_all_inputs(
     with get_sessionmaker()() as session:
         input_row = session.scalar(select(input_model).where(input_model.case_id == case.id))
         assert input_row is not None
-        input_id = input_row.id
         input_row.currency = None
         session.commit()
 
@@ -807,7 +807,7 @@ def test_calculation_rejects_missing_currencies_across_all_inputs(
     run = response.json()
     assert run["status"] == "failed"
     assert run["error"]["code"] == "missing_currency"
-    assert run["error"]["details"]["inputs"] == [{"type": input_type, "id": str(input_id)}]
+    assert run["error"]["details"]["inputs"] == [{"type": input_type, "label": expected_label}]
     assert "currency" in run["error"]["details"]["corrective_action"]
 
 
@@ -943,7 +943,6 @@ def test_undated_cash_flow_without_reporting_period_is_actionable_failure(
         assert cash_flow is not None
         cash_flow.cash_flow_date = None
         session.commit()
-        cash_flow_id = str(cash_flow.id)
 
     run = db_client.post(
         f"/api/v1/cases/{case.id}/calculation-runs",
@@ -953,7 +952,9 @@ def test_undated_cash_flow_without_reporting_period_is_actionable_failure(
 
     assert run["status"] == "failed"
     assert run["error"]["code"] == "financial_period_missing"
-    assert run["error"]["details"]["cash_flows"] == [{"id": cash_flow_id, "category": "operations"}]
+    assert run["error"]["details"]["cash_flows"] == [
+        {"label": "operations inflow", "category": "operations"}
+    ]
     assert "cash-flow date" in run["error"]["details"]["corrective_action"]
 
 
@@ -1001,20 +1002,17 @@ def test_cash_flows_outside_selected_reporting_period_name_every_record(
         ]
         session.add_all(cash_flows)
         session.commit()
-        expected = sorted(
-            [
-                {
-                    "id": str(item.id),
-                    "category": "operations",
-                    "cash_flow_date": str(item.cash_flow_date),
-                    "reporting_period_id": str(reporting_period.id),
-                    "period_start_date": "2026-01-01",
-                    "period_end_date": "2026-12-31",
-                }
-                for item in cash_flows
-            ],
-            key=lambda item: item["id"],
-        )
+        expected = [
+            {
+                "label": "operations inflow",
+                "category": "operations",
+                "cash_flow_date": str(item.cash_flow_date),
+                "reporting_period": "2026",
+                "period_start_date": "2026-01-01",
+                "period_end_date": "2026-12-31",
+            }
+            for item in cash_flows
+        ]
 
     response = db_client.post(
         f"/api/v1/cases/{case.id}/calculation-runs",
@@ -1026,7 +1024,9 @@ def test_cash_flows_outside_selected_reporting_period_name_every_record(
     run = response.json()
     assert run["status"] == "failed"
     assert run["error"]["code"] == "cash_flow_date_outside_reporting_period"
-    assert run["error"]["details"]["cash_flows"] == expected
+    assert sorted(
+        run["error"]["details"]["cash_flows"], key=lambda item: item["cash_flow_date"]
+    ) == sorted(expected, key=lambda item: item["cash_flow_date"])
     assert "review workspace" in run["error"]["details"]["corrective_action"]
     persisted = db_client.get(
         f"/api/v1/cases/{case.id}/calculation-runs/{run['id']}", headers=headers()
@@ -1057,8 +1057,8 @@ def test_active_obligations_missing_amounts_name_every_record(db_client: TestCli
         session.add(second)
         session.commit()
         expected = {
-            str(first.id): ["principal_amount"],
-            str(second.id): ["outstanding_amount"],
+            "Revolver (USD)": ["principal_amount"],
+            "Term Loan (USD)": ["outstanding_amount"],
         }
 
     run = db_client.post(
@@ -1070,7 +1070,7 @@ def test_active_obligations_missing_amounts_name_every_record(db_client: TestCli
     assert run["status"] == "failed"
     assert run["error"]["code"] == "active_obligation_amounts_missing"
     assert {
-        item["id"]: item["missing_fields"] for item in run["error"]["details"]["obligations"]
+        item["label"]: item["missing_fields"] for item in run["error"]["details"]["obligations"]
     } == expected
     assert "mark an obligation inactive" in run["error"]["details"]["corrective_action"]
 
@@ -1168,7 +1168,6 @@ def test_unknown_balance_type_is_an_actionable_persisted_failure(db_client: Test
         assert balance is not None
         balance.balance_type = "mystery_position"
         session.commit()
-        balance_id = str(balance.id)
 
     run = db_client.post(
         f"/api/v1/cases/{case.id}/calculation-runs",
@@ -1179,7 +1178,7 @@ def test_unknown_balance_type_is_an_actionable_persisted_failure(db_client: Test
     assert run["status"] == "failed"
     assert run["error"]["code"] == "unknown_balance_type"
     assert run["error"]["details"]["balances"] == [
-        {"id": balance_id, "balance_type": "mystery_position"}
+        {"label": "Mystery Position", "balance_type": "mystery_position"}
     ]
     assert run["error"]["details"]["corrective_action"]
 

@@ -46,9 +46,11 @@ const valueTypes: AssumptionValueType[] = [
 export function ScenariosTab({
   tenant,
   caseId,
+  mutationDisabled = false,
 }: {
   tenant: TenantHeaders;
   caseId: string;
+  mutationDisabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const deepLink = scenarioDeepLink();
@@ -131,7 +133,7 @@ export function ScenariosTab({
           </Alert>
           <Button
             onClick={() => initialize.mutate()}
-            disabled={initialize.isPending}
+            disabled={mutationDisabled || initialize.isPending}
           >
             {initialize.isPending
               ? "Initializing…"
@@ -146,7 +148,7 @@ export function ScenariosTab({
   const selected =
     workspace.scenarios.find((scenario) => scenario.id === selectedId) ??
     workspace.scenarios[0];
-  const auditMode = selected.archivedAt !== null;
+  const auditMode = selected.archivedAt !== null || mutationDisabled;
   return (
     <div className="@container/scenarios space-y-3">
       {savedMessage ? (
