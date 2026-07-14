@@ -297,6 +297,38 @@ describe("CalculationsTab", () => {
     expect(riskApi.calculationRun).not.toHaveBeenCalled();
   });
 
+  it("preserves an archived evidence run in read-only audit mode", async () => {
+    const target = `calculation-run-${run().id}-forecast-period-1`;
+    const archivedScenario = { ...scenario(), archivedAt: now };
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.mocked(riskApi.scenarios).mockResolvedValue(
+      scenarioWorkspace([archivedScenario]),
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("Archived forecast audit"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Archived", { exact: true })).toBeInTheDocument();
+    expect(
+      screen.getByText("Archived scenario · read only"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("$4,550.00")).toBeInTheDocument();
+    expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, caseId, true);
+    expect(
+      screen.queryByRole("button", { name: "Run forecast" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Rerun current inputs" }),
+    ).not.toBeInTheDocument();
+  });
+
   it.each([
     "calculation-run-not-a-uuid-forecast-period-1",
     `calculation-run-${run().id}-forecast-period-0`,
