@@ -21,6 +21,21 @@ def score_case(client: TestClient, case_id: str) -> dict:
     return run.json()
 
 
+def acknowledge_open_findings(client: TestClient, case_id: str) -> dict[str, dict]:
+    response = client.get(f"/api/v1/cases/{case_id}/findings", headers=headers())
+    assert response.status_code == 200, response.text
+    reviews = {}
+    for finding in [item for item in response.json() if item["status"] == "open"]:
+        review = client.patch(
+            f"/api/v1/findings/{finding['id']}",
+            headers=headers(),
+            json={"status": "acknowledged"},
+        )
+        assert review.status_code == 200, review.text
+        reviews[finding["id"]] = review.json()
+    return reviews
+
+
 def test_cases_are_org_scoped_and_archivable(db_client: TestClient) -> None:
     cases = CaseFactory(db_client)
     case_id = str(cases.create().id)
@@ -113,16 +128,34 @@ def test_case_decision_history_and_completed_report(db_client: TestClient) -> No
     case_id = str(
         CaseFactory(db_client)
         .create(
-            metadata={"structured_data": {"vendor_criticality": "low"}},
+            metadata={"structured_data": {"vendor_criticality": "critical"}},
         )
         .id
     )
     score_case(db_client, case_id)
+    finding = db_client.post(
+        f"/api/v1/cases/{case_id}/findings",
+        headers=headers(),
+        json={
+            "risk_type": "documentation_gap",
+            "title": "Missing insurance addendum",
+            "summary": "Reviewer could not locate the current insurance addendum.",
+            "severity": "medium",
+            "details": {
+                "document": "insurance_addendum",
+                "input_hash": "a" * 64,
+                "source_case_id": case_id,
+            },
+        },
+    )
+    assert finding.status_code == 201, finding.text
+    reviews = acknowledge_open_findings(db_client, case_id)
+    review = reviews[finding.json()["id"]]
 
     response = db_client.post(
         f"/api/v1/cases/{case_id}/decisions",
         headers=headers(),
-        json={"decision": "approved", "reason": "No triggered rules"},
+        json={"decision": "approved", "reason": "All findings reviewed"},
     )
     assert response.status_code == 200, response.text
     assert response.json()["decision"] == "approved"
@@ -133,7 +166,7 @@ def test_case_decision_history_and_completed_report(db_client: TestClient) -> No
 
     response = db_client.get(f"/api/v1/cases/{case_id}/decisions", headers=headers())
     assert response.status_code == 200
-    assert response.json()[0]["reason"] == "No triggered rules"
+    assert response.json()[0]["reason"] == "All findings reviewed"
     assert response.json()[0]["decided_by_display_name"] == "Demo User One"
 
     response = db_client.get("/api/v1/cases?decision=approved", headers=headers())
@@ -143,9 +176,33 @@ def test_case_decision_history_and_completed_report(db_client: TestClient) -> No
     response = db_client.get(f"/api/v1/cases/{case_id}/report", headers=headers())
     assert response.status_code == 200, response.text
     assert response.json()["case"]["decision"] == "approved"
-    assert response.json()["scores"][0]["score"] == 0
+    assert response.json()["scores"][0]["score"] == 45
     assert response.json()["decisions"][0]["decided_by"] == "Demo User One"
     assert response.json()["scores"][0]["assessment"] == "Score"
+    assert len(response.json()["scores"][0]["input_hash"]) == 64
+    assert response.json()["scores"][0]["rule_results"] == [
+        {
+            "details": {
+                "thresholds": {"critical": 45, "high": 30},
+                "vendor_criticality": "critical",
+            },
+            "risk_type": "operational_risk",
+            "rule_id": "vendor_criticality",
+            "score_impact": 45,
+        }
+    ]
+    report_finding = next(
+        item
+        for item in response.json()["findings"]
+        if item["title"] == "Missing insurance addendum"
+    )
+    assert report_finding["details"] == {
+        "document": "insurance_addendum",
+        "input_hash": "a" * 64,
+        "reviewed_at": review["details"]["reviewed_at"],
+        "reviewed_by": "[internal identifier redacted]",
+        "source_case_id": "[internal identifier redacted]",
+    }
     assert case_id not in response.text
     assert str(USER_1) not in response.text
 

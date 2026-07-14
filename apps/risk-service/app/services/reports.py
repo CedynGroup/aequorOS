@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from html import escape
 from uuid import UUID
@@ -12,7 +13,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.domain.risk_constants import CaseStatus
 from app.models import RiskAssessment, RiskFinding, RiskScore
+from app.schemas.common import JsonObject, JsonValue
 from app.services.cases import get_case_or_404, list_case_decisions, user_display_names
+
+UUID_PATTERN = re.compile(
+    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+    re.IGNORECASE,
+)
+REDACTED_IDENTIFIER = "[internal identifier redacted]"
 
 
 class ReportCase(BaseModel):
@@ -39,6 +47,7 @@ class ReportFinding(BaseModel):
     source: str
     rule_id: str | None
     score_impact: int | None
+    details: JsonObject
 
 
 class ReportDecision(BaseModel):
@@ -61,6 +70,8 @@ class ReportScore(BaseModel):
     score: int
     risk_level: str
     scoring_version: str
+    input_hash: str
+    rule_results: list[JsonObject]
     created_at: datetime
 
 
@@ -145,6 +156,7 @@ def report_payload(db: Session, ctx: TenantContext, case_id: UUID) -> RiskReport
                 source=finding.source,
                 rule_id=finding.rule_id,
                 score_impact=finding.score_impact,
+                details=sanitize_report_object(finding.details),
             )
             for finding in findings
         ],
@@ -181,11 +193,30 @@ def report_payload(db: Session, ctx: TenantContext, case_id: UUID) -> RiskReport
                 score=score.score,
                 risk_level=score.risk_level,
                 scoring_version=score.scoring_version,
+                input_hash=score.input_hash,
+                rule_results=[sanitize_report_object(result) for result in score.rule_results],
                 created_at=score.created_at,
             )
             for score in scores
         ],
     )
+
+
+def sanitize_report_object(value: JsonObject) -> JsonObject:
+    return {
+        UUID_PATTERN.sub(REDACTED_IDENTIFIER, key): sanitize_report_value(item)
+        for key, item in value.items()
+    }
+
+
+def sanitize_report_value(value: JsonValue) -> JsonValue:
+    if isinstance(value, str):
+        return UUID_PATTERN.sub(REDACTED_IDENTIFIER, value)
+    if isinstance(value, list):
+        return [sanitize_report_value(item) for item in value]
+    if isinstance(value, dict):
+        return sanitize_report_object(value)
+    return value
 
 
 def report_html(payload: RiskReportPayload) -> str:

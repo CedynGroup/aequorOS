@@ -34,7 +34,19 @@ export interface ReportScore {
    * @type {string}
    * @memberof ReportScore
    */
+  inputHash: string;
+  /**
+   *
+   * @type {string}
+   * @memberof ReportScore
+   */
   riskLevel: string;
+  /**
+   *
+   * @type {Array<{ [key: string]: any; }>}
+   * @memberof ReportScore
+   */
+  ruleResults: Array<{ [key: string]: any }>;
   /**
    *
    * @type {number}
@@ -56,7 +68,10 @@ export function instanceOfReportScore(value: object): value is ReportScore {
   if (!("assessment" in value) || value["assessment"] === undefined)
     return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
+  if (!("inputHash" in value) || value["inputHash"] === undefined) return false;
   if (!("riskLevel" in value) || value["riskLevel"] === undefined) return false;
+  if (!("ruleResults" in value) || value["ruleResults"] === undefined)
+    return false;
   if (!("score" in value) || value["score"] === undefined) return false;
   if (!("scoringVersion" in value) || value["scoringVersion"] === undefined)
     return false;
@@ -77,7 +92,9 @@ export function ReportScoreFromJSONTyped(
   return {
     assessment: json["assessment"],
     createdAt: new Date(json["created_at"]),
+    inputHash: json["input_hash"],
     riskLevel: json["risk_level"],
+    ruleResults: json["rule_results"],
     score: json["score"],
     scoringVersion: json["scoring_version"],
   };
@@ -98,7 +115,9 @@ export function ReportScoreToJSONTyped(
   return {
     assessment: value["assessment"],
     created_at: value["createdAt"].toISOString(),
+    input_hash: value["inputHash"],
     risk_level: value["riskLevel"],
+    rule_results: value["ruleResults"],
     score: value["score"],
     scoring_version: value["scoringVersion"],
   };
