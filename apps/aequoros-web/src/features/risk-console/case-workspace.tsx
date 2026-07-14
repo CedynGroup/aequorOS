@@ -14,7 +14,7 @@ import {
 } from "../../components/ui";
 import type { TenantHeaders } from "../../lib/api";
 import type { ConsoleTab, ReportMode } from "../../lib/constants";
-import { formatJson, labelize, truncateId } from "../../lib/utils";
+import { formatJson, labelize } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { DecisionBadge, RiskBadge, StatusBadge, relative } from "./format";
 import type { UpdateSearch } from "./types";
@@ -98,7 +98,7 @@ export function CaseWorkspace({
     <Panel className="min-h-[640px] overflow-hidden">
       <PanelHeader
         title="Case Detail"
-        meta={caseId ? truncateId(caseId) : "Select a case from the queue"}
+        meta={caseId ? "Borrower risk review" : "Select a case from the queue"}
         actions={
           caseQuery.isFetching ? (
             <Loader2 className="size-4 animate-spin" />
@@ -250,7 +250,9 @@ function CaseSummary({ data }: { data?: CaseRead }) {
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-[rgb(var(--muted-foreground))]">
         <span>Assignee</span>
-        <span>{truncateId(data.assignedToUserId)}</span>
+        <span>
+          {data.assignedToUserId ? "Assigned reviewer" : "Unassigned"}
+        </span>
         <span>Created</span>
         <span>{relative(data.createdAt)}</span>
         <span>Updated</span>

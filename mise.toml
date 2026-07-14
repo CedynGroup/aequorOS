@@ -89,6 +89,11 @@ description = "Create risk service local DB roles, run migrations, and grant app
 dir = "apps/risk-service"
 run = "mise run risk-service:bootstrap-db"
 
+[tasks."risk-service:reset-demo"]
+description = "Restore the fixed demo tenant to the pristine narrative portfolio"
+dir = "apps/risk-service"
+run = "mise run risk-service:reset-demo"
+
 [tasks."risk-service:revision"]
 description = "Create risk service Alembic revision"
 dir = "apps/risk-service"

@@ -221,7 +221,7 @@ describe("CalculationsTab", () => {
 
     renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
     await user.click(
-      await screen.findByRole("button", { name: /30000000\.\.\.0002/ }),
+      await screen.findByRole("button", { name: /Archived downside/ }),
     );
 
     expect(
@@ -689,7 +689,9 @@ describe("CalculationsTab", () => {
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(tenant, caseId, undefined, 25, 25),
     );
-    expect(await screen.findByText("30000000...0026")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /Baseline/ }),
+    ).toBeInTheDocument();
     expect(riskApi.calculationRun).toHaveBeenCalledWith(
       tenant,
       caseId,
@@ -741,10 +743,14 @@ describe("CalculationsTab", () => {
     const view = renderWithQuery(
       <CalculationsTab tenant={tenant} caseId={caseId} />,
     );
-    await screen.findByText("Baseline");
+    expect(await screen.findByLabelText("Forecast scenario")).toHaveTextContent(
+      "Baseline",
+    );
 
     view.rerender(<CalculationsTab tenant={tenant} caseId={nextCaseId} />);
-    await screen.findByText("New case baseline");
+    expect(await screen.findByLabelText("Forecast scenario")).toHaveTextContent(
+      "New case baseline",
+    );
     await user.click(screen.getByRole("button", { name: "Run forecast" }));
     await user.click(
       screen.getByRole("button", { name: "Rerun current inputs" }),

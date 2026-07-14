@@ -91,6 +91,19 @@ X-Org-Id: 11111111-1111-4111-8111-111111111111
 X-User-Id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
 ```
 
+After bootstrap, restore the full narrative demo portfolio with the local
+admin connection. The reset deletes and recreates only the fixed demo tenant,
+is safe to repeat between meetings, and refuses an unexpected organization
+name:
+
+```bash
+RISK_DEMO_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:15432/risk_service \
+  mise run risk-service:reset-demo
+```
+
+The portfolio and exact presenter journey are documented in
+[`../../docs/demo-playbook.md`](../../docs/demo-playbook.md).
+
 Health endpoints:
 
 - `GET /api/health/live`

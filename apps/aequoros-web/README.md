@@ -16,15 +16,19 @@ VITE_RISK_API_BASE_URL=http://127.0.0.1:8003/api/v1 pnpm --filter @aequoros/aequ
 
 ## Demo Data
 
-Seed the demo tenants and users, cases, decisions, findings, and the canonical
-financial inputs used by the forecast journey with:
+Restore the four-case narrative portfolio, including reviewed scenarios,
+forecast history, liquidity analysis, source evidence, decisions, and the
+completed report case, with:
 
 ```bash
 RISK_DEMO_DATABASE_URL=postgresql://postgres:postgres@localhost:15432/risk_service \
-  pnpm --filter @aequoros/aequoros-web seed:demo
+  pnpm --filter @aequoros/aequoros-web reset:demo
 ```
 
-The seed runs direct inserts and needs a local admin database role because application roles are protected by row-level security.
+The command is an idempotent reset scoped to the fixed demo tenant. It needs a
+local admin database role because application roles are protected by row-level
+security. See the [ten-minute demo playbook](../../docs/demo-playbook.md) for
+the presenter path.
 
 ## Financial Review
 
@@ -110,7 +114,7 @@ docker compose up -d
 mise run risk-service:bootstrap-db
 
 cd ../aequoros-web
-RISK_DEMO_DATABASE_URL=postgresql://postgres:postgres@localhost:15432/risk_service pnpm seed:demo
+RISK_DEMO_DATABASE_URL=postgresql://postgres:postgres@localhost:15432/risk_service pnpm reset:demo
 
 cd ../..
 DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service \

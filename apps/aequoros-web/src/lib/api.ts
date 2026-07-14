@@ -44,6 +44,8 @@ import {
   DocumentReadFromJSON,
   type ErrorResponse,
   ErrorResponseFromJSON,
+  type EvidenceRead,
+  EvidenceReadFromJSON,
   type FinancialDataWorkspaceRead,
   FinancialDataWorkspaceReadFromJSON,
   type FindingCreate,
@@ -555,6 +557,13 @@ export const riskApi = {
   findings(tenant: TenantHeaders, caseId: string) {
     return apiJson<FindingRead[]>(`/cases/${caseId}/findings`, tenant, (json) =>
       (json as unknown[]).map(FindingReadFromJSON),
+    );
+  },
+  findingEvidence(tenant: TenantHeaders, findingId: string) {
+    return apiJson<EvidenceRead[]>(
+      `/findings/${findingId}/evidence`,
+      tenant,
+      (json) => (json as unknown[]).map(EvidenceReadFromJSON),
     );
   },
   createFinding(tenant: TenantHeaders, caseId: string, payload: FindingCreate) {

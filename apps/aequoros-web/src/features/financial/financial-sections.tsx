@@ -985,7 +985,15 @@ function MutationForm({
               {field.label ?? labelize(field.key)}
               {field.required ? " *" : ""}
             </Label>
-            {field.type === "select" ? (
+            {mode === "update" && field.key.endsWith("Id") ? (
+              <Input
+                aria-label={field.label ?? labelize(field.key)}
+                value={
+                  values[field.key] ? "Linked record retained" : "Not linked"
+                }
+                readOnly
+              />
+            ) : field.type === "select" ? (
               <select
                 aria-label={field.label ?? labelize(field.key)}
                 value={values[field.key] ?? ""}

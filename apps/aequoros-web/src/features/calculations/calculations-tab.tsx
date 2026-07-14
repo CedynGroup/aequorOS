@@ -23,7 +23,6 @@ import {
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { formatMoney } from "../../lib/money";
-import { truncateId } from "../../lib/utils";
 import {
   focusWorkspaceTarget,
   workspaceHash,
@@ -290,6 +289,14 @@ export function CalculationsTab({
         <div className="grid gap-3 @5xl/calculations:grid-cols-[250px_minmax(0,1fr)]">
           <RunHistory
             runs={runs.data?.runs ?? []}
+            scenarioNames={
+              new Map(
+                availableScenarios.map((scenario) => [
+                  scenario.id,
+                  scenario.name,
+                ]),
+              )
+            }
             total={runs.data?.total ?? 0}
             selectedRunId={selectedSummary?.id ?? selectedRunId}
             onSelect={setSelectedRunId}
@@ -332,6 +339,7 @@ export function CalculationsTab({
 
 function RunHistory({
   runs,
+  scenarioNames,
   total,
   selectedRunId,
   onSelect,
@@ -341,6 +349,7 @@ function RunHistory({
   onNext,
 }: {
   runs: CalculationRunSummaryRead[];
+  scenarioNames: ReadonlyMap<string, string>;
   total: number;
   selectedRunId: string;
   onSelect: (id: string) => void;
@@ -365,7 +374,9 @@ function RunHistory({
             onClick={() => onSelect(run.id)}
           >
             <span className="flex items-center justify-between gap-2">
-              <span className="font-mono">{truncateId(run.id)}</span>
+              <span className="font-medium">
+                {scenarioNames.get(run.scenarioId) ?? "Forecast"}
+              </span>
               <Badge tone={runTone[run.status]}>{run.status}</Badge>
             </span>
             <span className="mt-1 block text-[rgb(var(--muted-foreground))]">
@@ -418,8 +429,8 @@ function RunOutput({
   return (
     <Panel>
       <PanelHeader
-        title={`Run ${truncateId(run.id)}`}
-        meta={`${run.engineVersion} · input ${run.inputHash.slice(0, 12)} · as of ${dateOnly(run.asOfDate)}`}
+        title="Forecast result"
+        meta={`${run.engineVersion} · as of ${dateOnly(run.asOfDate)}`}
         actions={
           readOnly ? null : (
             <Button

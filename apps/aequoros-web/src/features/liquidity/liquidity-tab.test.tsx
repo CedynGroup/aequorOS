@@ -224,7 +224,9 @@ describe("LiquidityTab", () => {
     expect(
       await screen.findByText("Liquidity risk summary"),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Baseline · run run-1/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Baseline · deterministic forecast/),
+    ).toBeInTheDocument();
     expect(screen.getByText("-$500.00")).toBeInTheDocument();
     expect(
       screen.getByText("Thin liquidity sources coverage"),
@@ -417,7 +419,9 @@ describe("LiquidityTab", () => {
       ),
     );
     await user.click(screen.getByLabelText("Liquidity forecast run"));
-    await user.click(await screen.findByRole("option", { name: /run-older/ }));
+    await user.click(
+      await screen.findByRole("option", { name: /7\/12\/2026/ }),
+    );
     await waitFor(() =>
       expect(loadSummary).toHaveBeenCalledWith(
         tenant,
@@ -437,7 +441,9 @@ describe("LiquidityTab", () => {
         "run-2",
       ),
     );
-    expect(screen.getByText(/Downside · run run-2/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Downside · deterministic forecast/),
+    ).toBeInTheDocument();
   });
 
   it("keeps archived scenario analyses selectable and read only", async () => {
@@ -488,7 +494,7 @@ describe("LiquidityTab", () => {
     );
 
     expect(
-      await screen.findByText(/Historical downside · run/),
+      await screen.findByText(/Historical downside · deterministic forecast/),
     ).toBeInTheDocument();
     expect(screen.getAllByText("Archived").length).toBeGreaterThan(0);
     expect(
@@ -574,7 +580,7 @@ describe("LiquidityTab", () => {
       ),
     );
     expect(screen.getByLabelText("Liquidity forecast run")).toHaveTextContent(
-      "run-late...cess",
+      "Forecast from",
     );
 
     await user.click(screen.getByRole("button", { name: "Next" }));
@@ -589,7 +595,7 @@ describe("LiquidityTab", () => {
     );
     await user.click(screen.getByLabelText("Liquidity forecast run"));
     await user.click(
-      await screen.findByRole("option", { name: /run-hist\.\.\.cess/ }),
+      await screen.findByRole("option", { name: /6\/30\/2026/ }),
     );
     await waitFor(() =>
       expect(loadSummary).toHaveBeenCalledWith(
