@@ -19,8 +19,9 @@ from app.models import (
     FinancialReportingPeriod,
     LiquidityAnalysisResult,
     RiskFinding,
+    RiskFindingEvidence,
 )
-from app.services import liquidity
+from app.services import calculations, liquidity
 from app.services.liquidity import generate_findings
 from tests.api.factories import CaseFactory
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
@@ -528,6 +529,12 @@ def test_stale_run_completion_does_not_replace_newer_findings(db_client: TestCli
         )
     assert current
     assert {item.details["liquidity"]["calculation_run_id"] for item in current} == {second["id"]}
+    historical = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary?run_id={first['id']}",
+        headers=headers(),
+    ).json()
+    assert historical["findings"]
+    assert {item["status"] for item in historical["findings"]} == {"superseded"}
 
 
 def test_liquidity_summary_ranks_findings_by_severity(db_client: TestClient) -> None:
@@ -616,55 +623,76 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
                 )
             )
         )
-        for finding in findings:
-            finding.status = "superseded"
-        setup_session.commit()
-
-    with sessionmaker() as newer_session:
-        newer_run = newer_session.get(CalculationRun, UUID(newer["id"]))
-        assert newer_run is not None
-        newer_periods = list(
-            newer_session.scalars(
-                select(CalculationForecastPeriod).where(
-                    CalculationForecastPeriod.run_id == newer_run.id
-                )
+        finding_ids = [finding.id for finding in findings]
+        setup_session.execute(
+            delete(RiskFindingEvidence).where(
+                RiskFindingEvidence.finding_id.in_(finding_ids)
             )
         )
-        generate_findings(
-            newer_session,
-            TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
-            newer_run,
-            newer_periods,
-        )
-        newer_run.status = "succeeded"
-        newer_session.flush()
+        for finding in findings:
+            setup_session.delete(finding)
+        setup_session.commit()
 
-        def publish_older() -> None:
-            with sessionmaker() as older_session:
-                older_run = older_session.get(CalculationRun, UUID(older["id"]))
-                assert older_run is not None
-                older_periods = list(
-                    older_session.scalars(
-                        select(CalculationForecastPeriod).where(
-                            CalculationForecastPeriod.run_id == older_run.id
-                        )
+    context = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+
+    def publish_older() -> None:
+        with (
+            sessionmaker() as older_session,
+            liquidity.serialize_finding_publication(
+                older_session, context, case.id, UUID(scenario["id"])
+            ),
+        ):
+            calculations._begin_repeatable_read(older_session)
+            older_run = older_session.get(CalculationRun, UUID(older["id"]))
+            assert older_run is not None
+            older_periods = list(
+                older_session.scalars(
+                    select(CalculationForecastPeriod).where(
+                        CalculationForecastPeriod.run_id == older_run.id
                     )
                 )
-                generate_findings(
-                    older_session,
-                    TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
-                    older_run,
-                    older_periods,
-                )
-                older_run.status = "succeeded"
-                older_session.commit()
+            )
+            generate_findings(
+                older_session,
+                context,
+                older_run,
+                older_periods,
+                publication_locked=True,
+            )
+            older_run.status = "succeeded"
+            older_session.commit()
 
-        with ThreadPoolExecutor(max_workers=1) as executor:
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with (
+            sessionmaker() as newer_session,
+            liquidity.serialize_finding_publication(
+                newer_session, context, case.id, UUID(scenario["id"])
+            ),
+        ):
+            calculations._begin_repeatable_read(newer_session)
+            newer_run = newer_session.get(CalculationRun, UUID(newer["id"]))
+            assert newer_run is not None
+            newer_periods = list(
+                newer_session.scalars(
+                    select(CalculationForecastPeriod).where(
+                        CalculationForecastPeriod.run_id == newer_run.id
+                    )
+                )
+            )
+            generate_findings(
+                newer_session,
+                context,
+                newer_run,
+                newer_periods,
+                publication_locked=True,
+            )
+            newer_run.status = "succeeded"
+            newer_session.flush()
             future = executor.submit(publish_older)
             with pytest.raises(FutureTimeoutError):
                 future.result(timeout=0.2)
             newer_session.commit()
-            future.result(timeout=5)
+        future.result(timeout=5)
 
     with sessionmaker() as verification_session:
         current = list(
@@ -678,3 +706,9 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
         )
     assert current
     assert {item.details["liquidity"]["calculation_run_id"] for item in current} == {newer["id"]}
+    historical = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary?run_id={older['id']}",
+        headers=headers(),
+    ).json()
+    assert historical["findings"]
+    assert {item["status"] for item in historical["findings"]} == {"superseded"}

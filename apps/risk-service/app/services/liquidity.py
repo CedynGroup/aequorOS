@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -9,6 +11,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -214,9 +217,12 @@ def generate_findings(
     ctx: TenantContext,
     run: CalculationRun,
     periods: list[CalculationForecastPeriod],
+    *,
+    publication_locked: bool = False,
 ) -> None:
     result = calculate_metrics(periods)
-    lock_finding_publication(db, ctx, run.case_id, run.scenario_id)
+    if not publication_locked:
+        lock_finding_publication(db, ctx, run.case_id, run.scenario_id)
     analysis = db.scalar(
         select(LiquidityAnalysisResult).where(
             LiquidityAnalysisResult.organization_id == ctx.organization_id,
@@ -253,44 +259,31 @@ def generate_findings(
             ),
         )
     )
-    if newer_run_id is not None:
-        record_event(
-            db,
-            ctx,
-            event_type="liquidity_analysis.completed",
-            entity_type="calculation_run",
-            entity_id=run.id,
-            details={
-                "finding_count": 0,
-                "rule_version": RULE_VERSION,
-                "superseded_by_calculation_run_id": str(newer_run_id),
-            },
-        )
-        return
-    prior = list(
-        db.scalars(
-            select(RiskFinding).where(
-                RiskFinding.organization_id == ctx.organization_id,
-                RiskFinding.case_id == run.case_id,
-                RiskFinding.risk_type == RISK_TYPE,
-                RiskFinding.source == "deterministic_rule",
-                RiskFinding.status.in_(("open", "needs_review")),
+    if newer_run_id is None:
+        prior = list(
+            db.scalars(
+                select(RiskFinding).where(
+                    RiskFinding.organization_id == ctx.organization_id,
+                    RiskFinding.case_id == run.case_id,
+                    RiskFinding.risk_type == RISK_TYPE,
+                    RiskFinding.source == "deterministic_rule",
+                    RiskFinding.status.in_(("open", "needs_review")),
+                )
             )
         )
-    )
-    for finding in prior:
-        liquidity = finding.details.get("liquidity", {})
-        if liquidity.get("scenario_id") == str(run.scenario_id):
-            finding.status = "superseded"
-            finding.disposition_reason = "Superseded by the latest liquidity forecast run."
-            record_event(
-                db,
-                ctx,
-                event_type="liquidity_finding.superseded",
-                entity_type="risk_finding",
-                entity_id=finding.id,
-                details={"superseded_by_calculation_run_id": str(run.id)},
-            )
+        for finding in prior:
+            liquidity = finding.details.get("liquidity", {})
+            if liquidity.get("scenario_id") == str(run.scenario_id):
+                finding.status = "superseded"
+                finding.disposition_reason = "Superseded by the latest liquidity forecast run."
+                record_event(
+                    db,
+                    ctx,
+                    event_type="liquidity_finding.superseded",
+                    entity_type="risk_finding",
+                    entity_id=finding.id,
+                    details={"superseded_by_calculation_run_id": str(run.id)},
+                )
 
     metrics_by_key = {item.key: item.model_dump(mode="json") for item in result.metrics}
     for concern in result.concerns:
@@ -303,10 +296,15 @@ def generate_findings(
             summary=concern["summary"],
             rationale=concern["rationale"],
             severity=concern["severity"],
-            status="open",
+            status="superseded" if newer_run_id is not None else "open",
             source="deterministic_rule",
             rule_id=concern["rule_id"],
             rule_version=RULE_VERSION,
+            disposition_reason=(
+                "Superseded by a newer liquidity forecast run."
+                if newer_run_id is not None
+                else None
+            ),
             details={
                 "liquidity": {
                     "workflow_id": WORKFLOW_ID,
@@ -399,7 +397,15 @@ def generate_findings(
         event_type="liquidity_analysis.completed",
         entity_type="calculation_run",
         entity_id=run.id,
-        details={"finding_count": len(result.concerns), "rule_version": RULE_VERSION},
+        details={
+            "finding_count": len(result.concerns),
+            "rule_version": RULE_VERSION,
+            **(
+                {"superseded_by_calculation_run_id": str(newer_run_id)}
+                if newer_run_id is not None
+                else {}
+            ),
+        },
     )
 
 
@@ -411,9 +417,34 @@ def lock_finding_publication(
 ) -> None:
     if db.get_bind().dialect.name != "postgresql":
         return
-    scope = f"{ctx.organization_id}:{case_id}:{scenario_id}".encode()
-    lock_key = int.from_bytes(hashlib.sha256(scope).digest()[:8], signed=True)
+    lock_key = _finding_publication_lock_key(ctx, case_id, scenario_id)
     db.execute(select(func.pg_advisory_xact_lock(lock_key)))
+
+
+@contextmanager
+def serialize_finding_publication(
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    scenario_id: UUID,
+) -> Iterator[None]:
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        yield
+        return
+    engine = bind.engine if isinstance(bind, Connection) else bind
+    lock_key = _finding_publication_lock_key(ctx, case_id, scenario_id)
+    with engine.connect() as connection:
+        connection.execute(select(func.pg_advisory_lock(lock_key)))
+        try:
+            yield
+        finally:
+            connection.execute(select(func.pg_advisory_unlock(lock_key)))
+
+
+def _finding_publication_lock_key(ctx: TenantContext, case_id: UUID, scenario_id: UUID) -> int:
+    scope = f"{ctx.organization_id}:{case_id}:{scenario_id}".encode()
+    return int.from_bytes(hashlib.sha256(scope).digest()[:8], signed=True)
 
 
 def get_summary(

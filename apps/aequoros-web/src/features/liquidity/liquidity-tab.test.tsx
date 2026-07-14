@@ -237,6 +237,32 @@ describe("LiquidityTab", () => {
     );
   });
 
+  it("renders superseded findings for an explicitly selected historical run", async () => {
+    vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(
+      summary({
+        findings: [
+          finding({
+            status: "superseded",
+            dispositionReason: "Superseded by a newer liquidity forecast run.",
+          }),
+        ],
+      }),
+    );
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    expect(await screen.findByText("superseded")).toBeInTheDocument();
+    expect(
+      screen.getByText("Thin liquidity sources coverage"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Acknowledge" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Dismiss" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("falls back to plain text for invalid currency codes", async () => {
     vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(
       summary({
