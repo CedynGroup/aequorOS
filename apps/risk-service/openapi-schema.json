@@ -6492,9 +6492,29 @@
       "LiquidityMetricRead": {
         "additionalProperties": false,
         "properties": {
+          "availability": {
+            "default": "available",
+            "enum": [
+              "available",
+              "unavailable"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
           "description": {
             "title": "Description",
             "type": "string"
+          },
+          "diagnostic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Liquidity Metric Diagnostic"
           },
           "key": {
             "title": "Key",
@@ -6532,9 +6552,16 @@
             "type": "string"
           },
           "value": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Value",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Liquidity Metric Value"
           }
         },
         "required": [

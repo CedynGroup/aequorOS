@@ -1,12 +1,14 @@
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import date
+from threading import Event
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 from sqlalchemy import create_engine, delete, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
@@ -59,6 +61,13 @@ def test_liquidity_openapi_contracts(client: TestClient) -> None:
         "LiquidityFindingReview",
     ):
         assert components[name]["additionalProperties"] is False
+    metric = components["LiquidityMetricRead"]
+    assert metric["properties"]["availability"]["enum"] == ["available", "unavailable"]
+    assert {item.get("type") for item in metric["properties"]["value"]["anyOf"]} == {
+        "string",
+        "null",
+    }
+    assert "diagnostic" in metric["properties"]
 
 
 def test_legacy_successful_run_returns_honest_unavailable_summary(
@@ -356,6 +365,34 @@ def test_liquidity_summary_reads_immutable_persisted_metrics(
         headers=headers(),
         params={"run_id": run["id"]},
     ).json()
+    diagnostic = (
+        "Credit reliance is unavailable because projected outflows plus debt repayment "
+        "must be positive; period 1 uses 0.0000. The ratio is undefined and was "
+        "excluded from threshold classification."
+    )
+    with get_sessionmaker()() as session:
+        analysis = session.scalar(
+            select(LiquidityAnalysisResult).where(LiquidityAnalysisResult.run_id == UUID(run["id"]))
+        )
+        assert analysis is not None
+        persisted = dict(analysis.result)
+        persisted["metrics"] = [
+            {
+                **metric,
+                **(
+                    {
+                        "value": None,
+                        "availability": "unavailable",
+                        "diagnostic": diagnostic,
+                    }
+                    if metric["key"] == "credit_reliance"
+                    else {}
+                ),
+            }
+            for metric in persisted["metrics"]
+        ]
+        analysis.result = persisted
+        session.commit()
 
     def reject_recalculation(_periods: object) -> object:
         raise AssertionError("historical liquidity metrics were recalculated")
@@ -369,7 +406,13 @@ def test_liquidity_summary_reads_immutable_persisted_metrics(
 
     assert historical.status_code == 200, historical.text
     assert historical.json()["analysis_version"] == "liquidity-v1.0.0"
-    assert historical.json()["metrics"] == first["metrics"]
+    metrics = {metric["key"]: metric for metric in historical.json()["metrics"]}
+    assert metrics["credit_reliance"]["value"] is None
+    assert metrics["credit_reliance"]["availability"] == "unavailable"
+    assert metrics["credit_reliance"]["diagnostic"] == diagnostic
+    assert metrics["minimum_cash_balance"] == next(
+        metric for metric in first["metrics"] if metric["key"] == "minimum_cash_balance"
+    )
 
 
 def test_zero_finding_run_persists_liquidity_analysis(db_client: TestClient) -> None:
@@ -587,6 +630,82 @@ def test_liquidity_review_rejects_archived_scenario_findings(
         assert finding.status == "open"
         assert (
             session.scalar(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id == UUID(finding_id),
+                    AuditEvent.event_type == "liquidity_finding.reviewed",
+                )
+            )
+            is None
+        )
+
+
+def test_liquidity_review_cannot_overwrite_concurrent_supersession(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session_factory = get_sessionmaker()
+    with session_factory() as dialect_session:
+        if dialect_session.get_bind().dialect.name != "postgresql":
+            pytest.skip("PostgreSQL advisory locks are required for concurrency coverage.")
+
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+    finding_id = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers()
+    ).json()["findings"][0]["id"]
+    context = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    review_waiting = Event()
+    original_lock = liquidity.lock_finding_publication
+
+    def observed_lock(
+        db: Session,
+        tenant_context: TenantContext,
+        locked_case_id: UUID,
+        scenario_id: UUID,
+    ) -> None:
+        review_waiting.set()
+        original_lock(db, tenant_context, locked_case_id, scenario_id)
+
+    monkeypatch.setattr(liquidity, "lock_finding_publication", observed_lock)
+
+    def review() -> Response:
+        return db_client.post(
+            f"/api/v1/cases/{case.id}/liquidity/findings/{finding_id}/review",
+            headers=headers(),
+            json={"action": "acknowledge"},
+        )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with (
+            session_factory() as outer_session,
+            liquidity.serialize_finding_publication(
+                outer_session, context, case.id, UUID(scenario["id"])
+            ) as publication_session,
+        ):
+            future = executor.submit(review)
+            assert review_waiting.wait(timeout=5)
+            finding = publication_session.get(RiskFinding, UUID(finding_id))
+            assert finding is not None
+            finding.status = "superseded"
+            finding.disposition_reason = "Superseded by a newer liquidity forecast run."
+            publication_session.commit()
+            with pytest.raises(FutureTimeoutError):
+                future.result(timeout=0.2)
+        response = future.result(timeout=5)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["message"] == "Liquidity finding is read-only."
+    with session_factory() as verification_session:
+        finding = verification_session.get(RiskFinding, UUID(finding_id))
+        assert finding is not None
+        assert finding.status == "superseded"
+        assert (
+            verification_session.scalar(
                 select(AuditEvent).where(
                     AuditEvent.entity_id == UUID(finding_id),
                     AuditEvent.event_type == "liquidity_finding.reviewed",

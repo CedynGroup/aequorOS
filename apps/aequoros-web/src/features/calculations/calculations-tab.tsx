@@ -52,8 +52,8 @@ export function CalculationsTab({
   const [runOffset, setRunOffset] = useState(0);
   const runsKey = ["calculation-runs", tenant, caseId, runOffset] as const;
   const scenarios = useQuery({
-    queryKey: ["scenarios", tenant, caseId],
-    queryFn: () => riskApi.scenarios(tenant, caseId),
+    queryKey: ["scenarios", tenant, caseId, Boolean(deepLink)],
+    queryFn: () => riskApi.scenarios(tenant, caseId, Boolean(deepLink)),
   });
   const runs = useQuery({
     queryKey: runsKey,
@@ -166,62 +166,82 @@ export function CalculationsTab({
   }
   const selectedSummary =
     runs.data?.runs.find((run) => run.id === selectedRunId) ?? selectedRun.data;
+  const selectedScenario = availableScenarios.find(
+    (scenario) => scenario.id === selectedRun.data?.scenarioId,
+  );
+  const archivedAudit = Boolean(deepLink && selectedScenario?.archivedAt);
   const hasRunHistory = Boolean(runs.data?.runs.length || selectedRunId);
   const isSubmitting = start.isPending || rerun.isPending;
 
   return (
     <div className="@container/calculations space-y-3">
-      <Panel>
-        <PanelHeader
-          title="Balance-sheet forecast"
-          meta="Deterministic annual projection using canonical balances and reviewed assumptions"
-          actions={
-            isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null
-          }
-        />
-        <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_140px_auto] md:items-end">
-          <div>
-            <Label>Scenario</Label>
-            <Select
-              ariaLabel="Forecast scenario"
-              value={activeScenarioId}
-              onValueChange={setScenarioId}
-              placeholder="Choose a scenario"
-            >
-              {availableScenarios.map((scenario) => (
-                <SelectItem key={scenario.id} value={scenario.id}>
-                  {scenario.name}
-                </SelectItem>
-              ))}
-            </Select>
+      {archivedAudit ? (
+        <Panel>
+          <PanelHeader
+            title="Archived forecast audit"
+            meta="Historical calculation evidence is preserved read only"
+            actions={<Badge tone="warning">Archived</Badge>}
+          />
+          <div className="p-3 text-sm">
+            {selectedScenario?.name} · mutation and rerun controls are
+            unavailable in audit mode.
           </div>
-          <div>
-            <Label>Annual periods</Label>
-            <Input
-              aria-label="Forecast periods"
-              type="number"
-              min={1}
-              max={12}
-              step={1}
-              value={forecastPeriods}
-              onChange={(event) => setForecastPeriods(event.target.value)}
-            />
-          </div>
-          <Button
-            disabled={
-              isSubmitting || !activeScenarioId || !validForecastPeriods
+        </Panel>
+      ) : (
+        <Panel>
+          <PanelHeader
+            title="Balance-sheet forecast"
+            meta="Deterministic annual projection using canonical balances and reviewed assumptions"
+            actions={
+              isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null
             }
-            onClick={() => start.mutate()}
-          >
-            {start.isPending ? "Starting…" : "Run forecast"}
-          </Button>
-        </div>
-        {start.isError ? (
-          <div className="px-3 pb-3">
-            <ErrorPanel error={start.error} />
+          />
+          <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_140px_auto] md:items-end">
+            <div>
+              <Label>Scenario</Label>
+              <Select
+                ariaLabel="Forecast scenario"
+                value={activeScenarioId}
+                onValueChange={setScenarioId}
+                placeholder="Choose a scenario"
+              >
+                {availableScenarios
+                  .filter((scenario) => !scenario.archivedAt)
+                  .map((scenario) => (
+                    <SelectItem key={scenario.id} value={scenario.id}>
+                      {scenario.name}
+                    </SelectItem>
+                  ))}
+              </Select>
+            </div>
+            <div>
+              <Label>Annual periods</Label>
+              <Input
+                aria-label="Forecast periods"
+                type="number"
+                min={1}
+                max={12}
+                step={1}
+                value={forecastPeriods}
+                onChange={(event) => setForecastPeriods(event.target.value)}
+              />
+            </div>
+            <Button
+              disabled={
+                isSubmitting || !activeScenarioId || !validForecastPeriods
+              }
+              onClick={() => start.mutate()}
+            >
+              {start.isPending ? "Starting…" : "Run forecast"}
+            </Button>
           </div>
-        ) : null}
-      </Panel>
+          {start.isError ? (
+            <div className="px-3 pb-3">
+              <ErrorPanel error={start.error} />
+            </div>
+          ) : null}
+        </Panel>
+      )}
 
       {!hasRunHistory ? (
         <Alert title="No calculation runs">
@@ -251,6 +271,7 @@ export function CalculationsTab({
               run={selectedRun.data}
               latestSuccessfulRunId={runs.data?.latestSuccessfulRunId}
               isRerunning={rerun.isPending}
+              readOnly={archivedAudit}
               onRerun={() => rerun.mutate(selectedRun.data.id)}
               onShowLatest={() =>
                 runs.data?.latestSuccessfulRunId &&
@@ -337,12 +358,14 @@ function RunOutput({
   run,
   latestSuccessfulRunId,
   isRerunning,
+  readOnly,
   onRerun,
   onShowLatest,
 }: {
   run: CalculationRunRead;
   latestSuccessfulRunId?: string | null;
   isRerunning: boolean;
+  readOnly: boolean;
   onRerun: () => void;
   onShowLatest: () => void;
 }) {
@@ -353,20 +376,28 @@ function RunOutput({
         title={`Run ${truncateId(run.id)}`}
         meta={`${run.engineVersion} · input ${run.inputHash.slice(0, 12)} · as of ${dateOnly(run.asOfDate)}`}
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isRerunning || running}
-            onClick={onRerun}
-          >
-            <RefreshCw
-              className={isRerunning ? "size-3 animate-spin" : "size-3"}
-            />
-            {isRerunning ? "Rerunning…" : "Rerun current inputs"}
-          </Button>
+          readOnly ? null : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isRerunning || running}
+              onClick={onRerun}
+            >
+              <RefreshCw
+                className={isRerunning ? "size-3 animate-spin" : "size-3"}
+              />
+              {isRerunning ? "Rerunning…" : "Rerun current inputs"}
+            </Button>
+          )
         }
       />
       <div className="space-y-3 p-3">
+        {readOnly ? (
+          <Alert title="Archived scenario · read only" tone="warning">
+            This exact historical forecast is available for audit. Rerun and
+            mutation controls are unavailable.
+          </Alert>
+        ) : null}
         {running ? (
           <Alert title="Forecast is running" tone="warning">
             Status refreshes automatically while calculation is in progress.

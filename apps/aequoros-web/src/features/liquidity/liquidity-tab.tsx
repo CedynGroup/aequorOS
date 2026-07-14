@@ -353,6 +353,11 @@ function MetricCard({ metric }: { metric: LiquidityMetricRead }) {
         {metric.periodNumber ? `Period ${metric.periodNumber} · ` : ""}
         {metric.description}
       </div>
+      {metric.availability === "unavailable" && metric.diagnostic ? (
+        <div className="mt-2 text-[11px] text-amber-700">
+          {metric.diagnostic}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -477,6 +482,8 @@ function LiquidityFindingCard({
 }
 
 function formatMetric(metric: LiquidityMetricRead) {
+  if (metric.availability === "unavailable" || metric.value === null)
+    return "Not available";
   const value = Number(metric.value);
   if (metric.unit === "ratio") return `${value.toFixed(2)}x`;
   if (metric.unit === "forecast_periods") return `${value} periods`;

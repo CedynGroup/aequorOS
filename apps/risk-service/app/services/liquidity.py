@@ -87,24 +87,38 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
     peak_gap_period = minimum
     peak_gap = max(-peak_gap_period.cash, Decimal(0))
     first_negative = next((item for item in ordered if item.cash < 0), None)
-    coverage_rows = [
-        (
-            item,
-            _ratio(
-                item.projected_inflows + item.credit_draw,
-                item.projected_outflows + item.debt_repayment,
-            ),
+    uses_by_period = [(item, item.projected_outflows + item.debt_repayment) for item in ordered]
+    invalid_uses = [(item, uses) for item, uses in uses_by_period if uses <= 0]
+    coverage_period: CalculationForecastPeriod | None = None
+    minimum_coverage: Decimal | None = None
+    coverage_diagnostic: str | None = None
+    if invalid_uses:
+        coverage_diagnostic = _undefined_uses_diagnostic("Sources coverage", invalid_uses)
+    else:
+        coverage_rows = [
+            (item, _ratio(item.projected_inflows + item.credit_draw, uses))
+            for item, uses in uses_by_period
+        ]
+        coverage_period, minimum_coverage = min(
+            coverage_rows, key=lambda item: (item[1], item[0].period_number)
         )
-        for item in ordered
-    ]
-    coverage_period, minimum_coverage = min(
-        coverage_rows, key=lambda item: (item[1], item[0].period_number)
-    )
-    total_uses = sum(
-        (item.projected_outflows + item.debt_repayment for item in ordered), Decimal(0)
-    )
+    total_uses = sum((uses for _, uses in uses_by_period), Decimal(0))
     total_draw = sum((item.credit_draw for item in ordered), Decimal(0))
-    credit_reliance = _ratio(total_draw, total_uses) if total_uses > 0 else Decimal("0.0000")
+    invalid_credit_uses = [
+        (item, uses)
+        for item, uses in uses_by_period
+        if uses < 0 or (uses == 0 and item.credit_draw != 0)
+    ]
+    if total_uses <= 0 and not invalid_credit_uses:
+        invalid_credit_uses = invalid_uses
+    credit_reliance = (
+        None if invalid_credit_uses or total_uses <= 0 else _ratio(total_draw, total_uses)
+    )
+    credit_reliance_diagnostic = (
+        _undefined_uses_diagnostic("Credit reliance", invalid_credit_uses)
+        if invalid_credit_uses
+        else None
+    )
     credit_reliance_periods = [
         item
         for item in ordered
@@ -136,8 +150,10 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
             label="Minimum sources coverage",
             value=minimum_coverage,
             unit="ratio",
-            period_number=coverage_period.period_number,
-            period_end=coverage_period.period_end,
+            availability="unavailable" if minimum_coverage is None else "available",
+            diagnostic=coverage_diagnostic,
+            period_number=coverage_period.period_number if coverage_period else None,
+            period_end=coverage_period.period_end if coverage_period else None,
             description=(
                 "Lowest projected inflows plus credit draws divided by outflows plus "
                 "debt repayment."
@@ -148,6 +164,8 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
             label="Credit reliance",
             value=credit_reliance,
             unit="ratio",
+            availability="unavailable" if credit_reliance is None else "available",
+            diagnostic=credit_reliance_diagnostic,
             description="Forecast credit draws divided by total projected liquidity uses.",
         ),
         LiquidityMetricRead(
@@ -179,6 +197,11 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
                     f"{_money(peak_gap)} {peak_gap_period.currency}."
                 ),
                 "period": peak_gap_period,
+                "periods": (
+                    [first_negative]
+                    if first_negative.period_number == peak_gap_period.period_number
+                    else [first_negative, peak_gap_period]
+                ),
                 "metric_keys": [
                     "minimum_cash_balance",
                     "peak_liquidity_gap",
@@ -186,7 +209,11 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
                 ],
             }
         )
-    if minimum_coverage < Decimal("1.20"):
+    if (
+        minimum_coverage is not None
+        and coverage_period is not None
+        and minimum_coverage < Decimal("1.20")
+    ):
         concerns.append(
             {
                 "rule_id": SOURCES_COVERAGE_RULE_ID,
@@ -204,7 +231,7 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
                 "metric_keys": ["minimum_sources_coverage"],
             }
         )
-    if credit_reliance > Decimal("0.25"):
+    if credit_reliance is not None and credit_reliance > Decimal("0.25"):
         concerns.append(
             {
                 "rule_id": CREDIT_RELIANCE_RULE_ID,
@@ -580,6 +607,26 @@ def review_finding(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Liquidity finding not found."
         )
+    lock_finding_publication(db, ctx, case_id, calculation_run.scenario_id)
+    db.expire(finding)
+    finding = db.scalar(
+        select(RiskFinding)
+        .where(
+            RiskFinding.id == finding_id,
+            RiskFinding.organization_id == ctx.organization_id,
+            RiskFinding.case_id == case_id,
+        )
+        .with_for_update()
+    )
+    if finding is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Liquidity finding not found."
+        )
+    calculation_run = _finding_calculation_run(db, ctx, finding)
+    if calculation_run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Liquidity finding not found."
+        )
     scenario_archived_at = db.scalar(
         select(RiskScenario.archived_at).where(
             RiskScenario.id == calculation_run.scenario_id,
@@ -690,8 +737,22 @@ def _finding_read(db: Session, ctx: TenantContext, finding: RiskFinding) -> Liqu
 
 def _ratio(numerator: Decimal, denominator: Decimal) -> Decimal:
     if denominator <= 0:
-        return Decimal("999.0000")
+        raise ValueError("Liquidity ratios require positive uses.")
     return (numerator / denominator).quantize(RATIO, rounding=ROUND_HALF_UP)
+
+
+def _undefined_uses_diagnostic(
+    metric_label: str,
+    invalid_uses: list[tuple[CalculationForecastPeriod, Decimal]],
+) -> str:
+    inputs = ", ".join(
+        f"period {period.period_number} uses {_money(uses)}" for period, uses in invalid_uses
+    )
+    return (
+        f"{metric_label} is unavailable because projected outflows plus debt "
+        f"repayment must be positive; {inputs}. The ratio is undefined and was "
+        "excluded from threshold classification."
+    )
 
 
 def _money(value: Decimal) -> Decimal:

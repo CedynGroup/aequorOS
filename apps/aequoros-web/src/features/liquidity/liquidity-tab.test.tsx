@@ -237,6 +237,36 @@ describe("LiquidityTab", () => {
     );
   });
 
+  it("renders undefined ratio metrics with their persisted diagnostic", async () => {
+    vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(
+      summary({
+        metrics: [
+          {
+            key: "minimum_sources_coverage",
+            label: "Minimum sources coverage",
+            value: null,
+            unit: "ratio",
+            availability: "unavailable",
+            diagnostic:
+              "Sources coverage is unavailable because projected outflows plus debt repayment must be positive; period 1 uses 0.0000. The ratio is undefined and was excluded from threshold classification.",
+            periodNumber: null,
+            periodEnd: null,
+            description: "Lowest sources coverage across the forecast.",
+          },
+        ],
+        findings: [],
+      }),
+    );
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    expect(await screen.findByText("Not available")).toBeInTheDocument();
+    expect(screen.getByText(/period 1 uses 0\.0000/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/excluded from threshold classification/),
+    ).toBeInTheDocument();
+  });
+
   it("renders superseded findings for an explicitly selected historical run", async () => {
     vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(
       summary({

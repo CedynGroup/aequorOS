@@ -137,6 +137,37 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await page.getByLabel("Copy scenario name").fill("Downside liquidity copy");
   await page.getByRole("button", { name: "Copy scenario" }).click();
   await expect(scenariosPanel.getByText("Scenario copied")).toBeVisible();
+  const tenantHeaders = {
+    "X-Org-Id": demoTenant.orgId,
+    "X-User-Id": demoTenant.userId,
+  };
+  const copiedWorkspaceResponse = await request.get(
+    `${apiBaseUrl}/cases/${northstarCase.id}/scenarios`,
+    { headers: tenantHeaders },
+  );
+  const copiedWorkspace = await copiedWorkspaceResponse.json();
+  const copiedScenario = copiedWorkspace.scenarios.find(
+    (scenario: { name: string }) => scenario.name === "Downside liquidity copy",
+  );
+  for (const assumption of copiedScenario.assumptions) {
+    const reviewed = await request.post(
+      `${apiBaseUrl}/cases/${northstarCase.id}/scenarios/${copiedScenario.id}/assumptions/${assumption.id}/review`,
+      {
+        headers: tenantHeaders,
+        data: { reason: "Prepare archived forecast evidence" },
+      },
+    );
+    expect(reviewed.ok()).toBe(true);
+  }
+  const archivedRunResponse = await request.post(
+    `${apiBaseUrl}/cases/${northstarCase.id}/calculation-runs`,
+    {
+      headers: tenantHeaders,
+      data: { scenario_id: copiedScenario.id, forecast_periods: 3 },
+    },
+  );
+  expect(archivedRunResponse.ok()).toBe(true);
+  const archivedRun = await archivedRunResponse.json();
   await page.getByRole("button", { name: "Archive scenario" }).click();
   await expect(scenariosPanel.getByText("Scenario archived")).toBeVisible();
   await expect(
@@ -182,6 +213,19 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
     0,
   );
   await expect(page.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
+
+  await page.goto(
+    `/cases/${northstarCase.id}?tab=calculations#calculation-run-${archivedRun.id}-forecast-period-1`,
+  );
+  await expect(page.getByText("Archived forecast audit")).toBeVisible();
+  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
+  await expect(page.getByText("Archived scenario · read only")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run forecast" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("button", { name: "Rerun current inputs" }),
+  ).toHaveCount(0);
 
   await page
     .getByLabel("Tenant org id")
@@ -415,7 +459,20 @@ test("renders liquidity empty and error states", async ({ page }) => {
         status: "ready",
         currency: "USD",
         as_of_date: "2026-07-14",
-        metrics: [],
+        metrics: [
+          {
+            key: "minimum_sources_coverage",
+            label: "Minimum sources coverage",
+            value: null,
+            unit: "ratio",
+            availability: "unavailable",
+            diagnostic:
+              "Sources coverage is unavailable because projected outflows plus debt repayment must be positive; period 1 uses 0.0000. The ratio is undefined and was excluded from threshold classification.",
+            period_number: null,
+            period_end: null,
+            description: "Lowest sources coverage across the forecast.",
+          },
+        ],
         findings: [],
         generated_at: "2026-07-14T00:00:00Z",
       }),
@@ -427,6 +484,8 @@ test("renders liquidity empty and error states", async ({ page }) => {
       "The selected forecast did not cross an MVP liquidity risk threshold.",
     ),
   ).toBeVisible();
+  await expect(page.getByText("Not available")).toBeVisible();
+  await expect(page.getByText(/period 1 uses 0\.0000/)).toBeVisible();
 
   await page.unroute(summaryPattern);
   await page.route(summaryPattern, async (route) => {

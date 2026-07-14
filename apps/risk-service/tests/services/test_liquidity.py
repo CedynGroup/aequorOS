@@ -57,12 +57,18 @@ def test_calculates_liquidity_metrics_and_findings_deterministically() -> None:
     assert result.concerns[0]["severity"] == "high"
 
 
-def test_zero_liquidity_uses_do_not_create_false_credit_reliance() -> None:
-    result = calculate_metrics([_period(1, cash="100", inflows="0", outflows="0")])
+@pytest.mark.parametrize("outflows", ["0", "-10"])
+def test_non_positive_liquidity_uses_make_ratios_unavailable(outflows: str) -> None:
+    result = calculate_metrics([_period(1, cash="100", inflows="0", outflows=outflows)])
 
     metrics = {item.key: item for item in result.metrics}
-    assert metrics["minimum_sources_coverage"].value == Decimal("999.0000")
-    assert metrics["credit_reliance"].value == Decimal("0.0000")
+    for key in ("minimum_sources_coverage", "credit_reliance"):
+        assert metrics[key].value is None
+        assert metrics[key].availability == "unavailable"
+        diagnostic = metrics[key].diagnostic
+        assert diagnostic is not None
+        assert f"period 1 uses {Decimal(outflows):.4f}" in diagnostic
+        assert "ratio is undefined" in diagnostic
     assert result.concerns == []
 
 
@@ -94,7 +100,14 @@ def test_peak_gap_metric_and_evidence_use_the_largest_shortfall_period() -> None
     assert peak_gap.value == Decimal("100.0000")
     assert peak_gap.period_number == 2
     assert result.concerns[0]["period"].period_number == 2
+    assert [period.period_number for period in result.concerns[0]["periods"]] == [1, 2]
     assert "forecast period 2" in result.concerns[0]["rationale"]
+
+
+def test_negative_cash_evidence_deduplicates_a_shared_period() -> None:
+    result = calculate_metrics([_period(1, cash="-10", inflows="50", outflows="60")])
+
+    assert [period.period_number for period in result.concerns[0]["periods"]] == [1]
 
 
 def test_rejects_non_sequential_forecast_outputs() -> None:

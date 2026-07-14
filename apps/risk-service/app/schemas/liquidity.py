@@ -29,11 +29,21 @@ class ClosedModel(BaseModel):
 class LiquidityMetricRead(ClosedModel):
     key: str
     label: str
-    value: Decimal
+    value: Decimal | None = Field(title="Liquidity Metric Value")
     unit: str
+    availability: Literal["available", "unavailable"] = "available"
+    diagnostic: str | None = Field(default=None, title="Liquidity Metric Diagnostic")
     period_number: int | None = None
     period_end: date | None = None
     description: str
+
+    @model_validator(mode="after")
+    def validate_availability(self) -> LiquidityMetricRead:
+        if self.availability == "available" and self.value is None:
+            raise ValueError("Available liquidity metrics require a value.")
+        if self.availability == "unavailable" and (self.value is not None or not self.diagnostic):
+            raise ValueError("Unavailable liquidity metrics require a diagnostic and no value.")
+        return self
 
 
 class LiquidityEvidenceRead(ClosedModel):

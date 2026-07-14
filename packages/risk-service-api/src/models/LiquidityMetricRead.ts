@@ -13,6 +13,20 @@
  */
 
 import { mapValues } from "../runtime";
+import type { LiquidityMetricValue } from "./LiquidityMetricValue";
+import {
+  LiquidityMetricValueFromJSON,
+  LiquidityMetricValueFromJSONTyped,
+  LiquidityMetricValueToJSON,
+  LiquidityMetricValueToJSONTyped,
+} from "./LiquidityMetricValue";
+import type { LiquidityMetricDiagnostic } from "./LiquidityMetricDiagnostic";
+import {
+  LiquidityMetricDiagnosticFromJSON,
+  LiquidityMetricDiagnosticFromJSONTyped,
+  LiquidityMetricDiagnosticToJSON,
+  LiquidityMetricDiagnosticToJSONTyped,
+} from "./LiquidityMetricDiagnostic";
 import type { PeriodNumber } from "./PeriodNumber";
 import {
   PeriodNumberFromJSON,
@@ -39,7 +53,19 @@ export interface LiquidityMetricRead {
    * @type {string}
    * @memberof LiquidityMetricRead
    */
+  availability?: LiquidityMetricReadAvailabilityEnum;
+  /**
+   *
+   * @type {string}
+   * @memberof LiquidityMetricRead
+   */
   description: string;
+  /**
+   *
+   * @type {LiquidityMetricDiagnostic}
+   * @memberof LiquidityMetricRead
+   */
+  diagnostic?: LiquidityMetricDiagnostic;
   /**
    *
    * @type {string}
@@ -72,11 +98,21 @@ export interface LiquidityMetricRead {
   unit: string;
   /**
    *
-   * @type {string}
+   * @type {LiquidityMetricValue}
    * @memberof LiquidityMetricRead
    */
-  value: string;
+  value: LiquidityMetricValue;
 }
+
+/**
+ * @export
+ */
+export const LiquidityMetricReadAvailabilityEnum = {
+  Available: "available",
+  Unavailable: "unavailable",
+} as const;
+export type LiquidityMetricReadAvailabilityEnum =
+  (typeof LiquidityMetricReadAvailabilityEnum)[keyof typeof LiquidityMetricReadAvailabilityEnum];
 
 /**
  * Check if a given object implements the LiquidityMetricRead interface.
@@ -106,7 +142,13 @@ export function LiquidityMetricReadFromJSONTyped(
   }
   return {
     ...json,
+    availability:
+      json["availability"] == null ? undefined : json["availability"],
     description: json["description"],
+    diagnostic:
+      json["diagnostic"] == null
+        ? undefined
+        : LiquidityMetricDiagnosticFromJSON(json["diagnostic"]),
     key: json["key"],
     label: json["label"],
     periodEnd:
@@ -118,7 +160,7 @@ export function LiquidityMetricReadFromJSONTyped(
         ? undefined
         : PeriodNumberFromJSON(json["period_number"]),
     unit: json["unit"],
-    value: json["value"],
+    value: LiquidityMetricValueFromJSON(json["value"]),
   };
 }
 
@@ -135,12 +177,14 @@ export function LiquidityMetricReadToJSONTyped(
   }
 
   return {
+    availability: value["availability"],
     description: value["description"],
+    diagnostic: LiquidityMetricDiagnosticToJSON(value["diagnostic"]),
     key: value["key"],
     label: value["label"],
     period_end: PeriodEndToJSON(value["periodEnd"]),
     period_number: PeriodNumberToJSON(value["periodNumber"]),
     unit: value["unit"],
-    value: value["value"],
+    value: LiquidityMetricValueToJSON(value["value"]),
   };
 }
