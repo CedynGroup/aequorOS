@@ -171,15 +171,22 @@ named failure diagnostic. The history route is newest-first and supports
 projection, optionally filtered by `scenario_id`.
 
 Indicators derive equity, equity-to-assets, liabilities-to-assets, equity
-change, and a deterministic pressure level from the forecast periods. Generated
-capital findings include evidence linking the projection, calculation run,
-scenario, input hash, indicator, and forecast period. A newer successful
+change, and a deterministic pressure level from the forecast periods. Monetary
+values are persisted to four decimal places and ratios are rounded half-up to
+eight decimal places before pressure classification and finding generation.
+Generated capital findings include evidence linking the projection, calculation
+run, scenario, input hash, indicator, and forecast period. A newer successful
 projection supersedes only unreviewed findings for the same scenario. The
 comparison route pairs the latest successful active baseline and downside
-projections; mismatched as-of dates, currencies, or horizons return a diagnostic
-instead of period deltas. Non-positive projected assets and missing or
-out-of-range forecast evidence persist the attempt as failed with corrective
+projections; mismatched as-of dates, currencies, or horizons return a
+diagnostic instead of period deltas. Non-positive projected assets and missing
+or out-of-range forecast evidence persist the attempt as failed with corrective
 details.
+
+Projection list, detail, and summary reads retain historical attempts after a
+scenario or case is archived. Archived scenarios cannot start new projections,
+and an archived case also rejects new projections, comparisons, and finding
+reviews. Comparisons exclude archived scenarios.
 
 ## Run Tests
 

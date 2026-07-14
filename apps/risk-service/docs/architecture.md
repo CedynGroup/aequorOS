@@ -431,11 +431,13 @@ GET  /api/v1/cases/{case_id}/capital-comparison
 Creating a projection requires an active same-tenant actor and a successful
 calculation run whose case and active scenario match the request. The attempt
 derives equity, equity-to-assets, liabilities-to-assets, and equity change for
-each immutable forecast period. Pressure is `critical` for negative equity,
-`high` below a 10 percent equity-to-assets ratio, `medium` below 20 percent or
-when equity declines, and `low` otherwise. Non-positive projected assets,
-missing opening-balance evidence, and numeric overflow persist a failed attempt
-with the affected forecast-period identifiers and corrective details.
+each immutable forecast period. Monetary values are rounded half-up to four
+decimal places and ratios to eight decimal places before persistence,
+classification, and finding generation. Pressure is `critical` for negative
+equity, `high` below a 10 percent equity-to-assets ratio, `medium` below 20
+percent or when equity declines, and `low` otherwise. Non-positive projected
+assets, missing opening-balance evidence, and numeric overflow persist a failed
+attempt with the affected forecast-period identifiers and corrective details.
 
 Successful attempts can generate deterministic negative-equity, thin-buffer,
 and final-period erosion findings. Finding details and
@@ -456,6 +458,10 @@ The summary returns the latest successful projection, optionally filtered by
 active baseline and downside scenarios and returns period equity and ratio
 deltas only when as-of date, reporting currency, and forecast horizon match;
 otherwise it returns a named basis-mismatch diagnostic and corrective action.
+List, detail, and summary reads preserve archived scenario and case history.
+Archived scenarios reject new projections; archived cases reject new
+projections, comparisons, and finding reviews. Comparisons omit archived
+scenarios.
 
 ## API Versioning
 

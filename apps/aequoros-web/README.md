@@ -53,11 +53,14 @@ including backend-loaded records, mapping, and revalidation.
 ## Capital Review
 
 The Capital tab lists immutable projection attempts and successful forecast runs
-for active scenarios. Reviewers can generate a projection, page through attempt
-history, inspect period equity and pressure indicators, compare the latest
-baseline and downside projections, and review generated findings with their
-forecast evidence. The comparison explains incompatible as-of dates, reporting
-currencies, or horizons instead of presenting misleading deltas.
+for active scenarios. It follows every page of the per-scenario latest-run list,
+so an older active scenario remains selectable even when newer run history fills
+the first page. Reviewers can generate a projection, page through attempt
+history, inspect period equity and pressure indicators in the projection's
+immutable reporting currency, compare the latest baseline and downside
+projections, and review generated findings with their forecast evidence. The
+comparison explains incompatible as-of dates, reporting currencies, or horizons
+instead of presenting misleading deltas.
 
 Projection and finding mutations are disabled in demo mode and for retired
 cases. Loading, API failure, no-run, no-projection, failed-attempt, incomplete

@@ -227,6 +227,11 @@ diagnostics without replacing prior attempts. The generalized tables below
 remain a proposal for later liquidity, Basel capital, metric, and validation
 modules.
 
+Capital money values are persisted at four-decimal precision. Ratios are
+rounded half-up to eight decimal places before pressure classification and
+finding generation, so threshold behavior is deterministic at storage
+precision.
+
 Create run-tracking tables:
 
 - calc_run
