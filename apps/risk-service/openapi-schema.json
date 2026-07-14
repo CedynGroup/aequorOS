@@ -1742,6 +1742,17 @@
             ],
             "title": "Decided By"
           },
+          "decided_by_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Display Name"
+          },
           "decision": {
             "$ref": "#/components/schemas/CaseDecision"
           },
@@ -6827,11 +6838,6 @@
             "title": "Created At",
             "type": "string"
           },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -6842,7 +6848,6 @@
           }
         },
         "required": [
-          "id",
           "name",
           "assessment_type",
           "status",
@@ -6853,17 +6858,16 @@
       },
       "ReportCase": {
         "properties": {
-          "assigned_to_user_id": {
+          "assigned_to": {
             "anyOf": [
               {
-                "format": "uuid",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Assigned To User Id"
+            "title": "Assigned To"
           },
           "case_type": {
             "title": "Case Type",
@@ -6891,11 +6895,6 @@
               }
             ],
             "title": "Decision"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
           },
           "risk_level": {
             "anyOf": [
@@ -6962,13 +6961,12 @@
           }
         },
         "required": [
-          "id",
           "title",
           "case_type",
           "subject_type",
           "subject_name",
           "status",
-          "assigned_to_user_id",
+          "assigned_to",
           "risk_score",
           "risk_level",
           "scoring_version",
@@ -6988,7 +6986,6 @@
           "decided_by": {
             "anyOf": [
               {
-                "format": "uuid",
                 "type": "string"
               },
               {
@@ -6999,11 +6996,6 @@
           },
           "decision": {
             "title": "Decision",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
             "type": "string"
           },
           "previous_decision": {
@@ -7030,7 +7022,6 @@
           }
         },
         "required": [
-          "id",
           "decision",
           "previous_decision",
           "reason",
@@ -7042,14 +7033,6 @@
       },
       "ReportFinding": {
         "properties": {
-          "details": {
-            "$ref": "#/components/schemas/JsonObject-Output"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
           "rationale": {
             "anyOf": [
               {
@@ -7109,7 +7092,6 @@
           }
         },
         "required": [
-          "id",
           "risk_type",
           "title",
           "summary",
@@ -7118,62 +7100,32 @@
           "status",
           "source",
           "rule_id",
-          "score_impact",
-          "details"
+          "score_impact"
         ],
         "title": "ReportFinding",
         "type": "object"
       },
       "ReportScore": {
         "properties": {
-          "assessment_id": {
+          "assessment": {
             "anyOf": [
               {
-                "format": "uuid",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Assessment Id"
+            "title": "Assessment"
           },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "input_hash": {
-            "title": "Input Hash",
-            "type": "string"
-          },
           "risk_level": {
             "title": "Risk Level",
             "type": "string"
-          },
-          "rule_results": {
-            "items": {
-              "$ref": "#/components/schemas/JsonObject-Output"
-            },
-            "title": "Rule Results",
-            "type": "array"
-          },
-          "run_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Run Id"
           },
           "score": {
             "title": "Score",
@@ -7185,14 +7137,10 @@
           }
         },
         "required": [
-          "id",
-          "assessment_id",
-          "run_id",
+          "assessment",
           "score",
           "risk_level",
           "scoring_version",
-          "input_hash",
-          "rule_results",
           "created_at"
         ],
         "title": "ReportScore",

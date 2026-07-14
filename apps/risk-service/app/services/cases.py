@@ -240,6 +240,25 @@ def assignees_for_cases(
     return {user_id: (display_name, email) for user_id, display_name, email in rows}
 
 
+def user_display_names(
+    db: Session, organization_id: UUID, user_ids: set[UUID | None]
+) -> dict[UUID, str]:
+    resolved_ids = {user_id for user_id in user_ids if user_id is not None}
+    if not resolved_ids:
+        return {}
+    rows = db.execute(
+        select(User.id, User.display_name).where(
+            User.organization_id == organization_id,
+            User.id.in_(resolved_ids),
+        )
+    ).all()
+    return {
+        user_id: display_name.strip()
+        for user_id, display_name in rows
+        if display_name and display_name.strip()
+    }
+
+
 def update_case(
     db: Session, ctx: TenantContext, case_id: UUID, command: UpdateCaseCommand
 ) -> RiskCase:

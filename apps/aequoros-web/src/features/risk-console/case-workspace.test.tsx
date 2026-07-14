@@ -172,6 +172,7 @@ describe("CaseWorkspace", () => {
         previousDecision: null,
         reason: "Ready for approval",
         decidedBy: DEFAULT_USER_ID,
+        decidedByDisplayName: "Demo User One",
         createdAt: new Date(),
       } as CaseDecisionRead);
 
@@ -191,6 +192,27 @@ describe("CaseWorkspace", () => {
         reason: "Ready for approval",
       });
     });
+  });
+
+  it("shows the resolved decision reviewer without exposing their identifier", async () => {
+    vi.spyOn(riskApi, "decisions").mockResolvedValue([
+      {
+        id: "decision-1",
+        organizationId: DEFAULT_ORG_ID,
+        caseId,
+        decision: "approved",
+        previousDecision: null,
+        reason: "Ready for approval",
+        decidedBy: DEFAULT_USER_ID,
+        decidedByDisplayName: "Ama Mensah",
+        createdAt: new Date(),
+      } as CaseDecisionRead,
+    ]);
+
+    renderWorkspace({ activeTab: "decisions" });
+
+    expect(await screen.findByText("Decided by Ama Mensah")).toBeInTheDocument();
+    expect(screen.queryByText(DEFAULT_USER_ID)).not.toBeInTheDocument();
   });
 
   it("retires capital mutations when the selected case is archived", async () => {

@@ -134,6 +134,7 @@ def test_case_decision_history_and_completed_report(db_client: TestClient) -> No
     response = db_client.get(f"/api/v1/cases/{case_id}/decisions", headers=headers())
     assert response.status_code == 200
     assert response.json()[0]["reason"] == "No triggered rules"
+    assert response.json()[0]["decided_by_display_name"] == "Demo User One"
 
     response = db_client.get("/api/v1/cases?decision=approved", headers=headers())
     assert response.status_code == 200
@@ -143,6 +144,10 @@ def test_case_decision_history_and_completed_report(db_client: TestClient) -> No
     assert response.status_code == 200, response.text
     assert response.json()["case"]["decision"] == "approved"
     assert response.json()["scores"][0]["score"] == 0
+    assert response.json()["decisions"][0]["decided_by"] == "Demo User One"
+    assert response.json()["scores"][0]["assessment"] == "Score"
+    assert case_id not in response.text
+    assert str(USER_1) not in response.text
 
     response = db_client.get(
         f"/api/v1/cases/{case_id}/report",

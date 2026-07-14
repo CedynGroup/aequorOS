@@ -12,18 +12,16 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.domain.risk_constants import CaseStatus
 from app.models import RiskAssessment, RiskFinding, RiskScore
-from app.schemas.common import JsonObject
-from app.services.cases import get_case_or_404, list_case_decisions
+from app.services.cases import get_case_or_404, list_case_decisions, user_display_names
 
 
 class ReportCase(BaseModel):
-    id: UUID
     title: str
     case_type: str
     subject_type: str | None
     subject_name: str | None
     status: str
-    assigned_to_user_id: UUID | None
+    assigned_to: str | None
     risk_score: int | None
     risk_level: str | None
     scoring_version: str | None
@@ -32,7 +30,6 @@ class ReportCase(BaseModel):
 
 
 class ReportFinding(BaseModel):
-    id: UUID
     risk_type: str
     title: str
     summary: str
@@ -42,20 +39,17 @@ class ReportFinding(BaseModel):
     source: str
     rule_id: str | None
     score_impact: int | None
-    details: JsonObject
 
 
 class ReportDecision(BaseModel):
-    id: UUID
     decision: str
     previous_decision: str | None
     reason: str | None
-    decided_by: UUID | None
+    decided_by: str | None
     created_at: datetime
 
 
 class ReportAssessment(BaseModel):
-    id: UUID
     name: str
     assessment_type: str
     status: str
@@ -63,14 +57,10 @@ class ReportAssessment(BaseModel):
 
 
 class ReportScore(BaseModel):
-    id: UUID
-    assessment_id: UUID | None
-    run_id: UUID | None
+    assessment: str | None
     score: int
     risk_level: str
     scoring_version: str
-    input_hash: str
-    rule_results: list[JsonObject]
     created_at: datetime
 
 
@@ -120,15 +110,24 @@ def report_payload(db: Session, ctx: TenantContext, case_id: UUID) -> RiskReport
             .order_by(RiskScore.created_at.desc())
         )
     )
+    user_names = user_display_names(
+        db,
+        ctx.organization_id,
+        {case.assigned_to_user_id, *(decision.decided_by for decision in decisions)},
+    )
+    assessment_names = {assessment.id: assessment.name for assessment in assessments}
     return RiskReportPayload(
         case=ReportCase(
-            id=case.id,
             title=case.title,
             case_type=case.case_type,
             subject_type=case.subject_type,
             subject_name=case.subject_name,
             status=case.status,
-            assigned_to_user_id=case.assigned_to_user_id,
+            assigned_to=(
+                user_names.get(case.assigned_to_user_id, "Unknown assignee")
+                if case.assigned_to_user_id is not None
+                else None
+            ),
             risk_score=case.risk_score,
             risk_level=case.risk_level,
             scoring_version=case.scoring_version,
@@ -137,7 +136,6 @@ def report_payload(db: Session, ctx: TenantContext, case_id: UUID) -> RiskReport
         ),
         findings=[
             ReportFinding(
-                id=finding.id,
                 risk_type=finding.risk_type,
                 title=finding.title,
                 summary=finding.summary,
@@ -147,24 +145,25 @@ def report_payload(db: Session, ctx: TenantContext, case_id: UUID) -> RiskReport
                 source=finding.source,
                 rule_id=finding.rule_id,
                 score_impact=finding.score_impact,
-                details=finding.details,
             )
             for finding in findings
         ],
         decisions=[
             ReportDecision(
-                id=decision.id,
                 decision=decision.decision,
                 previous_decision=decision.previous_decision,
                 reason=decision.reason,
-                decided_by=decision.decided_by,
+                decided_by=(
+                    user_names.get(decision.decided_by, "Unknown reviewer")
+                    if decision.decided_by is not None
+                    else None
+                ),
                 created_at=decision.created_at,
             )
             for decision in decisions
         ],
         assessments=[
             ReportAssessment(
-                id=assessment.id,
                 name=assessment.name,
                 assessment_type=assessment.assessment_type,
                 status=assessment.status,
@@ -174,14 +173,14 @@ def report_payload(db: Session, ctx: TenantContext, case_id: UUID) -> RiskReport
         ],
         scores=[
             ReportScore(
-                id=score.id,
-                assessment_id=score.assessment_id,
-                run_id=score.run_id,
+                assessment=(
+                    assessment_names.get(score.assessment_id)
+                    if score.assessment_id is not None
+                    else None
+                ),
                 score=score.score,
                 risk_level=score.risk_level,
                 scoring_version=score.scoring_version,
-                input_hash=score.input_hash,
-                rule_results=score.rule_results,
                 created_at=score.created_at,
             )
             for score in scores

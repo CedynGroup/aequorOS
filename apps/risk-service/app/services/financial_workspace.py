@@ -18,10 +18,9 @@ from app.models import (
     FinancialReportingPeriod,
     FinancialSourceRow,
     FinancialValidationIssue,
-    User,
 )
 from app.schemas.financial_workspace import FinancialDataWorkspaceRead, FinancialManualEditRead
-from app.services.cases import get_case_or_404
+from app.services.cases import get_case_or_404, user_display_names
 from app.services.financial_validation import summarize_validation_issues
 
 
@@ -36,15 +35,7 @@ def get_financial_workspace(
         db.scalars(financial_stmt(FinancialManualEditHistory, ctx.organization_id, case_id))
     )
     editor_ids = {edit.edited_by for edit in manual_edits if edit.edited_by is not None}
-    editor_names = {
-        user_id: display_name.strip() if display_name and display_name.strip() else None
-        for user_id, display_name in db.execute(
-            select(User.id, User.display_name).where(
-                User.organization_id == ctx.organization_id,
-                User.id.in_(editor_ids),
-            )
-        )
-    }
+    editor_names = user_display_names(db, ctx.organization_id, editor_ids)
     return FinancialDataWorkspaceRead(
         case_id=case.id,
         organization_id=case.organization_id,

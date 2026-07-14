@@ -40,12 +40,6 @@ export interface ReportDecision {
    * @type {string}
    * @memberof ReportDecision
    */
-  id: string;
-  /**
-   *
-   * @type {string}
-   * @memberof ReportDecision
-   */
   previousDecision: string | null;
   /**
    *
@@ -64,7 +58,6 @@ export function instanceOfReportDecision(
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
   if (!("decidedBy" in value) || value["decidedBy"] === undefined) return false;
   if (!("decision" in value) || value["decision"] === undefined) return false;
-  if (!("id" in value) || value["id"] === undefined) return false;
   if (!("previousDecision" in value) || value["previousDecision"] === undefined)
     return false;
   if (!("reason" in value) || value["reason"] === undefined) return false;
@@ -86,7 +79,6 @@ export function ReportDecisionFromJSONTyped(
     createdAt: new Date(json["created_at"]),
     decidedBy: json["decided_by"],
     decision: json["decision"],
-    id: json["id"],
     previousDecision: json["previous_decision"],
     reason: json["reason"],
   };
@@ -108,7 +100,6 @@ export function ReportDecisionToJSONTyped(
     created_at: value["createdAt"].toISOString(),
     decided_by: value["decidedBy"],
     decision: value["decision"],
-    id: value["id"],
     previous_decision: value["previousDecision"],
     reason: value["reason"],
   };

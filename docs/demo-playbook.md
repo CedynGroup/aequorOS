@@ -30,7 +30,7 @@ Go to `http://127.0.0.1:5173/cases`. The reset is safe to repeat and affects onl
 | 6:00 | In **Current case**, open **Liquidity stress review — Kivu Fresh Produce Logistics Ltd**. Open **Liquidity**, select **Downside — collections stress**, and expand **Supporting evidence** on the highest-severity finding.                  | “The liquidity conclusion is generated from the forecast and links back to the exact period, canonical inputs, and reviewed assumptions.”                            |
 | 7:00 | Open **Capital** and compare **Baseline** with **Downside — collections stress** by period.                                                                                                                                                  | “The same immutable Kivu forecast evidence drives the capital comparison, showing when balance-sheet pressure becomes a capital concern.”                            |
 | 8:00 | In **Current case**, return to **Covenant exception — Adom Textiles & Garments Ltd**. Open **Decisions** and record **Needs more info** with reason `Obtain management confirmation of the corrected covenant certificate before committee.` | “The human decision remains explicit and auditable even when calculations and evidence are automated.”                                                               |
-| 9:00 | Use the current-case selector to open **Completed review — Baobab Health Distribution SA**. Open **Reports**, switch from **JSON** to **HTML**, and show the approval and monitoring finding.                                                | “The completed case closes the loop: source-backed findings and the reviewer’s decision become a committee-ready report.”                                            |
+| 9:00 | Use the current-case selector to open **Completed review — Baobab Health Distribution SA**. Open **Reports** and show the default HTML approval report and monitoring finding. The UUID-free JSON view remains available for technical audiences. | “The completed case closes the loop: source-backed findings and the reviewer’s decision become a committee-ready report.”                                            |
 
 ## Reset and repeat
 
@@ -49,5 +49,5 @@ The expected starting outcomes are:
   covenant finding, a successful baseline forecast, and a preserved failed downside attempt.
 - Kivu Fresh Produce Logistics has positive minimum cash under baseline and negative minimum cash
   under downside, with pre-generated liquidity evidence and matched capital projections.
-- Baobab Health Distribution is completed and approved, so its JSON and HTML reports open
-  immediately.
+- Baobab Health Distribution is completed and approved, so its HTML report opens immediately and
+  its UUID-free JSON view remains available from the toggle.

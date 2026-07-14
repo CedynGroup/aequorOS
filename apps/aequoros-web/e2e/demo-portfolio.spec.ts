@@ -88,12 +88,15 @@ test("walks the pristine narrative portfolio from queue through report", async (
   await expect(
     page.getByText("Approved", { exact: true }).first(),
   ).toBeVisible();
+  await expect(page.getByText("Decided by Ama Mensah")).toBeVisible();
+  await expectNoVisibleUuid(page);
   await page.getByRole("button", { name: "Reports" }).click();
-  await page.getByRole("button", { name: "HTML" }).click();
   await expect(
     page
       .frameLocator('iframe[title="Risk report HTML preview"]')
       .getByRole("heading", { name: completedCase.title }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "JSON" }).click();
+  await expect(page.getByText('"decidedBy": "Ama Mensah"')).toBeVisible();
   await expectNoVisibleUuid(page);
 });

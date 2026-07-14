@@ -279,6 +279,7 @@ class CaseDecisionRead(BaseModel):
     previous_decision: CaseDecision | None
     reason: str | None
     decided_by: UUID | None
+    decided_by_display_name: str | None = None
     created_at: datetime
 
 

@@ -22,7 +22,7 @@ export interface ReportScore {
    * @type {string}
    * @memberof ReportScore
    */
-  assessmentId: string | null;
+  assessment: string | null;
   /**
    *
    * @type {Date}
@@ -34,31 +34,7 @@ export interface ReportScore {
    * @type {string}
    * @memberof ReportScore
    */
-  id: string;
-  /**
-   *
-   * @type {string}
-   * @memberof ReportScore
-   */
-  inputHash: string;
-  /**
-   *
-   * @type {string}
-   * @memberof ReportScore
-   */
   riskLevel: string;
-  /**
-   *
-   * @type {Array<{ [key: string]: any; }>}
-   * @memberof ReportScore
-   */
-  ruleResults: Array<{ [key: string]: any }>;
-  /**
-   *
-   * @type {string}
-   * @memberof ReportScore
-   */
-  runId: string | null;
   /**
    *
    * @type {number}
@@ -77,15 +53,10 @@ export interface ReportScore {
  * Check if a given object implements the ReportScore interface.
  */
 export function instanceOfReportScore(value: object): value is ReportScore {
-  if (!("assessmentId" in value) || value["assessmentId"] === undefined)
+  if (!("assessment" in value) || value["assessment"] === undefined)
     return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
-  if (!("id" in value) || value["id"] === undefined) return false;
-  if (!("inputHash" in value) || value["inputHash"] === undefined) return false;
   if (!("riskLevel" in value) || value["riskLevel"] === undefined) return false;
-  if (!("ruleResults" in value) || value["ruleResults"] === undefined)
-    return false;
-  if (!("runId" in value) || value["runId"] === undefined) return false;
   if (!("score" in value) || value["score"] === undefined) return false;
   if (!("scoringVersion" in value) || value["scoringVersion"] === undefined)
     return false;
@@ -104,13 +75,9 @@ export function ReportScoreFromJSONTyped(
     return json;
   }
   return {
-    assessmentId: json["assessment_id"],
+    assessment: json["assessment"],
     createdAt: new Date(json["created_at"]),
-    id: json["id"],
-    inputHash: json["input_hash"],
     riskLevel: json["risk_level"],
-    ruleResults: json["rule_results"],
-    runId: json["run_id"],
     score: json["score"],
     scoringVersion: json["scoring_version"],
   };
@@ -129,13 +96,9 @@ export function ReportScoreToJSONTyped(
   }
 
   return {
-    assessment_id: value["assessmentId"],
+    assessment: value["assessment"],
     created_at: value["createdAt"].toISOString(),
-    id: value["id"],
-    input_hash: value["inputHash"],
     risk_level: value["riskLevel"],
-    rule_results: value["ruleResults"],
-    run_id: value["runId"],
     score: value["score"],
     scoring_version: value["scoringVersion"],
   };

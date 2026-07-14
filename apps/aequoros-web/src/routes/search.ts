@@ -20,7 +20,7 @@ export type SearchState = {
 export function parseSearchState(input: Record<string, unknown>): SearchState {
   return {
     tab: typeof input.tab === "string" ? (input.tab as ConsoleTab) : undefined,
-    report: input.report === "html" ? "html" : "json",
+    report: input.report === "json" ? "json" : "html",
     q: typeof input.q === "string" ? input.q : undefined,
     status: typeof input.status === "string" ? (input.status as CaseStatus | "all") : undefined,
     risk: typeof input.risk === "string" ? (input.risk as RiskLevel | "all") : undefined,

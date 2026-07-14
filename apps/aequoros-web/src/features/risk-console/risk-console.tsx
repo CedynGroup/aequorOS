@@ -39,7 +39,7 @@ export function RiskConsoleRoute() {
 
   const activeTab: ConsoleTab =
     search.tab && isConsoleTab(search.tab) ? search.tab : "overview";
-  const reportMode: ReportMode = search.report === "html" ? "html" : "json";
+  const reportMode: ReportMode = search.report === "json" ? "json" : "html";
   const page = Math.max(Number(search.page ?? 1), 1);
   const filters = {
     q: search.q ?? "",

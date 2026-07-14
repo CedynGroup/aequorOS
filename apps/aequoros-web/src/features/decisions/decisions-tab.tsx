@@ -19,7 +19,7 @@ import {
   Textarea,
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
-import { labelize, truncateId } from "../../lib/utils";
+import { labelize } from "../../lib/utils";
 import { DataList, ErrorPanel } from "../../shared/route-ui";
 import { DecisionBadge, relative } from "../risk-console/format";
 
@@ -82,7 +82,9 @@ export function DecisionsTab({ tenant, caseId }: { tenant: TenantHeaders; caseId
               <span>{relative(decision.createdAt)}</span>
             </div>
             <div>{decision.reason ?? "No reason provided."}</div>
-            <div className="text-[rgb(var(--muted-foreground))]">Decided by {truncateId(decision.decidedBy)}</div>
+            <div className="text-[rgb(var(--muted-foreground))]">
+              Decided by {decision.decidedByDisplayName?.trim() || "Unknown reviewer"}
+            </div>
           </div>
         ))}
       </DataList>
