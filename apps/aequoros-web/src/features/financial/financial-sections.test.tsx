@@ -1,4 +1,5 @@
 import type {
+  FinancialCashFlowMutationResponse,
   FinancialDataWorkspaceRead,
   FinancialInstitutionMutationResponse,
   FinancialCovenantMutationResponse,
@@ -150,8 +151,12 @@ function client(
   };
 }
 
+function institutionSection() {
+  return document.getElementById("financial-section-financial_institutions")!;
+}
+
 describe("FinancialSections", () => {
-  it("renders grouped empty states, covenants, and read-only cash flows", () => {
+  it("renders grouped empty states and editable cash flows", () => {
     const data = workspace();
     data.institutions = [];
     data.cashFlows = [];
@@ -166,8 +171,8 @@ describe("FinancialSections", () => {
     expect(screen.getByText("Covenants")).toBeInTheDocument();
     expect(screen.getByText("No institutions records.")).toBeInTheDocument();
     expect(
-      screen.getByText(/intentionally keeps cash flows read-only/),
-    ).toBeInTheDocument();
+      screen.queryByText(/intentionally keeps cash flows read-only/),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText("No active validation issues."),
     ).toBeInTheDocument();
@@ -186,7 +191,9 @@ describe("FinancialSections", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Add institution" }));
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(
+      within(institutionSection()).getByRole("button", { name: "Edit" }),
+    );
     expect(
       screen.getByRole("form", { name: "Add institution" }),
     ).toBeInTheDocument();
@@ -254,6 +261,133 @@ describe("FinancialSections", () => {
       "defaulted",
       "unknown",
     ]);
+  });
+
+  it("creates a cash flow with a constrained direction and refreshed validation", async () => {
+    const user = userEvent.setup();
+    const created = {
+      ...workspace().cashFlows[0],
+      id: "cash-flow-2",
+      amount: "2750.00",
+      direction: "outflow" as const,
+      category: "supplier payment",
+    };
+    const create = vi.fn<FinancialReviewClient["create"]>().mockResolvedValue({
+      record: created,
+      validation: validation(),
+    } as FinancialCashFlowMutationResponse);
+    const onMutation = vi.fn<(updateWorkspace: WorkspaceUpdater) => void>();
+
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ create })}
+        onMutation={onMutation}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add cash flow" }));
+    const form = screen.getByRole("form", { name: "Add cash flow" });
+    expect(
+      within(within(form).getByLabelText("Direction"))
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("value")),
+    ).toEqual(["", "inflow", "outflow"]);
+    fireEvent.change(within(form).getByLabelText("Date"), {
+      target: { value: "2026-07-01" },
+    });
+    await user.type(within(form).getByLabelText("Amount"), "2750");
+    await user.type(within(form).getByLabelText("Currency"), "USD");
+    await user.selectOptions(
+      within(form).getByLabelText("Direction"),
+      "outflow",
+    );
+    await user.type(
+      within(form).getByLabelText("Category"),
+      "supplier payment",
+    );
+    await user.type(
+      within(form).getByLabelText("Reason"),
+      "Missing bank statement row",
+    );
+    await user.click(
+      within(form).getByRole("button", { name: "Add cash flow" }),
+    );
+
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    expect(create).toHaveBeenCalledWith("cashFlow", tenant, "case-1", {
+      cashFlowDate: "2026-07-01",
+      amount: "2750",
+      currency: "USD",
+      direction: "outflow",
+      category: "supplier payment",
+      reason: "Missing bank statement row",
+    });
+    expect(onMutation.mock.calls[0]?.[0](workspace()).cashFlows).toEqual([
+      expect.objectContaining({ id: "cash-flow-1" }),
+      expect.objectContaining({ id: "cash-flow-2" }),
+    ]);
+    expect(screen.getByText(/Added cash flow/)).toBeInTheDocument();
+  });
+
+  it("corrects a cash flow and sends explicit null only for cleared fields", async () => {
+    const user = userEvent.setup();
+    const corrected = {
+      ...workspace().cashFlows[0],
+      cashFlowDate: null,
+      currency: null,
+      amount: "1500.00",
+    };
+    const update = vi.fn<FinancialReviewClient["update"]>().mockResolvedValue({
+      record: corrected,
+      validation: validation(),
+    } as FinancialCashFlowMutationResponse);
+
+    render(
+      <FinancialSections
+        workspace={workspace()}
+        mocked={false}
+        tenant={tenant}
+        caseId="case-1"
+        client={client({ update })}
+        onMutation={vi.fn<(updateWorkspace: WorkspaceUpdater) => void>()}
+      />,
+    );
+
+    const section = document.getElementById(
+      "financial-section-financial_cash_flows",
+    )!;
+    await user.click(within(section).getByRole("button", { name: "Edit" }));
+    const form = within(section).getByRole("form", { name: "Edit cash flow" });
+    await user.clear(within(form).getByLabelText("Date"));
+    await user.clear(within(form).getByLabelText("Currency"));
+    await user.clear(within(form).getByLabelText("Amount"));
+    await user.type(within(form).getByLabelText("Amount"), "1500");
+    await user.type(
+      within(form).getByLabelText("Reason"),
+      "Correct statement values",
+    );
+    await user.click(
+      within(form).getByRole("button", { name: "Save correction" }),
+    );
+
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(update).toHaveBeenCalledWith(
+      "cashFlow",
+      tenant,
+      "case-1",
+      "cash-flow-1",
+      {
+        cashFlowDate: null,
+        amount: "1500",
+        currency: null,
+        reason: "Correct statement values",
+      },
+    );
+    expect(screen.getByText(/Saved cash flow correction/)).toBeInTheDocument();
   });
 
   it("navigates from a validation issue to the affected field", async () => {
@@ -375,7 +509,9 @@ describe("FinancialSections", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(
+      within(institutionSection()).getByRole("button", { name: "Edit" }),
+    );
     const form = screen.getByRole("form", { name: "Edit institution" });
     const name = within(form).getByLabelText("Name");
     await user.clear(name);
@@ -451,7 +587,9 @@ describe("FinancialSections", () => {
 
     await user.click(screen.getByRole("button", { name: "Add institution" }));
     const addForm = screen.getByRole("form", { name: "Add institution" });
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(
+      within(institutionSection()).getByRole("button", { name: "Edit" }),
+    );
     const form = screen.getByRole("form", { name: "Edit institution" });
     await user.clear(within(form).getByLabelText("Name"));
     await user.type(
@@ -468,7 +606,9 @@ describe("FinancialSections", () => {
 
     await waitFor(() => expect(update).toHaveBeenCalledOnce());
     expect(within(form).getByRole("button", { name: "Cancel" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Edit" })).toBeDisabled();
+    expect(
+      within(institutionSection()).getByRole("button", { name: "Edit" }),
+    ).toBeDisabled();
     for (const button of screen.getAllByRole("button", {
       name: "Add institution",
     })) {
@@ -502,7 +642,9 @@ describe("FinancialSections", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(
+      within(institutionSection()).getByRole("button", { name: "Edit" }),
+    );
     const form = screen.getByRole("form", { name: "Edit institution" });
     const name = within(form).getByLabelText("Name");
     await user.clear(name);
@@ -544,7 +686,9 @@ describe("FinancialSections", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(
+      within(institutionSection()).getByRole("button", { name: "Edit" }),
+    );
     const form = screen.getByRole("form", { name: "Edit institution" });
     await user.clear(within(form).getByLabelText("Name"));
     await user.type(
@@ -615,7 +759,9 @@ describe("FinancialSections", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(
+      within(institutionSection()).getByRole("button", { name: "Edit" }),
+    );
     const form = screen.getByRole("form", { name: "Edit institution" });
     await user.clear(within(form).getByLabelText("Name"));
     await user.type(
@@ -803,7 +949,9 @@ describe("FinancialSections", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(
+      within(institutionSection()).getByRole("button", { name: "Edit" }),
+    );
     const form = screen.getByRole("form", { name: "Edit institution" });
     await user.clear(within(form).getByLabelText("Reference code"));
     await user.type(within(form).getByLabelText("Reason"), "Remove bad code");

@@ -34,12 +34,6 @@ import {
   DocumentReadFromJSON,
   type ErrorResponse,
   ErrorResponseFromJSON,
-  type FinancialCashFlowCreate,
-  FinancialCashFlowCreateToJSON,
-  type FinancialCashFlowRead,
-  FinancialCashFlowReadFromJSON,
-  type FinancialCashFlowUpdate,
-  FinancialCashFlowUpdateToJSON,
   type FinancialDataWorkspaceRead,
   FinancialDataWorkspaceReadFromJSON,
   type FindingCreate,
@@ -402,37 +396,6 @@ export const riskApi = {
       tenant,
       ScenarioMutationResponseFromJSON,
       { method: "POST", body: JSON.stringify(AssumptionReviewToJSON(payload)) },
-    );
-  },
-  createFinancialCashFlow(
-    tenant: TenantHeaders,
-    caseId: string,
-    payload: FinancialCashFlowCreate,
-  ) {
-    return apiJson<FinancialCashFlowRead>(
-      `/cases/${caseId}/financial-workspace/cash-flows`,
-      tenant,
-      FinancialCashFlowReadFromJSON,
-      {
-        method: "POST",
-        body: JSON.stringify(FinancialCashFlowCreateToJSON(payload)),
-      },
-    );
-  },
-  updateFinancialCashFlow(
-    tenant: TenantHeaders,
-    caseId: string,
-    cashFlowId: string,
-    payload: FinancialCashFlowUpdate,
-  ) {
-    return apiJson<FinancialCashFlowRead>(
-      `/cases/${caseId}/financial-workspace/cash-flows/${cashFlowId}`,
-      tenant,
-      FinancialCashFlowReadFromJSON,
-      {
-        method: "PATCH",
-        body: JSON.stringify(FinancialCashFlowUpdateToJSON(payload)),
-      },
     );
   },
   reportJson(tenant: TenantHeaders, caseId: string) {

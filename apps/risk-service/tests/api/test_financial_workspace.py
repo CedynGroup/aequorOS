@@ -5,9 +5,11 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.db.session import get_sessionmaker
 from app.models import (
+    AuditEvent,
     FinancialAccount,
     FinancialBalance,
     FinancialCashFlow,
@@ -299,11 +301,15 @@ def test_financial_cash_flows_can_be_manually_created_and_corrected(
             "direction": "inflow",
             "category": "Customer Deposit",
             "metadata": {"entry": "manual"},
+            "reason": "Manual statement entry",
         },
     )
 
     assert create.status_code == 200, create.text
-    created = create.json()
+    create_body = create.json()
+    created = create_body["record"]
+    assert create_body["validation"]["case_id"] == str(case.id)
+    assert created["metadata"]["provenance"] == "manual"
     assert Decimal(str(created["amount"])) == Decimal("1000.2500")
     assert created["currency"] == "USD"
     assert created["category"] == "customer deposit"
@@ -319,9 +325,14 @@ def test_financial_cash_flows_can_be_manually_created_and_corrected(
     )
 
     assert correction.status_code == 200, correction.text
-    corrected = correction.json()
+    correction_body = correction.json()
+    corrected = correction_body["record"]
     assert Decimal(str(corrected["amount"])) == Decimal("1250.5000")
     assert corrected["direction"] == "outflow"
+    assert corrected["metadata"]["provenance"] == "corrected"
+    assert correction_body["validation"]["issue_count"] == len(
+        correction_body["validation"]["issues"]
+    )
 
     workspace = db_client.get(f"/api/v1/cases/{case.id}/financial-workspace", headers=headers())
     assert workspace.status_code == 200, workspace.text
@@ -332,6 +343,30 @@ def test_financial_cash_flows_can_be_manually_created_and_corrected(
         ("direction", "Reviewer correction"),
     }
     assert body["validation_issues"] == []
+    with get_sessionmaker()() as session:
+        create_edits = list(
+            session.scalars(
+                select(FinancialManualEditHistory).where(
+                    FinancialManualEditHistory.record_id == UUID(created["id"]),
+                    FinancialManualEditHistory.reason == "Manual statement entry",
+                )
+            )
+        )
+        assert {edit.field_name for edit in create_edits} >= {
+            "amount",
+            "cash_flow_date",
+            "category",
+            "currency",
+            "direction",
+            "metadata",
+        }
+        assert all(edit.edited_by == USER_1 for edit in create_edits)
+        events = set(
+            session.scalars(
+                select(AuditEvent.event_type).where(AuditEvent.entity_id == UUID(created["id"]))
+            )
+        )
+        assert events >= {"financial_record.created", "financial_record.corrected"}
 
 
 def test_financial_cash_flow_validation_issues_are_recorded_and_resolved(
@@ -346,11 +381,16 @@ def test_financial_cash_flow_validation_issues_are_recorded_and_resolved(
             "amount": "1000",
             "direction": "inflow",
             "category": "loan repayment",
+            "reason": "Manual statement entry",
         },
     )
 
     assert create.status_code == 200, create.text
-    cash_flow_id = create.json()["id"]
+    assert {issue["rule_id"] for issue in create.json()["validation"]["issues"]} == {
+        "cash_flow_missing_currency",
+        "cash_flow_missing_period_or_date",
+    }
+    cash_flow_id = create.json()["record"]["id"]
     workspace = db_client.get(f"/api/v1/cases/{case.id}/financial-workspace", headers=headers())
     assert {issue["rule_id"] for issue in workspace.json()["validation_issues"]} == {
         "cash_flow_missing_currency",
@@ -368,13 +408,9 @@ def test_financial_cash_flow_validation_issues_are_recorded_and_resolved(
     )
 
     assert correction.status_code == 200, correction.text
+    assert correction.json()["validation"]["issues"] == []
     workspace = db_client.get(f"/api/v1/cases/{case.id}/financial-workspace", headers=headers())
-    assert {
-        (issue["rule_id"], issue["status"]) for issue in workspace.json()["validation_issues"]
-    } == {
-        ("cash_flow_missing_currency", "resolved"),
-        ("cash_flow_missing_period_or_date", "resolved"),
-    }
+    assert workspace.json()["validation_issues"] == []
 
 
 def test_financial_cash_flow_correction_conflicts_return_409(
@@ -390,6 +426,7 @@ def test_financial_cash_flow_correction_conflicts_return_409(
             "currency": "GHS",
             "direction": "inflow",
             "category": "deposit",
+            "reason": "First manual entry",
         },
     )
     second = db_client.post(
@@ -401,6 +438,7 @@ def test_financial_cash_flow_correction_conflicts_return_409(
             "currency": "GHS",
             "direction": "inflow",
             "category": "deposit",
+            "reason": "Second manual entry",
         },
     )
 
@@ -408,7 +446,7 @@ def test_financial_cash_flow_correction_conflicts_return_409(
     assert second.status_code == 200, second.text
 
     conflict = db_client.patch(
-        f"/api/v1/cases/{case.id}/financial-workspace/cash-flows/{second.json()['id']}",
+        f"/api/v1/cases/{case.id}/financial-workspace/cash-flows/{second.json()['record']['id']}",
         headers=headers(),
         json={"amount": "1000", "reason": "Duplicate correction"},
     )
@@ -429,10 +467,37 @@ def test_financial_cash_flow_manual_routes_enforce_tenant_isolation(
             "amount": "1000",
             "direction": "inflow",
             "category": "deposit",
+            "reason": "Cross-tenant attempt",
         },
     )
 
     assert create.status_code == 404, create.text
+
+
+def test_financial_cash_flow_mutations_require_actor_and_non_empty_reason(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    payload = {
+        "amount": "1000",
+        "direction": "inflow",
+        "category": "deposit",
+        "reason": "   ",
+    }
+
+    blank_reason = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/cash-flows",
+        headers=headers(),
+        json=payload,
+    )
+    missing_actor = db_client.post(
+        f"/api/v1/cases/{case.id}/financial-workspace/cash-flows",
+        headers={"X-Org-Id": str(ORG_1)},
+        json={**payload, "reason": "Manual entry"},
+    )
+
+    assert blank_reason.status_code == 422
+    assert missing_actor.status_code == 422
 
 
 def seed_financial_workspace(*, case_id: UUID) -> None:

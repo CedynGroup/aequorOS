@@ -7,6 +7,9 @@ import {
   type FinancialBalanceCreate,
   type FinancialBalanceMutationResponse,
   type FinancialBalanceUpdate,
+  type FinancialCashFlowCreate,
+  type FinancialCashFlowMutationResponse,
+  type FinancialCashFlowUpdate,
   type FinancialCovenantCreate,
   type FinancialCovenantMutationResponse,
   type FinancialCovenantUpdate,
@@ -34,6 +37,7 @@ export type EditableFinancialKind =
   | "account"
   | "reportingPeriod"
   | "balance"
+  | "cashFlow"
   | "obligation"
   | "covenant";
 
@@ -42,6 +46,7 @@ export type FinancialCreatePayload =
   | FinancialAccountCreate
   | FinancialReportingPeriodCreate
   | FinancialBalanceCreate
+  | FinancialCashFlowCreate
   | FinancialObligationCreate
   | FinancialCovenantCreate;
 
@@ -50,6 +55,7 @@ export type FinancialUpdatePayload =
   | FinancialAccountUpdate
   | FinancialReportingPeriodUpdate
   | FinancialBalanceUpdate
+  | FinancialCashFlowUpdate
   | FinancialObligationUpdate
   | FinancialCovenantUpdate;
 
@@ -58,6 +64,7 @@ export type FinancialMutationResponse =
   | FinancialAccountMutationResponse
   | FinancialReportingPeriodMutationResponse
   | FinancialBalanceMutationResponse
+  | FinancialCashFlowMutationResponse
   | FinancialObligationMutationResponse
   | FinancialCovenantMutationResponse;
 
@@ -130,6 +137,11 @@ export const financialReviewClient: FinancialReviewClient = {
           ...headers,
           financialBalanceCreate: payload as FinancialBalanceCreate,
         });
+      case "cashFlow":
+        return api.createCaseFinancialCashFlow({
+          ...headers,
+          financialCashFlowCreate: payload as FinancialCashFlowCreate,
+        });
       case "obligation":
         return api.createCaseFinancialObligation({
           ...headers,
@@ -170,6 +182,12 @@ export const financialReviewClient: FinancialReviewClient = {
           ...headers,
           balanceId: recordId,
           financialBalanceUpdate: payload as FinancialBalanceUpdate,
+        });
+      case "cashFlow":
+        return api.updateCaseFinancialCashFlow({
+          ...headers,
+          cashFlowId: recordId,
+          financialCashFlowUpdate: payload as FinancialCashFlowUpdate,
         });
       case "obligation":
         return api.updateCaseFinancialObligation({

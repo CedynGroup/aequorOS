@@ -22,7 +22,7 @@ import type {
   FinancialBalanceMutationResponse,
   FinancialBalanceUpdate,
   FinancialCashFlowCreate,
-  FinancialCashFlowRead,
+  FinancialCashFlowMutationResponse,
   FinancialCashFlowUpdate,
   FinancialCovenantCreate,
   FinancialCovenantMutationResponse,
@@ -61,8 +61,8 @@ import {
   FinancialBalanceUpdateToJSON,
   FinancialCashFlowCreateFromJSON,
   FinancialCashFlowCreateToJSON,
-  FinancialCashFlowReadFromJSON,
-  FinancialCashFlowReadToJSON,
+  FinancialCashFlowMutationResponseFromJSON,
+  FinancialCashFlowMutationResponseToJSON,
   FinancialCashFlowUpdateFromJSON,
   FinancialCashFlowUpdateToJSON,
   FinancialCovenantCreateFromJSON,
@@ -122,8 +122,8 @@ export interface CreateCaseFinancialBalanceRequest {
 export interface CreateCaseFinancialCashFlowRequest {
   caseId: string;
   xOrgId: string;
+  xUserId: string;
   financialCashFlowCreate: FinancialCashFlowCreate;
-  xUserId?: string | null;
 }
 
 export interface CreateCaseFinancialCovenantRequest {
@@ -195,8 +195,8 @@ export interface UpdateCaseFinancialCashFlowRequest {
   caseId: string;
   cashFlowId: string;
   xOrgId: string;
+  xUserId: string;
   financialCashFlowUpdate: FinancialCashFlowUpdate;
-  xUserId?: string | null;
 }
 
 export interface UpdateCaseFinancialCovenantRequest {
@@ -242,7 +242,7 @@ export interface ValidateCaseFinancialDataRequest {
  */
 export class FinancialDataApi extends runtime.BaseAPI {
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Account
    */
   async createCaseFinancialAccountRaw(
@@ -313,7 +313,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Account
    */
   async createCaseFinancialAccount(
@@ -328,7 +328,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Balance
    */
   async createCaseFinancialBalanceRaw(
@@ -399,7 +399,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Balance
    */
   async createCaseFinancialBalance(
@@ -414,12 +414,13 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Cash Flow
    */
   async createCaseFinancialCashFlowRaw(
     requestParameters: CreateCaseFinancialCashFlowRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<FinancialCashFlowRead>> {
+  ): Promise<runtime.ApiResponse<FinancialCashFlowMutationResponse>> {
     if (requestParameters["caseId"] == null) {
       throw new runtime.RequiredError(
         "caseId",
@@ -431,6 +432,13 @@ export class FinancialDataApi extends runtime.BaseAPI {
       throw new runtime.RequiredError(
         "xOrgId",
         'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialCashFlow().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialCashFlow().',
       );
     }
 
@@ -472,17 +480,18 @@ export class FinancialDataApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      FinancialCashFlowReadFromJSON(jsonValue),
+      FinancialCashFlowMutationResponseFromJSON(jsonValue),
     );
   }
 
   /**
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Cash Flow
    */
   async createCaseFinancialCashFlow(
     requestParameters: CreateCaseFinancialCashFlowRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<FinancialCashFlowRead> {
+  ): Promise<FinancialCashFlowMutationResponse> {
     const response = await this.createCaseFinancialCashFlowRaw(
       requestParameters,
       initOverrides,
@@ -491,7 +500,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Covenant
    */
   async createCaseFinancialCovenantRaw(
@@ -562,7 +571,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Covenant
    */
   async createCaseFinancialCovenant(
@@ -577,7 +586,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Institution
    */
   async createCaseFinancialInstitutionRaw(
@@ -648,7 +657,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Institution
    */
   async createCaseFinancialInstitution(
@@ -663,7 +672,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Obligation
    */
   async createCaseFinancialObligationRaw(
@@ -734,7 +743,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Obligation
    */
   async createCaseFinancialObligation(
@@ -749,7 +758,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Reporting Period
    */
   async createCaseFinancialReportingPeriodRaw(
@@ -820,7 +829,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Create Case Financial Reporting Period
    */
   async createCaseFinancialReportingPeriod(
@@ -1050,7 +1059,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Account
    */
   async updateCaseFinancialAccountRaw(
@@ -1133,7 +1142,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Account
    */
   async updateCaseFinancialAccount(
@@ -1148,7 +1157,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Balance
    */
   async updateCaseFinancialBalanceRaw(
@@ -1231,7 +1240,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Balance
    */
   async updateCaseFinancialBalance(
@@ -1246,12 +1255,13 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Cash Flow
    */
   async updateCaseFinancialCashFlowRaw(
     requestParameters: UpdateCaseFinancialCashFlowRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<FinancialCashFlowRead>> {
+  ): Promise<runtime.ApiResponse<FinancialCashFlowMutationResponse>> {
     if (requestParameters["caseId"] == null) {
       throw new runtime.RequiredError(
         "caseId",
@@ -1270,6 +1280,13 @@ export class FinancialDataApi extends runtime.BaseAPI {
       throw new runtime.RequiredError(
         "xOrgId",
         'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialCashFlow().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialCashFlow().',
       );
     }
 
@@ -1316,17 +1333,18 @@ export class FinancialDataApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      FinancialCashFlowReadFromJSON(jsonValue),
+      FinancialCashFlowMutationResponseFromJSON(jsonValue),
     );
   }
 
   /**
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Cash Flow
    */
   async updateCaseFinancialCashFlow(
     requestParameters: UpdateCaseFinancialCashFlowRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<FinancialCashFlowRead> {
+  ): Promise<FinancialCashFlowMutationResponse> {
     const response = await this.updateCaseFinancialCashFlowRaw(
       requestParameters,
       initOverrides,
@@ -1335,7 +1353,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Covenant
    */
   async updateCaseFinancialCovenantRaw(
@@ -1418,7 +1436,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Covenant
    */
   async updateCaseFinancialCovenant(
@@ -1433,7 +1451,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Institution
    */
   async updateCaseFinancialInstitutionRaw(
@@ -1516,7 +1534,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Institution
    */
   async updateCaseFinancialInstitution(
@@ -1531,7 +1549,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Obligation
    */
   async updateCaseFinancialObligationRaw(
@@ -1614,7 +1632,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Obligation
    */
   async updateCaseFinancialObligation(
@@ -1629,7 +1647,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Reporting Period
    */
   async updateCaseFinancialReportingPeriodRaw(
@@ -1712,7 +1730,7 @@ export class FinancialDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Resource-specific canonical mutation contract selected for AEQ-18/AEQ-20. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
+   * Resource-specific canonical financial mutation contract. Only fields declared by this resource schema are accepted. The response includes the updated record and validation refreshed after the write.
    * Update Case Financial Reporting Period
    */
   async updateCaseFinancialReportingPeriod(

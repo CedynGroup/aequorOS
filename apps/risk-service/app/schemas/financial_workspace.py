@@ -128,36 +128,6 @@ class FinancialCashFlowRead(BaseModel):
     updated_at: datetime
 
 
-class FinancialCashFlowCreate(BaseModel):
-    account_id: UUID | None = None
-    reporting_period_id: UUID | None = None
-    cash_flow_date: date | None = None
-    amount: str = Field(min_length=1)
-    currency: str | None = None
-    direction: str
-    category: str
-    metadata: JsonObject = Field(default_factory=dict)
-
-
-class FinancialCashFlowUpdate(BaseModel):
-    account_id: UUID | None = None
-    reporting_period_id: UUID | None = None
-    cash_flow_date: date | None = None
-    amount: str | None = Field(default=None, min_length=1)
-    currency: str | None = None
-    direction: str | None = None
-    category: str | None = None
-    metadata: JsonObject | None = None
-    reason: str | None = None
-
-    @model_validator(mode="after")
-    def require_update_field(self) -> FinancialCashFlowUpdate:
-        update_fields = set(self.model_fields_set) - {"reason"}
-        if not update_fields:
-            raise ValueError("At least one cash-flow field is required.")
-        return self
-
-
 class FinancialObligationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -193,6 +163,28 @@ class ManualUpdatePayload(ManualMutationPayload):
         if not (set(self.model_fields_set) - {"reason"}):
             raise ValueError("At least one editable field is required.")
         return self
+
+
+class FinancialCashFlowCreate(ManualMutationPayload):
+    account_id: UUID | None = None
+    reporting_period_id: UUID | None = None
+    cash_flow_date: date | None = None
+    amount: FinancialAmount
+    currency: FinancialCurrency | None = None
+    direction: Literal["inflow", "outflow"]
+    category: FinancialString120 = Field(min_length=1)
+    metadata: JsonObject = Field(default_factory=dict)
+
+
+class FinancialCashFlowUpdate(ManualUpdatePayload):
+    account_id: UUID | None = None
+    reporting_period_id: UUID | None = None
+    cash_flow_date: date | None = None
+    amount: FinancialAmount = Decimal(0)
+    currency: FinancialCurrency | None = None
+    direction: Literal["inflow", "outflow"] = "inflow"
+    category: FinancialString120 = Field(default="", min_length=1)
+    metadata: JsonObject | None = None
 
 
 class FinancialInstitutionCreate(ManualMutationPayload):
@@ -477,6 +469,11 @@ class FinancialReportingPeriodMutationResponse(BaseModel):
 
 class FinancialBalanceMutationResponse(BaseModel):
     record: FinancialBalanceRead
+    validation: FinancialValidationRunResponse
+
+
+class FinancialCashFlowMutationResponse(BaseModel):
+    record: FinancialCashFlowRead
     validation: FinancialValidationRunResponse
 
 
