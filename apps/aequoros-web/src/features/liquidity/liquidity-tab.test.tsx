@@ -373,7 +373,7 @@ describe("LiquidityTab", () => {
     renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
 
     expect(
-      await screen.findByText("99,999,999,999,999,999,999.00x"),
+      await screen.findByText("9,999,999,999,999,999,999,900%"),
     ).toBeInTheDocument();
   });
 

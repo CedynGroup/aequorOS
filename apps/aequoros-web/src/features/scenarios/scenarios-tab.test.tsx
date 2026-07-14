@@ -301,6 +301,22 @@ describe("ScenariosTab", () => {
 
     renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
     const scenarioName = await screen.findByLabelText("Scenario name");
+    expect(
+      screen.getByRole("table", { name: "Scenario assumptions" }),
+    ).toBeInTheDocument();
+    for (const heading of [
+      "Label",
+      "Type",
+      "Value",
+      "Unit",
+      "Status",
+      "Actions",
+    ]) {
+      expect(
+        screen.getByRole("columnheader", { name: heading }),
+      ).toBeInTheDocument();
+    }
+    expect(screen.getAllByText("%")).not.toHaveLength(0);
     await user.clear(scenarioName);
     await user.type(scenarioName, "  Operating plan  ");
     await user.click(screen.getByRole("button", { name: "Save details" }));
@@ -337,7 +353,7 @@ describe("ScenariosTab", () => {
 
     const value = await screen.findByLabelText("Revenue growth value");
     await user.clear(value);
-    await user.type(value, "0.05");
+    await user.type(value, "5");
     expect(screen.getByRole("button", { name: "Review" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {

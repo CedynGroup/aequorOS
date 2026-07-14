@@ -5,7 +5,13 @@ import type {
   ScenarioRead,
 } from "@aequoros/risk-service-api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  type ComponentPropsWithoutRef,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import {
@@ -20,6 +26,7 @@ import {
   Textarea,
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
+import { formatPercent } from "../../lib/money";
 import { labelize } from "../../lib/utils";
 import {
   focusWorkspaceTarget,
@@ -308,7 +315,11 @@ function ScenarioEditor({
         category: newAssumption.category,
         key: newAssumption.key,
         label: newAssumption.label,
-        value: typedValue(newAssumption.value, newAssumption.valueType),
+        value: typedUnitValue(
+          newAssumption.value,
+          newAssumption.valueType,
+          newAssumption.unit,
+        ),
         unit: newAssumption.unit || undefined,
         reason: "Add scenario assumption",
       }),
@@ -434,24 +445,57 @@ function ScenarioEditor({
           </div>
         ) : null}
         {actionError ? <ErrorPanel error={actionError} /> : null}
-        <div className="space-y-2">
+        <div
+          data-testid="assumption-table"
+          className="max-w-full overflow-x-auto rounded-md border border-[rgb(var(--border))]"
+        >
           {scenario.assumptions.length ? (
-            scenario.assumptions.map((assumption) => (
-              <AssumptionRow
-                key={assumption.id}
-                tenant={tenant}
-                caseId={caseId}
-                scenarioId={scenario.id}
-                assumption={assumption}
-                readOnly={readOnly}
-                onSaved={onSaved}
-              />
-            ))
+            <table className="w-full min-w-[720px] table-fixed border-collapse text-left text-xs">
+              <caption className="sr-only">Scenario assumptions</caption>
+              <colgroup>
+                <col className="w-[27%]" />
+                <col className="w-[12%]" />
+                <col className="w-[20%]" />
+                <col className="w-[10%]" />
+                <col className="w-[13%]" />
+                <col className="w-[18%]" />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] text-[rgb(var(--muted-foreground))]">
+                  {["Label", "Type", "Value", "Unit", "Status", "Actions"].map(
+                    (heading) => (
+                      <th
+                        key={heading}
+                        scope="col"
+                        className="h-9 px-2 text-[11px] font-semibold uppercase tracking-[0.04em]"
+                      >
+                        {heading}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {scenario.assumptions.map((assumption) => (
+                  <AssumptionRow
+                    key={assumption.id}
+                    tenant={tenant}
+                    caseId={caseId}
+                    scenarioId={scenario.id}
+                    assumption={assumption}
+                    readOnly={readOnly}
+                    onSaved={onSaved}
+                  />
+                ))}
+              </tbody>
+            </table>
           ) : (
-            <Alert title="No assumptions">
-              Add required growth, expense, cash-flow timing, credit usage, and
-              repayment inputs.
-            </Alert>
+            <div className="p-3">
+              <Alert title="No assumptions">
+                Add required growth, expense, cash-flow timing, credit usage,
+                and repayment inputs.
+              </Alert>
+            </div>
           )}
         </div>
         {!readOnly ? (
@@ -514,10 +558,11 @@ function ScenarioEditor({
                   </option>
                 ))}
               </select>
-              <Input
+              <UnitInput
                 aria-label="New assumption value"
                 placeholder="Value"
                 value={newAssumption.value}
+                unit={newAssumption.unit}
                 disabled={newAssumption.valueType === "null"}
                 onChange={(event) =>
                   setNewAssumption({
@@ -575,14 +620,16 @@ function AssumptionRow({
 }) {
   const initialType = valueTypeOf(assumption.value);
   const [valueType, setValueType] = useState(initialType);
-  const [value, setValue] = useState(valueInput(assumption.value));
+  const [value, setValue] = useState(
+    valueInputForUnit(assumption.value, assumption.unit),
+  );
   const [persistedValue, setPersistedValue] = useState(assumption.value);
   useEffect(() => {
     setValueType(valueTypeOf(assumption.value));
-    setValue(valueInput(assumption.value));
+    setValue(valueInputForUnit(assumption.value, assumption.unit));
     setPersistedValue(assumption.value);
-  }, [assumption.updatedAt, assumption.value]);
-  const nextValue = typedValue(value, valueType);
+  }, [assumption.unit, assumption.updatedAt, assumption.value]);
+  const nextValue = typedUnitValue(value, valueType, assumption.unit);
   const validValue = isValidValue(value, valueType);
   const dirty =
     valueType !== valueTypeOf(persistedValue) || nextValue !== persistedValue;
@@ -605,78 +652,126 @@ function AssumptionRow({
     onSuccess: () => onSaved(`${assumption.label} reviewed`),
   });
   return (
-    <div
-      id={`scenario-${scenarioId}-assumption-${assumption.id}`}
-      tabIndex={-1}
-      className="grid gap-2 rounded-md border border-[rgb(var(--border))] p-2 outline-none focus:bg-amber-100 @2xl/editor:grid-cols-[minmax(0,1fr)_100px_160px_auto] @2xl/editor:items-center"
-    >
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-sm font-medium">
-            {assumption.label}
-          </span>
+    <Fragment>
+      <tr
+        id={`scenario-${scenarioId}-assumption-${assumption.id}`}
+        tabIndex={-1}
+        className="border-b border-[rgb(var(--border))] outline-none last:border-0 focus:bg-amber-100"
+      >
+        <td className="min-w-0 px-2 py-1.5 align-middle">
+          <div className="truncate text-sm font-medium">{assumption.label}</div>
+          <div className="truncate text-[11px] text-[rgb(var(--muted-foreground))]">
+            {labelize(assumption.category)} · {assumption.key}
+          </div>
+        </td>
+        <td className="px-2 py-1.5 align-middle">
+          <select
+            aria-label={`${assumption.label} value type`}
+            className="h-8 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2 text-xs"
+            value={valueType}
+            disabled={readOnly}
+            onChange={(event) =>
+              setValueType(event.target.value as AssumptionValueType)
+            }
+          >
+            {valueTypes.map((option) => (
+              <option key={option} value={option}>
+                {labelize(option)}
+              </option>
+            ))}
+          </select>
+        </td>
+        <td className="px-2 py-1.5 align-middle">
+          <UnitInput
+            aria-label={`${assumption.label} value`}
+            value={value}
+            unit={assumption.unit}
+            disabled={readOnly || valueType === "null"}
+            onChange={(event) => setValue(event.target.value)}
+          />
+        </td>
+        <td className="truncate px-2 py-1.5 align-middle text-[rgb(var(--muted-foreground))]">
+          {unitLabel(assumption.unit)}
+        </td>
+        <td className="px-2 py-1.5 align-middle">
           <Badge
             tone={
               assumption.reviewStatus === "reviewed" ? "success" : "warning"
             }
           >
-            {assumption.reviewStatus}
+            {labelize(assumption.reviewStatus)}
           </Badge>
-        </div>
-        <div className="text-xs text-[rgb(var(--muted-foreground))]">
-          {labelize(assumption.category)} · {assumption.key} ·{" "}
-          {assumption.unit ?? "unitless"}
-        </div>
-      </div>
-      <select
-        aria-label={`${assumption.label} value type`}
-        className="h-8 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2 text-sm"
-        value={valueType}
-        disabled={readOnly}
-        onChange={(event) =>
-          setValueType(event.target.value as AssumptionValueType)
-        }
-      >
-        {valueTypes.map((option) => (
-          <option key={option} value={option}>
-            {labelize(option)}
-          </option>
-        ))}
-      </select>
-      <Input
-        aria-label={`${assumption.label} value`}
-        value={value}
-        disabled={readOnly || valueType === "null"}
-        onChange={(event) => setValue(event.target.value)}
-      />
-      {!readOnly ? (
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!dirty || !validValue || update.isPending}
-            onClick={() => update.mutate()}
-          >
-            Save
-          </Button>
-          <Button
-            size="sm"
-            disabled={
-              dirty || !validValue || update.isPending || review.isPending
-            }
-            onClick={() => review.mutate()}
-          >
-            Review
-          </Button>
-        </div>
-      ) : null}
+        </td>
+        <td className="px-2 py-1.5 align-middle">
+          {!readOnly ? (
+            <div className="flex gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!dirty || !validValue || update.isPending}
+                onClick={() => update.mutate()}
+              >
+                Save
+              </Button>
+              <Button
+                size="sm"
+                disabled={
+                  dirty || !validValue || update.isPending || review.isPending
+                }
+                onClick={() => review.mutate()}
+              >
+                Review
+              </Button>
+            </div>
+          ) : (
+            <span className="text-[rgb(var(--muted-foreground))]">
+              Read only
+            </span>
+          )}
+        </td>
+      </tr>
       {update.isError || review.isError ? (
-        <div className="@2xl/editor:col-span-4">
-          <ErrorPanel error={update.error ?? review.error} />
-        </div>
+        <tr>
+          <td colSpan={6} className="p-2">
+            <ErrorPanel error={update.error ?? review.error} />
+          </td>
+        </tr>
+      ) : null}
+    </Fragment>
+  );
+}
+
+function UnitInput({
+  unit,
+  className,
+  ...props
+}: ComponentPropsWithoutRef<"input"> & { unit?: string | null }) {
+  const suffix = unitSuffix(unit);
+  return (
+    <div className="relative min-w-0">
+      <Input
+        {...props}
+        className={`${className ?? ""} ${suffix ? "pr-12" : ""}`}
+      />
+      {suffix ? (
+        <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs font-medium text-[rgb(var(--muted-foreground))]">
+          {suffix}
+        </span>
       ) : null}
     </div>
   );
+}
+
+function unitSuffix(unit?: string | null) {
+  if (!unit) return "";
+  if (unit === "ratio" || unit === "percent" || unit === "%") return "%";
+  if (unit === "days" || unit === "day") return "days";
+  if (/^[A-Z]{3}$/.test(unit)) return unit;
+  return "";
+}
+
+function unitLabel(unit?: string | null) {
+  return unitSuffix(unit) || (unit ? labelize(unit) : "Unitless");
 }
 
 function scenarioDeepLink() {
@@ -709,6 +804,15 @@ function valueInput(value: AssumptionValue): string {
   return value === null ? "" : String(value);
 }
 
+function valueInputForUnit(
+  value: AssumptionValue,
+  unit?: string | null,
+): string {
+  if (typeof value === "number" && unit === "ratio")
+    return formatPercent(value).replace(/[^\d.-]/g, "");
+  return valueInput(value);
+}
+
 function isValidValue(value: string, valueType: AssumptionValueType): boolean {
   if (valueType === "number") {
     return value.trim() !== "" && Number.isFinite(Number(value));
@@ -725,4 +829,13 @@ function typedValue(
   if (valueType === "boolean") return value === "true";
   if (valueType === "number") return Number(value);
   return value;
+}
+
+function typedUnitValue(
+  value: string,
+  valueType: AssumptionValueType,
+  unit?: string | null,
+): AssumptionValue {
+  const typed = typedValue(value, valueType);
+  return typeof typed === "number" && unit === "ratio" ? typed / 100 : typed;
 }

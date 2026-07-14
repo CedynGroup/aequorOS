@@ -29,9 +29,40 @@ export function formatDecimal(value: string, fractionDigits: number) {
   );
 }
 
+export function formatPercent(
+  value: string | number,
+  maximumFractionDigits = 2,
+) {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(value));
+  if (!match) return String(value);
+  const scaledMatch = /^(-?)(\d+)(?:\.(\d+))?$/.exec(
+    multiplyDecimalBy100(match),
+  );
+  if (!scaledMatch) return String(value);
+  return formatDecimalParts(
+    scaledMatch,
+    new Intl.NumberFormat(undefined, {
+      style: "percent",
+      maximumFractionDigits,
+    }),
+    true,
+  );
+}
+
+function multiplyDecimalBy100(match: RegExpExecArray) {
+  const integer = match[2];
+  const fraction = match[3] ?? "";
+  const digits = `${integer}${fraction.padEnd(2, "0")}`;
+  const decimalIndex = integer.length + 2;
+  const scaledInteger = digits.slice(0, decimalIndex).replace(/^0+(?=\d)/, "");
+  const scaledFraction = digits.slice(decimalIndex).replace(/0+$/, "");
+  return `${match[1]}${scaledInteger}${scaledFraction ? `.${scaledFraction}` : ""}`;
+}
+
 function formatDecimalParts(
   match: RegExpExecArray,
   formatter: Intl.NumberFormat,
+  trimTrailingZeros = false,
 ) {
   const resolvedOptions = formatter.resolvedOptions();
   const minimumFractionDigits = resolvedOptions.minimumFractionDigits ?? 0;
@@ -43,7 +74,9 @@ function formatDecimalParts(
   const decimalSeparator =
     formatter.formatToParts(0.1).find((part) => part.type === "decimal")
       ?.value ?? ".";
-  const fraction = rounded.fraction.padEnd(minimumFractionDigits, "0");
+  const fraction = (
+    trimTrailingZeros ? rounded.fraction.replace(/0+$/, "") : rounded.fraction
+  ).padEnd(minimumFractionDigits, "0");
   const formattedNumber = `${groupedInteger}${fraction ? decimalSeparator + fraction : ""}`;
   const parts = formatter.formatToParts(match[1] ? -0 : 0);
   let insertedNumber = false;

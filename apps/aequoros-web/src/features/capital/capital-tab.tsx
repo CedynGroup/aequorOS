@@ -23,6 +23,7 @@ import {
   Skeleton,
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
+import { formatPercent } from "../../lib/money";
 import { formatJson, formatMoney, labelize } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { FindingReviewItem } from "../findings/findings-tab";
@@ -609,9 +610,5 @@ function attemptLabel(
 }
 
 function percent(value: string | number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "percent",
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(Number(value));
+  return formatPercent(value);
 }

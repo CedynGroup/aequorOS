@@ -2,6 +2,19 @@ export const DEFAULT_ORG_ID = "11111111-1111-4111-8111-111111111111";
 export const DEFAULT_USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 export const DEFAULT_API_BASE_URL = "http://127.0.0.1:8003/api/v1";
 
+export const DEMO_TENANTS = [
+  {
+    name: "AequorOS Demo Organization",
+    orgId: DEFAULT_ORG_ID,
+    userId: DEFAULT_USER_ID,
+  },
+  {
+    name: "AequorOS Isolated Tenant",
+    orgId: "22222222-2222-4222-8222-222222222222",
+    userId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  },
+] as const;
+
 export const tabs = [
   "overview",
   "financial",

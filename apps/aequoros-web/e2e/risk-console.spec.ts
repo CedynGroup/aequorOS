@@ -117,15 +117,41 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await expect(initialize.or(baselineHeading)).toBeVisible();
   if (await initialize.isVisible()) await initialize.click();
   await expect(baselineHeading).toBeVisible();
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 1280, height: 800 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const assumptionTable = page.getByTestId("assumption-table");
+    const topBar = page.getByTestId("risk-console-top-bar");
+    await expect(assumptionTable).toBeVisible();
+    expect(
+      await assumptionTable.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true);
+    expect(
+      await topBar.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true);
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+  }
   const downside = page.getByRole("button", { name: /^Downside / });
   await expect(downside).toBeVisible();
 
   const growth = page
     .getByLabel("Revenue growth value", { exact: true })
     .first();
-  await growth.fill((await growth.inputValue()) === "0.04" ? "0.05" : "0.04");
+  await growth.fill((await growth.inputValue()) === "4" ? "5" : "4");
   await growth
-    .locator("..")
+    .locator("xpath=ancestor::tr")
     .getByRole("button", { name: "Save", exact: true })
     .click();
   await expect(scenariosPanel.getByText("Revenue growth saved")).toBeVisible();
@@ -333,13 +359,9 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
     page.getByRole("button", { name: "Rerun current inputs" }),
   ).toHaveCount(0);
 
-  await page
-    .getByLabel("Tenant org id")
-    .fill("22222222-2222-4222-8222-222222222222");
-  await page.getByLabel("User id").fill("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
-  await expect(
-    page.getByText("Tenant context is not valid.").first(),
-  ).toBeVisible();
+  await page.getByRole("combobox", { name: "Organization" }).click();
+  await page.getByRole("option", { name: "AequorOS Isolated Tenant" }).click();
+  await expect(page.getByText("Case not found.")).toBeVisible();
 });
 
 test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with tenant isolation", async ({
@@ -404,13 +426,13 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
   const growth = page
     .getByLabel("Revenue growth value", { exact: true })
     .first();
-  await growth.fill((await growth.inputValue()) === "0.07" ? "0.08" : "0.07");
+  await growth.fill((await growth.inputValue()) === "7" ? "8" : "7");
   await growth
-    .locator("..")
+    .locator("xpath=ancestor::tr")
     .getByRole("button", { name: "Save", exact: true })
     .click();
   await growth
-    .locator("..")
+    .locator("xpath=ancestor::tr")
     .getByRole("button", { name: "Review", exact: true })
     .click();
 
@@ -434,9 +456,9 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
   ).toBe(true);
 
   await page.getByRole("tab", { name: "Scenarios" }).click();
-  await growth.fill((await growth.inputValue()) === "0.09" ? "0.10" : "0.09");
+  await growth.fill((await growth.inputValue()) === "9" ? "10" : "9");
   await growth
-    .locator("..")
+    .locator("xpath=ancestor::tr")
     .getByRole("button", { name: "Save", exact: true })
     .click();
   await page.getByRole("tab", { name: "Forecast" }).click();
@@ -455,13 +477,9 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
     .click();
   await expect(page.getByText("Projected balance sheet outputs")).toBeVisible();
 
-  await page
-    .getByLabel("Tenant org id")
-    .fill("22222222-2222-4222-8222-222222222222");
-  await page.getByLabel("User id").fill("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
-  await expect(
-    page.getByText("Tenant context is not valid.").first(),
-  ).toBeVisible();
+  await page.getByRole("combobox", { name: "Organization" }).click();
+  await page.getByRole("option", { name: "AequorOS Isolated Tenant" }).click();
+  await expect(page.getByText("Case not found.")).toBeVisible();
 });
 
 test("reviews liquidity metrics, evidence, finding status, and tenant isolation", async ({
@@ -539,13 +557,9 @@ test("reviews liquidity metrics, evidence, finding status, and tenant isolation"
   await expect(page.getByText("Terminal finding · read only")).toBeVisible();
   await captureEvidence(page, "liquidity-acknowledged-read-only");
 
-  await page
-    .getByLabel("Tenant org id")
-    .fill("22222222-2222-4222-8222-222222222222");
-  await page.getByLabel("User id").fill("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
-  await expect(
-    page.getByText("Tenant context is not valid.").first(),
-  ).toBeVisible();
+  await page.getByRole("combobox", { name: "Organization" }).click();
+  await page.getByRole("option", { name: "AequorOS Isolated Tenant" }).click();
+  await expect(page.getByText("Case not found.")).toBeVisible();
 });
 
 test("renders liquidity empty and error states", async ({ page }) => {

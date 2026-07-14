@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   DEFAULT_ORG_ID,
   DEFAULT_USER_ID,
+  DEMO_TENANTS,
   type ConsoleTab,
   type ReportMode,
   isConsoleTab,
@@ -37,6 +38,7 @@ export function RiskConsoleRoute() {
   const [lastCaseId, setLastCaseId] = usePersistentState("aequoros.caseId", "");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [mockWorkspace, setMockWorkspace] = useState(false);
+  const [queueVisible, setQueueVisible] = useState(() => !params.caseId);
   const tenant = useMemo<TenantHeaders>(
     () => ({ orgId, userId }),
     [orgId, userId],
@@ -106,6 +108,18 @@ export function RiskConsoleRoute() {
     });
   };
 
+  const chooseTenant = (nextOrgId: string) => {
+    const nextTenant = DEMO_TENANTS.find((item) => item.orgId === nextOrgId);
+    if (!nextTenant) return;
+    setOrgId(nextTenant.orgId);
+    setUserId(nextTenant.userId);
+    setLastCaseId("");
+    setSelected({});
+    setMockWorkspace(false);
+    setQueueVisible(true);
+    void navigate({ to: "/cases", search: { ...search, page: 1 } });
+  };
+
   const refresh = () => {
     void router.invalidate();
     toast.info("Refreshing risk console data");
@@ -121,33 +135,42 @@ export function RiskConsoleRoute() {
       <main className="min-w-0 flex-1">
         <TopBar
           orgId={orgId}
-          userId={userId}
-          setOrgId={setOrgId}
-          setUserId={setUserId}
+          chooseTenant={chooseTenant}
           cases={demoList?.items ?? casesQuery.data?.items ?? []}
           caseId={workspaceCaseId}
           chooseCase={chooseCase}
+          queueVisible={queueVisible}
+          toggleQueue={() => setQueueVisible((visible) => !visible)}
           refresh={refresh}
           seed={() => {
             setMockWorkspace(true);
             toast.success("Frontend mock financial workspace enabled");
           }}
         />
-        <div className="grid min-h-[calc(100vh-56px)] grid-cols-[minmax(420px,0.95fr)_minmax(440px,1.05fr)] gap-3 p-3 max-xl:grid-cols-1">
-          <CaseQueuePanel
-            query={casesQuery}
-            taxonomy={taxonomyQuery.data}
-            filters={filters}
-            page={page}
-            selected={selected}
-            setSelected={setSelected}
-            chooseCase={chooseCase}
-            activeCaseId={workspaceCaseId}
-            selectedIds={selectedIds}
-            tenant={tenant}
-            updateSearch={updateSearch}
-            mockList={demoList}
-          />
+        <div
+          data-testid="risk-console-master-detail"
+          className={`grid min-h-[calc(100vh-56px)] gap-3 p-3 ${
+            queueVisible
+              ? "grid-cols-[minmax(360px,0.72fr)_minmax(0,1.28fr)] max-xl:grid-cols-1"
+              : "grid-cols-1"
+          }`}
+        >
+          {queueVisible ? (
+            <CaseQueuePanel
+              query={casesQuery}
+              taxonomy={taxonomyQuery.data}
+              filters={filters}
+              page={page}
+              selected={selected}
+              setSelected={setSelected}
+              chooseCase={chooseCase}
+              activeCaseId={workspaceCaseId}
+              selectedIds={selectedIds}
+              tenant={tenant}
+              updateSearch={updateSearch}
+              mockList={demoList}
+            />
+          ) : null}
           <CaseWorkspace
             tenant={tenant}
             caseId={workspaceCaseId}
