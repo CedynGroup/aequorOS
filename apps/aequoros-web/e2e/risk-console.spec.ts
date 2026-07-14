@@ -295,6 +295,23 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   );
   await expect(page.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
 
+  await page.goto(`/cases/${northstarCase.id}?tab=calculations`);
+  await page
+    .getByRole("button", {
+      name: new RegExp(
+        `${archivedRun.id.slice(0, 8)}.*${archivedRun.id.slice(-4)}`,
+      ),
+    })
+    .click();
+  await expect(page.getByText("Archived forecast audit")).toBeVisible();
+  await expect(page.getByText("Archived scenario · read only")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run forecast" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("button", { name: "Rerun current inputs" }),
+  ).toHaveCount(0);
+
   await page.goto(
     `/cases/${northstarCase.id}?tab=calculations#calculation-run-${archivedRun.id}-forecast-period-1`,
   );
