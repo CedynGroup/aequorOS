@@ -1,7 +1,7 @@
 """immutable liquidity analysis results
 
 Revision ID: 202607140001
-Revises: 202607130002
+Revises: 202607130003
 Create Date: 2026-07-14 12:00:00.000000
 """
 
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision = "202607140001"
-down_revision = "202607130002"
+down_revision = "202607130003"
 branch_labels = None
 depends_on = None
 
