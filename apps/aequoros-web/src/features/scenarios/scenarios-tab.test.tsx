@@ -229,6 +229,30 @@ describe("ScenariosTab", () => {
     expect(scenarios).toHaveBeenCalledWith(tenant, caseId, false);
   });
 
+  it.each([
+    { stored: 0.123456, editable: "12.3456" },
+    { stored: 0.045, editable: "4.5" },
+  ])(
+    "preserves $stored as editable percent text without marking it dirty",
+    async ({ stored, editable }) => {
+      vi.spyOn(riskApi, "scenarios").mockResolvedValue(
+        workspace([
+          scenario({
+            assumptions: [assumption({ value: stored })],
+          }),
+        ]),
+      );
+
+      renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+
+      expect(await screen.findByLabelText("Revenue growth value")).toHaveValue(
+        editable,
+      );
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Review" })).toBeEnabled();
+    },
+  );
+
   it("ignores malformed scenario evidence fragments", async () => {
     window.history.replaceState(
       null,

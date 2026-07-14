@@ -353,12 +353,12 @@ describe("LiquidityTab", () => {
     ).toBeInTheDocument();
   });
 
-  it("formats large ratio metrics without losing precision", async () => {
+  it("formats coverage ratios as multiples without losing precision", async () => {
     vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(
       summary({
         metrics: [
           {
-            key: "sources_coverage",
+            key: "minimum_sources_coverage",
             label: "Sources coverage",
             value: "99999999999999999999.0000",
             unit: "ratio",
@@ -373,8 +373,30 @@ describe("LiquidityTab", () => {
     renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
 
     expect(
-      await screen.findByText("9,999,999,999,999,999,999,900%"),
+      await screen.findByText("99,999,999,999,999,999,999.00x"),
     ).toBeInTheDocument();
+  });
+
+  it("formats credit reliance as a percentage", async () => {
+    vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(
+      summary({
+        metrics: [
+          {
+            key: "credit_reliance",
+            label: "Credit reliance",
+            value: "0.0833",
+            unit: "ratio",
+            periodNumber: null,
+            periodEnd: null,
+            description: "Credit draws divided by forecast liquidity uses.",
+          },
+        ],
+      }),
+    );
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    expect(await screen.findByText("8.33%")).toBeInTheDocument();
   });
 
   it("selects an explicit scenario and run and scopes the summary", async () => {

@@ -26,7 +26,6 @@ import {
   Textarea,
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
-import { formatPercent } from "../../lib/money";
 import { labelize } from "../../lib/utils";
 import {
   focusWorkspaceTarget,
@@ -809,8 +808,31 @@ function valueInputForUnit(
   unit?: string | null,
 ): string {
   if (typeof value === "number" && unit === "ratio")
-    return formatPercent(value).replace(/[^\d.-]/g, "");
+    return shiftDecimal(String(value), 2);
   return valueInput(value);
+}
+
+function shiftDecimal(value: string, places: number): string {
+  const match = /^(-?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(value);
+  if (!match) return value;
+
+  const digits = `${match[2]}${match[3] ?? ""}`;
+  const decimalIndex = match[2].length + Number(match[4] ?? 0) + places;
+  const integer =
+    decimalIndex <= 0
+      ? "0"
+      : `${digits.slice(0, decimalIndex)}${"0".repeat(
+          Math.max(0, decimalIndex - digits.length),
+        )}`;
+  const fraction =
+    decimalIndex <= 0
+      ? `${"0".repeat(-decimalIndex)}${digits}`
+      : digits.slice(decimalIndex);
+  const normalizedInteger = integer.replace(/^0+(?=\d)/, "");
+  const normalizedFraction = fraction.replace(/0+$/, "");
+  return `${match[1] ?? ""}${normalizedInteger}${
+    normalizedFraction ? `.${normalizedFraction}` : ""
+  }`;
 }
 
 function isValidValue(value: string, valueType: AssumptionValueType): boolean {
