@@ -12,7 +12,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TenantHeaders } from "../../lib/api";
 import type { FinancialReviewClient } from "./financial-client";
@@ -29,6 +29,10 @@ beforeAll(() => {
     configurable: true,
     value: vi.fn<() => void>(),
   });
+});
+
+beforeEach(() => {
+  window.history.replaceState(null, "", window.location.pathname);
 });
 
 function workspace(): FinancialDataWorkspaceRead {
@@ -156,6 +160,19 @@ function institutionSection() {
 }
 
 describe("FinancialSections", () => {
+  it("focuses a canonical record from an evidence deep link", async () => {
+    const target = "financial-institutions-institution-1";
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+
+    render(<FinancialSections workspace={workspace()} mocked />);
+
+    await waitFor(() => expect(document.activeElement?.id).toBe(target));
+  });
+
   it("renders grouped empty states and editable cash flows", () => {
     const data = workspace();
     data.institutions = [];

@@ -66,6 +66,22 @@ def test_zero_liquidity_uses_do_not_create_false_credit_reliance() -> None:
     assert result.concerns == []
 
 
+def test_peak_gap_metric_and_evidence_use_the_largest_shortfall_period() -> None:
+    result = calculate_metrics(
+        [
+            _period(1, cash="-10", inflows="50", outflows="60"),
+            _period(2, cash="-100", inflows="40", outflows="70"),
+        ]
+    )
+
+    metrics = {item.key: item for item in result.metrics}
+    peak_gap = metrics["peak_liquidity_gap"]
+    assert peak_gap.value == Decimal("100.0000")
+    assert peak_gap.period_number == 2
+    assert result.concerns[0]["period"].period_number == 2
+    assert "forecast period 2" in result.concerns[0]["rationale"]
+
+
 def test_rejects_non_sequential_forecast_outputs() -> None:
     with pytest.raises(ValueError, match="sequential forecast output"):
         calculate_metrics([_period(2, cash="100", inflows="50", outflows="25")])

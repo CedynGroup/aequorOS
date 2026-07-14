@@ -100,6 +100,11 @@ function mutation(result = scenario()): ScenarioMutationResponse {
 describe("ScenariosTab", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    window.history.replaceState(null, "", window.location.pathname);
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn<() => void>(),
+    });
     vi.spyOn(riskApi, "scenarioValidation").mockResolvedValue({
       scenarioId: scenario().id,
       complete: false,
@@ -113,6 +118,20 @@ describe("ScenariosTab", () => {
         },
       ],
     });
+  });
+
+  it("opens and focuses a scenario assumption from an evidence deep link", async () => {
+    const target = `scenario-${scenario().id}-assumption-${assumption().id}`;
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(workspace());
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+
+    await waitFor(() => expect(document.activeElement?.id).toBe(target));
   });
 
   it("renders an explicit empty state and initializes baseline and downside", async () => {

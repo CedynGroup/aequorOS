@@ -3,10 +3,12 @@ from uuid import UUID
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
-from app.models import AuditEvent, RiskFinding
+from app.models import AuditEvent, CalculationForecastPeriod, CalculationRun, RiskFinding
+from app.services.liquidity import generate_findings
 from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_2, USER_2, headers
+from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.api.test_calculations import _financial_inputs, _ready_scenario
 
 
@@ -91,7 +93,13 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
         "canonical_input",
         "scenario_assumption",
     }
-    assert all(evidence["source_url"].startswith("/api/v1/") for evidence in finding["evidence"])
+    assert all(
+        evidence["source_url"].startswith(f"/cases/{case.id}?") for evidence in finding["evidence"]
+    )
+    assert any(
+        "tab=financial#financial-obligations-" in evidence["source_url"]
+        for evidence in finding["evidence"]
+    )
 
     invalid = db_client.post(
         f"/api/v1/cases/{case.id}/liquidity/findings/{finding['id']}/review",
@@ -176,3 +184,95 @@ def test_liquidity_rerun_supersedes_prior_scenario_findings(db_client: TestClien
     with get_sessionmaker()() as session:
         prior = list(session.scalars(select(RiskFinding).where(RiskFinding.id.in_(prior_ids))))
     assert prior and all(item.status == "superseded" for item in prior)
+
+
+def test_stale_run_completion_does_not_replace_newer_findings(db_client: TestClient) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    first = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+    second = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs/{first['id']}/rerun",
+        headers=headers(),
+        json={},
+    ).json()
+
+    with get_sessionmaker()() as session:
+        first_run = session.get(CalculationRun, UUID(first["id"]))
+        assert first_run is not None
+        periods = list(
+            session.scalars(
+                select(CalculationForecastPeriod).where(
+                    CalculationForecastPeriod.run_id == first_run.id
+                )
+            )
+        )
+        generate_findings(
+            session,
+            TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+            first_run,
+            periods,
+        )
+        session.commit()
+
+        current = list(
+            session.scalars(
+                select(RiskFinding).where(
+                    RiskFinding.case_id == case.id,
+                    RiskFinding.risk_type == "liquidity",
+                    RiskFinding.status == "open",
+                )
+            )
+        )
+    assert current
+    assert {item.details["liquidity"]["calculation_run_id"] for item in current} == {second["id"]}
+
+
+def test_liquidity_summary_ranks_findings_by_severity(db_client: TestClient) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    run = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+
+    with get_sessionmaker()() as session:
+        for severity in ("medium", "critical"):
+            session.add(
+                RiskFinding(
+                    organization_id=ORG_1,
+                    case_id=case.id,
+                    risk_type="liquidity",
+                    title=f"{severity} finding",
+                    summary="Severity ordering regression fixture.",
+                    rationale="Severity ordering regression fixture.",
+                    severity=severity,
+                    status="open",
+                    source="deterministic_rule",
+                    rule_id=f"liquidity.test.{severity}",
+                    rule_version="liquidity-v1.0.0",
+                    details={
+                        "liquidity": {
+                            "calculation_run_id": run["id"],
+                            "scenario_id": scenario["id"],
+                            "input_hash": run["input_hash"],
+                            "metrics": [],
+                        }
+                    },
+                )
+            )
+        session.commit()
+
+    findings = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers()
+    ).json()["findings"]
+    rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    assert [rank[item["severity"]] for item in findings] == sorted(
+        rank[item["severity"]] for item in findings
+    )

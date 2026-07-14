@@ -23,6 +23,10 @@ import {
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { formatMoney, truncateId } from "../../lib/utils";
+import {
+  focusWorkspaceTarget,
+  workspaceHash,
+} from "../../lib/workspace-deep-link";
 import { ErrorPanel } from "../../shared/route-ui";
 
 const runTone: Record<
@@ -43,6 +47,7 @@ export function CalculationsTab({
   caseId: string;
 }) {
   const queryClient = useQueryClient();
+  const deepLink = calculationDeepLink();
   const [runOffset, setRunOffset] = useState(0);
   const runsKey = ["calculation-runs", tenant, caseId, runOffset] as const;
   const scenarios = useQuery({
@@ -62,7 +67,9 @@ export function CalculationsTab({
   });
   const [scenarioId, setScenarioId] = useState("");
   const [forecastPeriods, setForecastPeriods] = useState("3");
-  const [selectedRunId, setSelectedRunId] = useState("");
+  const [selectedRunId, setSelectedRunId] = useState(
+    () => deepLink?.runId ?? "",
+  );
   const selectedRun = useQuery({
     queryKey: ["calculation-run", tenant, caseId, selectedRunId],
     queryFn: () => riskApi.calculationRun(tenant, caseId, selectedRunId),
@@ -79,8 +86,8 @@ export function CalculationsTab({
   useEffect(() => {
     setRunOffset(0);
     setScenarioId("");
-    setSelectedRunId("");
-  }, [caseId, tenant.orgId]);
+    setSelectedRunId(deepLink?.runId ?? "");
+  }, [caseId, deepLink?.runId, tenant.orgId]);
 
   useEffect(() => {
     if (!scenarios.data) return;
@@ -95,11 +102,18 @@ export function CalculationsTab({
     if (!runs.data) return;
     setSelectedRunId((current) =>
       runs.data.runs.some((run) => run.id === current) ||
-      current === runs.data.latestSuccessfulRunId
+      current === runs.data.latestSuccessfulRunId ||
+      current === deepLink?.runId
         ? current
         : (runs.data.runs[0]?.id ?? ""),
     );
-  }, [runs.data]);
+  }, [deepLink?.runId, runs.data]);
+
+  useEffect(() => {
+    if (selectedRun.data && deepLink?.targetId) {
+      focusWorkspaceTarget(deepLink.targetId);
+    }
+  }, [deepLink?.targetId, selectedRun.data]);
 
   const parsedForecastPeriods = Number(forecastPeriods);
   const validForecastPeriods =
@@ -381,7 +395,7 @@ function RunOutput({
           </>
         ) : null}
         {run.status === "succeeded" && run.outputs.length ? (
-          <ForecastTable rows={run.outputs} />
+          <ForecastTable runId={run.id} rows={run.outputs} />
         ) : null}
         {run.status === "succeeded" && !run.outputs.length ? (
           <Alert title="No forecast outputs">
@@ -483,7 +497,13 @@ function diagnosticRecord(record: Record<string, unknown>) {
     .join(" — ");
 }
 
-function ForecastTable({ rows }: { rows: ForecastPeriodRead[] }) {
+function ForecastTable({
+  runId,
+  rows,
+}: {
+  runId: string;
+  rows: ForecastPeriodRead[];
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[760px] border-collapse text-right text-xs">
@@ -503,7 +523,9 @@ function ForecastTable({ rows }: { rows: ForecastPeriodRead[] }) {
           {rows.map((row) => (
             <tr
               key={row.id}
-              className="border-b border-[rgb(var(--border))] last:border-0"
+              id={`calculation-run-${runId}-forecast-period-${row.periodNumber}`}
+              tabIndex={-1}
+              className="border-b border-[rgb(var(--border))] outline-none last:border-0 focus:bg-amber-100"
             >
               <td className="p-2 text-left font-medium">
                 {dateOnly(row.periodEnd)}
@@ -520,6 +542,16 @@ function ForecastTable({ rows }: { rows: ForecastPeriodRead[] }) {
       </table>
     </div>
   );
+}
+
+function calculationDeepLink() {
+  const targetId = workspaceHash();
+  const prefix = "calculation-run-";
+  const separator = "-forecast-period-";
+  if (!targetId.startsWith(prefix) || !targetId.includes(separator))
+    return null;
+  const runId = targetId.slice(prefix.length, targetId.indexOf(separator));
+  return runId ? { runId, targetId } : null;
 }
 
 function MoneyCell({ row, value }: { row: ForecastPeriodRead; value: string }) {

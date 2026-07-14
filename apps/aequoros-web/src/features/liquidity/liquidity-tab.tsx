@@ -4,13 +4,12 @@ import type {
   LiquidityReviewAction,
 } from "@aequoros/risk-service-api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { Alert, Button, Input, Label, Skeleton } from "../../components/ui";
 import type { TenantHeaders } from "../../lib/api";
-import { apiBaseUrl } from "../../lib/constants";
 import { ErrorPanel } from "../../shared/route-ui";
 import { FindingReviewCard } from "../findings/finding-review-card";
 import { liquidityReviewClient } from "./liquidity-client";
@@ -155,12 +154,9 @@ function LiquidityFindingCard({
               <li key={evidence.id} className="min-w-0">
                 <a
                   className="inline-flex max-w-full items-center gap-1 text-[rgb(var(--primary))] underline"
-                  href={evidenceUrl(evidence.sourceUrl)}
-                  target="_blank"
-                  rel="noreferrer"
+                  href={evidence.sourceUrl}
                 >
                   <span className="truncate">{evidence.label}</span>
-                  <ExternalLink className="size-3 shrink-0" />
                 </a>
                 {evidence.quote ? (
                   <div className="mt-0.5 text-[rgb(var(--muted-foreground))]">
@@ -232,8 +228,4 @@ function formatDate(value: string | null | undefined) {
   return value
     ? new Date(`${value}T00:00:00`).toLocaleDateString()
     : "not available";
-}
-
-function evidenceUrl(sourceUrl: string) {
-  return `${apiBaseUrl().replace(/\/api\/v1\/?$/, "")}${sourceUrl}`;
 }

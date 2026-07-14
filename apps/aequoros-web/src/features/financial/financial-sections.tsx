@@ -27,7 +27,7 @@ import {
   Plus,
   RotateCcw,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Alert,
@@ -39,6 +39,10 @@ import {
 } from "../../components/ui";
 import type { TenantHeaders } from "../../lib/api";
 import { cn, labelize, truncateId } from "../../lib/utils";
+import {
+  focusWorkspaceTarget,
+  workspaceHash,
+} from "../../lib/workspace-deep-link";
 import type {
   EditableFinancialKind,
   FinancialCreatePayload,
@@ -248,6 +252,12 @@ export function FinancialSections({
   ) => Promise<void> | void;
 }) {
   const [focusedCell, setFocusedCell] = useState<string>();
+  useEffect(() => {
+    const targetId = workspaceHash();
+    if (targetId.startsWith("financial-") && focusWorkspaceTarget(targetId)) {
+      setFocusedCell(targetId);
+    }
+  }, [workspace]);
   const openIssues = workspace.validationIssues.filter(
     (issue) => issue.status === "open",
   );
@@ -694,7 +704,11 @@ function FinancialRecordRows({
 }) {
   return (
     <>
-      <tr className="border-t border-[rgb(var(--border))]">
+      <tr
+        id={`financial-${config.collection}-${row.id}`}
+        tabIndex={-1}
+        className="border-t border-[rgb(var(--border))] outline-none focus:bg-amber-100"
+      >
         {config.fields.map((field) => {
           const id = cellIdentifier(config.table, row.id, field.key);
           return (

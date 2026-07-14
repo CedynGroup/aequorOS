@@ -37,7 +37,7 @@ function finding(
         sourceType: "forecast_output",
         label: "Forecast period 1",
         sourceUrl:
-          "/api/v1/cases/case-1/calculation-runs/run-1#forecast-period-1",
+          "/cases/case-1?tab=calculations#calculation-run-run-1-forecast-period-1",
         locator: { period_number: 1 },
         quote: "Coverage is below 1.20x.",
       },
@@ -120,7 +120,7 @@ describe("LiquidityTab", () => {
       screen.getByRole("link", { name: /Forecast period 1/ }),
     ).toHaveAttribute(
       "href",
-      expect.stringContaining("/api/v1/cases/case-1/calculation-runs/run-1"),
+      "/cases/case-1?tab=calculations#calculation-run-run-1-forecast-period-1",
     );
   });
 

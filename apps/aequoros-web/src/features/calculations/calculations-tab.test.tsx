@@ -116,8 +116,32 @@ function runList(items: CalculationRunRead[] = []): CalculationRunListRead {
 describe("CalculationsTab", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    window.history.replaceState(null, "", window.location.pathname);
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn<() => void>(),
+    });
     vi.spyOn(riskApi, "scenarios").mockResolvedValue(scenarioWorkspace());
     vi.spyOn(riskApi, "calculationRun").mockResolvedValue(run());
+  });
+
+  it("opens and focuses a forecast period from an evidence deep link", async () => {
+    const target = `calculation-run-${run().id}-forecast-period-1`;
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+
+    await waitFor(() => expect(document.activeElement?.id).toBe(target));
+    expect(riskApi.calculationRun).toHaveBeenCalledWith(
+      tenant,
+      caseId,
+      run().id,
+    );
   });
 
   it("shows the empty state then starts and renders a successful forecast", async () => {

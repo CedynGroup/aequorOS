@@ -6,7 +6,7 @@ from typing import Any, Literal, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -66,8 +66,8 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
         raise ValueError("Liquidity analysis requires forecast outputs in one currency.")
 
     minimum = min(ordered, key=lambda item: (item.cash, item.period_number))
-    peak_gap = max((-item.cash for item in ordered), default=Decimal(0))
-    peak_gap = max(peak_gap, Decimal(0))
+    peak_gap_period = minimum
+    peak_gap = max(-peak_gap_period.cash, Decimal(0))
     first_negative = next((item for item in ordered if item.cash < 0), None)
     coverage_rows = [
         (
@@ -104,8 +104,8 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
             label="Peak liquidity gap",
             value=_money(peak_gap),
             unit=minimum.currency,
-            period_number=first_negative.period_number if first_negative else None,
-            period_end=first_negative.period_end if first_negative else None,
+            period_number=peak_gap_period.period_number if peak_gap > 0 else None,
+            period_end=peak_gap_period.period_end if peak_gap > 0 else None,
             description="Largest amount by which projected ending cash falls below zero.",
         ),
         LiquidityMetricRead(
@@ -150,11 +150,12 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
                     f"{first_negative.period_number}."
                 ),
                 "rationale": (
-                    f"Projected ending cash is {_money(first_negative.cash)} "
-                    f"{first_negative.currency}, creating a peak liquidity gap of "
-                    f"{_money(peak_gap)} {first_negative.currency}."
+                    f"The lowest projected ending cash is {_money(peak_gap_period.cash)} "
+                    f"{peak_gap_period.currency} in forecast period "
+                    f"{peak_gap_period.period_number}, creating a peak liquidity gap of "
+                    f"{_money(peak_gap)} {peak_gap_period.currency}."
                 ),
-                "period": first_negative,
+                "period": peak_gap_period,
                 "metric_keys": [
                     "minimum_cash_balance",
                     "peak_liquidity_gap",
@@ -205,6 +206,35 @@ def generate_findings(
     periods: list[CalculationForecastPeriod],
 ) -> None:
     result = calculate_metrics(periods)
+    newer_run_id = db.scalar(
+        select(CalculationRun.id).where(
+            CalculationRun.organization_id == ctx.organization_id,
+            CalculationRun.case_id == run.case_id,
+            CalculationRun.scenario_id == run.scenario_id,
+            CalculationRun.status == "succeeded",
+            or_(
+                CalculationRun.created_at > run.created_at,
+                and_(
+                    CalculationRun.created_at == run.created_at,
+                    CalculationRun.id > run.id,
+                ),
+            ),
+        )
+    )
+    if newer_run_id is not None:
+        record_event(
+            db,
+            ctx,
+            event_type="liquidity_analysis.completed",
+            entity_type="calculation_run",
+            entity_id=run.id,
+            details={
+                "finding_count": 0,
+                "rule_version": RULE_VERSION,
+                "superseded_by_calculation_run_id": str(newer_run_id),
+            },
+        )
+        return
     prior = list(
         db.scalars(
             select(RiskFinding).where(
@@ -265,8 +295,8 @@ def generate_findings(
                     "source_type": "forecast_output",
                     "label": f"Forecast period {period.period_number}",
                     "source_url": (
-                        f"/api/v1/cases/{run.case_id}/calculation-runs/{run.id}"
-                        f"#forecast-period-{period.period_number}"
+                        f"/cases/{run.case_id}?tab=calculations"
+                        f"#calculation-run-{run.id}-forecast-period-{period.period_number}"
                     ),
                     "calculation_run_id": str(run.id),
                     "forecast_period_id": str(period.id),
@@ -277,10 +307,15 @@ def generate_findings(
                 relevance=Decimal(1),
             )
         )
-        for source_type, records in (
-            ("canonical_input", run.inputs.get("balances", [])),
-            ("canonical_input", run.inputs.get("cash_flows", [])),
-            ("scenario_assumption", run.inputs.get("scenario", {}).get("assumptions", [])),
+        for source_type, collection, records in (
+            ("canonical_input", "balances", run.inputs.get("balances", [])),
+            ("canonical_input", "cashFlows", run.inputs.get("cash_flows", [])),
+            ("canonical_input", "obligations", run.inputs.get("obligations", [])),
+            (
+                "scenario_assumption",
+                "assumptions",
+                run.inputs.get("scenario", {}).get("assumptions", []),
+            ),
         ):
             for record in records:
                 record_id = record.get("id")
@@ -293,7 +328,13 @@ def generate_findings(
                         locator={
                             "source_type": source_type,
                             "label": _source_label(source_type, record),
-                            "source_url": _source_url(run.case_id, source_type, record_id),
+                            "source_url": _source_url(
+                                run.case_id,
+                                source_type,
+                                record_id,
+                                collection=collection,
+                                scenario_id=run.scenario_id,
+                            ),
                             "record_id": record_id,
                             "input_hash": run.input_hash,
                         },
@@ -384,6 +425,8 @@ def get_summary(
         for item in finding_rows
         if item.details.get("liquidity", {}).get("calculation_run_id") == str(run.id)
     ]
+    severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    findings.sort(key=lambda item: severity_rank[item.severity])
     return LiquiditySummaryRead(
         case_id=case_id,
         scenario_id=run.scenario_id,
@@ -487,7 +530,14 @@ def _source_label(source_type: str, record: dict[str, Any]) -> str:
     )
 
 
-def _source_url(case_id: UUID, source_type: str, record_id: str) -> str:
+def _source_url(
+    case_id: UUID,
+    source_type: str,
+    record_id: str,
+    *,
+    collection: str,
+    scenario_id: UUID,
+) -> str:
     if source_type == "scenario_assumption":
-        return f"/api/v1/cases/{case_id}/scenarios#assumption-{record_id}"
-    return f"/api/v1/cases/{case_id}/financial-workspace#record-{record_id}"
+        return f"/cases/{case_id}?tab=scenarios" f"#scenario-{scenario_id}-assumption-{record_id}"
+    return f"/cases/{case_id}?tab=financial#financial-{collection}-{record_id}"

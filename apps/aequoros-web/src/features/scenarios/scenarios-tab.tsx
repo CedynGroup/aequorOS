@@ -21,6 +21,10 @@ import {
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { labelize } from "../../lib/utils";
+import {
+  focusWorkspaceTarget,
+  workspaceHash,
+} from "../../lib/workspace-deep-link";
 import { ErrorPanel } from "../../shared/route-ui";
 
 const categories: AssumptionCategory[] = [
@@ -47,12 +51,15 @@ export function ScenariosTab({
   caseId: string;
 }) {
   const queryClient = useQueryClient();
+  const deepLink = scenarioDeepLink();
   const queryKey = ["scenarios", tenant, caseId] as const;
   const query = useQuery({
     queryKey,
     queryFn: () => riskApi.scenarios(tenant, caseId),
   });
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(
+    () => deepLink?.scenarioId ?? "",
+  );
   const [customName, setCustomName] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
 
@@ -60,6 +67,12 @@ export function ScenariosTab({
     if (!selectedId && query.data?.scenarios[0])
       setSelectedId(query.data.scenarios[0].id);
   }, [query.data, selectedId]);
+
+  useEffect(() => {
+    if (query.data && deepLink?.targetId) {
+      focusWorkspaceTarget(deepLink.targetId);
+    }
+  }, [deepLink?.targetId, query.data, selectedId]);
 
   const refresh = async (message: string) => {
     setSavedMessage(message);
@@ -546,7 +559,11 @@ function AssumptionRow({
     onSuccess: () => onSaved(`${assumption.label} reviewed`),
   });
   return (
-    <div className="grid gap-2 rounded-md border border-[rgb(var(--border))] p-2 @2xl/editor:grid-cols-[minmax(0,1fr)_100px_160px_auto] @2xl/editor:items-center">
+    <div
+      id={`scenario-${scenarioId}-assumption-${assumption.id}`}
+      tabIndex={-1}
+      className="grid gap-2 rounded-md border border-[rgb(var(--border))] p-2 outline-none focus:bg-amber-100 @2xl/editor:grid-cols-[minmax(0,1fr)_100px_160px_auto] @2xl/editor:items-center"
+    >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">
@@ -611,6 +628,16 @@ function AssumptionRow({
       ) : null}
     </div>
   );
+}
+
+function scenarioDeepLink() {
+  const targetId = workspaceHash();
+  const prefix = "scenario-";
+  const separator = "-assumption-";
+  if (!targetId.startsWith(prefix) || !targetId.includes(separator))
+    return null;
+  const scenarioId = targetId.slice(prefix.length, targetId.indexOf(separator));
+  return scenarioId ? { scenarioId, targetId } : null;
 }
 
 function valueTypeOf(value: AssumptionValue): AssumptionValueType {
