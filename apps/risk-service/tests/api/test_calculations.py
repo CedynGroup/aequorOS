@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, tzinfo
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from decimal import Decimal
 from uuid import UUID
 
@@ -21,7 +21,7 @@ from app.models import (
 )
 from app.services import calculations
 from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_1, ORG_2, headers
+from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 
 
 def _ready_scenario(client: TestClient, case_id: UUID) -> dict:
@@ -165,6 +165,7 @@ def test_calculation_correctness_persistence_and_reproducible_rerun(
     ).json()
     assert active_listing["runs"] == []
     assert active_listing["latest_successful_run_id"] is None
+    assert active_listing["latest_successful_runs_by_scenario"] == []
 
     with get_sessionmaker()() as session:
         assert session.scalar(select(CalculationRun).where(CalculationRun.id == UUID(run["id"])))
@@ -186,6 +187,57 @@ def test_calculation_correctness_persistence_and_reproducible_rerun(
                 AuditEvent.event_type == "calculation_run.succeeded",
             )
         )
+
+
+def test_active_run_listing_returns_latest_success_for_every_scenario(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    workspace = db_client.post(
+        f"/api/v1/cases/{case.id}/scenarios/initialize",
+        headers=headers(),
+        json={"reason": "Prepare scenario run history"},
+    ).json()
+    baseline, downside = workspace["scenarios"]
+    now = datetime.now(UTC)
+
+    def run(scenario_id: str, status: str, age: int) -> CalculationRun:
+        return CalculationRun(
+            organization_id=ORG_1,
+            case_id=case.id,
+            scenario_id=UUID(scenario_id),
+            status=status,
+            engine_version="balance-sheet-v1.0.0",
+            input_schema_version="calculation-input-v1",
+            output_schema_version="balance-sheet-output-v1",
+            input_hash=f"{age:064d}",
+            inputs={},
+            forecast_periods=3,
+            as_of_date=date(2026, 6, 30),
+            created_by=USER_1,
+            created_at=now - timedelta(minutes=age),
+            updated_at=now - timedelta(minutes=age),
+        )
+
+    baseline_success = run(baseline["id"], "succeeded", 3)
+    downside_success = run(downside["id"], "succeeded", 2)
+    newest_failure = run(baseline["id"], "failed", 1)
+    with get_sessionmaker()() as session:
+        session.add_all([baseline_success, downside_success, newest_failure])
+        session.commit()
+        expected_ids = {str(baseline_success.id), str(downside_success.id)}
+
+    response = db_client.get(
+        f"/api/v1/cases/{case.id}/calculation-runs"
+        "?active_scenarios_only=true&limit=1",
+        headers=headers(),
+    )
+    assert response.status_code == 200, response.text
+    listing = response.json()
+    assert [item["id"] for item in listing["runs"]] == [str(newest_failure.id)]
+    assert {
+        item["id"] for item in listing["latest_successful_runs_by_scenario"]
+    } == expected_ids
 
 
 def test_default_as_of_date_excludes_future_balances_unless_explicit(

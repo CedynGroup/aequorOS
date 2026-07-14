@@ -194,10 +194,33 @@ def list_runs(  # noqa: PLR0913
             .offset(offset)
         ).mappings()
     )
+    latest_by_scenario: list[CalculationRunSummaryRead] = []
+    if active_scenarios_only:
+        ranked = (
+            select(
+                *summary_columns,
+                func.row_number()
+                .over(
+                    partition_by=CalculationRun.scenario_id,
+                    order_by=(CalculationRun.created_at.desc(), CalculationRun.id.desc()),
+                )
+                .label("rank"),
+            )
+            .where(*conditions)
+            .where(CalculationRun.status == "succeeded")
+            .subquery()
+        )
+        latest_rows = db.execute(
+            select(*(ranked.c[column.key] for column in summary_columns))
+            .where(ranked.c.rank == 1)
+            .order_by(ranked.c.created_at.desc(), ranked.c.id.desc())
+        ).mappings()
+        latest_by_scenario = [_read_summary(row) for row in latest_rows]
     return CalculationRunListRead(
         case_id=case_id,
         runs=[_read_summary(row) for row in rows],
         latest_successful_run_id=latest,
+        latest_successful_runs_by_scenario=latest_by_scenario,
         total=total,
         limit=limit,
         offset=offset,

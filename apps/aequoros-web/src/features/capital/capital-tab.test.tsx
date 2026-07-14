@@ -45,6 +45,7 @@ function runList(): CalculationRunListRead {
       },
     ],
     latestSuccessfulRunId: runId,
+    latestSuccessfulRunsByScenario: [],
     total: 1,
     limit: 100,
     offset: 0,
@@ -444,33 +445,47 @@ describe("CapitalTab", () => {
     ).toHaveTextContent("Failed");
   });
 
-  it("fetches the latest successful active-scenario run outside the first page", async () => {
+  it("includes the latest successful run for every active scenario", async () => {
+    const downsideScenarioId = "20000000-0000-4000-8000-000000000002";
+    const downsideRunId = "30000000-0000-4000-8000-000000000002";
+    vi.mocked(riskApi.scenarios).mockResolvedValue({
+      ...scenarioWorkspace(),
+      scenarios: [
+        ...scenarioWorkspace().scenarios,
+        {
+          ...scenarioWorkspace().scenarios[0],
+          id: downsideScenarioId,
+          name: "Liquidity downside",
+          scenarioType: "downside",
+        },
+      ],
+    });
     const failedRun = {
       ...runList().runs[0],
       id: "failed-run",
       status: "failed" as const,
     };
+    const baselineSuccess = runList().runs[0];
+    const downsideSuccess = {
+      ...baselineSuccess,
+      id: downsideRunId,
+      scenarioId: downsideScenarioId,
+      createdAt: new Date(now.getTime() + 1_000),
+    };
     vi.mocked(riskApi.calculationRuns).mockResolvedValue({
       ...runList(),
-      latestSuccessfulRunId: runId,
       runs: [failedRun],
       total: 101,
       hasMore: true,
+      latestSuccessfulRunsByScenario: [baselineSuccess, downsideSuccess],
     });
-    const calculationRun = vi
-      .spyOn(riskApi, "calculationRun")
-      .mockResolvedValue({
-        ...runList().runs[0],
-        inputSnapshot: {},
-        periods: [],
-      } as never);
 
     renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
 
-    expect(
-      await screen.findByRole("combobox", { name: "Capital forecast run" }),
-    ).toHaveTextContent("Operating baseline (Baseline)");
-    expect(calculationRun).toHaveBeenCalledWith(tenant, caseId, runId);
+    const selector = await screen.findByRole("combobox", {
+      name: "Capital forecast run",
+    });
+    expect(selector).toHaveTextContent("Liquidity downside (Downside)");
     expect(riskApi.calculationRuns).toHaveBeenCalledWith(
       tenant,
       caseId,

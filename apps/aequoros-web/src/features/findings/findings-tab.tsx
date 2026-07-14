@@ -46,10 +46,12 @@ export function FindingsTab({
   tenant,
   caseId,
   mutationDisabled = false,
+  mutationDisabledReason = "retired-case",
 }: {
   tenant: TenantHeaders;
   caseId: string;
   mutationDisabled?: boolean;
+  mutationDisabledReason?: "demo" | "retired-case";
 }) {
   const queryClient = useQueryClient();
   const form = useForm<FindingForm>({
@@ -91,7 +93,9 @@ export function FindingsTab({
         <Label>Create manual finding</Label>
         {mutationDisabled ? (
           <div className="text-xs text-[rgb(var(--muted-foreground))]">
-            Finding mutations are unavailable for retired cases.
+            {mutationDisabledReason === "retired-case"
+              ? "Finding mutations are unavailable for retired cases."
+              : "Finding mutations are unavailable in demo mode."}
           </div>
         ) : null}
         <Input

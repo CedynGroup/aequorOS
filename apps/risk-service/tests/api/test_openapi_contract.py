@@ -266,7 +266,14 @@ def test_calculation_contracts_include_lifecycle_errors_versions_and_outputs(
     }
     assert list_parameters["limit"]["schema"]["maximum"] == 100
     assert list_parameters["offset"]["schema"]["minimum"] == 0
-    assert {"runs", "total", "limit", "offset", "has_more"} <= set(
+    assert {
+        "runs",
+        "latest_successful_runs_by_scenario",
+        "total",
+        "limit",
+        "offset",
+        "has_more",
+    } <= set(
         components["CalculationRunListRead"]["required"]
     )
     assert {"inputs", "outputs"}.isdisjoint(components["CalculationRunSummaryRead"]["properties"])

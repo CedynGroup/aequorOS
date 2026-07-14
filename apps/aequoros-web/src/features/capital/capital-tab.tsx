@@ -84,30 +84,26 @@ export function CapitalTab({
   );
   const runs = useQuery({
     queryKey: ["calculation-runs", tenant, caseId, "capital-active"],
-    queryFn: async () => {
-      const page = await riskApi.calculationRuns(
-        tenant,
-        caseId,
-        undefined,
-        100,
-        0,
-        true,
-      );
-      const latestId = page.latestSuccessfulRunId;
-      if (!latestId || page.runs.some((run) => run.id === latestId)) return page;
-      const latest = await riskApi.calculationRun(tenant, caseId, latestId);
-      return { ...page, runs: [...page.runs, latest] };
-    },
+    queryFn: () =>
+      riskApi.calculationRuns(tenant, caseId, undefined, 100, 0, true),
   });
   const successfulRuns = useMemo(() => {
-    return (
-      runs.data?.runs.filter((run) => {
+    const candidates = [
+      ...(runs.data?.runs ?? []),
+      ...(runs.data?.latestSuccessfulRunsByScenario ?? []),
+    ];
+    return candidates
+      .filter((run, index) => {
         const scenario = scenariosById.get(run.scenarioId);
-        return run.status === "succeeded" && scenario?.archivedAt === null;
-      }) ?? []
-    ).sort(
-      (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
-    );
+        return (
+          run.status === "succeeded" &&
+          scenario?.archivedAt === null &&
+          candidates.findIndex((candidate) => candidate.id === run.id) === index
+        );
+      })
+      .sort(
+        (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+      );
   }, [runs.data, scenariosById]);
 
   useEffect(() => {

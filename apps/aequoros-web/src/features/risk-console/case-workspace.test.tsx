@@ -24,8 +24,16 @@ vi.mock("../capital/capital-tab", () => ({
 }));
 
 vi.mock("../findings/findings-tab", () => ({
-  FindingsTab: ({ mutationDisabled }: { mutationDisabled: boolean }) => (
-    <div>Finding controls: {String(mutationDisabled)}</div>
+  FindingsTab: ({
+    mutationDisabled,
+    mutationDisabledReason,
+  }: {
+    mutationDisabled: boolean;
+    mutationDisabledReason: string;
+  }) => (
+    <div>
+      Finding controls: {String(mutationDisabled)} · {mutationDisabledReason}
+    </div>
   ),
 }));
 
@@ -156,6 +164,19 @@ describe("CaseWorkspace", () => {
       },
     });
 
-    expect(await screen.findByText("Finding controls: true")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Finding controls: true · retired-case"),
+    ).toBeInTheDocument();
+  });
+
+  it("disables shared finding mutations in demo mode", async () => {
+    renderWorkspace({
+      activeTab: "findings",
+      mockWorkspace: true,
+    });
+
+    expect(
+      await screen.findByText("Finding controls: true · demo"),
+    ).toBeInTheDocument();
   });
 });

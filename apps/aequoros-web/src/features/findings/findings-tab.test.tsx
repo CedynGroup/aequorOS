@@ -117,4 +117,24 @@ describe("FindingsTab", () => {
     expect(createFinding).not.toHaveBeenCalled();
     expect(updateFinding).not.toHaveBeenCalled();
   });
+
+  it("explains disabled finding mutations in demo mode", async () => {
+    vi.spyOn(riskApi, "findings").mockResolvedValue([finding()]);
+
+    renderWithQuery(
+      <FindingsTab
+        tenant={tenant}
+        caseId="case-1"
+        mutationDisabled
+        mutationDisabledReason="demo"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Finding mutations are unavailable in demo mode."),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Cash conversion cycle widened")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create finding" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
+  });
 });

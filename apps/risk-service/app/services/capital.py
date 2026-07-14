@@ -564,7 +564,7 @@ def _supersede_prior_findings(
             .where(
                 RiskFinding.organization_id == ctx.organization_id,
                 RiskFinding.case_id == projection.case_id,
-                RiskFinding.status.in_({"open", "needs_review"}),
+                RiskFinding.status == "needs_review",
                 CapitalProjectionFinding.organization_id == ctx.organization_id,
                 CapitalProjection.organization_id == ctx.organization_id,
                 CapitalProjection.scenario_id == projection.scenario_id,

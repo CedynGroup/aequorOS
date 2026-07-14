@@ -167,7 +167,8 @@ export function CaseWorkspace({
                 <FindingsTab
                   tenant={tenant}
                   caseId={caseId}
-                  mutationDisabled={caseRetired}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                  mutationDisabledReason={caseRetired ? "retired-case" : "demo"}
                 />
               </LazyTabBoundary>
             </TabsContent>

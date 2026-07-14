@@ -94,6 +94,7 @@ class CalculationRunListRead(ClosedModel):
     case_id: UUID
     runs: list[CalculationRunSummaryRead]
     latest_successful_run_id: UUID | None
+    latest_successful_runs_by_scenario: list[CalculationRunSummaryRead]
     total: int
     limit: int
     offset: int

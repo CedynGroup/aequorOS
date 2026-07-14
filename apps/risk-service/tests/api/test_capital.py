@@ -516,7 +516,7 @@ def test_capital_rerun_supersedes_only_unreviewed_findings_for_same_scenario(
             assert finding.details["superseded_by_capital_projection_id"] == second["id"]
         reviewed = session.get(RiskFinding, second_finding_id)
         assert reviewed is not None
-        reviewed.status = "acknowledged"
+        reviewed.status = "open"
         other_finding = session.get(RiskFinding, other_finding_id)
         assert other_finding is not None
         assert other_finding.status == "needs_review"
@@ -531,7 +531,7 @@ def test_capital_rerun_supersedes_only_unreviewed_findings_for_same_scenario(
     with get_sessionmaker()() as session:
         reviewed = session.get(RiskFinding, second_finding_id)
         assert reviewed is not None
-        assert reviewed.status == "acknowledged"
+        assert reviewed.status == "open"
         assert "superseded_by_capital_projection_id" not in reviewed.details
 
 

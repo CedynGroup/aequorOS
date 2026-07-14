@@ -520,6 +520,13 @@
             ],
             "title": "Latest Successful Run Id"
           },
+          "latest_successful_runs_by_scenario": {
+            "items": {
+              "$ref": "#/components/schemas/CalculationRunSummaryRead"
+            },
+            "title": "Latest Successful Runs By Scenario",
+            "type": "array"
+          },
           "limit": {
             "title": "Limit",
             "type": "integer"
@@ -544,6 +551,7 @@
           "case_id",
           "runs",
           "latest_successful_run_id",
+          "latest_successful_runs_by_scenario",
           "total",
           "limit",
           "offset",
