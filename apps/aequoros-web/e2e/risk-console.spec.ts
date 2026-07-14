@@ -284,6 +284,17 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await page.reload();
   await expect(page.getByText("Archived forecast audit")).toBeVisible();
 
+  await console.gotoSelectedCase("liquidity");
+  await page.getByLabel("Liquidity scenario").click();
+  await page
+    .getByRole("option", { name: "Downside liquidity copy · Archived" })
+    .click();
+  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Acknowledge" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
+
   await page
     .getByLabel("Tenant org id")
     .fill("22222222-2222-4222-8222-222222222222");
