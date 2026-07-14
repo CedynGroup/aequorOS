@@ -104,19 +104,10 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
         )
     total_uses = sum((uses for _, uses in uses_by_period), Decimal(0))
     total_draw = sum((item.credit_draw for item in ordered), Decimal(0))
-    invalid_credit_uses = [
-        (item, uses)
-        for item, uses in uses_by_period
-        if uses < 0 or (uses == 0 and item.credit_draw != 0)
-    ]
-    if total_uses <= 0 and not invalid_credit_uses:
-        invalid_credit_uses = invalid_uses
-    credit_reliance = (
-        None if invalid_credit_uses or total_uses <= 0 else _ratio(total_draw, total_uses)
-    )
+    credit_reliance = None if invalid_uses else _ratio(total_draw, total_uses)
     credit_reliance_diagnostic = (
-        _undefined_uses_diagnostic("Credit reliance", invalid_credit_uses)
-        if invalid_credit_uses
+        _undefined_uses_diagnostic("Credit reliance", invalid_uses)
+        if invalid_uses
         else None
     )
     credit_reliance_periods = [

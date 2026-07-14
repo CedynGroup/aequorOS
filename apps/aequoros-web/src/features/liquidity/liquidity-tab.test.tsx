@@ -242,16 +242,16 @@ describe("LiquidityTab", () => {
       summary({
         metrics: [
           {
-            key: "minimum_sources_coverage",
-            label: "Minimum sources coverage",
+            key: "credit_reliance",
+            label: "Credit reliance",
             value: null,
             unit: "ratio",
             availability: "unavailable",
             diagnostic:
-              "Sources coverage is unavailable because projected outflows plus debt repayment must be positive; period 1 uses 0.0000. The ratio is undefined and was excluded from threshold classification.",
+              "Credit reliance is unavailable because projected outflows plus debt repayment must be positive; period 2 uses 0.0000. The ratio is undefined and was excluded from threshold classification.",
             periodNumber: null,
             periodEnd: null,
-            description: "Lowest sources coverage across the forecast.",
+            description: "Credit draws divided by forecast liquidity uses.",
           },
         ],
         findings: [],
@@ -261,7 +261,7 @@ describe("LiquidityTab", () => {
     renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
 
     expect(await screen.findByText("Not available")).toBeInTheDocument();
-    expect(screen.getByText(/period 1 uses 0\.0000/)).toBeInTheDocument();
+    expect(screen.getByText(/period 2 uses 0\.0000/)).toBeInTheDocument();
     expect(
       screen.getByText(/excluded from threshold classification/),
     ).toBeInTheDocument();

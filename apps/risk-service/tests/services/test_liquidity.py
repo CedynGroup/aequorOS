@@ -77,7 +77,6 @@ def test_credit_reliance_tracks_every_contributing_forecast_period() -> None:
         [
             _period(1, cash="100", inflows="10", outflows="100", draw="50"),
             _period(2, cash="100", inflows="10", outflows="50", draw="25"),
-            _period(3, cash="100", inflows="10", outflows="0", draw="0"),
         ]
     )
 
@@ -85,6 +84,25 @@ def test_credit_reliance_tracks_every_contributing_forecast_period() -> None:
         item for item in result.concerns if item["rule_id"] == "liquidity.credit_reliance"
     )
     assert [period.period_number for period in concern["periods"]] == [1, 2]
+
+
+@pytest.mark.parametrize("outflows", ["0", "-10"])
+def test_mixed_non_positive_uses_make_credit_reliance_unavailable(outflows: str) -> None:
+    result = calculate_metrics(
+        [
+            _period(1, cash="100", inflows="10", outflows="100", draw="50"),
+            _period(2, cash="100", inflows="10", outflows=outflows, draw="0"),
+        ]
+    )
+
+    metric = next(item for item in result.metrics if item.key == "credit_reliance")
+    assert metric.value is None
+    assert metric.availability == "unavailable"
+    assert metric.diagnostic is not None
+    assert f"period 2 uses {Decimal(outflows):.4f}" in metric.diagnostic
+    assert all(
+        concern["rule_id"] != "liquidity.credit_reliance" for concern in result.concerns
+    )
 
 
 def test_peak_gap_metric_and_evidence_use_the_largest_shortfall_period() -> None:
