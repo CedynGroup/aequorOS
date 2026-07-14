@@ -26,6 +26,7 @@ from app.models import (
     LiquidityAnalysisResult,
     RiskFinding,
     RiskFindingEvidence,
+    RiskScenario,
 )
 from app.schemas.findings import FindingUpdate
 from app.schemas.liquidity import (
@@ -104,6 +105,11 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
     )
     total_draw = sum((item.credit_draw for item in ordered), Decimal(0))
     credit_reliance = _ratio(total_draw, total_uses) if total_uses > 0 else Decimal("0.0000")
+    credit_reliance_periods = [
+        item
+        for item in ordered
+        if item.credit_draw != 0 or item.projected_outflows + item.debt_repayment != 0
+    ]
     runway = Decimal(first_negative.period_number - 1 if first_negative else len(ordered))
 
     metrics = [
@@ -210,6 +216,7 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
                     "debt repayment."
                 ),
                 "period": next(item for item in ordered if item.credit_draw > 0),
+                "periods": credit_reliance_periods,
                 "metric_keys": ["credit_reliance"],
             }
         )
@@ -249,7 +256,8 @@ def generate_findings(
         db.add(analysis)
         db.flush()
     newer_run_id = db.scalar(
-        select(CalculationRun.id).where(
+        select(CalculationRun.id)
+        .where(
             CalculationRun.organization_id == ctx.organization_id,
             CalculationRun.case_id == run.case_id,
             CalculationRun.scenario_id == run.scenario_id,
@@ -262,6 +270,8 @@ def generate_findings(
                 ),
             ),
         )
+        .order_by(CalculationRun.created_at.desc(), CalculationRun.id.desc())
+        .limit(1)
     )
     if newer_run_id is None:
         prior = list(
@@ -291,7 +301,7 @@ def generate_findings(
 
     metrics_by_key = {item.key: item.model_dump(mode="json") for item in result.metrics}
     for concern in result.concerns:
-        period = concern["period"]
+        evidence_periods = concern.get("periods", [concern["period"]])
         finding = RiskFinding(
             organization_id=ctx.organization_id,
             case_id=run.case_id,
@@ -322,27 +332,28 @@ def generate_findings(
         )
         db.add(finding)
         db.flush()
-        db.add(
-            RiskFindingEvidence(
-                organization_id=ctx.organization_id,
-                finding_id=finding.id,
-                quote=concern["rationale"],
-                locator={
-                    "source_type": "forecast_output",
-                    "label": f"Forecast period {period.period_number}",
-                    "source_url": (
-                        f"/cases/{run.case_id}?tab=calculations"
-                        f"#calculation-run-{run.id}-forecast-period-{period.period_number}"
-                    ),
-                    "calculation_run_id": str(run.id),
-                    "forecast_period_id": str(period.id),
-                    "period_number": period.period_number,
-                    "period_end": period.period_end.isoformat(),
-                    "input_hash": run.input_hash,
-                },
-                relevance=Decimal(1),
+        for period in evidence_periods:
+            db.add(
+                RiskFindingEvidence(
+                    organization_id=ctx.organization_id,
+                    finding_id=finding.id,
+                    quote=concern["rationale"],
+                    locator={
+                        "source_type": "forecast_output",
+                        "label": f"Forecast period {period.period_number}",
+                        "source_url": (
+                            f"/cases/{run.case_id}?tab=calculations"
+                            f"#calculation-run-{run.id}-forecast-period-{period.period_number}"
+                        ),
+                        "calculation_run_id": str(run.id),
+                        "forecast_period_id": str(period.id),
+                        "period_number": period.period_number,
+                        "period_end": period.period_end.isoformat(),
+                        "input_hash": run.input_hash,
+                    },
+                    relevance=Decimal(1),
+                )
             )
-        )
         for source_type, collection, records in (
             (
                 "canonical_input",
@@ -564,9 +575,22 @@ def review_finding(
 ) -> LiquidityFindingRead:
     get_case_or_404(db, ctx.organization_id, case_id)
     finding = findings_service.get_finding_or_404(db, ctx.organization_id, finding_id)
-    if finding.case_id != case_id or _finding_calculation_run(db, ctx, finding) is None:
+    calculation_run = _finding_calculation_run(db, ctx, finding)
+    if finding.case_id != case_id or calculation_run is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Liquidity finding not found."
+        )
+    scenario_archived_at = db.scalar(
+        select(RiskScenario.archived_at).where(
+            RiskScenario.id == calculation_run.scenario_id,
+            RiskScenario.organization_id == ctx.organization_id,
+            RiskScenario.case_id == case_id,
+        )
+    )
+    if scenario_archived_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Archived scenario liquidity findings are read-only.",
         )
     if finding.status not in ("open", "needs_review"):
         raise HTTPException(

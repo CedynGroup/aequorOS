@@ -66,6 +66,21 @@ def test_zero_liquidity_uses_do_not_create_false_credit_reliance() -> None:
     assert result.concerns == []
 
 
+def test_credit_reliance_tracks_every_contributing_forecast_period() -> None:
+    result = calculate_metrics(
+        [
+            _period(1, cash="100", inflows="10", outflows="100", draw="50"),
+            _period(2, cash="100", inflows="10", outflows="50", draw="25"),
+            _period(3, cash="100", inflows="10", outflows="0", draw="0"),
+        ]
+    )
+
+    concern = next(
+        item for item in result.concerns if item["rule_id"] == "liquidity.credit_reliance"
+    )
+    assert [period.period_number for period in concern["periods"]] == [1, 2]
+
+
 def test_peak_gap_metric_and_evidence_use_the_largest_shortfall_period() -> None:
     result = calculate_metrics(
         [

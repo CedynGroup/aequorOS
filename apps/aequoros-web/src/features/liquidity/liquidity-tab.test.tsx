@@ -385,6 +385,91 @@ describe("LiquidityTab", () => {
     expect(screen.getByText(/Downside · run run-2/)).toBeInTheDocument();
   });
 
+  it("keeps archived scenario analyses selectable and read only", async () => {
+    const user = userEvent.setup();
+    const archivedScenario = {
+      ...scenario("scenario-archived", "Historical downside"),
+      archivedAt: now,
+    };
+    vi.mocked(riskApi.scenarios).mockResolvedValue(
+      scenarioWorkspace([archivedScenario, scenario()]),
+    );
+    vi.mocked(riskApi.calculationRuns).mockImplementation(
+      (_tenant, _caseId, requestedScenarioId) =>
+        Promise.resolve(
+          runList([
+            run(
+              requestedScenarioId === archivedScenario.id
+                ? "run-archived"
+                : "run-1",
+              requestedScenarioId,
+            ),
+          ]),
+        ),
+    );
+    vi.spyOn(liquidityReviewClient, "summary").mockImplementation(
+      (_tenant, _caseId, requestedScenarioId, requestedRunId) =>
+        Promise.resolve(
+          summary({
+            scenarioId: requestedScenarioId,
+            calculationRunId: requestedRunId,
+          }),
+        ),
+    );
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    await waitFor(() =>
+      expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, "case-1", true),
+    );
+    expect(
+      await screen.findByLabelText("Liquidity scenario"),
+    ).toHaveTextContent("Baseline");
+    await user.click(screen.getByLabelText("Liquidity scenario"));
+    await user.click(
+      await screen.findByRole("option", {
+        name: "Historical downside · Archived",
+      }),
+    );
+
+    expect(
+      await screen.findByText(/Historical downside · run/),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Archived").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Archived scenario · read only"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Acknowledge" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Dismiss" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not offer reruns for archived scenarios without persisted analysis", async () => {
+    const archivedScenario = {
+      ...scenario("scenario-archived", "Historical downside"),
+      archivedAt: now,
+    };
+    vi.mocked(riskApi.scenarios).mockResolvedValue(
+      scenarioWorkspace([archivedScenario]),
+    );
+    vi.mocked(riskApi.calculationRuns).mockResolvedValue(runList([]));
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    expect(
+      await screen.findByText(
+        "No persisted liquidity analysis is available for archived scenario Historical downside.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Archived", { exact: true })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open Forecast to rerun" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps the latest successful run selectable outside the current history page", async () => {
     const user = userEvent.setup();
     const latest = run(

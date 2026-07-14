@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 import {
   Alert,
+  Badge,
   Button,
   Input,
   Label,
@@ -38,10 +39,13 @@ export function LiquidityTab({
   const [runId, setRunId] = useState("");
   const [runOffset, setRunOffset] = useState(0);
   const scenarios = useQuery({
-    queryKey: ["scenarios", tenant, caseId],
-    queryFn: () => riskApi.scenarios(tenant, caseId),
+    queryKey: ["scenarios", tenant, caseId, true],
+    queryFn: () => riskApi.scenarios(tenant, caseId, true),
   });
-  const availableScenarios = scenarios.data?.scenarios ?? [];
+  const availableScenarios = [...(scenarios.data?.scenarios ?? [])].sort(
+    (left, right) =>
+      Number(Boolean(left.archivedAt)) - Number(Boolean(right.archivedAt)),
+  );
   const selectedScenario =
     availableScenarios.find((scenario) => scenario.id === scenarioId) ??
     availableScenarios[0];
@@ -136,8 +140,9 @@ export function LiquidityTab({
     <ErrorPanel error={runs.error} />
   ) : !selectedRunId ? (
     <Alert title="No liquidity analysis">
-      Run a successful balance-sheet forecast for {selectedScenario.name} to
-      calculate liquidity metrics and findings.
+      {selectedScenario.archivedAt
+        ? `No persisted liquidity analysis is available for archived scenario ${selectedScenario.name}.`
+        : `Run a successful balance-sheet forecast for ${selectedScenario.name} to calculate liquidity metrics and findings.`}
     </Alert>
   ) : selectedRun.isLoading ? (
     <div aria-label="Loading liquidity analysis" className="space-y-3">
@@ -159,22 +164,30 @@ export function LiquidityTab({
     <ErrorPanel error={query.error} />
   ) : !query.data || query.data.status === "not_calculated" ? (
     <Alert title="Liquidity analysis not available for this run">
-      <span>
-        Liquidity analysis not available for this run — rerun to generate it.
-      </span>{" "}
-      <a
-        className="font-medium text-[rgb(var(--primary))] underline"
-        href={`/cases/${caseId}?tab=calculations#calculation-run-${selectedRun.data.id}-forecast-period-1`}
-      >
-        Open Forecast to rerun
-      </a>
-      .
+      {selectedScenario.archivedAt ? (
+        "Liquidity analysis was not persisted for this archived scenario."
+      ) : (
+        <>
+          <span>
+            Liquidity analysis not available for this run — rerun to generate
+            it.
+          </span>{" "}
+          <a
+            className="font-medium text-[rgb(var(--primary))] underline"
+            href={`/cases/${caseId}?tab=calculations#calculation-run-${selectedRun.data.id}-forecast-period-1`}
+          >
+            Open Forecast to rerun
+          </a>
+          .
+        </>
+      )}
     </Alert>
   ) : (
     <LiquidityAnalysis
       tenant={tenant}
       caseId={caseId}
       scenarioName={selectedScenario.name}
+      scenarioArchived={Boolean(selectedScenario.archivedAt)}
       summary={query.data}
     />
   );
@@ -188,7 +201,12 @@ export function LiquidityTab({
         />
         <div className="grid gap-3 p-3 sm:grid-cols-2">
           <div>
-            <Label>Scenario</Label>
+            <div className="flex items-center gap-2">
+              <Label>Scenario</Label>
+              {selectedScenario.archivedAt ? (
+                <Badge tone="warning">Archived</Badge>
+              ) : null}
+            </div>
             <Select
               ariaLabel="Liquidity scenario"
               value={selectedScenario.id}
@@ -198,6 +216,7 @@ export function LiquidityTab({
               {availableScenarios.map((scenario) => (
                 <SelectItem key={scenario.id} value={scenario.id}>
                   {scenario.name}
+                  {scenario.archivedAt ? " · Archived" : ""}
                 </SelectItem>
               ))}
             </Select>
@@ -264,18 +283,23 @@ function LiquidityAnalysis({
   tenant,
   caseId,
   scenarioName,
+  scenarioArchived,
   summary,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   scenarioName: string;
+  scenarioArchived: boolean;
   summary: LiquiditySummaryRead;
 }) {
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Liquidity risk summary</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold">Liquidity risk summary</h2>
+            {scenarioArchived ? <Badge tone="warning">Archived</Badge> : null}
+          </div>
           <p className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
             {scenarioName} · run {truncateId(summary.calculationRunId ?? "")} ·
             forecast input {summary.calculationInputHash?.slice(0, 12)} · as of{" "}
@@ -303,6 +327,7 @@ function LiquidityAnalysis({
               tenant={tenant}
               caseId={caseId}
               finding={finding}
+              readOnly={scenarioArchived}
             />
           ))
         ) : (
@@ -336,10 +361,12 @@ function LiquidityFindingCard({
   tenant,
   caseId,
   finding,
+  readOnly,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   finding: LiquidityFindingRead;
+  readOnly: boolean;
 }) {
   const queryClient = useQueryClient();
   const [dismissReason, setDismissReason] = useState("");
@@ -396,7 +423,7 @@ function LiquidityFindingCard({
         </details>
       }
     >
-      {!resolved ? (
+      {!resolved && !readOnly ? (
         <div className="grid gap-2 border-t border-[rgb(var(--border))] pt-2 md:grid-cols-[1fr_auto_auto]">
           <Input
             aria-label={`Dismissal reason for ${finding.title}`}
@@ -429,6 +456,10 @@ function LiquidityFindingCard({
             ) : null}
             Dismiss
           </Button>
+        </div>
+      ) : readOnly ? (
+        <div className="border-t border-[rgb(var(--border))] pt-2 font-medium text-[rgb(var(--muted-foreground))]">
+          Archived scenario · read only
         </div>
       ) : finding.dispositionReason ? (
         <div className="border-t border-[rgb(var(--border))] pt-2 text-[rgb(var(--muted-foreground))]">

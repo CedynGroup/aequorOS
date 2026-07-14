@@ -76,9 +76,7 @@ def test_legacy_successful_run_returns_honest_unavailable_summary(
     run = run_response.json()
     with get_sessionmaker()() as session:
         session.execute(
-            delete(LiquidityAnalysisResult).where(
-                LiquidityAnalysisResult.run_id == UUID(run["id"])
-            )
+            delete(LiquidityAnalysisResult).where(LiquidityAnalysisResult.run_id == UUID(run["id"]))
         )
         session.commit()
 
@@ -215,6 +213,59 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
                 AuditEvent.event_type == "liquidity_finding.reviewed",
             )
         )
+
+
+def test_credit_reliance_finding_evidence_covers_all_forecast_periods(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    run = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"], "forecast_periods": 3},
+    ).json()
+
+    with get_sessionmaker()() as session:
+        persisted_run = session.get(CalculationRun, UUID(run["id"]))
+        assert persisted_run is not None
+        periods = list(
+            session.scalars(
+                select(CalculationForecastPeriod)
+                .where(CalculationForecastPeriod.run_id == persisted_run.id)
+                .order_by(CalculationForecastPeriod.period_number)
+            )
+        )
+        for period in periods:
+            period.credit_draw = period.projected_outflows + period.debt_repayment
+        generate_findings(
+            session,
+            TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+            persisted_run,
+            periods,
+        )
+        session.flush()
+        credit_finding = session.scalar(
+            select(RiskFinding)
+            .where(
+                RiskFinding.case_id == case.id,
+                RiskFinding.rule_id == "liquidity.credit_reliance",
+                RiskFinding.details["liquidity"]["calculation_run_id"].as_string() == run["id"],
+            )
+            .order_by(RiskFinding.created_at.desc(), RiskFinding.id.desc())
+        )
+        assert credit_finding is not None
+        period_evidence = list(
+            session.scalars(
+                select(RiskFindingEvidence).where(
+                    RiskFindingEvidence.finding_id == credit_finding.id,
+                    RiskFindingEvidence.locator["source_type"].as_string() == "forecast_output",
+                )
+            )
+        )
+
+    assert {item.locator["period_number"] for item in period_evidence} == {1, 2, 3}
 
 
 def test_liquidity_summary_and_review_are_tenant_scoped(db_client: TestClient) -> None:
@@ -439,9 +490,9 @@ def test_liquidity_review_uses_finding_producing_rule_version(
         headers=headers(),
         json={"scenario_id": scenario["id"]},
     )
-    finding = db_client.get(
-        f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers()
-    ).json()["findings"][0]
+    finding = db_client.get(f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers()).json()[
+        "findings"
+    ][0]
 
     monkeypatch.setattr(liquidity, "RULE_VERSION", "liquidity-v2.0.0")
     response = db_client.post(
@@ -492,6 +543,52 @@ def test_liquidity_review_rejects_terminal_findings(db_client: TestClient) -> No
             session.scalar(
                 select(AuditEvent).where(
                     AuditEvent.entity_id == finding_id,
+                    AuditEvent.event_type == "liquidity_finding.reviewed",
+                )
+            )
+            is None
+        )
+
+
+def test_liquidity_review_rejects_archived_scenario_findings(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+    finding_id = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers()
+    ).json()["findings"][0]["id"]
+    archived = db_client.post(
+        f"/api/v1/cases/{case.id}/scenarios/{scenario['id']}/archive",
+        headers=headers(),
+        json={"reason": "Retain historical liquidity analysis"},
+    )
+    assert archived.status_code == 200, archived.text
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/liquidity/findings/{finding_id}/review",
+        headers=headers(),
+        json={"action": "acknowledge", "reason": "Historical review"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["message"] == (
+        "Archived scenario liquidity findings are read-only."
+    )
+    with get_sessionmaker()() as session:
+        finding = session.get(RiskFinding, UUID(finding_id))
+        assert finding is not None
+        assert finding.status == "open"
+        assert (
+            session.scalar(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id == UUID(finding_id),
                     AuditEvent.event_type == "liquidity_finding.reviewed",
                 )
             )
@@ -641,6 +738,58 @@ def test_stale_run_completion_does_not_replace_newer_findings(db_client: TestCli
     assert {item["status"] for item in historical["findings"]} == {"superseded"}
 
 
+def test_stale_run_uses_latest_newer_run_as_superseder(db_client: TestClient) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    oldest = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+    middle = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs/{oldest['id']}/rerun",
+        headers=headers(),
+        json={},
+    ).json()
+    newest = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs/{middle['id']}/rerun",
+        headers=headers(),
+        json={},
+    ).json()
+
+    with get_sessionmaker()() as session:
+        oldest_run = session.get(CalculationRun, UUID(oldest["id"]))
+        assert oldest_run is not None
+        periods = list(
+            session.scalars(
+                select(CalculationForecastPeriod).where(
+                    CalculationForecastPeriod.run_id == oldest_run.id
+                )
+            )
+        )
+        generate_findings(
+            session,
+            TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+            oldest_run,
+            periods,
+        )
+        session.commit()
+        completed_events = list(
+            session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id == oldest_run.id,
+                    AuditEvent.event_type == "liquidity_analysis.completed",
+                )
+            )
+        )
+
+    assert any(
+        event.details.get("superseded_by_calculation_run_id") == newest["id"]
+        for event in completed_events
+    )
+
+
 def test_liquidity_summary_ranks_findings_by_severity(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -729,9 +878,7 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
         )
         finding_ids = [finding.id for finding in findings]
         setup_session.execute(
-            delete(RiskFindingEvidence).where(
-                RiskFindingEvidence.finding_id.in_(finding_ids)
-            )
+            delete(RiskFindingEvidence).where(RiskFindingEvidence.finding_id.in_(finding_ids))
         )
         for finding in findings:
             setup_session.delete(finding)
