@@ -444,11 +444,16 @@ function formatMetric(metric: LiquidityMetricRead) {
   const value = Number(metric.value);
   if (metric.unit === "ratio") return `${value.toFixed(2)}x`;
   if (metric.unit === "forecast_periods") return `${value} periods`;
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: metric.unit,
-    maximumFractionDigits: 0,
-  }).format(value);
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: metric.unit,
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch (error) {
+    if (error instanceof RangeError) return `${metric.unit} ${metric.value}`;
+    throw error;
+  }
 }
 
 function formatDate(value: string | null | undefined) {

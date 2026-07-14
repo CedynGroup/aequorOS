@@ -237,6 +237,24 @@ describe("LiquidityTab", () => {
     );
   });
 
+  it("falls back to plain text for invalid currency codes", async () => {
+    vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(
+      summary({
+        currency: "US1",
+        metrics: [
+          {
+            ...summary().metrics[0],
+            unit: "US1",
+          },
+        ],
+      }),
+    );
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    expect(await screen.findByText("US1 -500.0000")).toBeInTheDocument();
+  });
+
   it("selects an explicit scenario and run and scopes the summary", async () => {
     const user = userEvent.setup();
     const olderRun = run(
