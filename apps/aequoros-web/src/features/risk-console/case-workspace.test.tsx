@@ -2,6 +2,7 @@ import type { CaseDecisionRead } from "@aequoros/risk-service-api";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../../lib/constants";
@@ -101,6 +102,10 @@ function renderWorkspace(overrides: Partial<WorkspaceProps> = {}) {
 describe("CaseWorkspace", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn<() => void>(),
+    });
   });
 
   it("prompts the operator when no case is selected", () => {
@@ -184,6 +189,93 @@ describe("CaseWorkspace", () => {
     expect(
       screen.queryByRole("button", { name: "Liquidity" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("focuses a health destination exactly once for each navigation", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(riskApi, "financialWorkspace").mockResolvedValue({
+      organizationId: tenant.orgId,
+      caseId,
+      institutions: [],
+      accounts: [],
+      reportingPeriods: [],
+      balances: [],
+      cashFlows: [],
+      obligations: [],
+      covenants: [],
+      sourceRows: [],
+      recordSourceLinks: [],
+      manualEdits: [],
+      validationIssues: [],
+      validationSummary: { total: 0, error: 0, warning: 0, info: 0 },
+    });
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue({
+      caseId,
+      scenarios: [],
+      readiness: {
+        caseId,
+        ready: false,
+        scenarioCount: 0,
+        completeScenarioCount: 0,
+        incompleteScenarioIds: [],
+      },
+    });
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue({
+      caseId,
+      runs: [],
+      latestSuccessfulRunId: null,
+      latestSuccessfulRunsByScenario: [],
+      total: 0,
+      limit: 25,
+      offset: 0,
+      hasMore: false,
+    });
+    vi.spyOn(riskApi, "findings").mockResolvedValue([]);
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    const destinationFocusCount = () =>
+      focus.mock.contexts.filter(
+        (target) =>
+          target instanceof HTMLElement &&
+          target.id === "case-health-target-financial",
+      ).length;
+
+    function ControlledWorkspace() {
+      const [activeTab, setActiveTab] =
+        useState<WorkspaceProps["activeTab"]>("overview");
+      return (
+        <CaseWorkspace
+          tenant={tenant}
+          caseId={caseId}
+          activeTab={activeTab}
+          reportMode="json"
+          updateSearch={(next) => {
+            if (next.tab) setActiveTab(next.tab);
+          }}
+          caseQuery={{
+            data: undefined,
+            error: null,
+            isError: false,
+            isFetching: false,
+          }}
+          mockCaseData={mockCase(DEFAULT_ORG_ID, caseId)}
+          mockWorkspace={false}
+        />
+      );
+    }
+
+    renderWithQuery(<ControlledWorkspace />);
+    const validation = screen.getByRole("button", { name: /Validation/ });
+    await user.click(validation);
+    await waitFor(() => {
+      expect(document.activeElement).toHaveAttribute(
+        "id",
+        "case-health-target-financial",
+      );
+    });
+    expect(destinationFocusCount()).toBe(1);
+
+    await user.click(validation);
+    await waitFor(() => expect(destinationFocusCount()).toBe(2));
   });
 
   it("loads HTML reports in the report preview mode", async () => {
