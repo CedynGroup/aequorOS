@@ -6,18 +6,11 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import {
-  Badge,
-  Button,
-  Input,
-  Label,
-  Select,
-  SelectItem,
-  Textarea,
-} from "../../components/ui";
+import { Button, Input, Label, Select, SelectItem, Textarea } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { labelize } from "../../lib/utils";
 import { DataList, ErrorPanel } from "../../shared/route-ui";
+import { FindingReviewCard } from "./finding-review-card";
 
 const findingSchema = z.object({
   riskType: z.string().min(1),
@@ -187,24 +180,10 @@ export function FindingReviewItem({
   });
 
   return (
-    <div className="grid gap-2 rounded-md border border-[rgb(var(--border))] p-3 text-xs">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge
-          tone={
-            finding.severity === "high" || finding.severity === "critical"
-              ? "danger"
-              : "warning"
-          }
-        >
-          {finding.severity}
-        </Badge>
-        <Badge>{finding.status}</Badge>
-        <span className="font-medium">{finding.title}</span>
-      </div>
-      <div>{finding.summary}</div>
-      <div className="text-[rgb(var(--muted-foreground))]">
-        {finding.riskType} - score impact {finding.scoreImpact ?? "n/a"}
-      </div>
+    <FindingReviewCard
+      finding={finding}
+      metadata={`${finding.riskType} - score impact ${finding.scoreImpact ?? "n/a"}`}
+    >
       <form
         className="grid gap-2 border-t border-[rgb(var(--border))] pt-2 md:grid-cols-[160px_1fr_auto]"
         onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
@@ -240,6 +219,6 @@ export function FindingReviewItem({
         </Button>
       </form>
       {mutation.isError ? <ErrorPanel error={mutation.error} /> : null}
-    </div>
+    </FindingReviewCard>
   );
 }

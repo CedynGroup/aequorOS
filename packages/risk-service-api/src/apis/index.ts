@@ -9,5 +9,6 @@ export * from "./FinancialDataApi";
 export * from "./FindingsApi";
 export * from "./HealthApi";
 export * from "./JobsApi";
+export * from "./LiquidityApi";
 export * from "./ScenariosApi";
 export * from "./TaxonomyApi";

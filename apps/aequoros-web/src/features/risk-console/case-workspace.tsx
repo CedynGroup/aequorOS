@@ -44,6 +44,11 @@ const FindingsTab = lazy(() =>
     default: module.FindingsTab,
   })),
 );
+const LiquidityTab = lazy(() =>
+  import("../liquidity/liquidity-tab").then((module) => ({
+    default: module.LiquidityTab,
+  })),
+);
 const DecisionsTab = lazy(() =>
   import("../decisions/decisions-tab").then((module) => ({
     default: module.DecisionsTab,
@@ -124,6 +129,7 @@ export function CaseWorkspace({
                 <TabsTrigger value="scenarios">Scenarios</TabsTrigger>
                 <TabsTrigger value="calculations">Forecast</TabsTrigger>
                 <TabsTrigger value="capital">Capital</TabsTrigger>
+                <TabsTrigger value="liquidity">Liquidity</TabsTrigger>
                 <TabsTrigger value="findings">Findings</TabsTrigger>
                 <TabsTrigger value="decisions">Decisions</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -160,6 +166,11 @@ export function CaseWorkspace({
                   mutationDisabled={mockWorkspace || caseRetired}
                   mutationDisabledReason={caseRetired ? "retired-case" : "demo"}
                 />
+              </LazyTabBoundary>
+            </TabsContent>
+            <TabsContent value="liquidity" className="m-0 p-3">
+              <LazyTabBoundary>
+                <LiquidityTab tenant={tenant} caseId={caseId} />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="findings" className="m-0 p-3">

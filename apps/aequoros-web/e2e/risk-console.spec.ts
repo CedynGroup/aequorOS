@@ -173,7 +173,8 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
     workspace = await scenarioResponse.json();
   }
   const baseline = workspace.scenarios.find(
-    (scenario: { scenario_type: string }) => scenario.scenario_type === "baseline",
+    (scenario: { scenario_type: string }) =>
+      scenario.scenario_type === "baseline",
   );
   for (const assumption of baseline.assumptions) {
     const reviewed = await request.post(
@@ -188,7 +189,9 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
 
   const console = new RiskConsolePage(page);
   await console.gotoSelectedCase("calculations");
-  await expect(page.getByText("No calculation runs").or(page.getByText("Run history"))).toBeVisible();
+  await expect(
+    page.getByText("No calculation runs").or(page.getByText("Run history")),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Run forecast" }).click();
   await expect(page.getByText("Projected balance sheet outputs")).toBeVisible();
   const successfulHash = await page
@@ -196,10 +199,18 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
     .textContent();
 
   await page.getByRole("tab", { name: "Scenarios" }).click();
-  const growth = page.getByLabel("Revenue growth value", { exact: true }).first();
+  const growth = page
+    .getByLabel("Revenue growth value", { exact: true })
+    .first();
   await growth.fill((await growth.inputValue()) === "0.07" ? "0.08" : "0.07");
-  await growth.locator("..").getByRole("button", { name: "Save", exact: true }).click();
-  await growth.locator("..").getByRole("button", { name: "Review", exact: true }).click();
+  await growth
+    .locator("..")
+    .getByRole("button", { name: "Save", exact: true })
+    .click();
+  await growth
+    .locator("..")
+    .getByRole("button", { name: "Review", exact: true })
+    .click();
 
   await page.getByRole("tab", { name: "Forecast" }).click();
   await page.getByRole("button", { name: "Rerun current inputs" }).click();
@@ -210,7 +221,10 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
 
   await page.getByRole("tab", { name: "Scenarios" }).click();
   await growth.fill((await growth.inputValue()) === "0.09" ? "0.10" : "0.09");
-  await growth.locator("..").getByRole("button", { name: "Save", exact: true }).click();
+  await growth
+    .locator("..")
+    .getByRole("button", { name: "Save", exact: true })
+    .click();
   await page.getByRole("tab", { name: "Forecast" }).click();
   await page.getByRole("button", { name: "Rerun current inputs" }).click();
   await expect(page.getByText("scenario_not_ready")).toBeVisible();
@@ -228,6 +242,121 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
     .fill("22222222-2222-4222-8222-222222222222");
   await page.getByLabel("User id").fill("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
   await expect(page.getByText("Case not found.")).toBeVisible();
+});
+
+test("reviews liquidity metrics, evidence, finding status, and tenant isolation", async ({
+  page,
+  request,
+}) => {
+  const tenantHeaders = {
+    "X-Org-Id": demoTenant.orgId,
+    "X-User-Id": demoTenant.userId,
+  };
+  let scenarioResponse = await request.get(
+    `${apiBaseUrl}/cases/${northstarCase.id}/scenarios`,
+    { headers: tenantHeaders },
+  );
+  let workspace = await scenarioResponse.json();
+  if (!workspace.scenarios.length) {
+    scenarioResponse = await request.post(
+      `${apiBaseUrl}/cases/${northstarCase.id}/scenarios/initialize`,
+      {
+        headers: tenantHeaders,
+        data: { reason: "Prepare liquidity e2e" },
+      },
+    );
+    workspace = await scenarioResponse.json();
+  }
+  const baseline = workspace.scenarios.find(
+    (scenario: { scenario_type: string }) =>
+      scenario.scenario_type === "baseline",
+  );
+  for (const assumption of baseline.assumptions) {
+    const reviewed = await request.post(
+      `${apiBaseUrl}/cases/${northstarCase.id}/scenarios/${baseline.id}/assumptions/${assumption.id}/review`,
+      {
+        headers: tenantHeaders,
+        data: { reason: "Approve liquidity e2e input" },
+      },
+    );
+    expect(reviewed.ok()).toBe(true);
+  }
+  const run = await request.post(
+    `${apiBaseUrl}/cases/${northstarCase.id}/calculation-runs`,
+    {
+      headers: tenantHeaders,
+      data: { scenario_id: baseline.id, forecast_periods: 3 },
+    },
+  );
+  expect(run.ok()).toBe(true);
+  expect((await run.json()).status).toBe("succeeded");
+
+  const console = new RiskConsolePage(page);
+  await console.gotoSelectedCase("liquidity");
+  await expect(page.getByText("Liquidity risk summary")).toBeVisible();
+  await expect(page.getByText("Minimum cash balance")).toBeVisible();
+  await expect(page.getByText(/Supporting evidence \(/).first()).toBeVisible();
+  await page
+    .getByText(/Supporting evidence \(/)
+    .first()
+    .click();
+  await expect(
+    page.getByRole("link", { name: /Forecast period/ }).first(),
+  ).toBeVisible();
+
+  const acknowledge = page.getByRole("button", { name: "Acknowledge" }).first();
+  await expect(acknowledge).toBeEnabled();
+  await acknowledge.click();
+  await expect(page.getByText("Liquidity finding acknowledged")).toBeVisible();
+
+  await page
+    .getByLabel("Tenant org id")
+    .fill("22222222-2222-4222-8222-222222222222");
+  await page.getByLabel("User id").fill("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+  await expect(page.getByText("Case not found.")).toBeVisible();
+});
+
+test("renders liquidity empty and error states", async ({ page }) => {
+  const summaryPattern = `**/api/v1/cases/${northstarCase.id}/liquidity/summary**`;
+  await page.route(summaryPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        case_id: northstarCase.id,
+        scenario_id: null,
+        calculation_run_id: null,
+        calculation_input_hash: null,
+        status: "not_calculated",
+        currency: null,
+        as_of_date: null,
+        metrics: [],
+        findings: [],
+        generated_at: null,
+      }),
+    });
+  });
+  const console = new RiskConsolePage(page);
+  await console.gotoSelectedCase("liquidity");
+  await expect(page.getByText("No liquidity analysis")).toBeVisible();
+
+  await page.unroute(summaryPattern);
+  await page.route(summaryPattern, async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: {
+          code: "liquidity_unavailable",
+          message: "Liquidity analysis is temporarily unavailable.",
+          details: null,
+        },
+        request_id: "e2e-liquidity-error",
+      }),
+    });
+  });
+  await page.reload();
+  await expect(page.getByText("Request failed")).toBeVisible();
 });
 
 test("renders JSON and HTML reports without deprecated endpoints", async ({

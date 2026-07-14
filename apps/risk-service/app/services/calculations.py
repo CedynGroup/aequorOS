@@ -37,6 +37,7 @@ from app.schemas.calculations import (
 )
 from app.services.audit import record_event
 from app.services.cases import get_case_or_404
+from app.services.liquidity import generate_findings as generate_liquidity_findings
 from app.services.scenario_semantics import resolve_engine_assumptions
 
 ENGINE_VERSION = "balance-sheet-v1.0.0"
@@ -316,16 +317,38 @@ def _create_and_execute(  # noqa: PLR0913
                 "input_schema_version": INPUT_SCHEMA_VERSION,
             },
         )
+        forecast_rows: list[CalculationForecastPeriod] = []
         for value in calculate_forecast(snapshot):
-            db.add(
-                CalculationForecastPeriod(
-                    organization_id=ctx.organization_id,
-                    case_id=case_id,
-                    run_id=run.id,
-                    **value.__dict__,
-                )
+            forecast_row = CalculationForecastPeriod(
+                organization_id=ctx.organization_id,
+                case_id=case_id,
+                run_id=run.id,
+                **value.__dict__,
             )
+            db.add(forecast_row)
+            forecast_rows.append(forecast_row)
         db.flush()
+        try:
+            generate_liquidity_findings(db, ctx, run, forecast_rows)
+        except ValueError as exc:
+            raise CalculationInputError(
+                "liquidity_output_invalid",
+                "Liquidity metrics could not be calculated from the forecast outputs.",
+                {
+                    "forecast_outputs": [
+                        {
+                            "id": str(item.id),
+                            "period_number": item.period_number,
+                            "currency": item.currency,
+                        }
+                        for item in forecast_rows
+                    ],
+                    "diagnostic": str(exc),
+                    "corrective_action": (
+                        "Review the named forecast outputs and rerun the calculation."
+                    ),
+                },
+            ) from exc
         run.status = "succeeded"
         run.completed_at = datetime.now(UTC)
         record_event(
