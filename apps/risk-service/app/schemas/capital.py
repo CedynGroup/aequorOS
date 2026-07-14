@@ -63,9 +63,19 @@ class CapitalProjectionRead(ClosedModel):
     updated_at: datetime
 
 
+class CapitalProjectionSummaryRead(ClosedModel):
+    id: UUID
+    scenario_id: UUID
+    calculation_run_id: UUID
+    status: CapitalProjectionStatus
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+
+
 class CapitalProjectionListRead(ClosedModel):
     case_id: UUID
-    projections: list[CapitalProjectionRead]
+    projections: list[CapitalProjectionSummaryRead]
     total: int
     limit: int
     offset: int

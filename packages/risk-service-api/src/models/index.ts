@@ -34,6 +34,7 @@ export * from "./CapitalProjectionListRead";
 export * from "./CapitalProjectionRead";
 export * from "./CapitalProjectionReadError";
 export * from "./CapitalProjectionStatus";
+export * from "./CapitalProjectionSummaryRead";
 export * from "./CapitalSummaryRead";
 export * from "./CaseAssign";
 export * from "./CaseBulkActionErrorRead";

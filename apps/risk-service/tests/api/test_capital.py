@@ -293,6 +293,56 @@ def test_capital_projection_persists_invalid_opening_balance_diagnostic(
     assert persisted.json()["error"] == failed["error"]
 
 
+def test_capital_projection_persists_derived_indicator_range_diagnostic(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenarios(db_client, case.id)[0]
+    _financial_inputs(case.id)
+    run = _forecast(db_client, case.id, scenario["id"])
+    with get_sessionmaker()() as session:
+        period = session.scalar(
+            select(CalculationForecastPeriod).where(
+                CalculationForecastPeriod.run_id == UUID(run["id"])
+            )
+        )
+        assert period is not None
+        period.total_assets = Decimal("0.0001")
+        period.total_liabilities = Decimal("100000000.0000")
+        period.total_equity = Decimal("-99999999.9999")
+        period_id = str(period.id)
+        session.commit()
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": run["id"]},
+    )
+    assert response.status_code == 201
+    failed = response.json()
+    assert failed["status"] == "failed"
+    assert failed["error"] == {
+        "code": "capital_indicator_out_of_range",
+        "message": "A derived capital indicator exceeds its supported numeric range.",
+        "details": {
+            "forecast_period_id": period_id,
+            "period_number": 1,
+            "field": "equity_to_assets_ratio",
+            "value": "-999999999999",
+            "precision": 12,
+            "scale": 8,
+        },
+    }
+    assert failed["indicators"] == []
+
+    persisted = db_client.get(
+        f"/api/v1/cases/{case.id}/capital-projections/{failed['id']}",
+        headers=headers(),
+    )
+    assert persisted.status_code == 200
+    assert persisted.json()["error"] == failed["error"]
+
+
 def test_capital_projection_history_persists_failures_and_is_tenant_scoped(
     db_client: TestClient,
 ) -> None:
@@ -330,7 +380,15 @@ def test_capital_projection_history_persists_failures_and_is_tenant_scoped(
     assert body["offset"] == 0
     assert body["has_more"] is False
     assert body["projections"][0]["id"] == failed["id"]
-    assert body["projections"][0]["error"] == failed["error"]
+    assert "error" not in body["projections"][0]
+    assert "indicators" not in body["projections"][0]
+    assert "findings" not in body["projections"][0]
+    detail = db_client.get(
+        f"/api/v1/cases/{case.id}/capital-projections/{failed['id']}",
+        headers=headers(),
+    )
+    assert detail.status_code == 200
+    assert detail.json()["error"] == failed["error"]
     assert (
         db_client.get(
             f"/api/v1/cases/{case.id}/capital-projections", headers=headers(ORG_2)

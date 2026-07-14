@@ -22,6 +22,10 @@ import {
   CapitalProjectionReadFromJSON,
   CapitalProjectionReadToJSON,
 } from "../src/models/CapitalProjectionRead";
+import {
+  CapitalProjectionSummaryReadFromJSON,
+  CapitalProjectionSummaryReadToJSON,
+} from "../src/models/CapitalProjectionSummaryRead";
 import type { FinancialAccountUpdate } from "../src/models/FinancialAccountUpdate";
 import {
   FinancialAmount,
@@ -173,6 +177,18 @@ const capitalRead = CapitalProjectionReadFromJSON({
 const capitalReadSerialized = CapitalProjectionReadToJSON(
   capitalRead,
 ) as unknown as Record<string, unknown>;
+const capitalSummaryRead = CapitalProjectionSummaryReadFromJSON({
+  id: "0198c7de-95bf-7000-8000-000000000010",
+  scenario_id: "0198c7de-95bf-7000-8000-000000000001",
+  calculation_run_id: "0198c7de-95bf-7000-8000-000000000004",
+  status: "failed",
+  started_at: "2026-07-12T14:30:00.000Z",
+  completed_at: "2026-07-12T15:30:00.000Z",
+  created_at: "2026-07-12T14:30:00.000Z",
+});
+const capitalSummarySerialized = CapitalProjectionSummaryReadToJSON(
+  capitalSummaryRead,
+) as unknown as Record<string, unknown>;
 
 assert(
   serialized.account_id === payload.accountId,
@@ -249,6 +265,14 @@ assert(
 assert(
   capitalReadSerialized.calculation_run_id === capitalRead.calculationRunId,
   "capital projection was not serialized with snake-case run ID",
+);
+assert(
+  capitalSummaryRead.completedAt === "2026-07-12T15:30:00.000Z",
+  "capital projection summary completion time was not decoded",
+);
+assert(
+  capitalSummarySerialized.scenario_id === capitalSummaryRead.scenarioId,
+  "capital projection summary scenario ID was not serialized",
 );
 
 function assert(condition: boolean, message: string): asserts condition {

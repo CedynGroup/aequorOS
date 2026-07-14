@@ -3,6 +3,7 @@ import type {
   CapitalComparisonRead,
   CapitalProjectionListRead,
   CapitalProjectionRead,
+  CapitalProjectionSummaryRead,
   CapitalSummaryRead,
   ScenarioWorkspaceRead,
 } from "@aequoros/risk-service-api";
@@ -158,6 +159,7 @@ function projection(): CapitalProjectionRead {
 function failedProjection(): CapitalProjectionRead {
   return {
     ...projection(),
+    id: "40000000-0000-4000-8000-000000000002",
     status: "failed",
     error: {
       code: "forecast_evidence_missing",
@@ -196,11 +198,25 @@ function attempts(
 ): CapitalProjectionListRead {
   return {
     caseId,
-    projections: values,
+    projections: values.map(projectionSummary),
     total: values.length,
     limit: 25,
     offset: 0,
     hasMore: false,
+  };
+}
+
+function projectionSummary(
+  value: CapitalProjectionRead,
+): CapitalProjectionSummaryRead {
+  return {
+    id: value.id,
+    scenarioId: value.scenarioId,
+    calculationRunId: value.calculationRunId,
+    status: value.status,
+    startedAt: value.startedAt,
+    completedAt: value.completedAt,
+    createdAt: value.createdAt,
   };
 }
 
@@ -287,6 +303,9 @@ describe("CapitalTab", () => {
     vi.spyOn(riskApi, "createCapitalProjection").mockResolvedValue(
       failedProjection(),
     );
+    vi.spyOn(riskApi, "capitalProjection").mockResolvedValue(
+      failedProjection(),
+    );
     renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
 
     await user.click(
@@ -305,6 +324,9 @@ describe("CapitalTab", () => {
   it("restores failed diagnostics from immutable attempt history", async () => {
     vi.mocked(riskApi.capitalProjections).mockResolvedValue(
       attempts([failedProjection(), projection()]),
+    );
+    vi.spyOn(riskApi, "capitalProjection").mockResolvedValue(
+      failedProjection(),
     );
     vi.mocked(riskApi.capitalSummary).mockResolvedValue(summary(projection()));
 
@@ -344,6 +366,26 @@ describe("CapitalTab", () => {
       await screen.findByRole("combobox", { name: "Capital forecast run" }),
     ).toHaveTextContent("Operating baseline (Baseline)");
     expect(calculationRun).toHaveBeenCalledWith(tenant, caseId, runId);
+  });
+
+  it("refreshes selected attempt findings after a status update", async () => {
+    const user = userEvent.setup();
+    const value = projection();
+    vi.mocked(riskApi.capitalProjections).mockResolvedValue(attempts([value]));
+    const capitalProjection = vi
+      .spyOn(riskApi, "capitalProjection")
+      .mockResolvedValue(value);
+    vi.spyOn(riskApi, "updateFinding").mockResolvedValue({
+      ...value.findings[0].finding,
+      status: "acknowledged",
+    });
+
+    renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
+
+    await screen.findByText("Projected capital buffer is thin");
+    await user.click(screen.getByRole("button", { name: "Update" }));
+
+    await waitFor(() => expect(capitalProjection).toHaveBeenCalledTimes(2));
   });
 
   it("shows read errors and disables mutations in demo mode", async () => {

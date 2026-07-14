@@ -13,13 +13,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { CapitalProjectionRead } from "./CapitalProjectionRead";
+import type { CapitalProjectionSummaryRead } from "./CapitalProjectionSummaryRead";
 import {
-  CapitalProjectionReadFromJSON,
-  CapitalProjectionReadFromJSONTyped,
-  CapitalProjectionReadToJSON,
-  CapitalProjectionReadToJSONTyped,
-} from "./CapitalProjectionRead";
+  CapitalProjectionSummaryReadFromJSON,
+  CapitalProjectionSummaryReadFromJSONTyped,
+  CapitalProjectionSummaryReadToJSON,
+  CapitalProjectionSummaryReadToJSONTyped,
+} from "./CapitalProjectionSummaryRead";
 
 /**
  *
@@ -53,10 +53,10 @@ export interface CapitalProjectionListRead {
   offset: number;
   /**
    *
-   * @type {Array<CapitalProjectionRead>}
+   * @type {Array<CapitalProjectionSummaryRead>}
    * @memberof CapitalProjectionListRead
    */
-  projections: Array<CapitalProjectionRead>;
+  projections: Array<CapitalProjectionSummaryRead>;
   /**
    *
    * @type {number}
@@ -101,7 +101,7 @@ export function CapitalProjectionListReadFromJSONTyped(
     limit: json["limit"],
     offset: json["offset"],
     projections: (json["projections"] as Array<any>).map(
-      CapitalProjectionReadFromJSON,
+      CapitalProjectionSummaryReadFromJSON,
     ),
     total: json["total"],
   };
@@ -127,7 +127,7 @@ export function CapitalProjectionListReadToJSONTyped(
     limit: value["limit"],
     offset: value["offset"],
     projections: (value["projections"] as Array<any>).map(
-      CapitalProjectionReadToJSON,
+      CapitalProjectionSummaryReadToJSON,
     ),
     total: value["total"],
   };

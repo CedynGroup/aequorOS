@@ -1046,7 +1046,7 @@
           },
           "projections": {
             "items": {
-              "$ref": "#/components/schemas/CapitalProjectionRead"
+              "$ref": "#/components/schemas/CapitalProjectionSummaryRead"
             },
             "title": "Projections",
             "type": "array"
@@ -1199,6 +1199,69 @@
           "failed"
         ],
         "type": "string"
+      },
+      "CapitalProjectionSummaryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "calculation_run_id": {
+            "format": "uuid",
+            "title": "Calculation Run Id",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CapitalProjectionStatus"
+          }
+        },
+        "required": [
+          "id",
+          "scenario_id",
+          "calculation_run_id",
+          "status",
+          "started_at",
+          "completed_at",
+          "created_at"
+        ],
+        "title": "CapitalProjectionSummaryRead",
+        "type": "object"
       },
       "CapitalSummaryRead": {
         "additionalProperties": false,

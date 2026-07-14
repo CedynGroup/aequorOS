@@ -299,6 +299,17 @@ export const riskApi = {
       CapitalProjectionListReadFromJSON,
     );
   },
+  capitalProjection(
+    tenant: TenantHeaders,
+    caseId: string,
+    projectionId: string,
+  ) {
+    return apiJson<CapitalProjectionRead>(
+      `/cases/${caseId}/capital-projections/${projectionId}`,
+      tenant,
+      CapitalProjectionReadFromJSON,
+    );
+  },
   capitalComparison(tenant: TenantHeaders, caseId: string) {
     return apiJson<CapitalComparisonRead>(
       `/cases/${caseId}/capital-comparison`,

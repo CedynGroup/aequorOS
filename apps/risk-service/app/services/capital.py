@@ -28,6 +28,7 @@ from app.schemas.capital import (
     CapitalProjectionErrorRead,
     CapitalProjectionListRead,
     CapitalProjectionRead,
+    CapitalProjectionSummaryRead,
     CapitalSummaryRead,
 )
 from app.schemas.findings import EvidenceRead, FindingRead
@@ -38,6 +39,8 @@ from app.services.findings import list_finding_evidence
 ENGINE_VERSION = "capital-projection-v1.0.0"
 RATIO = Decimal("0.00000001")
 MONEY = Decimal("0.0001")
+RATIO_STORAGE = (RATIO, 12, 8)
+MONEY_STORAGE = (MONEY, 20, 4)
 
 
 class CapitalInputError(Exception):
@@ -71,6 +74,15 @@ def create_projection(
             status_code=status.HTTP_409_CONFLICT,
             detail="Capital projection requires a successful calculation run.",
         )
+    db.execute(
+        select(RiskScenario.id)
+        .where(
+            RiskScenario.id == run.scenario_id,
+            RiskScenario.organization_id == ctx.organization_id,
+            RiskScenario.case_id == case_id,
+        )
+        .with_for_update()
+    ).scalar_one()
     now = datetime.now(UTC)
     projection = CapitalProjection(
         organization_id=ctx.organization_id,
@@ -200,7 +212,10 @@ def list_projections(
     )
     return CapitalProjectionListRead(
         case_id=case_id,
-        projections=[_read_projection(db, ctx, projection) for projection in projections],
+        projections=[
+            CapitalProjectionSummaryRead.model_validate(projection, from_attributes=True)
+            for projection in projections
+        ],
         total=total,
         limit=limit,
         offset=offset,
@@ -328,16 +343,26 @@ def _indicator(
         "total_equity": str(period.total_equity),
         "opening_equity": str(opening_equity),
     }
+    values = {
+        "equity": _bounded_value(period.total_equity, MONEY_STORAGE, "equity", period),
+        "equity_to_assets_ratio": _bounded_value(
+            equity_ratio, RATIO_STORAGE, "equity_to_assets_ratio", period
+        ),
+        "liabilities_to_assets_ratio": _bounded_value(
+            liabilities_ratio,
+            RATIO_STORAGE,
+            "liabilities_to_assets_ratio",
+            period,
+        ),
+        "equity_change": _bounded_value(equity_change, MONEY_STORAGE, "equity_change", period),
+    }
     return CapitalIndicator(
         organization_id=projection.organization_id,
         case_id=projection.case_id,
         projection_id=projection.id,
         forecast_period_id=period.id,
         period_number=period.period_number,
-        equity=_money(period.total_equity),
-        equity_to_assets_ratio=_ratio(equity_ratio),
-        liabilities_to_assets_ratio=_ratio(liabilities_ratio),
-        equity_change=_money(equity_change),
+        **values,
         pressure_level=pressure,
         evidence=evidence,
     )
@@ -465,9 +490,7 @@ def _supersede_prior_findings(
     )
     for finding in prior_findings:
         finding.status = "superseded"
-        finding.disposition_reason = (
-            f"Superseded by capital projection {projection.id}."
-        )
+        finding.disposition_reason = f"Superseded by capital projection {projection.id}."
         finding.details = {
             **finding.details,
             "superseded_by_capital_projection_id": str(projection.id),
@@ -558,3 +581,33 @@ def _money(value: Decimal) -> Decimal:
 
 def _ratio(value: Decimal) -> Decimal:
     return value.quantize(RATIO, rounding=ROUND_HALF_UP)
+
+
+def _bounded_value(
+    value: Decimal,
+    storage: tuple[Decimal, int, int],
+    field: str,
+    period: CalculationForecastPeriod,
+) -> Decimal:
+    quantum, precision, scale = storage
+    limit = Decimal(10) ** (precision - scale)
+    try:
+        if not value.is_finite() or abs(value) >= limit:
+            raise InvalidOperation
+        result = value.quantize(quantum, rounding=ROUND_HALF_UP)
+        if abs(result) >= limit:
+            raise InvalidOperation
+        return result
+    except InvalidOperation as exc:
+        raise CapitalInputError(
+            "capital_indicator_out_of_range",
+            "A derived capital indicator exceeds its supported numeric range.",
+            {
+                "forecast_period_id": str(period.id),
+                "period_number": period.period_number,
+                "field": field,
+                "value": str(value),
+                "precision": precision,
+                "scale": scale,
+            },
+        ) from exc
