@@ -158,17 +158,6 @@ export function LiquidityTab({
     <Alert title="No liquidity analysis">
       Select a successful balance-sheet forecast to review liquidity analysis.
     </Alert>
-  ) : selectedRun.isLoading ? (
-    <div aria-label="Loading liquidity analysis" className="space-y-3">
-      <Skeleton className="h-24" />
-      <Skeleton className="h-52" />
-    </div>
-  ) : selectedRun.error ? (
-    <ErrorPanel error={selectedRun.error} />
-  ) : selectedRun.data?.status !== "succeeded" ? (
-    <Alert title="No liquidity analysis">
-      Select a successful balance-sheet forecast to review liquidity analysis.
-    </Alert>
   ) : query.isLoading ? (
     <div aria-label="Loading liquidity analysis" className="space-y-3">
       <Skeleton className="h-24" />

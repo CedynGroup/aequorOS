@@ -7,7 +7,10 @@ import { completedCase, demoTenant, northstarCase } from "./support/test-data";
 
 const evidenceDir = process.env.NO_MISTAKES_EVIDENCE_DIR;
 
-async function captureEvidence(page: import("playwright/test").Page, name: string) {
+async function captureEvidence(
+  page: import("playwright/test").Page,
+  name: string,
+) {
   if (!evidenceDir) return;
   await page.screenshot({ path: `${evidenceDir}/${name}.png`, fullPage: true });
 }

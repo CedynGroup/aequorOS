@@ -22,8 +22,14 @@ export function parseSearchState(input: Record<string, unknown>): SearchState {
     tab: typeof input.tab === "string" ? (input.tab as ConsoleTab) : undefined,
     report: input.report === "json" ? "json" : "html",
     q: typeof input.q === "string" ? input.q : undefined,
-    status: typeof input.status === "string" ? (input.status as CaseStatus | "all") : undefined,
-    risk: typeof input.risk === "string" ? (input.risk as RiskLevel | "all") : undefined,
+    status:
+      typeof input.status === "string"
+        ? (input.status as CaseStatus | "all")
+        : undefined,
+    risk:
+      typeof input.risk === "string"
+        ? (input.risk as RiskLevel | "all")
+        : undefined,
     archived: input.archived === true || input.archived === "true",
     sort: typeof input.sort === "string" ? (input.sort as CaseSort) : undefined,
     page: Number.isFinite(Number(input.page)) ? Number(input.page) : undefined,

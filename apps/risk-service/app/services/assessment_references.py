@@ -86,9 +86,7 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
-def _utc_date(
-    db: Session, column: ColumnExpressionArgument[datetime]
-) -> ColumnElement[date]:
+def _utc_date(db: Session, column: ColumnExpressionArgument[datetime]) -> ColumnElement[date]:
     if db.get_bind().dialect.name == "postgresql":
         return func.date(func.timezone("UTC", column))
     return func.date(column)

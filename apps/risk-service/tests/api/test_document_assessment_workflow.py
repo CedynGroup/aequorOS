@@ -120,9 +120,7 @@ def test_assessment_run_references_are_unique_and_console_visible(
         "1",
         "2",
     }
-    assert all(
-        detail["reference"].startswith("Credit review ") for detail in run_details
-    )
+    assert all(detail["reference"].startswith("Credit review ") for detail in run_details)
     first_runs = db_client.get(
         f"/api/v1/assessments/{first_assessment.id}/runs",
         headers=headers(),
