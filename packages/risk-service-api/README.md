@@ -5,9 +5,10 @@ TypeScript client generated from the AequorOS Risk Service OpenAPI schema.
 Generated `src/` code is committed so frontend consumers do not need Python or
 the OpenAPI generator installed.
 
-Generated source is excluded centrally from style linting and formatting.
-TypeScript type-checking, package tests, and deterministic regeneration freshness
-checks remain enforced.
+Generated source is excluded centrally from routine style linting and formatting
+through the repository `.eslintignore` and `.prettierignore`. TypeScript
+type-checking, package tests, and deterministic regeneration freshness checks
+remain enforced.
 
 ## Regenerating
 
@@ -27,7 +28,8 @@ The generation target exports `openapi-schema.json`, clears stale generated
 client files, derives a temporary generator-only schema for nullable union
 models, regenerates the `typescript-fetch` client, formats generated TypeScript,
 and restores source-first package metadata. The committed OpenAPI schema remains
-the canonical service contract.
+the canonical service contract. Regeneration intentionally bypasses the repository
+Prettier exclusion to normalize deterministic generated output.
 
 Generated capital contracts preserve nullable projections, errors, comparison
 diagnostics, and lifecycle timestamps. Capital timestamps decode as

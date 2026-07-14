@@ -11,7 +11,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `pnpm --filter @aequoros/risk-service-api test`.
 - Keep `packages/risk-service-api/src` excluded centrally from style linting and
   formatting; generated files must contain no inline suppressions, while type-checking,
-  package tests, and freshness checks remain required.
+  package tests, and freshness checks remain required. Client regeneration intentionally
+  bypasses the formatting exclusion to normalize deterministic output.
 - Financial review UI code lives under `apps/aequoros-web/src/features/financial` and must call
   `FinancialDataApi` from `packages/risk-service-api`; do not duplicate OpenAPI payloads or
   hand-roll financial workspace requests.
