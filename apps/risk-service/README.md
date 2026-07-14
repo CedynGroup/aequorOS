@@ -7,7 +7,8 @@ The service is built with FastAPI, Pydantic settings, SQLAlchemy, Alembic, and P
 ## Current Surface
 
 The service currently provides the backend foundation, financial-data APIs,
-case scenario management, and the first deterministic balance-sheet forecast:
+case scenario management, deterministic balance-sheet forecasts, and the first
+capital projection workflow:
 
 - Health and readiness endpoints under `/api/health`
 - Centralized environment-based settings
@@ -21,11 +22,13 @@ case scenario management, and the first deterministic balance-sheet forecast:
 - Scenario creation, editing, copying, archiving, review, validation, and calculation readiness
 - Tenant-scoped calculation runs with immutable input snapshots, version metadata, and audit events
 - Deterministic annual balance-sheet forecasts, persisted failures, reruns, and paginated history
+- Tenant-scoped capital projection attempts with period pressure indicators and persisted diagnostics
+- Latest capital summaries, baseline-versus-downside comparisons, and generated findings with evidence
 - Audit events, per-field manual edit history, and source-record traceability
 
-Liquidity and capital scoring, full ingestion pipelines, auth, background
-workers, advanced forecast configuration, and report generation are
-intentionally not implemented yet.
+Liquidity scoring, Basel regulatory-capital scoring, full ingestion pipelines,
+auth, background workers, advanced forecast configuration, and report
+generation are intentionally not implemented yet.
 
 ## Requirements
 
@@ -137,13 +140,53 @@ states before calculation. A `201` response contains the final persisted run,
 including a `failed` run with actionable diagnostics. Successful output and
 failed diagnostics remain immutable history. List requests support optional
 `scenario_id`, `limit` (1-100), and `offset`; summaries omit the full input and
-output payloads, which are available from the run detail route.
+output payloads, which are available from the run detail route. Setting
+`active_scenarios_only=true` excludes archived scenarios and also returns the
+latest successful run per active scenario, paginated by the same `limit` and
+`offset`; this supports downstream capital-run selection without losing older
+attempt history from the main `runs` list.
 
 Forecast snapshots use the newest effective balance date on or before the
 requested as-of date and the matching reporting-period cash flows and active
 obligations. All selected inputs must use one currency; active obligations need
 principal and outstanding amounts. The selected scenario must have reviewed,
 unambiguous values for all five required assumption categories.
+
+Capital projection attempts consume an immutable successful forecast run:
+
+```text
+GET  /api/v1/cases/{case_id}/capital-projections
+POST /api/v1/cases/{case_id}/capital-projections
+GET  /api/v1/cases/{case_id}/capital-projections/{projection_id}
+GET  /api/v1/cases/{case_id}/capital-summary
+GET  /api/v1/cases/{case_id}/capital-comparison
+```
+
+Creating a projection requires `calculation_run_id`, `X-Org-Id`, and
+`X-User-Id`. The run must be successful and belong to an active scenario in the
+same case and tenant. Each attempt is immutable and stores the run input hash,
+engine version, reporting currency, lifecycle state, period indicators, and any
+named failure diagnostic. The history route is newest-first and supports
+`limit` (1-100) and `offset`; the summary route returns the latest successful
+projection, optionally filtered by `scenario_id`.
+
+Indicators derive equity, equity-to-assets, liabilities-to-assets, equity
+change, and a deterministic pressure level from the forecast periods. Monetary
+values are persisted to four decimal places and ratios are rounded half-up to
+eight decimal places before pressure classification and finding generation.
+Generated capital findings include evidence linking the projection, calculation
+run, scenario, input hash, indicator, and forecast period. A newer successful
+projection supersedes only unreviewed findings for the same scenario. The
+comparison route pairs the latest successful active baseline and downside
+projections; mismatched as-of dates, currencies, or horizons return a
+diagnostic instead of period deltas. Non-positive projected assets and missing
+or out-of-range forecast evidence persist the attempt as failed with corrective
+details.
+
+Projection list, detail, and summary reads retain historical attempts after a
+scenario or case is archived. Archived scenarios cannot start new projections,
+and an archived case also rejects new projections, comparisons, and finding
+reviews. Comparisons exclude archived scenarios.
 
 ## Run Tests
 

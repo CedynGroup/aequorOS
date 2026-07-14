@@ -14,6 +14,31 @@ import {
   type CalculationRunRead,
 } from "../src/models/CalculationRunRead";
 import type { CalculationRunSummaryRead } from "../src/models/CalculationRunSummaryRead";
+import {
+  CapitalComparisonReadFromJSON,
+  CapitalComparisonReadToJSON,
+  type CapitalComparisonRead,
+} from "../src/models/CapitalComparisonRead";
+import type { CapitalComparisonDiagnosticRead } from "../src/models/CapitalComparisonDiagnosticRead";
+import {
+  CapitalProjectionCreateToJSON,
+  type CapitalProjectionCreate,
+} from "../src/models/CapitalProjectionCreate";
+import {
+  CapitalProjectionReadFromJSON,
+  CapitalProjectionReadToJSON,
+  type CapitalProjectionRead,
+} from "../src/models/CapitalProjectionRead";
+import type { CapitalProjectionErrorRead } from "../src/models/CapitalProjectionErrorRead";
+import {
+  CapitalProjectionSummaryReadFromJSON,
+  CapitalProjectionSummaryReadToJSON,
+  type CapitalProjectionSummaryRead,
+} from "../src/models/CapitalProjectionSummaryRead";
+import {
+  CapitalSummaryReadFromJSON,
+  type CapitalSummaryRead,
+} from "../src/models/CapitalSummaryRead";
 import type { FinancialAccountUpdate } from "../src/models/FinancialAccountUpdate";
 import {
   FinancialAmount,
@@ -53,6 +78,36 @@ type CalculationStartedAtContract = Assert<
 >;
 type CalculationCompletedAtContract = Assert<
   Equal<CalculationRunSummaryRead["completedAt"], Date | null>
+>;
+type CapitalProjectionErrorContract = Assert<
+  Equal<CapitalProjectionRead["error"], CapitalProjectionErrorRead | null>
+>;
+type CapitalProjectionStartedAtContract = Assert<
+  Equal<CapitalProjectionRead["startedAt"], Date | null>
+>;
+type CapitalProjectionCompletedAtContract = Assert<
+  Equal<CapitalProjectionRead["completedAt"], Date | null>
+>;
+type CapitalProjectionSummaryStartedAtContract = Assert<
+  Equal<CapitalProjectionSummaryRead["startedAt"], Date | null>
+>;
+type CapitalProjectionSummaryCompletedAtContract = Assert<
+  Equal<CapitalProjectionSummaryRead["completedAt"], Date | null>
+>;
+type CapitalSummaryProjectionContract = Assert<
+  Equal<CapitalSummaryRead["projection"], CapitalProjectionRead | null>
+>;
+type CapitalComparisonBaselineContract = Assert<
+  Equal<CapitalComparisonRead["baseline"], CapitalProjectionRead | null>
+>;
+type CapitalComparisonDownsideContract = Assert<
+  Equal<CapitalComparisonRead["downside"], CapitalProjectionRead | null>
+>;
+type CapitalComparisonDiagnosticContract = Assert<
+  Equal<
+    CapitalComparisonRead["diagnostic"],
+    CapitalComparisonDiagnosticRead | null
+  >
 >;
 type MetadataContract = Assert<
   Equal<
@@ -129,6 +184,90 @@ const calculationReadWithoutTiming = CalculationRunReadFromJSON({
   completed_at: null,
   started_at: null,
 });
+const capitalCreateSerialized = CapitalProjectionCreateToJSON({
+  calculationRunId: "0198c7de-95bf-7000-8000-000000000004",
+} satisfies CapitalProjectionCreate) as unknown as Record<string, unknown>;
+const capitalRead = CapitalProjectionReadFromJSON({
+  id: "0198c7de-95bf-7000-8000-000000000010",
+  organization_id: "0198c7de-95bf-7000-8000-000000000005",
+  case_id: "0198c7de-95bf-7000-8000-000000000002",
+  scenario_id: "0198c7de-95bf-7000-8000-000000000001",
+  calculation_run_id: "0198c7de-95bf-7000-8000-000000000004",
+  status: "succeeded",
+  engine_version: "capital-projection-v1.0.0",
+  input_hash: "a".repeat(64),
+  reporting_currency: "USD",
+  started_at: "2026-07-12T14:30:00.000Z",
+  completed_at: "2026-07-12T15:30:00.000Z",
+  error: null,
+  indicators: [
+    {
+      id: "0198c7de-95bf-7000-8000-000000000011",
+      forecast_period_id: "0198c7de-95bf-7000-8000-000000000012",
+      period_number: 1,
+      equity: "125.0000",
+      equity_to_assets_ratio: "0.12500000",
+      liabilities_to_assets_ratio: "0.87500000",
+      equity_change: "-25.0000",
+      pressure_level: "medium",
+      evidence: { calculation_run_id: "0198c7de-95bf-7000-8000-000000000004" },
+    },
+  ],
+  findings: [],
+  created_by: "0198c7de-95bf-7000-8000-000000000003",
+  created_at: "2026-07-12T14:30:00.000Z",
+  updated_at: "2026-07-12T15:30:00.000Z",
+});
+const capitalReadSerialized = CapitalProjectionReadToJSON(
+  capitalRead,
+) as unknown as Record<string, unknown>;
+const capitalSummaryRead = CapitalProjectionSummaryReadFromJSON({
+  id: "0198c7de-95bf-7000-8000-000000000010",
+  scenario_id: "0198c7de-95bf-7000-8000-000000000001",
+  calculation_run_id: "0198c7de-95bf-7000-8000-000000000004",
+  status: "failed",
+  reporting_currency: "USD",
+  started_at: "2026-07-12T14:30:00.000Z",
+  completed_at: "2026-07-12T15:30:00.000Z",
+  created_at: "2026-07-12T14:30:00.000Z",
+});
+const capitalSummarySerialized = CapitalProjectionSummaryReadToJSON(
+  capitalSummaryRead,
+) as unknown as Record<string, unknown>;
+const capitalEndpointSummary = CapitalSummaryReadFromJSON({
+  case_id: "0198c7de-95bf-7000-8000-000000000002",
+  scenario_id: null,
+  projection: null,
+});
+const capitalComparison = CapitalComparisonReadFromJSON({
+  case_id: "0198c7de-95bf-7000-8000-000000000002",
+  baseline: null,
+  downside: null,
+  periods: [],
+  diagnostic: {
+    code: "comparison_basis_mismatch",
+    message: "Forecast bases differ.",
+    differing_attributes: [
+      "as_of_date",
+      "reporting_currency",
+      "forecast_horizon",
+    ],
+    baseline_basis: {
+      as_of_date: "2026-06-30",
+      reporting_currency: "USD",
+      forecast_horizon: 2,
+    },
+    downside_basis: {
+      as_of_date: "2026-07-01",
+      reporting_currency: "EUR",
+      forecast_horizon: 3,
+    },
+    corrective_action: "Rerun the other scenario.",
+  },
+});
+const capitalComparisonSerialized = CapitalComparisonReadToJSON(
+  capitalComparison,
+) as unknown as Record<string, any>;
 
 assert(
   serialized.account_id === payload.accountId,
@@ -188,6 +327,79 @@ assert(
     calculationReadWithoutTiming.completedAt === null,
   "nullable calculation timestamps were not preserved",
 );
+assert(
+  capitalCreateSerialized.calculation_run_id ===
+    "0198c7de-95bf-7000-8000-000000000004",
+  "capital calculation run ID was not serialized",
+);
+assert(
+  capitalRead.indicators[0]?.equityToAssetsRatio === "0.12500000",
+  "capital indicator ratio was not decoded",
+);
+assert(
+  capitalRead.indicators[0]?.evidence.calculation_run_id ===
+    capitalRead.calculationRunId,
+  "capital evidence traceability was not decoded",
+);
+assert(
+  capitalReadSerialized.calculation_run_id === capitalRead.calculationRunId,
+  "capital projection was not serialized with snake-case run ID",
+);
+assert(
+  capitalReadSerialized.reporting_currency === "USD",
+  "capital projection reporting currency was not serialized",
+);
+assert(
+  capitalRead.error === null &&
+    capitalRead.startedAt instanceof Date &&
+    capitalRead.completedAt instanceof Date,
+  "capital projection nullable fields were not decoded",
+);
+assert(
+  capitalSummaryRead.startedAt instanceof Date &&
+    capitalSummaryRead.completedAt instanceof Date,
+  "capital projection summary timestamps were not decoded as Dates",
+);
+assert(
+  capitalSummarySerialized.started_at === "2026-07-12T14:30:00.000Z" &&
+    capitalSummarySerialized.completed_at === "2026-07-12T15:30:00.000Z",
+  "capital projection summary timestamps were not serialized",
+);
+assert(
+  capitalSummarySerialized.scenario_id === capitalSummaryRead.scenarioId,
+  "capital projection summary scenario ID was not serialized",
+);
+assert(
+  capitalSummarySerialized.reporting_currency === "USD",
+  "capital projection summary reporting currency was not serialized",
+);
+assert(
+  capitalEndpointSummary.projection === null &&
+    capitalEndpointSummary.scenarioId === null,
+  "nullable capital summary fields were not preserved",
+);
+assert(
+  capitalComparison.baseline === null && capitalComparison.downside === null,
+  "nullable capital comparison projections were not preserved",
+);
+assert(
+  capitalComparison.diagnostic !== null,
+  "capital comparison diagnostic was not decoded",
+);
+assert(
+  capitalComparison.diagnostic.baselineBasis.asOfDate instanceof Date,
+  "capital comparison basis date was not decoded",
+);
+assert(
+  capitalComparison.diagnostic.differingAttributes.join(",") ===
+    "as_of_date,reporting_currency,forecast_horizon",
+  "capital comparison differing attributes were not decoded",
+);
+assert(
+  capitalComparisonSerialized.diagnostic.downside_basis.reporting_currency ===
+    "EUR",
+  "capital comparison diagnostic was not serialized with snake-case basis fields",
+);
 
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) {
@@ -202,6 +414,15 @@ void (0 as unknown as CalculationCreateDateContract);
 void (0 as unknown as CalculationRerunDateContract);
 void (0 as unknown as CalculationStartedAtContract);
 void (0 as unknown as CalculationCompletedAtContract);
+void (0 as unknown as CapitalProjectionErrorContract);
+void (0 as unknown as CapitalProjectionStartedAtContract);
+void (0 as unknown as CapitalProjectionCompletedAtContract);
+void (0 as unknown as CapitalProjectionSummaryStartedAtContract);
+void (0 as unknown as CapitalProjectionSummaryCompletedAtContract);
+void (0 as unknown as CapitalSummaryProjectionContract);
+void (0 as unknown as CapitalComparisonBaselineContract);
+void (0 as unknown as CapitalComparisonDownsideContract);
+void (0 as unknown as CapitalComparisonDiagnosticContract);
 void (0 as unknown as MetadataContract);
 void (0 as unknown as AssumptionValueContract);
 void (0 as unknown as ScenarioAssumptionsContract);

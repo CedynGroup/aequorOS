@@ -34,6 +34,11 @@ const CalculationsTab = lazy(() =>
     default: module.CalculationsTab,
   })),
 );
+const CapitalTab = lazy(() =>
+  import("../capital/capital-tab").then((module) => ({
+    default: module.CapitalTab,
+  })),
+);
 const FindingsTab = lazy(() =>
   import("../findings/findings-tab").then((module) => ({
     default: module.FindingsTab,
@@ -79,6 +84,11 @@ export function CaseWorkspace({
   mockCaseData?: CaseRead;
   mockWorkspace: boolean;
 }) {
+  const selectedCase = mockCaseData ?? (caseQuery.data as CaseRead | undefined);
+  const caseRetired = Boolean(
+    selectedCase?.archivedAt || selectedCase?.status === "archived",
+  );
+
   return (
     <Panel className="min-h-[640px] overflow-hidden">
       <PanelHeader
@@ -102,9 +112,7 @@ export function CaseWorkspace({
         </div>
       ) : (
         <>
-          <CaseSummary
-            data={mockCaseData ?? (caseQuery.data as CaseRead | undefined)}
-          />
+          <CaseSummary data={selectedCase} />
           <Tabs
             value={activeTab}
             onValueChange={(tab) => updateSearch({ tab: tab as ConsoleTab })}
@@ -115,6 +123,7 @@ export function CaseWorkspace({
                 <TabsTrigger value="financial">Financial Workspace</TabsTrigger>
                 <TabsTrigger value="scenarios">Scenarios</TabsTrigger>
                 <TabsTrigger value="calculations">Forecast</TabsTrigger>
+                <TabsTrigger value="capital">Capital</TabsTrigger>
                 <TabsTrigger value="findings">Findings</TabsTrigger>
                 <TabsTrigger value="decisions">Decisions</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -122,11 +131,7 @@ export function CaseWorkspace({
               </TabsList>
             </div>
             <TabsContent value="overview" className="m-0 p-3">
-              <OverviewTab
-                caseData={
-                  mockCaseData ?? (caseQuery.data as CaseRead | undefined)
-                }
-              />
+              <OverviewTab caseData={selectedCase} />
             </TabsContent>
             <TabsContent value="financial" className="m-0 p-3">
               <LazyTabBoundary>
@@ -147,9 +152,24 @@ export function CaseWorkspace({
                 <CalculationsTab tenant={tenant} caseId={caseId} />
               </LazyTabBoundary>
             </TabsContent>
+            <TabsContent value="capital" className="m-0 p-3">
+              <LazyTabBoundary>
+                <CapitalTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                  mutationDisabledReason={caseRetired ? "retired-case" : "demo"}
+                />
+              </LazyTabBoundary>
+            </TabsContent>
             <TabsContent value="findings" className="m-0 p-3">
               <LazyTabBoundary>
-                <FindingsTab tenant={tenant} caseId={caseId} />
+                <FindingsTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                  mutationDisabledReason={caseRetired ? "retired-case" : "demo"}
+                />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="decisions" className="m-0 p-3">

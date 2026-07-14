@@ -448,3 +448,171 @@ def test_postgres_migrations_create_calculation_tables_indexes_and_rls(
         "uq_calculation_forecast_run_period",
     }
     assert migrated_postgres_schema.constraints(constraints) == constraints
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_postgres_migrations_create_capital_tables_indexes_and_rls(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    tables = {
+        "capital_projections",
+        "capital_indicators",
+        "capital_projection_findings",
+    }
+    assert migrated_postgres_schema.tables(tables) == tables
+    indexes = {
+        "ix_capital_projections_case_scenario",
+        "ix_capital_indicators_projection",
+        "ix_capital_projection_findings_projection",
+    }
+    assert migrated_postgres_schema.indexes(indexes) == indexes
+    assert migrated_postgres_schema.policies(tables) == {
+        f"{table}_tenant_isolation" for table in tables
+    }
+    constraints = {
+        "ck_capital_projections_status",
+        "ck_capital_indicators_period_number",
+        "ck_capital_indicators_pressure_level",
+        "uq_capital_projections_id_org_case",
+        "uq_capital_indicator_projection_period",
+        "uq_capital_projection_finding",
+    }
+    assert migrated_postgres_schema.constraints(constraints) == constraints
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres RLS tests.",
+)
+def test_postgres_capital_rls_isolates_tenant_rows(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    case_id = uuid4()
+    scenario_id = uuid4()
+    calculation_run_id = uuid4()
+    projection_id = uuid4()
+
+    with migrated_postgres_schema.app_engine.connect() as connection:
+        role_attributes = connection.execute(
+            text(
+                """
+                SELECT rolsuper, rolbypassrls
+                FROM pg_roles
+                WHERE rolname = current_user
+                """
+            )
+        ).one()
+        assert role_attributes == (False, False)
+        connection.commit()
+
+        with connection.begin():
+            connection.execute(
+                text("SELECT set_config('app.organization_id', :organization_id, true)"),
+                {"organization_id": str(ORG_1)},
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO organizations (id, name, created_at, updated_at)
+                    VALUES (:organization_id, 'Tenant One', now(), now())
+                    """
+                ),
+                {"organization_id": str(ORG_1)},
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO risk_cases
+                      (id, organization_id, title, case_type, status, created_at, updated_at)
+                    VALUES
+                      (
+                        :case_id, :organization_id, 'Capital RLS case', 'vendor',
+                        'active', now(), now()
+                      )
+                    """
+                ),
+                {"case_id": str(case_id), "organization_id": str(ORG_1)},
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO risk_scenarios
+                      (id, organization_id, case_id, name, scenario_type, created_at, updated_at)
+                    VALUES
+                      (
+                        :scenario_id, :organization_id, :case_id, 'Baseline',
+                        'baseline', now(), now()
+                      )
+                    """
+                ),
+                {
+                    "scenario_id": str(scenario_id),
+                    "organization_id": str(ORG_1),
+                    "case_id": str(case_id),
+                },
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO calculation_runs
+                      (
+                        id, organization_id, case_id, scenario_id, status, engine_version,
+                        input_schema_version, output_schema_version, input_hash, inputs,
+                        forecast_periods, as_of_date, created_by, created_at, updated_at
+                      )
+                    VALUES
+                      (
+                        :run_id, :organization_id, :case_id, :scenario_id, 'succeeded',
+                        'test', 'test', 'test', :input_hash, '{}'::jsonb, 1,
+                        DATE '2026-07-14', :created_by, now(), now()
+                      )
+                    """
+                ),
+                {
+                    "run_id": str(calculation_run_id),
+                    "organization_id": str(ORG_1),
+                    "case_id": str(case_id),
+                    "scenario_id": str(scenario_id),
+                    "input_hash": "a" * 64,
+                    "created_by": str(uuid4()),
+                },
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO capital_projections
+                      (
+                        id, organization_id, case_id, scenario_id, calculation_run_id,
+                        status, engine_version, input_hash, reporting_currency, created_by,
+                        created_at, updated_at
+                      )
+                    VALUES
+                      (
+                        :projection_id, :organization_id, :case_id, :scenario_id, :run_id,
+                        'succeeded', 'test', :input_hash, 'USD', :created_by, now(), now()
+                      )
+                    """
+                ),
+                {
+                    "projection_id": str(projection_id),
+                    "organization_id": str(ORG_1),
+                    "case_id": str(case_id),
+                    "scenario_id": str(scenario_id),
+                    "run_id": str(calculation_run_id),
+                    "input_hash": "b" * 64,
+                    "created_by": str(uuid4()),
+                },
+            )
+
+            visible_to_org_one = connection.scalar(text("SELECT count(*) FROM capital_projections"))
+            connection.execute(
+                text("SELECT set_config('app.organization_id', :organization_id, true)"),
+                {"organization_id": str(ORG_2)},
+            )
+            visible_to_org_two = connection.scalar(text("SELECT count(*) FROM capital_projections"))
+
+        assert visible_to_org_one == 1
+        assert visible_to_org_two == 0

@@ -520,6 +520,14 @@
             ],
             "title": "Latest Successful Run Id"
           },
+          "latest_successful_runs_by_scenario": {
+            "description": "Latest successful active-scenario runs paginated with limit and offset.",
+            "items": {
+              "$ref": "#/components/schemas/CalculationRunSummaryRead"
+            },
+            "title": "Latest Successful Runs By Scenario",
+            "type": "array"
+          },
           "limit": {
             "title": "Limit",
             "type": "integer"
@@ -544,6 +552,7 @@
           "case_id",
           "runs",
           "latest_successful_run_id",
+          "latest_successful_runs_by_scenario",
           "total",
           "limit",
           "offset",
@@ -798,6 +807,604 @@
           "failed"
         ],
         "type": "string"
+      },
+      "CapitalComparisonBasisAttribute": {
+        "enum": [
+          "as_of_date",
+          "reporting_currency",
+          "forecast_horizon"
+        ],
+        "type": "string"
+      },
+      "CapitalComparisonBasisRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "forecast_horizon": {
+            "title": "Forecast Horizon",
+            "type": "integer"
+          },
+          "reporting_currency": {
+            "title": "Reporting Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of_date",
+          "reporting_currency",
+          "forecast_horizon"
+        ],
+        "title": "CapitalComparisonBasisRead",
+        "type": "object"
+      },
+      "CapitalComparisonDiagnosticRead": {
+        "additionalProperties": false,
+        "properties": {
+          "baseline_basis": {
+            "$ref": "#/components/schemas/CapitalComparisonBasisRead"
+          },
+          "code": {
+            "const": "comparison_basis_mismatch",
+            "title": "Code",
+            "type": "string"
+          },
+          "corrective_action": {
+            "title": "Corrective Action",
+            "type": "string"
+          },
+          "differing_attributes": {
+            "items": {
+              "$ref": "#/components/schemas/CapitalComparisonBasisAttribute"
+            },
+            "title": "Differing Attributes",
+            "type": "array"
+          },
+          "downside_basis": {
+            "$ref": "#/components/schemas/CapitalComparisonBasisRead"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "differing_attributes",
+          "baseline_basis",
+          "downside_basis",
+          "corrective_action"
+        ],
+        "title": "CapitalComparisonDiagnosticRead",
+        "type": "object"
+      },
+      "CapitalComparisonPeriodRead": {
+        "additionalProperties": false,
+        "properties": {
+          "baseline_equity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Baseline Equity",
+            "type": "string"
+          },
+          "baseline_equity_to_assets_ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Baseline Equity To Assets Ratio",
+            "type": "string"
+          },
+          "downside_equity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Downside Equity",
+            "type": "string"
+          },
+          "downside_equity_to_assets_ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Downside Equity To Assets Ratio",
+            "type": "string"
+          },
+          "equity_delta": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Equity Delta",
+            "type": "string"
+          },
+          "equity_to_assets_ratio_delta": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Equity To Assets Ratio Delta",
+            "type": "string"
+          },
+          "period_number": {
+            "title": "Period Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "period_number",
+          "baseline_equity",
+          "downside_equity",
+          "equity_delta",
+          "baseline_equity_to_assets_ratio",
+          "downside_equity_to_assets_ratio",
+          "equity_to_assets_ratio_delta"
+        ],
+        "title": "CapitalComparisonPeriodRead",
+        "type": "object"
+      },
+      "CapitalComparisonRead": {
+        "additionalProperties": false,
+        "properties": {
+          "baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalProjectionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "diagnostic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalComparisonDiagnosticRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "downside": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalProjectionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "periods": {
+            "items": {
+              "$ref": "#/components/schemas/CapitalComparisonPeriodRead"
+            },
+            "title": "Periods",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_id",
+          "baseline",
+          "downside",
+          "periods",
+          "diagnostic"
+        ],
+        "title": "CapitalComparisonRead",
+        "type": "object"
+      },
+      "CapitalFindingRead": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRead"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "finding": {
+            "$ref": "#/components/schemas/FindingRead"
+          }
+        },
+        "required": [
+          "finding",
+          "evidence"
+        ],
+        "title": "CapitalFindingRead",
+        "type": "object"
+      },
+      "CapitalIndicatorRead": {
+        "additionalProperties": false,
+        "properties": {
+          "equity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Equity",
+            "type": "string"
+          },
+          "equity_change": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Equity Change",
+            "type": "string"
+          },
+          "equity_to_assets_ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Equity To Assets Ratio",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          },
+          "forecast_period_id": {
+            "format": "uuid",
+            "title": "Forecast Period Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "liabilities_to_assets_ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Liabilities To Assets Ratio",
+            "type": "string"
+          },
+          "period_number": {
+            "title": "Period Number",
+            "type": "integer"
+          },
+          "pressure_level": {
+            "$ref": "#/components/schemas/CapitalPressureLevel"
+          }
+        },
+        "required": [
+          "id",
+          "forecast_period_id",
+          "period_number",
+          "equity",
+          "equity_to_assets_ratio",
+          "liabilities_to_assets_ratio",
+          "equity_change",
+          "pressure_level",
+          "evidence"
+        ],
+        "title": "CapitalIndicatorRead",
+        "type": "object"
+      },
+      "CapitalPressureLevel": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "type": "string"
+      },
+      "CapitalProjectionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "calculation_run_id": {
+            "format": "uuid",
+            "title": "Calculation Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "calculation_run_id"
+        ],
+        "title": "CapitalProjectionCreate",
+        "type": "object"
+      },
+      "CapitalProjectionErrorRead": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details"
+        ],
+        "title": "CapitalProjectionErrorRead",
+        "type": "object"
+      },
+      "CapitalProjectionListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "projections": {
+            "items": {
+              "$ref": "#/components/schemas/CapitalProjectionSummaryRead"
+            },
+            "title": "Projections",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_id",
+          "projections",
+          "total",
+          "limit",
+          "offset",
+          "has_more"
+        ],
+        "title": "CapitalProjectionListRead",
+        "type": "object"
+      },
+      "CapitalProjectionRead": {
+        "additionalProperties": false,
+        "properties": {
+          "calculation_run_id": {
+            "format": "uuid",
+            "title": "Calculation Run Id",
+            "type": "string"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "format": "uuid",
+            "title": "Created By",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalProjectionErrorRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/CapitalFindingRead"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "indicators": {
+            "items": {
+              "$ref": "#/components/schemas/CapitalIndicatorRead"
+            },
+            "title": "Indicators",
+            "type": "array"
+          },
+          "input_hash": {
+            "title": "Input Hash",
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "title": "Organization Id",
+            "type": "string"
+          },
+          "reporting_currency": {
+            "title": "Reporting Currency",
+            "type": "string"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CapitalProjectionStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "organization_id",
+          "case_id",
+          "scenario_id",
+          "calculation_run_id",
+          "status",
+          "engine_version",
+          "input_hash",
+          "reporting_currency",
+          "started_at",
+          "completed_at",
+          "error",
+          "indicators",
+          "findings",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CapitalProjectionRead",
+        "type": "object"
+      },
+      "CapitalProjectionStatus": {
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "CapitalProjectionSummaryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "calculation_run_id": {
+            "format": "uuid",
+            "title": "Calculation Run Id",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reporting_currency": {
+            "title": "Reporting Currency",
+            "type": "string"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CapitalProjectionStatus"
+          }
+        },
+        "required": [
+          "id",
+          "scenario_id",
+          "calculation_run_id",
+          "status",
+          "reporting_currency",
+          "started_at",
+          "completed_at",
+          "created_at"
+        ],
+        "title": "CapitalProjectionSummaryRead",
+        "type": "object"
+      },
+      "CapitalSummaryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "projection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapitalProjectionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scenario_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario Id"
+          }
+        },
+        "required": [
+          "case_id",
+          "scenario_id",
+          "projection"
+        ],
+        "title": "CapitalSummaryRead",
+        "type": "object"
       },
       "CaseAssign": {
         "properties": {
@@ -9176,6 +9783,16 @@
           },
           {
             "in": "query",
+            "name": "active_scenarios_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Active Scenarios Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
@@ -9676,6 +10293,647 @@
         "summary": "Rerun Calculation",
         "tags": [
           "calculations"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/capital-comparison": {
+      "get": {
+        "operationId": "getCapitalComparison",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapitalComparisonRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Capital Comparison",
+        "tags": [
+          "capital"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/capital-projections": {
+      "get": {
+        "operationId": "listCapitalProjections",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapitalProjectionListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "List Capital Projections",
+        "tags": [
+          "capital"
+        ]
+      },
+      "post": {
+        "operationId": "createCapitalProjection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapitalProjectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapitalProjectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Create Capital Projection",
+        "tags": [
+          "capital"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/capital-projections/{projection_id}": {
+      "get": {
+        "operationId": "getCapitalProjection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "projection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Projection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapitalProjectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Capital Projection",
+        "tags": [
+          "capital"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/capital-summary": {
+      "get": {
+        "operationId": "getCapitalSummary",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenario_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scenario Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapitalSummaryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Capital Summary",
+        "tags": [
+          "capital"
         ]
       }
     },
@@ -15560,17 +16818,10 @@
           {
             "in": "header",
             "name": "X-User-Id",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
+              "title": "X-User-Id",
+              "type": "string"
             }
           }
         ],

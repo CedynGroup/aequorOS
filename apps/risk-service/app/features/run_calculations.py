@@ -23,11 +23,18 @@ def list_calculation_runs(  # noqa: PLR0913
     db: DbSession,
     ctx: Tenant,
     scenario_id: Annotated[UUID | None, Query()] = None,
+    active_scenarios_only: Annotated[bool, Query()] = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CalculationRunListRead:
     return calculations.list_runs(
-        db, ctx, case_id, scenario_id=scenario_id, limit=limit, offset=offset
+        db,
+        ctx,
+        case_id,
+        scenario_id=scenario_id,
+        active_scenarios_only=active_scenarios_only,
+        limit=limit,
+        offset=offset,
     )
 
 

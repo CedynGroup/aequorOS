@@ -29,3 +29,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   active obligations require both principal and outstanding amounts.
 - Calculation history endpoints return paginated run summaries; fetch a run by
   ID for its immutable input snapshot and forecast outputs.
+- Capital projection attempts live under `/api/v1/cases/{case_id}/capital-projections`
+  and consume a successful calculation run. They persist period indicators and
+  generated case findings with calculation-run, forecast-period, and input-hash evidence.
+- Capital summaries return the latest successful projection, while
+  `/capital-comparison` pairs the latest baseline and downside projections by period.
+  The MVP pressure rules use equity-to-assets, liabilities-to-assets, and equity change;
+  non-positive projected assets fail with named forecast-period diagnostics.

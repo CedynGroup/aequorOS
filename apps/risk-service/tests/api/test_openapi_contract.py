@@ -56,6 +56,12 @@ def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient
     assert case_parameters["limit"]["schema"]["maximum"] == 200
     assert case_parameters["offset"]["schema"]["minimum"] == 0
 
+    finding_update_parameters = {
+        parameter["name"]: parameter
+        for parameter in paths["/api/v1/findings/{finding_id}"]["patch"]["parameters"]
+    }
+    assert finding_update_parameters["X-User-Id"]["required"] is True
+
     error_ref = case_list_operation["responses"]["422"]["content"]["application/json"]["schema"][
         "$ref"
     ]
@@ -266,9 +272,14 @@ def test_calculation_contracts_include_lifecycle_errors_versions_and_outputs(
     }
     assert list_parameters["limit"]["schema"]["maximum"] == 100
     assert list_parameters["offset"]["schema"]["minimum"] == 0
-    assert {"runs", "total", "limit", "offset", "has_more"} <= set(
-        components["CalculationRunListRead"]["required"]
-    )
+    assert {
+        "runs",
+        "latest_successful_runs_by_scenario",
+        "total",
+        "limit",
+        "offset",
+        "has_more",
+    } <= set(components["CalculationRunListRead"]["required"])
     assert {"inputs", "outputs"}.isdisjoint(components["CalculationRunSummaryRead"]["properties"])
     assert {
         "status",

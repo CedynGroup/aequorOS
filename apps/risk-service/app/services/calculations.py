@@ -143,6 +143,7 @@ def list_runs(  # noqa: PLR0913
     case_id: UUID,
     *,
     scenario_id: UUID | None = None,
+    active_scenarios_only: bool = False,
     limit: int = 25,
     offset: int = 0,
 ) -> CalculationRunListRead:
@@ -153,6 +154,13 @@ def list_runs(  # noqa: PLR0913
     )
     if scenario_id is not None:
         conditions += (CalculationRun.scenario_id == scenario_id,)
+    if active_scenarios_only:
+        active_scenario_ids = select(RiskScenario.id).where(
+            RiskScenario.organization_id == ctx.organization_id,
+            RiskScenario.case_id == case_id,
+            RiskScenario.archived_at.is_(None),
+        )
+        conditions += (CalculationRun.scenario_id.in_(active_scenario_ids),)
     total = db.scalar(select(func.count()).select_from(CalculationRun).where(*conditions)) or 0
     latest = db.scalar(
         select(CalculationRun.id)
@@ -186,10 +194,35 @@ def list_runs(  # noqa: PLR0913
             .offset(offset)
         ).mappings()
     )
+    latest_by_scenario: list[CalculationRunSummaryRead] = []
+    if active_scenarios_only:
+        ranked = (
+            select(
+                *summary_columns,
+                func.row_number()
+                .over(
+                    partition_by=CalculationRun.scenario_id,
+                    order_by=(CalculationRun.created_at.desc(), CalculationRun.id.desc()),
+                )
+                .label("rank"),
+            )
+            .where(*conditions)
+            .where(CalculationRun.status == "succeeded")
+            .subquery()
+        )
+        latest_rows = db.execute(
+            select(*(ranked.c[column.key] for column in summary_columns))
+            .where(ranked.c.rank == 1)
+            .order_by(ranked.c.created_at.desc(), ranked.c.id.desc())
+            .limit(limit)
+            .offset(offset)
+        ).mappings()
+        latest_by_scenario = [_read_summary(row) for row in latest_rows]
     return CalculationRunListRead(
         case_id=case_id,
         runs=[_read_summary(row) for row in rows],
         latest_successful_run_id=latest,
+        latest_successful_runs_by_scenario=latest_by_scenario,
         total=total,
         limit=limit,
         offset=offset,

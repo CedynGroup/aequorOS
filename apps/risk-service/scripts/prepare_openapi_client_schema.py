@@ -6,18 +6,22 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-NULLABLE_DATE_MODELS = {
+NULLABLE_UNION_MODELS = {
     "CalculationRerunCreate",
     "CalculationRunCreate",
     "CalculationRunRead",
     "CalculationRunSummaryRead",
+    "CapitalComparisonRead",
+    "CapitalProjectionRead",
+    "CapitalProjectionSummaryRead",
+    "CapitalSummaryRead",
 }
 
 
 def prepare_schema(schema: dict[str, Any]) -> dict[str, Any]:
     prepared = deepcopy(schema)
     components = prepared["components"]["schemas"]
-    for model_name in NULLABLE_DATE_MODELS:
+    for model_name in NULLABLE_UNION_MODELS:
         components[model_name].pop("additionalProperties", None)
     return prepared
 

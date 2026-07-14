@@ -33,20 +33,52 @@ mise run risk-service:openapi-client
 ```
 
 The generation target exports `openapi-schema.json`, clears stale generated
-client files, regenerates the `typescript-fetch` client, formats generated
-TypeScript, and restores source-first package metadata.
+client files, derives a temporary generator-only schema for nullable union
+models, regenerates the `typescript-fetch` client, formats generated TypeScript,
+and restores source-first package metadata. The committed OpenAPI schema remains
+the canonical service contract.
+
+Generated capital contracts preserve nullable projections, errors, comparison
+diagnostics, and lifecycle timestamps. Capital timestamps decode as
+`Date | null`.
 
 ## Verification
 
 ```bash
 mise run risk-service:api-typecheck
+pnpm --filter @aequoros/risk-service-api test
+mise run risk-service:api-fresh
 ```
+
+`risk-service:api-fresh` regenerates the schema and client, type-checks them, and
+fails when regeneration changes committed generated files.
 
 ## Usage
 
 ```ts
-import { Configuration, HealthApi } from "@aequoros/risk-service-api";
+import { CapitalApi, Configuration } from "@aequoros/risk-service-api";
+
+const capital = new CapitalApi(
+  new Configuration({ basePath: "http://127.0.0.1:8003" }),
+);
+
+const projection = await capital.createCapitalProjection({
+  caseId,
+  xOrgId,
+  xUserId,
+  capitalProjectionCreate: { calculationRunId },
+});
+
+const comparison = await capital.getCapitalComparison({ caseId, xOrgId });
+
+if (projection.error !== null || comparison.diagnostic !== null) {
+  // Render the persisted projection failure or comparison-basis diagnostic.
+}
 ```
+
+Capital mutations require both tenant headers. List, detail, summary, and
+comparison calls require `X-Org-Id` and accept `X-User-Id` when an actor is
+available.
 """
 GITIGNORE = """# Generated files - only exclude compiled output
 dist/

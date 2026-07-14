@@ -22,6 +22,16 @@ import {
   CalculationRunListReadFromJSON,
   type CalculationRunRead,
   CalculationRunReadFromJSON,
+  type CapitalComparisonRead,
+  CapitalComparisonReadFromJSON,
+  type CapitalProjectionCreate,
+  CapitalProjectionCreateToJSON,
+  type CapitalProjectionListRead,
+  CapitalProjectionListReadFromJSON,
+  type CapitalProjectionRead,
+  CapitalProjectionReadFromJSON,
+  type CapitalSummaryRead,
+  CapitalSummaryReadFromJSON,
   type CaseSort,
   type CaseStatus,
   type CaseTaxonomyRead,
@@ -221,12 +231,14 @@ export const riskApi = {
     scenarioId?: string,
     limit = 25,
     offset = 0,
+    activeScenariosOnly = false,
   ) {
     return apiJson<CalculationRunListRead>(
       `/cases/${caseId}/calculation-runs${toQuery({
         scenario_id: scenarioId,
         limit,
         offset,
+        active_scenarios_only: activeScenariosOnly || undefined,
       })}`,
       tenant,
       CalculationRunListReadFromJSON,
@@ -267,6 +279,58 @@ export const riskApi = {
       {
         method: "POST",
         body: JSON.stringify(CalculationRerunCreateToJSON(payload)),
+      },
+    );
+  },
+  capitalSummary(tenant: TenantHeaders, caseId: string, scenarioId?: string) {
+    return apiJson<CapitalSummaryRead>(
+      `/cases/${caseId}/capital-summary${toQuery({ scenario_id: scenarioId })}`,
+      tenant,
+      CapitalSummaryReadFromJSON,
+    );
+  },
+  capitalProjections(
+    tenant: TenantHeaders,
+    caseId: string,
+    limit = 25,
+    offset = 0,
+  ) {
+    return apiJson<CapitalProjectionListRead>(
+      `/cases/${caseId}/capital-projections${toQuery({ limit, offset })}`,
+      tenant,
+      CapitalProjectionListReadFromJSON,
+    );
+  },
+  capitalProjection(
+    tenant: TenantHeaders,
+    caseId: string,
+    projectionId: string,
+  ) {
+    return apiJson<CapitalProjectionRead>(
+      `/cases/${caseId}/capital-projections/${projectionId}`,
+      tenant,
+      CapitalProjectionReadFromJSON,
+    );
+  },
+  capitalComparison(tenant: TenantHeaders, caseId: string) {
+    return apiJson<CapitalComparisonRead>(
+      `/cases/${caseId}/capital-comparison`,
+      tenant,
+      CapitalComparisonReadFromJSON,
+    );
+  },
+  createCapitalProjection(
+    tenant: TenantHeaders,
+    caseId: string,
+    payload: CapitalProjectionCreate,
+  ) {
+    return apiJson<CapitalProjectionRead>(
+      `/cases/${caseId}/capital-projections`,
+      tenant,
+      CapitalProjectionReadFromJSON,
+      {
+        method: "POST",
+        body: JSON.stringify(CapitalProjectionCreateToJSON(payload)),
       },
     );
   },

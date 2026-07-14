@@ -31,6 +31,13 @@ def test_assessments_runs_findings_evidence_and_jobs(db_client: TestClient, fake
     response = db_client.patch(
         f"/api/v1/findings/{finding_id}",
         headers=headers(),
+        json={},
+    )
+    assert response.status_code == 400
+
+    response = db_client.patch(
+        f"/api/v1/findings/{finding_id}",
+        headers=headers(),
         json={"status": "dismissed"},
     )
     assert response.status_code == 400
@@ -83,6 +90,35 @@ def test_reviewers_can_create_manual_findings(db_client: TestClient) -> None:
     response = db_client.get(f"/api/v1/cases/{case_id}/findings", headers=headers())
     assert response.status_code == 200
     assert response.json()[0]["title"] == "Missing insurance addendum"
+
+
+def test_finding_review_requires_authenticated_actor(db_client: TestClient) -> None:
+    case_id = str(CaseFactory(db_client).create().id)
+    created = db_client.post(
+        f"/api/v1/cases/{case_id}/findings",
+        headers=headers(),
+        json={
+            "risk_type": "documentation_gap",
+            "title": "Missing review support",
+            "summary": "Reviewer support is incomplete.",
+            "severity": "medium",
+        },
+    )
+    assert created.status_code == 201, created.text
+    finding_id = created.json()["id"]
+
+    response = db_client.patch(
+        f"/api/v1/findings/{finding_id}",
+        headers={"X-Org-Id": headers()["X-Org-Id"]},
+        json={"status": "acknowledged"},
+    )
+
+    assert response.status_code == 422
+    persisted = db_client.get(f"/api/v1/findings/{finding_id}", headers=headers())
+    assert persisted.status_code == 200
+    assert persisted.json()["status"] == "open"
+    assert "reviewed_by" not in persisted.json()["details"]
+    assert "reviewed_at" not in persisted.json()["details"]
 
 
 def test_manual_finding_creation_validates_case_and_taxonomy(db_client: TestClient) -> None:

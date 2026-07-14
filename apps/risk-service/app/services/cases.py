@@ -64,6 +64,17 @@ def get_case_or_404(db: Session, organization_id: UUID, case_id: UUID) -> RiskCa
     return case
 
 
+def get_case_for_update_or_404(db: Session, organization_id: UUID, case_id: UUID) -> RiskCase:
+    case = db.scalar(
+        select(RiskCase)
+        .where(RiskCase.id == case_id, RiskCase.organization_id == organization_id)
+        .with_for_update()
+    )
+    if case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found.")
+    return case
+
+
 def snapshot_case(case: RiskCase) -> CaseSnapshot:
     return CaseSnapshot(
         id=case.id,

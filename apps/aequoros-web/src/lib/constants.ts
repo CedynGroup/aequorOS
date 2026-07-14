@@ -7,6 +7,7 @@ export const tabs = [
   "financial",
   "scenarios",
   "calculations",
+  "capital",
   "findings",
   "decisions",
   "documents",

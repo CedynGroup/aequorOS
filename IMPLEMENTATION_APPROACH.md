@@ -13,18 +13,20 @@ This approach assumes:
 
 ### Current implementation status
 
-The first forecasting slice is implemented as a deterministic annual
-balance-sheet projection. It persists tenant-scoped calculation runs, immutable
+The first forecasting and capital-pressure slices are implemented as a
+deterministic annual balance-sheet projection followed by a capital projection.
+They persist tenant-scoped calculation runs and capital attempts, immutable
 input snapshots and hashes, engine/input/output versions, annual forecast
-periods, audit events, and actionable failures. Reruns append history using
-current canonical financial data and reviewed scenario assumptions. The risk
-console can start and rerun forecasts, poll lifecycle status, page through run
-history, and render failures or successful outputs.
+periods, capital indicators, generated evidence-backed findings, audit events,
+and actionable failures. Reruns append history using current canonical
+financial data and reviewed scenario assumptions. The risk console can start
+and rerun forecasts, generate and page through capital attempts, compare aligned
+baseline and downside projections, and render failures or successful outputs.
 
-This slice runs synchronously and does not include liquidity scoring, capital
-scoring, advanced model configuration, constrained optimization, or final
-reporting. The broader sections below remain the target architecture for those
-later modules.
+These slices run synchronously and do not include liquidity scoring, Basel
+regulatory-capital scoring, advanced model configuration, constrained
+optimization, or final reporting. The broader sections below remain the target
+architecture for those later modules.
 
 ---
 
@@ -214,11 +216,21 @@ Each run requires:
 ### 6.2 Run persistence
 
 The implemented forecast uses `calculation_runs` and
-`calculation_forecast_periods`. Each run stores the scenario, optional source
-run, lifecycle timestamps, horizon and as-of date, immutable canonical inputs,
+`calculation_forecast_periods`. Capital pressure uses `capital_projections`,
+`capital_indicators`, and `capital_projection_findings`. Each forecast run
+stores the scenario, optional source run, lifecycle timestamps, horizon and
+as-of date, immutable canonical inputs,
 SHA-256 input hash, version metadata, actor, and failure diagnostics. Forecast
-periods belong to exactly one run. The generalized tables below remain a
-proposal for later liquidity, capital, metric, and validation modules.
+periods belong to exactly one run. Each capital attempt references a successful
+forecast run and persists versioned indicators, findings, evidence, and failure
+diagnostics without replacing prior attempts. The generalized tables below
+remain a proposal for later liquidity, Basel capital, metric, and validation
+modules.
+
+Capital money values are persisted at four-decimal precision. Ratios are
+rounded half-up to eight decimal places before pressure classification and
+finding generation, so threshold behavior is deterministic at storage
+precision.
 
 Create run-tracking tables:
 
@@ -284,11 +296,25 @@ Function outputs should include both:
   - body: `{}` or optional `forecast_periods` and `as_of_date`; omitted values reuse the original horizon and use today's as-of date
   - response: a new run linked to the source run; prior results remain unchanged
 
-### 7.4 Planned module contracts
+### 7.4 Project capital pressure
 
-Liquidity and capital metric drilldowns and submission previews are not yet
-implemented. Their routes should be added only when those modules have concrete
-request, result, and versioning requirements.
+- `POST /api/v1/cases/{case_id}/capital-projections`
+  - body: `calculation_run_id` for a successful immutable forecast
+  - response: persisted final attempt with indicators, findings, evidence, or named failure diagnostics
+- `GET /api/v1/cases/{case_id}/capital-projections`
+  - query: `limit` and `offset`
+  - response: paginated immutable attempt summaries
+- `GET /api/v1/cases/{case_id}/capital-projections/{projection_id}`
+  - response: one attempt with full indicators, findings, and evidence
+- `GET /api/v1/cases/{case_id}/capital-summary`
+  - query: optional `scenario_id`
+  - response: latest successful projection or an empty summary
+- `GET /api/v1/cases/{case_id}/capital-comparison`
+  - response: latest active baseline and downside projections with aligned period deltas, or a forecast-basis mismatch diagnostic
+
+Liquidity metrics, Basel regulatory-capital drilldowns, and submission previews
+are not yet implemented. Their routes should be added only when those modules
+have concrete request, result, and versioning requirements.
 
 ---
 

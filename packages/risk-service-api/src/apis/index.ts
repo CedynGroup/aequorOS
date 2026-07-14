@@ -2,6 +2,7 @@
 /* eslint-disable */
 export * from "./AssessmentsApi";
 export * from "./CalculationsApi";
+export * from "./CapitalApi";
 export * from "./CasesApi";
 export * from "./DocumentsApi";
 export * from "./FinancialDataApi";

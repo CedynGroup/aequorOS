@@ -50,6 +50,22 @@ from the covenant inputs.
 When frontend demo mode is active, the entire financial workspace is read-only,
 including backend-loaded records, mapping, and revalidation.
 
+## Capital Review
+
+The Capital tab lists immutable projection attempts and successful forecast runs
+for active scenarios. It follows every page of the per-scenario latest-run list,
+so an older active scenario remains selectable even when newer run history fills
+the first page. Reviewers can generate a projection, page through attempt
+history, inspect period equity and pressure indicators in the projection's
+immutable reporting currency, compare the latest baseline and downside
+projections, and review generated findings with their forecast evidence. The
+comparison explains incompatible as-of dates, reporting currencies, or horizons
+instead of presenting misleading deltas.
+
+Projection and finding mutations are disabled in demo mode and for retired
+cases. Loading, API failure, no-run, no-projection, failed-attempt, incomplete
+comparison, and successful result states are rendered explicitly.
+
 ## Checks
 
 ```bash
@@ -67,6 +83,9 @@ The E2E suite starts Vite automatically and expects a seeded risk-service API at
 `http://127.0.0.1:8003/api/v1`. Its forecast journey initializes and reviews a
 scenario, verifies projected output and a changed-input rerun, then checks
 persisted failure history, preservation of prior output, and tenant isolation.
+The capital journey creates baseline and downside forecasts and projections,
+reviews indicators and finding evidence, compares aligned scenarios, exercises
+API error and comparison-diagnostic states, and verifies tenant isolation.
 From the repository root:
 
 ```bash
@@ -118,16 +137,17 @@ The web app uses a feature-based split so each operational surface owns its UI a
 - `src/features/risk-console/shell.tsx`: sidebar and top-bar console chrome
 - `src/features/risk-console/case-queue-panel.tsx`: queue filters, table, selection, and pagination
 - `src/features/risk-console/bulk-actions.tsx`: bulk action dialog, mutation, and result rendering
-- `src/features/risk-console/case-workspace.tsx`: detail summary, overview, financial, scenarios, forecast, decisions, documents, findings, and report tabs
+- `src/features/risk-console/case-workspace.tsx`: detail summary, overview, financial, scenarios, forecast, capital, decisions, documents, findings, and report tabs
 - `src/features/risk-console/format.tsx`: risk/status/decision badges and date formatting
 - `src/features/risk-console/types.ts`: feature-local queue/search helper types
 - `src/features/documents/documents-tab.tsx`: document upload-request, completion, parse, and download URL workflows
-- `src/features/findings/findings-tab.tsx`: manual finding creation and finding status updates
+- `src/features/findings/findings-tab.tsx`: manual finding creation plus shared finding review and status updates
 - `src/features/financial/financial-client.ts`: generated-client adapter for financial workspace reads, mapping, validation, and supported mutations
 - `src/features/financial/financial-tab.tsx`: financial workspace loading, mapping, and revalidation controls
 - `src/features/financial/financial-sections.tsx`: grouped records, validation navigation, source traceability, audit history, and mutation forms
 - `src/features/scenarios/scenarios-tab.tsx`: scenario initialization, lifecycle, assumption editing and review, validation, and readiness
 - `src/features/calculations/calculations-tab.tsx`: forecast start and rerun controls, polling, paginated run history, diagnostics, and projected outputs
+- `src/features/capital/capital-tab.tsx`: projection generation and history, indicators, scenario comparison, findings, and evidence review
 - `src/features/demo-data/demo-data.ts`: frontend-only fallback/demo data helpers
 - `src/shared/route-ui.tsx`: route-level empty, error, and data-list helpers
 - `src/routes/risk-console.tsx`: thin route export for TanStack Router wiring
@@ -144,6 +164,7 @@ Vitest tests are colocated with the module they protect:
 - `src/features/financial/financial-sections.test.tsx`: grouped review, validation focus, source traceability, audit history, and supported mutations
 - `src/features/scenarios/scenarios-tab.test.tsx`: scenario loading, empty, error, lifecycle, validation, editing, review, and save states
 - `src/features/calculations/calculations-tab.test.tsx`: forecast loading, empty, running, failure, success, rerun, history, and formatting states
+- `src/features/capital/capital-tab.test.tsx`: capital loading, empty, failure, success, comparison, evidence, pagination, and mutation-disabled states
 - `src/features/demo-data/demo-data.test.ts`: fallback/demo data filtering and detail construction
 - `src/routes/search.test.ts`: typed search-param parsing
 - `src/features/risk-console/risk-console.test.tsx`: bulk action result grouping
@@ -154,4 +175,6 @@ Browser-mode Vitest tests use Playwright for DOM-heavy component interactions:
 
 The Playwright E2E suite includes `e2e/financial-review.spec.ts` for source
 drilldown and the upload, map, validate, correct, retry, revalidate, cash-flow
-entry, and covenant-entry journeys.
+entry, and covenant-entry journeys. `e2e/capital-projection.spec.ts` covers the
+deterministic capital projection, comparison, finding-evidence, failure, and
+tenant-isolation workflow.

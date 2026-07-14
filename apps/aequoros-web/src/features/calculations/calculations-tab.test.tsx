@@ -105,6 +105,7 @@ function runList(items: CalculationRunRead[] = []): CalculationRunListRead {
     runs: items,
     latestSuccessfulRunId:
       items.find((item) => item.status === "succeeded")?.id ?? null,
+    latestSuccessfulRunsByScenario: [],
     total: items.length,
     limit: 25,
     offset: 0,

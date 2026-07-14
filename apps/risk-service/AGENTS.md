@@ -38,6 +38,10 @@ This file is the starting point for agents working in `apps/risk-service`.
 - Commit queued and running lifecycle states before synchronous execution. Build
   each financial snapshot in a repeatable-read transaction from one effective
   reporting period, and return paginated summaries from history endpoints.
+- Capital projection attempts use `/api/v1/cases/{case_id}/capital-projections`
+  and must consume successful immutable calculation runs. Preserve projection,
+  indicator, generated-finding, evidence, and failed-diagnostic history; compare
+  only matching baseline and downside forecast bases.
 
 ## Commit Messages
 

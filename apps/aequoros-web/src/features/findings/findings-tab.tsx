@@ -6,7 +6,15 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { Badge, Button, Input, Label, Select, SelectItem, Textarea } from "../../components/ui";
+import {
+  Badge,
+  Button,
+  Input,
+  Label,
+  Select,
+  SelectItem,
+  Textarea,
+} from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { labelize } from "../../lib/utils";
 import { DataList, ErrorPanel } from "../../shared/route-ui";
@@ -34,7 +42,17 @@ const findingStatusSchema = z.object({
 type FindingForm = z.infer<typeof findingSchema>;
 type FindingStatusForm = z.infer<typeof findingStatusSchema>;
 
-export function FindingsTab({ tenant, caseId }: { tenant: TenantHeaders; caseId: string }) {
+export function FindingsTab({
+  tenant,
+  caseId,
+  mutationDisabled = false,
+  mutationDisabledReason = "retired-case",
+}: {
+  tenant: TenantHeaders;
+  caseId: string;
+  mutationDisabled?: boolean;
+  mutationDisabledReason?: "demo" | "retired-case";
+}) {
   const queryClient = useQueryClient();
   const form = useForm<FindingForm>({
     resolver: zodResolver(findingSchema),
@@ -56,37 +74,83 @@ export function FindingsTab({ tenant, caseId }: { tenant: TenantHeaders; caseId:
         details: {},
       }),
     onSuccess: () => {
-      form.reset({ riskType: "manual_review", title: "", summary: "", severity: "medium" });
+      form.reset({
+        riskType: "manual_review",
+        title: "",
+        summary: "",
+        severity: "medium",
+      });
       void queryClient.invalidateQueries({ queryKey: ["findings"] });
     },
   });
 
   return (
     <div className="grid gap-3 lg:grid-cols-[280px_1fr]">
-      <form className="space-y-3 rounded-md border border-[rgb(var(--border))] p-3" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
+      <form
+        className="space-y-3 rounded-md border border-[rgb(var(--border))] p-3"
+        onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
+      >
         <Label>Create manual finding</Label>
-        <Input placeholder="Risk type" {...form.register("riskType")} />
-        <Input placeholder="Title" {...form.register("title")} />
-        <Textarea placeholder="Summary" {...form.register("summary")} />
-        <Input placeholder="Severity" {...form.register("severity")} />
+        {mutationDisabled ? (
+          <div className="text-xs text-[rgb(var(--muted-foreground))]">
+            {mutationDisabledReason === "retired-case"
+              ? "Finding mutations are unavailable for retired cases."
+              : "Finding mutations are unavailable in demo mode."}
+          </div>
+        ) : null}
+        <Input
+          disabled={mutationDisabled}
+          placeholder="Risk type"
+          {...form.register("riskType")}
+        />
+        <Input
+          disabled={mutationDisabled}
+          placeholder="Title"
+          {...form.register("title")}
+        />
+        <Textarea
+          disabled={mutationDisabled}
+          placeholder="Summary"
+          {...form.register("summary")}
+        />
+        <Input
+          disabled={mutationDisabled}
+          placeholder="Severity"
+          {...form.register("severity")}
+        />
         {mutation.isError ? <ErrorPanel error={mutation.error} /> : null}
-        <Button type="submit" disabled={mutation.isPending}>Create finding</Button>
+        <Button type="submit" disabled={mutationDisabled || mutation.isPending}>
+          Create finding
+        </Button>
       </form>
-      <DataList loading={query.isLoading} error={query.error} empty="No findings">
+      <DataList
+        loading={query.isLoading}
+        error={query.error}
+        empty="No findings"
+      >
         {query.data?.map((finding) => (
-          <FindingItem key={finding.id} finding={finding} tenant={tenant} />
+          <FindingReviewItem
+            key={finding.id}
+            finding={finding}
+            tenant={tenant}
+            disabled={mutationDisabled}
+          />
         ))}
       </DataList>
     </div>
   );
 }
 
-function FindingItem({
+export function FindingReviewItem({
   finding,
   tenant,
+  onUpdated,
+  disabled = false,
 }: {
   finding: FindingRead;
   tenant: TenantHeaders;
+  onUpdated?: () => void;
+  disabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const form = useForm<FindingStatusForm>({
@@ -105,6 +169,19 @@ function FindingItem({
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["findings"] });
       void queryClient.invalidateQueries({ queryKey: ["cases"] });
+      if (finding.ruleVersion?.startsWith("capital-projection-")) {
+        void queryClient.invalidateQueries({
+          queryKey: ["capital-projections"],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["capital-projection"],
+        });
+        void queryClient.invalidateQueries({ queryKey: ["capital-summary"] });
+        void queryClient.invalidateQueries({
+          queryKey: ["capital-comparison"],
+        });
+      }
+      onUpdated?.();
       toast.success("Finding updated");
     },
   });
@@ -112,28 +189,53 @@ function FindingItem({
   return (
     <div className="grid gap-2 rounded-md border border-[rgb(var(--border))] p-3 text-xs">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={finding.severity === "high" || finding.severity === "critical" ? "danger" : "warning"}>{finding.severity}</Badge>
+        <Badge
+          tone={
+            finding.severity === "high" || finding.severity === "critical"
+              ? "danger"
+              : "warning"
+          }
+        >
+          {finding.severity}
+        </Badge>
         <Badge>{finding.status}</Badge>
         <span className="font-medium">{finding.title}</span>
       </div>
       <div>{finding.summary}</div>
-      <div className="text-[rgb(var(--muted-foreground))]">{finding.riskType} - score impact {finding.scoreImpact ?? "n/a"}</div>
+      <div className="text-[rgb(var(--muted-foreground))]">
+        {finding.riskType} - score impact {finding.scoreImpact ?? "n/a"}
+      </div>
       <form
         className="grid gap-2 border-t border-[rgb(var(--border))] pt-2 md:grid-cols-[160px_1fr_auto]"
         onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
       >
         <Select
+          disabled={disabled}
           value={form.watch("status")}
-          onValueChange={(value) => form.setValue("status", value as FindingStatusForm["status"])}
+          onValueChange={(value) =>
+            form.setValue("status", value as FindingStatusForm["status"])
+          }
           placeholder="Status"
         >
           {findingStatusSchema.shape.status.options.map((status) => (
-            <SelectItem key={status} value={status}>{labelize(status)}</SelectItem>
+            <SelectItem key={status} value={status}>
+              {labelize(status)}
+            </SelectItem>
           ))}
         </Select>
-        <Input placeholder="Disposition reason" {...form.register("dispositionReason")} />
-        <Button type="submit" size="sm" disabled={mutation.isPending}>
-          {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+        <Input
+          disabled={disabled}
+          placeholder="Disposition reason"
+          {...form.register("dispositionReason")}
+        />
+        <Button
+          type="submit"
+          size="sm"
+          disabled={disabled || mutation.isPending}
+        >
+          {mutation.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : null}
           Update
         </Button>
       </form>

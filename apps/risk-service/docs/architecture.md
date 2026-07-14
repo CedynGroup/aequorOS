@@ -26,6 +26,7 @@ Examples:
 - `app/features/findings.py`
 - `app/features/manage_scenarios.py`
 - `app/features/run_calculations.py`
+- `app/features/manage_capital.py`
 
 ### Service Layer
 
@@ -42,6 +43,7 @@ Examples:
 - updating a finding disposition
 - managing scenario and assumption lifecycles
 - creating, rerunning, and reading immutable calculation runs
+- projecting capital indicators and generating evidence-backed findings
 
 Service modules may use SQLAlchemy sessions, models, and infrastructure clients.
 They should keep all tenant-scoped lookups explicit and should not rely on entity
@@ -56,6 +58,7 @@ Examples:
 - `app/features/jobs_service.py`
 - `app/services/scenarios.py`
 - `app/services/calculations.py`
+- `app/services/capital.py`
 
 ### Domain Layer
 
@@ -139,7 +142,8 @@ FastAPI route
 
 `RiskCase` is the top-level review workspace. Most tenant-owned workflow data is
 scoped to a case through `case_id`, including uploaded documents, assessments,
-findings, financial workspace records, and scenarios.
+findings, financial workspace records, scenarios, calculation runs, and capital
+projections.
 
 ### Documents
 
@@ -369,10 +373,13 @@ POST /api/v1/cases/{case_id}/calculation-runs/{run_id}/rerun
 ```
 
 The list route returns newest-first summaries and supports `scenario_id`,
-`limit` (1-100), and `offset`. It also returns `latest_successful_run_id` for
-the selected case and optional scenario filter. Fetch an individual run to read
-the full immutable snapshot and output periods. Starting and rerunning require
-an active same-tenant actor. A rerun appends a new row linked through
+`active_scenarios_only`, `limit` (1-100), and `offset`. It also returns
+`latest_successful_run_id` for the selected case and optional scenario filter.
+When active-only filtering is enabled, archived scenarios are excluded and
+`latest_successful_runs_by_scenario` returns one successful run per active
+scenario using the same pagination. Fetch an individual run to read the full
+immutable snapshot and output periods. Starting and rerunning require an active
+same-tenant actor. A rerun appends a new row linked through
 `rerun_of_run_id`; it uses the original scenario with current canonical inputs
 and reviewed assumptions. An empty rerun body reuses the original horizon and
 defaults the as-of date to today; either value can be supplied explicitly.
@@ -399,6 +406,62 @@ It persists assets, liabilities, equity, cash, inflows, outflows, credit draw,
 debt repayment, and component details at four-decimal precision. The stored
 engine, input-schema, and output-schema versions make later engine changes
 distinguishable from reruns with changed canonical data.
+
+### Capital Projections And Findings
+
+`CapitalProjection` is an immutable, tenant- and case-scoped attempt to derive
+capital pressure from one successful `CalculationRun`. It copies the source
+run's scenario, SHA-256 input hash, and reporting currency, records its own
+engine version and lifecycle, and persists successful period results as
+`CapitalIndicator` rows. `CapitalProjectionFinding` links generated
+`RiskFinding` rows to the projection that produced them. PostgreSQL RLS protects
+all three capital tables, while service queries also scope by organization and
+case.
+
+Capital resources use these routes:
+
+```text
+GET  /api/v1/cases/{case_id}/capital-projections
+POST /api/v1/cases/{case_id}/capital-projections
+GET  /api/v1/cases/{case_id}/capital-projections/{projection_id}
+GET  /api/v1/cases/{case_id}/capital-summary
+GET  /api/v1/cases/{case_id}/capital-comparison
+```
+
+Creating a projection requires an active same-tenant actor and a successful
+calculation run whose case and active scenario match the request. The attempt
+derives equity, equity-to-assets, liabilities-to-assets, and equity change for
+each immutable forecast period. Monetary values are rounded half-up to four
+decimal places and ratios to eight decimal places before persistence,
+classification, and finding generation. Pressure is `critical` for negative
+equity, `high` below a 10 percent equity-to-assets ratio, `medium` below 20
+percent or when equity declines, and `low` otherwise. Non-positive projected
+assets, missing opening-balance evidence, and numeric overflow persist a failed
+attempt with the affected forecast-period identifiers and corrective details.
+
+Successful attempts can generate deterministic negative-equity, thin-buffer,
+and final-period erosion findings. Finding details and
+`RiskFindingEvidence.locator` trace the projection, calculation run, scenario,
+input hash, indicator, and forecast period. A new successful projection marks
+only unreviewed findings from older projections for the same scenario as
+superseded; reviewed findings remain unchanged.
+
+Reviewing a finding through `PATCH /api/v1/findings/{finding_id}` requires an
+active same-tenant actor and a non-archived case. The request must change status
+or disposition reason, dismissals require a reason, and successful reviews
+record the reviewer and timestamp so later projections preserve the reviewed
+finding.
+
+The projection list is newest-first and supports `limit` (1-100) and `offset`.
+The summary returns the latest successful projection, optionally filtered by
+`scenario_id`. The comparison selects the latest successful projections for
+active baseline and downside scenarios and returns period equity and ratio
+deltas only when as-of date, reporting currency, and forecast horizon match;
+otherwise it returns a named basis-mismatch diagnostic and corrective action.
+List, detail, and summary reads preserve archived scenario and case history.
+Archived scenarios reject new projections; archived cases reject new
+projections, comparisons, and finding reviews. Comparisons omit archived
+scenarios.
 
 ## API Versioning
 

@@ -53,6 +53,12 @@ export interface CalculationRunListRead {
    */
   latestSuccessfulRunId: LatestSuccessfulRunId;
   /**
+   * Latest successful active-scenario runs paginated with limit and offset.
+   * @type {Array<CalculationRunSummaryRead>}
+   * @memberof CalculationRunListRead
+   */
+  latestSuccessfulRunsByScenario: Array<CalculationRunSummaryRead>;
+  /**
    *
    * @type {number}
    * @memberof CalculationRunListRead
@@ -91,6 +97,11 @@ export function instanceOfCalculationRunListRead(
     value["latestSuccessfulRunId"] === undefined
   )
     return false;
+  if (
+    !("latestSuccessfulRunsByScenario" in value) ||
+    value["latestSuccessfulRunsByScenario"] === undefined
+  )
+    return false;
   if (!("limit" in value) || value["limit"] === undefined) return false;
   if (!("offset" in value) || value["offset"] === undefined) return false;
   if (!("runs" in value) || value["runs"] === undefined) return false;
@@ -118,6 +129,9 @@ export function CalculationRunListReadFromJSONTyped(
     latestSuccessfulRunId: LatestSuccessfulRunIdFromJSON(
       json["latest_successful_run_id"],
     ),
+    latestSuccessfulRunsByScenario: (
+      json["latest_successful_runs_by_scenario"] as Array<any>
+    ).map(CalculationRunSummaryReadFromJSON),
     limit: json["limit"],
     offset: json["offset"],
     runs: (json["runs"] as Array<any>).map(CalculationRunSummaryReadFromJSON),
@@ -145,6 +159,9 @@ export function CalculationRunListReadToJSONTyped(
     latest_successful_run_id: LatestSuccessfulRunIdToJSON(
       value["latestSuccessfulRunId"],
     ),
+    latest_successful_runs_by_scenario: (
+      value["latestSuccessfulRunsByScenario"] as Array<any>
+    ).map(CalculationRunSummaryReadToJSON),
     limit: value["limit"],
     offset: value["offset"],
     runs: (value["runs"] as Array<any>).map(CalculationRunSummaryReadToJSON),
