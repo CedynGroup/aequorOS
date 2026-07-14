@@ -5,7 +5,7 @@ import type {
   ScenarioRead,
 } from "@aequoros/risk-service-api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -52,6 +52,7 @@ export function ScenariosTab({
 }) {
   const queryClient = useQueryClient();
   const deepLink = scenarioDeepLink();
+  const focusedDeepLinks = useRef(new Set<string>());
   const includeArchived = deepLink !== null;
   const queryKey = ["scenarios", tenant, caseId, includeArchived] as const;
   const query = useQuery({
@@ -70,8 +71,13 @@ export function ScenariosTab({
   }, [query.data, selectedId]);
 
   useEffect(() => {
-    if (query.data && deepLink?.targetId) {
-      focusWorkspaceTarget(deepLink.targetId);
+    if (
+      query.data &&
+      deepLink?.targetId &&
+      !focusedDeepLinks.current.has(deepLink.targetId) &&
+      focusWorkspaceTarget(deepLink.targetId)
+    ) {
+      focusedDeepLinks.current.add(deepLink.targetId);
     }
   }, [deepLink?.targetId, query.data, selectedId]);
 

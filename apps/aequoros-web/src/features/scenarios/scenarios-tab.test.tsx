@@ -155,6 +155,37 @@ describe("ScenariosTab", () => {
     expect(screen.queryByLabelText("Custom scenario name")).toBeNull();
   });
 
+  it("focuses an evidence deep link only once across rerenders and refetches", async () => {
+    const target = `scenario-${scenario().id}-assumption-${assumption().id}`;
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    const scenarios = vi
+      .spyOn(riskApi, "scenarios")
+      .mockResolvedValueOnce(workspace())
+      .mockResolvedValue(
+        workspace([scenario({ description: "Refetched scenario" })]),
+      );
+    const view = renderWithQuery(
+      <ScenariosTab tenant={tenant} caseId={caseId} />,
+    );
+
+    await waitFor(() => expect(document.activeElement?.id).toBe(target));
+    const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    view.rerender(<ScenariosTab tenant={tenant} caseId={caseId} />);
+    await view.queryClient.refetchQueries({
+      queryKey: ["scenarios", tenant, caseId, true],
+      exact: true,
+    });
+
+    await waitFor(() => expect(scenarios).toHaveBeenCalledTimes(2));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
   it("shows archived scenarios with no issues as historically valid", async () => {
     const target = `scenario-${scenario().id}-assumption-${assumption().id}`;
     window.history.replaceState(

@@ -614,14 +614,20 @@ def review_finding(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Liquidity finding not found."
         )
-    scenario_archived_at = db.scalar(
-        select(RiskScenario.archived_at).where(
+    scenario = db.scalar(
+        select(RiskScenario)
+        .where(
             RiskScenario.id == calculation_run.scenario_id,
             RiskScenario.organization_id == ctx.organization_id,
             RiskScenario.case_id == case_id,
         )
+        .with_for_update()
     )
-    if scenario_archived_at is not None:
+    if scenario is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Liquidity finding not found."
+        )
+    if scenario.archived_at is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Archived scenario liquidity findings are read-only.",

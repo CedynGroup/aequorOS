@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from datetime import date
+from datetime import UTC, date, datetime
 from threading import Event
 from uuid import UUID
 
@@ -24,6 +24,7 @@ from app.models import (
     RiskCase,
     RiskFinding,
     RiskFindingEvidence,
+    RiskScenario,
 )
 from app.services import calculations, liquidity
 from app.services.liquidity import generate_findings
@@ -705,6 +706,86 @@ def test_liquidity_review_cannot_overwrite_concurrent_supersession(
         finding = verification_session.get(RiskFinding, UUID(finding_id))
         assert finding is not None
         assert finding.status == "superseded"
+        assert (
+            verification_session.scalar(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id == UUID(finding_id),
+                    AuditEvent.event_type == "liquidity_finding.reviewed",
+                )
+            )
+            is None
+        )
+
+
+def test_liquidity_review_cannot_commit_after_concurrent_scenario_archive(
+    db_client: TestClient,
+) -> None:
+    session_factory = get_sessionmaker()
+    with session_factory() as dialect_session:
+        if dialect_session.get_bind().dialect.name != "postgresql":
+            pytest.skip("PostgreSQL row locks are required for concurrency coverage.")
+
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+    finding_id = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers()
+    ).json()["findings"][0]["id"]
+
+    def review() -> Response:
+        return db_client.post(
+            f"/api/v1/cases/{case.id}/liquidity/findings/{finding_id}/review",
+            headers=headers(),
+            json={"action": "acknowledge"},
+        )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with session_factory() as archive_session:
+            archived_scenario = archive_session.scalar(
+                select(RiskScenario)
+                .where(RiskScenario.id == UUID(scenario["id"]))
+                .with_for_update()
+            )
+            assert archived_scenario is not None
+            scenario_lock_attempted = Event()
+
+            def observe_scenario_lock(
+                _connection: object,
+                _cursor: object,
+                statement: str,
+                _parameters: object,
+                _context: object,
+                _executemany: bool,
+            ) -> None:
+                if "risk_scenarios" in statement and "FOR UPDATE" in statement:
+                    scenario_lock_attempted.set()
+
+            bind = archive_session.get_bind()
+            event.listen(bind, "before_cursor_execute", observe_scenario_lock)
+            try:
+                future = executor.submit(review)
+                assert scenario_lock_attempted.wait(timeout=5)
+                with pytest.raises(FutureTimeoutError):
+                    future.result(timeout=0.2)
+                archived_scenario.archived_at = datetime.now(UTC)
+                archive_session.commit()
+            finally:
+                event.remove(bind, "before_cursor_execute", observe_scenario_lock)
+        response = future.result(timeout=5)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["message"] == (
+        "Archived scenario liquidity findings are read-only."
+    )
+    with session_factory() as verification_session:
+        finding = verification_session.get(RiskFinding, UUID(finding_id))
+        assert finding is not None
+        assert finding.status == "open"
         assert (
             verification_session.scalar(
                 select(AuditEvent).where(
