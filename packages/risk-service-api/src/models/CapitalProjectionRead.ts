@@ -13,20 +13,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { CapitalProjectionReadError } from "./CapitalProjectionReadError";
-import {
-  CapitalProjectionReadErrorFromJSON,
-  CapitalProjectionReadErrorFromJSONTyped,
-  CapitalProjectionReadErrorToJSON,
-  CapitalProjectionReadErrorToJSONTyped,
-} from "./CapitalProjectionReadError";
-import type { CompletedAt } from "./CompletedAt";
-import {
-  CompletedAtFromJSON,
-  CompletedAtFromJSONTyped,
-  CompletedAtToJSON,
-  CompletedAtToJSONTyped,
-} from "./CompletedAt";
 import type { CapitalProjectionStatus } from "./CapitalProjectionStatus";
 import {
   CapitalProjectionStatusFromJSON,
@@ -41,13 +27,6 @@ import {
   CapitalFindingReadToJSON,
   CapitalFindingReadToJSONTyped,
 } from "./CapitalFindingRead";
-import type { StartedAt } from "./StartedAt";
-import {
-  StartedAtFromJSON,
-  StartedAtFromJSONTyped,
-  StartedAtToJSON,
-  StartedAtToJSONTyped,
-} from "./StartedAt";
 import type { CapitalIndicatorRead } from "./CapitalIndicatorRead";
 import {
   CapitalIndicatorReadFromJSON,
@@ -55,6 +34,13 @@ import {
   CapitalIndicatorReadToJSON,
   CapitalIndicatorReadToJSONTyped,
 } from "./CapitalIndicatorRead";
+import type { CapitalProjectionErrorRead } from "./CapitalProjectionErrorRead";
+import {
+  CapitalProjectionErrorReadFromJSON,
+  CapitalProjectionErrorReadFromJSONTyped,
+  CapitalProjectionErrorReadToJSON,
+  CapitalProjectionErrorReadToJSONTyped,
+} from "./CapitalProjectionErrorRead";
 
 /**
  *
@@ -76,10 +62,10 @@ export interface CapitalProjectionRead {
   caseId: string;
   /**
    *
-   * @type {CompletedAt}
+   * @type {Date}
    * @memberof CapitalProjectionRead
    */
-  completedAt: CompletedAt;
+  completedAt: Date | null;
   /**
    *
    * @type {Date}
@@ -100,10 +86,10 @@ export interface CapitalProjectionRead {
   engineVersion: string;
   /**
    *
-   * @type {CapitalProjectionReadError}
+   * @type {CapitalProjectionErrorRead}
    * @memberof CapitalProjectionRead
    */
-  error: CapitalProjectionReadError;
+  error: CapitalProjectionErrorRead | null;
   /**
    *
    * @type {Array<CapitalFindingRead>}
@@ -148,10 +134,10 @@ export interface CapitalProjectionRead {
   scenarioId: string;
   /**
    *
-   * @type {StartedAt}
+   * @type {Date}
    * @memberof CapitalProjectionRead
    */
-  startedAt: StartedAt;
+  startedAt: Date | null;
   /**
    *
    * @type {CapitalProjectionStatus}
@@ -216,14 +202,14 @@ export function CapitalProjectionReadFromJSONTyped(
     return json;
   }
   return {
-    ...json,
     calculationRunId: json["calculation_run_id"],
     caseId: json["case_id"],
-    completedAt: CompletedAtFromJSON(json["completed_at"]),
+    completedAt:
+      json["completed_at"] == null ? null : new Date(json["completed_at"]),
     createdAt: new Date(json["created_at"]),
     createdBy: json["created_by"],
     engineVersion: json["engine_version"],
-    error: CapitalProjectionReadErrorFromJSON(json["error"]),
+    error: CapitalProjectionErrorReadFromJSON(json["error"]),
     findings: (json["findings"] as Array<any>).map(CapitalFindingReadFromJSON),
     id: json["id"],
     indicators: (json["indicators"] as Array<any>).map(
@@ -233,7 +219,7 @@ export function CapitalProjectionReadFromJSONTyped(
     organizationId: json["organization_id"],
     reportingCurrency: json["reporting_currency"],
     scenarioId: json["scenario_id"],
-    startedAt: StartedAtFromJSON(json["started_at"]),
+    startedAt: json["started_at"] == null ? null : new Date(json["started_at"]),
     status: CapitalProjectionStatusFromJSON(json["status"]),
     updatedAt: new Date(json["updated_at"]),
   };
@@ -254,11 +240,14 @@ export function CapitalProjectionReadToJSONTyped(
   return {
     calculation_run_id: value["calculationRunId"],
     case_id: value["caseId"],
-    completed_at: CompletedAtToJSON(value["completedAt"]),
+    completed_at:
+      value["completedAt"] == null
+        ? null
+        : (value["completedAt"] as any).toISOString(),
     created_at: value["createdAt"].toISOString(),
     created_by: value["createdBy"],
     engine_version: value["engineVersion"],
-    error: CapitalProjectionReadErrorToJSON(value["error"]),
+    error: CapitalProjectionErrorReadToJSON(value["error"]),
     findings: (value["findings"] as Array<any>).map(CapitalFindingReadToJSON),
     id: value["id"],
     indicators: (value["indicators"] as Array<any>).map(
@@ -268,7 +257,10 @@ export function CapitalProjectionReadToJSONTyped(
     organization_id: value["organizationId"],
     reporting_currency: value["reportingCurrency"],
     scenario_id: value["scenarioId"],
-    started_at: StartedAtToJSON(value["startedAt"]),
+    started_at:
+      value["startedAt"] == null
+        ? null
+        : (value["startedAt"] as any).toISOString(),
     status: CapitalProjectionStatusToJSON(value["status"]),
     updated_at: value["updatedAt"].toISOString(),
   };

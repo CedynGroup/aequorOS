@@ -27,7 +27,7 @@ import { formatJson, formatMoney, labelize, truncateId } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { FindingReviewItem } from "../findings/findings-tab";
 
-type Projection = CapitalProjectionRead | CapitalComparisonRead["baseline"];
+type Projection = CapitalProjectionRead;
 
 const pressureTone = {
   low: "success",

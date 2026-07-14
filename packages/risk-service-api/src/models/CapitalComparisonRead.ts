@@ -20,20 +20,20 @@ import {
   CapitalComparisonPeriodReadToJSON,
   CapitalComparisonPeriodReadToJSONTyped,
 } from "./CapitalComparisonPeriodRead";
-import type { CapitalComparisonReadBaseline } from "./CapitalComparisonReadBaseline";
+import type { CapitalComparisonDiagnosticRead } from "./CapitalComparisonDiagnosticRead";
 import {
-  CapitalComparisonReadBaselineFromJSON,
-  CapitalComparisonReadBaselineFromJSONTyped,
-  CapitalComparisonReadBaselineToJSON,
-  CapitalComparisonReadBaselineToJSONTyped,
-} from "./CapitalComparisonReadBaseline";
-import type { CapitalComparisonReadDiagnostic } from "./CapitalComparisonReadDiagnostic";
+  CapitalComparisonDiagnosticReadFromJSON,
+  CapitalComparisonDiagnosticReadFromJSONTyped,
+  CapitalComparisonDiagnosticReadToJSON,
+  CapitalComparisonDiagnosticReadToJSONTyped,
+} from "./CapitalComparisonDiagnosticRead";
+import type { CapitalProjectionRead } from "./CapitalProjectionRead";
 import {
-  CapitalComparisonReadDiagnosticFromJSON,
-  CapitalComparisonReadDiagnosticFromJSONTyped,
-  CapitalComparisonReadDiagnosticToJSON,
-  CapitalComparisonReadDiagnosticToJSONTyped,
-} from "./CapitalComparisonReadDiagnostic";
+  CapitalProjectionReadFromJSON,
+  CapitalProjectionReadFromJSONTyped,
+  CapitalProjectionReadToJSON,
+  CapitalProjectionReadToJSONTyped,
+} from "./CapitalProjectionRead";
 
 /**
  *
@@ -43,10 +43,10 @@ import {
 export interface CapitalComparisonRead {
   /**
    *
-   * @type {CapitalComparisonReadBaseline}
+   * @type {CapitalProjectionRead}
    * @memberof CapitalComparisonRead
    */
-  baseline: CapitalComparisonReadBaseline;
+  baseline: CapitalProjectionRead | null;
   /**
    *
    * @type {string}
@@ -55,16 +55,16 @@ export interface CapitalComparisonRead {
   caseId: string;
   /**
    *
-   * @type {CapitalComparisonReadDiagnostic}
+   * @type {CapitalComparisonDiagnosticRead}
    * @memberof CapitalComparisonRead
    */
-  diagnostic: CapitalComparisonReadDiagnostic;
+  diagnostic: CapitalComparisonDiagnosticRead | null;
   /**
    *
-   * @type {CapitalComparisonReadBaseline}
+   * @type {CapitalProjectionRead}
    * @memberof CapitalComparisonRead
    */
-  downside: CapitalComparisonReadBaseline;
+  downside: CapitalProjectionRead | null;
   /**
    *
    * @type {Array<CapitalComparisonPeriodRead>}
@@ -102,11 +102,10 @@ export function CapitalComparisonReadFromJSONTyped(
     return json;
   }
   return {
-    ...json,
-    baseline: CapitalComparisonReadBaselineFromJSON(json["baseline"]),
+    baseline: CapitalProjectionReadFromJSON(json["baseline"]),
     caseId: json["case_id"],
-    diagnostic: CapitalComparisonReadDiagnosticFromJSON(json["diagnostic"]),
-    downside: CapitalComparisonReadBaselineFromJSON(json["downside"]),
+    diagnostic: CapitalComparisonDiagnosticReadFromJSON(json["diagnostic"]),
+    downside: CapitalProjectionReadFromJSON(json["downside"]),
     periods: (json["periods"] as Array<any>).map(
       CapitalComparisonPeriodReadFromJSON,
     ),
@@ -126,10 +125,10 @@ export function CapitalComparisonReadToJSONTyped(
   }
 
   return {
-    baseline: CapitalComparisonReadBaselineToJSON(value["baseline"]),
+    baseline: CapitalProjectionReadToJSON(value["baseline"]),
     case_id: value["caseId"],
-    diagnostic: CapitalComparisonReadDiagnosticToJSON(value["diagnostic"]),
-    downside: CapitalComparisonReadBaselineToJSON(value["downside"]),
+    diagnostic: CapitalComparisonDiagnosticReadToJSON(value["diagnostic"]),
+    downside: CapitalProjectionReadToJSON(value["downside"]),
     periods: (value["periods"] as Array<any>).map(
       CapitalComparisonPeriodReadToJSON,
     ),

@@ -17,7 +17,9 @@ import type { CalculationRunSummaryRead } from "../src/models/CalculationRunSumm
 import {
   CapitalComparisonReadFromJSON,
   CapitalComparisonReadToJSON,
+  type CapitalComparisonRead,
 } from "../src/models/CapitalComparisonRead";
+import type { CapitalComparisonDiagnosticRead } from "../src/models/CapitalComparisonDiagnosticRead";
 import {
   CapitalProjectionCreateToJSON,
   type CapitalProjectionCreate,
@@ -25,11 +27,18 @@ import {
 import {
   CapitalProjectionReadFromJSON,
   CapitalProjectionReadToJSON,
+  type CapitalProjectionRead,
 } from "../src/models/CapitalProjectionRead";
+import type { CapitalProjectionErrorRead } from "../src/models/CapitalProjectionErrorRead";
 import {
   CapitalProjectionSummaryReadFromJSON,
   CapitalProjectionSummaryReadToJSON,
+  type CapitalProjectionSummaryRead,
 } from "../src/models/CapitalProjectionSummaryRead";
+import {
+  CapitalSummaryReadFromJSON,
+  type CapitalSummaryRead,
+} from "../src/models/CapitalSummaryRead";
 import type { FinancialAccountUpdate } from "../src/models/FinancialAccountUpdate";
 import {
   FinancialAmount,
@@ -69,6 +78,36 @@ type CalculationStartedAtContract = Assert<
 >;
 type CalculationCompletedAtContract = Assert<
   Equal<CalculationRunSummaryRead["completedAt"], Date | null>
+>;
+type CapitalProjectionErrorContract = Assert<
+  Equal<CapitalProjectionRead["error"], CapitalProjectionErrorRead | null>
+>;
+type CapitalProjectionStartedAtContract = Assert<
+  Equal<CapitalProjectionRead["startedAt"], Date | null>
+>;
+type CapitalProjectionCompletedAtContract = Assert<
+  Equal<CapitalProjectionRead["completedAt"], Date | null>
+>;
+type CapitalProjectionSummaryStartedAtContract = Assert<
+  Equal<CapitalProjectionSummaryRead["startedAt"], Date | null>
+>;
+type CapitalProjectionSummaryCompletedAtContract = Assert<
+  Equal<CapitalProjectionSummaryRead["completedAt"], Date | null>
+>;
+type CapitalSummaryProjectionContract = Assert<
+  Equal<CapitalSummaryRead["projection"], CapitalProjectionRead | null>
+>;
+type CapitalComparisonBaselineContract = Assert<
+  Equal<CapitalComparisonRead["baseline"], CapitalProjectionRead | null>
+>;
+type CapitalComparisonDownsideContract = Assert<
+  Equal<CapitalComparisonRead["downside"], CapitalProjectionRead | null>
+>;
+type CapitalComparisonDiagnosticContract = Assert<
+  Equal<
+    CapitalComparisonRead["diagnostic"],
+    CapitalComparisonDiagnosticRead | null
+  >
 >;
 type MetadataContract = Assert<
   Equal<
@@ -195,6 +234,11 @@ const capitalSummaryRead = CapitalProjectionSummaryReadFromJSON({
 const capitalSummarySerialized = CapitalProjectionSummaryReadToJSON(
   capitalSummaryRead,
 ) as unknown as Record<string, unknown>;
+const capitalEndpointSummary = CapitalSummaryReadFromJSON({
+  case_id: "0198c7de-95bf-7000-8000-000000000002",
+  scenario_id: null,
+  projection: null,
+});
 const capitalComparison = CapitalComparisonReadFromJSON({
   case_id: "0198c7de-95bf-7000-8000-000000000002",
   baseline: null,
@@ -306,8 +350,20 @@ assert(
   "capital projection reporting currency was not serialized",
 );
 assert(
-  capitalSummaryRead.completedAt === "2026-07-12T15:30:00.000Z",
-  "capital projection summary completion time was not decoded",
+  capitalRead.error === null &&
+    capitalRead.startedAt instanceof Date &&
+    capitalRead.completedAt instanceof Date,
+  "capital projection nullable fields were not decoded",
+);
+assert(
+  capitalSummaryRead.startedAt instanceof Date &&
+    capitalSummaryRead.completedAt instanceof Date,
+  "capital projection summary timestamps were not decoded as Dates",
+);
+assert(
+  capitalSummarySerialized.started_at === "2026-07-12T14:30:00.000Z" &&
+    capitalSummarySerialized.completed_at === "2026-07-12T15:30:00.000Z",
+  "capital projection summary timestamps were not serialized",
 );
 assert(
   capitalSummarySerialized.scenario_id === capitalSummaryRead.scenarioId,
@@ -316,6 +372,19 @@ assert(
 assert(
   capitalSummarySerialized.reporting_currency === "USD",
   "capital projection summary reporting currency was not serialized",
+);
+assert(
+  capitalEndpointSummary.projection === null &&
+    capitalEndpointSummary.scenarioId === null,
+  "nullable capital summary fields were not preserved",
+);
+assert(
+  capitalComparison.baseline === null && capitalComparison.downside === null,
+  "nullable capital comparison projections were not preserved",
+);
+assert(
+  capitalComparison.diagnostic !== null,
+  "capital comparison diagnostic was not decoded",
 );
 assert(
   capitalComparison.diagnostic.baselineBasis.asOfDate instanceof Date,
@@ -345,6 +414,15 @@ void (0 as unknown as CalculationCreateDateContract);
 void (0 as unknown as CalculationRerunDateContract);
 void (0 as unknown as CalculationStartedAtContract);
 void (0 as unknown as CalculationCompletedAtContract);
+void (0 as unknown as CapitalProjectionErrorContract);
+void (0 as unknown as CapitalProjectionStartedAtContract);
+void (0 as unknown as CapitalProjectionCompletedAtContract);
+void (0 as unknown as CapitalProjectionSummaryStartedAtContract);
+void (0 as unknown as CapitalProjectionSummaryCompletedAtContract);
+void (0 as unknown as CapitalSummaryProjectionContract);
+void (0 as unknown as CapitalComparisonBaselineContract);
+void (0 as unknown as CapitalComparisonDownsideContract);
+void (0 as unknown as CapitalComparisonDiagnosticContract);
 void (0 as unknown as MetadataContract);
 void (0 as unknown as AssumptionValueContract);
 void (0 as unknown as ScenarioAssumptionsContract);

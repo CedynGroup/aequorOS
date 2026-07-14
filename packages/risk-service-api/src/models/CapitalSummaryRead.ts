@@ -13,20 +13,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { ScenarioId } from "./ScenarioId";
+import type { CapitalProjectionRead } from "./CapitalProjectionRead";
 import {
-  ScenarioIdFromJSON,
-  ScenarioIdFromJSONTyped,
-  ScenarioIdToJSON,
-  ScenarioIdToJSONTyped,
-} from "./ScenarioId";
-import type { CapitalComparisonReadBaseline } from "./CapitalComparisonReadBaseline";
-import {
-  CapitalComparisonReadBaselineFromJSON,
-  CapitalComparisonReadBaselineFromJSONTyped,
-  CapitalComparisonReadBaselineToJSON,
-  CapitalComparisonReadBaselineToJSONTyped,
-} from "./CapitalComparisonReadBaseline";
+  CapitalProjectionReadFromJSON,
+  CapitalProjectionReadFromJSONTyped,
+  CapitalProjectionReadToJSON,
+  CapitalProjectionReadToJSONTyped,
+} from "./CapitalProjectionRead";
 
 /**
  *
@@ -42,16 +35,16 @@ export interface CapitalSummaryRead {
   caseId: string;
   /**
    *
-   * @type {CapitalComparisonReadBaseline}
+   * @type {CapitalProjectionRead}
    * @memberof CapitalSummaryRead
    */
-  projection: CapitalComparisonReadBaseline;
+  projection: CapitalProjectionRead | null;
   /**
    *
-   * @type {ScenarioId}
+   * @type {string}
    * @memberof CapitalSummaryRead
    */
-  scenarioId: ScenarioId;
+  scenarioId: string | null;
 }
 
 /**
@@ -80,10 +73,9 @@ export function CapitalSummaryReadFromJSONTyped(
     return json;
   }
   return {
-    ...json,
     caseId: json["case_id"],
-    projection: CapitalComparisonReadBaselineFromJSON(json["projection"]),
-    scenarioId: ScenarioIdFromJSON(json["scenario_id"]),
+    projection: CapitalProjectionReadFromJSON(json["projection"]),
+    scenarioId: json["scenario_id"],
   };
 }
 
@@ -101,7 +93,7 @@ export function CapitalSummaryReadToJSONTyped(
 
   return {
     case_id: value["caseId"],
-    projection: CapitalComparisonReadBaselineToJSON(value["projection"]),
-    scenario_id: ScenarioIdToJSON(value["scenarioId"]),
+    projection: CapitalProjectionReadToJSON(value["projection"]),
+    scenario_id: value["scenarioId"],
   };
 }

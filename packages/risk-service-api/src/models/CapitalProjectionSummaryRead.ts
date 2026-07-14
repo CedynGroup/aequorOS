@@ -13,13 +13,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { CompletedAt } from "./CompletedAt";
-import {
-  CompletedAtFromJSON,
-  CompletedAtFromJSONTyped,
-  CompletedAtToJSON,
-  CompletedAtToJSONTyped,
-} from "./CompletedAt";
 import type { CapitalProjectionStatus } from "./CapitalProjectionStatus";
 import {
   CapitalProjectionStatusFromJSON,
@@ -27,13 +20,6 @@ import {
   CapitalProjectionStatusToJSON,
   CapitalProjectionStatusToJSONTyped,
 } from "./CapitalProjectionStatus";
-import type { StartedAt } from "./StartedAt";
-import {
-  StartedAtFromJSON,
-  StartedAtFromJSONTyped,
-  StartedAtToJSON,
-  StartedAtToJSONTyped,
-} from "./StartedAt";
 
 /**
  *
@@ -49,10 +35,10 @@ export interface CapitalProjectionSummaryRead {
   calculationRunId: string;
   /**
    *
-   * @type {CompletedAt}
+   * @type {Date}
    * @memberof CapitalProjectionSummaryRead
    */
-  completedAt: CompletedAt;
+  completedAt: Date | null;
   /**
    *
    * @type {Date}
@@ -79,10 +65,10 @@ export interface CapitalProjectionSummaryRead {
   scenarioId: string;
   /**
    *
-   * @type {StartedAt}
+   * @type {Date}
    * @memberof CapitalProjectionSummaryRead
    */
-  startedAt: StartedAt;
+  startedAt: Date | null;
   /**
    *
    * @type {CapitalProjectionStatus}
@@ -129,14 +115,14 @@ export function CapitalProjectionSummaryReadFromJSONTyped(
     return json;
   }
   return {
-    ...json,
     calculationRunId: json["calculation_run_id"],
-    completedAt: CompletedAtFromJSON(json["completed_at"]),
+    completedAt:
+      json["completed_at"] == null ? null : new Date(json["completed_at"]),
     createdAt: new Date(json["created_at"]),
     id: json["id"],
     reportingCurrency: json["reporting_currency"],
     scenarioId: json["scenario_id"],
-    startedAt: StartedAtFromJSON(json["started_at"]),
+    startedAt: json["started_at"] == null ? null : new Date(json["started_at"]),
     status: CapitalProjectionStatusFromJSON(json["status"]),
   };
 }
@@ -157,12 +143,18 @@ export function CapitalProjectionSummaryReadToJSONTyped(
 
   return {
     calculation_run_id: value["calculationRunId"],
-    completed_at: CompletedAtToJSON(value["completedAt"]),
+    completed_at:
+      value["completedAt"] == null
+        ? null
+        : (value["completedAt"] as any).toISOString(),
     created_at: value["createdAt"].toISOString(),
     id: value["id"],
     reporting_currency: value["reportingCurrency"],
     scenario_id: value["scenarioId"],
-    started_at: StartedAtToJSON(value["startedAt"]),
+    started_at:
+      value["startedAt"] == null
+        ? null
+        : (value["startedAt"] as any).toISOString(),
     status: CapitalProjectionStatusToJSON(value["status"]),
   };
 }
