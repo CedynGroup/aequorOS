@@ -160,6 +160,15 @@ def create_case_finding(
 def update_finding(
     db: Session, ctx: TenantContext, finding_id: UUID, command: UpdateFindingCommand
 ) -> RiskFinding:
+    finding = apply_finding_update(db, ctx, finding_id, command)
+    db.commit()
+    db.refresh(finding)
+    return finding
+
+
+def apply_finding_update(
+    db: Session, ctx: TenantContext, finding_id: UUID, command: UpdateFindingCommand
+) -> RiskFinding:
     if ctx.actor_user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -216,8 +225,7 @@ def update_finding(
             entity_id=finding.id,
             details={"before": {"status": before_status}, "after": {"status": finding.status}},
         )
-    db.commit()
-    db.refresh(finding)
+    db.flush()
     return finding
 
 

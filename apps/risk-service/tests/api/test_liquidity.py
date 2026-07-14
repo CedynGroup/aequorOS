@@ -10,6 +10,7 @@ from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
 from app.domain.risk_constants import LIQUIDITY_RISK_TYPE
 from app.models import AuditEvent, CalculationForecastPeriod, CalculationRun, RiskFinding
+from app.services import liquidity
 from app.services.liquidity import generate_findings
 from tests.api.factories import CaseFactory
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
@@ -160,6 +161,46 @@ def test_liquidity_summary_and_review_are_tenant_scoped(db_client: TestClient) -
         ).status_code
         == 404
     )
+
+
+def test_liquidity_review_rolls_back_when_audit_event_fails(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+    finding_id = UUID(
+        db_client.get(f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers()).json()[
+            "findings"
+        ][0]["id"]
+    )
+
+    def fail_audit_event(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("audit persistence failed")
+
+    monkeypatch.setattr(liquidity, "record_event", fail_audit_event)
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/liquidity/findings/{finding_id}/review",
+        headers=headers(),
+        json={"action": "acknowledge", "reason": "Reviewed forecast evidence"},
+    )
+
+    assert response.status_code == 500
+    with get_sessionmaker()() as session:
+        persisted_finding = session.get(RiskFinding, finding_id)
+        assert persisted_finding is not None
+        assert persisted_finding.status == "open"
+        event_types = set(
+            session.scalars(select(AuditEvent.event_type).where(AuditEvent.entity_id == finding_id))
+        )
+    assert "finding.status_changed" not in event_types
+    assert "liquidity_finding.reviewed" not in event_types
 
 
 def test_liquidity_rerun_supersedes_prior_scenario_findings(db_client: TestClient) -> None:
@@ -386,6 +427,4 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
             )
         )
     assert current
-    assert {item.details["liquidity"]["calculation_run_id"] for item in current} == {
-        newer["id"]
-    }
+    assert {item.details["liquidity"]["calculation_run_id"] for item in current} == {newer["id"]}

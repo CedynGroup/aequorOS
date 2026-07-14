@@ -366,9 +366,7 @@ def generate_findings(
     )
 
 
-def _lock_finding_publication(
-    db: Session, ctx: TenantContext, run: CalculationRun
-) -> None:
+def _lock_finding_publication(db: Session, ctx: TenantContext, run: CalculationRun) -> None:
     if db.get_bind().dialect.name != "postgresql":
         return
     scope = f"{ctx.organization_id}:{run.case_id}:{run.scenario_id}".encode()
@@ -466,7 +464,7 @@ def review_finding(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Liquidity finding not found."
         )
-    updated = findings_service.update_finding(
+    updated = findings_service.apply_finding_update(
         db,
         ctx,
         finding_id,
@@ -488,6 +486,7 @@ def review_finding(
         details={"action": payload.action, "reason": payload.reason},
     )
     db.commit()
+    db.refresh(updated)
     return _finding_read(db, ctx, updated)
 
 
@@ -551,5 +550,5 @@ def _source_url(
     scenario_id: UUID,
 ) -> str:
     if source_type == "scenario_assumption":
-        return f"/cases/{case_id}?tab=scenarios" f"#scenario-{scenario_id}-assumption-{record_id}"
+        return f"/cases/{case_id}?tab=scenarios#scenario-{scenario_id}-assumption-{record_id}"
     return f"/cases/{case_id}?tab=financial#financial-{collection}-{record_id}"
