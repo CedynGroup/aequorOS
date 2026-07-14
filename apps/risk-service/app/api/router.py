@@ -14,6 +14,7 @@ from app.features.record_case_decisions import router as case_decisions_router
 from app.features.review_cases import router as cases_router
 from app.features.review_findings import router as findings_router
 from app.features.run_assessments import router as assessments_router
+from app.features.run_calculations import router as calculations_router
 from app.features.track_jobs import router as jobs_router
 
 api_router = APIRouter()
@@ -28,6 +29,7 @@ v1_router.include_router(case_taxonomy_router)
 v1_router.include_router(documents_router)
 v1_router.include_router(financial_workspace_router)
 v1_router.include_router(scenarios_router)
+v1_router.include_router(calculations_router)
 v1_router.include_router(jobs_router)
 v1_router.include_router(assessments_router)
 v1_router.include_router(findings_router)

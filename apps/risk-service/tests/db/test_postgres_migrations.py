@@ -419,3 +419,32 @@ def test_postgres_migrations_create_scenario_tables_indexes_and_rls(
         "ck_scenario_assumptions_review_status",
         "uq_risk_scenarios_id_organization_id_case_id",
     }
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_postgres_migrations_create_calculation_tables_indexes_and_rls(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    tables = {"calculation_runs", "calculation_forecast_periods"}
+    assert migrated_postgres_schema.tables(tables) == tables
+    indexes = {
+        "ix_calculation_runs_case_scenario",
+        "ix_calculation_runs_input_hash",
+        "ix_calculation_forecast_periods_run_id",
+    }
+    assert migrated_postgres_schema.indexes(indexes) == indexes
+    assert migrated_postgres_schema.policies(tables) == {
+        "calculation_runs_tenant_isolation",
+        "calculation_forecast_periods_tenant_isolation",
+    }
+    constraints = {
+        "ck_calculation_runs_status",
+        "ck_calculation_runs_periods",
+        "ck_calculation_forecast_periods_number",
+        "uq_calculation_runs_id_org_case",
+        "uq_calculation_forecast_run_period",
+    }
+    assert migrated_postgres_schema.constraints(constraints) == constraints

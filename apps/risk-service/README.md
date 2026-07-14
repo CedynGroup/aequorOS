@@ -6,8 +6,8 @@ The service is built with FastAPI, Pydantic settings, SQLAlchemy, Alembic, and P
 
 ## Current Surface
 
-The service currently provides the backend foundation, financial-data APIs, and
-case scenario management:
+The service currently provides the backend foundation, financial-data APIs,
+case scenario management, and the first deterministic balance-sheet forecast:
 
 - Health and readiness endpoints under `/api/health`
 - Centralized environment-based settings
@@ -19,10 +19,13 @@ case scenario management:
 - Covenant persistence, mapping, deterministic compliance validation, and correction
 - Tenant-scoped baseline, downside, and custom scenarios with structured assumptions
 - Scenario creation, editing, copying, archiving, review, validation, and calculation readiness
+- Tenant-scoped calculation runs with immutable input snapshots, version metadata, and audit events
+- Deterministic annual balance-sheet forecasts, persisted failures, reruns, and paginated history
 - Audit events, per-field manual edit history, and source-record traceability
 
-Production risk calculations, full ingestion pipelines, auth, background workers,
-and report generation are intentionally not implemented yet.
+Liquidity and capital scoring, full ingestion pipelines, auth, background
+workers, advanced forecast configuration, and report generation are
+intentionally not implemented yet.
 
 ## Requirements
 
@@ -109,6 +112,38 @@ reviewed assumption in each required category: growth, expenses, cash-flow
 timing, credit usage, and repayment behavior. Editing or copying an assumption
 resets its review state to `draft`. Mutation responses include the scenario's
 refreshed validation and the case's refreshed readiness state.
+
+Balance-sheet forecast attempts use
+`/api/v1/cases/{case_id}/calculation-runs`:
+
+```text
+GET  /api/v1/cases/{case_id}/calculation-runs
+POST /api/v1/cases/{case_id}/calculation-runs
+GET  /api/v1/cases/{case_id}/calculation-runs/{run_id}
+POST /api/v1/cases/{case_id}/calculation-runs/{run_id}/rerun
+```
+
+Starting a run requires `scenario_id`, accepts one to twelve annual
+`forecast_periods` (default three), and optionally accepts `as_of_date`, which
+defaults to today.
+Rerunning creates a new run for the original scenario using current canonical
+financial data and reviewed assumptions. Its body may be `{}`; omitted fields
+reuse the original period count and default the as-of date to today, while
+provided fields override those values. Both mutations require `X-Org-Id` and
+`X-User-Id`.
+
+The first engine executes synchronously, but commits its `queued` and `running`
+states before calculation. A `201` response contains the final persisted run,
+including a `failed` run with actionable diagnostics. Successful output and
+failed diagnostics remain immutable history. List requests support optional
+`scenario_id`, `limit` (1-100), and `offset`; summaries omit the full input and
+output payloads, which are available from the run detail route.
+
+Forecast snapshots use the newest effective balance date on or before the
+requested as-of date and the matching reporting-period cash flows and active
+obligations. All selected inputs must use one currency; active obligations need
+principal and outstanding amounts. The selected scenario must have reviewed,
+unambiguous values for all five required assumption categories.
 
 ## Run Tests
 

@@ -14,6 +14,14 @@ import {
   CaseListReadFromJSON,
   type CaseRead,
   CaseReadFromJSON,
+  type CalculationRerunCreate,
+  CalculationRerunCreateToJSON,
+  type CalculationRunCreate,
+  CalculationRunCreateToJSON,
+  type CalculationRunListRead,
+  CalculationRunListReadFromJSON,
+  type CalculationRunRead,
+  CalculationRunReadFromJSON,
   type CaseSort,
   type CaseStatus,
   type CaseTaxonomyRead,
@@ -211,6 +219,61 @@ export const riskApi = {
       `/cases/${caseId}/financial-workspace`,
       tenant,
       FinancialDataWorkspaceReadFromJSON,
+    );
+  },
+  calculationRuns(
+    tenant: TenantHeaders,
+    caseId: string,
+    scenarioId?: string,
+    limit = 25,
+    offset = 0,
+  ) {
+    return apiJson<CalculationRunListRead>(
+      `/cases/${caseId}/calculation-runs${toQuery({
+        scenario_id: scenarioId,
+        limit,
+        offset,
+      })}`,
+      tenant,
+      CalculationRunListReadFromJSON,
+    );
+  },
+  calculationRun(tenant: TenantHeaders, caseId: string, runId: string) {
+    return apiJson<CalculationRunRead>(
+      `/cases/${caseId}/calculation-runs/${runId}`,
+      tenant,
+      CalculationRunReadFromJSON,
+    );
+  },
+  startCalculation(
+    tenant: TenantHeaders,
+    caseId: string,
+    payload: CalculationRunCreate,
+  ) {
+    return apiJson<CalculationRunRead>(
+      `/cases/${caseId}/calculation-runs`,
+      tenant,
+      CalculationRunReadFromJSON,
+      {
+        method: "POST",
+        body: JSON.stringify(CalculationRunCreateToJSON(payload)),
+      },
+    );
+  },
+  rerunCalculation(
+    tenant: TenantHeaders,
+    caseId: string,
+    runId: string,
+    payload: CalculationRerunCreate = {},
+  ) {
+    return apiJson<CalculationRunRead>(
+      `/cases/${caseId}/calculation-runs/${runId}/rerun`,
+      tenant,
+      CalculationRunReadFromJSON,
+      {
+        method: "POST",
+        body: JSON.stringify(CalculationRerunCreateToJSON(payload)),
+      },
     );
   },
   scenarios(tenant: TenantHeaders, caseId: string, includeArchived = false) {

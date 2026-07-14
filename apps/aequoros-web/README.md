@@ -16,7 +16,8 @@ VITE_RISK_API_BASE_URL=http://127.0.0.1:8003/api/v1 pnpm --filter @aequoros/aequ
 
 ## Demo Data
 
-Seed the demo org, user, cases, decisions, and findings with:
+Seed the demo tenants and users, cases, decisions, findings, and the canonical
+financial inputs used by the forecast journey with:
 
 ```bash
 RISK_DEMO_DATABASE_URL=postgresql://postgres:postgres@localhost:15432/risk_service \
@@ -67,7 +68,10 @@ pnpm --filter @aequoros/aequoros-web build
 ## Playwright E2E
 
 The E2E suite starts Vite automatically and expects a seeded risk-service API at
-`http://127.0.0.1:8003/api/v1`. From the repository root:
+`http://127.0.0.1:8003/api/v1`. Its forecast journey initializes and reviews a
+scenario, verifies projected output and a changed-input rerun, then checks
+persisted failure history, preservation of prior output, and tenant isolation.
+From the repository root:
 
 ```bash
 cd apps/risk-service
@@ -118,7 +122,7 @@ The web app uses a feature-based split so each operational surface owns its UI a
 - `src/features/risk-console/shell.tsx`: sidebar and top-bar console chrome
 - `src/features/risk-console/case-queue-panel.tsx`: queue filters, table, selection, and pagination
 - `src/features/risk-console/bulk-actions.tsx`: bulk action dialog, mutation, and result rendering
-- `src/features/risk-console/case-workspace.tsx`: detail summary, overview, financial, scenarios, decisions, documents, findings, and report tabs
+- `src/features/risk-console/case-workspace.tsx`: detail summary, overview, financial, scenarios, forecast, decisions, documents, findings, and report tabs
 - `src/features/risk-console/format.tsx`: risk/status/decision badges and date formatting
 - `src/features/risk-console/types.ts`: feature-local queue/search helper types
 - `src/features/documents/documents-tab.tsx`: document upload-request, completion, parse, and download URL workflows
@@ -127,6 +131,7 @@ The web app uses a feature-based split so each operational surface owns its UI a
 - `src/features/financial/financial-tab.tsx`: financial workspace loading, mapping, and revalidation controls
 - `src/features/financial/financial-sections.tsx`: grouped records, validation navigation, source traceability, audit history, and mutation forms
 - `src/features/scenarios/scenarios-tab.tsx`: scenario initialization, lifecycle, assumption editing and review, validation, and readiness
+- `src/features/calculations/calculations-tab.tsx`: forecast start and rerun controls, polling, paginated run history, diagnostics, and projected outputs
 - `src/features/demo-data/demo-data.ts`: frontend-only fallback/demo data helpers
 - `src/shared/route-ui.tsx`: route-level empty, error, and data-list helpers
 - `src/routes/risk-console.tsx`: thin route export for TanStack Router wiring
@@ -142,6 +147,7 @@ Vitest tests are colocated with the module they protect:
 - `src/features/financial/financial-tab.test.tsx`: loading, mapping, revalidation, and refresh failure states
 - `src/features/financial/financial-sections.test.tsx`: grouped review, validation focus, source traceability, audit history, and supported mutations
 - `src/features/scenarios/scenarios-tab.test.tsx`: scenario loading, empty, error, lifecycle, validation, editing, review, and save states
+- `src/features/calculations/calculations-tab.test.tsx`: forecast loading, empty, running, failure, success, rerun, history, and formatting states
 - `src/features/demo-data/demo-data.test.ts`: fallback/demo data filtering and detail construction
 - `src/routes/search.test.ts`: typed search-param parsing
 - `src/features/risk-console/risk-console.test.tsx`: bulk action result grouping

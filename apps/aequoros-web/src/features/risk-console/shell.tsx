@@ -37,6 +37,7 @@ export function Sidebar({
     { tab: "overview", label: "Case Detail", icon: LayoutDashboard },
     { tab: "financial", label: "Financial Workspace", icon: WalletCards },
     { tab: "scenarios", label: "Scenarios", icon: SlidersHorizontal },
+    { tab: "calculations", label: "Forecast", icon: Sparkles },
     { tab: "documents", label: "Documents", icon: FileText },
     { tab: "findings", label: "Findings", icon: ListChecks },
     { tab: "report", label: "Reports", icon: FileJson },

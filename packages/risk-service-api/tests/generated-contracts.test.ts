@@ -1,5 +1,19 @@
 import { AccountId, instanceOfAccountId } from "../src/models/AccountId";
 import { AsOfDate, instanceOfAsOfDate } from "../src/models/AsOfDate";
+import {
+  CalculationRerunCreateToJSON,
+  type CalculationRerunCreate,
+} from "../src/models/CalculationRerunCreate";
+import {
+  CalculationRunCreateToJSON,
+  type CalculationRunCreate,
+} from "../src/models/CalculationRunCreate";
+import {
+  CalculationRunReadFromJSON,
+  CalculationRunReadToJSON,
+  type CalculationRunRead,
+} from "../src/models/CalculationRunRead";
+import type { CalculationRunSummaryRead } from "../src/models/CalculationRunSummaryRead";
 import type { FinancialAccountUpdate } from "../src/models/FinancialAccountUpdate";
 import {
   FinancialAmount,
@@ -28,6 +42,18 @@ type Assert<Value extends true> = Value;
 type AmountContract = Assert<Equal<FinancialAmount, number | string>>;
 type AccountIdContract = Assert<Equal<AccountId, string | null>>;
 type DateContract = Assert<Equal<AsOfDate, string | null>>;
+type CalculationCreateDateContract = Assert<
+  Equal<CalculationRunCreate["asOfDate"], Date | null | undefined>
+>;
+type CalculationRerunDateContract = Assert<
+  Equal<CalculationRerunCreate["asOfDate"], Date | null | undefined>
+>;
+type CalculationStartedAtContract = Assert<
+  Equal<CalculationRunRead["startedAt"], Date | null>
+>;
+type CalculationCompletedAtContract = Assert<
+  Equal<CalculationRunSummaryRead["completedAt"], Date | null>
+>;
 type MetadataContract = Assert<
   Equal<
     FinancialAccountUpdate["metadata"],
@@ -65,6 +91,44 @@ const assumptionSerialized = AssumptionUpdateToJSON({
   value: 0.05,
   reason: "Reviewer update",
 } satisfies AssumptionUpdate) as unknown as Record<string, unknown>;
+const calculationDate = new Date("2026-07-12T14:30:00.000Z");
+const calculationCreateSerialized = CalculationRunCreateToJSON({
+  scenarioId: "0198c7de-95bf-7000-8000-000000000001",
+  asOfDate: calculationDate,
+}) as unknown as Record<string, unknown>;
+const calculationRerunSerialized = CalculationRerunCreateToJSON({
+  asOfDate: calculationDate,
+}) as unknown as Record<string, unknown>;
+const calculationRead = CalculationRunReadFromJSON({
+  as_of_date: "2026-07-12",
+  case_id: "0198c7de-95bf-7000-8000-000000000002",
+  completed_at: "2026-07-12T15:30:00.000Z",
+  created_at: "2026-07-12T14:00:00.000Z",
+  created_by: "0198c7de-95bf-7000-8000-000000000003",
+  engine_version: "balance-sheet-v1.0.0",
+  error: null,
+  forecast_periods: 3,
+  id: "0198c7de-95bf-7000-8000-000000000004",
+  input_hash: "a".repeat(64),
+  input_schema_version: "calculation-input-v1",
+  inputs: {},
+  organization_id: "0198c7de-95bf-7000-8000-000000000005",
+  output_schema_version: "balance-sheet-output-v1",
+  outputs: [],
+  rerun_of_run_id: null,
+  scenario_id: "0198c7de-95bf-7000-8000-000000000001",
+  started_at: "2026-07-12T14:30:00.000Z",
+  status: "succeeded",
+  updated_at: "2026-07-12T15:30:00.000Z",
+});
+const calculationReadSerialized = CalculationRunReadToJSON(
+  calculationRead,
+) as unknown as Record<string, unknown>;
+const calculationReadWithoutTiming = CalculationRunReadFromJSON({
+  ...calculationReadSerialized,
+  completed_at: null,
+  started_at: null,
+});
 
 assert(
   serialized.account_id === payload.accountId,
@@ -99,6 +163,31 @@ assert(
 assert(!instanceOfAccountId(42), "number was accepted as an account ID");
 assert(instanceOfAsOfDate("2026-07-12"), "date alias rejected string");
 assert(!instanceOfAsOfDate({}), "object was accepted as a date alias");
+assert(
+  calculationCreateSerialized.as_of_date === "2026-07-12",
+  "calculation as-of date was not serialized",
+);
+assert(
+  calculationRerunSerialized.as_of_date === "2026-07-12",
+  "calculation rerun as-of date was not serialized",
+);
+assert(
+  calculationRead.startedAt instanceof Date,
+  "calculation start time was not decoded as a Date",
+);
+assert(
+  calculationRead.completedAt instanceof Date,
+  "calculation completion time was not decoded as a Date",
+);
+assert(
+  calculationReadSerialized.started_at === "2026-07-12T14:30:00.000Z",
+  "calculation start time was not serialized",
+);
+assert(
+  calculationReadWithoutTiming.startedAt === null &&
+    calculationReadWithoutTiming.completedAt === null,
+  "nullable calculation timestamps were not preserved",
+);
 
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) {
@@ -109,6 +198,10 @@ function assert(condition: boolean, message: string): asserts condition {
 void (0 as unknown as AmountContract);
 void (0 as unknown as AccountIdContract);
 void (0 as unknown as DateContract);
+void (0 as unknown as CalculationCreateDateContract);
+void (0 as unknown as CalculationRerunDateContract);
+void (0 as unknown as CalculationStartedAtContract);
+void (0 as unknown as CalculationCompletedAtContract);
 void (0 as unknown as MetadataContract);
 void (0 as unknown as AssumptionValueContract);
 void (0 as unknown as ScenarioAssumptionsContract);

@@ -11,6 +11,21 @@ This approach assumes:
 - Architecture must support multi-tenant expansion without redesign.
 - Frontend should fetch computed outputs and drilldowns from APIs, not hardcoded datasets.
 
+### Current implementation status
+
+The first forecasting slice is implemented as a deterministic annual
+balance-sheet projection. It persists tenant-scoped calculation runs, immutable
+input snapshots and hashes, engine/input/output versions, annual forecast
+periods, audit events, and actionable failures. Reruns append history using
+current canonical financial data and reviewed scenario assumptions. The risk
+console can start and rerun forecasts, poll lifecycle status, page through run
+history, and render failures or successful outputs.
+
+This slice runs synchronously and does not include liquidity scoring, capital
+scoring, advanced model configuration, constrained optimization, or final
+reporting. The broader sections below remain the target architecture for those
+later modules.
+
 ---
 
 ## 1. Target State
@@ -73,6 +88,10 @@ Suggested runtime pattern:
 
 - Synchronous for fast metrics (target under 2 seconds).
 - Async job for heavy runs (target under 5 seconds for completion, polled via run_id).
+
+The current balance-sheet forecast follows the synchronous pattern while still
+persisting `queued` and `running` before execution so the lifecycle contract can
+remain observable if execution later moves to a worker.
 
 ---
 
@@ -194,6 +213,13 @@ Each run requires:
 
 ### 6.2 Run persistence
 
+The implemented forecast uses `calculation_runs` and
+`calculation_forecast_periods`. Each run stores the scenario, optional source
+run, lifecycle timestamps, horizon and as-of date, immutable canonical inputs,
+SHA-256 input hash, version metadata, actor, and failure diagnostics. Forecast
+periods belong to exactly one run. The generalized tables below remain a
+proposal for later liquidity, capital, metric, and validation modules.
+
 Create run-tracking tables:
 
 - calc_run
@@ -238,26 +264,31 @@ Function outputs should include both:
 
 ## 7. API Contract Pattern
 
-### 7.1 Trigger or fetch baseline run
+### 7.1 Start a balance-sheet forecast
 
-- POST /api/v1/calculations/{module}/run
-  - body: tenant_id, bank_id, as_of_date, scenario_id, parameter_set_id
-  - response: run_id, status
+- `POST /api/v1/cases/{case_id}/calculation-runs`
+  - body: `scenario_id`, `forecast_periods` (1-12, default 3), optional `as_of_date`
+  - response: persisted final run, including immutable inputs and outputs or failure diagnostics
 
-### 7.2 Fetch run summary
+### 7.2 List and fetch runs
 
-- GET /api/v1/calculations/runs/{run_id}
-  - response: status, metric cards, warnings, validation summary
+- `GET /api/v1/cases/{case_id}/calculation-runs`
+  - query: optional `scenario_id`, `limit`, and `offset`
+  - response: paginated summaries plus `latest_successful_run_id`
+- `GET /api/v1/cases/{case_id}/calculation-runs/{run_id}`
+  - response: lifecycle and version metadata, input snapshot and hash, diagnostics, and forecast periods
 
-### 7.3 Fetch drilldown table
+### 7.3 Rerun with current inputs
 
-- GET /api/v1/calculations/runs/{run_id}/metrics/{metric_code}/lines
-  - response: line items and formula references
+- `POST /api/v1/cases/{case_id}/calculation-runs/{run_id}/rerun`
+  - body: `{}` or optional `forecast_periods` and `as_of_date`; omitted values reuse the original horizon and use today's as-of date
+  - response: a new run linked to the source run; prior results remain unchanged
 
-### 7.4 Fetch submission preview payload
+### 7.4 Planned module contracts
 
-- GET /api/v1/submissions/{module}/preview?run_id=...
-  - response: structured payload mapped to BoG layout sections
+Liquidity and capital metric drilldowns and submission previews are not yet
+implemented. Their routes should be added only when those modules have concrete
+request, result, and versioning requirements.
 
 ---
 

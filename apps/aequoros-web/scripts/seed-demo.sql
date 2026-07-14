@@ -5,16 +5,22 @@
 
 \set org_id '11111111-1111-4111-8111-111111111111'
 \set user_id 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+\set org_2 '22222222-2222-4222-8222-222222222222'
+\set user_2 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 \set case_1 '90000000-0000-4000-8000-000000000001'
 \set case_2 '90000000-0000-4000-8000-000000000002'
 \set case_3 '90000000-0000-4000-8000-000000000003'
 
 insert into organizations (id, name, created_at, updated_at)
-values (:'org_id', 'AequorOS Demo Organization', now(), now())
+values
+  (:'org_id', 'AequorOS Demo Organization', now(), now()),
+  (:'org_2', 'AequorOS Isolated Tenant', now(), now())
 on conflict (id) do update set name = excluded.name, updated_at = now();
 
 insert into users (id, organization_id, email, display_name, is_active, created_at, updated_at)
-values (:'user_id', :'org_id', 'demo.user.one@example.test', 'Demo User One', true, now(), now())
+values
+  (:'user_id', :'org_id', 'demo.user.one@example.test', 'Demo User One', true, now(), now()),
+  (:'user_2', :'org_2', 'demo.user.two@example.test', 'Demo User Two', true, now(), now())
 on conflict (id) do update
 set organization_id = excluded.organization_id,
     email = excluded.email,
@@ -132,6 +138,75 @@ set organization_id = excluded.organization_id,
     metadata = excluded.metadata,
     created_by = excluded.created_by,
     updated_at = excluded.updated_at;
+
+insert into financial_balances (
+  id, organization_id, case_id, dedupe_key, balance_type, amount, currency,
+  as_of_date, metadata, created_at, updated_at
+) values
+(
+  '94000000-0000-4000-8000-000000000001', :'org_id', :'case_1',
+  'demo:forecast:cash', 'cash', 1250000, 'USD', DATE '2026-06-30',
+  '{"source":"demo forecast seed"}', now(), now()
+),
+(
+  '94000000-0000-4000-8000-000000000002', :'org_id', :'case_1',
+  'demo:forecast:receivables', 'receivables', 2750000, 'USD', DATE '2026-06-30',
+  '{"source":"demo forecast seed"}', now(), now()
+),
+(
+  '94000000-0000-4000-8000-000000000003', :'org_id', :'case_1',
+  'demo:forecast:payables', 'payables', 900000, 'USD', DATE '2026-06-30',
+  '{"source":"demo forecast seed"}', now(), now()
+)
+on conflict (dedupe_key, organization_id, case_id) do update
+set balance_type = excluded.balance_type,
+    amount = excluded.amount,
+    currency = excluded.currency,
+    as_of_date = excluded.as_of_date,
+    metadata = excluded.metadata,
+    updated_at = now();
+
+insert into financial_cash_flows (
+  id, organization_id, case_id, dedupe_key, cash_flow_date, amount, currency,
+  direction, category, metadata, created_at, updated_at
+) values
+(
+  '95000000-0000-4000-8000-000000000001', :'org_id', :'case_1',
+  'demo:forecast:operating-inflow', DATE '2026-06-30', 1800000, 'USD',
+  'inflow', 'operating receipts', '{"source":"demo forecast seed"}', now(), now()
+),
+(
+  '95000000-0000-4000-8000-000000000002', :'org_id', :'case_1',
+  'demo:forecast:operating-outflow', DATE '2026-06-30', 1350000, 'USD',
+  'outflow', 'operating expenses', '{"source":"demo forecast seed"}', now(), now()
+)
+on conflict (dedupe_key, organization_id, case_id) do update
+set cash_flow_date = excluded.cash_flow_date,
+    amount = excluded.amount,
+    currency = excluded.currency,
+    direction = excluded.direction,
+    category = excluded.category,
+    metadata = excluded.metadata,
+    updated_at = now();
+
+insert into financial_obligations (
+  id, organization_id, case_id, dedupe_key, obligation_type, facility_type,
+  principal_amount, outstanding_amount, currency, status, details, created_at, updated_at
+) values
+(
+  '96000000-0000-4000-8000-000000000001', :'org_id', :'case_1',
+  'demo:forecast:revolver', 'credit_facility', 'revolver', 2000000, 1000000,
+  'USD', 'active', '{"source":"demo forecast seed"}', now(), now()
+)
+on conflict (dedupe_key, organization_id, case_id) do update
+set obligation_type = excluded.obligation_type,
+    facility_type = excluded.facility_type,
+    principal_amount = excluded.principal_amount,
+    outstanding_amount = excluded.outstanding_amount,
+    currency = excluded.currency,
+    status = excluded.status,
+    details = excluded.details,
+    updated_at = now();
 
 insert into risk_case_decisions (
   id,

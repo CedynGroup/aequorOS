@@ -343,6 +343,58 @@ describe("risk API helpers", () => {
     });
   });
 
+  it("uses case-scoped calculation run and rerun contracts", async () => {
+    const responseBody = {
+      id: "run-1",
+      organization_id: DEFAULT_ORG_ID,
+      case_id: "case-1",
+      scenario_id: "scenario-1",
+      rerun_of_run_id: null,
+      status: "failed",
+      engine_version: "balance-sheet-v1.0.0",
+      input_schema_version: "calculation-input-v1",
+      output_schema_version: "balance-sheet-output-v1",
+      input_hash: "a".repeat(64),
+      inputs: {},
+      forecast_periods: 3,
+      as_of_date: "2026-06-30",
+      started_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+      error: { code: "scenario_not_ready", message: "Review inputs" },
+      outputs: [],
+      created_by: DEFAULT_USER_ID,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(responseBody), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    const started = await riskApi.startCalculation(tenant, "case-1", {
+      scenarioId: "scenario-1",
+      forecastPeriods: 3,
+    });
+    await riskApi.rerunCalculation(tenant, "case-1", "run-1");
+
+    expect(started.error?.code).toBe("scenario_not_ready");
+    const [startUrl, startInit] = fetchMock.mock.calls[0];
+    expect(String(startUrl)).toContain("/cases/case-1/calculation-runs");
+    expect(requestJsonBody(startInit)).toEqual({
+      forecast_periods: 3,
+      scenario_id: "scenario-1",
+    });
+    const [rerunUrl, rerunInit] = fetchMock.mock.calls[1];
+    expect(String(rerunUrl)).toContain(
+      "/cases/case-1/calculation-runs/run-1/rerun",
+    );
+    expect(requestJsonBody(rerunInit)).toEqual({});
+  });
+
   it("normalizes API error envelopes", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
