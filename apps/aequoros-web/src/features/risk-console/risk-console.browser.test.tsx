@@ -1,6 +1,6 @@
 import { CaseSort } from "@aequoros/risk-service-api";
 import { cleanup, render, screen } from "@testing-library/react";
-import { userEvent } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 
@@ -71,6 +71,38 @@ describe("risk console browser interactions", () => {
       "22222222-2222-4222-8222-222222222222",
     );
     expect(chooseCase).toHaveBeenCalledWith(cases[1].id);
+  });
+
+  it("keeps the case queue toggle accessible at a mobile viewport", async () => {
+    await page.viewport(390, 844);
+    const toggleQueue = vi.fn<TopBarProps["toggleQueue"]>();
+
+    render(
+      <TopBar
+        orgId={DEFAULT_ORG_ID}
+        chooseTenant={vi.fn<TopBarProps["chooseTenant"]>()}
+        cases={cases}
+        caseId={cases[0].id}
+        chooseCase={vi.fn<TopBarProps["chooseCase"]>()}
+        queueVisible={false}
+        toggleQueue={toggleQueue}
+        refresh={vi.fn<TopBarProps["refresh"]>()}
+        seed={vi.fn<TopBarProps["seed"]>()}
+      />,
+    );
+
+    const topBar = screen.getByTestId("risk-console-top-bar");
+    const toggle = screen.getByRole("button", { name: "Show case queue" });
+    const bounds = toggle.getBoundingClientRect();
+    const hitTarget = document.elementFromPoint(
+      bounds.left + bounds.width / 2,
+      bounds.top + bounds.height / 2,
+    );
+
+    expect(topBar.scrollWidth).toBeLessThanOrEqual(topBar.clientWidth);
+    expect(hitTarget === toggle || toggle.contains(hitTarget)).toBe(true);
+    await userEvent.click(toggle);
+    expect(toggleQueue).toHaveBeenCalledOnce();
   });
 
   it("opens the bulk action dialog in a real browser DOM", async () => {

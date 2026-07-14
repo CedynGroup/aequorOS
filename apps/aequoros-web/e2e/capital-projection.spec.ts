@@ -358,7 +358,7 @@ test("projects capital, compares scenarios, reviews evidence, and enforces tenan
 
   await page.getByRole("combobox", { name: "Organization" }).click();
   await page.getByRole("option", { name: "AequorOS Isolated Tenant" }).click();
-  await expect(page.getByText("Case not found.").first()).toBeVisible();
+  await expect(page.getByText("No case selected")).toBeVisible();
 });
 
 test("shows capital API errors", async ({ page }) => {

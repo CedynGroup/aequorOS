@@ -142,6 +142,10 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
           document.documentElement.clientWidth,
       ),
     ).toBe(true);
+    await captureEvidence(
+      page,
+      `scenario-assumptions-${viewport.width}x${viewport.height}`,
+    );
   }
   const downside = page.getByRole("button", { name: /^Downside / });
   await expect(downside).toBeVisible();
@@ -361,7 +365,7 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
 
   await page.getByRole("combobox", { name: "Organization" }).click();
   await page.getByRole("option", { name: "AequorOS Isolated Tenant" }).click();
-  await expect(page.getByText("Case not found.")).toBeVisible();
+  await expect(page.getByText("No case selected")).toBeVisible();
 });
 
 test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with tenant isolation", async ({
@@ -414,6 +418,10 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
   await page.getByLabel("Forecast scenario").click();
   await page.getByRole("option", { name: "Baseline" }).click();
   await page.getByRole("button", { name: "Run forecast" }).click();
+  await expect(page.getByText("Forecast completed")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Rerun current inputs" }),
+  ).toBeVisible();
   await expect(page.getByText("Projected balance sheet outputs")).toBeVisible();
   const successfulRunsResponse = await request.get(
     `${apiBaseUrl}/cases/${northstarCase.id}/calculation-runs?scenario_id=${baseline.id}`,
@@ -479,7 +487,7 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
 
   await page.getByRole("combobox", { name: "Organization" }).click();
   await page.getByRole("option", { name: "AequorOS Isolated Tenant" }).click();
-  await expect(page.getByText("Case not found.")).toBeVisible();
+  await expect(page.getByText("No case selected")).toBeVisible();
 });
 
 test("reviews liquidity metrics, evidence, finding status, and tenant isolation", async ({
@@ -559,7 +567,7 @@ test("reviews liquidity metrics, evidence, finding status, and tenant isolation"
 
   await page.getByRole("combobox", { name: "Organization" }).click();
   await page.getByRole("option", { name: "AequorOS Isolated Tenant" }).click();
-  await expect(page.getByText("Case not found.")).toBeVisible();
+  await expect(page.getByText("No case selected")).toBeVisible();
 });
 
 test("renders liquidity empty and error states", async ({ page }) => {
@@ -722,10 +730,15 @@ test("desktop and mobile viewports render the primary console without clipping t
   await page.setViewportSize({ width: 1440, height: 900 });
   await console.gotoSelectedCase();
 
-  await expect(page.getByRole("heading", { name: "Case Queue" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show case queue" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Case Queue" })).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: northstarCase.title }),
   ).toBeVisible();
+  await captureEvidence(page, "case-detail-with-queue-collapsed");
+
+  await page.getByRole("button", { name: "Show case queue" }).click();
+  await expect(page.getByRole("heading", { name: "Case Queue" })).toBeVisible();
 
   await console.expectMobileOverview();
 });

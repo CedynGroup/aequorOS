@@ -124,10 +124,10 @@ export function TopBar({
       <div className="hidden text-sm font-semibold md:block">
         Risk operations
       </div>
-      <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2">
+      <div className="ml-auto flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
         <Select
           ariaLabel="Organization"
-          className="w-44 max-w-[28vw] sm:w-60"
+          className="min-w-0 w-44 max-w-[28vw] sm:w-60"
           value={orgId}
           onValueChange={chooseTenant}
           placeholder="Organization"
@@ -140,7 +140,7 @@ export function TopBar({
         </Select>
         <Select
           ariaLabel="Current case"
-          className="w-44 max-w-[32vw] sm:w-56"
+          className="min-w-0 w-44 max-w-[32vw] sm:w-56"
           value={caseId ?? ""}
           onValueChange={chooseCase}
           placeholder="Current case"
@@ -161,9 +161,10 @@ export function TopBar({
           variant="outline"
           size="sm"
           onClick={seed}
+          aria-label="Demo seed data"
         >
           <Sparkles className="size-3.5" />
-          Demo seed data
+          <span className="hidden sm:inline">Demo seed data</span>
         </Button>
       </div>
     </div>

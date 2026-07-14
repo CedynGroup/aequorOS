@@ -77,6 +77,17 @@ export class RiskConsolePage {
     await this.page.reload();
 
     await expect(
+      this.page.getByRole("button", { name: "Show case queue" }),
+    ).toBeVisible();
+    const evidenceDir = process.env.NO_MISTAKES_EVIDENCE_DIR;
+    if (evidenceDir) {
+      await this.page.screenshot({
+        path: `${evidenceDir}/mobile-top-bar-queue-toggle-overlap.png`,
+        fullPage: true,
+      });
+    }
+    await this.page.getByRole("button", { name: "Show case queue" }).click();
+    await expect(
       this.page.getByRole("heading", { name: "Case Queue" }),
     ).toBeVisible();
     await expect(
