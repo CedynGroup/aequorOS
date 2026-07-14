@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
+import { mockCaseHealth } from "../demo-data/demo-data";
 import { FindingsTab } from "./findings-tab";
 
 const tenant: TenantHeaders = {
@@ -190,6 +191,29 @@ describe("FindingsTab", () => {
       screen.getByRole("button", { name: "Create finding" }),
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
+  });
+
+  it("renders complete demo findings without live queries", async () => {
+    const findings = vi.spyOn(riskApi, "findings");
+    const create = vi.spyOn(riskApi, "createFinding");
+    const update = vi.spyOn(riskApi, "updateFinding");
+    const demoFindings = mockCaseHealth(DEFAULT_ORG_ID, "case-1").findings;
+
+    renderWithQuery(
+      <FindingsTab
+        tenant={tenant}
+        caseId="case-1"
+        mutationDisabled
+        mutationDisabledReason="demo"
+        demoFindings={demoFindings}
+      />,
+    );
+
+    expect(await screen.findAllByText(/Demo high finding/)).not.toHaveLength(0);
+    expect(screen.getAllByRole("button", { name: "Update" })[0]).toBeDisabled();
+    expect(findings).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("renders liquidity workflow findings as read-only", async () => {

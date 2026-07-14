@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
+import { mockCaseHealth } from "../demo-data/demo-data";
 import { ScenariosTab } from "./scenarios-tab";
 
 const tenant: TenantHeaders = {
@@ -422,6 +423,32 @@ describe("ScenariosTab", () => {
         reason: "Add scenario assumption",
       });
     });
+  });
+
+  it("renders complete demo scenarios without live queries or mutations", async () => {
+    const scenarios = vi.spyOn(riskApi, "scenarios");
+    const validation = vi.mocked(riskApi.scenarioValidation);
+    const update = vi.spyOn(riskApi, "updateScenario");
+    const demoData = mockCaseHealth(tenant.orgId, caseId);
+
+    renderWithQuery(
+      <ScenariosTab tenant={tenant} caseId={caseId} demoData={demoData} />,
+    );
+
+    expect(
+      await screen.findByText("Ready for calculations"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Demo scenario · read only")).toBeInTheDocument();
+    expect(screen.getByLabelText("Scenario name")).toHaveAttribute("readonly");
+    expect(screen.queryByRole("button", { name: "Save details" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy scenario" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Archive scenario" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add assumption" })).toBeNull();
+    expect(scenarios).not.toHaveBeenCalled();
+    expect(validation).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("invalidates every tenant and case-scoped scenario variant after a mutation", async () => {

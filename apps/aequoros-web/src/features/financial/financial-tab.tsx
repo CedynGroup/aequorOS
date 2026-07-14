@@ -21,10 +21,12 @@ export function FinancialTab({
   tenant,
   caseId,
   mockWorkspace,
+  demoWorkspace,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   mockWorkspace: boolean;
+  demoWorkspace?: FinancialDataWorkspaceRead;
 }) {
   const queryClient = useQueryClient();
   const queryKey = ["financial-workspace", tenant, caseId] as const;
@@ -33,9 +35,11 @@ export function FinancialTab({
     queryFn: () => financialReviewClient.workspace(tenant, caseId),
     enabled: !mockWorkspace,
   });
-  const workspace = mockWorkspace
-    ? mockCaseHealth(tenant.orgId, caseId).financial
-    : query.data;
+  const workspace =
+    demoWorkspace ??
+    (mockWorkspace
+      ? mockCaseHealth(tenant.orgId, caseId).financial
+      : query.data);
   const workspaceIdentity = JSON.stringify([
     tenant.orgId,
     tenant.userId,

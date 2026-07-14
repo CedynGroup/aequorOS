@@ -6,9 +6,9 @@ import type {
   FindingRead,
   ScenarioWorkspaceRead,
 } from "@aequoros/risk-service-api";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 import { Skeleton } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
@@ -31,6 +31,12 @@ export function CaseHealthHeader({
   demoData?: MockCaseHealthData;
   onNavigate: (tab: ConsoleTab) => void;
 }) {
+  const queryClient = useQueryClient();
+  const runScope = `${tenant.orgId}:${tenant.userId}:${caseId}`;
+  const previousLatestRun = useRef<{
+    scope: string;
+    status: CalculationStatus | undefined;
+  }>({ scope: runScope, status: undefined });
   const financial = useQuery({
     queryKey: ["financial-workspace", tenant, caseId],
     queryFn: () => riskApi.financialWorkspace(tenant, caseId),
@@ -57,6 +63,25 @@ export function CaseHealthHeader({
     queryFn: () => riskApi.findings(tenant, caseId),
     enabled: !demoData,
   });
+  const latestRunStatus = runs.data?.runs[0]?.status;
+
+  useEffect(() => {
+    const previous = previousLatestRun.current;
+    previousLatestRun.current = { scope: runScope, status: latestRunStatus };
+    if (
+      previous.scope === runScope &&
+      previous.status &&
+      (["queued", "running"] as CalculationStatus[]).includes(
+        previous.status,
+      ) &&
+      latestRunStatus &&
+      !(["queued", "running"] as CalculationStatus[]).includes(latestRunStatus)
+    ) {
+      void queryClient.invalidateQueries({
+        queryKey: ["findings", tenant, caseId],
+      });
+    }
+  }, [caseId, latestRunStatus, queryClient, runScope, tenant]);
 
   return (
     <section
@@ -257,8 +282,7 @@ function findingState(findings: FindingRead[]) {
   if (!findings.length)
     return <HealthValue tone="muted">No findings</HealthValue>;
   const activeFindings = findings.filter(
-    (finding) =>
-      finding.status === "open" || finding.status === "needs_review",
+    (finding) => finding.status === "open" || finding.status === "needs_review",
   );
   const historicalCount = findings.length - activeFindings.length;
   if (!activeFindings.length)

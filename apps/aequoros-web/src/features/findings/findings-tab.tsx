@@ -47,11 +47,13 @@ export function FindingsTab({
   caseId,
   mutationDisabled = false,
   mutationDisabledReason = "retired-case",
+  demoFindings,
 }: {
   tenant: TenantHeaders;
   caseId: string;
   mutationDisabled?: boolean;
   mutationDisabledReason?: "demo" | "retired-case";
+  demoFindings?: FindingRead[];
 }) {
   const queryClient = useQueryClient();
   const form = useForm<FindingForm>({
@@ -66,7 +68,9 @@ export function FindingsTab({
   const query = useQuery({
     queryKey: ["findings", tenant, caseId],
     queryFn: () => riskApi.findings(tenant, caseId),
+    enabled: demoFindings === undefined,
   });
+  const findings = demoFindings ?? query.data;
   const mutation = useMutation({
     mutationFn: (values: FindingForm) =>
       riskApi.createFinding(tenant, caseId, {
@@ -124,11 +128,11 @@ export function FindingsTab({
         </Button>
       </form>
       <DataList
-        loading={query.isLoading}
-        error={query.error}
+        loading={demoFindings === undefined && query.isLoading}
+        error={demoFindings === undefined ? query.error : null}
         empty="No findings"
       >
-        {query.data?.map((finding) => (
+        {findings?.map((finding) => (
           <FindingReviewItem
             key={finding.id}
             finding={finding}

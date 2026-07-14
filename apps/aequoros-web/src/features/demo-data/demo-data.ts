@@ -1,5 +1,6 @@
 import {
   type CaseDecision,
+  type CalculationRunRead,
   type CalculationRunListRead,
   type CalculationRunSummaryRead,
   type CaseQueueItemRead,
@@ -13,6 +14,7 @@ import {
   RiskLevel,
   type RiskLevel as RiskLevelType,
   type ScenarioRead,
+  type ScenarioValidationRead,
   type ScenarioWorkspaceRead,
 } from "@aequoros/risk-service-api";
 
@@ -27,10 +29,12 @@ export const DEMO_CASE_IDS = [
 ] as const;
 
 export type MockCaseHealthData = {
+  calculationRun: CalculationRunRead;
   financial: FinancialDataWorkspaceRead;
   findings: FindingRead[];
   runs: CalculationRunListRead;
   scenarios: ScenarioWorkspaceRead;
+  scenarioValidations: Record<string, ScenarioValidationRead>;
 };
 
 export function emptyWorkspace(
@@ -67,7 +71,12 @@ export function mockCaseHealth(
     caseData.riskLevel === RiskLevel.High ||
     caseData.riskLevel === RiskLevel.Critical;
   const timestamp = new Date("2026-07-01T12:00:00Z");
+  const reportingDate = new Date("2026-06-30T00:00:00Z");
   const scenarioId = `${caseId}-baseline`;
+  const institutionId = `${caseId}-institution`;
+  const accountId = `${caseId}-operating-account`;
+  const reportingPeriodId = `${caseId}-reporting-period`;
+  const obligationId = `${caseId}-revolver`;
   const scenarioCategories = [
     "growth",
     "expenses",
@@ -124,6 +133,41 @@ export function mockCaseHealth(
     error: null,
     createdAt: timestamp,
   };
+  const calculationRun: CalculationRunRead = {
+    ...run,
+    organizationId,
+    caseId,
+    inputSchemaVersion: "calculation-input-v1",
+    outputSchemaVersion: "balance-sheet-output-v1",
+    inputs: {
+      reportingPeriodId,
+      balanceIds: [
+        `${caseId}-cash-balance`,
+        `${caseId}-equipment-balance`,
+        `${caseId}-payable-balance`,
+      ],
+      cashFlowIds: [`${caseId}-inflow`, `${caseId}-outflow`],
+      obligationIds: [obligationId],
+      scenarioId,
+    },
+    outputs: [1, 2, 3].map((periodNumber) => ({
+      id: `${run.id}-period-${periodNumber}`,
+      periodNumber,
+      periodEnd: new Date(`${2026 + periodNumber}-06-30T00:00:00Z`),
+      currency: "USD",
+      totalAssets: String(4_550_000 + periodNumber * 150_000),
+      totalLiabilities: String(1_000_000 - periodNumber * 100_000),
+      totalEquity: String(3_550_000 + periodNumber * 250_000),
+      cash: String(550_000 + periodNumber * 150_000),
+      projectedInflows: "1000000",
+      projectedOutflows: "850000",
+      creditDraw: "0",
+      debtRepayment: "100000",
+      components: { mocked: true },
+    })),
+    createdBy: DEFAULT_USER_ID,
+    updatedAt: timestamp,
+  };
   const findingSeverities = Array.from(
     { length: queueItem.openFindingsCount },
     (_, index) =>
@@ -163,7 +207,7 @@ export function mockCaseHealth(
       ...emptyWorkspace(organizationId, caseId),
       institutions: [
         {
-          id: `${caseId}-institution`,
+          id: institutionId,
           organizationId,
           caseId,
           name: caseData.subjectName ?? "Demo institution",
@@ -174,13 +218,102 @@ export function mockCaseHealth(
           updatedAt: timestamp,
         },
       ],
+      accounts: [
+        {
+          id: accountId,
+          organizationId,
+          caseId,
+          institutionId,
+          accountName: "Primary operating account",
+          accountNumber: "DEMO-1001",
+          accountType: "operating",
+          currency: "USD",
+          status: "active",
+          metadata: { mocked: true },
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+      ],
+      reportingPeriods: [
+        {
+          id: reportingPeriodId,
+          organizationId,
+          caseId,
+          periodType: "annual",
+          label: "FY 2026",
+          startDate: new Date("2025-07-01T00:00:00Z"),
+          endDate: reportingDate,
+          asOfDate: reportingDate,
+          metadata: { mocked: true },
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+      ],
+      balances: [
+        ["cash", "1000000", `${caseId}-cash-balance`, accountId],
+        ["equipment", "4000000", `${caseId}-equipment-balance`, null],
+        ["payable", "500000", `${caseId}-payable-balance`, null],
+      ].map(([balanceType, amount, id, linkedAccountId]) => ({
+        id: id as string,
+        organizationId,
+        caseId,
+        reportingPeriodId,
+        accountId: linkedAccountId as string | null,
+        balanceType: balanceType as string,
+        amount: amount as string,
+        currency: "USD",
+        asOfDate: reportingDate,
+        metadata: { mocked: true },
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })),
+      cashFlows: [
+        ["inflow", "1000000", `${caseId}-inflow`],
+        ["outflow", "850000", `${caseId}-outflow`],
+      ].map(([direction, amount, id]) => ({
+        id,
+        organizationId,
+        caseId,
+        reportingPeriodId,
+        accountId,
+        direction,
+        category: "operations",
+        amount,
+        currency: "USD",
+        cashFlowDate: reportingDate,
+        metadata: { mocked: true },
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })),
+      obligations: [
+        {
+          id: obligationId,
+          organizationId,
+          caseId,
+          institutionId,
+          accountId,
+          reportingPeriodId,
+          obligationType: "revolver",
+          facilityType: "working_capital",
+          principalAmount: "2000000",
+          outstandingAmount: "1000000",
+          currency: "USD",
+          interestRate: "0.075",
+          startDate: new Date("2025-07-01T00:00:00Z"),
+          maturityDate: new Date("2028-06-30T00:00:00Z"),
+          status: "active",
+          details: { mocked: true },
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+      ],
       covenants: [
         {
           id: `${caseId}-covenant`,
           organizationId,
           caseId,
-          obligationId: null,
-          reportingPeriodId: null,
+          obligationId,
+          reportingPeriodId,
           name: "Minimum debt service coverage",
           metric: "debt_service_coverage_ratio",
           operator: "gte",
@@ -206,6 +339,18 @@ export function mockCaseHealth(
         incompleteScenarioIds: [],
       },
     },
+    scenarioValidations: Object.fromEntries(
+      scenarios.map((scenario) => [
+        scenario.id,
+        {
+          scenarioId: scenario.id,
+          complete: true,
+          issueCount: 0,
+          issues: [],
+        },
+      ]),
+    ),
+    calculationRun,
     runs: {
       caseId,
       runs: [run],

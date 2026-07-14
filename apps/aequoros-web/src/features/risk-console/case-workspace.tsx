@@ -1,6 +1,13 @@
 import type { CaseRead } from "@aequoros/risk-service-api";
 import { Loader2 } from "lucide-react";
-import { lazy, Suspense, type ReactNode, useEffect, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import {
@@ -99,8 +106,16 @@ export function CaseWorkspace({
   const caseRetired = Boolean(
     selectedCase?.archivedAt || selectedCase?.status === "archived",
   );
-  const [pendingHealthTab, setPendingHealthTab] =
-    useState<ConsoleTab | null>(null);
+  const [pendingHealthTab, setPendingHealthTab] = useState<ConsoleTab | null>(
+    null,
+  );
+  const demoData = useMemo(
+    () =>
+      mockWorkspace && caseId
+        ? mockCaseHealth(tenant.orgId, caseId)
+        : undefined,
+    [caseId, mockWorkspace, tenant.orgId],
+  );
 
   useEffect(() => {
     if (pendingHealthTab !== activeTab) return;
@@ -137,9 +152,7 @@ export function CaseWorkspace({
             tenant={tenant}
             caseId={caseId}
             decision={selectedCase?.decision}
-            demoData={
-              mockWorkspace ? mockCaseHealth(tenant.orgId, caseId) : undefined
-            }
+            demoData={demoData}
             onNavigate={(tab) => {
               setPendingHealthTab(tab);
               updateSearch({ tab });
@@ -188,6 +201,7 @@ export function CaseWorkspace({
                   tenant={tenant}
                   caseId={caseId}
                   mockWorkspace={mockWorkspace}
+                  demoWorkspace={demoData?.financial}
                 />
               </LazyTabBoundary>
             </TabsContent>
@@ -202,6 +216,7 @@ export function CaseWorkspace({
                   tenant={tenant}
                   caseId={caseId}
                   mutationDisabled={mockWorkspace || caseRetired}
+                  demoData={demoData}
                 />
               </LazyTabBoundary>
             </TabsContent>
@@ -217,6 +232,7 @@ export function CaseWorkspace({
                   caseId={caseId}
                   mutationDisabled={mockWorkspace || caseRetired}
                   mutationDisabledReason={caseRetired ? "retired-case" : "demo"}
+                  demoData={demoData}
                 />
               </LazyTabBoundary>
             </TabsContent>
@@ -262,6 +278,7 @@ export function CaseWorkspace({
                   caseId={caseId}
                   mutationDisabled={mockWorkspace || caseRetired}
                   mutationDisabledReason={caseRetired ? "retired-case" : "demo"}
+                  demoFindings={demoData?.findings}
                 />
               </LazyTabBoundary>
             </TabsContent>
