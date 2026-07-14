@@ -18,6 +18,8 @@ import { riskApi } from "../../lib/api";
 import type { ConsoleTab, ReportMode } from "../../lib/constants";
 import { formatJson, labelize } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
+import { focusWorkspaceTarget } from "../../lib/workspace-deep-link";
+import { CaseHealthHeader } from "./case-health-header";
 import { DecisionBadge, RiskBadge, StatusBadge, relative } from "./format";
 import type { UpdateSearch } from "./types";
 import type { MockCaseRead } from "../demo-data/demo-data";
@@ -121,6 +123,17 @@ export function CaseWorkspace({
       ) : (
         <>
           <CaseSummary data={selectedCase} />
+          <CaseHealthHeader
+            tenant={tenant}
+            caseId={caseId}
+            decision={selectedCase?.decision}
+            onNavigate={(tab) => {
+              updateSearch({ tab });
+              requestAnimationFrame(() =>
+                focusWorkspaceTarget(`case-health-target-${tab}`),
+              );
+            }}
+          />
           <Tabs
             value={activeTab}
             onValueChange={(tab) => updateSearch({ tab: tab as ConsoleTab })}
@@ -139,7 +152,12 @@ export function CaseWorkspace({
                 <TabsTrigger value="report">Report</TabsTrigger>
               </TabsList>
             </div>
-            <TabsContent value="overview" className="m-0 p-3">
+            <TabsContent
+              id="case-health-target-overview"
+              tabIndex={-1}
+              value="overview"
+              className="m-0 p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))]"
+            >
               <OverviewTab
                 tenant={tenant}
                 caseId={caseId}
@@ -148,7 +166,12 @@ export function CaseWorkspace({
                 scoreRunReference={mockCaseData?.scoreRunReference}
               />
             </TabsContent>
-            <TabsContent value="financial" className="m-0 p-3">
+            <TabsContent
+              id="case-health-target-financial"
+              tabIndex={-1}
+              value="financial"
+              className="m-0 p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))]"
+            >
               <LazyTabBoundary>
                 <FinancialTab
                   tenant={tenant}
@@ -157,7 +180,12 @@ export function CaseWorkspace({
                 />
               </LazyTabBoundary>
             </TabsContent>
-            <TabsContent value="scenarios" className="m-0 p-3">
+            <TabsContent
+              id="case-health-target-scenarios"
+              tabIndex={-1}
+              value="scenarios"
+              className="m-0 p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))]"
+            >
               <LazyTabBoundary>
                 <ScenariosTab
                   tenant={tenant}
@@ -166,7 +194,12 @@ export function CaseWorkspace({
                 />
               </LazyTabBoundary>
             </TabsContent>
-            <TabsContent value="calculations" className="m-0 p-3">
+            <TabsContent
+              id="case-health-target-calculations"
+              tabIndex={-1}
+              value="calculations"
+              className="m-0 p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))]"
+            >
               <LazyTabBoundary>
                 <CalculationsTab
                   tenant={tenant}
@@ -176,7 +209,12 @@ export function CaseWorkspace({
                 />
               </LazyTabBoundary>
             </TabsContent>
-            <TabsContent value="capital" className="m-0 p-3">
+            <TabsContent
+              id="case-health-target-capital"
+              tabIndex={-1}
+              value="capital"
+              className="m-0 p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))]"
+            >
               <LazyTabBoundary>
                 <CapitalTab
                   tenant={tenant}
@@ -186,7 +224,12 @@ export function CaseWorkspace({
                 />
               </LazyTabBoundary>
             </TabsContent>
-            <TabsContent value="liquidity" className="m-0 p-3">
+            <TabsContent
+              id="case-health-target-liquidity"
+              tabIndex={-1}
+              value="liquidity"
+              className="m-0 p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))]"
+            >
               <LazyTabBoundary>
                 <LiquidityTab
                   tenant={tenant}
@@ -196,7 +239,12 @@ export function CaseWorkspace({
                 />
               </LazyTabBoundary>
             </TabsContent>
-            <TabsContent value="findings" className="m-0 p-3">
+            <TabsContent
+              id="case-health-target-findings"
+              tabIndex={-1}
+              value="findings"
+              className="m-0 p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))]"
+            >
               <LazyTabBoundary>
                 <FindingsTab
                   tenant={tenant}
@@ -206,7 +254,12 @@ export function CaseWorkspace({
                 />
               </LazyTabBoundary>
             </TabsContent>
-            <TabsContent value="decisions" className="m-0 p-3">
+            <TabsContent
+              id="case-health-target-decisions"
+              tabIndex={-1}
+              value="decisions"
+              className="m-0 p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))]"
+            >
               <LazyTabBoundary>
                 <DecisionsTab
                   tenant={tenant}
@@ -215,7 +268,12 @@ export function CaseWorkspace({
                 />
               </LazyTabBoundary>
             </TabsContent>
-            <TabsContent value="documents" className="m-0 p-3">
+            <TabsContent
+              id="case-health-target-documents"
+              tabIndex={-1}
+              value="documents"
+              className="m-0 p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))]"
+            >
               <LazyTabBoundary>
                 <DocumentsTab
                   tenant={tenant}
@@ -224,7 +282,12 @@ export function CaseWorkspace({
                 />
               </LazyTabBoundary>
             </TabsContent>
-            <TabsContent value="report" className="m-0 p-3">
+            <TabsContent
+              id="case-health-target-report"
+              tabIndex={-1}
+              value="report"
+              className="m-0 p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))]"
+            >
               <LazyTabBoundary>
                 <ReportTab
                   tenant={tenant}

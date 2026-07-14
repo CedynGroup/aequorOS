@@ -101,6 +101,44 @@ test("renders financial workspace and findings for the selected case", async ({
   ).toBeVisible();
 });
 
+test("summarizes the seeded breaching case without optimistic defaults", async ({
+  page,
+  request,
+}) => {
+  const breachingCaseId = "90000000-0000-4000-8000-000000000002";
+  const tenantHeaders = {
+    "X-Org-Id": demoTenant.orgId,
+    "X-User-Id": demoTenant.userId,
+  };
+  const findingsResponse = await request.get(
+    `${apiBaseUrl}/cases/${breachingCaseId}/findings`,
+    { headers: tenantHeaders },
+  );
+  test.skip(
+    !findingsResponse.ok(),
+    "The deterministic AEQ-23 narrative portfolio is not seeded.",
+  );
+  const findings = (await findingsResponse.json()) as Array<{
+    severity: string;
+  }>;
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const finding of findings) {
+    if (finding.severity in counts)
+      counts[finding.severity as keyof typeof counts] += 1;
+  }
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/cases/${breachingCaseId}?tab=overview`);
+
+  const health = page.getByTestId("case-health-header");
+  await expect(
+    health.getByLabel(
+      `${counts.critical} critical, ${counts.high} high, ${counts.medium} medium, ${counts.low} low`,
+    ),
+  ).toBeVisible();
+  await expect(health.getByText("Non-compliant")).toBeVisible();
+});
+
 test("initializes, edits, reviews, copies, archives, and tenant-isolates scenarios", async ({
   page,
   request,
@@ -746,7 +784,7 @@ test("desktop and mobile viewports render the primary console without clipping t
 }) => {
   const console = new RiskConsolePage(page);
 
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1280, height: 800 });
   await console.gotoSelectedCase();
 
   await expect(
@@ -762,6 +800,11 @@ test("desktop and mobile viewports render the primary console without clipping t
 
   await page.getByRole("button", { name: "Show case queue" }).click();
   await expect(page.getByRole("heading", { name: "Case Queue" })).toBeVisible();
+  const health = page.getByTestId("case-health-header");
+  await expect(health).toBeVisible();
+  expect(
+    await health.evaluate((strip) => strip.scrollWidth <= strip.clientWidth),
+  ).toBe(true);
 
   await console.expectMobileOverview();
 });
