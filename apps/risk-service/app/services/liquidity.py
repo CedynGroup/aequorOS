@@ -46,9 +46,7 @@ RISK_TYPE = LIQUIDITY_RISK_TYPE
 NEGATIVE_CASH_RULE_ID = "liquidity.negative_cash"
 SOURCES_COVERAGE_RULE_ID = "liquidity.sources_coverage"
 CREDIT_RELIANCE_RULE_ID = "liquidity.credit_reliance"
-RULE_IDS = frozenset(
-    (NEGATIVE_CASH_RULE_ID, SOURCES_COVERAGE_RULE_ID, CREDIT_RELIANCE_RULE_ID)
-)
+RULE_IDS = frozenset((NEGATIVE_CASH_RULE_ID, SOURCES_COVERAGE_RULE_ID, CREDIT_RELIANCE_RULE_ID))
 MONEY = Decimal("0.0001")
 RATIO = Decimal("0.0001")
 type EvidenceSourceType = Literal["forecast_output", "canonical_input", "scenario_assumption"]
@@ -106,9 +104,7 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
     total_draw = sum((item.credit_draw for item in ordered), Decimal(0))
     credit_reliance = None if invalid_uses else _ratio(total_draw, total_uses)
     credit_reliance_diagnostic = (
-        _undefined_uses_diagnostic("Credit reliance", invalid_uses)
-        if invalid_uses
-        else None
+        _undefined_uses_diagnostic("Credit reliance", invalid_uses) if invalid_uses else None
     )
     credit_reliance_periods = [
         item
@@ -752,10 +748,7 @@ def _source_label(source_type: str, record: dict[str, Any]) -> str:
     if source_type == "scenario_assumption":
         return f"Scenario assumption: {record.get('key', record['id'])}"
     label = (
-        record.get("label")
-        or record.get("balance_type")
-        or record.get("category")
-        or record["id"]
+        record.get("label") or record.get("balance_type") or record.get("category") or record["id"]
     )
     return f"Canonical record: {label}"
 

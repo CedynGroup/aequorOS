@@ -100,9 +100,7 @@ def test_mixed_non_positive_uses_make_credit_reliance_unavailable(outflows: str)
     assert metric.availability == "unavailable"
     assert metric.diagnostic is not None
     assert f"period 2 uses {Decimal(outflows):.4f}" in metric.diagnostic
-    assert all(
-        concern["rule_id"] != "liquidity.credit_reliance" for concern in result.concerns
-    )
+    assert all(concern["rule_id"] != "liquidity.credit_reliance" for concern in result.concerns)
 
 
 def test_peak_gap_metric_and_evidence_use_the_largest_shortfall_period() -> None:
