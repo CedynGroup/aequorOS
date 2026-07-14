@@ -51,23 +51,35 @@ describe("FindingsTab", () => {
 
     renderWithQuery(<FindingsTab tenant={tenant} caseId="case-1" />);
 
-    expect(await screen.findByText("Create manual finding")).toBeInTheDocument();
-    expect(await screen.findByText("Cash conversion cycle widened")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Create manual finding"),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Cash conversion cycle widened"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Update" })).toBeInTheDocument();
   });
 
   it("submits manual finding payloads", async () => {
     const user = userEvent.setup();
     vi.spyOn(riskApi, "findings").mockResolvedValue([]);
-    const createFinding = vi.spyOn(riskApi, "createFinding").mockResolvedValue(finding({
-      title: "Missing management commentary",
-      summary: "Reviewer needs current quarter commentary.",
-    }));
+    const createFinding = vi.spyOn(riskApi, "createFinding").mockResolvedValue(
+      finding({
+        title: "Missing management commentary",
+        summary: "Reviewer needs current quarter commentary.",
+      }),
+    );
 
     renderWithQuery(<FindingsTab tenant={tenant} caseId="case-1" />);
 
-    await user.type(await screen.findByPlaceholderText("Title"), "Missing management commentary");
-    await user.type(screen.getByPlaceholderText("Summary"), "Reviewer needs current quarter commentary.");
+    await user.type(
+      await screen.findByPlaceholderText("Title"),
+      "Missing management commentary",
+    );
+    await user.type(
+      screen.getByPlaceholderText("Summary"),
+      "Reviewer needs current quarter commentary.",
+    );
     await user.click(screen.getByRole("button", { name: "Create finding" }));
 
     await waitFor(() => {
@@ -84,7 +96,9 @@ describe("FindingsTab", () => {
   it("submits finding status updates", async () => {
     const user = userEvent.setup();
     vi.spyOn(riskApi, "findings").mockResolvedValue([finding()]);
-    const updateFinding = vi.spyOn(riskApi, "updateFinding").mockResolvedValue(finding());
+    const updateFinding = vi
+      .spyOn(riskApi, "updateFinding")
+      .mockResolvedValue(finding());
 
     renderWithQuery(<FindingsTab tenant={tenant} caseId="case-1" />);
 
@@ -137,12 +151,16 @@ describe("FindingsTab", () => {
       <FindingsTab tenant={tenant} caseId="case-1" mutationDisabled />,
     );
 
-    expect(await screen.findByText("Cash conversion cycle widened")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Cash conversion cycle widened"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Finding mutations are unavailable for retired cases."),
     ).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Title")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Create finding" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Create finding" }),
+    ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
     expect(createFinding).not.toHaveBeenCalled();
     expect(updateFinding).not.toHaveBeenCalled();
@@ -161,10 +179,16 @@ describe("FindingsTab", () => {
     );
 
     expect(
-      await screen.findByText("Finding mutations are unavailable in demo mode."),
+      await screen.findByText(
+        "Finding mutations are unavailable in demo mode.",
+      ),
     ).toBeInTheDocument();
-    expect(await screen.findByText("Cash conversion cycle widened")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create finding" })).toBeDisabled();
+    expect(
+      await screen.findByText("Cash conversion cycle widened"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create finding" }),
+    ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
   });
 });

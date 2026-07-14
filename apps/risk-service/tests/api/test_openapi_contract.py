@@ -279,9 +279,7 @@ def test_calculation_contracts_include_lifecycle_errors_versions_and_outputs(
         "limit",
         "offset",
         "has_more",
-    } <= set(
-        components["CalculationRunListRead"]["required"]
-    )
+    } <= set(components["CalculationRunListRead"]["required"])
     assert {"inputs", "outputs"}.isdisjoint(components["CalculationRunSummaryRead"]["properties"])
     assert {
         "status",

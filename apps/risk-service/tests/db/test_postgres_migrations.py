@@ -607,16 +607,12 @@ def test_postgres_capital_rls_isolates_tenant_rows(
                 },
             )
 
-            visible_to_org_one = connection.scalar(
-                text("SELECT count(*) FROM capital_projections")
-            )
+            visible_to_org_one = connection.scalar(text("SELECT count(*) FROM capital_projections"))
             connection.execute(
                 text("SELECT set_config('app.organization_id', :organization_id, true)"),
                 {"organization_id": str(ORG_2)},
             )
-            visible_to_org_two = connection.scalar(
-                text("SELECT count(*) FROM capital_projections")
-            )
+            visible_to_org_two = connection.scalar(text("SELECT count(*) FROM capital_projections"))
 
         assert visible_to_org_one == 1
         assert visible_to_org_two == 0

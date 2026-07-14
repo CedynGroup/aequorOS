@@ -489,10 +489,7 @@ function ScenarioComparison({
                 </span>
                 <span>Downside delta</span>
                 <span className="text-right font-mono">
-                  {formatMoney(
-                    period.equityDelta,
-                    baseline.reportingCurrency,
-                  )}
+                  {formatMoney(period.equityDelta, baseline.reportingCurrency)}
                 </span>
                 <span>Ratio delta</span>
                 <span className="text-right">

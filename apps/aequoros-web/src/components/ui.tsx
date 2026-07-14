@@ -134,9 +134,15 @@ export function PanelHeader({
     <div className="flex min-h-11 items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
       <div className="min-w-0">
         <h2 className="truncate text-sm font-semibold">{title}</h2>
-        {meta ? <div className="mt-0.5 text-xs text-[rgb(var(--muted-foreground))]">{meta}</div> : null}
+        {meta ? (
+          <div className="mt-0.5 text-xs text-[rgb(var(--muted-foreground))]">
+            {meta}
+          </div>
+        ) : null}
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+      ) : null}
     </div>
   );
 }
@@ -161,13 +167,19 @@ export function Alert({
       )}
     >
       <div className="font-medium">{title}</div>
-      {children ? <div className="mt-1 text-xs opacity-80">{children}</div> : null}
+      {children ? (
+        <div className="mt-1 text-xs opacity-80">{children}</div>
+      ) : null}
     </div>
   );
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded bg-[rgb(var(--muted))]", className)} />;
+  return (
+    <div
+      className={cn("animate-pulse rounded bg-[rgb(var(--muted))]", className)}
+    />
+  );
 }
 
 export const Tabs = TabsPrimitive.Root;
@@ -314,7 +326,9 @@ export function DialogContent({
       <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/30" />
       <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] p-0 shadow-xl">
         <div className="flex h-12 items-center justify-between border-b border-[rgb(var(--border))] px-4">
-          <DialogPrimitive.Title className="text-sm font-semibold">{title}</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="text-sm font-semibold">
+            {title}
+          </DialogPrimitive.Title>
           {description ? (
             <DialogPrimitive.Description className="sr-only">
               {description}
@@ -347,7 +361,10 @@ export function Tooltip({
       <TooltipPrimitive.Root>
         <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
         <TooltipPrimitive.Portal>
-          <TooltipPrimitive.Content className="z-50 rounded bg-slate-950 px-2 py-1 text-xs text-white" sideOffset={6}>
+          <TooltipPrimitive.Content
+            className="z-50 rounded bg-slate-950 px-2 py-1 text-xs text-white"
+            sideOffset={6}
+          >
             {label}
           </TooltipPrimitive.Content>
         </TooltipPrimitive.Portal>
