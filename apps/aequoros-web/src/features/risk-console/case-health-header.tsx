@@ -220,24 +220,28 @@ function HealthValue({
 function validationState(workspace: FinancialDataWorkspaceRead) {
   if (!hasCanonicalFinancialData(workspace))
     return <HealthValue tone="muted">No financial data</HealthValue>;
-  const { error, warning, info, total } = workspace.validationSummary;
-  if ([error, warning, info, total].every((value) => value === undefined))
-    return <HealthValue tone="muted">Unknown</HealthValue>;
-  if ((error ?? 0) > 0)
+  const summary = { error: 0, warning: 0, info: 0 };
+  for (const issue of workspace.validationIssues) {
+    if (issue.status !== "open") continue;
+    if (issue.severity === "error") summary.error += 1;
+    if (issue.severity === "warning") summary.warning += 1;
+    if (issue.severity === "info") summary.info += 1;
+  }
+  if (summary.error > 0)
     return (
       <HealthValue tone="danger">
-        <span className="tabular-nums">{error}</span> errors
+        <span className="tabular-nums">{summary.error}</span> errors
       </HealthValue>
     );
-  if ((warning ?? 0) > 0)
+  if (summary.warning > 0)
     return (
       <HealthValue tone="warning">
-        <span className="tabular-nums">{warning}</span> warnings
+        <span className="tabular-nums">{summary.warning}</span> warnings
       </HealthValue>
     );
   return (
     <HealthValue tone="success">
-      Validated{(info ?? 0) > 0 ? ` · ${info} info` : ""}
+      Validated{summary.info > 0 ? ` · ${summary.info} info` : ""}
     </HealthValue>
   );
 }
