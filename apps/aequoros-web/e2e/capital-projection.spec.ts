@@ -354,6 +354,9 @@ test("projects capital, compares scenarios, reviews evidence, and enforces tenan
   await expect(page.getByText("Evidence", { exact: true })).toBeVisible();
   await expect(page.getByText("Downside delta")).toBeVisible();
   await expect(page.getByText("-$25.00")).toBeVisible();
+  await expect(
+    page.locator('svg[aria-label="Baseline versus downside capital chart"]'),
+  ).toBeVisible();
   await captureEvidence(page, "capital-projection-success.png");
 
   await page.getByRole("combobox", { name: "Organization" }).click();

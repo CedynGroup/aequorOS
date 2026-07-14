@@ -8,7 +8,7 @@ import type {
 } from "@aequoros/risk-service-api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -26,7 +26,15 @@ import { riskApi, type TenantHeaders } from "../../lib/api";
 import { formatPercent } from "../../lib/money";
 import { formatJson, formatMoney, labelize } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
+import { capitalComparisonToSeries } from "../charts/analysis-chart-adapters";
+import { ChartBoundary } from "../charts/chart-shell";
 import { FindingReviewItem } from "../findings/findings-tab";
+
+const CapitalComparisonChart = lazy(() =>
+  import("../charts/analysis-charts").then((module) => ({
+    default: module.CapitalComparisonChart,
+  })),
+);
 
 type Projection = CapitalProjectionRead;
 
@@ -434,6 +442,13 @@ function ScenarioComparison({
         title="Baseline vs downside"
         meta="Latest successful projections"
       />
+      <div className="px-3 pt-1">
+        <ChartBoundary title="Capital comparison">
+          <CapitalComparisonChart
+            series={capitalComparisonToSeries(comparison)}
+          />
+        </ChartBoundary>
+      </div>
       {error ? (
         <div className="p-3">
           <ErrorPanel error={error} />

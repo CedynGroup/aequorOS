@@ -1,4 +1,5 @@
 import type {
+  CalculationRunRead,
   LiquidityFindingRead,
   LiquidityMetricRead,
   LiquidityReviewAction,
@@ -6,7 +7,7 @@ import type {
 } from "@aequoros/risk-service-api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { lazy, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -25,7 +26,15 @@ import { riskApi, type TenantHeaders } from "../../lib/api";
 import { formatDecimal, formatMoney, formatPercent } from "../../lib/money";
 import { ErrorPanel } from "../../shared/route-ui";
 import { FindingReviewCard } from "../findings/finding-review-card";
+import { liquidityCoverageToSeries } from "../charts/analysis-chart-adapters";
+import { ChartBoundary } from "../charts/chart-shell";
 import { liquidityReviewClient } from "./liquidity-client";
+
+const LiquidityCoverageChart = lazy(() =>
+  import("../charts/analysis-charts").then((module) => ({
+    default: module.LiquidityCoverageChart,
+  })),
+);
 
 export function LiquidityTab({
   tenant,
@@ -193,6 +202,7 @@ export function LiquidityTab({
       scenarioArchived={Boolean(selectedScenario.archivedAt)}
       mutationDisabled={mutationDisabled}
       mutationDisabledReason={mutationDisabledReason}
+      run={selectedRun.data}
       summary={query.data}
     />
   );
@@ -304,6 +314,7 @@ function LiquidityAnalysis({
   scenarioArchived,
   mutationDisabled,
   mutationDisabledReason,
+  run,
   summary,
 }: {
   tenant: TenantHeaders;
@@ -312,6 +323,7 @@ function LiquidityAnalysis({
   scenarioArchived: boolean;
   mutationDisabled: boolean;
   mutationDisabledReason: "demo" | "retired-case";
+  run: CalculationRunRead;
   summary: LiquiditySummaryRead;
 }) {
   return (
@@ -331,6 +343,11 @@ function LiquidityAnalysis({
           {summary.findings.length} findings
         </span>
       </header>
+      <ChartBoundary title="Liquidity coverage">
+        <LiquidityCoverageChart
+          series={liquidityCoverageToSeries(run, summary)}
+        />
+      </ChartBoundary>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         {summary.metrics.map((metric) => (
           <MetricCard key={metric.key} metric={metric} />

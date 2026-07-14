@@ -423,6 +423,9 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
     page.getByRole("button", { name: "Rerun current inputs" }),
   ).toBeVisible();
   await expect(page.getByText("Projected balance sheet outputs")).toBeVisible();
+  await expect(
+    page.locator('svg[aria-label="Balance-sheet trajectory chart"]'),
+  ).toBeVisible();
   const successfulRunsResponse = await request.get(
     `${apiBaseUrl}/cases/${northstarCase.id}/calculation-runs?scenario_id=${baseline.id}`,
     { headers: tenantHeaders },
@@ -548,6 +551,9 @@ test("reviews liquidity metrics, evidence, finding status, and tenant isolation"
     page.getByText(/Baseline · deterministic forecast/),
   ).toBeVisible();
   await expect(page.getByText("Minimum cash balance")).toBeVisible();
+  await expect(
+    page.locator('svg[aria-label="Liquidity sources coverage chart"]'),
+  ).toBeVisible();
   await expect(page.getByText(/Supporting evidence \(/).first()).toBeVisible();
   await page
     .getByText(/Supporting evidence \(/)

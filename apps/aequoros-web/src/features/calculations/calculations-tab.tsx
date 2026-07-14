@@ -6,7 +6,7 @@ import type {
 } from "@aequoros/risk-service-api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { lazy, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -28,6 +28,14 @@ import {
   workspaceHash,
 } from "../../lib/workspace-deep-link";
 import { ErrorPanel } from "../../shared/route-ui";
+import { forecastRunToSeries } from "../charts/analysis-chart-adapters";
+import { ChartBoundary } from "../charts/chart-shell";
+
+const ForecastTrajectoryChart = lazy(() =>
+  import("../charts/analysis-charts").then((module) => ({
+    default: module.ForecastTrajectoryChart,
+  })),
+);
 
 const runTone: Record<
   CalculationStatus,
@@ -496,6 +504,11 @@ function RunOutput({
               </Alert>
             ) : null}
           </>
+        ) : null}
+        {run.status === "succeeded" ? (
+          <ChartBoundary title="Forecast trajectory">
+            <ForecastTrajectoryChart series={forecastRunToSeries(run)} />
+          </ChartBoundary>
         ) : null}
         {run.status === "succeeded" && run.outputs.length ? (
           <ForecastTable runId={run.id} rows={run.outputs} />

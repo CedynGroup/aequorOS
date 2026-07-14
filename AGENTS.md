@@ -50,3 +50,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 risk-service:reset-demo`. The Core-insert reset is idempotent, deletes only the known demo
   tenant, and pre-populates forecast, liquidity, capital, finding, decision, and report inputs in
   explicit dependency order. The presenter journey is documented in `docs/demo-playbook.md`.
+- Risk-console analysis charts use lazy-loaded Recharts components under
+  `apps/aequoros-web/src/features/charts`. Keep generated DTO-to-series domain logic in pure
+  adapters, preserve original decimal strings for labels, represent unavailable values as
+  annotated gaps, and retain the authoritative tables alongside every chart.
