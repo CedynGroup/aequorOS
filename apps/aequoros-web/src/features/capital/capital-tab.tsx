@@ -43,6 +43,12 @@ export function CapitalTab({
 }) {
   const queryClient = useQueryClient();
   const [runId, setRunId] = useState("");
+  const [failedProjection, setFailedProjection] =
+    useState<CapitalProjectionRead | null>(null);
+  const scenarios = useQuery({
+    queryKey: ["scenarios", tenant, caseId, "capital"],
+    queryFn: () => riskApi.scenarios(tenant, caseId, true),
+  });
   const runs = useQuery({
     queryKey: ["calculation-runs", tenant, caseId, "capital"],
     queryFn: () => riskApi.calculationRuns(tenant, caseId, undefined, 100, 0),
@@ -59,6 +65,18 @@ export function CapitalTab({
     () => runs.data?.runs.filter((run) => run.status === "succeeded") ?? [],
     [runs.data],
   );
+  const scenariosById = useMemo(
+    () =>
+      new Map(
+        scenarios.data?.scenarios.map((scenario) => [scenario.id, scenario]) ??
+          [],
+      ),
+    [scenarios.data],
+  );
+
+  useEffect(() => {
+    setFailedProjection(null);
+  }, [caseId, tenant.orgId]);
 
   useEffect(() => {
     setRunId((current) =>
@@ -74,6 +92,7 @@ export function CapitalTab({
         calculationRunId: runId,
       }),
     onSuccess: async (projection) => {
+      setFailedProjection(projection.status === "failed" ? projection : null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["capital-summary"] }),
         queryClient.invalidateQueries({ queryKey: ["capital-comparison"] }),
@@ -87,14 +106,22 @@ export function CapitalTab({
     },
   });
 
-  if (runs.isLoading || summary.isLoading || comparison.isLoading) {
+  if (
+    scenarios.isLoading ||
+    runs.isLoading ||
+    summary.isLoading ||
+    comparison.isLoading
+  ) {
     return <Skeleton className="h-96" />;
   }
+  if (scenarios.isError) return <ErrorPanel error={scenarios.error} />;
   if (runs.isError) return <ErrorPanel error={runs.error} />;
   if (summary.isError) return <ErrorPanel error={summary.error} />;
   if (comparison.isError) return <ErrorPanel error={comparison.error} />;
 
-  const projection = summary.data?.projection as Projection | null | undefined;
+  const projection =
+    failedProjection ??
+    (summary.data?.projection as Projection | null | undefined);
 
   return (
     <div className="space-y-3">
@@ -119,7 +146,7 @@ export function CapitalTab({
             >
               {successfulRuns.map((run) => (
                 <SelectItem key={run.id} value={run.id}>
-                  {truncateId(run.id)} · {run.createdAt.toLocaleString()}
+                  {runLabel(run, scenariosById.get(run.scenarioId))}
                 </SelectItem>
               ))}
             </Select>
@@ -168,7 +195,11 @@ export function CapitalTab({
         <>
           <ProjectionSummary projection={projection} />
           <ScenarioComparison comparison={comparison.data} />
-          <CapitalFindings projection={projection} tenant={tenant} />
+          <CapitalFindings
+            projection={projection}
+            tenant={tenant}
+            mutationDisabled={mutationDisabled}
+          />
         </>
       )}
     </div>
@@ -282,9 +313,11 @@ function ScenarioComparison({
 function CapitalFindings({
   projection,
   tenant,
+  mutationDisabled,
 }: {
   projection: Projection;
   tenant: TenantHeaders;
+  mutationDisabled: boolean;
 }) {
   const queryClient = useQueryClient();
   return (
@@ -304,6 +337,7 @@ function CapitalFindings({
             <FindingReviewItem
               finding={finding}
               tenant={tenant}
+              disabled={mutationDisabled}
               onUpdated={() => {
                 void queryClient.invalidateQueries({
                   queryKey: ["capital-summary"],
@@ -329,6 +363,16 @@ function CapitalFindings({
       </div>
     </Panel>
   );
+}
+
+function runLabel(
+  run: { id: string; scenarioId: string; createdAt: Date },
+  scenario?: { name: string; scenarioType: string },
+) {
+  const scenarioLabel = scenario
+    ? `${scenario.name} (${labelize(scenario.scenarioType)})`
+    : `Unknown scenario ${truncateId(run.scenarioId)}`;
+  return `${scenarioLabel} · ${run.createdAt.toLocaleString()} · ${truncateId(run.id)}`;
 }
 
 function money(value: string | number) {

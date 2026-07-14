@@ -196,6 +196,7 @@ export function Select({
   onValueChange,
   placeholder,
   children,
+  disabled = false,
 }: {
   ariaLabel?: string;
   className?: string;
@@ -203,13 +204,18 @@ export function Select({
   onValueChange: (value: string) => void;
   placeholder: string;
   children: ReactNode;
+  disabled?: boolean;
 }) {
   return (
-    <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
+    <SelectPrimitive.Root
+      value={value}
+      onValueChange={onValueChange}
+      disabled={disabled}
+    >
       <SelectPrimitive.Trigger
         aria-label={ariaLabel ?? placeholder}
         className={cn(
-          "inline-flex h-8 min-w-36 items-center justify-between gap-2 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2.5 text-sm outline-none focus:border-[rgb(var(--focus))]",
+          "inline-flex h-8 min-w-36 items-center justify-between gap-2 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2.5 text-sm outline-none focus:border-[rgb(var(--focus))] disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
       >

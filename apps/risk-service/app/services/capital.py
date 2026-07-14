@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -254,7 +254,7 @@ def _opening_equity(period: CalculationForecastPeriod) -> Decimal:
         return Decimal(period.components["opening_assets"]) - Decimal(
             period.components["opening_liabilities"]
         )
-    except (KeyError, TypeError, ValueError) as exc:
+    except (InvalidOperation, KeyError, TypeError, ValueError) as exc:
         raise CapitalInputError(
             "forecast_evidence_missing",
             "The forecast output is missing opening balance evidence.",

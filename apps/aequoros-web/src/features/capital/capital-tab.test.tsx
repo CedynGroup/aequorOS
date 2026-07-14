@@ -3,6 +3,7 @@ import type {
   CapitalComparisonRead,
   CapitalProjectionRead,
   CapitalSummaryRead,
+  ScenarioWorkspaceRead,
 } from "@aequoros/risk-service-api";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -46,6 +47,35 @@ function runList(): CalculationRunListRead {
     limit: 100,
     offset: 0,
     hasMore: false,
+  };
+}
+
+function scenarioWorkspace(): ScenarioWorkspaceRead {
+  return {
+    caseId,
+    scenarios: [
+      {
+        id: scenarioId,
+        organizationId: tenant.orgId,
+        caseId,
+        name: "Operating baseline",
+        description: null,
+        scenarioType: "baseline",
+        copiedFromScenarioId: null,
+        createdBy: tenant.userId,
+        archivedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        assumptions: [],
+      },
+    ],
+    readiness: {
+      caseId,
+      ready: true,
+      scenarioCount: 1,
+      completeScenarioCount: 1,
+      incompleteScenarioIds: [],
+    },
   };
 }
 
@@ -124,6 +154,23 @@ function projection(): CapitalProjectionRead {
   } as unknown as CapitalProjectionRead;
 }
 
+function failedProjection(): CapitalProjectionRead {
+  return {
+    ...projection(),
+    status: "failed",
+    error: {
+      code: "forecast_evidence_missing",
+      message: "Opening balance evidence is invalid",
+      details: {
+        forecast_period_id: "60000000-0000-4000-8000-000000000001",
+        required_components: ["opening_assets", "opening_liabilities"],
+      },
+    },
+    indicators: [],
+    findings: [],
+  } as unknown as CapitalProjectionRead;
+}
+
 function summary(value: CapitalProjectionRead | null): CapitalSummaryRead {
   return {
     caseId,
@@ -146,6 +193,7 @@ function comparison(
 describe("CapitalTab", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(scenarioWorkspace());
     vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
     vi.spyOn(riskApi, "capitalSummary").mockResolvedValue(summary(null));
     vi.spyOn(riskApi, "capitalComparison").mockResolvedValue(comparison(null));
@@ -156,6 +204,14 @@ describe("CapitalTab", () => {
     expect(
       await screen.findByText("No capital projection"),
     ).toBeInTheDocument();
+  });
+
+  it("identifies forecast runs by scenario name and type", async () => {
+    renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByRole("combobox", { name: "Capital forecast run" }),
+    ).toHaveTextContent("Operating baseline (Baseline)");
   });
 
   it("renders an explicit loading state", () => {
@@ -208,6 +264,29 @@ describe("CapitalTab", () => {
     );
   });
 
+  it("preserves failed projection diagnostics after generation", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(riskApi, "capitalSummary").mockResolvedValue(
+      summary(projection()),
+    );
+    vi.spyOn(riskApi, "createCapitalProjection").mockResolvedValue(
+      failedProjection(),
+    );
+    renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Generate projection" }),
+    );
+
+    expect(
+      await screen.findByText("Opening balance evidence is invalid"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/opening_assets/)).toBeInTheDocument();
+    expect(
+      screen.queryByText("Projected capital indicators"),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows read errors and disables mutations in demo mode", async () => {
     vi.mocked(riskApi.capitalSummary).mockRejectedValue(
       new Error("capital unavailable"),
@@ -227,5 +306,22 @@ describe("CapitalTab", () => {
     expect(
       screen.getByRole("button", { name: "Generate projection" }),
     ).toBeDisabled();
+  });
+
+  it("disables capital finding review mutations in demo mode", async () => {
+    const value = projection();
+    vi.mocked(riskApi.capitalSummary).mockResolvedValue(summary(value));
+    vi.mocked(riskApi.capitalComparison).mockResolvedValue(comparison(value));
+    const updateFinding = vi.spyOn(riskApi, "updateFinding");
+
+    renderWithQuery(
+      <CapitalTab tenant={tenant} caseId={caseId} mutationDisabled />,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Update" }),
+    ).toBeDisabled();
+    expect(screen.getByPlaceholderText("Disposition reason")).toBeDisabled();
+    expect(updateFinding).not.toHaveBeenCalled();
   });
 });

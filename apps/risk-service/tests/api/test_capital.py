@@ -248,3 +248,46 @@ def test_capital_projection_rejects_invalid_named_forecast_period(
     assert failed["error"]["details"]["forecast_periods"] == [
         {"forecast_period_id": period_id, "period_number": 1}
     ]
+
+
+def test_capital_projection_persists_invalid_opening_balance_diagnostic(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenarios(db_client, case.id)[0]
+    _financial_inputs(case.id)
+    run = _forecast(db_client, case.id, scenario["id"])
+    with get_sessionmaker()() as session:
+        period = session.scalar(
+            select(CalculationForecastPeriod).where(
+                CalculationForecastPeriod.run_id == UUID(run["id"])
+            )
+        )
+        assert period is not None
+        period.components = {**period.components, "opening_assets": "invalid"}
+        period_id = str(period.id)
+        session.commit()
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/capital-projections",
+        headers=headers(),
+        json={"calculation_run_id": run["id"]},
+    )
+    assert response.status_code == 201
+    failed = response.json()
+    assert failed["status"] == "failed"
+    assert failed["error"] == {
+        "code": "forecast_evidence_missing",
+        "message": "The forecast output is missing opening balance evidence.",
+        "details": {
+            "forecast_period_id": period_id,
+            "required_components": ["opening_assets", "opening_liabilities"],
+        },
+    }
+
+    persisted = db_client.get(
+        f"/api/v1/cases/{case.id}/capital-projections/{failed['id']}",
+        headers=headers(),
+    )
+    assert persisted.status_code == 200
+    assert persisted.json()["error"] == failed["error"]

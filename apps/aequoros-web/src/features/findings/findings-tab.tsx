@@ -117,10 +117,12 @@ export function FindingReviewItem({
   finding,
   tenant,
   onUpdated,
+  disabled = false,
 }: {
   finding: FindingRead;
   tenant: TenantHeaders;
   onUpdated?: () => void;
+  disabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const form = useForm<FindingStatusForm>({
@@ -168,6 +170,7 @@ export function FindingReviewItem({
         onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
       >
         <Select
+          disabled={disabled}
           value={form.watch("status")}
           onValueChange={(value) =>
             form.setValue("status", value as FindingStatusForm["status"])
@@ -181,10 +184,15 @@ export function FindingReviewItem({
           ))}
         </Select>
         <Input
+          disabled={disabled}
           placeholder="Disposition reason"
           {...form.register("dispositionReason")}
         />
-        <Button type="submit" size="sm" disabled={mutation.isPending}>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={disabled || mutation.isPending}
+        >
           {mutation.isPending ? (
             <Loader2 className="size-4 animate-spin" />
           ) : null}
