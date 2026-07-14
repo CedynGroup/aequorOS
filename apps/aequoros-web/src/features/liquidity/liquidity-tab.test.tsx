@@ -253,6 +253,9 @@ describe("LiquidityTab", () => {
 
     expect(await screen.findByText("superseded")).toBeInTheDocument();
     expect(
+      screen.getByText("Terminal finding · read only"),
+    ).toBeInTheDocument();
+    expect(
       screen.getByText("Thin liquidity sources coverage"),
     ).toBeInTheDocument();
     expect(
@@ -260,6 +263,23 @@ describe("LiquidityTab", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Dismiss" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("labels an empty historical analysis as the selected forecast", async () => {
+    vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(
+      summary({ findings: [] }),
+    );
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    expect(
+      await screen.findByText(
+        "The selected forecast did not cross an MVP liquidity risk threshold.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/latest successful forecast/i),
     ).not.toBeInTheDocument();
   });
 

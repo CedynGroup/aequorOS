@@ -427,19 +427,32 @@ def serialize_finding_publication(
     ctx: TenantContext,
     case_id: UUID,
     scenario_id: UUID,
-) -> Iterator[None]:
+) -> Iterator[Session]:
     bind = db.get_bind()
     if bind.dialect.name != "postgresql":
-        yield
+        yield db
         return
-    engine = bind.engine if isinstance(bind, Connection) else bind
     lock_key = _finding_publication_lock_key(ctx, case_id, scenario_id)
-    with engine.connect() as connection:
+    connection = bind if isinstance(bind, Connection) else bind.connect()
+    close_connection = connection is not bind
+    try:
         connection.execute(select(func.pg_advisory_lock(lock_key)))
+        connection.commit()
+        publication_db = Session(
+            bind=connection,
+            autoflush=False,
+            expire_on_commit=False,
+        )
+        publication_db.info["organization_id"] = ctx.organization_id
         try:
-            yield
+            yield publication_db
         finally:
+            publication_db.close()
             connection.execute(select(func.pg_advisory_unlock(lock_key)))
+            connection.commit()
+    finally:
+        if close_connection:
+            connection.close()
 
 
 def _finding_publication_lock_key(ctx: TenantContext, case_id: UUID, scenario_id: UUID) -> int:
@@ -550,6 +563,11 @@ def review_finding(
     if finding.case_id != case_id or _finding_calculation_run(db, ctx, finding) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Liquidity finding not found."
+        )
+    if finding.status not in ("open", "needs_review"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Liquidity finding is read-only.",
         )
     updated = findings_service.apply_finding_update(
         db,

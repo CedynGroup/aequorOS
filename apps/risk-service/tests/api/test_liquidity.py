@@ -5,7 +5,8 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
+from sqlalchemy import create_engine, delete, select
+from sqlalchemy.orm import sessionmaker
 
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
@@ -454,6 +455,50 @@ def test_liquidity_review_uses_finding_producing_rule_version(
     assert response.json()["rule_version"] == "liquidity-v1.0.0"
 
 
+def test_liquidity_review_rejects_terminal_findings(db_client: TestClient) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    older = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+    db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs/{older['id']}/rerun",
+        headers=headers(),
+        json={},
+    )
+    historical = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary",
+        headers=headers(),
+        params={"run_id": older["id"]},
+    ).json()
+    finding_id = UUID(historical["findings"][0]["id"])
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/liquidity/findings/{finding_id}/review",
+        headers=headers(),
+        json={"action": "acknowledge", "reason": "Must remain historical"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["message"] == "Liquidity finding is read-only."
+    with get_sessionmaker()() as session:
+        finding = session.get(RiskFinding, finding_id)
+        assert finding is not None
+        assert finding.status == "superseded"
+        assert (
+            session.scalar(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id == finding_id,
+                    AuditEvent.event_type == "liquidity_finding.reviewed",
+                )
+            )
+            is None
+        )
+
+
 def test_liquidity_rerun_supersedes_prior_scenario_findings(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -640,58 +685,58 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
             sessionmaker() as older_session,
             liquidity.serialize_finding_publication(
                 older_session, context, case.id, UUID(scenario["id"])
-            ),
+            ) as publication_session,
         ):
-            calculations._begin_repeatable_read(older_session)
-            older_run = older_session.get(CalculationRun, UUID(older["id"]))
+            calculations._begin_repeatable_read(publication_session)
+            older_run = publication_session.get(CalculationRun, UUID(older["id"]))
             assert older_run is not None
             older_periods = list(
-                older_session.scalars(
+                publication_session.scalars(
                     select(CalculationForecastPeriod).where(
                         CalculationForecastPeriod.run_id == older_run.id
                     )
                 )
             )
             generate_findings(
-                older_session,
+                publication_session,
                 context,
                 older_run,
                 older_periods,
                 publication_locked=True,
             )
             older_run.status = "succeeded"
-            older_session.commit()
+            publication_session.commit()
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         with (
             sessionmaker() as newer_session,
             liquidity.serialize_finding_publication(
                 newer_session, context, case.id, UUID(scenario["id"])
-            ),
+            ) as publication_session,
         ):
-            calculations._begin_repeatable_read(newer_session)
-            newer_run = newer_session.get(CalculationRun, UUID(newer["id"]))
+            calculations._begin_repeatable_read(publication_session)
+            newer_run = publication_session.get(CalculationRun, UUID(newer["id"]))
             assert newer_run is not None
             newer_periods = list(
-                newer_session.scalars(
+                publication_session.scalars(
                     select(CalculationForecastPeriod).where(
                         CalculationForecastPeriod.run_id == newer_run.id
                     )
                 )
             )
             generate_findings(
-                newer_session,
+                publication_session,
                 context,
                 newer_run,
                 newer_periods,
                 publication_locked=True,
             )
             newer_run.status = "succeeded"
-            newer_session.flush()
+            publication_session.flush()
             future = executor.submit(publish_older)
             with pytest.raises(FutureTimeoutError):
                 future.result(timeout=0.2)
-            newer_session.commit()
+            publication_session.commit()
         future.result(timeout=5)
 
     with sessionmaker() as verification_session:
@@ -712,3 +757,49 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
     ).json()
     assert historical["findings"]
     assert {item["status"] for item in historical["findings"]} == {"superseded"}
+
+
+def test_publication_lock_and_transaction_share_a_constrained_pool_connection(
+    db_client: TestClient,
+) -> None:
+    configured_sessionmaker = get_sessionmaker()
+    configured_engine = configured_sessionmaker.kw["bind"]
+    if configured_engine.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL advisory locks are required for pool coverage.")
+
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    run = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+    constrained_engine = create_engine(
+        configured_engine.url,
+        pool_size=1,
+        max_overflow=0,
+        pool_timeout=0.25,
+    )
+    constrained_sessionmaker = sessionmaker(
+        bind=constrained_engine,
+        autoflush=False,
+        expire_on_commit=False,
+    )
+    context = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    try:
+        with (
+            constrained_sessionmaker() as outer_session,
+            liquidity.serialize_finding_publication(
+                outer_session,
+                context,
+                case.id,
+                UUID(scenario["id"]),
+            ) as publication_session,
+        ):
+            calculations._begin_repeatable_read(publication_session)
+            persisted = publication_session.get(CalculationRun, UUID(run["id"]))
+            assert persisted is not None
+            assert persisted.organization_id == ORG_1
+    finally:
+        constrained_engine.dispose()

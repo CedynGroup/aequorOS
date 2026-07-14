@@ -344,6 +344,7 @@ test("reviews liquidity metrics, evidence, finding status, and tenant isolation"
   await expect(acknowledge).toBeEnabled();
   await acknowledge.click();
   await expect(page.getByText("Liquidity finding acknowledged")).toBeVisible();
+  await expect(page.getByText("Terminal finding · read only")).toBeVisible();
 
   await page
     .getByLabel("Tenant org id")
@@ -388,6 +389,33 @@ test("renders liquidity empty and error states", async ({ page }) => {
       `^/cases/${northstarCase.id}\\?tab=calculations#calculation-run-[0-9a-f-]+-forecast-period-1$`,
     ),
   );
+
+  await page.unroute(summaryPattern);
+  await page.route(summaryPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        case_id: northstarCase.id,
+        scenario_id: "11111111-1111-4111-8111-111111111111",
+        calculation_run_id: "22222222-2222-4222-8222-222222222222",
+        calculation_input_hash: "a".repeat(64),
+        analysis_version: "liquidity-v1.0.0",
+        status: "ready",
+        currency: "USD",
+        as_of_date: "2026-07-14",
+        metrics: [],
+        findings: [],
+        generated_at: "2026-07-14T00:00:00Z",
+      }),
+    });
+  });
+  await page.reload();
+  await expect(
+    page.getByText(
+      "The selected forecast did not cross an MVP liquidity risk threshold.",
+    ),
+  ).toBeVisible();
 
   await page.unroute(summaryPattern);
   await page.route(summaryPattern, async (route) => {

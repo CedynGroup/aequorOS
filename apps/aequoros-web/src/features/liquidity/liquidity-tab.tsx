@@ -307,8 +307,7 @@ function LiquidityAnalysis({
           ))
         ) : (
           <Alert title="No liquidity concerns">
-            The latest successful forecast did not cross an MVP liquidity risk
-            threshold.
+            The selected forecast did not cross an MVP liquidity risk threshold.
           </Alert>
         )}
       </section>
@@ -433,7 +432,12 @@ function LiquidityFindingCard({
         </div>
       ) : finding.dispositionReason ? (
         <div className="border-t border-[rgb(var(--border))] pt-2 text-[rgb(var(--muted-foreground))]">
+          <div className="font-medium">Terminal finding · read only</div>
           Review note: {finding.dispositionReason}
+        </div>
+      ) : resolved ? (
+        <div className="border-t border-[rgb(var(--border))] pt-2 font-medium text-[rgb(var(--muted-foreground))]">
+          Terminal finding · read only
         </div>
       ) : null}
       {mutation.error ? <ErrorPanel error={mutation.error} /> : null}

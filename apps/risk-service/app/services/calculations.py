@@ -291,12 +291,14 @@ def _create_and_execute(  # noqa: PLR0913
     run.started_at = now
     db.commit()
 
+    run_id = run.id
     assembled_snapshot: dict[str, Any] | None = None
-    with serialize_finding_publication(db, ctx, case_id, scenario_id):
+    with serialize_finding_publication(db, ctx, case_id, scenario_id) as publication_db:
+        run = _run_or_404(publication_db, ctx, case_id, run_id)
         try:
-            _begin_repeatable_read(db)
+            _begin_repeatable_read(publication_db)
             snapshot, as_of_date = build_input_snapshot(
-                db,
+                publication_db,
                 ctx,
                 case_id,
                 scenario_id,
@@ -308,7 +310,7 @@ def _create_and_execute(  # noqa: PLR0913
             run.input_hash = _snapshot_hash(snapshot)
             run.as_of_date = as_of_date
             record_event(
-                db,
+                publication_db,
                 ctx,
                 event_type="calculation_run.input_snapshot_established",
                 entity_type="calculation_run",
@@ -328,9 +330,9 @@ def _create_and_execute(  # noqa: PLR0913
                     run_id=run.id,
                     **value.__dict__,
                 )
-                db.add(forecast_row)
+                publication_db.add(forecast_row)
                 forecast_rows.append(forecast_row)
-            db.flush()
+            publication_db.flush()
             try:
                 calculate_liquidity_metrics(forecast_rows)
             except ValueError as exc:
@@ -352,21 +354,27 @@ def _create_and_execute(  # noqa: PLR0913
                         ),
                     },
                 ) from exc
-            generate_liquidity_findings(db, ctx, run, forecast_rows, publication_locked=True)
+            generate_liquidity_findings(
+                publication_db,
+                ctx,
+                run,
+                forecast_rows,
+                publication_locked=True,
+            )
             run.status = "succeeded"
             run.completed_at = datetime.now(UTC)
             record_event(
-                db,
+                publication_db,
                 ctx,
                 event_type="calculation_run.succeeded",
                 entity_type="calculation_run",
                 entity_id=run.id,
                 details={"input_hash": run.input_hash, "output_periods": forecast_periods},
             )
-            db.commit()
+            publication_db.commit()
         except CalculationInputError as exc:
             _persist_failure(
-                db,
+                publication_db,
                 ctx,
                 case_id,
                 run.id,
@@ -384,14 +392,15 @@ def _create_and_execute(  # noqa: PLR0913
                 },
             )
             _persist_failure(
-                db,
+                publication_db,
                 ctx,
                 case_id,
                 run.id,
                 error,
                 assembled_snapshot,
             )
-    return get_run(db, ctx, case_id, run.id)
+    db.expire_all()
+    return get_run(db, ctx, case_id, run_id)
 
 
 def build_input_snapshot(  # noqa: PLR0913, PLR0915
