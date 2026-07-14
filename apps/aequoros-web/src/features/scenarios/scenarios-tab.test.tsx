@@ -155,6 +155,36 @@ describe("ScenariosTab", () => {
     expect(screen.queryByLabelText("Custom scenario name")).toBeNull();
   });
 
+  it("shows archived scenarios with no issues as historically valid", async () => {
+    const target = `scenario-${scenario().id}-assumption-${assumption().id}`;
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(
+      workspace([scenario({ archivedAt: now })]),
+    );
+    vi.spyOn(riskApi, "scenarioValidation").mockResolvedValue({
+      scenarioId: scenario().id,
+      complete: false,
+      issueCount: 0,
+      issues: [],
+    });
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("Scenario validation passed"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("All required assumptions are present and reviewed."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("0 validation issues")).toBeNull();
+    expect(screen.getByText("Archived")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Review" })).toBeNull();
+  });
+
   it("keeps normal scenario navigation active-only", async () => {
     const scenarios = vi
       .spyOn(riskApi, "scenarios")

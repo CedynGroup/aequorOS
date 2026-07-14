@@ -318,6 +318,11 @@ function ScenarioEditor({
   });
   const actionError =
     updateScenario.error ?? copy.error ?? archive.error ?? add.error;
+  const validationPassed = validation.data
+    ? readOnly
+      ? validation.data.issueCount === 0
+      : validation.data.complete
+    : false;
 
   return (
     <Panel className="@container/editor min-w-0">
@@ -374,7 +379,7 @@ function ScenarioEditor({
         </div>
         {validation.isLoading ? <Skeleton className="h-16" /> : null}
         {validation.isError ? <ErrorPanel error={validation.error} /> : null}
-        {validation.data?.complete ? (
+        {validationPassed ? (
           <Alert title="Scenario validation passed">
             All required assumptions are present and reviewed.
           </Alert>
