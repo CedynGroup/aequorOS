@@ -27,6 +27,7 @@ Examples:
 - `app/features/manage_scenarios.py`
 - `app/features/run_calculations.py`
 - `app/features/manage_capital.py`
+- `app/features/review_liquidity.py`
 
 ### Service Layer
 
@@ -44,6 +45,7 @@ Examples:
 - managing scenario and assumption lifecycles
 - creating, rerunning, and reading immutable calculation runs
 - projecting capital indicators and generating evidence-backed findings
+- calculating liquidity metrics and reviewing generated liquidity findings
 
 Service modules may use SQLAlchemy sessions, models, and infrastructure clients.
 They should keep all tenant-scoped lookups explicit and should not rely on entity
@@ -59,6 +61,7 @@ Examples:
 - `app/services/scenarios.py`
 - `app/services/calculations.py`
 - `app/services/capital.py`
+- `app/services/liquidity.py`
 
 ### Domain Layer
 
@@ -75,6 +78,7 @@ Good candidates for the domain layer:
 - assessment engine interfaces
 - future scoring logic
 - deterministic balance-sheet projection rules
+- deterministic liquidity metric and finding rules
 
 Domain code should not depend on:
 
@@ -462,6 +466,52 @@ List, detail, and summary reads preserve archived scenario and case history.
 Archived scenarios reject new projections; archived cases reject new
 projections, comparisons, and finding reviews. Comparisons omit archived
 scenarios.
+
+### Liquidity Analysis And Findings
+
+Every successful calculation run creates one immutable
+`LiquidityAnalysisResult`, versioned independently from the forecast engine and
+linked to the run through a tenant- and case-scoped foreign key. The stored
+result contains five deterministic metrics: minimum cash balance, peak
+liquidity gap, minimum sources coverage, credit reliance, and cash runway.
+Sources coverage is inflows plus credit draws divided by outflows plus debt
+repayment; credit reliance is total credit draws divided by those total uses.
+If any forecast period has non-positive uses, both ratio metrics are marked
+unavailable with an explicit diagnostic instead of substituting a value.
+
+Version `liquidity-v1.0.0` publishes findings for three conditions:
+
+| Rule                         | Condition                                | Severity                                 |
+| ---------------------------- | ---------------------------------------- | ---------------------------------------- |
+| `liquidity.negative_cash`    | Projected cash falls below zero          | `critical` in period 1; otherwise `high` |
+| `liquidity.sources_coverage` | Minimum sources coverage is below 1.20x  | `high` below 1.00x; otherwise `medium`   |
+| `liquidity.credit_reliance`  | Credit funds more than 25% of total uses | `high` above 50%; otherwise `medium`     |
+
+Each finding stores its calculation run, scenario, rule version, input hash, and
+contributing metric snapshot. `RiskFindingEvidence` rows link it to the relevant
+forecast periods, canonical reporting period, balances, cash flows,
+obligations, and reviewed scenario assumptions. Evidence locators carry the
+same input hash and provide case-workspace deep links. Finding publication is
+serialized per tenant, case, and scenario; a newer successful run supersedes
+only prior open or needs-review liquidity findings for that scenario.
+
+Liquidity resources use these routes:
+
+```text
+GET  /api/v1/cases/{case_id}/liquidity/summary
+POST /api/v1/cases/{case_id}/liquidity/findings/{finding_id}/review
+```
+
+The summary route accepts optional `scenario_id` and `run_id`. It selects the
+newest matching successful run and returns `not_calculated` when no persisted
+analysis exists, including for successful runs created before liquidity
+analysis was introduced. Findings are returned in severity order. The review
+route accepts `acknowledge` or `dismiss`, requires an active same-tenant user,
+and requires a non-empty reason for dismissal. Only open or needs-review
+findings on active scenarios can be reviewed; reviewed, superseded, and archived
+scenario findings are read-only. Reviews and automatic publication or
+supersession emit audit events. Liquidity workflow findings are also protected
+from mutation through the generic findings update route.
 
 ## API Versioning
 

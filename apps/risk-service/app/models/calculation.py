@@ -102,3 +102,23 @@ class CalculationForecastPeriod(UuidV4PrimaryKeyMixin, Base):
     components: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
+
+
+class LiquidityAnalysisResult(UuidV4PrimaryKeyMixin, Base):
+    __tablename__ = "liquidity_analysis_results"
+    __table_args__ = (
+        Index("ix_liquidity_analysis_results_case_id", "case_id"),
+        ForeignKeyConstraint(
+            ["run_id", "organization_id", "case_id"],
+            ["calculation_runs.id", "calculation_runs.organization_id", "calculation_runs.case_id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("run_id", name="uq_liquidity_analysis_results_run_id"),
+    )
+
+    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    analysis_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

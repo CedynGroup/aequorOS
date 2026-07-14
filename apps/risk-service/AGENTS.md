@@ -42,6 +42,9 @@ This file is the starting point for agents working in `apps/risk-service`.
   and must consume successful immutable calculation runs. Preserve projection,
   indicator, generated-finding, evidence, and failed-diagnostic history; compare
   only matching baseline and downside forecast bases.
+- Generate liquidity metrics and findings in the successful calculation transaction. Persist
+  evidence through the shared tenant-scoped finding tables, and bind every evidence locator to the
+  calculation run and immutable input hash.
 
 ## Commit Messages
 

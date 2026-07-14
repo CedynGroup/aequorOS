@@ -24,11 +24,13 @@ capital projection workflow:
 - Deterministic annual balance-sheet forecasts, persisted failures, reruns, and paginated history
 - Tenant-scoped capital projection attempts with period pressure indicators and persisted diagnostics
 - Latest capital summaries, baseline-versus-downside comparisons, and generated findings with evidence
+- Versioned liquidity metrics and severity-ranked findings generated from successful forecasts
+- Liquidity finding evidence, acknowledge/dismiss review actions, and audit events
 - Audit events, per-field manual edit history, and source-record traceability
 
-Liquidity scoring, Basel regulatory-capital scoring, full ingestion pipelines,
-auth, background workers, advanced forecast configuration, and report
-generation are intentionally not implemented yet.
+Regulatory LCR/NSFR and Basel regulatory-capital scoring, full ingestion pipelines, auth,
+background workers, advanced forecast configuration, and report generation are
+intentionally not implemented yet.
 
 ## Requirements
 
@@ -187,6 +189,33 @@ Projection list, detail, and summary reads retain historical attempts after a
 scenario or case is archived. Archived scenarios cannot start new projections,
 and an archived case also rejects new projections, comparisons, and finding
 reviews. Comparisons exclude archived scenarios.
+
+Every successful forecast also persists a versioned liquidity analysis and
+publishes deterministic findings for the same immutable run. Read either the
+latest successful run, or select a scenario and run explicitly, with:
+
+```text
+GET /api/v1/cases/{case_id}/liquidity/summary?scenario_id={scenario_id}&run_id={run_id}
+```
+
+The summary reports minimum cash, peak liquidity gap, minimum sources coverage,
+credit reliance, and cash runway. A metric is returned as unavailable with an
+explicit diagnostic when its denominator is not positive. Findings are ordered
+by severity and include links to forecast periods, canonical inputs, and
+reviewed scenario assumptions, all bound to the calculation input hash.
+
+Review an open liquidity finding with:
+
+```text
+POST /api/v1/cases/{case_id}/liquidity/findings/{finding_id}/review
+```
+
+The body action is `acknowledge` or `dismiss`; dismissal requires a non-empty
+reason. Review requires `X-Org-Id` and `X-User-Id`, records audit events, and is
+rejected for terminal findings or findings belonging to archived scenarios.
+The generic findings update endpoint does not mutate liquidity workflow
+findings. A newer successful run supersedes open findings from the previous run
+for that scenario without altering acknowledged or dismissed history.
 
 ## Run Tests
 

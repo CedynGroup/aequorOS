@@ -6,7 +6,7 @@ import type {
 } from "@aequoros/risk-service-api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -22,7 +22,12 @@ import {
   Skeleton,
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
-import { formatMoney, truncateId } from "../../lib/utils";
+import { formatMoney } from "../../lib/money";
+import { truncateId } from "../../lib/utils";
+import {
+  focusWorkspaceTarget,
+  workspaceHash,
+} from "../../lib/workspace-deep-link";
 import { ErrorPanel } from "../../shared/route-ui";
 
 const runTone: Record<
@@ -38,16 +43,22 @@ const runTone: Record<
 export function CalculationsTab({
   tenant,
   caseId,
+  mutationDisabled = false,
+  mutationDisabledReason = "demo",
 }: {
   tenant: TenantHeaders;
   caseId: string;
+  mutationDisabled?: boolean;
+  mutationDisabledReason?: "demo" | "retired-case";
 }) {
   const queryClient = useQueryClient();
+  const deepLink = calculationDeepLink();
+  const focusedDeepLinks = useRef(new Set<string>());
   const [runOffset, setRunOffset] = useState(0);
   const runsKey = ["calculation-runs", tenant, caseId, runOffset] as const;
   const scenarios = useQuery({
-    queryKey: ["scenarios", tenant, caseId],
-    queryFn: () => riskApi.scenarios(tenant, caseId),
+    queryKey: ["scenarios", tenant, caseId, true],
+    queryFn: () => riskApi.scenarios(tenant, caseId, true),
   });
   const runs = useQuery({
     queryKey: runsKey,
@@ -62,7 +73,9 @@ export function CalculationsTab({
   });
   const [scenarioId, setScenarioId] = useState("");
   const [forecastPeriods, setForecastPeriods] = useState("3");
-  const [selectedRunId, setSelectedRunId] = useState("");
+  const [selectedRunId, setSelectedRunId] = useState(
+    () => deepLink?.runId ?? "",
+  );
   const selectedRun = useQuery({
     queryKey: ["calculation-run", tenant, caseId, selectedRunId],
     queryFn: () => riskApi.calculationRun(tenant, caseId, selectedRunId),
@@ -79,15 +92,18 @@ export function CalculationsTab({
   useEffect(() => {
     setRunOffset(0);
     setScenarioId("");
-    setSelectedRunId("");
-  }, [caseId, tenant.orgId]);
+    setSelectedRunId(deepLink?.runId ?? "");
+  }, [caseId, deepLink?.runId, tenant.orgId]);
 
   useEffect(() => {
     if (!scenarios.data) return;
     setScenarioId((current) =>
-      scenarios.data.scenarios.some((scenario) => scenario.id === current)
+      scenarios.data.scenarios.some(
+        (scenario) => scenario.id === current && !scenario.archivedAt,
+      )
         ? current
-        : (scenarios.data.scenarios[0]?.id ?? ""),
+        : (scenarios.data.scenarios.find((scenario) => !scenario.archivedAt)
+            ?.id ?? ""),
     );
   }, [scenarios.data]);
 
@@ -95,11 +111,23 @@ export function CalculationsTab({
     if (!runs.data) return;
     setSelectedRunId((current) =>
       runs.data.runs.some((run) => run.id === current) ||
-      current === runs.data.latestSuccessfulRunId
+      current === runs.data.latestSuccessfulRunId ||
+      current === deepLink?.runId
         ? current
         : (runs.data.runs[0]?.id ?? ""),
     );
-  }, [runs.data]);
+  }, [deepLink?.runId, runs.data]);
+
+  useEffect(() => {
+    if (
+      selectedRun.data &&
+      deepLink?.targetId &&
+      !focusedDeepLinks.current.has(deepLink.targetId) &&
+      focusWorkspaceTarget(deepLink.targetId)
+    ) {
+      focusedDeepLinks.current.add(deepLink.targetId);
+    }
+  }, [deepLink?.targetId, selectedRun.data]);
 
   const parsedForecastPeriods = Number(forecastPeriods);
   const validForecastPeriods =
@@ -107,10 +135,11 @@ export function CalculationsTab({
     parsedForecastPeriods >= 1 &&
     parsedForecastPeriods <= 12;
   const activeScenarioId = scenarios.data?.scenarios.some(
-    (scenario) => scenario.id === scenarioId,
+    (scenario) => scenario.id === scenarioId && !scenario.archivedAt,
   )
     ? scenarioId
-    : (scenarios.data?.scenarios[0]?.id ?? "");
+    : (scenarios.data?.scenarios.find((scenario) => !scenario.archivedAt)?.id ??
+      "");
 
   const refreshRuns = async (run: CalculationRunRead, message: string) => {
     setRunOffset(0);
@@ -151,62 +180,106 @@ export function CalculationsTab({
   }
   const selectedSummary =
     runs.data?.runs.find((run) => run.id === selectedRunId) ?? selectedRun.data;
+  const selectedScenario = availableScenarios.find(
+    (scenario) =>
+      scenario.id ===
+      (selectedRun.data?.scenarioId ?? selectedSummary?.scenarioId),
+  );
+  const activeScenarios = availableScenarios.filter(
+    (scenario) => !scenario.archivedAt,
+  );
+  const archivedAudit = Boolean(selectedScenario?.archivedAt);
   const hasRunHistory = Boolean(runs.data?.runs.length || selectedRunId);
   const isSubmitting = start.isPending || rerun.isPending;
 
   return (
     <div className="@container/calculations space-y-3">
-      <Panel>
-        <PanelHeader
-          title="Balance-sheet forecast"
-          meta="Deterministic annual projection using canonical balances and reviewed assumptions"
-          actions={
-            isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null
-          }
-        />
-        <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_140px_auto] md:items-end">
-          <div>
-            <Label>Scenario</Label>
-            <Select
-              ariaLabel="Forecast scenario"
-              value={activeScenarioId}
-              onValueChange={setScenarioId}
-              placeholder="Choose a scenario"
-            >
-              {availableScenarios.map((scenario) => (
-                <SelectItem key={scenario.id} value={scenario.id}>
-                  {scenario.name}
-                </SelectItem>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <Label>Annual periods</Label>
-            <Input
-              aria-label="Forecast periods"
-              type="number"
-              min={1}
-              max={12}
-              step={1}
-              value={forecastPeriods}
-              onChange={(event) => setForecastPeriods(event.target.value)}
-            />
-          </div>
-          <Button
-            disabled={
-              isSubmitting || !activeScenarioId || !validForecastPeriods
+      {activeScenarios.length ? (
+        <Panel>
+          <PanelHeader
+            title="Balance-sheet forecast"
+            meta="Deterministic annual projection using canonical balances and reviewed assumptions"
+            actions={
+              isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null
             }
-            onClick={() => start.mutate()}
-          >
-            {start.isPending ? "Starting…" : "Run forecast"}
-          </Button>
-        </div>
-        {start.isError ? (
-          <div className="px-3 pb-3">
-            <ErrorPanel error={start.error} />
+          />
+          <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_140px_auto] md:items-end">
+            <div>
+              <Label>Scenario</Label>
+              <Select
+                ariaLabel="Forecast scenario"
+                value={activeScenarioId}
+                onValueChange={setScenarioId}
+                placeholder="Choose a scenario"
+                disabled={mutationDisabled}
+              >
+                {activeScenarios.map((scenario) => (
+                  <SelectItem key={scenario.id} value={scenario.id}>
+                    {scenario.name}
+                  </SelectItem>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label>Annual periods</Label>
+              <Input
+                aria-label="Forecast periods"
+                type="number"
+                min={1}
+                max={12}
+                step={1}
+                value={forecastPeriods}
+                disabled={mutationDisabled}
+                onChange={(event) => setForecastPeriods(event.target.value)}
+              />
+            </div>
+            <Button
+              disabled={
+                mutationDisabled ||
+                isSubmitting ||
+                !activeScenarioId ||
+                !validForecastPeriods
+              }
+              onClick={() => start.mutate()}
+            >
+              {start.isPending ? "Starting…" : "Run forecast"}
+            </Button>
           </div>
-        ) : null}
-      </Panel>
+          {mutationDisabled ? (
+            <div className="px-3 pb-3">
+              {mutationDisabledReason === "retired-case" ? (
+                <Alert title="Forecast mutations unavailable for retired case">
+                  Historical forecasts remain available for review, but archived
+                  cases cannot start or rerun calculations.
+                </Alert>
+              ) : (
+                <Alert title="Mutation unavailable in demo mode">
+                  Switch to live API data to start or rerun a forecast.
+                </Alert>
+              )}
+            </div>
+          ) : null}
+          {start.isError ? (
+            <div className="px-3 pb-3">
+              <ErrorPanel error={start.error} />
+            </div>
+          ) : null}
+        </Panel>
+      ) : null}
+
+      {archivedAudit ? (
+        <Panel>
+          <PanelHeader
+            title="Archived forecast audit"
+            meta="Historical calculation evidence is preserved read only"
+            actions={<Badge tone="warning">Archived</Badge>}
+          />
+          <div className="p-3 text-sm">
+            {selectedScenario?.name} · rerun controls are unavailable in audit
+            mode.
+          </div>
+        </Panel>
+      ) : null}
 
       {!hasRunHistory ? (
         <Alert title="No calculation runs">
@@ -236,6 +309,13 @@ export function CalculationsTab({
               run={selectedRun.data}
               latestSuccessfulRunId={runs.data?.latestSuccessfulRunId}
               isRerunning={rerun.isPending}
+              readOnlyReason={
+                mutationDisabled
+                  ? mutationDisabledReason
+                  : archivedAudit
+                    ? "archived-scenario"
+                    : null
+              }
               onRerun={() => rerun.mutate(selectedRun.data.id)}
               onShowLatest={() =>
                 runs.data?.latestSuccessfulRunId &&
@@ -322,36 +402,56 @@ function RunOutput({
   run,
   latestSuccessfulRunId,
   isRerunning,
+  readOnlyReason,
   onRerun,
   onShowLatest,
 }: {
   run: CalculationRunRead;
   latestSuccessfulRunId?: string | null;
   isRerunning: boolean;
+  readOnlyReason: "archived-scenario" | "demo" | "retired-case" | null;
   onRerun: () => void;
   onShowLatest: () => void;
 }) {
   const running = run.status === "queued" || run.status === "running";
+  const readOnly = readOnlyReason !== null;
   return (
     <Panel>
       <PanelHeader
         title={`Run ${truncateId(run.id)}`}
         meta={`${run.engineVersion} · input ${run.inputHash.slice(0, 12)} · as of ${dateOnly(run.asOfDate)}`}
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isRerunning || running}
-            onClick={onRerun}
-          >
-            <RefreshCw
-              className={isRerunning ? "size-3 animate-spin" : "size-3"}
-            />
-            {isRerunning ? "Rerunning…" : "Rerun current inputs"}
-          </Button>
+          readOnly ? null : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isRerunning || running}
+              onClick={onRerun}
+            >
+              <RefreshCw
+                className={isRerunning ? "size-3 animate-spin" : "size-3"}
+              />
+              {isRerunning ? "Rerunning…" : "Rerun current inputs"}
+            </Button>
+          )
         }
       />
       <div className="space-y-3 p-3">
+        {readOnlyReason === "archived-scenario" ? (
+          <Alert title="Archived scenario · read only" tone="warning">
+            This exact historical forecast is available for audit. Rerun and
+            mutation controls are unavailable.
+          </Alert>
+        ) : readOnlyReason === "retired-case" ? (
+          <Alert title="Retired case · read only" tone="warning">
+            This historical forecast remains available for review. Archived
+            cases cannot rerun calculations.
+          </Alert>
+        ) : readOnlyReason === "demo" ? (
+          <Alert title="Demo mode · read only" tone="warning">
+            Switch to live API data to rerun this forecast.
+          </Alert>
+        ) : null}
         {running ? (
           <Alert title="Forecast is running" tone="warning">
             Status refreshes automatically while calculation is in progress.
@@ -381,7 +481,7 @@ function RunOutput({
           </>
         ) : null}
         {run.status === "succeeded" && run.outputs.length ? (
-          <ForecastTable rows={run.outputs} />
+          <ForecastTable runId={run.id} rows={run.outputs} />
         ) : null}
         {run.status === "succeeded" && !run.outputs.length ? (
           <Alert title="No forecast outputs">
@@ -483,7 +583,13 @@ function diagnosticRecord(record: Record<string, unknown>) {
     .join(" — ");
 }
 
-function ForecastTable({ rows }: { rows: ForecastPeriodRead[] }) {
+function ForecastTable({
+  runId,
+  rows,
+}: {
+  runId: string;
+  rows: ForecastPeriodRead[];
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[760px] border-collapse text-right text-xs">
@@ -503,7 +609,9 @@ function ForecastTable({ rows }: { rows: ForecastPeriodRead[] }) {
           {rows.map((row) => (
             <tr
               key={row.id}
-              className="border-b border-[rgb(var(--border))] last:border-0"
+              id={`calculation-run-${runId}-forecast-period-${row.periodNumber}`}
+              tabIndex={-1}
+              className="border-b border-[rgb(var(--border))] outline-none last:border-0 focus:bg-amber-100"
             >
               <td className="p-2 text-left font-medium">
                 {dateOnly(row.periodEnd)}
@@ -519,6 +627,29 @@ function ForecastTable({ rows }: { rows: ForecastPeriodRead[] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function calculationDeepLink() {
+  const targetId = workspaceHash();
+  const prefix = "calculation-run-";
+  const separator = "-forecast-period-";
+  if (!targetId.startsWith(prefix) || !targetId.includes(separator))
+    return null;
+  const runId = targetId.slice(prefix.length, targetId.indexOf(separator));
+  const period = targetId.slice(targetId.indexOf(separator) + separator.length);
+  const periodNumber = Number(period);
+  return isUuid(runId) &&
+    /^\d+$/.test(period) &&
+    Number.isSafeInteger(periodNumber) &&
+    periodNumber > 0
+    ? { runId, targetId }
+    : null;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
   );
 }
 

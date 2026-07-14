@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
+from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from decimal import Decimal
+from threading import Event
+from typing import Any
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
 from app.models import (
     AuditEvent,
@@ -17,6 +24,9 @@ from app.models import (
     FinancialCashFlow,
     FinancialObligation,
     FinancialReportingPeriod,
+    LiquidityAnalysisResult,
+    RiskFinding,
+    RiskScenario,
     ScenarioAssumption,
 )
 from app.services import calculations
@@ -248,6 +258,42 @@ def test_active_run_listing_returns_latest_success_for_every_scenario(
     assert discovered_ids == expected_ids
 
 
+def test_successful_run_reuses_calculated_liquidity_metrics(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    original_calculate = calculations.calculate_liquidity_metrics
+    original_generate = calculations.generate_liquidity_findings
+    calculated_results: list[Any] = []
+    generated_results: list[Any] = []
+
+    def track_calculate(periods: list[CalculationForecastPeriod]) -> Any:
+        result = original_calculate(periods)
+        calculated_results.append(result)
+        return result
+
+    def track_generate(*args: Any, **kwargs: Any) -> None:
+        generated_results.append(kwargs.get("result"))
+        original_generate(*args, **kwargs)
+
+    monkeypatch.setattr(calculations, "calculate_liquidity_metrics", track_calculate)
+    monkeypatch.setattr(calculations, "generate_liquidity_findings", track_generate)
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"], "forecast_periods": 2},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "succeeded"
+    assert len(calculated_results) == 1
+    assert generated_results == calculated_results
+
+
 def test_default_as_of_date_excludes_future_balances_unless_explicit(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -330,6 +376,284 @@ def test_audit_binds_pending_run_to_established_input_hash(db_client: TestClient
         "as_of_date": run["as_of_date"],
         "input_schema_version": run["input_schema_version"],
     }
+
+
+def test_failure_after_liquidity_publication_rolls_back_atomic_run_result(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+
+    original_record_event = calculations.record_event
+
+    def fail_finalization(
+        db: Session,
+        ctx: TenantContext,
+        **kwargs: Any,
+    ) -> AuditEvent:
+        if kwargs.get("event_type") == "calculation_run.succeeded":
+            raise RuntimeError("finalization failed")
+        return original_record_event(db, ctx, **kwargs)
+
+    monkeypatch.setattr(calculations, "record_event", fail_finalization)
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "failed"
+    assert run["outputs"] == []
+    with get_sessionmaker()() as session:
+        established = list(
+            session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id == UUID(run["id"]),
+                    AuditEvent.event_type == "calculation_run.input_snapshot_established",
+                )
+            )
+        )
+        liquidity_events = list(
+            session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id == UUID(run["id"]),
+                    AuditEvent.event_type == "liquidity_analysis.completed",
+                )
+            )
+        )
+    assert len(established) == 1
+    assert established[0].details["input_hash"] == run["input_hash"]
+    assert liquidity_events == []
+
+
+def test_publication_establishes_repeatable_read_before_loading_run(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    call_order: list[str] = []
+    original_begin = calculations._begin_repeatable_read
+    original_load = calculations._run_or_404
+
+    def track_begin(db: Session) -> None:
+        call_order.append("isolation")
+        original_begin(db)
+
+    def track_load(
+        db: Session,
+        ctx: TenantContext,
+        case_id: UUID,
+        run_id: UUID,
+    ) -> CalculationRun:
+        call_order.append("load")
+        return original_load(db, ctx, case_id, run_id)
+
+    monkeypatch.setattr(calculations, "_begin_repeatable_read", track_begin)
+    monkeypatch.setattr(calculations, "_run_or_404", track_load)
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "succeeded"
+    assert call_order[:2] == ["isolation", "load"]
+
+
+def test_publication_lock_acquisition_failure_persists_failed_run(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+
+    @contextmanager
+    def fail_lock(*_args: Any, **_kwargs: Any):
+        raise RuntimeError("publication lock unavailable")
+        yield
+
+    monkeypatch.setattr(calculations, "serialize_finding_publication", fail_lock)
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "failed"
+    assert run["error"]["code"] == "finding_publication_lock_error"
+    assert run["error"]["details"]["diagnostic"] == "publication lock unavailable"
+
+
+def test_publication_lock_cleanup_failure_preserves_successful_run(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+
+    @contextmanager
+    def fail_unlock(db: Session, *_args: Any, **_kwargs: Any):
+        yield db
+        raise RuntimeError("publication unlock unavailable")
+
+    monkeypatch.setattr(calculations, "serialize_finding_publication", fail_unlock)
+
+    response = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "succeeded"
+    assert run["error"] is None
+    assert run["outputs"]
+
+
+def test_archived_case_rejects_start_and_rerun_without_side_effects(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    prior = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+    archived = db_client.post(f"/api/v1/cases/{case.id}/archive", headers=headers())
+    assert archived.status_code == 200
+
+    with get_sessionmaker()() as session:
+        counts_before = {
+            "runs": session.query(CalculationRun).filter_by(case_id=case.id).count(),
+            "outputs": session.query(CalculationForecastPeriod).filter_by(case_id=case.id).count(),
+            "analyses": session.query(LiquidityAnalysisResult).filter_by(case_id=case.id).count(),
+            "findings": session.query(RiskFinding).filter_by(case_id=case.id).count(),
+            "audits": session.query(AuditEvent).filter_by(organization_id=ORG_1).count(),
+        }
+
+    start = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    )
+    repeated = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs/{prior['id']}/rerun",
+        headers=headers(),
+        json={},
+    )
+
+    for response in (start, repeated):
+        assert response.status_code == 409
+        assert response.json()["error"]["message"] == (
+            "Archived cases cannot be modified through this workflow."
+        )
+
+    with get_sessionmaker()() as session:
+        counts_after = {
+            "runs": session.query(CalculationRun).filter_by(case_id=case.id).count(),
+            "outputs": session.query(CalculationForecastPeriod).filter_by(case_id=case.id).count(),
+            "analyses": session.query(LiquidityAnalysisResult).filter_by(case_id=case.id).count(),
+            "findings": session.query(RiskFinding).filter_by(case_id=case.id).count(),
+            "audits": session.query(AuditEvent).filter_by(organization_id=ORG_1).count(),
+        }
+    assert counts_after == counts_before
+
+
+def test_scenario_archive_wins_before_calculation_publication(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_factory = get_sessionmaker()
+    with session_factory() as dialect_session:
+        if dialect_session.get_bind().dialect.name != "postgresql":
+            pytest.skip("PostgreSQL row locks are required for concurrency coverage.")
+
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    publication_ready = Event()
+    continue_publication = Event()
+    original_begin = calculations._begin_repeatable_read
+
+    def pause_before_eligibility_lock(db: Session) -> None:
+        original_begin(db)
+        publication_ready.set()
+        assert continue_publication.wait(timeout=5)
+
+    monkeypatch.setattr(calculations, "_begin_repeatable_read", pause_before_eligibility_lock)
+
+    def start() -> Any:
+        return db_client.post(
+            f"/api/v1/cases/{case.id}/calculation-runs",
+            headers=headers(),
+            json={"scenario_id": scenario["id"]},
+        )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(start)
+        assert publication_ready.wait(timeout=5)
+        with session_factory() as archive_session:
+            archive_session.info["organization_id"] = ORG_1
+            archived_scenario = archive_session.scalar(
+                select(RiskScenario)
+                .where(RiskScenario.id == UUID(scenario["id"]))
+                .with_for_update()
+            )
+            assert archived_scenario is not None
+            continue_publication.set()
+            with pytest.raises(FutureTimeoutError):
+                future.result(timeout=0.2)
+            archived_scenario.archived_at = datetime.now(UTC)
+            archive_session.commit()
+        response = future.result(timeout=5)
+
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "failed"
+    assert run["outputs"] == []
+    with session_factory() as verification_session:
+        verification_session.info["organization_id"] = ORG_1
+        assert (
+            verification_session.scalar(
+                select(LiquidityAnalysisResult).where(
+                    LiquidityAnalysisResult.run_id == UUID(run["id"])
+                )
+            )
+            is None
+        )
+        assert (
+            list(
+                verification_session.scalars(
+                    select(RiskFinding).where(
+                        RiskFinding.case_id == case.id,
+                        RiskFinding.details["liquidity"]["calculation_run_id"].as_string()
+                        == run["id"],
+                    )
+                )
+            )
+            == []
+        )
+        event_types = set(
+            verification_session.scalars(
+                select(AuditEvent.event_type).where(AuditEvent.entity_id == UUID(run["id"]))
+            )
+        )
+    assert "calculation_run.succeeded" not in event_types
+    assert "liquidity_analysis.completed" not in event_types
 
 
 def test_rerun_after_assumption_change_versions_inputs_without_replacing_output(

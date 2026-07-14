@@ -36,3 +36,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `/capital-comparison` pairs the latest baseline and downside projections by period.
   The MVP pressure rules use equity-to-assets, liabilities-to-assets, and equity change;
   non-positive projected assets fail with named forecast-period diagnostics.
+- Successful forecast runs automatically calculate deterministic liquidity metrics and generate
+  tenant-scoped liquidity findings. Liquidity evidence locators bind forecast periods, canonical
+  inputs, and reviewed scenario assumptions to the calculation input hash.
+- Liquidity summaries and acknowledge/dismiss review actions live under
+  `/api/v1/cases/{case_id}/liquidity`; reuse the shared case-finding review card in SPA analysis
+  verticals.

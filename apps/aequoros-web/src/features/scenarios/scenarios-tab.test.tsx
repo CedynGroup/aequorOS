@@ -100,6 +100,11 @@ function mutation(result = scenario()): ScenarioMutationResponse {
 describe("ScenariosTab", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    window.history.replaceState(null, "", window.location.pathname);
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn<() => void>(),
+    });
     vi.spyOn(riskApi, "scenarioValidation").mockResolvedValue({
       scenarioId: scenario().id,
       complete: false,
@@ -113,6 +118,133 @@ describe("ScenariosTab", () => {
         },
       ],
     });
+  });
+
+  it("opens and focuses a scenario assumption from an evidence deep link", async () => {
+    const target = `scenario-${scenario().id}-assumption-${assumption().id}`;
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    const archivedScenario = scenario({
+      name: "Archived downside",
+      archivedAt: now,
+    });
+    const scenarios = vi
+      .spyOn(riskApi, "scenarios")
+      .mockResolvedValue(workspace([archivedScenario]));
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+
+    await waitFor(() => expect(document.activeElement?.id).toBe(target));
+    expect(scenarios).toHaveBeenCalledWith(tenant, caseId, true);
+    expect(screen.getByText("Archived")).toBeInTheDocument();
+    expect(
+      screen.getByText("Archived scenario audit mode"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Scenario name")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Revenue growth value type")).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Save details" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy scenario" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Archive scenario" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add assumption" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review" })).toBeNull();
+    expect(screen.queryByLabelText("Custom scenario name")).toBeNull();
+  });
+
+  it("focuses an evidence deep link only once across rerenders and refetches", async () => {
+    const target = `scenario-${scenario().id}-assumption-${assumption().id}`;
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    const scenarios = vi
+      .spyOn(riskApi, "scenarios")
+      .mockResolvedValueOnce(workspace())
+      .mockResolvedValue(
+        workspace([scenario({ description: "Refetched scenario" })]),
+      );
+    const view = renderWithQuery(
+      <ScenariosTab tenant={tenant} caseId={caseId} />,
+    );
+
+    await waitFor(() => expect(document.activeElement?.id).toBe(target));
+    const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    view.rerender(<ScenariosTab tenant={tenant} caseId={caseId} />);
+    await view.queryClient.refetchQueries({
+      queryKey: ["scenarios", tenant, caseId, true],
+      exact: true,
+    });
+
+    await waitFor(() => expect(scenarios).toHaveBeenCalledTimes(2));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows archived scenarios with no issues as historically valid", async () => {
+    const target = `scenario-${scenario().id}-assumption-${assumption().id}`;
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(
+      workspace([scenario({ archivedAt: now })]),
+    );
+    vi.spyOn(riskApi, "scenarioValidation").mockResolvedValue({
+      scenarioId: scenario().id,
+      complete: false,
+      issueCount: 0,
+      issues: [],
+    });
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("Scenario validation passed"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("All required assumptions are present and reviewed."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("0 validation issues")).toBeNull();
+    expect(screen.getByText("Archived")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Review" })).toBeNull();
+  });
+
+  it("keeps normal scenario navigation active-only", async () => {
+    const scenarios = vi
+      .spyOn(riskApi, "scenarios")
+      .mockResolvedValue(workspace());
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+
+    expect(await screen.findByLabelText("Scenario name")).toHaveValue(
+      "Baseline",
+    );
+    expect(scenarios).toHaveBeenCalledWith(tenant, caseId, false);
+  });
+
+  it("ignores malformed scenario evidence fragments", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#scenario-not-a-uuid-assumption-also-invalid`,
+    );
+    const scenarios = vi
+      .spyOn(riskApi, "scenarios")
+      .mockResolvedValue(workspace());
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+
+    expect(await screen.findByLabelText("Scenario name")).toHaveValue(
+      "Baseline",
+    );
+    expect(scenarios).toHaveBeenCalledWith(tenant, caseId, false);
   });
 
   it("renders an explicit empty state and initializes baseline and downside", async () => {

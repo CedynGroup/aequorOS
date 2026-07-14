@@ -12,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -36,7 +36,14 @@ from app.schemas.calculations import (
     ForecastPeriodRead,
 )
 from app.services.audit import record_event
-from app.services.cases import get_case_or_404
+from app.services.cases import (
+    ensure_case_is_not_archived,
+    get_case_for_update_or_404,
+    get_case_or_404,
+)
+from app.services.liquidity import calculate_metrics as calculate_liquidity_metrics
+from app.services.liquidity import generate_findings as generate_liquidity_findings
+from app.services.liquidity import serialize_finding_publication
 from app.services.scenario_semantics import resolve_engine_assumptions
 
 ENGINE_VERSION = "balance-sheet-v1.0.0"
@@ -106,7 +113,6 @@ def start_run(
     db: Session, ctx: TenantContext, case_id: UUID, payload: CalculationRunCreate
 ) -> CalculationRunRead:
     _require_actor(ctx)
-    get_case_or_404(db, ctx.organization_id, case_id)
     return _create_and_execute(
         db,
         ctx,
@@ -234,7 +240,7 @@ def get_run(db: Session, ctx: TenantContext, case_id: UUID, run_id: UUID) -> Cal
     return _read_run(db, _run_or_404(db, ctx, case_id, run_id))
 
 
-def _create_and_execute(  # noqa: PLR0913
+def _create_and_execute(  # noqa: PLR0913, PLR0915
     db: Session,
     ctx: TenantContext,
     case_id: UUID,
@@ -244,7 +250,7 @@ def _create_and_execute(  # noqa: PLR0913
     *,
     rerun_of_run_id: UUID | None = None,
 ) -> CalculationRunRead:
-    _scenario_or_404(db, ctx, case_id, scenario_id)
+    _lock_active_case_and_scenario(db, ctx, case_id, scenario_id)
     now = datetime.now(UTC)
     as_of_date = requested_as_of_date or now.date()
     snapshot = _pending_snapshot(case_id, scenario_id, forecast_periods, as_of_date)
@@ -288,76 +294,148 @@ def _create_and_execute(  # noqa: PLR0913
     run.started_at = now
     db.commit()
 
+    run_id = run.id
     assembled_snapshot: dict[str, Any] | None = None
+    lifecycle_persisted = False
     try:
-        _begin_repeatable_read(db)
-        snapshot, as_of_date = build_input_snapshot(
-            db,
-            ctx,
-            case_id,
-            scenario_id,
-            forecast_periods,
-            as_of_date,
-        )
-        assembled_snapshot = snapshot
-        run.inputs = snapshot
-        run.input_hash = _snapshot_hash(snapshot)
-        run.as_of_date = as_of_date
-        record_event(
-            db,
-            ctx,
-            event_type="calculation_run.input_snapshot_established",
-            entity_type="calculation_run",
-            entity_id=run.id,
-            details={
-                "input_hash": run.input_hash,
-                "input_hash_status": "established",
-                "as_of_date": as_of_date.isoformat(),
-                "input_schema_version": INPUT_SCHEMA_VERSION,
-            },
-        )
-        for value in calculate_forecast(snapshot):
-            db.add(
-                CalculationForecastPeriod(
-                    organization_id=ctx.organization_id,
-                    case_id=case_id,
-                    run_id=run.id,
-                    **value.__dict__,
+        with serialize_finding_publication(db, ctx, case_id, scenario_id) as publication_db:
+            try:
+                _begin_repeatable_read(publication_db)
+                _lock_active_case_and_scenario(
+                    publication_db,
+                    ctx,
+                    case_id,
+                    scenario_id,
                 )
+                run = _run_or_404(publication_db, ctx, case_id, run_id)
+                snapshot, as_of_date = build_input_snapshot(
+                    publication_db,
+                    ctx,
+                    case_id,
+                    scenario_id,
+                    forecast_periods,
+                    as_of_date,
+                )
+                assembled_snapshot = snapshot
+                run.inputs = snapshot
+                run.input_hash = _snapshot_hash(snapshot)
+                run.as_of_date = as_of_date
+                record_event(
+                    publication_db,
+                    ctx,
+                    event_type="calculation_run.input_snapshot_established",
+                    entity_type="calculation_run",
+                    entity_id=run.id,
+                    details={
+                        "input_hash": run.input_hash,
+                        "input_hash_status": "established",
+                        "as_of_date": as_of_date.isoformat(),
+                        "input_schema_version": INPUT_SCHEMA_VERSION,
+                    },
+                )
+                forecast_rows: list[CalculationForecastPeriod] = []
+                for value in calculate_forecast(snapshot):
+                    forecast_row = CalculationForecastPeriod(
+                        organization_id=ctx.organization_id,
+                        case_id=case_id,
+                        run_id=run.id,
+                        **value.__dict__,
+                    )
+                    publication_db.add(forecast_row)
+                    forecast_rows.append(forecast_row)
+                publication_db.flush()
+                try:
+                    liquidity_result = calculate_liquidity_metrics(forecast_rows)
+                except ValueError as exc:
+                    raise CalculationInputError(
+                        "liquidity_output_invalid",
+                        "Liquidity metrics could not be calculated from the forecast outputs.",
+                        {
+                            "forecast_outputs": [
+                                {
+                                    "id": str(item.id),
+                                    "period_number": item.period_number,
+                                    "currency": item.currency,
+                                }
+                                for item in forecast_rows
+                            ],
+                            "diagnostic": str(exc),
+                            "corrective_action": (
+                                "Review the named forecast outputs and rerun the calculation."
+                            ),
+                        },
+                    ) from exc
+                generate_liquidity_findings(
+                    publication_db,
+                    ctx,
+                    run,
+                    forecast_rows,
+                    publication_locked=True,
+                    result=liquidity_result,
+                )
+                run.status = "succeeded"
+                run.completed_at = datetime.now(UTC)
+                record_event(
+                    publication_db,
+                    ctx,
+                    event_type="calculation_run.succeeded",
+                    entity_type="calculation_run",
+                    entity_id=run.id,
+                    details={"input_hash": run.input_hash, "output_periods": forecast_periods},
+                )
+                publication_db.commit()
+                lifecycle_persisted = True
+            except CalculationInputError as exc:
+                _persist_failure(
+                    publication_db,
+                    ctx,
+                    case_id,
+                    run_id,
+                    exc,
+                    assembled_snapshot,
+                )
+                lifecycle_persisted = True
+            except Exception:
+                error = CalculationInputError(
+                    "calculation_error",
+                    "The balance-sheet forecast could not be calculated.",
+                    {
+                        "corrective_action": (
+                            "Review the run inputs and retry. Contact support if it fails again."
+                        )
+                    },
+                )
+                _persist_failure(
+                    publication_db,
+                    ctx,
+                    case_id,
+                    run_id,
+                    error,
+                    assembled_snapshot,
+                )
+                lifecycle_persisted = True
+    except Exception as exc:
+        if not lifecycle_persisted:
+            error = CalculationInputError(
+                "finding_publication_lock_error",
+                "Liquidity finding publication could not be serialized.",
+                {
+                    "diagnostic": str(exc),
+                    "corrective_action": (
+                        "Retry the calculation. Contact support if it fails again."
+                    ),
+                },
             )
-        db.flush()
-        run.status = "succeeded"
-        run.completed_at = datetime.now(UTC)
-        record_event(
-            db,
-            ctx,
-            event_type="calculation_run.succeeded",
-            entity_type="calculation_run",
-            entity_id=run.id,
-            details={"input_hash": run.input_hash, "output_periods": forecast_periods},
-        )
-        db.commit()
-    except CalculationInputError as exc:
-        _persist_failure(db, ctx, case_id, run.id, exc, assembled_snapshot)
-    except Exception:
-        error = CalculationInputError(
-            "calculation_error",
-            "The balance-sheet forecast could not be calculated.",
-            {
-                "corrective_action": (
-                    "Review the run inputs and retry. Contact support if it fails again."
-                )
-            },
-        )
-        _persist_failure(
-            db,
-            ctx,
-            case_id,
-            run.id,
-            error,
-            assembled_snapshot,
-        )
-    return get_run(db, ctx, case_id, run.id)
+            _persist_failure(
+                db,
+                ctx,
+                case_id,
+                run_id,
+                error,
+                assembled_snapshot,
+            )
+    db.expire_all()
+    return get_run(db, ctx, case_id, run_id)
 
 
 def build_input_snapshot(  # noqa: PLR0913, PLR0915
@@ -1061,6 +1139,13 @@ def _persist_failure(  # noqa: PLR0913
 ) -> None:
     db.rollback()
     run = _run_or_404(db, ctx, case_id, run_id)
+    db.execute(
+        delete(CalculationForecastPeriod).where(
+            CalculationForecastPeriod.organization_id == ctx.organization_id,
+            CalculationForecastPeriod.case_id == case_id,
+            CalculationForecastPeriod.run_id == run.id,
+        )
+    )
     if canonical_snapshot is not None:
         run.inputs = canonical_snapshot
         run.input_hash = _snapshot_hash(canonical_snapshot)
@@ -1195,19 +1280,30 @@ def _run_or_404(db: Session, ctx: TenantContext, case_id: UUID, run_id: UUID) ->
     return row
 
 
-def _scenario_or_404(
-    db: Session, ctx: TenantContext, case_id: UUID, scenario_id: UUID
+def _lock_active_case_and_scenario(
+    db: Session,
+    ctx: TenantContext,
+    case_id: UUID,
+    scenario_id: UUID,
 ) -> RiskScenario:
+    case = get_case_for_update_or_404(db, ctx.organization_id, case_id)
+    ensure_case_is_not_archived(case)
     scenario = db.scalar(
-        select(RiskScenario).where(
+        select(RiskScenario)
+        .where(
             RiskScenario.id == scenario_id,
             RiskScenario.organization_id == ctx.organization_id,
             RiskScenario.case_id == case_id,
-            RiskScenario.archived_at.is_(None),
         )
+        .with_for_update()
     )
     if scenario is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found.")
+    if scenario.archived_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Archived scenarios cannot be used for calculations.",
+        )
     return scenario
 
 

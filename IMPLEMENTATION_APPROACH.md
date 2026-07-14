@@ -23,8 +23,12 @@ financial data and reviewed scenario assumptions. The risk console can start
 and rerun forecasts, generate and page through capital attempts, compare aligned
 baseline and downside projections, and render failures or successful outputs.
 
-These slices run synchronously and do not include liquidity scoring, Basel
-regulatory-capital scoring, advanced model configuration, constrained
+Successful forecasts now also persist versioned minimum-cash, peak-gap,
+sources-coverage, credit-reliance, and cash-runway metrics. Deterministic
+thresholds publish severity-ranked liquidity findings with input-hash-bound
+evidence; reviewers can acknowledge or dismiss them in the risk console. This
+slice still runs synchronously and does not include regulatory LCR/NSFR or
+stress calculations, Basel regulatory-capital scoring, advanced model configuration, constrained
 optimization, or final reporting. The broader sections below remain the target
 architecture for those later modules.
 
@@ -217,14 +221,17 @@ Each run requires:
 
 The implemented forecast uses `calculation_runs` and
 `calculation_forecast_periods`. Capital pressure uses `capital_projections`,
-`capital_indicators`, and `capital_projection_findings`. Each forecast run
-stores the scenario, optional source run, lifecycle timestamps, horizon and
-as-of date, immutable canonical inputs,
+`capital_indicators`, and `capital_projection_findings`. Liquidity analysis uses
+`liquidity_analysis_results` plus the shared risk-finding and evidence tables.
+Each forecast run stores the scenario, optional source run, lifecycle
+timestamps, horizon and as-of date, immutable canonical inputs,
 SHA-256 input hash, version metadata, actor, and failure diagnostics. Forecast
 periods belong to exactly one run. Each capital attempt references a successful
 forecast run and persists versioned indicators, findings, evidence, and failure
-diagnostics without replacing prior attempts. The generalized tables below
-remain a proposal for later liquidity, Basel capital, metric, and validation
+diagnostics without replacing prior attempts. Each successful forecast persists
+one versioned liquidity result and publishes input-hash-bound findings and
+evidence without replacing prior results. The generalized tables below remain a
+proposal for later regulatory liquidity, Basel capital, metric, and validation
 modules.
 
 Capital money values are persisted at four-decimal precision. Ratios are
@@ -253,6 +260,7 @@ Implement pure functions:
 - computeCapitalRatios(inputs, params)
 - runStressScenario(inputs, scenarioParams)
 - runForecast(inputs, assumptions, horizon)
+- calculateLiquidityMetrics(forecastPeriods)
 - rankOptimizationCandidates(candidates, constraints)
 
 Function outputs should include both:
@@ -312,9 +320,18 @@ Function outputs should include both:
 - `GET /api/v1/cases/{case_id}/capital-comparison`
   - response: latest active baseline and downside projections with aligned period deltas, or a forecast-basis mismatch diagnostic
 
-Liquidity metrics, Basel regulatory-capital drilldowns, and submission previews
-are not yet implemented. Their routes should be added only when those modules
-have concrete request, result, and versioning requirements.
+### 7.5 Review forecast liquidity risk
+
+- `GET /api/v1/cases/{case_id}/liquidity/summary`
+  - query: optional `scenario_id` and `run_id`
+  - response: the selected successful run's versioned metrics, diagnostics, severity-ranked findings, and evidence, or `not_calculated`
+- `POST /api/v1/cases/{case_id}/liquidity/findings/{finding_id}/review`
+  - body: `acknowledge` or `dismiss`; dismissal requires a non-empty reason
+  - response: the reviewed liquidity finding
+
+Regulatory LCR/NSFR metrics, Basel regulatory-capital drilldowns, and submission
+previews are not yet implemented. Their routes should be added only when those
+modules have concrete request, result, and versioning requirements.
 
 ---
 
@@ -414,9 +431,9 @@ Before enabling UI:
 
 ### Week 2
 
-- Implement liquidity calculation service with run persistence.
+- Extend liquidity calculation service with regulatory LCR/NSFR persistence.
 - Add tests for LCR and NSFR baseline and stress.
-- Integrate liquidity screens with API.
+- Extend the liquidity API screens with regulatory metrics.
 
 ### Week 3
 
@@ -456,7 +473,7 @@ This allows immediate progress while connection details are pending.
 2. Load parameter sets and one-bank seed data.
 3. Run reconciliation scripts and fix mismatches.
 4. Execute baseline calculation runs and compare against expected results.
-5. Enable UI integration for liquidity, basel, and forecasting.
+5. Enable UI integration for regulatory liquidity, basel, and forecasting.
 6. Execute stress scenarios and validate outputs.
 7. Freeze a demo snapshot for consistent stakeholder walkthroughs.
 

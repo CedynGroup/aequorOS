@@ -16,6 +16,7 @@ from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.domain.risk_constants import (
     DETERMINISTIC_FINDING_SOURCE,
+    LIQUIDITY_RISK_TYPE,
     SUPERSEDED_FINDING_STATUS,
     CaseStatus,
     FindingStatus,
@@ -396,7 +397,7 @@ def evaluate_cash_runway(data: ScoringInput) -> list[RuleFinding]:
     return [
         RuleFinding(
             rule_id="low_cash_runway",
-            risk_type="liquidity_risk",
+            risk_type=LIQUIDITY_RISK_TYPE,
             title="Cash runway is below review threshold",
             summary=f"Cash runway is {value:g} month(s), below the 6 month threshold.",
             rationale="Short cash runway can indicate near-term liquidity pressure.",

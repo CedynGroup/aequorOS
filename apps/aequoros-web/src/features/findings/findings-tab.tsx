@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import {
-  Badge,
   Button,
   Input,
   Label,
@@ -18,6 +17,7 @@ import {
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { labelize } from "../../lib/utils";
 import { DataList, ErrorPanel } from "../../shared/route-ui";
+import { FindingReviewCard } from "./finding-review-card";
 
 const findingSchema = z.object({
   riskType: z.string().min(1),
@@ -152,6 +152,10 @@ export function FindingReviewItem({
   onUpdated?: () => void;
   disabled?: boolean;
 }) {
+  const isLiquidityWorkflowFinding =
+    finding.riskType === "liquidity_risk" &&
+    finding.source === "deterministic_rule" &&
+    finding.details.liquidity?.workflow_id === "liquidity_analysis";
   const queryClient = useQueryClient();
   const form = useForm<FindingStatusForm>({
     resolver: zodResolver(findingStatusSchema),
@@ -187,59 +191,51 @@ export function FindingReviewItem({
   });
 
   return (
-    <div className="grid gap-2 rounded-md border border-[rgb(var(--border))] p-3 text-xs">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge
-          tone={
-            finding.severity === "high" || finding.severity === "critical"
-              ? "danger"
-              : "warning"
-          }
+    <FindingReviewCard
+      finding={finding}
+      metadata={`${finding.riskType} - score impact ${finding.scoreImpact ?? "n/a"}`}
+    >
+      {isLiquidityWorkflowFinding ? (
+        <div className="border-t border-[rgb(var(--border))] pt-2 text-[rgb(var(--muted-foreground))]">
+          Liquidity workflow finding — review in the Liquidity tab.
+        </div>
+      ) : (
+        <form
+          className="grid gap-2 border-t border-[rgb(var(--border))] pt-2 md:grid-cols-[160px_1fr_auto]"
+          onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
         >
-          {finding.severity}
-        </Badge>
-        <Badge>{finding.status}</Badge>
-        <span className="font-medium">{finding.title}</span>
-      </div>
-      <div>{finding.summary}</div>
-      <div className="text-[rgb(var(--muted-foreground))]">
-        {finding.riskType} - score impact {finding.scoreImpact ?? "n/a"}
-      </div>
-      <form
-        className="grid gap-2 border-t border-[rgb(var(--border))] pt-2 md:grid-cols-[160px_1fr_auto]"
-        onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
-      >
-        <Select
-          disabled={disabled}
-          value={form.watch("status")}
-          onValueChange={(value) =>
-            form.setValue("status", value as FindingStatusForm["status"])
-          }
-          placeholder="Status"
-        >
-          {findingStatusSchema.shape.status.options.map((status) => (
-            <SelectItem key={status} value={status}>
-              {labelize(status)}
-            </SelectItem>
-          ))}
-        </Select>
-        <Input
-          disabled={disabled}
-          placeholder="Disposition reason"
-          {...form.register("dispositionReason")}
-        />
-        <Button
-          type="submit"
-          size="sm"
-          disabled={disabled || mutation.isPending}
-        >
-          {mutation.isPending ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : null}
-          Update
-        </Button>
-      </form>
+          <Select
+            disabled={disabled}
+            value={form.watch("status")}
+            onValueChange={(value) =>
+              form.setValue("status", value as FindingStatusForm["status"])
+            }
+            placeholder="Status"
+          >
+            {findingStatusSchema.shape.status.options.map((status) => (
+              <SelectItem key={status} value={status}>
+                {labelize(status)}
+              </SelectItem>
+            ))}
+          </Select>
+          <Input
+            disabled={disabled}
+            placeholder="Disposition reason"
+            {...form.register("dispositionReason")}
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={disabled || mutation.isPending}
+          >
+            {mutation.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : null}
+            Update
+          </Button>
+        </form>
+      )}
       {mutation.isError ? <ErrorPanel error={mutation.error} /> : null}
-    </div>
+    </FindingReviewCard>
   );
 }

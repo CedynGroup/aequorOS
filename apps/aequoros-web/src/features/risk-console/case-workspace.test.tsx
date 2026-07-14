@@ -23,6 +23,20 @@ vi.mock("../capital/capital-tab", () => ({
   ),
 }));
 
+vi.mock("../calculations/calculations-tab", () => ({
+  CalculationsTab: ({
+    mutationDisabled,
+    mutationDisabledReason,
+  }: {
+    mutationDisabled: boolean;
+    mutationDisabledReason: string;
+  }) => (
+    <div>
+      Forecast controls: {String(mutationDisabled)} · {mutationDisabledReason}
+    </div>
+  ),
+}));
+
 vi.mock("../findings/findings-tab", () => ({
   FindingsTab: ({
     mutationDisabled,
@@ -33,6 +47,20 @@ vi.mock("../findings/findings-tab", () => ({
   }) => (
     <div>
       Finding controls: {String(mutationDisabled)} · {mutationDisabledReason}
+    </div>
+  ),
+}));
+
+vi.mock("../liquidity/liquidity-tab", () => ({
+  LiquidityTab: ({
+    mutationDisabled,
+    mutationDisabledReason,
+  }: {
+    mutationDisabled: boolean;
+    mutationDisabledReason: string;
+  }) => (
+    <div>
+      Liquidity controls: {String(mutationDisabled)} · {mutationDisabledReason}
     </div>
   ),
 }));
@@ -101,6 +129,16 @@ describe("CaseWorkspace", () => {
     expect(
       screen.getByText(/Single-case actions are left disabled/),
     ).toBeInTheDocument();
+  });
+
+  it("keeps analysis verticals in case-detail tabs rather than workflow navigation", () => {
+    renderWorkspace();
+
+    expect(screen.getByRole("tab", { name: "Forecast" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Liquidity" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Liquidity" }),
+    ).not.toBeInTheDocument();
   });
 
   it("loads HTML reports in the report preview mode", async () => {
@@ -191,6 +229,56 @@ describe("CaseWorkspace", () => {
 
     expect(
       await screen.findByText("Finding controls: true · demo"),
+    ).toBeInTheDocument();
+  });
+
+  it("retires forecast mutations when the selected case is archived", async () => {
+    renderWorkspace({
+      activeTab: "calculations",
+      mockCaseData: {
+        ...mockCase(DEFAULT_ORG_ID, caseId),
+        status: "archived",
+      },
+    });
+
+    expect(
+      await screen.findByText("Forecast controls: true · retired-case"),
+    ).toBeInTheDocument();
+  });
+
+  it("disables forecast mutations in demo mode", async () => {
+    renderWorkspace({
+      activeTab: "calculations",
+      mockWorkspace: true,
+    });
+
+    expect(
+      await screen.findByText("Forecast controls: true · demo"),
+    ).toBeInTheDocument();
+  });
+
+  it("retires liquidity mutations when the selected case is archived", async () => {
+    renderWorkspace({
+      activeTab: "liquidity",
+      mockCaseData: {
+        ...mockCase(DEFAULT_ORG_ID, caseId),
+        archivedAt: new Date("2026-07-14T12:00:00Z"),
+      },
+    });
+
+    expect(
+      await screen.findByText("Liquidity controls: true · retired-case"),
+    ).toBeInTheDocument();
+  });
+
+  it("disables liquidity mutations in demo mode", async () => {
+    renderWorkspace({
+      activeTab: "liquidity",
+      mockWorkspace: true,
+    });
+
+    expect(
+      await screen.findByText("Liquidity controls: true · demo"),
     ).toBeInTheDocument();
   });
 });

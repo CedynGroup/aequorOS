@@ -116,8 +116,185 @@ function runList(items: CalculationRunRead[] = []): CalculationRunListRead {
 describe("CalculationsTab", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    window.history.replaceState(null, "", window.location.pathname);
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn<() => void>(),
+    });
     vi.spyOn(riskApi, "scenarios").mockResolvedValue(scenarioWorkspace());
     vi.spyOn(riskApi, "calculationRun").mockResolvedValue(run());
+  });
+
+  it("opens and focuses a forecast period from an evidence deep link", async () => {
+    const target = `calculation-run-${run().id}-forecast-period-1`;
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+
+    const { queryClient } = renderWithQuery(
+      <CalculationsTab tenant={tenant} caseId={caseId} />,
+    );
+
+    await waitFor(() => expect(document.activeElement?.id).toBe(target));
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(riskApi.calculationRun).toHaveBeenCalledWith(
+      tenant,
+      caseId,
+      run().id,
+    );
+
+    queryClient.setQueryData(["calculation-run", tenant, caseId, run().id], {
+      ...run(),
+      completedAt: new Date("2026-07-13T13:00:00Z"),
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText("$4,550.00")).toBeInTheDocument(),
+    );
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves an archived evidence run in read-only audit mode", async () => {
+    const target = `calculation-run-${run().id}-forecast-period-1`;
+    const archivedScenario = { ...scenario(), archivedAt: now };
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.mocked(riskApi.scenarios).mockResolvedValue(
+      scenarioWorkspace([archivedScenario]),
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("Archived forecast audit"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Archived", { exact: true })).toBeInTheDocument();
+    expect(
+      screen.getByText("Archived scenario · read only"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("$4,550.00")).toBeInTheDocument();
+    expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, caseId, true);
+    expect(
+      screen.queryByRole("button", { name: "Run forecast" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Rerun current inputs" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("makes archived runs selected from history read-only", async () => {
+    const user = userEvent.setup();
+    const activeRun = run();
+    const archivedScenarioId = "20000000-0000-4000-8000-000000000002";
+    const archivedRun = run({
+      id: "30000000-0000-4000-8000-000000000002",
+      scenarioId: archivedScenarioId,
+      createdAt: new Date("2026-07-12T12:00:00Z"),
+    });
+    vi.mocked(riskApi.scenarios).mockResolvedValue(
+      scenarioWorkspace([
+        scenario(),
+        {
+          ...scenario(),
+          id: archivedScenarioId,
+          name: "Archived downside",
+          archivedAt: now,
+        },
+      ]),
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(
+      runList([activeRun, archivedRun]),
+    );
+    vi.mocked(riskApi.calculationRun).mockImplementation(
+      (_tenant, _caseId, requestedRunId) =>
+        Promise.resolve(
+          requestedRunId === archivedRun.id ? archivedRun : activeRun,
+        ),
+    );
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+    await user.click(
+      await screen.findByRole("button", { name: /30000000\.\.\.0002/ }),
+    );
+
+    expect(
+      await screen.findByText("Archived forecast audit"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Archived scenario · read only"),
+    ).toBeInTheDocument();
+    expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, caseId, true);
+    expect(screen.getByRole("button", { name: "Run forecast" })).toBeEnabled();
+    expect(
+      screen.queryByRole("button", { name: "Rerun current inputs" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["demo", "Mutation unavailable in demo mode", "Demo mode · read only"],
+    [
+      "retired-case",
+      "Forecast mutations unavailable for retired case",
+      "Retired case · read only",
+    ],
+  ] as const)(
+    "disables every forecast mutation for %s workspaces",
+    async (mutationDisabledReason, panelTitle, runTitle) => {
+      const user = userEvent.setup();
+      vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList([run()]));
+      const start = vi.spyOn(riskApi, "startCalculation");
+      const rerun = vi.spyOn(riskApi, "rerunCalculation");
+
+      renderWithQuery(
+        <CalculationsTab
+          tenant={tenant}
+          caseId={caseId}
+          mutationDisabled
+          mutationDisabledReason={mutationDisabledReason}
+        />,
+      );
+
+      expect(await screen.findByText(panelTitle)).toBeInTheDocument();
+      expect(await screen.findByText(runTitle)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Run forecast" }),
+      ).toBeDisabled();
+      expect(screen.getByLabelText("Forecast scenario")).toBeDisabled();
+      expect(screen.getByLabelText("Forecast periods")).toBeDisabled();
+      expect(
+        screen.queryByRole("button", { name: "Rerun current inputs" }),
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Run forecast" }));
+      expect(start).not.toHaveBeenCalled();
+      expect(rerun).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    "calculation-run-not-a-uuid-forecast-period-1",
+    `calculation-run-${run().id}-forecast-period-0`,
+    `calculation-run-${run().id}-forecast-period-1.5`,
+    `calculation-run-${run().id}-forecast-period-invalid`,
+  ])("ignores malformed calculation evidence fragment %s", async (target) => {
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+
+    expect(await screen.findByText("No calculation runs")).toBeInTheDocument();
+    expect(riskApi.calculationRun).not.toHaveBeenCalled();
   });
 
   it("shows the empty state then starts and renders a successful forecast", async () => {
