@@ -51,9 +51,9 @@ forecast, liquidity, capital, finding, and decision mutations are disabled.
 Archived cases are likewise read-only. Document download links remain
 available because they do not mutate case data.
 
-The deterministic portfolio includes a non-compliant liquidity covenant for
-Mariner Trust so the case-health summary and adverse-state journeys do
-not rely on optimistic defaults.
+The frontend-only fixtures mark covenants non-compliant for the high-risk Adom
+and Kivu cases, so the case-health summary and adverse-state journeys do not
+rely on optimistic defaults.
 
 When the API is unavailable, enable frontend demo mode from the console to use
 populated, validated financial data, reviewed baseline and downside scenarios,
@@ -291,4 +291,6 @@ entry, and covenant-entry journeys. `e2e/capital-projection.spec.ts` covers the
 deterministic capital projection, comparison, finding-evidence, failure, and
 tenant-isolation workflow. `e2e/risk-console.spec.ts` verifies the compact
 scenario table, seeded breaching case-health summary, console overflow at
-1440x1000, and header overflow at 1280x800.
+1440x1000, and header overflow at 1280x800. `e2e/case-health-demo.spec.ts`
+verifies the populated
+frontend-only adverse summary and its focused navigation to Financial.

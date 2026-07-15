@@ -27,10 +27,13 @@ Successful forecasts now also persist versioned minimum-cash, peak-gap,
 sources-coverage, credit-reliance, and cash-runway metrics. Deterministic
 thresholds publish severity-ranked liquidity findings with input-hash-bound
 evidence; reviewers can acknowledge or dismiss them in the risk console. This
-slice still runs synchronously and does not include regulatory LCR/NSFR or
-stress calculations, Basel regulatory-capital scoring, advanced model configuration, constrained
-optimization, or final reporting. The broader sections below remain the target
-architecture for those later modules.
+console also presents tenant- and case-scoped financial validation, scenario
+readiness, forecast, finding, covenant, and decision health with direct
+navigation to each owning review tab. This slice still runs synchronously and
+does not include regulatory LCR/NSFR or stress calculations,
+Basel regulatory-capital scoring, advanced model configuration, constrained
+optimization, or final reporting. The broader sections below remain the
+target architecture for those later modules.
 
 ---
 
