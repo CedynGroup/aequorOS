@@ -457,7 +457,7 @@ function InfoBlock({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-[rgb(var(--border))] p-3">
+    <div className="min-w-0 rounded-md border border-[rgb(var(--border))] p-3">
       <div className="mb-2 text-xs font-semibold uppercase tracking-[0.04em] text-[rgb(var(--muted-foreground))]">
         {title}
       </div>
@@ -468,9 +468,14 @@ function InfoBlock({
 
 function KeyValue({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[120px_1fr] gap-2 text-xs">
-      <div className="text-[rgb(var(--muted-foreground))]">{label}</div>
-      <div>{value}</div>
+    <div
+      data-testid="case-key-value"
+      className="grid min-w-0 grid-cols-[minmax(0,120px)_minmax(0,1fr)] gap-2 text-xs"
+    >
+      <div className="min-w-0 break-words text-[rgb(var(--muted-foreground))]">
+        {label}
+      </div>
+      <div className="min-w-0 break-words">{value}</div>
     </div>
   );
 }
