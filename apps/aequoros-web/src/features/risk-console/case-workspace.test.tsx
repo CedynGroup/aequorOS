@@ -8,6 +8,7 @@ import { riskApi, type TenantHeaders } from "../../lib/api";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
 import { mockCase } from "../demo-data/demo-data";
+import { financialReviewClient } from "../financial/financial-client";
 import { CaseWorkspace } from "./case-workspace";
 
 vi.mock("../capital/capital-tab", () => ({
@@ -193,7 +194,7 @@ describe("CaseWorkspace", () => {
 
   it("focuses a health destination exactly once for each navigation", async () => {
     const user = userEvent.setup();
-    vi.spyOn(riskApi, "financialWorkspace").mockResolvedValue({
+    vi.spyOn(financialReviewClient, "workspace").mockResolvedValue({
       organizationId: tenant.orgId,
       caseId,
       institutions: [],

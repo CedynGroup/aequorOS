@@ -13,6 +13,7 @@ import { riskApi, type TenantHeaders } from "../../lib/api";
 import type { ConsoleTab } from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
 import { DEMO_CASE_IDS, mockCaseHealth } from "../demo-data/demo-data";
+import { financialReviewClient } from "../financial/financial-client";
 import { CaseHealthHeader } from "./case-health-header";
 
 const tenant: TenantHeaders = { orgId: "org-1", userId: "user-1" };
@@ -159,7 +160,7 @@ function installQueries({
   runList?: CalculationRunListRead;
   findingList?: FindingRead[];
 } = {}) {
-  vi.spyOn(riskApi, "financialWorkspace").mockResolvedValue(workspace);
+  vi.spyOn(financialReviewClient, "workspace").mockResolvedValue(workspace);
   vi.spyOn(riskApi, "scenarios").mockResolvedValue(scenarioWorkspace);
   vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList);
   vi.spyOn(riskApi, "findings").mockResolvedValue(findingList);
@@ -195,7 +196,7 @@ describe("CaseHealthHeader", () => {
 
   it("shows loading skeletons instead of optimistic health states", () => {
     const pending = new Promise<never>(() => undefined);
-    vi.spyOn(riskApi, "financialWorkspace").mockReturnValue(pending);
+    vi.spyOn(financialReviewClient, "workspace").mockReturnValue(pending);
     vi.spyOn(riskApi, "scenarios").mockReturnValue(pending);
     vi.spyOn(riskApi, "calculationRuns").mockReturnValue(pending);
     vi.spyOn(riskApi, "findings").mockReturnValue(pending);
@@ -455,7 +456,7 @@ describe("CaseHealthHeader", () => {
   });
 
   it("renders complete demo health without making live requests", () => {
-    const financialWorkspace = vi.spyOn(riskApi, "financialWorkspace");
+    const financialWorkspace = vi.spyOn(financialReviewClient, "workspace");
     const scenarios = vi.spyOn(riskApi, "scenarios");
     const calculationRuns = vi.spyOn(riskApi, "calculationRuns");
     const findings = vi.spyOn(riskApi, "findings");
@@ -484,7 +485,7 @@ describe("CaseHealthHeader", () => {
   });
 
   it("renders unknown states when health queries fail", async () => {
-    vi.spyOn(riskApi, "financialWorkspace").mockRejectedValue(
+    vi.spyOn(financialReviewClient, "workspace").mockRejectedValue(
       new Error("no financial"),
     );
     vi.spyOn(riskApi, "scenarios").mockRejectedValue(new Error("no scenarios"));
@@ -504,7 +505,7 @@ describe("CaseHealthHeader", () => {
     const { queryClient } = renderHeader(null);
     expect(await screen.findByText("No forecasts")).toBeInTheDocument();
 
-    vi.mocked(riskApi.financialWorkspace).mockResolvedValue(
+    vi.mocked(financialReviewClient.workspace).mockResolvedValue(
       financial({
         institutions: [
           {} as FinancialDataWorkspaceRead["institutions"][number],
