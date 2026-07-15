@@ -8,21 +8,22 @@ server-side on tenant-isolated, effective-dated data for a Bank of Ghana license
 
 ```
 aequorOS/
-├── backend/                  # ── THE BACKEND (Python, one FastAPI service) ──
-│                             #   all calculation engines incl. the in-process LSTM
-│                             #   cash-flow module (app/ml, PyTorch), Postgres,
-│                             #   RLS tenancy, regulatory runs, BoG submissions, seed
-├── dashboard/                # ── THE PRODUCT UI (Next.js) ── Treasurer console,
-│                             #   all values live from the backend API
+├── backend/                  # ── THE PRODUCT ──
+│   ├── app/                  #   FastAPI service: all engines (IRR, Liquidity, FX,
+│   │                         #   Basel, FTP, Forecasting), app/ml LSTM, Data Engine,
+│   │                         #   Postgres + RLS tenancy, BoG submissions, seed
+│   ├── dashboard/            #   the product UI (Next.js) → app.aequoros.com
+│   ├── alembic/ tests/ scripts/ docker-compose.yml
 ├── frontend/                 # ── MARKETING SITE (Next.js) ── aequoros.com pages
 ├── packages/
-│   └── risk-service-api/     # generated TypeScript client (backend ⇄ dashboard contract)
+│   └── risk-service-api/     # generated TypeScript client (API ⇄ dashboard contract)
 ├── docs/                     # specs, build handoff, working notes
 └── ARCHITECTURE.md           # system map + conventions (start here)
 ```
 
-Three deployables: `frontend` → Vercel (aequoros.com) · `dashboard` → Vercel
-(app/demo subdomain) · `backend` → container host (API incl. ML + Postgres + MinIO).
+Three deployables: `frontend` → Vercel (aequoros.com) · `backend/dashboard` → Vercel
+(app.aequoros.com, Root Directory `backend/dashboard`) · `backend` → container host
+(API incl. ML + Postgres + MinIO; the Docker image excludes `dashboard/`).
 
 ## Quick start
 

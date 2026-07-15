@@ -29,3 +29,6 @@ tests/
 # Docker/build metadata not needed inside context
 Dockerfile
 .dockerignore
+
+# Next.js UI lives alongside the service; not part of the API image.
+dashboard/

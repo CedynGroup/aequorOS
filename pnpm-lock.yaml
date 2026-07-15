@@ -14,11 +14,11 @@ importers:
 
   backend: {}
 
-  dashboard:
+  backend/dashboard:
     dependencies:
       '@aequoros/risk-service-api':
         specifier: workspace:*
-        version: link:../packages/risk-service-api
+        version: link:../../packages/risk-service-api
       '@tanstack/react-query':
         specifier: ^5
         version: 5.101.0(react@18.3.1)
