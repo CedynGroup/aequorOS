@@ -63,6 +63,14 @@ describe("risk console browser interactions", () => {
       await userEvent.click(
         screen.getByRole("combobox", { name: "Organization" }),
       );
+    });
+    const evidenceDir = import.meta.env.VITE_NO_MISTAKES_EVIDENCE_DIR;
+    if (evidenceDir) {
+      await page.screenshot({
+        path: `${evidenceDir}/organization-selector-open.png`,
+      });
+    }
+    await act(async () => {
       await userEvent.click(
         screen.getByRole("option", { name: "AequorOS Isolated Tenant" }),
       );
@@ -109,6 +117,13 @@ describe("risk console browser interactions", () => {
 
     expect(topBar.scrollWidth).toBeLessThanOrEqual(topBar.clientWidth);
     expect(hitTarget === toggle || toggle.contains(hitTarget)).toBe(true);
+    const evidenceDir = import.meta.env.VITE_NO_MISTAKES_EVIDENCE_DIR;
+    if (evidenceDir) {
+      await page.screenshot({
+        path: `${evidenceDir}/mobile-topbar-390x844.png`,
+        element: topBar,
+      });
+    }
     await userEvent.click(toggle);
     expect(toggleQueue).toHaveBeenCalledOnce();
   });

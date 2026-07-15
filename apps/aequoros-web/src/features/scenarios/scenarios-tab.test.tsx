@@ -233,6 +233,9 @@ describe("ScenariosTab", () => {
     { stored: 0.123456, editable: "12.3456" },
     { stored: 0.045, editable: "4.5" },
     { stored: 0.007, editable: "0.7" },
+    { stored: "0.35", editable: "35" },
+    { stored: "0.03", editable: "3" },
+    { stored: "1.0", editable: "100" },
   ])(
     "preserves $stored as editable percent text without marking it dirty",
     async ({ stored, editable }) => {
@@ -253,6 +256,34 @@ describe("ScenariosTab", () => {
       expect(screen.getByRole("button", { name: "Review" })).toBeEnabled();
     },
   );
+
+  it("percentage-scales edits to string-valued ratios", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(
+      workspace([
+        scenario({ assumptions: [assumption({ value: "0.35" })] }),
+      ]),
+    );
+    const update = vi
+      .spyOn(riskApi, "updateAssumption")
+      .mockResolvedValue(mutation());
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+    const value = await screen.findByLabelText("Revenue growth value");
+    await user.clear(value);
+    await user.type(value, "40");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledWith(
+        tenant,
+        caseId,
+        scenario().id,
+        assumption().id,
+        { value: 0.4, reason: "Reviewer updated assumption" },
+      );
+    });
+  });
 
   it.each([
     { entered: ".5", stored: 0.005 },

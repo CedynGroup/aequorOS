@@ -621,21 +621,27 @@ function AssumptionRow({
   readOnly: boolean;
   onSaved: (message: string) => Promise<void>;
 }) {
-  const initialType = valueTypeOf(assumption.value);
+  const initialType = valueTypeForUnit(assumption.value, assumption.unit);
   const [valueType, setValueType] = useState(initialType);
   const [value, setValue] = useState(
     valueInputForUnit(assumption.value, assumption.unit),
   );
   const [persistedValue, setPersistedValue] = useState(assumption.value);
   useEffect(() => {
-    setValueType(valueTypeOf(assumption.value));
+    setValueType(valueTypeForUnit(assumption.value, assumption.unit));
     setValue(valueInputForUnit(assumption.value, assumption.unit));
     setPersistedValue(assumption.value);
   }, [assumption.unit, assumption.updatedAt, assumption.value]);
   const nextValue = typedUnitValue(value, valueType, assumption.unit);
   const validValue = isValidValue(value, valueType, assumption.unit);
+  const persistedType = valueTypeForUnit(persistedValue, assumption.unit);
+  const comparablePersistedValue = typedUnitValue(
+    valueInputForUnit(persistedValue, assumption.unit),
+    persistedType,
+    assumption.unit,
+  );
   const dirty =
-    valueType !== valueTypeOf(persistedValue) || nextValue !== persistedValue;
+    valueType !== persistedType || nextValue !== comparablePersistedValue;
   const update = useMutation({
     mutationFn: () =>
       riskApi.updateAssumption(tenant, caseId, scenarioId, assumption.id, {
@@ -803,6 +809,15 @@ function valueTypeOf(value: AssumptionValue): AssumptionValueType {
   return typeof value as AssumptionValueType;
 }
 
+function valueTypeForUnit(
+  value: AssumptionValue,
+  unit?: string | null,
+): AssumptionValueType {
+  if (typeof value === "string" && unit === "ratio" && decimalParts(value))
+    return "number";
+  return valueTypeOf(value);
+}
+
 function valueInput(value: AssumptionValue): string {
   return value === null ? "" : String(value);
 }
@@ -811,7 +826,11 @@ function valueInputForUnit(
   value: AssumptionValue,
   unit?: string | null,
 ): string {
-  if (typeof value === "number" && unit === "ratio")
+  if (
+    unit === "ratio" &&
+    (typeof value === "number" ||
+      (typeof value === "string" && decimalParts(value)))
+  )
     return shiftDecimal(String(value), 2) ?? valueInput(value);
   return valueInput(value);
 }
