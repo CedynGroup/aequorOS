@@ -42,7 +42,6 @@ const groups: { label: string; items: NavItem[] }[] = [
         label: 'Interest Rate Risk',
         icon: Activity,
         code: '01',
-        postMvp: true,
       },
       { href: '/liquidity', label: 'Liquidity Risk', icon: Droplet, code: '02' },
       {
@@ -50,7 +49,6 @@ const groups: { label: string; items: NavItem[] }[] = [
         label: 'FX Risk',
         icon: DollarSign,
         code: '03',
-        postMvp: true,
       },
       { href: '/basel', label: 'Basel Capital', icon: ShieldCheck, code: '04' },
       {
@@ -58,7 +56,6 @@ const groups: { label: string; items: NavItem[] }[] = [
         label: 'Funds Transfer Pricing',
         icon: GitBranch,
         code: '05',
-        postMvp: true,
       },
       {
         href: '/forecasting',

@@ -2,10 +2,36 @@
 
 **Status: BUILD COMPLETE — READY FOR TESTING**
 
-The three-module MVP (Liquidity Risk · Basel Capital · Balance Sheet Forecasting)
-is built end-to-end on real, server-side, tenant-scoped calculation engines. The
-polished Treasurer-facing UI (`aequoros-demo`) now pulls every number from the
-backend — all hardcoded financial data has been deleted.
+The **full six-module product** (Interest Rate Risk · Liquidity · FX · Basel Capital ·
+Funds Transfer Pricing · Balance Sheet Forecasting, plus the LSTM cash-flow service) is
+built end-to-end on real, server-side, tenant-scoped calculation engines. The polished
+Treasurer-facing UI (`aequoros-demo`) pulls every number from the backend — zero hardcoded
+financial data.
+
+**Structure:** the monorepo was kept intact (no restructure). `aequoros-demo` is the primary
+product UI; `apps/risk-service` + `apps/cashflow-ml` are the backend; `packages/risk-service-api`
+is the shared generated client. See ARCHITECTURE.md → "Structure decision" for why the
+proposed "move backend into aequoros-demo / delete other apps" was declined.
+
+### Live-verified values (Sample Bank Ltd, 2026-03)
+
+| Module | Headline | Live value |
+|--------|----------|-----------|
+| Liquidity | LCR baseline/idio/market/combined | 147.29 / 94.84 / 113.01 / 87.36% |
+| Basel | CAR / Tier 1 / CET1 | 15.83 / 13.04 / 12.11% |
+| Forecasting | avg ROE / y5 CAR | 13.25 / 15.22% |
+| Cash-flow LSTM | MAPE improvement vs static | +25.3% |
+| IRR | worst ΔEVE÷Tier1 (limit 15) / dur gap / 12m gap | 5.35% green / 0.48y / −370M |
+| FX | NOP÷Tier1 / single-ccy max (limit 10) / VaR 99% 1d | 16.07% / 10.71% red / 731K |
+| FTP | portfolio NIM / products below margin / NMD core | 7.20% / 2 / 66.5% |
+
+All six modules run via `.../run-all-scenarios` + `.../dashboard`; tenant isolation verified
+(org2 → 404 on every module). Backend suite: **558 passed, 16 skipped**; repo-wide `ruff` clean.
+
+### Seed is idempotent
+
+`scripts/seed_sample_bank.py` now clears all bank-scoped dependents (regulatory runs +
+data-engine ingestion/canonical rows) before re-inserting, so it re-runs cleanly on a live DB.
 
 ---
 

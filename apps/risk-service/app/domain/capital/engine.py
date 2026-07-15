@@ -269,6 +269,17 @@ def classify_capital_ratio(value_pct: Decimal, minimum_pct: Decimal) -> CapitalS
     return "red"
 
 
+def tier1_capital(facts: Sequence[CapitalFact]) -> Decimal:
+    """Tier 1 capital (CET1 + AT1) from the capital-component facts.
+
+    Deductions subtract; general provisions and other Tier 2 items are ignored.
+    Reused by non-capital engines (e.g. IRRBB) that need Tier 1 as the
+    denominator for a supervisory limit without re-running the full RWA build.
+    """
+    components = [fact for fact in facts if fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT]
+    return money(_tier_total(components, TIER_CET1) + _tier_total(components, TIER_AT1))
+
+
 def compute_rwa(facts: Sequence[CapitalFact], params: CapitalParams) -> RwaResult:
     credit_items = _credit_line_items(facts, params)
     credit_rwa = money(sum((item.weighted_amount for item in credit_items), _ZERO))

@@ -9,9 +9,20 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.banks import BankRead, BankReportingPeriodRead
 
-type RegulatoryModule = Literal["liquidity", "capital", "forecast", "optimizer", "whatif"]
+type RegulatoryModule = Literal[
+    "liquidity", "capital", "forecast", "optimizer", "whatif", "irr", "fx", "ftp"
+]
 type LiquidityScenarioCode = Literal["baseline", "idiosyncratic", "market_wide", "combined"]
 type CapitalScenarioCode = Literal["baseline", "mild", "moderate", "severe"]
+type IrrScenarioCode = Literal[
+    "baseline",
+    "parallel_up_200",
+    "parallel_down_200",
+    "short_up_250",
+    "short_down_250",
+    "steepener",
+    "flattener",
+]
 type RegulatoryScenarioCode = Literal[
     "baseline",
     "idiosyncratic",
@@ -29,9 +40,20 @@ type RegulatoryScenarioCode = Literal[
     "cedi_depreciation_20",
     "default_spike",
     "mpr_cut_200",
+    "parallel_up_200",
+    "parallel_down_200",
+    "short_up_250",
+    "short_down_250",
+    "steepener",
+    "flattener",
+    "mild_depreciation",
+    "severe_depreciation",
+    "cedi_crisis",
+    "rates_up_200",
+    "funding_stress",
 ]
 type RegulatoryRunStatus = Literal["queued", "running", "succeeded", "failed"]
-type RegulatoryMetricUnit = Literal["pct", "ghs"]
+type RegulatoryMetricUnit = Literal["pct", "ghs", "years"]
 type RegulatoryMetricStatus = Literal["green", "amber", "red", "na"]
 type LiquidityRatioStatus = Literal["green", "amber", "red"]
 type RegulatoryLineSection = Literal[
@@ -45,6 +67,15 @@ type RegulatoryLineSection = Literal[
     "operational_rwa",
     "capital_component",
     "ratio",
+    "irr_gap",
+    "irr_eve",
+    "irr_ear",
+    "fx_position",
+    "fx_var",
+    "fx_hedge",
+    "ftp_curve",
+    "ftp_product",
+    "ftp_branch",
 ]
 type RegulatoryValidationSeverity = Literal["error", "warning", "info"]
 

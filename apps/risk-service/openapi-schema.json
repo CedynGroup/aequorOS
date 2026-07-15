@@ -8583,6 +8583,1011 @@
         "title": "ForecastScenarioRead",
         "type": "object"
       },
+      "FtpBranchRead": {
+        "additionalProperties": false,
+        "properties": {
+          "book_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Book Ghs",
+            "type": "string"
+          },
+          "branch": {
+            "title": "Branch",
+            "type": "string"
+          },
+          "deposits_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Deposits Ghs",
+            "type": "string"
+          },
+          "ftp_adjusted_nim_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ftp Adjusted Nim Pct",
+            "type": "string"
+          },
+          "loans_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Loans Ghs",
+            "type": "string"
+          },
+          "net_contribution_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Contribution Ghs",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "branch",
+          "deposits_ghs",
+          "loans_ghs",
+          "book_ghs",
+          "ftp_adjusted_nim_pct",
+          "net_contribution_ghs",
+          "rank"
+        ],
+        "title": "FtpBranchRead",
+        "type": "object"
+      },
+      "FtpCategory": {
+        "enum": [
+          "asset",
+          "liability"
+        ],
+        "type": "string"
+      },
+      "FtpCurvePointRead": {
+        "additionalProperties": false,
+        "properties": {
+          "base_yield_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Base Yield Pct",
+            "type": "string"
+          },
+          "ftp_rate_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ftp Rate Pct",
+            "type": "string"
+          },
+          "funding_spread_bps": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Funding Spread Bps",
+            "type": "string"
+          },
+          "liquidity_premium_bps": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Liquidity Premium Bps",
+            "type": "string"
+          },
+          "tenor_label": {
+            "title": "Tenor Label",
+            "type": "string"
+          },
+          "tenor_years": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tenor Years",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenor_label",
+          "tenor_years",
+          "base_yield_pct",
+          "liquidity_premium_bps",
+          "funding_spread_bps",
+          "ftp_rate_pct"
+        ],
+        "title": "FtpCurvePointRead",
+        "type": "object"
+      },
+      "FtpDashboardRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank": {
+            "$ref": "#/components/schemas/BankRead"
+          },
+          "branches": {
+            "items": {
+              "$ref": "#/components/schemas/FtpBranchRead"
+            },
+            "title": "Branches",
+            "type": "array"
+          },
+          "curve": {
+            "items": {
+              "$ref": "#/components/schemas/FtpCurvePointRead"
+            },
+            "title": "Curve",
+            "type": "array"
+          },
+          "latest_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ftp Dashboard Latest Run Id"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/FtpMetricsRead"
+          },
+          "nmd_segments": {
+            "items": {
+              "$ref": "#/components/schemas/FtpNmdSegmentRead"
+            },
+            "title": "Nmd Segments",
+            "type": "array"
+          },
+          "period": {
+            "$ref": "#/components/schemas/BankReportingPeriodRead"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/FtpProductRead"
+            },
+            "title": "Products",
+            "type": "array"
+          },
+          "stored": {
+            "title": "Stored",
+            "type": "boolean"
+          },
+          "trend": {
+            "items": {
+              "$ref": "#/components/schemas/FtpTrendPointRead"
+            },
+            "title": "Trend",
+            "type": "array"
+          },
+          "validations": {
+            "items": {
+              "$ref": "#/components/schemas/FtpValidationRead"
+            },
+            "title": "Validations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank",
+          "period",
+          "stored",
+          "latest_run_id",
+          "metrics",
+          "curve",
+          "products",
+          "branches",
+          "nmd_segments",
+          "trend",
+          "validations"
+        ],
+        "title": "FtpDashboardRead",
+        "type": "object"
+      },
+      "FtpMetricsRead": {
+        "additionalProperties": false,
+        "properties": {
+          "blended_assigned_ftp_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Blended Assigned Ftp Pct",
+            "type": "string"
+          },
+          "min_product_margin_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Min Product Margin Pct",
+            "type": "string"
+          },
+          "nmd_core_max_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nmd Core Max Pct",
+            "type": "string"
+          },
+          "nmd_core_min_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nmd Core Min Pct",
+            "type": "string"
+          },
+          "nmd_core_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nmd Core Pct",
+            "type": "string"
+          },
+          "nmd_core_status": {
+            "$ref": "#/components/schemas/FtpStatus"
+          },
+          "portfolio_nim_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Portfolio Nim Pct",
+            "type": "string"
+          },
+          "products_below_min_margin": {
+            "title": "Products Below Min Margin",
+            "type": "integer"
+          },
+          "total_balance_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Balance Ghs",
+            "type": "string"
+          },
+          "total_branch_contribution_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Branch Contribution Ghs",
+            "type": "string"
+          },
+          "total_contribution_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Contribution Ghs",
+            "type": "string"
+          },
+          "total_products": {
+            "title": "Total Products",
+            "type": "integer"
+          },
+          "weighted_asset_yield_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Weighted Asset Yield Pct",
+            "type": "string"
+          },
+          "weighted_funding_credit_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Weighted Funding Credit Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_nim_pct",
+          "weighted_asset_yield_pct",
+          "weighted_funding_credit_pct",
+          "total_balance_ghs",
+          "total_contribution_ghs",
+          "products_below_min_margin",
+          "total_products",
+          "min_product_margin_pct",
+          "total_branch_contribution_ghs",
+          "nmd_core_pct",
+          "nmd_core_status",
+          "nmd_core_min_pct",
+          "nmd_core_max_pct",
+          "blended_assigned_ftp_pct"
+        ],
+        "title": "FtpMetricsRead",
+        "type": "object"
+      },
+      "FtpNmdSegmentRead": {
+        "additionalProperties": false,
+        "properties": {
+          "assigned_ftp_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Assigned Ftp Pct",
+            "type": "string"
+          },
+          "balance_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance Ghs",
+            "type": "string"
+          },
+          "core_amount_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Core Amount Ghs",
+            "type": "string"
+          },
+          "core_ftp_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Core Ftp Pct",
+            "type": "string"
+          },
+          "core_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Core Pct",
+            "type": "string"
+          },
+          "effective_duration_years": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Effective Duration Years",
+            "type": "string"
+          },
+          "segment": {
+            "title": "Segment",
+            "type": "string"
+          },
+          "volatile_amount_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Volatile Amount Ghs",
+            "type": "string"
+          },
+          "volatile_ftp_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Volatile Ftp Pct",
+            "type": "string"
+          },
+          "volatile_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Volatile Pct",
+            "type": "string"
+          },
+          "within_policy": {
+            "title": "Within Policy",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "segment",
+          "balance_ghs",
+          "core_pct",
+          "volatile_pct",
+          "core_amount_ghs",
+          "volatile_amount_ghs",
+          "effective_duration_years",
+          "core_ftp_pct",
+          "volatile_ftp_pct",
+          "assigned_ftp_pct",
+          "within_policy"
+        ],
+        "title": "FtpNmdSegmentRead",
+        "type": "object"
+      },
+      "FtpProductRead": {
+        "additionalProperties": false,
+        "properties": {
+          "balance_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance Ghs",
+            "type": "string"
+          },
+          "below_min_margin": {
+            "title": "Below Min Margin",
+            "type": "boolean"
+          },
+          "capital_charge_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Capital Charge Pct",
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/FtpCategory"
+          },
+          "contribution_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Contribution Ghs",
+            "type": "string"
+          },
+          "customer_rate_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Customer Rate Pct",
+            "type": "string"
+          },
+          "expected_credit_loss_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Expected Credit Loss Pct",
+            "type": "string"
+          },
+          "ftp_rate_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ftp Rate Pct",
+            "type": "string"
+          },
+          "net_margin_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Margin Pct",
+            "type": "string"
+          },
+          "operating_cost_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Operating Cost Pct",
+            "type": "string"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "tenor_years": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tenor Years",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product",
+          "category",
+          "balance_ghs",
+          "tenor_years",
+          "customer_rate_pct",
+          "ftp_rate_pct",
+          "operating_cost_pct",
+          "expected_credit_loss_pct",
+          "capital_charge_pct",
+          "net_margin_pct",
+          "contribution_ghs",
+          "below_min_margin"
+        ],
+        "title": "FtpProductRead",
+        "type": "object"
+      },
+      "FtpScenarioBatchCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reporting_period_id"
+        ],
+        "title": "FtpScenarioBatchCreate",
+        "type": "object"
+      },
+      "FtpStatus": {
+        "enum": [
+          "green",
+          "amber",
+          "red"
+        ],
+        "type": "string"
+      },
+      "FtpTrendPointRead": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "nmd_core_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nmd Core Pct",
+            "type": "string"
+          },
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "portfolio_nim_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Portfolio Nim Pct",
+            "type": "string"
+          },
+          "products_below_min_margin": {
+            "title": "Products Below Min Margin",
+            "type": "integer"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "stored": {
+            "title": "Stored",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reporting_period_id",
+          "label",
+          "period_end",
+          "portfolio_nim_pct",
+          "products_below_min_margin",
+          "nmd_core_pct",
+          "stored"
+        ],
+        "title": "FtpTrendPointRead",
+        "type": "object"
+      },
+      "FtpValidationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "rule_code": {
+            "title": "Rule Code",
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/RegulatoryValidationSeverity"
+          }
+        },
+        "required": [
+          "rule_code",
+          "passed",
+          "severity",
+          "message"
+        ],
+        "title": "FtpValidationRead",
+        "type": "object"
+      },
+      "FxCurrencyPositionRead": {
+        "additionalProperties": false,
+        "properties": {
+          "abs_pct_tier1": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Abs Pct Tier1",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "net_ccy": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Ccy",
+            "type": "string"
+          },
+          "net_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Ghs",
+            "type": "string"
+          },
+          "side": {
+            "$ref": "#/components/schemas/FxSide"
+          },
+          "spot_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Spot Ghs",
+            "type": "string"
+          },
+          "within_single_limit": {
+            "title": "Within Single Limit",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "currency",
+          "side",
+          "net_ghs",
+          "net_ccy",
+          "spot_ghs",
+          "abs_pct_tier1",
+          "within_single_limit"
+        ],
+        "title": "FxCurrencyPositionRead",
+        "type": "object"
+      },
+      "FxDashboardRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank": {
+            "$ref": "#/components/schemas/BankRead"
+          },
+          "hedges": {
+            "items": {
+              "$ref": "#/components/schemas/FxHedgeRead"
+            },
+            "title": "Hedges",
+            "type": "array"
+          },
+          "latest_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Dashboard Latest Run Id"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/FxMetricsRead"
+          },
+          "period": {
+            "$ref": "#/components/schemas/BankReportingPeriodRead"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/FxCurrencyPositionRead"
+            },
+            "title": "Positions",
+            "type": "array"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/FxScenarioNopRead"
+            },
+            "title": "Scenarios",
+            "type": "array"
+          },
+          "standalone_vars": {
+            "items": {
+              "$ref": "#/components/schemas/FxStandaloneVarRead"
+            },
+            "title": "Standalone Vars",
+            "type": "array"
+          },
+          "stored": {
+            "title": "Stored",
+            "type": "boolean"
+          },
+          "trend": {
+            "items": {
+              "$ref": "#/components/schemas/FxTrendPointRead"
+            },
+            "title": "Trend",
+            "type": "array"
+          },
+          "validations": {
+            "items": {
+              "$ref": "#/components/schemas/FxValidationRead"
+            },
+            "title": "Validations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank",
+          "period",
+          "stored",
+          "latest_run_id",
+          "metrics",
+          "positions",
+          "standalone_vars",
+          "hedges",
+          "scenarios",
+          "trend",
+          "validations"
+        ],
+        "title": "FxDashboardRead",
+        "type": "object"
+      },
+      "FxHedgeRead": {
+        "additionalProperties": false,
+        "properties": {
+          "dollar_offset_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Dollar Offset Pct",
+            "type": "string"
+          },
+          "effective": {
+            "title": "Effective",
+            "type": "boolean"
+          },
+          "hedge_id": {
+            "title": "Hedge Id",
+            "type": "string"
+          },
+          "instrument": {
+            "title": "Instrument",
+            "type": "string"
+          },
+          "mtm_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Mtm Ghs",
+            "type": "string"
+          },
+          "pair": {
+            "title": "Pair",
+            "type": "string"
+          },
+          "prospective_r2_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Prospective R2 Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hedge_id",
+          "instrument",
+          "pair",
+          "mtm_ghs",
+          "prospective_r2_pct",
+          "dollar_offset_pct",
+          "effective"
+        ],
+        "title": "FxHedgeRead",
+        "type": "object"
+      },
+      "FxMetricsRead": {
+        "additionalProperties": false,
+        "properties": {
+          "diversification_benefit_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Diversification Benefit Ghs",
+            "type": "string"
+          },
+          "hedge_aggregate_mtm_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Hedge Aggregate Mtm Ghs",
+            "type": "string"
+          },
+          "hedge_effective_count": {
+            "title": "Hedge Effective Count",
+            "type": "integer"
+          },
+          "hedge_total_count": {
+            "title": "Hedge Total Count",
+            "type": "integer"
+          },
+          "nop_aggregate_limit_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nop Aggregate Limit Pct",
+            "type": "string"
+          },
+          "nop_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nop Ghs",
+            "type": "string"
+          },
+          "nop_pct_tier1": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nop Pct Tier1",
+            "type": "string"
+          },
+          "nop_single_limit_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nop Single Limit Pct",
+            "type": "string"
+          },
+          "nop_status": {
+            "$ref": "#/components/schemas/FxStatus"
+          },
+          "single_ccy_max_currency": {
+            "title": "Single Ccy Max Currency",
+            "type": "string"
+          },
+          "single_ccy_max_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Single Ccy Max Pct",
+            "type": "string"
+          },
+          "single_ccy_status": {
+            "$ref": "#/components/schemas/FxStatus"
+          },
+          "standalone_var_total_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Standalone Var Total Ghs",
+            "type": "string"
+          },
+          "stressed_var_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stressed Var Ghs",
+            "type": "string"
+          },
+          "sum_long_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Sum Long Ghs",
+            "type": "string"
+          },
+          "sum_short_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Sum Short Ghs",
+            "type": "string"
+          },
+          "tier1_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tier1 Ghs",
+            "type": "string"
+          },
+          "var_99_1d_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Var 99 1D Ghs",
+            "type": "string"
+          },
+          "var_confidence_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Var Confidence Pct",
+            "type": "string"
+          },
+          "var_observations": {
+            "title": "Var Observations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "nop_ghs",
+          "nop_pct_tier1",
+          "nop_status",
+          "sum_long_ghs",
+          "sum_short_ghs",
+          "single_ccy_max_pct",
+          "single_ccy_max_currency",
+          "single_ccy_status",
+          "nop_single_limit_pct",
+          "nop_aggregate_limit_pct",
+          "var_99_1d_ghs",
+          "stressed_var_ghs",
+          "diversification_benefit_ghs",
+          "standalone_var_total_ghs",
+          "var_confidence_pct",
+          "var_observations",
+          "hedge_effective_count",
+          "hedge_total_count",
+          "hedge_aggregate_mtm_ghs",
+          "tier1_ghs"
+        ],
+        "title": "FxMetricsRead",
+        "type": "object"
+      },
+      "FxScenarioBatchCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reporting_period_id"
+        ],
+        "title": "FxScenarioBatchCreate",
+        "type": "object"
+      },
+      "FxScenarioCode": {
+        "enum": [
+          "baseline",
+          "mild_depreciation",
+          "severe_depreciation",
+          "cedi_crisis"
+        ],
+        "type": "string"
+      },
+      "FxScenarioNopRead": {
+        "additionalProperties": false,
+        "properties": {
+          "nop_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nop Ghs",
+            "type": "string"
+          },
+          "nop_pct_tier1": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nop Pct Tier1",
+            "type": "string"
+          },
+          "scenario_code": {
+            "$ref": "#/components/schemas/FxScenarioCode"
+          },
+          "shock_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Shock Pct",
+            "type": "string"
+          },
+          "within_aggregate_limit": {
+            "title": "Within Aggregate Limit",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "scenario_code",
+          "shock_pct",
+          "nop_ghs",
+          "nop_pct_tier1",
+          "within_aggregate_limit"
+        ],
+        "title": "FxScenarioNopRead",
+        "type": "object"
+      },
+      "FxSide": {
+        "enum": [
+          "long",
+          "short"
+        ],
+        "type": "string"
+      },
+      "FxStandaloneVarRead": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "net_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Ghs",
+            "type": "string"
+          },
+          "standalone_var_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Standalone Var Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency",
+          "net_ghs",
+          "standalone_var_ghs"
+        ],
+        "title": "FxStandaloneVarRead",
+        "type": "object"
+      },
+      "FxStatus": {
+        "enum": [
+          "green",
+          "amber",
+          "red"
+        ],
+        "type": "string"
+      },
+      "FxTrendPointRead": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "nop_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nop Ghs",
+            "type": "string"
+          },
+          "nop_pct_tier1": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nop Pct Tier1",
+            "type": "string"
+          },
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "stored": {
+            "title": "Stored",
+            "type": "boolean"
+          },
+          "var_99_1d_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Var 99 1D Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reporting_period_id",
+          "label",
+          "period_end",
+          "nop_ghs",
+          "nop_pct_tier1",
+          "var_99_1d_ghs",
+          "stored"
+        ],
+        "title": "FxTrendPointRead",
+        "type": "object"
+      },
+      "FxValidationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "rule_code": {
+            "title": "Rule Code",
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/RegulatoryValidationSeverity"
+          }
+        },
+        "required": [
+          "rule_code",
+          "passed",
+          "severity",
+          "message"
+        ],
+        "title": "FxValidationRead",
+        "type": "object"
+      },
       "HealthResponse": {
         "properties": {
           "environment": {
@@ -11664,7 +12669,12 @@
           "short_up_250",
           "short_down_250",
           "steepener",
-          "flattener"
+          "flattener",
+          "mild_depreciation",
+          "severe_depreciation",
+          "cedi_crisis",
+          "rates_up_200",
+          "funding_stress"
         ],
         "type": "string"
       },
@@ -16397,6 +17407,518 @@
         "summary": "Run Whatif Analysis",
         "tags": [
           "forecasting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/ftp/dashboard": {
+      "get": {
+        "operationId": "getFtpDashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reporting_period_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reporting Period Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FtpDashboardRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Ftp Dashboard",
+        "tags": [
+          "regulatory-ftp"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/ftp/run-all-scenarios": {
+      "post": {
+        "operationId": "runAllFtpScenarios",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FtpScenarioBatchCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegulatoryRunBatchRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Run All Ftp Scenarios",
+        "tags": [
+          "regulatory-ftp"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/fx/dashboard": {
+      "get": {
+        "operationId": "getFxDashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reporting_period_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reporting Period Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FxDashboardRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Fx Dashboard",
+        "tags": [
+          "regulatory-fx"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/fx/run-all-scenarios": {
+      "post": {
+        "operationId": "runAllFxScenarios",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FxScenarioBatchCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegulatoryRunBatchRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Run All Fx Scenarios",
+        "tags": [
+          "regulatory-fx"
         ]
       }
     },

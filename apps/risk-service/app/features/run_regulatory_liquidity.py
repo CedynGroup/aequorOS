@@ -64,7 +64,9 @@ def list_regulatory_runs(  # noqa: PLR0913
     db: DbSession,
     ctx: Tenant,
     module: Annotated[
-        Literal["liquidity", "capital", "forecast", "optimizer", "whatif"] | None, Query()
+        Literal["liquidity", "capital", "forecast", "optimizer", "whatif", "irr", "fx", "ftp"]
+        | None,
+        Query(),
     ] = None,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
     scenario_code: Annotated[str | None, Query(max_length=40)] = None,

@@ -29,11 +29,15 @@ type Item = {
 const items: Item[] = [
   { id: 'home', label: 'Home / Overview Dashboard', href: '/', icon: LayoutDashboard, group: 'Pages' },
 
+  { id: 'irr', label: 'Interest Rate Risk — IRRBB Dashboard', hint: 'Module 01', href: '/irr', icon: Activity, group: 'Modules' },
+
   { id: 'lcr', label: 'Liquidity — LCR Dashboard', hint: 'Module 02', href: '/liquidity', icon: Droplet, group: 'Modules' },
   { id: 'nsfr', label: 'Liquidity — NSFR Dashboard', href: '/liquidity/nsfr', icon: Droplet, group: 'Modules' },
   { id: 'forecast', label: 'Liquidity — Cash Flow Forecast (LSTM)', href: '/liquidity/forecast', icon: Droplet, group: 'Modules' },
   { id: 'stress', label: 'Liquidity — Stress Scenarios', href: '/liquidity/stress', icon: Droplet, group: 'Modules' },
   { id: 'submission', label: 'Liquidity — BoG Submission Preview', href: '/liquidity/submission', icon: Droplet, group: 'Modules' },
+
+  { id: 'fx', label: 'FX Risk — Net Open Position', hint: 'Module 03', href: '/fx', icon: DollarSign, group: 'Modules' },
 
   { id: 'basel', label: 'Basel Capital — Capital Dashboard', hint: 'Module 04', href: '/basel', icon: ShieldCheck, group: 'Modules' },
   { id: 'rwa', label: 'Basel — RWA Breakdown', href: '/basel/rwa', icon: ShieldCheck, group: 'Modules' },
@@ -41,14 +45,12 @@ const items: Item[] = [
   { id: 'basel-stress', label: 'Basel — Stress Testing', href: '/basel/stress', icon: ShieldCheck, group: 'Modules' },
   { id: 'basel-subs', label: 'Basel — BoG Submission Preview', href: '/basel/submissions', icon: ShieldCheck, group: 'Modules' },
 
+  { id: 'ftp', label: 'Funds Transfer Pricing — FTP Dashboard', hint: 'Module 05', href: '/ftp', icon: GitBranch, group: 'Modules' },
+
   { id: 'forecasting', label: 'Balance Sheet — Forecast Dashboard', hint: 'Module 06', href: '/forecasting', icon: TrendingUp, group: 'Modules' },
   { id: 'forecast-scenario', label: 'Balance Sheet — Scenario Builder', href: '/forecasting/scenario', icon: TrendingUp, group: 'Modules' },
   { id: 'forecast-optimizer', label: 'Balance Sheet — Strategy Optimizer', href: '/forecasting/optimizer', icon: TrendingUp, group: 'Modules' },
   { id: 'forecast-whatif', label: 'Balance Sheet — What-if Analysis', href: '/forecasting/whatif', icon: TrendingUp, group: 'Modules' },
-
-  { id: 'irr', label: 'Interest Rate Risk', hint: 'Post-MVP', href: '/irr', icon: Activity, group: 'Post-MVP modules' },
-  { id: 'fx', label: 'FX Risk', hint: 'Post-MVP', href: '/fx', icon: DollarSign, group: 'Post-MVP modules' },
-  { id: 'ftp', label: 'Funds Transfer Pricing', hint: 'Post-MVP', href: '/ftp', icon: GitBranch, group: 'Post-MVP modules' },
 
   { id: 'reports', label: 'Reports Library', href: '/reports', icon: FileBarChart2, group: 'Filings' },
   { id: 'submissions', label: 'Regulatory Submissions', href: '/submissions', icon: FileCheck2, group: 'Filings' },

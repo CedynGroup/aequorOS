@@ -100,9 +100,12 @@ def get_period_facts(
     )
     grouped: dict[str, list[BankFactRead]] = {field: [] for field in _FACT_GROUP_FIELDS.values()}
     for fact in facts:
-        grouped[_FACT_GROUP_FIELDS[fact.fact_group]].append(
-            BankFactRead.model_validate(fact, from_attributes=True)
-        )
+        # Analytical-overlay groups (irr_*, fx_*, ftp_*) are surfaced by their own
+        # module dashboards, not this canonical balance-sheet facts view.
+        field = _FACT_GROUP_FIELDS.get(fact.fact_group)
+        if field is None:
+            continue
+        grouped[field].append(BankFactRead.model_validate(fact, from_attributes=True))
     return BankFactsRead(
         period=BankReportingPeriodRead.model_validate(period, from_attributes=True),
         **grouped,

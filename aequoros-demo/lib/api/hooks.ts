@@ -30,6 +30,9 @@ import {
   forecastingApi,
   isApiError,
   regulatoryCapitalApi,
+  regulatoryFtpApi,
+  regulatoryFxApi,
+  regulatoryIrrApi,
   regulatoryLiquidityApi,
   tenant,
 } from './client';
@@ -253,6 +256,125 @@ export function useRunAllCapitalScenarios(bankId: string | undefined) {
       ),
     onSuccess: () => {
       capitalInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Interest Rate Risk (IRR), FX Risk, and Funds Transfer Pricing (FTP)
+//
+// Each module exposes a self-contained dashboard plus a run-all-scenarios
+// batch mutation, mirroring the capital module. Run-all invalidates the
+// module's dashboard and the shared regulatory-run read keys.
+// ---------------------------------------------------------------------------
+
+export function useIrrDashboard(
+  bankId: string | undefined,
+  periodId: string | undefined
+) {
+  return useQuery({
+    queryKey: ['irr-dashboard', bankId, periodId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryIrrApi.getIrrDashboard({
+          ...t,
+          bankId: bankId!,
+          reportingPeriodId: periodId,
+        })
+      ),
+    enabled: Boolean(bankId && periodId),
+  });
+}
+
+export function useRunAllIrrScenarios(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { reportingPeriodId: string }) =>
+      apiCall(() =>
+        regulatoryIrrApi.runAllIrrScenarios({
+          ...t,
+          bankId: bankId!,
+          irrScenarioBatchCreate: payload,
+        })
+      ),
+    onSuccess: () => {
+      ['irr-dashboard', 'reg-runs', 'reg-run'].forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+export function useFxDashboard(
+  bankId: string | undefined,
+  periodId: string | undefined
+) {
+  return useQuery({
+    queryKey: ['fx-dashboard', bankId, periodId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryFxApi.getFxDashboard({
+          ...t,
+          bankId: bankId!,
+          reportingPeriodId: periodId,
+        })
+      ),
+    enabled: Boolean(bankId && periodId),
+  });
+}
+
+export function useRunAllFxScenarios(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { reportingPeriodId: string }) =>
+      apiCall(() =>
+        regulatoryFxApi.runAllFxScenarios({
+          ...t,
+          bankId: bankId!,
+          fxScenarioBatchCreate: payload,
+        })
+      ),
+    onSuccess: () => {
+      ['fx-dashboard', 'reg-runs', 'reg-run'].forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+export function useFtpDashboard(
+  bankId: string | undefined,
+  periodId: string | undefined
+) {
+  return useQuery({
+    queryKey: ['ftp-dashboard', bankId, periodId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryFtpApi.getFtpDashboard({
+          ...t,
+          bankId: bankId!,
+          reportingPeriodId: periodId,
+        })
+      ),
+    enabled: Boolean(bankId && periodId),
+  });
+}
+
+export function useRunAllFtpScenarios(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { reportingPeriodId: string }) =>
+      apiCall(() =>
+        regulatoryFtpApi.runAllFtpScenarios({
+          ...t,
+          bankId: bankId!,
+          ftpScenarioBatchCreate: payload,
+        })
+      ),
+    onSuccess: () => {
+      ['ftp-dashboard', 'reg-runs', 'reg-run'].forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
     },

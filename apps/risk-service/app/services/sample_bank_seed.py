@@ -8,6 +8,7 @@ are deleted by fixed UUID before re-insertion.
 
 from __future__ import annotations
 
+import math
 from calendar import monthrange
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete, select
+from sqlalchemy import inspect as sql_inspect
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
 
@@ -47,6 +49,8 @@ SAMPLE_BANK_ID = UUID("77000000-0000-4000-8000-000000000001")
 CURRENCY = "GHS"
 JURISDICTION_CODE = "GH"
 APPROVED_BY = "Bank of Ghana CRD baseline"
+FX_APPROVED_BY = "BoG FX baseline"
+FTP_APPROVED_BY = "BoG FTP baseline"
 APPROVAL_TIMESTAMP = datetime(2025, 1, 1, tzinfo=UTC)
 EFFECTIVE_FROM = date(2025, 1, 1)
 
@@ -56,6 +60,7 @@ FIRST_PERIOD_MONTH = 4
 
 _ONE = Decimal(1)
 _ZERO = Decimal(0)
+_HUNDRED = Decimal("100")
 MILLION = Decimal("1000000")
 MONEY = Decimal("0.0001")
 
@@ -63,6 +68,7 @@ _SECURITIES_FACTOR_START = Decimal("0.90")
 _LOANS_FACTOR_START = Decimal("0.94")
 _DEPOSITS_FACTOR_START = Decimal("0.985")
 _CAPITAL_FACTOR_START = Decimal("0.96")
+_FX_FACTOR_START = Decimal("0.93")
 
 # Canonical latest-period amounts, in GHS millions.
 _FIXED_ASSETS_M: tuple[tuple[str, str], ...] = (
@@ -125,6 +131,235 @@ _CAPITAL_COMPONENTS_M: tuple[tuple[str, str, str, bool], ...] = (
     ("subordinated_debt", "45", "T2", False),
     ("general_provisions", "15", "T2", False),
 )
+
+# IRR rate-sensitive repricing positions (latest-period canonical, GHS millions).
+# (category, bucket, millions, rate_pct, fixed_or_float, midpoint_years, source).
+#
+# Source reconciliation to the balance sheet (canonical 2026-03):
+#   - securities-sourced positions (short/medium government bills and bonds) sum
+#     to 620M, tying to the balance-sheet securities line (bog_bills 260 +
+#     gog_bonds 360) and scaling with the securities factor;
+#   - one interbank placement of 70M is sourced from the fixed BoG excess
+#     reserves (70M) and does not scale;
+#   - the remaining 1,350M is loan-sourced (corporate, SME, mortgage and
+#     long-dated held-to-maturity government paper carried in the banking book)
+#     and stays within the 1,400M gross loan book, scaling with the loans factor.
+# Asset RS total = 620 + 70 + 1,350 = 2,040M.
+_IRR_ASSET_POSITIONS: tuple[tuple[str, str, str, str, str, str, str], ...] = (
+    ("interbank_placements", "overnight", "70", "26.0", "float", "0.003", "interbank"),
+    ("tbills_short", "1-7d", "60", "25.4", "fixed", "0.014", "securities"),
+    ("tbills_1m", "8-30d", "90", "25.6", "fixed", "0.06", "securities"),
+    ("tbills_3m", "1-3m", "110", "25.4", "fixed", "0.17", "securities"),
+    ("corp_loans_float_1", "1-3m", "180", "29.5", "float", "0.17", "loans"),
+    ("gog_bonds_short", "3-6m", "120", "26.1", "fixed", "0.38", "securities"),
+    ("sme_loans_1", "3-6m", "150", "31.0", "float", "0.38", "loans"),
+    ("gog_bonds_1y", "6-12m", "90", "27.0", "fixed", "0.75", "securities"),
+    ("corp_loans_float_2", "6-12m", "200", "29.5", "float", "0.75", "loans"),
+    ("gog_bonds_2y", "1-3y", "150", "27.8", "fixed", "1.9", "securities"),
+    ("corp_loans_fixed", "1-3y", "240", "24.5", "fixed", "1.9", "loans"),
+    ("gog_bonds_5y", "3-5y", "180", "28.9", "fixed", "4.0", "loans"),
+    ("mortgages", "3-5y", "200", "28.2", "fixed", "4.0", "loans"),
+    ("gog_bonds_long", "5y+", "100", "29.5", "fixed", "7.0", "loans"),
+    ("corp_loans_long", "5y+", "100", "24.5", "fixed", "7.0", "loans"),
+)
+# Interest-bearing funding that reprices; the retail current-account core is
+# behaviorally non-rate-sensitive and is excluded. Liability RS total = 1,705M.
+_IRR_LIABILITY_POSITIONS: tuple[tuple[str, str, str, str, str, str, str], ...] = (
+    ("call_deposits", "overnight", "240", "7.0", "float", "0.003", "deposits"),
+    ("wholesale_sme", "8-30d", "200", "21.5", "fixed", "0.06", "deposits"),
+    ("term_deposits_3m", "1-3m", "280", "21.5", "fixed", "0.17", "deposits"),
+    ("wholesale_corp", "1-3m", "320", "23.0", "fixed", "0.17", "deposits"),
+    ("savings_repricing", "3-6m", "300", "8.5", "float", "0.38", "deposits"),
+    ("term_deposits_1y", "6-12m", "220", "23.4", "fixed", "0.75", "deposits"),
+    ("term_borrowings", "1-3y", "100", "25.5", "fixed", "1.9", "deposits"),
+    ("subordinated_debt", "5y+", "45", "26.0", "fixed", "7.0", "capital"),
+)
+# A single pay-fixed receiver interest-rate swap hedge. The engine decomposes it
+# into a floating receive leg (asset, next 91-day reset) and a fixed pay leg
+# (liability, 3-year tenor); both price into gap/EVE/duration but not NII.
+_IRR_SWAP: dict[str, str] = {
+    "category": "pay_fixed_irs",
+    "notional_m": "120",
+    "pay_rate_pct": "25.3",
+    "receive_index": "91d_tbill",
+    "tenor_years": "3",
+    "direction": "pay_fixed",
+    "receive_bucket": "1-3m",
+    "receive_midpoint_years": "0.17",
+    "pay_bucket": "1-3y",
+    "pay_midpoint_years": "1.9",
+}
+# Base zero-coupon discount curve for PV/EVE, keyed by bucket midpoint (percent).
+_IRR_BASE_CURVE: dict[str, str] = {
+    "0.003y": "25.5",
+    "0.014y": "25.4",
+    "0.06y": "25.6",
+    "0.17y": "25.8",
+    "0.38y": "26.2",
+    "0.75y": "27.0",
+    "1.9y": "27.8",
+    "4.0y": "28.9",
+    "7.0y": "29.5",
+}
+# Six Basel IRRBB scenarios plus the base discount curve. Short-rate scenarios
+# decay with tenor via decay_years; steepener/flattener use the standard
+# e^(-t/4) short weight applied in the engine.
+_IRR_STRESS: dict[str, dict[str, str]] = {
+    "base_curve": _IRR_BASE_CURVE,
+    "parallel_up_200": {"parallel_bp": "200"},
+    "parallel_down_200": {"parallel_bp": "-200"},
+    "short_up_250": {"short_bp": "250", "decay_years": "3"},
+    "short_down_250": {"short_bp": "-250", "decay_years": "3"},
+    "steepener": {"short_bp": "-65", "long_bp": "90"},
+    "flattener": {"short_bp": "80", "long_bp": "-60"},
+}
+_IRR_SOURCE_FACTOR: dict[str, str] = {
+    "securities": "securities",
+    "loans": "loans",
+    "interbank": "fixed",
+    "deposits": "deposits",
+    "capital": "capital",
+}
+# IRR positions are an independent decomposition of the rate-sensitive book;
+# their reconciliation to balance-sheet securities and loans is checked within
+# this tolerance to absorb 4-dp rounding of the individually scaled overlay rows.
+_IRR_TIE_TOLERANCE = Decimal("1")
+
+# FX net open positions per currency (latest-period canonical, GHS millions).
+# (currency, net_ghs_m signed, spot_ghs, assets_ccy_m, liabilities_ccy_m,
+#  net_derivatives_ccy_m, return_seed). By construction, for every row
+#  assets_ccy - liabilities_ccy + net_derivatives_ccy = net_ccy and
+#  net_ccy * spot_ghs = net_ghs at factor 1.0. Longs (USD, GBP, NGN, ZAR) sum to
+#  +45M GHS-equivalent and shorts (EUR, XOF) to -12M, tying exactly to the
+#  market_risk net_long_fx (45M) / net_short_fx (12M) facts at 2026-03.
+_FX_POSITIONS: tuple[tuple[str, str, str, str, str, str, int], ...] = (
+    ("USD", "30", "12.5", "5.0", "3.1", "0.5", 0),
+    ("EUR", "-7", "14.0", "1.2", "2.0", "0.3", 1),
+    ("GBP", "9", "15.0", "1.4", "1.0", "0.2", 2),
+    ("NGN", "3", "0.008", "500", "150", "25", 3),
+    ("ZAR", "3", "0.6", "8.0", "4.0", "1.0", 4),
+    ("XOF", "-5", "0.02", "300", "600", "50", 5),
+)
+_FX_LONG_TOTAL_M = "45"
+_FX_SHORT_TOTAL_M = "12"
+# Three hedges: two effective (R^2 >= 0.80 and dollar-offset within 0.80-1.25)
+# and one ineffective (R^2 0.72) so the IFRS 9 effectiveness screen shows both
+# states. (hedge_id, instrument, pair, notional_ccy_m, rate, maturity_days,
+#  mtm_ghs_m signed, prospective_r2, dollar_offset_ratio).
+_FX_HEDGES: tuple[tuple[str, str, str, str, str, str, str, str, str], ...] = (
+    ("FXH-USD-01", "forward", "USD/GHS", "20", "12.7", "90", "4.5", "0.94", "1.02"),
+    ("FXH-EUR-02", "cross_currency_swap", "EUR/GHS", "6", "14.2", "365", "-2.1", "0.88", "0.91"),
+    ("FXH-GBP-03", "option", "GBP/GHS", "4", "16.0", "180", "1.3", "0.72", "0.95"),
+)
+# Daily FX-return history parameters (250-day rolling window). Returns are
+# generated by a deterministic, RNG-free closed form (drift + seasonal +
+# per-currency idiosyncratic oscillation), with a high-volatility cedi-crisis
+# sub-window (days 60-110) carrying a fat negative tail. See _fx_return_series.
+_FX_RETURN_WINDOW = 250
+_FX_CRISIS_START = 60
+_FX_CRISIS_END = 110
+# FX position sums are checked against their scaled canonical totals within this
+# tolerance to absorb 4-dp rounding of the individually scaled per-currency rows.
+_FX_TIE_TOLERANCE = Decimal("1")
+_FX_CAPITAL_THRESHOLDS: dict[str, str] = {
+    "fx_nop_single_limit_pct": "10",
+    "fx_nop_aggregate_limit_pct": "20",
+    "fx_var_confidence_pct": "99",
+    "hedge_r2_min_pct": "80",
+    "hedge_offset_low_pct": "80",
+    "hedge_offset_high_pct": "125",
+}
+_FX_STRESS: dict[str, dict[str, str]] = {
+    "mild_depreciation": {"ghs_usd_shock_pct": "10"},
+    "severe_depreciation": {"ghs_usd_shock_pct": "20"},
+    "cedi_crisis": {
+        "ghs_usd_shock_pct": "30",
+        "correlation_uplift": "0.2",
+        "crisis_window_start": str(_FX_CRISIS_START),
+        "crisis_window_end": str(_FX_CRISIS_END),
+    },
+}
+
+# FTP matched-maturity transfer curve (rates, period-invariant — no scaling).
+# (tenor_label, tenor_years, base_yield_pct, liquidity_premium_bps,
+#  funding_spread_bps, expected_ftp_rate_pct). By construction each point obeys
+#  ftp = base + (liquidity_bps + funding_bps) / 100; the seed asserts it.
+_FTP_CURVE_POINTS: tuple[tuple[str, str, str, str, str, str], ...] = (
+    ("overnight", "0.003", "25.0", "0", "40", "25.40"),
+    ("91d", "0.25", "25.4", "0", "45", "25.85"),
+    ("182d", "0.5", "26.1", "5", "45", "26.60"),
+    ("1y", "1.0", "27.0", "10", "50", "27.60"),
+    ("2y", "2.0", "27.8", "20", "50", "28.50"),
+    ("3y", "3.0", "28.4", "30", "55", "29.25"),
+    ("5y", "5.0", "28.9", "40", "55", "29.85"),
+    ("10y", "10.0", "29.5", "50", "60", "30.60"),
+)
+# FTP product book (latest-period canonical, GHS millions). ``ftp_rate_pct``
+# matches the curve point at ``tenor_years``. Source drives the per-period
+# scaling factor and the balance-sheet reconciliation:
+#   - loan products (corporate/sme/mortgage/retail) sum to 1,290M ≤ 1,400M gross
+#     loans; the remaining 110M is the past-due and commercial book carried
+#     centrally, so the FTP loan book stays inside the balance sheet.
+#   - gov_securities_3y (620M) ties to the balance-sheet securities line
+#     (bog_bills 260 + gog_bonds 360).
+#   - deposit products sum to 1,740M ≤ 1,900M of interest-bearing deposits; the
+#     remaining 160M is non-repricing head-office float.
+# (product, category, balance_m, tenor_years, customer_rate_pct, ftp_rate_pct,
+#  operating_cost_pct, expected_credit_loss_pct, capital_charge_pct, source).
+_FTP_PRODUCTS: tuple[tuple[str, str, str, str, str, str, str, str, str, str], ...] = (
+    ("corporate_5y", "asset", "560", "5.0", "32.0", "29.85", "0.5", "0.8", "0.15", "loans"),
+    ("sme_2y", "asset", "280", "2.0", "33.0", "28.50", "0.7", "1.2", "0.11", "loans"),
+    ("mortgage_10y", "asset", "200", "10.0", "30.0", "30.60", "0.4", "0.3", "0.05", "loans"),
+    ("retail_1y", "asset", "250", "1.0", "34.0", "27.60", "0.9", "1.5", "0.08", "loans"),
+    ("gov_securities_3y", "asset", "620", "3.0", "27.5", "29.25", "0.05", "0", "0", "securities"),
+    ("current_accounts", "liability", "700", "0.003", "0.0", "25.40", "0.3", "0", "0", "deposits"),
+    ("savings", "liability", "300", "0.5", "8.5", "26.60", "0.4", "0", "0", "deposits"),
+    ("term_3m", "liability", "280", "0.25", "21.5", "25.85", "0.2", "0", "0", "deposits"),
+    ("term_1y", "liability", "220", "1.0", "23.4", "27.60", "0.2", "0", "0", "deposits"),
+    ("wholesale", "liability", "240", "0.25", "23.0", "25.85", "0.1", "0", "0", "deposits"),
+)
+# FTP branch network (latest-period canonical, GHS millions). Deposits scale with
+# the deposits factor, loans with the loans factor. Σ branch deposits (1,500M) and
+# Σ branch loans (1,180M) are the branch-booked subset of the 1,900M deposit and
+# 1,400M loan books; head-office/treasury positions are booked centrally.
+# (branch, deposits_m, loans_m).
+_FTP_BRANCHES: tuple[tuple[str, str, str], ...] = (
+    ("accra_main", "520", "380"),
+    ("kumasi", "310", "260"),
+    ("takoradi", "180", "210"),
+    ("tema", "240", "150"),
+    ("tamale", "130", "90"),
+    ("cape_coast", "120", "90"),
+)
+# FTP non-maturity-deposit segments (latest-period canonical, GHS millions).
+# Core receives a long-tenor FTP rate at the effective duration, volatile the
+# overnight rate. Balances scale with the deposits factor. Σ NMD balances (1,000M)
+# maps to the current-account and savings deposit products.
+# (segment, balance_m, core_pct, volatile_pct, effective_duration_years).
+_FTP_NMDS: tuple[tuple[str, str, str, str, str], ...] = (
+    ("current_accounts", "700", "65", "35", "2.5"),
+    ("savings", "300", "70", "30", "3.0"),
+)
+_FTP_SOURCE_FACTOR: dict[str, str] = {
+    "loans": "loans",
+    "securities": "securities",
+    "deposits": "deposits",
+}
+# FTP balances are checked against their scaled canonical totals within this
+# tolerance to absorb 4-dp rounding of the individually scaled rows.
+_FTP_TIE_TOLERANCE = Decimal("1")
+_FTP_CAPITAL_THRESHOLDS: dict[str, str] = {
+    "ftp_target_roe_pct": "15",
+    "ftp_min_product_margin_pct": "0",
+    "ftp_liquidity_premium_max_bps": "50",
+    "ftp_funding_spread_max_bps": "200",
+    "nmd_core_min_pct": "60",
+    "nmd_core_max_pct": "70",
+}
+_FTP_STRESS: dict[str, dict[str, str]] = {
+    "rates_up_200": {"curve_shift_bp": "200"},
+    "funding_stress": {"funding_spread_add_bps": "100"},
+}
 
 _LCR_OUTFLOW_RATES: dict[str, str] = {
     "retail_deposits_stable": "5",
@@ -191,6 +426,8 @@ _CAPITAL_THRESHOLDS: dict[str, str] = {
     "fx_charge_pct": "8",
     "rwa_multiplier": "1250",
     "tier2_gp_cap_pct_credit_rwa": "1.25",
+    "eve_tier1_limit_pct": "15",
+    "irr_nii_limit_pct": "10",
 }
 _LIQUIDITY_IDIOSYNCRATIC: dict[str, str] = {
     "runoff:retail_deposits_stable": "15",
@@ -285,6 +522,7 @@ _STRESS_SHOCKS: dict[str, dict[str, dict[str, str]]] = {
             "dividend_payout_pct": "0",
         },
     },
+    "irr": _IRR_STRESS,
 }
 _PARAMETER_MODELS: tuple[type[RegulatoryParameterMixin], ...] = (
     ParamLcrRunoffRate,
@@ -313,6 +551,7 @@ class _PeriodFactors:
     loans: Decimal
     deposits: Decimal
     capital: Decimal
+    fx: Decimal
 
 
 def seed_sample_bank(session: Session) -> SeedSummary:
@@ -340,7 +579,7 @@ def seed_sample_bank(session: Session) -> SeedSummary:
     fact_count = 0
     for index, period in enumerate(periods):
         facts = _build_period_facts(period, index)
-        _validate_period_facts(period, facts)
+        _validate_period_facts(period, facts, index)
         session.add_all(facts)
         fact_count += len(facts)
 
@@ -392,7 +631,53 @@ def _ensure_demo_user(session: Session) -> None:
         session.flush()
 
 
+# Runtime-populated tables that reference the Sample Bank via bank_id, ordered
+# leaf -> root so foreign keys are satisfied when re-seeding a live database.
+# The seed owns a full reset of the demo bank, so any derived runs / ingested
+# data for it are cleared before re-insertion. Tables are swept defensively:
+# a table absent from the current schema (e.g. a partial SQLite test DB) is
+# skipped. regulatory_runs cascades to its metric/line-item/validation children.
+_DEPENDENT_TABLES: tuple[str, ...] = (
+    "regulatory_runs",
+    "canonical_position_snapshots",
+    "canonical_positions",
+    "canonical_products",
+    "canonical_counterparties",
+    "canonical_gl_accounts",
+    "translation_failures",
+    "lineage_records",
+    "mapping_configs",
+    "ingestion_batches",
+)
+
+
+def _delete_bank_dependents(session: Session) -> None:
+    inspector = sql_inspect(session.get_bind())
+    existing = set(inspector.get_table_names())
+    params = {"bank_id": str(SAMPLE_BANK_ID), "organization_id": str(DEMO_ORG_ID)}
+    for table in _DEPENDENT_TABLES:
+        if table not in existing:
+            continue
+        columns = {column["name"] for column in inspector.get_columns(table)}
+        if "bank_id" in columns:
+            where = "WHERE bank_id = :bank_id AND organization_id = :organization_id"
+        elif "ingestion_batch_id" in columns:
+            # Rows keyed to a batch rather than the bank (e.g. lineage_records);
+            # cleared via their parent batch, which is deleted after this table.
+            where = (
+                "WHERE ingestion_batch_id IN "
+                "(SELECT id FROM ingestion_batches WHERE bank_id = :bank_id)"
+            )
+        else:
+            continue
+        session.execute(
+            sql_text(f"DELETE FROM {table} {where}"),  # noqa: S608 - fixed allowlist
+            params,
+        )
+
+
 def _delete_existing_seed(session: Session) -> None:
+    _delete_bank_dependents(session)
     session.execute(
         delete(BankFinancialFact).where(
             BankFinancialFact.bank_id == SAMPLE_BANK_ID,
@@ -413,7 +698,7 @@ def _delete_existing_seed(session: Session) -> None:
             delete(model).where(
                 model.organization_id == DEMO_ORG_ID,
                 model.jurisdiction_code == JURISDICTION_CODE,
-                model.approved_by == APPROVED_BY,
+                model.approved_by.in_((APPROVED_BY, FX_APPROVED_BY, FTP_APPROVED_BY)),
             )
         )
 
@@ -446,6 +731,7 @@ def _factors(index: int) -> _PeriodFactors:
         loans=_factor(_LOANS_FACTOR_START, index),
         deposits=_factor(_DEPOSITS_FACTOR_START, index),
         capital=_factor(_CAPITAL_FACTOR_START, index),
+        fx=_factor(_FX_FACTOR_START, index),
     )
 
 
@@ -557,6 +843,292 @@ def _build_period_facts(period: BankReportingPeriod, index: int) -> list[BankFin
         )
         for category, amount, tier, deduction in capital_rows
     )
+    facts.extend(_irr_facts(period, factors))
+    facts.extend(_fx_facts(period, factors))
+    facts.extend(_ftp_facts(period, factors))
+    return facts
+
+
+def _irr_factor(source: str, factors: _PeriodFactors) -> Decimal:
+    key = _IRR_SOURCE_FACTOR[source]
+    return {
+        "securities": factors.securities,
+        "loans": factors.loans,
+        "deposits": factors.deposits,
+        "capital": factors.capital,
+        "fixed": _ONE,
+    }[key]
+
+
+def _irr_position_fact(
+    period: BankReportingPeriod,
+    side: str,
+    row: tuple[str, str, str, str, str, str, str],
+    factors: _PeriodFactors,
+) -> BankFinancialFact:
+    category, bucket, millions, rate, fixed_or_float, midpoint, source = row
+    return _fact(
+        period,
+        "irr_position",
+        category,
+        _amount(millions, _irr_factor(source, factors)),
+        attributes={
+            "side": side,
+            "bucket": bucket,
+            "fixed_or_float": fixed_or_float,
+            "rate_pct": rate,
+            "midpoint_years": midpoint,
+            "source": source,
+        },
+    )
+
+
+def _irr_swap_fact(period: BankReportingPeriod, factors: _PeriodFactors) -> BankFinancialFact:
+    notional = _amount(_IRR_SWAP["notional_m"], factors.loans)
+    return _fact(
+        period,
+        "irr_swap",
+        _IRR_SWAP["category"],
+        notional,
+        attributes={
+            "notional": str(notional),
+            "pay_rate_pct": _IRR_SWAP["pay_rate_pct"],
+            "receive_index": _IRR_SWAP["receive_index"],
+            "tenor_years": _IRR_SWAP["tenor_years"],
+            "direction": _IRR_SWAP["direction"],
+            "receive_bucket": _IRR_SWAP["receive_bucket"],
+            "receive_midpoint_years": _IRR_SWAP["receive_midpoint_years"],
+            "pay_bucket": _IRR_SWAP["pay_bucket"],
+            "pay_midpoint_years": _IRR_SWAP["pay_midpoint_years"],
+        },
+    )
+
+
+def _irr_facts(period: BankReportingPeriod, factors: _PeriodFactors) -> list[BankFinancialFact]:
+    facts = [_irr_position_fact(period, "asset", row, factors) for row in _IRR_ASSET_POSITIONS]
+    facts.extend(
+        _irr_position_fact(period, "liability", row, factors) for row in _IRR_LIABILITY_POSITIONS
+    )
+    facts.append(_irr_swap_fact(period, factors))
+    return facts
+
+
+def _fx_return_series(seed_index: int) -> list[float]:
+    """Deterministic 250-day FX return series (no RNG state).
+
+    Each day's return is a closed form of the day index and a per-currency seed:
+    a mild -0.02%/day cedi-depreciation drift, a seasonal cycle and a currency
+    idiosyncratic oscillation. Days 60-110 form the 2022-2023 cedi-crisis
+    sub-window, replacing the calm regime with high-volatility swings plus a
+    periodic sharp negative tail so the stressed-VaR window bites.
+    """
+    phase = 0.6 + 0.17 * seed_index
+    amplitude = 0.0035 + 0.0004 * seed_index
+    series: list[float] = []
+    for day in range(_FX_RETURN_WINDOW):
+        step = day + 1
+        drift = -0.0002
+        idiosyncratic = amplitude * math.sin(phase * step + seed_index)
+        if _FX_CRISIS_START <= day <= _FX_CRISIS_END:
+            crisis = 0.022 * math.sin(1.27 * step + 0.5 * seed_index)
+            if (day - _FX_CRISIS_START) % 9 == 0:
+                crisis -= 0.017
+            value = drift + crisis + 0.4 * idiosyncratic
+        else:
+            seasonal = 0.0011 * math.sin(2.0 * math.pi * step / 63.0)
+            value = drift + seasonal + idiosyncratic
+        series.append(round(value, 6))
+    return series
+
+
+def _fx_position_fact(
+    period: BankReportingPeriod,
+    row: tuple[str, str, str, str, str, str, int],
+    factors: _PeriodFactors,
+) -> BankFinancialFact:
+    currency, net_ghs_m, spot, assets_m, liabilities_m, derivatives_m, _seed = row
+    net_ghs = _amount(net_ghs_m, factors.fx)
+    assets_ccy = _amount(assets_m, factors.fx)
+    liabilities_ccy = _amount(liabilities_m, factors.fx)
+    derivatives_ccy = _amount(derivatives_m, factors.fx)
+    net_ccy = assets_ccy - liabilities_ccy + derivatives_ccy
+    return _fact(
+        period,
+        "fx_position",
+        currency,
+        net_ghs,
+        attributes={
+            "currency": currency,
+            "side": "long" if net_ghs >= _ZERO else "short",
+            "spot_ghs": spot,
+            "net_ccy": str(net_ccy),
+            "assets_ccy": str(assets_ccy),
+            "liabilities_ccy": str(liabilities_ccy),
+            "net_derivatives_ccy": str(derivatives_ccy),
+            "net_ghs": str(net_ghs),
+        },
+    )
+
+
+def _fx_return_fact(
+    period: BankReportingPeriod, row: tuple[str, str, str, str, str, str, int]
+) -> BankFinancialFact:
+    currency = row[0]
+    seed_index = row[6]
+    return _fact(
+        period,
+        "fx_return_history",
+        currency,
+        Decimal(_FX_RETURN_WINDOW),
+        attributes={"currency": currency, "returns": _fx_return_series(seed_index)},
+    )
+
+
+def _fx_hedge_fact(
+    period: BankReportingPeriod,
+    row: tuple[str, str, str, str, str, str, str, str, str],
+    factors: _PeriodFactors,
+) -> BankFinancialFact:
+    hedge_id, instrument, pair, notional_m, rate, maturity_days, mtm_m, r2, offset = row
+    mtm = _amount(mtm_m, factors.fx)
+    notional = _amount(notional_m, factors.fx)
+    return _fact(
+        period,
+        "fx_hedge",
+        hedge_id,
+        mtm,
+        attributes={
+            "hedge_id": hedge_id,
+            "instrument": instrument,
+            "pair": pair,
+            "notional_ccy": str(notional),
+            "rate": rate,
+            "maturity_days": maturity_days,
+            "mtm_ghs": str(mtm),
+            "prospective_r2": r2,
+            "dollar_offset_ratio": offset,
+        },
+    )
+
+
+def _fx_facts(period: BankReportingPeriod, factors: _PeriodFactors) -> list[BankFinancialFact]:
+    facts = [_fx_position_fact(period, row, factors) for row in _FX_POSITIONS]
+    facts.extend(_fx_return_fact(period, row) for row in _FX_POSITIONS)
+    facts.extend(_fx_hedge_fact(period, row, factors) for row in _FX_HEDGES)
+    return facts
+
+
+def _ftp_source_factor(source: str, factors: _PeriodFactors) -> Decimal:
+    return {
+        "loans": factors.loans,
+        "securities": factors.securities,
+        "deposits": factors.deposits,
+    }[_FTP_SOURCE_FACTOR[source]]
+
+
+def _ftp_curve_fact(
+    period: BankReportingPeriod, row: tuple[str, str, str, str, str, str]
+) -> BankFinancialFact:
+    label, tenor, base, liquidity_bps, funding_bps, expected_ftp = row
+    ftp = Decimal(base) + (Decimal(liquidity_bps) + Decimal(funding_bps)) / _HUNDRED
+    if ftp != Decimal(expected_ftp):
+        raise SampleBankSeedError(
+            f"FTP curve point {label}: derived FTP {ftp}% != expected {expected_ftp}%."
+        )
+    return _fact(
+        period,
+        "ftp_curve_point",
+        label,
+        ftp,
+        attributes={
+            "tenor_label": label,
+            "tenor_years": tenor,
+            "base_yield_pct": base,
+            "liquidity_premium_bps": liquidity_bps,
+            "funding_spread_bps": funding_bps,
+            "ftp_rate_pct": str(ftp),
+        },
+    )
+
+
+def _ftp_product_fact(
+    period: BankReportingPeriod,
+    row: tuple[str, str, str, str, str, str, str, str, str, str],
+    factors: _PeriodFactors,
+) -> BankFinancialFact:
+    product, category, balance_m, tenor, customer, ftp, opex, ecl, cap, source = row
+    balance = _amount(balance_m, _ftp_source_factor(source, factors))
+    # Assets earn customer - ftp - operating cost - expected credit loss - capital
+    # charge; deposits earn the FTP credit ftp - customer - operating cost.
+    if category == "asset":
+        net_margin = Decimal(customer) - Decimal(ftp) - Decimal(opex) - Decimal(ecl) - Decimal(cap)
+    else:
+        net_margin = Decimal(ftp) - Decimal(customer) - Decimal(opex)
+    return _fact(
+        period,
+        "ftp_product",
+        product,
+        balance,
+        attributes={
+            "product": product,
+            "category": category,
+            "balance_ghs": str(balance),
+            "tenor_years": tenor,
+            "customer_rate_pct": customer,
+            "ftp_rate_pct": ftp,
+            "operating_cost_pct": opex,
+            "expected_credit_loss_pct": ecl,
+            "capital_charge_pct": cap,
+            "net_margin_pct": str(net_margin),
+            "source": source,
+        },
+    )
+
+
+def _ftp_branch_fact(
+    period: BankReportingPeriod, row: tuple[str, str, str], factors: _PeriodFactors
+) -> BankFinancialFact:
+    branch, deposits_m, loans_m = row
+    deposits = _amount(deposits_m, factors.deposits)
+    loans = _amount(loans_m, factors.loans)
+    return _fact(
+        period,
+        "ftp_branch",
+        branch,
+        deposits,
+        attributes={
+            "branch": branch,
+            "deposits_ghs": str(deposits),
+            "loans_ghs": str(loans),
+        },
+    )
+
+
+def _ftp_nmd_fact(
+    period: BankReportingPeriod, row: tuple[str, str, str, str, str], factors: _PeriodFactors
+) -> BankFinancialFact:
+    segment, balance_m, core_pct, volatile_pct, effective_duration = row
+    balance = _amount(balance_m, factors.deposits)
+    return _fact(
+        period,
+        "ftp_nmd",
+        segment,
+        balance,
+        attributes={
+            "segment": segment,
+            "balance_ghs": str(balance),
+            "core_pct": core_pct,
+            "volatile_pct": volatile_pct,
+            "effective_duration_years": effective_duration,
+        },
+    )
+
+
+def _ftp_facts(period: BankReportingPeriod, factors: _PeriodFactors) -> list[BankFinancialFact]:
+    facts = [_ftp_curve_fact(period, row) for row in _FTP_CURVE_POINTS]
+    facts.extend(_ftp_product_fact(period, row, factors) for row in _FTP_PRODUCTS)
+    facts.extend(_ftp_branch_fact(period, row, factors) for row in _FTP_BRANCHES)
+    facts.extend(_ftp_nmd_fact(period, row, factors) for row in _FTP_NMDS)
     return facts
 
 
@@ -642,7 +1214,9 @@ def _side(side: str) -> dict[str, Any]:
     return {"side": side}
 
 
-def _validate_period_facts(period: BankReportingPeriod, facts: list[BankFinancialFact]) -> None:
+def _validate_period_facts(
+    period: BankReportingPeriod, facts: list[BankFinancialFact], index: int
+) -> None:
     balance = [fact for fact in facts if fact.fact_group == "balance_sheet"]
     assets_total = _total(fact.amount for fact in balance if fact.attributes.get("side") == "asset")
     funding_total = _total(
@@ -674,6 +1248,167 @@ def _validate_period_facts(period: BankReportingPeriod, facts: list[BankFinancia
         raise SampleBankSeedError(
             f"Period {period.label}: securities facts {securities_group} != "
             f"balance-sheet securities {securities_balance}."
+        )
+
+    _validate_irr_positions(period, facts, balance, loans_gross, securities_balance)
+    _validate_fx_positions(period, facts, index)
+    _validate_ftp_facts(period, facts, balance, loans_gross, securities_balance)
+
+
+def _validate_fx_positions(
+    period: BankReportingPeriod, facts: list[BankFinancialFact], index: int
+) -> None:
+    positions = [fact for fact in facts if fact.fact_group == "fx_position"]
+    long_sum = _total(fact.amount for fact in positions if fact.amount >= _ZERO)
+    short_sum = _total(-fact.amount for fact in positions if fact.amount < _ZERO)
+
+    factor = _factor(_FX_FACTOR_START, index)
+    expected_long = _amount(_FX_LONG_TOTAL_M, factor)
+    expected_short = _amount(_FX_SHORT_TOTAL_M, factor)
+    if (
+        abs(long_sum - expected_long) > _FX_TIE_TOLERANCE
+        or abs(short_sum - expected_short) > _FX_TIE_TOLERANCE
+    ):
+        raise SampleBankSeedError(
+            f"Period {period.label}: FX net positions (long {long_sum}, short {short_sum}) "
+            f"do not match the scaled canonical totals (long {expected_long}, short "
+            f"{expected_short})."
+        )
+
+    # At the latest period (factor 1.0) the per-currency FX book must tie exactly
+    # to the aggregate market_risk net_long_fx / net_short_fx facts.
+    if index == PERIOD_COUNT - 1:
+        net_long = next(
+            fact.amount
+            for fact in facts
+            if fact.fact_group == "market_risk" and fact.category == "net_long_fx"
+        )
+        net_short = next(
+            fact.amount
+            for fact in facts
+            if fact.fact_group == "market_risk" and fact.category == "net_short_fx"
+        )
+        if long_sum != net_long or short_sum != net_short:
+            raise SampleBankSeedError(
+                f"Period {period.label}: FX net positions (long {long_sum}, short {short_sum}) "
+                f"do not tie to market_risk (net_long_fx {net_long}, net_short_fx {net_short})."
+            )
+
+
+def _validate_irr_positions(
+    period: BankReportingPeriod,
+    facts: list[BankFinancialFact],
+    balance: list[BankFinancialFact],
+    loans_gross: Decimal,
+    securities_balance: Decimal,
+) -> None:
+    positions = [fact for fact in facts if fact.fact_group == "irr_position"]
+    securities_sourced = _total(
+        fact.amount for fact in positions if fact.attributes.get("source") == "securities"
+    )
+    if abs(securities_sourced - securities_balance) > _IRR_TIE_TOLERANCE:
+        raise SampleBankSeedError(
+            f"Period {period.label}: securities-sourced IRR positions {securities_sourced} != "
+            f"balance-sheet securities {securities_balance}."
+        )
+
+    loans_sourced = _total(
+        fact.amount
+        for fact in positions
+        if fact.attributes.get("source") == "loans" and fact.attributes.get("side") == "asset"
+    )
+    if loans_sourced > loans_gross + _IRR_TIE_TOLERANCE:
+        raise SampleBankSeedError(
+            f"Period {period.label}: loan-sourced IRR positions {loans_sourced} exceed "
+            f"gross loans {loans_gross}."
+        )
+
+    interbank_sourced = _total(
+        fact.amount for fact in positions if fact.attributes.get("source") == "interbank"
+    )
+    excess_reserves = _total(
+        fact.amount for fact in balance if fact.category == "bog_excess_reserves"
+    )
+    if interbank_sourced > excess_reserves + _IRR_TIE_TOLERANCE:
+        raise SampleBankSeedError(
+            f"Period {period.label}: interbank IRR placements {interbank_sourced} exceed "
+            f"BoG excess reserves {excess_reserves}."
+        )
+
+
+def _validate_ftp_facts(
+    period: BankReportingPeriod,
+    facts: list[BankFinancialFact],
+    balance: list[BankFinancialFact],
+    loans_gross: Decimal,
+    securities_balance: Decimal,
+) -> None:
+    curve = [fact for fact in facts if fact.fact_group == "ftp_curve_point"]
+    curve_ftp = {
+        fact.attributes["tenor_years"]: Decimal(str(fact.attributes["ftp_rate_pct"]))
+        for fact in curve
+    }
+    products = [fact for fact in facts if fact.fact_group == "ftp_product"]
+
+    # Each product's FTP transfer rate must equal the curve rate at its tenor.
+    for product in products:
+        tenor = product.attributes["tenor_years"]
+        product_ftp = Decimal(str(product.attributes["ftp_rate_pct"]))
+        curve_rate = curve_ftp.get(tenor)
+        if curve_rate is None or curve_rate != product_ftp:
+            raise SampleBankSeedError(
+                f"Period {period.label}: FTP product {product.category} FTP rate {product_ftp}% "
+                f"does not match the curve rate {curve_rate}% at tenor {tenor}y."
+            )
+
+    loan_products = _total(
+        product.amount for product in products if product.attributes.get("source") == "loans"
+    )
+    if loan_products > loans_gross + _FTP_TIE_TOLERANCE:
+        raise SampleBankSeedError(
+            f"Period {period.label}: FTP loan products {loan_products} exceed gross loans "
+            f"{loans_gross}."
+        )
+
+    gov_securities = _total(
+        product.amount for product in products if product.attributes.get("source") == "securities"
+    )
+    if abs(gov_securities - securities_balance) > _FTP_TIE_TOLERANCE:
+        raise SampleBankSeedError(
+            f"Period {period.label}: FTP government-securities product {gov_securities} does not "
+            f"tie to balance-sheet securities {securities_balance}."
+        )
+
+    deposit_categories = {category for category, _ in _DEPOSITS_M}
+    total_deposits = _total(fact.amount for fact in balance if fact.category in deposit_categories)
+    deposit_products = _total(
+        product.amount for product in products if product.attributes.get("category") == "liability"
+    )
+    if deposit_products > total_deposits + _FTP_TIE_TOLERANCE:
+        raise SampleBankSeedError(
+            f"Period {period.label}: FTP deposit products {deposit_products} exceed total "
+            f"deposits {total_deposits}."
+        )
+
+    branches = [fact for fact in facts if fact.fact_group == "ftp_branch"]
+    branch_deposits = _total(fact.amount for fact in branches)
+    branch_loans = _total(Decimal(str(fact.attributes["loans_ghs"])) for fact in branches)
+    if branch_deposits > total_deposits + _FTP_TIE_TOLERANCE:
+        raise SampleBankSeedError(
+            f"Period {period.label}: FTP branch deposits {branch_deposits} exceed total "
+            f"deposits {total_deposits}."
+        )
+    if branch_loans > loans_gross + _FTP_TIE_TOLERANCE:
+        raise SampleBankSeedError(
+            f"Period {period.label}: FTP branch loans {branch_loans} exceed gross loans "
+            f"{loans_gross}."
+        )
+
+    nmd_total = _total(fact.amount for fact in facts if fact.fact_group == "ftp_nmd")
+    if nmd_total > total_deposits + _FTP_TIE_TOLERANCE:
+        raise SampleBankSeedError(
+            f"Period {period.label}: FTP non-maturity deposits {nmd_total} exceed total "
+            f"deposits {total_deposits}."
         )
 
 
@@ -731,5 +1466,42 @@ def _seed_parameters(session: Session) -> int:
                 )
                 for shock_key, value in shocks.items()
             )
+
+    # FX-specific parameters carry the dedicated BoG FX baseline approver.
+    fx_scope = {**scope, "approved_by": FX_APPROVED_BY}
+    rows.extend(
+        ParamCapitalThreshold(threshold_code=code, value_pct=Decimal(value), **fx_scope)
+        for code, value in _FX_CAPITAL_THRESHOLDS.items()
+    )
+    for scenario_code, shocks in _FX_STRESS.items():
+        rows.extend(
+            ParamStressShock(
+                module="fx",
+                scenario_code=scenario_code,
+                shock_key=shock_key,
+                shock_value=Decimal(value),
+                **fx_scope,
+            )
+            for shock_key, value in shocks.items()
+        )
+
+    # FTP-specific parameters carry the dedicated BoG FTP baseline approver.
+    ftp_scope = {**scope, "approved_by": FTP_APPROVED_BY}
+    rows.extend(
+        ParamCapitalThreshold(threshold_code=code, value_pct=Decimal(value), **ftp_scope)
+        for code, value in _FTP_CAPITAL_THRESHOLDS.items()
+    )
+    for scenario_code, shocks in _FTP_STRESS.items():
+        rows.extend(
+            ParamStressShock(
+                module="ftp",
+                scenario_code=scenario_code,
+                shock_key=shock_key,
+                shock_value=Decimal(value),
+                **ftp_scope,
+            )
+            for shock_key, value in shocks.items()
+        )
+
     session.add_all(rows)
     return len(rows)

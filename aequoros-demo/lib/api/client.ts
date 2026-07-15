@@ -12,6 +12,9 @@ import {
   Configuration,
   ForecastingApi,
   RegulatoryCapitalApi,
+  RegulatoryFtpApi,
+  RegulatoryFxApi,
+  RegulatoryIrrApi,
   RegulatoryLiquidityApi,
   ResponseError,
 } from '@aequoros/risk-service-api';
@@ -40,6 +43,9 @@ const configuration = new Configuration({
 export const banksApi = new BanksApi(configuration);
 export const regulatoryLiquidityApi = new RegulatoryLiquidityApi(configuration);
 export const regulatoryCapitalApi = new RegulatoryCapitalApi(configuration);
+export const regulatoryIrrApi = new RegulatoryIrrApi(configuration);
+export const regulatoryFxApi = new RegulatoryFxApi(configuration);
+export const regulatoryFtpApi = new RegulatoryFtpApi(configuration);
 export const forecastingApi = new ForecastingApi(configuration);
 export const cashflowForecastApi = new CashflowForecastApi(configuration);
 

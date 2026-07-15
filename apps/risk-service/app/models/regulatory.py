@@ -88,7 +88,9 @@ class BankFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             "fact_group IN ('balance_sheet', 'loan_exposure', 'securities', 'off_balance', "
             "'lcr_inflow', 'market_risk', 'operational_income', 'capital_component', "
-            "'deposit_behavior')",
+            "'deposit_behavior', 'irr_position', 'irr_swap', 'fx_position', "
+            "'fx_return_history', 'fx_hedge', 'ftp_curve_point', 'ftp_product', "
+            "'ftp_branch', 'ftp_nmd')",
             name="ck_bank_financial_facts_fact_group",
         ),
         ForeignKeyConstraint(
@@ -210,7 +212,7 @@ class ParamStressShock(RegulatoryParameterMixin, Base):
     __tablename__ = "param_stress_shock"
     __table_args__ = (
         CheckConstraint(
-            "module IN ('liquidity', 'capital', 'forecast')",
+            "module IN ('liquidity', 'capital', 'forecast', 'irr', 'fx', 'ftp')",
             name="ck_param_stress_shock_module",
         ),
         UniqueConstraint(

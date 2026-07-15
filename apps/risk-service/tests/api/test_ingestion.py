@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json as jsonlib
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ import openpyxl
 from fastapi.testclient import TestClient
 
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
+from app.storage.client import StorageLocation
 from tests.adapters.excel_csv import fixtures
 from tests.api.helpers import ORG_2, headers
 
@@ -311,10 +313,6 @@ class TestStorageArtifacts:
     def test_raw_source_and_report_land_in_tiered_storage(
         self, db_client: TestClient, tmp_path: Path, storage_engine
     ) -> None:
-        import json as jsonlib
-
-        from app.storage.client import StorageLocation
-
         bank_id = seed_bank(db_client)
         activate_mapping(db_client, bank_id, FULL_MAPPING)
         workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
@@ -345,7 +343,7 @@ class TestStorageArtifacts:
         bank_id = seed_bank(db_client)
         activate_mapping(db_client, bank_id, FULL_MAPPING)
         workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
-        first = start_batch(db_client, bank_id, workbook)
+        start_batch(db_client, bank_id, workbook)
         second = start_batch(db_client, bank_id, workbook)
         assert second["reused"] is True
         raw_objects = [

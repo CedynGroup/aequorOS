@@ -13,6 +13,8 @@ export default function RatioGauge({
   status,
   decimals = 1,
   suffix = '%',
+  thresholdLabel = 'Regulatory minimum',
+  higherIsBetter = true,
 }: {
   label: string;
   value: number;
@@ -22,6 +24,14 @@ export default function RatioGauge({
   status: StatusTone;
   decimals?: number;
   suffix?: string;
+  /** Caption for the threshold marker. Defaults to "Regulatory minimum". */
+  thresholdLabel?: string;
+  /**
+   * Whether a higher value is better (a floor, e.g. LCR/CAR). Set false for
+   * ceiling limits (e.g. ΔEVE/Tier1, NOP/Tier1) where staying below the
+   * threshold is the compliant outcome — flips the variance colour.
+   */
+  higherIsBetter?: boolean;
 }) {
   const max = Math.max(value, threshold) * 1.4;
   const pctValue = Math.min(100, (value / max) * 100);
@@ -37,6 +47,7 @@ export default function RatioGauge({
 
   const variance = value - threshold;
   const varianceSign = variance >= 0 ? '+' : '';
+  const varianceIsGood = higherIsBetter ? variance >= 0 : variance <= 0;
 
   return (
     <div className="card p-6">
@@ -51,7 +62,7 @@ export default function RatioGauge({
         <span className="text-h2 text-navy">{suffix}</span>
         <span
           className={`ml-2 text-body font-mono font-medium tabular-nums ${
-            variance >= 0 ? 'text-success' : 'text-critical'
+            varianceIsGood ? 'text-success' : 'text-critical'
           }`}
         >
           {varianceSign}
@@ -81,7 +92,7 @@ export default function RatioGauge({
 
       <div className="mt-2 flex items-center justify-between text-caption text-slate">
         <span>
-          Regulatory minimum{' '}
+          {thresholdLabel}{' '}
           <span className="font-mono font-medium text-navy tabular-nums">
             {threshold}
             {suffix}

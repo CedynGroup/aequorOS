@@ -22,6 +22,9 @@ from app.features.run_assessments import router as assessments_router
 from app.features.run_calculations import router as calculations_router
 from app.features.run_forecasting import router as forecasting_router
 from app.features.run_regulatory_capital import router as regulatory_capital_router
+from app.features.run_regulatory_ftp import router as regulatory_ftp_router
+from app.features.run_regulatory_fx import router as regulatory_fx_router
+from app.features.run_regulatory_irr import router as regulatory_irr_router
 from app.features.run_regulatory_liquidity import router as regulatory_liquidity_router
 from app.features.track_jobs import router as jobs_router
 
@@ -33,6 +36,9 @@ v1_router.include_router(banks_router)
 v1_router.include_router(ingestion_router)
 v1_router.include_router(regulatory_liquidity_router)
 v1_router.include_router(regulatory_capital_router)
+v1_router.include_router(regulatory_irr_router)
+v1_router.include_router(regulatory_fx_router)
+v1_router.include_router(regulatory_ftp_router)
 v1_router.include_router(forecasting_router)
 v1_router.include_router(cashflow_forecast_router)
 v1_router.include_router(bulk_update_cases_router)

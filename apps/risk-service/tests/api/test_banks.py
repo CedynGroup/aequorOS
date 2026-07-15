@@ -24,8 +24,8 @@ def test_seed_demo_creates_sample_bank(db_client: TestClient) -> None:
     summary = _seed_demo_bank(db_client)
     assert summary["bank_id"] == str(SAMPLE_BANK_ID)
     assert summary["periods"] == 12
-    assert summary["fact_count"] == 528
-    assert summary["param_count"] == 126
+    assert summary["fact_count"] == 1308
+    assert summary["param_count"] == 167
 
     response = db_client.get("/api/v1/banks", headers=headers())
     assert response.status_code == 200

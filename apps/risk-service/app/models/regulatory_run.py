@@ -30,13 +30,16 @@ class RegulatoryRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     ``module`` selects the engine: ``liquidity``, ``capital``, ``forecast``
     (5-year balance-sheet projection), ``optimizer`` (constrained strategic
-    search), or ``whatif`` (single-shock forecast comparison).
+    search), ``whatif`` (single-shock forecast comparison), ``irr`` (interest
+    rate risk in the banking book), ``fx`` (foreign-exchange risk), or ``ftp``
+    (funds transfer pricing).
     """
 
     __tablename__ = "regulatory_runs"
     __table_args__ = (
         CheckConstraint(
-            "module IN ('liquidity', 'capital', 'forecast', 'optimizer', 'whatif')",
+            "module IN ('liquidity', 'capital', 'forecast', 'optimizer', 'whatif', "
+            "'irr', 'fx', 'ftp')",
             name="ck_regulatory_runs_module",
         ),
         CheckConstraint(
@@ -93,7 +96,9 @@ class RegulatoryMetricResult(UuidV4PrimaryKeyMixin, Base):
 
     __tablename__ = "regulatory_metric_results"
     __table_args__ = (
-        CheckConstraint("unit IN ('pct', 'ghs')", name="ck_regulatory_metric_results_unit"),
+        CheckConstraint(
+            "unit IN ('pct', 'ghs', 'years')", name="ck_regulatory_metric_results_unit"
+        ),
         CheckConstraint(
             "status IN ('green', 'amber', 'red', 'na')",
             name="ck_regulatory_metric_results_status",
@@ -129,7 +134,9 @@ class RegulatoryLineItem(UuidV4PrimaryKeyMixin, Base):
     __table_args__ = (
         CheckConstraint(
             "section IN ('hqla', 'outflow', 'inflow', 'asf', 'rsf', 'credit_rwa', "
-            "'market_rwa', 'operational_rwa', 'capital_component', 'ratio')",
+            "'market_rwa', 'operational_rwa', 'capital_component', 'ratio', "
+            "'irr_gap', 'irr_eve', 'irr_ear', 'fx_position', 'fx_var', 'fx_hedge', "
+            "'ftp_curve', 'ftp_product', 'ftp_branch')",
             name="ck_regulatory_line_items_section",
         ),
         ForeignKeyConstraint(

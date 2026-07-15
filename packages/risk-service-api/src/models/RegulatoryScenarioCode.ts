@@ -37,6 +37,11 @@ export const RegulatoryScenarioCode = {
   ShortDown250: "short_down_250",
   Steepener: "steepener",
   Flattener: "flattener",
+  MildDepreciation: "mild_depreciation",
+  SevereDepreciation: "severe_depreciation",
+  CediCrisis: "cedi_crisis",
+  RatesUp200: "rates_up_200",
+  FundingStress: "funding_stress",
 } as const;
 export type RegulatoryScenarioCode =
   (typeof RegulatoryScenarioCode)[keyof typeof RegulatoryScenarioCode];

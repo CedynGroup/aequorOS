@@ -226,3 +226,46 @@ Verified in `apps/risk-service/mise.toml`, root `mise.toml`, and `.pre-commit-co
 | client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean) |
 
 All `mise run risk-service:*` tasks work from the repo root or from `apps/risk-service`.
+
+---
+
+## Structure decision (2026-07 — six-module completion)
+
+A directive proposed relocating the Python backend into `aequoros-demo` and deleting
+`aequoros-site` / `aequoros-web`. This was **declined** as based on a misread of the layout:
+the backend was already cleanly consolidated in `apps/risk-service` (FastAPI) and
+`apps/cashflow-ml` (LSTM). Moving a Python/uv/alembic service inside a Next.js/pnpm package
+would break the workspace, migrations, RLS, the OpenAPI client-gen pipeline, and the test
+suite. The monorepo was kept intact; nothing was moved or deleted.
+
+**`aequoros-demo` is the primary product surface** — the Bank Treasurer console, wired
+end-to-end to the risk-service via the generated `@aequoros/risk-service-api` client, with
+zero hardcoded financial data. `apps/aequoros-web` (case-based risk console) and
+`aequoros-site` (marketing) remain independent, working deliverables.
+
+### Six regulatory modules (all live, DB-driven, tenant-scoped)
+
+Each follows the same pattern: pure Decimal engine in `app/domain/<module>/engine.py`,
+immutable `RegulatoryRun` persistence (snapshot + SHA-256 hash + versioned metrics/line-items/
+validations), bank + reporting-period scoping, effective-dated `param_*` inputs, and a
+`get_<module>_dashboard` with stored-run-first + inline-fallback.
+
+| # | Module | Engine | Key endpoints |
+|---|--------|--------|---------------|
+| 1 | Liquidity | LCR / NSFR / stress | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
+| 2 | Basel Capital | RWA / CAR-Tier1-CET1-leverage / stress | `/banks/{id}/capital/*`, `/submissions/bsd2` |
+| 3 | Forecasting | 5y projection / optimizer / what-if | `/banks/{id}/forecast/*` |
+| 4 | Cash-flow LSTM | separate `apps/cashflow-ml` via proxy | `/banks/{id}/cashflow-forecast` |
+| 5 | IRR (IRRBB) | gap / duration / EVE (6 Basel) / EaR | `/banks/{id}/irr/*` |
+| 6 | FX | NOP / historical-sim VaR / IFRS 9 hedges | `/banks/{id}/fx/*` |
+| 7 | FTP | matched-maturity curve / product & branch P&L / NMD | `/banks/{id}/ftp/*` |
+
+The shared migration `202607170001_irr_fx_ftp_foundation` widened the run-module, fact-group,
+and line-section CHECK constraints for IRR/FX/FTP; those modules add no further migrations.
+
+### Known pre-existing debt (data-engine / storage tracks — not the regulatory modules)
+
+`basedpyright` reports 8 errors in `app/services/ingestion.py`, `tests/adapters/excel_csv/
+fixtures.py`, and `tests/storage/*` — all in the data-engine/storage tracks, present before
+the six-module build. They are left for those tracks' owners; the regulatory modules and the
+repo-wide `ruff check` are clean.
