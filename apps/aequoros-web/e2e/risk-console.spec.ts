@@ -394,7 +394,7 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await expect(page.getByText("Archived scenario · read only")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Run forecast" }),
-  ).toBeEnabled();
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Rerun current inputs" }),
   ).toHaveCount(0);
@@ -410,10 +410,19 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await expect(page.getByText("Archived scenario · read only")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Run forecast" }),
-  ).toBeEnabled();
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Rerun current inputs" }),
   ).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Baseline/ }).first().click();
+  await expect(page.getByText("Archived forecast audit")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Run forecast" }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Rerun current inputs" }),
+  ).toBeEnabled();
 
   const calculationMutationCount = () =>
     tracker.requests.filter(
