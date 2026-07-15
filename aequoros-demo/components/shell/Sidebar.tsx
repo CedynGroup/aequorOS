@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Activity,
+  Database,
   Droplet,
   DollarSign,
   ShieldCheck,
@@ -28,6 +29,10 @@ const groups: { label: string; items: NavItem[] }[] = [
   {
     label: 'Overview',
     items: [{ href: '/', label: 'Home', icon: LayoutDashboard }],
+  },
+  {
+    label: 'Data',
+    items: [{ href: '/data-engine', label: 'Data Engine', icon: Database, code: '00' }],
   },
   {
     label: 'Modules',
