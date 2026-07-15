@@ -881,7 +881,11 @@ function typedUnitValue(
 ): AssumptionValue {
   if (valueType === "number" && unit === "ratio") {
     const shifted = shiftDecimal(value, -2);
-    return shifted === null ? Number.NaN : Number(shifted);
+    if (shifted === null) return Number.NaN;
+    const numericValue = Number(shifted);
+    return numericValue === 0 && /[1-9]/.test(shifted)
+      ? Number.NaN
+      : numericValue;
   }
   return typedValue(value, valueType);
 }

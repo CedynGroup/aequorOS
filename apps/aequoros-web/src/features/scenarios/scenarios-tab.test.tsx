@@ -310,33 +310,89 @@ describe("ScenariosTab", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
-  it("rejects ratio values whose shifted result is unsafe", async () => {
+  it.each(["1e-1001", "1e-322"])(
+    "rejects ratio value %s whose shifted result is unsafe",
+    async (unsafeValue) => {
+      const user = userEvent.setup();
+      vi.spyOn(riskApi, "scenarios").mockResolvedValue(workspace());
+      const update = vi.spyOn(riskApi, "updateAssumption");
+      const create = vi.spyOn(riskApi, "createAssumption");
+
+      renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+      const value = await screen.findByLabelText("Revenue growth value");
+      await user.clear(value);
+      await user.type(value, unsafeValue);
+
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+      await user.type(screen.getByLabelText("Assumption key"), "stress_rate");
+      await user.type(screen.getByLabelText("Assumption label"), "Stress rate");
+      await user.selectOptions(
+        screen.getByLabelText("New assumption value type"),
+        "number",
+      );
+      await user.type(
+        screen.getByLabelText("New assumption value"),
+        unsafeValue,
+      );
+      await user.type(screen.getByLabelText("Assumption unit"), "ratio");
+
+      expect(
+        screen.getByRole("button", { name: "Add assumption" }),
+      ).toBeDisabled();
+      expect(update).not.toHaveBeenCalled();
+      expect(create).not.toHaveBeenCalled();
+    },
+  );
+
+  it("preserves valid zero ratios for Save and Add", async () => {
     const user = userEvent.setup();
-    vi.spyOn(riskApi, "scenarios").mockResolvedValue(workspace());
-    const update = vi.spyOn(riskApi, "updateAssumption");
-    const create = vi.spyOn(riskApi, "createAssumption");
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(
+      workspace([scenario({ assumptions: [assumption({ value: 0.05 })] })]),
+    );
+    const update = vi
+      .spyOn(riskApi, "updateAssumption")
+      .mockResolvedValue(mutation());
+    const create = vi
+      .spyOn(riskApi, "createAssumption")
+      .mockResolvedValue(mutation());
 
     renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
     const value = await screen.findByLabelText("Revenue growth value");
     await user.clear(value);
-    await user.type(value, "1e-1001");
+    await user.type(value, "0");
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledWith(
+        tenant,
+        caseId,
+        scenario().id,
+        assumption().id,
+        { value: 0, reason: "Reviewer updated assumption" },
+      );
+    });
 
-    await user.type(screen.getByLabelText("Assumption key"), "stress_rate");
-    await user.type(screen.getByLabelText("Assumption label"), "Stress rate");
+    await user.type(screen.getByLabelText("Assumption key"), "zero_rate");
+    await user.type(screen.getByLabelText("Assumption label"), "Zero rate");
     await user.selectOptions(
       screen.getByLabelText("New assumption value type"),
       "number",
     );
-    await user.type(screen.getByLabelText("New assumption value"), "1e-1001");
+    await user.type(screen.getByLabelText("New assumption value"), "0");
     await user.type(screen.getByLabelText("Assumption unit"), "ratio");
+    await user.click(screen.getByRole("button", { name: "Add assumption" }));
 
-    expect(
-      screen.getByRole("button", { name: "Add assumption" }),
-    ).toBeDisabled();
-    expect(update).not.toHaveBeenCalled();
-    expect(create).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(create).toHaveBeenCalledWith(tenant, caseId, scenario().id, {
+        category: "other",
+        key: "zero_rate",
+        label: "Zero rate",
+        value: 0,
+        unit: "ratio",
+        reason: "Add scenario assumption",
+      });
+    });
   });
 
   it("ignores malformed scenario evidence fragments", async () => {
