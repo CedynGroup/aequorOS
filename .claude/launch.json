@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "aequoros-demo",
+      "name": "dashboard",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "aequoros-demo", "dev"],
+      "runtimeArgs": ["--filter", "dashboard", "dev"],
       "port": 3001
     }
   ]

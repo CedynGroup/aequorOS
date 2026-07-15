@@ -11,17 +11,17 @@ Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
 
 | Component | Path | Stack | Role |
 | --- | --- | --- | --- |
-| Risk service | `apps/risk-service` | FastAPI, Python 3.13, uv, SQLAlchemy 2.0, Alembic, Pydantic v2, Loguru, boto3 | The backend. Owns all persistence, calculation engines, findings, audit, and the OpenAPI contract. |
+| Risk service | `backend/risk-service` | FastAPI, Python 3.13, uv, SQLAlchemy 2.0, Alembic, Pydantic v2, Loguru, boto3 | The backend. Owns all persistence, calculation engines, findings, audit, and the OpenAPI contract. |
 | Web SPA | `apps/aequoros-web` | React 19, Vite 8, TanStack Router/Query/Table, Radix UI, Tailwind 4, oxlint, Vitest, Playwright | Risk console UI. Consumes the risk service exclusively through `packages/risk-service-api`. |
 | Generated API client | `packages/risk-service-api` | typescript-fetch output of openapi-generator 7.13 | Generated from the risk-service OpenAPI schema. Source-consumed (`main: ./src/index.ts`), never hand-edited. |
-| Marketing site | `aequoros-site` | Next.js 14 | Static marketing site. **Out of scope for this build. Do not touch.** |
-| Static prototype | `aequoros-demo` | Next.js 14, recharts, hardcoded data | Pre-MVP demo prototype. **Out of scope for this build. Do not touch.** |
-| Local infra | `apps/risk-service/docker-compose.yml` | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local` | Started with `docker compose up -d` from `apps/risk-service`. |
+| Marketing site | `frontend` | Next.js 14 | Static marketing site. **Out of scope for this build. Do not touch.** |
+| Static prototype | `dashboard` | Next.js 14, recharts, hardcoded data | Pre-MVP demo prototype. **Out of scope for this build. Do not touch.** |
+| Local infra | `backend/risk-service/docker-compose.yml` | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local` | Started with `docker compose up -d` from `backend/risk-service`. |
 
-Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `apps/risk-service/mise.toml`),
+Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `backend/risk-service/mise.toml`),
 `uv` for Python deps, `pnpm` workspaces (`pnpm-workspace.yaml` includes `apps/*`, `packages/*`,
-`aequoros-site`, `aequoros-demo`). Pre-commit config is at the repo root
-(`.pre-commit-config.yaml`): ruff check/format scoped to `^apps/risk-service/`, Conventional
+`frontend`, `dashboard`). Pre-commit config is at the repo root
+(`.pre-commit-config.yaml`): ruff check/format scoped to `^backend/risk-service/`, Conventional
 Commits enforcement, and a pre-push hook that runs `mise run risk-service:api-fresh`.
 
 Local DB bootstrap: `mise run risk-service:bootstrap-db` creates a migration role (may bypass RLS)
@@ -33,7 +33,7 @@ App connection string:
 
 ## 2. Tenancy model
 
-Verified in `apps/risk-service/app/api/deps.py`, `app/db/session.py`, and migration
+Verified in `backend/risk-service/app/api/deps.py`, `app/db/session.py`, and migration
 `alembic/versions/202605250002_enable_tenant_rls.py`.
 
 1. **Headers → context.** Every business request carries `X-Org-Id` (required) and `X-User-Id`
@@ -174,7 +174,7 @@ description of existing tables.**
 
 ## 6. OpenAPI contract flow
 
-Verified in `apps/risk-service/mise.toml`, root `mise.toml`, and `.pre-commit-config.yaml`.
+Verified in `backend/risk-service/mise.toml`, root `mise.toml`, and `.pre-commit-config.yaml`.
 
 1. Backend routes/schemas change → regenerate:
    `mise run risk-service:openapi-client`. This exports `openapi-schema.json` from the FastAPI
@@ -185,7 +185,7 @@ Verified in `apps/risk-service/mise.toml`, root `mise.toml`, and `.pre-commit-co
 2. Validate the generated package: `pnpm --filter @aequoros/risk-service-api test` (compiles and
    runs `tests/generated-contracts.test.js`) and `type-check`.
 3. **Freshness gate**: `mise run risk-service:api-fresh` regenerates, type-checks, then asserts
-   `git status --porcelain` is clean for `apps/risk-service/openapi-schema.json` and
+   `git status --porcelain` is clean for `backend/risk-service/openapi-schema.json` and
    `packages/risk-service-api`. It runs on pre-push. A schema change without a committed
    regenerated client fails the gate.
 4. `packages/risk-service-api/src` is excluded from style linting/formatting centrally; generated
@@ -198,16 +198,16 @@ Verified in `apps/risk-service/mise.toml`, root `mise.toml`, and `.pre-commit-co
 
 ## 7. ML service plan (cashflow-ml)
 
-**Status: planned for this build; `apps/cashflow-ml` does not exist yet.**
+**Status: planned for this build; `backend/cashflow-ml` does not exist yet.**
 
-- New service at `apps/cashflow-ml`: FastAPI + PyTorch LSTM for cash-flow forecasting. Separate
+- New service at `backend/cashflow-ml`: FastAPI + PyTorch LSTM for cash-flow forecasting. Separate
   deployable, separate dependency tree (it must not bloat risk-service's env).
 - **Never exposed to the browser.** The SPA and external callers reach it ONLY through a
   risk-service proxy endpoint that enforces tenant scoping (headers → `TenantContext` →
   tenant-scoped input assembly) before forwarding. The ML service itself is tenant-unaware
   compute; the risk service owns authorization, input snapshots, and run persistence.
 - The internal base URL is configuration: add a settings group to
-  `apps/risk-service/app/core/config.py` (`Settings`, pydantic-settings, env-alias pattern like
+  `backend/risk-service/app/core/config.py` (`Settings`, pydantic-settings, env-alias pattern like
   `StorageSettings`) — e.g. `CASHFLOW_ML_BASE_URL` — rather than hardcoding hosts.
 - ML inference results that feed decisions should be persisted through the section-3 run pattern
   (snapshot, hash, versions, findings) like any other engine.
@@ -218,30 +218,30 @@ Verified in `apps/risk-service/mise.toml`, root `mise.toml`, and `.pre-commit-co
 
 | Target | Commands |
 | --- | --- |
-| risk-service (all) | `cd apps/risk-service && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check` |
+| risk-service (all) | `cd backend/risk-service && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check` |
 | risk-service vs Postgres | `docker compose up -d risk-postgres` then `mise run risk-service:test-postgres` (sets `TEST_DATABASE_URL`) |
 | risk-service migrations | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"` |
 | web | `pnpm --filter @aequoros/aequoros-web typecheck` · `lint` · `test` · `build` (e2e: `e2e`, deterministic journeys in `apps/aequoros-web/e2e/*.spec.ts`) |
 | generated client | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`) |
 | client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean) |
 
-All `mise run risk-service:*` tasks work from the repo root or from `apps/risk-service`.
+All `mise run risk-service:*` tasks work from the repo root or from `backend/risk-service`.
 
 ---
 
 ## Structure decision (2026-07 — six-module completion)
 
-A directive proposed relocating the Python backend into `aequoros-demo` and deleting
-`aequoros-site` / `aequoros-web`. This was **declined** as based on a misread of the layout:
-the backend was already cleanly consolidated in `apps/risk-service` (FastAPI) and
-`apps/cashflow-ml` (LSTM). Moving a Python/uv/alembic service inside a Next.js/pnpm package
+A directive proposed relocating the Python backend into `dashboard` and deleting
+`frontend` / `aequoros-web`. This was **declined** as based on a misread of the layout:
+the backend was already cleanly consolidated in `backend/risk-service` (FastAPI) and
+`backend/cashflow-ml` (LSTM). Moving a Python/uv/alembic service inside a Next.js/pnpm package
 would break the workspace, migrations, RLS, the OpenAPI client-gen pipeline, and the test
 suite. The monorepo was kept intact; nothing was moved or deleted.
 
-**`aequoros-demo` is the primary product surface** — the Bank Treasurer console, wired
+**`dashboard` is the primary product surface** — the Bank Treasurer console, wired
 end-to-end to the risk-service via the generated `@aequoros/risk-service-api` client, with
 zero hardcoded financial data. `apps/aequoros-web` (case-based risk console) and
-`aequoros-site` (marketing) remain independent, working deliverables.
+`frontend` (marketing) remain independent, working deliverables.
 
 ### Six regulatory modules (all live, DB-driven, tenant-scoped)
 
@@ -255,7 +255,7 @@ validations), bank + reporting-period scoping, effective-dated `param_*` inputs,
 | 1 | Liquidity | LCR / NSFR / stress | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
 | 2 | Basel Capital | RWA / CAR-Tier1-CET1-leverage / stress | `/banks/{id}/capital/*`, `/submissions/bsd2` |
 | 3 | Forecasting | 5y projection / optimizer / what-if | `/banks/{id}/forecast/*` |
-| 4 | Cash-flow LSTM | separate `apps/cashflow-ml` via proxy | `/banks/{id}/cashflow-forecast` |
+| 4 | Cash-flow LSTM | separate `backend/cashflow-ml` via proxy | `/banks/{id}/cashflow-forecast` |
 | 5 | IRR (IRRBB) | gap / duration / EVE (6 Basel) / EaR | `/banks/{id}/irr/*` |
 | 6 | FX | NOP / historical-sim VaR / IFRS 9 hedges | `/banks/{id}/fx/*` |
 | 7 | FTP | matched-maturity curve / product & branch P&L / NMD | `/banks/{id}/ftp/*` |

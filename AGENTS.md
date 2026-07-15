@@ -13,7 +13,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   formatting; generated files must contain no inline suppressions, while type-checking,
   package tests, and freshness checks remain required. Client regeneration intentionally
   bypasses the formatting exclusion to normalize deterministic output.
-- Financial review UI code lives under `apps/aequoros-web/src/features/financial` and must call
+- Financial review UI code lives under `apps/aequoros-web (REMOVED — see ARCHITECTURE.md)/src/features/financial` and must call
   `FinancialDataApi` from `packages/risk-service-api`; do not duplicate OpenAPI payloads or
   hand-roll financial workspace requests.
 - Canonical institution, account, reporting-period, balance, cash-flow, obligation, and covenant

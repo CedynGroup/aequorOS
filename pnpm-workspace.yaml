@@ -1,7 +1,7 @@
 packages:
-  - "aequoros-demo"
-  - "aequoros-site"
-  - "apps/*"
+  - "frontend"
+  - "dashboard"
+  - "backend/*"
   - "packages/*"
 
 allowBuilds:

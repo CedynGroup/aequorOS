@@ -5,7 +5,7 @@ Match existing code exactly; do not introduce new patterns when one below alread
 
 ---
 
-## 1. Python (apps/risk-service)
+## 1. Python (backend/risk-service)
 
 ### Tooling (from `pyproject.toml`)
 
@@ -170,7 +170,7 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
   (`app/integrations/storage/base.py`); `S3ObjectStorage` + `get_object_storage()` in
   `s3.py` is the sole boto3 call site. Never import boto3 in features/services.
 
-### Tests (`apps/risk-service/tests/`)
+### Tests (`backend/risk-service/tests/`)
 
 - Layout: `tests/api/` (HTTP-level, the default style), `tests/services/`, `tests/features/`,
   `tests/db/`, plus `tests/conftest.py`.
