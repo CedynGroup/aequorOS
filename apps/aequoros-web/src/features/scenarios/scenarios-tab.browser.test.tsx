@@ -1,4 +1,5 @@
 import type {
+  AssumptionCategory,
   ScenarioAssumptionRead,
   ScenarioRead,
   ScenarioWorkspaceRead,
@@ -23,7 +24,7 @@ const now = new Date("2026-07-13T12:00:00Z");
 
 function assumption(
   id: string,
-  category: string,
+  category: AssumptionCategory,
   key: string,
   label: string,
   value: number | string,
@@ -49,11 +50,46 @@ function assumption(
 }
 
 const assumptions = [
-  assumption("10000000-0000-4000-8000-000000000001", "cash_flow_timing", "cash_flow_delay_days", "Cash-flow delay", 5, "days"),
-  assumption("10000000-0000-4000-8000-000000000002", "credit_usage", "credit_usage_rate", "Credit usage", "0.35", "ratio"),
-  assumption("10000000-0000-4000-8000-000000000003", "expenses", "expense_growth_rate", "Expense growth", "0.03", "ratio"),
-  assumption("10000000-0000-4000-8000-000000000004", "growth", "revenue_growth_rate", "Revenue growth", "0.04", "ratio"),
-  assumption("10000000-0000-4000-8000-000000000005", "repayment_behavior", "repayment_rate", "Repayment rate", "1.0", "ratio"),
+  assumption(
+    "10000000-0000-4000-8000-000000000001",
+    "cash_flow_timing",
+    "cash_flow_delay_days",
+    "Cash-flow delay",
+    5,
+    "days",
+  ),
+  assumption(
+    "10000000-0000-4000-8000-000000000002",
+    "credit_usage",
+    "credit_usage_rate",
+    "Credit usage",
+    "0.35",
+    "ratio",
+  ),
+  assumption(
+    "10000000-0000-4000-8000-000000000003",
+    "expenses",
+    "expense_growth_rate",
+    "Expense growth",
+    "0.03",
+    "ratio",
+  ),
+  assumption(
+    "10000000-0000-4000-8000-000000000004",
+    "growth",
+    "revenue_growth_rate",
+    "Revenue growth",
+    "0.04",
+    "ratio",
+  ),
+  assumption(
+    "10000000-0000-4000-8000-000000000005",
+    "repayment_behavior",
+    "repayment_rate",
+    "Repayment rate",
+    "1.0",
+    "ratio",
+  ),
 ];
 
 const scenario: ScenarioRead = {
@@ -61,7 +97,8 @@ const scenario: ScenarioRead = {
   organizationId: tenant.orgId,
   caseId,
   name: "Baseline",
-  description: "Management plan with modest growth and normal collection timing.",
+  description:
+    "Management plan with modest growth and normal collection timing.",
   scenarioType: "baseline",
   copiedFromScenarioId: null,
   createdBy: tenant.userId,
@@ -103,7 +140,9 @@ describe("scenario editor browser rendering", () => {
     await page.viewport(1280, 800);
     renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
 
-    expect(await screen.findByLabelText("Credit usage value")).toHaveValue("35");
+    expect(await screen.findByLabelText("Credit usage value")).toHaveValue(
+      "35",
+    );
     expect(screen.getByLabelText("Expense growth value")).toHaveValue("3");
     expect(screen.getByLabelText("Revenue growth value")).toHaveValue("4");
     expect(screen.getByLabelText("Repayment rate value")).toHaveValue("100");

@@ -260,9 +260,7 @@ describe("ScenariosTab", () => {
   it("percentage-scales edits to string-valued ratios", async () => {
     const user = userEvent.setup();
     vi.spyOn(riskApi, "scenarios").mockResolvedValue(
-      workspace([
-        scenario({ assumptions: [assumption({ value: "0.35" })] }),
-      ]),
+      workspace([scenario({ assumptions: [assumption({ value: "0.35" })] })]),
     );
     const update = vi
       .spyOn(riskApi, "updateAssumption")
