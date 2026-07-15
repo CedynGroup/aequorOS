@@ -490,6 +490,10 @@ Every successful calculation run creates one immutable
 linked to the run through a tenant- and case-scoped foreign key. The stored
 result contains five deterministic metrics: minimum cash balance, peak
 liquidity gap, minimum sources coverage, credit reliance, and cash runway.
+It also stores the sources-coverage classification threshold and the rule
+version that supplied it, keeping historical classifications reproducible when
+rules change. Results created before this metadata was introduced may omit both
+fields; the pair is otherwise persisted and returned together.
 Sources coverage is inflows plus credit draws divided by outflows plus debt
 repayment; credit reliance is total credit draws divided by those total uses.
 If any forecast period has non-positive uses, both ratio metrics are marked
@@ -521,13 +525,15 @@ POST /api/v1/cases/{case_id}/liquidity/findings/{finding_id}/review
 The summary route accepts optional `scenario_id` and `run_id`. It selects the
 newest matching successful run and returns `not_calculated` when no persisted
 analysis exists, including for successful runs created before liquidity
-analysis was introduced. Findings are returned in severity order. The review
-route accepts `acknowledge` or `dismiss`, requires an active same-tenant user,
-and requires a non-empty reason for dismissal. Only open or needs-review
-findings on active scenarios can be reviewed; reviewed, superseded, and archived
-scenario findings are read-only. Reviews and automatic publication or
-supersession emit audit events. Liquidity workflow findings are also protected
-from mutation through the generic findings update route.
+analysis was introduced. Ready summaries return the persisted classification
+threshold and its rule version; legacy results return both fields as null.
+Findings are returned in severity order. The review route accepts `acknowledge`
+or `dismiss`, requires an active same-tenant user, and requires a non-empty
+reason for dismissal. Only open or needs-review findings on active scenarios
+can be reviewed; reviewed, superseded, and archived scenario findings are
+read-only. Reviews and automatic publication or supersession emit audit events.
+Liquidity workflow findings are also protected from mutation through the
+generic findings update route.
 
 ### Case Reports
 

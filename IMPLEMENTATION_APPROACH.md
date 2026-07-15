@@ -22,12 +22,17 @@ and actionable failures. Reruns append history using current canonical
 financial data and reviewed scenario assumptions. The risk console can start
 and rerun forecasts, generate and page through capital attempts, compare aligned
 baseline and downside projections, and render failures or successful outputs.
+It also renders lazy-loaded forecast, liquidity sources-coverage, and capital
+comparison charts from pure generated-contract adapters while retaining
+authoritative tables and explicit unavailable or partial-data states.
 
 Successful forecasts now also persist versioned minimum-cash, peak-gap,
 sources-coverage, credit-reliance, and cash-runway metrics. Deterministic
 thresholds publish severity-ranked liquidity findings with input-hash-bound
-evidence; reviewers can acknowledge or dismiss them in the risk console. This
-slice still runs synchronously and does not include regulatory LCR/NSFR or
+evidence; reviewers can acknowledge or dismiss them in the risk console. Each
+immutable result also records the sources-coverage classification threshold and
+rule version used by its chart and table, with an explicit legacy fallback when
+that metadata is absent. This slice still runs synchronously and does not include regulatory LCR/NSFR or
 stress calculations, Basel regulatory-capital scoring, advanced model configuration, constrained
 optimization, or final reporting. The broader sections below remain the target
 architecture for those later modules.

@@ -44,7 +44,9 @@ This file is the starting point for agents working in `apps/risk-service`.
   only matching baseline and downside forecast bases.
 - Generate liquidity metrics and findings in the successful calculation transaction. Persist
   evidence through the shared tenant-scoped finding tables, and bind every evidence locator to the
-  calculation run and immutable input hash.
+  calculation run and immutable input hash. Store the sources-coverage classification threshold
+  and rule version with each immutable analysis; expose both as null for legacy results that lack
+  the metadata.
 
 ## Commit Messages
 

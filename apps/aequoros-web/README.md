@@ -117,7 +117,8 @@ assets, liabilities, and equity before the authoritative output table. Chart
 labels and tooltips retain the API's original decimal strings; missing periods
 or non-plottable values remain disconnected and are listed as annotated gaps.
 An empty, unavailable, loading, or failed visualization does not hide the run's
-tabular output.
+tabular output. Run history remains contained at narrow widths, and wide
+forecast output tables scroll horizontally instead of clipping their values.
 
 ## Capital Review
 
@@ -133,8 +134,9 @@ instead of presenting misleading deltas.
 
 Compatible comparisons include a lazy-loaded equity-to-assets chart for the
 baseline and downside projections. The API remains responsible for determining
-comparison compatibility, and the comparison table remains authoritative when
-the visualization is empty, unavailable, loading, or fails to render.
+comparison compatibility, and the comparison table exposes the same baseline
+and downside ratios and remains authoritative when the visualization is empty,
+unavailable, loading, or fails to render.
 
 Projection and finding mutations are disabled in demo mode and for retired
 cases. Loading, API failure, no-run, no-projection, failed-attempt, incomplete
@@ -154,7 +156,9 @@ the persisted classification threshold. The summary contract returns the
 threshold and rule version used to classify that immutable run, so historical
 reference lines never drift with frontend or current-rule changes. Analyses
 created before that metadata was persisted explicitly show the chart as
-unavailable; metrics and findings remain available below it.
+unavailable. An authoritative per-period table retains the original coverage
+decimals, threshold, rule version, and gap diagnostics; metrics and findings
+remain available below it.
 
 Open findings can be acknowledged or dismissed; dismissal requires a reason.
 Mutation errors remain visible and successful reviews refresh both the
