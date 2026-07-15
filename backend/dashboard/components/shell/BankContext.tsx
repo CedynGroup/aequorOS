@@ -16,6 +16,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Landmark, Loader2 } from 'lucide-react';
 import type {
   BankRead,
@@ -45,6 +47,7 @@ export function useBankContext(): BankContextValue {
 }
 
 export default function BankProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const banksQuery = useBanks();
   const bank = banksQuery.data?.banks[0] ?? null;
 
@@ -103,7 +106,35 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     return <NoBanksPanel />;
   }
 
+  // Bank exists but holds no reporting periods (fresh install or a full
+  // reset): module dashboards have nothing to render, so steer the user to
+  // the Data Engine. The Data Engine and Settings routes stay reachable —
+  // uploading is exactly how a period comes into existence.
+  const zeroPeriods = !isLoading && Boolean(bank) && periods.length === 0;
+  const allowWithoutPeriods =
+    pathname.startsWith('/data-engine') || pathname.startsWith('/settings');
+  if (zeroPeriods && !allowWithoutPeriods) {
+    return <NoPeriodsPanel />;
+  }
+
   return <BankContext.Provider value={value}>{children}</BankContext.Provider>;
+}
+
+function NoPeriodsPanel() {
+  return (
+    <FullScreenPanel
+      title="No data yet"
+      description="This bank has no reporting periods. Upload your data in the Data Engine and activate it — the dashboards will populate for the uploaded as-of period."
+      action={
+        <Link
+          href="/data-engine"
+          className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700"
+        >
+          Open the Data Engine
+        </Link>
+      }
+    />
+  );
 }
 
 function NoBanksPanel() {

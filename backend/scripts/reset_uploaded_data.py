@@ -48,9 +48,33 @@ DATA_ENGINE_TABLES: tuple[str, ...] = (
 )
 
 
-def reset(session: Session, org_id: UUID, bank_id: UUID) -> dict[str, int]:
+def reset(
+    session: Session,
+    org_id: UUID,
+    bank_id: UUID,
+    *,
+    wipe_all_periods: bool = False,
+) -> dict[str, int]:
+    """Remove uploaded data; with wipe_all_periods also remove every seeded
+    reporting period (runs, facts, periods) so the bank is completely empty.
+    The bank row, regulatory parameters, and audit log are always preserved —
+    parameters are jurisdiction configuration the engines need to compute on
+    freshly uploaded data, and the bank row anchors the UI and storage slug.
+    Restore the synthetic baseline anytime with scripts/seed_sample_bank.py.
+    """
     params = {"org": str(org_id), "bank": str(bank_id)}
     deleted: dict[str, int] = {}
+
+    if wipe_all_periods:
+        for table in ("regulatory_runs", "bank_financial_facts", "bank_reporting_periods"):
+            result = session.execute(
+                text(
+                    f"DELETE FROM {table} "  # noqa: S608 - fixed allowlist
+                    "WHERE organization_id = :org AND bank_id = :bank"
+                ),
+                params,
+            )
+            deleted[table] = deleted.get(table, 0) + (result.rowcount or 0)
 
     # 1. Periods created by data activation (facts tagged source=data_engine).
     period_rows = session.execute(
@@ -125,6 +149,12 @@ def main() -> int:
     parser.add_argument("--org-id", default=str(DEMO_ORG_ID))
     parser.add_argument("--bank-id", default=str(SAMPLE_BANK_ID))
     parser.add_argument("--purge-storage", action="store_true")
+    parser.add_argument(
+        "--wipe-all-periods",
+        action="store_true",
+        help="Also delete every seeded reporting period (runs, facts, periods) "
+        "so only the bank shell and regulatory parameters remain.",
+    )
     parser.add_argument("--yes", action="store_true", help="Skip confirmation.")
     args = parser.parse_args()
 
@@ -137,7 +167,12 @@ def main() -> int:
 
     engine = create_engine(args.database_url)
     with Session(engine) as session:
-        deleted = reset(session, UUID(args.org_id), UUID(args.bank_id))
+        deleted = reset(
+            session,
+            UUID(args.org_id),
+            UUID(args.bank_id),
+            wipe_all_periods=args.wipe_all_periods,
+        )
         session.commit()
 
     for table, count in sorted(deleted.items()):
@@ -147,7 +182,13 @@ def main() -> int:
         removed = purge_storage()
         print(f"  {'storage objects purged':36} {removed:>8}")
 
-    print("Reset complete — bank is back to its seeded state.")
+    if args.wipe_all_periods:
+        print(
+            "Reset complete — bank is empty (parameters and bank shell kept). "
+            "Restore the synthetic baseline with scripts/seed_sample_bank.py."
+        )
+    else:
+        print("Reset complete — bank is back to its seeded state.")
     return 0
 
 
