@@ -31,6 +31,13 @@ class Bank(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "banks"
     __table_args__ = (
         Index("ix_banks_organization_id", "organization_id"),
+        Index(
+            "uq_banks_storage_slug",
+            "storage_slug",
+            unique=True,
+            postgresql_where=sql_text("storage_slug IS NOT NULL"),
+            sqlite_where=sql_text("storage_slug IS NOT NULL"),
+        ),
         UniqueConstraint("id", "organization_id", name="uq_banks_id_organization_id"),
     )
 
@@ -42,6 +49,9 @@ class Bank(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     currency: Mapped[str] = mapped_column(String(3), default="GHS", nullable=False)
     jurisdiction_code: Mapped[str] = mapped_column(String(8), default="GH", nullable=False)
     license_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    # DNS-safe identifier used in storage bucket names
+    # (aequoros-{env}-{storage_slug}-{tier}); assigned on first ingestion.
+    storage_slug: Mapped[str | None] = mapped_column(String(63), nullable=True)
 
 
 class BankReportingPeriod(UuidV4PrimaryKeyMixin, TimestampMixin, Base):

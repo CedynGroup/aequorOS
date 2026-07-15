@@ -15,12 +15,14 @@ from app.api.deps import TenantContext
 from app.core.config import Settings, get_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
+from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import Organization, User
 from tests.api.factories import ApiFactories
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.storage.inmemory import InMemoryStorageClient
 
 
 @pytest.fixture(autouse=True)
@@ -158,6 +160,11 @@ def fake_storage() -> FakeStorage:
 
 
 @pytest.fixture
+def storage_engine() -> InMemoryStorageClient:
+    return InMemoryStorageClient()
+
+
+@pytest.fixture
 def api_factories(db_client: TestClient, fake_storage: FakeStorage) -> ApiFactories:
     return ApiFactories(db_client, fake_storage)
 
@@ -183,6 +190,7 @@ def db_client(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     fake_storage: FakeStorage,
+    storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
     test_database_url = os.getenv("TEST_DATABASE_URL")
     database_url, schema_name = _prepare_database_url(tmp_path=tmp_path, monkeypatch=monkeypatch)
@@ -198,6 +206,7 @@ def db_client(
         _seed_demo_tenants(engine)
         app = create_app()
         app.dependency_overrides[get_object_storage] = lambda: fake_storage
+        app.dependency_overrides[get_ingestion_storage] = lambda: storage_engine
         with TestClient(app, raise_server_exceptions=False) as test_client:
             yield test_client
     finally:

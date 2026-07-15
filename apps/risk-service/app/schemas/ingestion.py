@@ -74,6 +74,8 @@ class IngestionBatchRead(BaseModel):
     completed_at: datetime | None
     error_code: str | None
     error_message: str | None
+    raw_artifact_path: str | None
+    report_artifact_path: str | None
     created_at: datetime
 
 

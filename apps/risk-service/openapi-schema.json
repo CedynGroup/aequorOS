@@ -8770,6 +8770,17 @@
             ],
             "title": "Mapping Config Id"
           },
+          "raw_artifact_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Artifact Path"
+          },
           "records_accepted": {
             "title": "Records Accepted",
             "type": "integer"
@@ -8793,6 +8804,17 @@
           "records_warning": {
             "title": "Records Warning",
             "type": "integer"
+          },
+          "report_artifact_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Artifact Path"
           },
           "source_system": {
             "enum": [
@@ -8861,6 +8883,8 @@
           "completed_at",
           "error_code",
           "error_message",
+          "raw_artifact_path",
+          "report_artifact_path",
           "created_at"
         ],
         "title": "IngestionBatchRead",

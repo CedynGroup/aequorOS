@@ -85,6 +85,12 @@ export interface IngestionBatchRead {
   mappingConfigId: string | null;
   /**
    *
+   * @type {string}
+   * @memberof IngestionBatchRead
+   */
+  rawArtifactPath: string | null;
+  /**
+   *
    * @type {number}
    * @memberof IngestionBatchRead
    */
@@ -119,6 +125,12 @@ export interface IngestionBatchRead {
    * @memberof IngestionBatchRead
    */
   recordsWarning: number;
+  /**
+   *
+   * @type {string}
+   * @memberof IngestionBatchRead
+   */
+  reportArtifactPath: string | null;
   /**
    *
    * @type {string}
@@ -210,6 +222,8 @@ export function instanceOfIngestionBatchRead(
   if (!("id" in value) || value["id"] === undefined) return false;
   if (!("mappingConfigId" in value) || value["mappingConfigId"] === undefined)
     return false;
+  if (!("rawArtifactPath" in value) || value["rawArtifactPath"] === undefined)
+    return false;
   if (!("recordsAccepted" in value) || value["recordsAccepted"] === undefined)
     return false;
   if (!("recordsBlocked" in value) || value["recordsBlocked"] === undefined)
@@ -224,6 +238,11 @@ export function instanceOfIngestionBatchRead(
   )
     return false;
   if (!("recordsWarning" in value) || value["recordsWarning"] === undefined)
+    return false;
+  if (
+    !("reportArtifactPath" in value) ||
+    value["reportArtifactPath"] === undefined
+  )
     return false;
   if (!("sourceSystem" in value) || value["sourceSystem"] === undefined)
     return false;
@@ -258,12 +277,14 @@ export function IngestionBatchReadFromJSONTyped(
     extractionMode: json["extraction_mode"],
     id: json["id"],
     mappingConfigId: json["mapping_config_id"],
+    rawArtifactPath: json["raw_artifact_path"],
     recordsAccepted: json["records_accepted"],
     recordsBlocked: json["records_blocked"],
     recordsError: json["records_error"],
     recordsExtracted: json["records_extracted"],
     recordsTranslated: json["records_translated"],
     recordsWarning: json["records_warning"],
+    reportArtifactPath: json["report_artifact_path"],
     sourceSystem: json["source_system"],
     startedAt: json["started_at"] == null ? null : new Date(json["started_at"]),
     status: json["status"],
@@ -298,12 +319,14 @@ export function IngestionBatchReadToJSONTyped(
     extraction_mode: value["extractionMode"],
     id: value["id"],
     mapping_config_id: value["mappingConfigId"],
+    raw_artifact_path: value["rawArtifactPath"],
     records_accepted: value["recordsAccepted"],
     records_blocked: value["recordsBlocked"],
     records_error: value["recordsError"],
     records_extracted: value["recordsExtracted"],
     records_translated: value["recordsTranslated"],
     records_warning: value["recordsWarning"],
+    report_artifact_path: value["reportArtifactPath"],
     source_system: value["sourceSystem"],
     started_at:
       value["startedAt"] == null

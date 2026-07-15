@@ -147,6 +147,12 @@ class TestHappyPath:
         assert batch["validation_report"]["summary"]["overall_status"] == "ACCEPTED"
         assert batch["content_hash"]
 
+        assert batch["raw_artifact_path"] == f"excel_csv/{AS_OF}/{batch['id']}/bank.xlsx"
+        assert (
+            batch["report_artifact_path"]
+            == f"validation_reports/{AS_OF}/{batch['id']}/validation_report.json"
+        )
+
         positions = db_client.get(
             f"/api/v1/banks/{bank_id}/canonical-positions",
             headers=headers(),
@@ -261,6 +267,8 @@ class TestGatingAndFailure:
         assert batch["status"] == "failed"
         assert batch["error_code"] == "connection_failed"
         assert "does not exist" in batch["error_message"]
+        assert batch["raw_artifact_path"] is None
+        assert batch["report_artifact_path"] is None
 
     def test_untranslatable_rows_are_preserved_for_review(
         self, db_client: TestClient, tmp_path: Path
@@ -297,6 +305,55 @@ class TestGatingAndFailure:
         )
         assert response.status_code == 422
         assert "active mapping config" in response.json()["error"]["message"]
+
+
+class TestStorageArtifacts:
+    def test_raw_source_and_report_land_in_tiered_storage(
+        self, db_client: TestClient, tmp_path: Path, storage_engine
+    ) -> None:
+        import json as jsonlib
+
+        from app.storage.client import StorageLocation
+
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
+        batch = start_batch(db_client, bank_id, workbook)["batch"]
+
+        slugs = {
+            key[0].split("-", 2)[2].rsplit("-", 1)[0]
+            for key in storage_engine._objects  # noqa: SLF001
+        }
+        assert len(slugs) == 1
+        slug = slugs.pop()
+
+        raw_location = StorageLocation(slug, "raw", batch["raw_artifact_path"])
+        descriptor, stream = storage_engine.read(raw_location)
+        assert stream.read() == workbook.read_bytes()
+        assert descriptor.metadata.ingestion_batch_id == batch["id"]
+        assert descriptor.metadata.checksum_sha256 == batch["content_hash"]
+        assert descriptor.metadata.lineage_node_id is not None
+
+        report_location = StorageLocation(slug, "outputs", batch["report_artifact_path"])
+        _, report_stream = storage_engine.read(report_location)
+        report = jsonlib.loads(report_stream.read())
+        assert report["summary"]["overall_status"] == "ACCEPTED"
+
+    def test_identical_rerun_stores_no_duplicate_raw_versions(
+        self, db_client: TestClient, tmp_path: Path, storage_engine
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
+        first = start_batch(db_client, bank_id, workbook)
+        second = start_batch(db_client, bank_id, workbook)
+        assert second["reused"] is True
+        raw_objects = [
+            key
+            for key in storage_engine._objects
+            if "-raw" in key[0]  # noqa: SLF001
+        ]
+        assert len(raw_objects) == 1
 
 
 class TestTenantIsolation:

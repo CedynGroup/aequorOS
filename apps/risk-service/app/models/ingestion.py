@@ -128,6 +128,11 @@ class IngestionBatch(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    # Object paths in the institution's storage buckets (storage.md §1.3):
+    # the raw source file in the `raw` tier and the validation report in
+    # `outputs`. Null for batches that failed before the artifact existed.
+    raw_artifact_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    report_artifact_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
 
 class LineageRecord(UuidV7PrimaryKeyMixin, Base):

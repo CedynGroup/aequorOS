@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import DbSession, MutationTenant, Tenant
 from app.schemas.ingestion import (
@@ -21,8 +22,25 @@ from app.schemas.ingestion import (
     TranslationFailureListRead,
 )
 from app.services import ingestion
+from app.storage.client import StorageClient, StorageValidationError
+from app.storage.config import StorageRetiredError
+from app.storage.factory import get_storage_client
 
 router = APIRouter(tags=["ingestion"])
+
+
+def get_ingestion_storage() -> StorageClient:
+    """The storage engine, or 503 when it is unconfigured or retired."""
+    try:
+        return get_storage_client()
+    except (StorageValidationError, StorageRetiredError, NotImplementedError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Storage is unavailable: {exc}",
+        ) from exc
+
+
+IngestionStorage = Annotated[StorageClient, Depends(get_ingestion_storage)]
 
 
 @router.post(
@@ -52,9 +70,13 @@ def list_mapping_configs(bank_id: UUID, db: DbSession, ctx: Tenant) -> MappingCo
     operation_id="startIngestionBatch",
 )
 def start_ingestion_batch(
-    bank_id: UUID, payload: IngestionBatchCreate, db: DbSession, ctx: MutationTenant
+    bank_id: UUID,
+    payload: IngestionBatchCreate,
+    db: DbSession,
+    ctx: MutationTenant,
+    storage: IngestionStorage,
 ) -> IngestionBatchStartRead:
-    return ingestion.start_ingestion(db, ctx, bank_id, payload)
+    return ingestion.start_ingestion(db, ctx, bank_id, payload, storage)
 
 
 @router.get(

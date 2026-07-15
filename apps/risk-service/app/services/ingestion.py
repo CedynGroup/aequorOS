@@ -12,8 +12,14 @@ reads identically once execution moves to a worker.
 
 from __future__ import annotations
 
+import hashlib
+import io
+import json
+import re
+from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -70,6 +76,12 @@ from app.schemas.ingestion import (
     TranslationFailureRead,
 )
 from app.services.audit import record_event
+from app.storage.client import (
+    ObjectMetadata,
+    StorageClient,
+    StorageError,
+    StorageLocation,
+)
 
 _MAX_LINEAGE_DEPTH = 50
 
@@ -150,7 +162,11 @@ def list_mapping_configs(db: Session, ctx: TenantContext, bank_id: UUID) -> Mapp
 
 
 def start_ingestion(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: IngestionBatchCreate
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    payload: IngestionBatchCreate,
+    storage: StorageClient,
 ) -> IngestionBatchStartRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     mapping_record = _resolve_mapping_config(db, ctx, bank, payload)
@@ -200,6 +216,17 @@ def start_ingestion(
         inputs=(),
         details={"records": len(extraction.records), "warnings": extraction.warnings},
     )
+
+    storage_failure = _artifact_step(
+        db,
+        ctx,
+        (bank, payload, adapter, mapping_record),
+        lambda: _persist_raw_artifact(
+            ctx, bank_slug(db, bank), batch, extract_node, payload, storage
+        ),
+    )
+    if storage_failure is not None:
+        return storage_failure
 
     batch.status = "translating"
     records = adapter.translate(extraction, mapping)
@@ -259,6 +286,15 @@ def start_ingestion(
 
     if outcome.overall_status != "rejected":
         _persist_canonical(db, ctx, bank, batch, validate_node, records, outcome.record_statuses)
+
+    storage_failure = _artifact_step(
+        db,
+        ctx,
+        (bank, payload, adapter, mapping_record),
+        lambda: _persist_report_artifact(ctx, bank_slug(db, bank), batch, validate_node, storage),
+    )
+    if storage_failure is not None:
+        return storage_failure
 
     _record_batch_event(db, ctx, batch, payload.reason)
     db.commit()
@@ -898,6 +934,114 @@ def _supersede_current(db: Session, model: type, new_id: UUID, *conditions: Any)
     if current is not None:
         current.superseded_by = new_id
         db.flush()
+
+
+def _artifact_step(
+    db: Session,
+    ctx: TenantContext,
+    batch_context: tuple[Bank, IngestionBatchCreate, SourceAdapter, MappingConfigRecord],
+    persist: Callable[[], None],
+) -> IngestionBatchStartRead | None:
+    """Run a storage persistence step; a StorageError fails the batch loudly.
+
+    The in-flight transaction (including any canonical rows) is rolled back —
+    a batch whose artifacts cannot be stored must not present itself as
+    accepted history (storage.md §1.3).
+    """
+    try:
+        persist()
+        return None
+    except StorageError as exc:
+        db.rollback()
+        bank, payload, adapter, mapping_record = batch_context
+        batch = _new_batch(ctx, bank, payload, adapter, mapping_record)
+        return _fail_batch(db, ctx, batch, payload.reason, "storage_error", str(exc))
+
+
+_SLUG_UNSAFE = re.compile(r"[^a-z0-9-]+")
+
+
+def bank_slug(db: Session, bank: Bank) -> str:
+    """The bank's DNS-safe storage slug, assigned on first use.
+
+    Derived from the short name plus an id fragment so it stays unique and
+    stable even if two banks share a short name; persisted so bucket names
+    never change once assigned.
+    """
+    if bank.storage_slug is None:
+        base = _SLUG_UNSAFE.sub("-", bank.short_name.lower()).strip("-") or "bank"
+        bank.storage_slug = f"{base[:40]}-{bank.id.hex[:6]}"
+        db.flush()
+    return bank.storage_slug
+
+
+def _persist_raw_artifact(  # noqa: PLR0913 - mirrors record_event's shape
+    ctx: TenantContext,
+    slug: str,
+    batch: IngestionBatch,
+    extract_node: LineageRecord,
+    payload: IngestionBatchCreate,
+    storage: StorageClient,
+) -> None:
+    """Store the untouched source file in the raw tier (storage.md §1.3)."""
+    storage.ensure_institution(slug)
+    source = Path(payload.location)
+    content = source.read_bytes()
+    location = StorageLocation(
+        institution_slug=slug,
+        tier="raw",
+        object_path=(f"{batch.source_system.lower()}/{batch.as_of_date}/{batch.id}/{source.name}"),
+    )
+    storage.write(
+        location,
+        io.BytesIO(content),
+        ObjectMetadata(
+            institution_slug=slug,
+            tier="raw",
+            checksum_sha256=batch.content_hash or hashlib.sha256(content).hexdigest(),
+            written_at=utc_now(),
+            written_by=str(ctx.actor_user_id),
+            as_of_date=str(batch.as_of_date),
+            ingestion_batch_id=str(batch.id),
+            lineage_node_id=str(extract_node.id),
+            source_system=batch.source_system,
+            source_reference=source.name,
+        ),
+    )
+    batch.raw_artifact_path = location.object_path
+
+
+def _persist_report_artifact(
+    ctx: TenantContext,
+    slug: str,
+    batch: IngestionBatch,
+    validate_node: LineageRecord,
+    storage: StorageClient,
+) -> None:
+    """Store the operator-facing validation report in the outputs tier."""
+    content = json.dumps(batch.validation_report, sort_keys=True).encode()
+    location = StorageLocation(
+        institution_slug=slug,
+        tier="outputs",
+        object_path=(f"validation_reports/{batch.as_of_date}/{batch.id}/validation_report.json"),
+    )
+    storage.write(
+        location,
+        io.BytesIO(content),
+        ObjectMetadata(
+            institution_slug=slug,
+            tier="outputs",
+            checksum_sha256=hashlib.sha256(content).hexdigest(),
+            written_at=utc_now(),
+            written_by=str(ctx.actor_user_id),
+            as_of_date=str(batch.as_of_date),
+            ingestion_batch_id=str(batch.id),
+            lineage_node_id=str(validate_node.id),
+            source_system=batch.source_system,
+        ),
+        content_type="application/json",
+    )
+    batch.report_artifact_path = location.object_path
 
 
 def _record_batch_event(
