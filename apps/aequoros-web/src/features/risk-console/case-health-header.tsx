@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 
-import { Skeleton } from "../../components/ui";
+import { Skeleton, Tooltip } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import type { ConsoleTab } from "../../lib/constants";
 import { cn, labelize } from "../../lib/utils";
@@ -87,7 +87,7 @@ export function CaseHealthHeader({
     <section
       aria-label="Case health"
       data-testid="case-health-header"
-      className="grid min-w-0 grid-cols-2 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] sm:grid-cols-3 xl:grid-cols-6"
+      className="grid min-w-0 grid-cols-2 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] sm:grid-cols-3"
     >
       <HealthLink label="Validation" tab="financial" onNavigate={onNavigate}>
         <QueryState
@@ -103,11 +103,7 @@ export function CaseHealthHeader({
           render={scenarioState}
         />
       </HealthLink>
-      <HealthLink
-        label="Latest forecast"
-        tab="calculations"
-        onNavigate={onNavigate}
-      >
+      <HealthLink label="Forecast" tab="calculations" onNavigate={onNavigate}>
         <QueryState query={runs} data={demoData?.runs} render={runState} />
       </HealthLink>
       <HealthLink label="Findings" tab="findings" onNavigate={onNavigate}>
@@ -153,11 +149,13 @@ function HealthLink({
   return (
     <button
       type="button"
-      className="group min-w-0 border-b border-r border-[rgb(var(--border))] px-3 py-2 text-left outline-none last:border-r-0 hover:bg-[rgb(var(--muted))] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))] xl:border-b-0"
+      className="group min-w-0 border-b border-r border-[rgb(var(--border))] px-3 py-2 text-left outline-none last:border-r-0 hover:bg-[rgb(var(--muted))] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--focus))]"
       onClick={() => onNavigate(tab)}
     >
       <span className="flex min-w-0 items-center justify-between gap-1 text-[10px] font-medium uppercase tracking-[0.06em] text-[rgb(var(--muted-foreground))]">
-        <span className="truncate">{label}</span>
+        <span data-health-label className="whitespace-normal">
+          {label}
+        </span>
         <ChevronRight
           aria-hidden="true"
           className="size-3 shrink-0 transition-transform group-hover:translate-x-0.5"
@@ -205,7 +203,7 @@ function HealthValue({
     <span
       title={title}
       className={cn(
-        "block truncate text-sm font-semibold",
+        "block min-w-0 whitespace-normal break-words text-sm font-semibold",
         tone === "danger" && "text-[rgb(var(--danger))]",
         tone === "warning" && "text-[rgb(var(--warning))]",
         tone === "success" && "text-[rgb(var(--success))]",
@@ -296,7 +294,7 @@ function findingState(findings: FindingRead[]) {
         className="flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-xs font-semibold text-[rgb(var(--muted-foreground))] tabular-nums"
       >
         <span>No active</span>
-        <span>+{historicalCount} historical</span>
+        <span>+{historicalCount} resolved</span>
       </span>
     );
   const counts = countSeverities(activeFindings);
@@ -315,7 +313,7 @@ function findingState(findings: FindingRead[]) {
       <SeverityCount severity="low" count={counts.low} />
       {historicalCount ? (
         <span className="text-[rgb(var(--muted-foreground))]">
-          +{historicalCount} historical
+          +{historicalCount} resolved
         </span>
       ) : null}
     </span>
@@ -329,19 +327,26 @@ function SeverityCount({
   severity: "critical" | "high" | "low" | "medium";
   count: number;
 }) {
+  const label = `${labelize(severity)}: ${count} active findings`;
   return (
-    <span
-      title={`${count} ${severity}`}
-      className={cn(
-        (severity === "critical" || severity === "high") &&
-          "text-[rgb(var(--danger))]",
-        severity === "medium" && "text-[rgb(var(--warning))]",
-        severity === "low" && "text-[rgb(var(--success))]",
-      )}
-    >
-      {severity.slice(0, 1).toUpperCase()}
-      {count}
-    </span>
+    <Tooltip label={label}>
+      <span
+        aria-label={label}
+        className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-1.5 py-0.5 text-[rgb(var(--foreground))]"
+      >
+        <span
+          aria-hidden="true"
+          className={cn(
+            "size-1.5 shrink-0 rounded-full",
+            (severity === "critical" || severity === "high") &&
+              "bg-[rgb(var(--danger))]",
+            severity === "medium" && "bg-[rgb(var(--warning))]",
+            severity === "low" && "bg-[rgb(var(--success))]",
+          )}
+        />
+        <span>{count}</span>
+      </span>
+    </Tooltip>
   );
 }
 

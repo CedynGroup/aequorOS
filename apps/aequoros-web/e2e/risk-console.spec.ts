@@ -16,6 +16,60 @@ async function captureEvidence(
   await page.screenshot({ path: `${evidenceDir}/${name}.png`, fullPage: true });
 }
 
+async function expectGlanceableCaseHealth(
+  page: import("playwright/test").Page,
+  viewport: { height: number; width: number },
+) {
+  await page.setViewportSize(viewport);
+  const health = page.getByTestId("case-health-header");
+
+  for (const label of [
+    "Validation",
+    "Scenarios",
+    "Forecast",
+    "Findings",
+    "Covenants",
+    "Decision",
+  ]) {
+    await expect(health.getByText(label, { exact: true })).toBeVisible();
+  }
+  expect(
+    await health.evaluate((header) => {
+      const elements = [header, ...header.querySelectorAll<HTMLElement>("*")];
+      return elements.every((element) => {
+        const style = window.getComputedStyle(element);
+        const clipsOverflow =
+          style.overflowX === "hidden" || style.overflowX === "clip";
+        return (
+          style.textOverflow !== "ellipsis" &&
+          !(clipsOverflow && element.scrollWidth > element.clientWidth + 1)
+        );
+      });
+    }),
+  ).toBe(true);
+  expect(
+    await health.evaluate((header) => header.scrollWidth <= header.clientWidth),
+  ).toBe(true);
+
+  const riskRows = page.getByTestId("case-key-value");
+  expect(await riskRows.count()).toBeGreaterThan(0);
+  expect(
+    await riskRows.evaluateAll((rows) =>
+      rows.every((row) => {
+        const [label, value] = Array.from(row.children) as HTMLElement[];
+        if (!label || !value) return false;
+        const labelBounds = label.getBoundingClientRect();
+        const valueBounds = value.getBoundingClientRect();
+        return (
+          labelBounds.right <= valueBounds.left + 0.5 &&
+          label.scrollWidth <= label.clientWidth + 1 &&
+          value.scrollWidth <= value.clientWidth + 1
+        );
+      }),
+    ),
+  ).toBe(true);
+}
+
 test.beforeEach(async ({ page, request }) => {
   test.skip(
     !(await isRiskServiceReady(request)),
@@ -120,14 +174,16 @@ test("summarizes the seeded breaching case without optimistic defaults", async (
   );
   const findings = (await findingsResponse.json()) as Array<{
     severity: string;
+    status: string;
   }>;
   const counts = { critical: 0, high: 0, medium: 0, low: 0 };
   for (const finding of findings) {
+    if (finding.status !== "open" && finding.status !== "needs_review")
+      continue;
     if (finding.severity in counts)
       counts[finding.severity as keyof typeof counts] += 1;
   }
 
-  await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`/cases/${breachingCaseId}?tab=overview`);
 
   const health = page.getByTestId("case-health-header");
@@ -137,10 +193,16 @@ test("summarizes the seeded breaching case without optimistic defaults", async (
     ),
   ).toBeVisible();
   await expect(health.getByText("Non-compliant")).toBeVisible();
-  expect(
-    await health.evaluate((header) => header.scrollWidth <= header.clientWidth),
-  ).toBe(true);
-  await captureEvidence(page, "seeded-breaching-case-health");
+  await expect(health.getByLabel("Critical: 0 active findings")).toBeVisible();
+  await expect(health.getByLabel("High: 0 active findings")).toBeVisible();
+  await expect(health.getByLabel("Medium: 1 active findings")).toBeVisible();
+  await expect(health.getByLabel("Low: 0 active findings")).toBeVisible();
+  await expect(health.getByText(/^[CHML]\d+$/)).toHaveCount(0);
+
+  await expectGlanceableCaseHealth(page, { width: 1280, height: 800 });
+  await captureEvidence(page, "seeded-breaching-case-health-1280");
+  await expectGlanceableCaseHealth(page, { width: 1440, height: 1000 });
+  await captureEvidence(page, "seeded-breaching-case-health-1440");
 });
 
 test("initializes, edits, reviews, copies, archives, and tenant-isolates scenarios", async ({

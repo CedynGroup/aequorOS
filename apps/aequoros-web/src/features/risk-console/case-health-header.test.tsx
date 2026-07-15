@@ -332,9 +332,14 @@ describe("CaseHealthHeader", () => {
         "0 critical, 1 high, 1 medium, 0 low, 5 historical",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("+5 historical")).toHaveClass(
+    expect(screen.getByLabelText("Critical: 0 active findings")).toBeVisible();
+    expect(screen.getByLabelText("High: 1 active findings")).toBeVisible();
+    expect(screen.getByLabelText("Medium: 1 active findings")).toBeVisible();
+    expect(screen.getByLabelText("Low: 0 active findings")).toBeVisible();
+    expect(screen.getByText("+5 resolved")).toHaveClass(
       "text-[rgb(var(--muted-foreground))]",
     );
+    expect(screen.queryByText(/^[CHML]\d+$/)).not.toBeInTheDocument();
   });
 
   it("shows historical traceability when no findings are active", async () => {
@@ -349,7 +354,7 @@ describe("CaseHealthHeader", () => {
     expect(
       await screen.findByLabelText("No active findings, 2 historical"),
     ).toBeInTheDocument();
-    expect(screen.getByText("+2 historical")).toBeInTheDocument();
+    expect(screen.getByText("+2 resolved")).toBeInTheDocument();
     expect(screen.queryByText("C0")).not.toBeInTheDocument();
     expect(screen.queryByText("H0")).not.toBeInTheDocument();
   });
@@ -431,7 +436,7 @@ describe("CaseHealthHeader", () => {
     expect(screen.getByText("Validated")).toBeInTheDocument();
     expect(screen.getByText("Ready")).toBeInTheDocument();
     expect(screen.getByTitle("Forecast #1 · Succeeded")).toBeInTheDocument();
-    expect(screen.getByText("+1 historical")).toBeInTheDocument();
+    expect(screen.getByText("+1 resolved")).toBeInTheDocument();
     expect(screen.getByText("Non-compliant")).toBeInTheDocument();
     expect(screen.getByText("Needs More Info")).toBeInTheDocument();
     expect(financialWorkspace).not.toHaveBeenCalled();
@@ -516,7 +521,7 @@ describe("CaseHealthHeader", () => {
     for (const [label, tab] of [
       ["Validation", "financial"],
       ["Scenarios", "scenarios"],
-      ["Latest forecast", "calculations"],
+      ["Forecast", "calculations"],
       ["Findings", "findings"],
       ["Covenants", "financial"],
       ["Decision", "decisions"],
