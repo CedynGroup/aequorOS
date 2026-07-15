@@ -40,7 +40,18 @@ Methodology (Product Documentation Module 1):
     rotational blend.
 - **EaR.** ``ΔNII = Σ_i Gap_i · ΔRate · (12 − months_i) / 12`` over the ≤12-month
   buckets, evaluated under the parallel ±200 bp shocks; ``months_i`` is the
-  bucket midpoint expressed in months.
+  bucket midpoint expressed in months. Decomposed swap legs sit in the gap
+  buckets like any other position, so EaR already reprices the floating leg.
+- **NII.** Annualized accrual net interest income is
+  ``Σ asset amount·rate − Σ liability amount·rate`` over ALL positions,
+  including decomposed interest-rate-swap legs. The swap treatment is complete:
+  a swap contributes its net carry to base NII —
+  ``carry = notional × (floating index rate − fixed rate) / 100`` for a
+  pay-fixed swap, and ``carry = notional × (fixed rate − floating index rate)
+  / 100`` for a receive-fixed swap. The floating index rate is the base-curve
+  zero rate at the floating leg's bucket midpoint (the same curve point the
+  leg reprices at, e.g. the ``0.17y`` key for a 91-day T-bill index), stamped
+  onto the leg's ``rate_pct`` when the swap is decomposed.
 """
 
 from __future__ import annotations
@@ -137,8 +148,9 @@ class IrrPosition:
     """One rate-sensitive banking-book position reduced to the fields IRR uses.
 
     ``is_hedge`` marks synthetic legs decomposed from a derivative hedge (e.g. an
-    interest-rate swap); hedge legs participate in gap, duration and EVE but are
-    excluded from the accrual net-interest-income base.
+    interest-rate swap). Hedge legs participate in gap, duration, EVE and the
+    accrual net-interest-income base alike — the two legs' offsetting accruals
+    net to the swap carry — so the flag is provenance, not an exclusion.
     """
 
     side: IrrSide
@@ -422,15 +434,19 @@ def ear_line_item(delta_bp: Decimal, delta_nii: Decimal) -> IrrLineItem:
 
 
 def compute_nii(positions: Sequence[IrrPosition]) -> Decimal:
-    """Annualized net interest income of the on-balance-sheet rate-sensitive book.
+    """Annualized net interest income of the rate-sensitive book, swap carry included.
 
-    Hedge legs are excluded (their fixed/floating carry nets to approximately
-    zero at inception and is not part of the accrual book).
+    Every position accrues ``amount × rate_pct / 100`` (added for assets,
+    subtracted for liabilities), including decomposed interest-rate-swap legs:
+    the receive-leg accrual minus the pay-leg accrual is the swap's net carry,
+    ``notional × (floating index rate − fixed rate) / 100`` for a pay-fixed
+    swap and ``notional × (fixed rate − floating index rate) / 100`` for a
+    receive-fixed swap. The floating index rate is the base-curve zero rate at
+    the floating leg's bucket midpoint — the same curve point the leg reprices
+    at — which the swap decomposition stamps onto the leg's ``rate_pct``.
     """
     interest = _ZERO
     for position in positions:
-        if position.is_hedge:
-            continue
         accrual = position.amount * position.rate_pct / _HUNDRED
         interest += accrual if position.side == "asset" else -accrual
     return money(interest)

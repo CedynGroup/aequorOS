@@ -176,7 +176,9 @@ _IRR_LIABILITY_POSITIONS: tuple[tuple[str, str, str, str, str, str, str], ...] =
 )
 # A single pay-fixed receiver interest-rate swap hedge. The engine decomposes it
 # into a floating receive leg (asset, next 91-day reset) and a fixed pay leg
-# (liability, 3-year tenor); both price into gap/EVE/duration but not NII.
+# (liability, 3-year tenor); both price into gap/EVE/duration, and their net
+# accrual — notional × (91d floating index − pay fixed)/100 — is the swap carry
+# that joins base NII.
 _IRR_SWAP: dict[str, str] = {
     "category": "pay_fixed_irs",
     "notional_m": "120",

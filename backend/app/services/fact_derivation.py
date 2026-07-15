@@ -132,14 +132,17 @@ irr_position
 
 irr_swap
     INTEREST_RATE_SWAP positions → one fact per swap (category = swap id,
-    amount = GHS notional) shaped exactly like the seed: ``pay_rate_pct``,
-    ``receive_index``, ``tenor_years``, ``direction``, and the engine's leg
-    placement — the floating receive leg buckets at the index reset tenor
-    (91d T-Bill → 1-3m) and the fixed pay leg at the remaining maturity, with
+    amount = GHS notional) shaped exactly like the seed: ``pay_rate_pct``
+    (always the swap's fixed rate — the template column keeps its pay-fixed
+    name), ``receive_index``, ``tenor_years``, ``direction``, and the engine's
+    leg placement — the floating leg buckets at the index reset tenor
+    (91d T-Bill → 1-3m) and the fixed leg at the remaining maturity, with
     midpoints from the nine canonical buckets so the parameter-table discount
-    curve keys match. Only pay-fixed swaps derive (the IRR engine decomposes
-    pay-fixed only); anything else is skipped with a warning. Skipped with a
-    note when no swap positions exist.
+    curve keys match. ``receive_bucket``/``pay_bucket`` locate the legs the
+    bank receives/pays: pay-fixed swaps receive the floating leg; receive-fixed
+    swaps are the mirror image (fixed leg received, floating leg paid). Any
+    other direction is skipped with a warning. Skipped with a note when no
+    swap positions exist.
 
 ftp_curve_point
     The ingested GHS sovereign yield curve, with a documented liquidity-premium
@@ -1789,10 +1792,11 @@ def _derive_irr_swaps(canonical: _Canonical, groups: list[GroupResult]) -> list[
         attributes = row.attributes
         swap_id = str(attributes.get("swap_id") or row.source_reference)
         direction = str(attributes.get("direction") or "pay_fixed").strip().lower()
-        if direction != "pay_fixed":
+        if direction not in ("pay_fixed", "receive_fixed"):
             warnings.append(
                 f"Swap {swap_id}: direction {direction!r} is not supported (the IRR "
-                "engine decomposes pay-fixed swaps only); the swap was excluded."
+                "engine decomposes pay-fixed and receive-fixed swaps only); the swap "
+                "was excluded."
             )
             continue
         notional = row.notional_ghs if row.notional_ghs > _ZERO else row.balance_ghs
@@ -1806,16 +1810,34 @@ def _derive_irr_swaps(canonical: _Canonical, groups: list[GroupResult]) -> list[
             warnings.append(f"Swap {swap_id}: no pay_rate_pct; the swap was excluded.")
             continue
         receive_index = str(attributes.get("receive_index") or "91d_tbill").strip().lower()
-        receive_bucket = _bucket_for_days(_index_reset_days(receive_index))
+        floating_bucket = _bucket_for_days(_index_reset_days(receive_index))
         if row.contractual_maturity is not None:
             remaining_days = max((row.contractual_maturity - canonical.as_of).days, 0)
         else:
             tenor = _dec(attributes.get("tenor_years"), _ZERO)
             remaining_days = int(tenor * Decimal("365"))
-        pay_bucket = _bucket_for_days(remaining_days)
+        fixed_bucket = _bucket_for_days(remaining_days)
         tenor_years = _dec_or_none(attributes.get("tenor_years"))
         if tenor_years is None:
             tenor_years = (Decimal(remaining_days) / Decimal("365")).quantize(Decimal("0.01"))
+        # receive_bucket/pay_bucket locate the legs the bank receives/pays:
+        # a pay-fixed swap receives the floating leg (index reset bucket) and
+        # pays the fixed leg (remaining-maturity bucket); receive-fixed swaps
+        # are the mirror image.
+        if direction == "pay_fixed":
+            receive_bucket, pay_bucket = floating_bucket, fixed_bucket
+            derived_from = (
+                "INTEREST_RATE_SWAP position: pay-fixed swap decomposed by the IRR "
+                "engine into a floating receive leg (index reset bucket) and a fixed "
+                "pay leg (remaining-maturity bucket)"
+            )
+        else:
+            receive_bucket, pay_bucket = fixed_bucket, floating_bucket
+            derived_from = (
+                "INTEREST_RATE_SWAP position: receive-fixed swap decomposed by the IRR "
+                "engine into a fixed receive leg (remaining-maturity bucket) and a "
+                "floating pay leg (index reset bucket)"
+            )
         category = swap_id if swap_id not in used_categories else row.source_reference
         used_categories.add(category)
         specs.append(
@@ -1823,15 +1845,13 @@ def _derive_irr_swaps(canonical: _Canonical, groups: list[GroupResult]) -> list[
                 fact_group="irr_swap",
                 category=category,
                 amount=notional,
-                derived_from="INTEREST_RATE_SWAP position: pay-fixed swap decomposed "
-                "by the IRR engine into a floating receive leg (index reset bucket) "
-                "and a fixed pay leg (remaining-maturity bucket)",
+                derived_from=derived_from,
                 attributes={
                     "notional": str(money(notional)),
                     "pay_rate_pct": str(pay_rate),
                     "receive_index": receive_index,
                     "tenor_years": str(tenor_years),
-                    "direction": "pay_fixed",
+                    "direction": direction,
                     "receive_bucket": receive_bucket,
                     "receive_midpoint_years": _BUCKET_MIDPOINT[receive_bucket],
                     "pay_bucket": pay_bucket,

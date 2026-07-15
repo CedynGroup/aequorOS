@@ -30,6 +30,7 @@ from tests.factories.canonical import (
     HEDGE_USD_SOLD,
     SWAP_NOTIONAL_GHS,
     seed_canonical_fixture,
+    seed_directional_swap_positions,
     seed_hedge_and_swap_positions,
 )
 
@@ -288,6 +289,39 @@ def test_irr_swap_facts_are_seed_shaped(db_session: Session) -> None:
     assert swap.attributes["receive_midpoint_years"] == "0.17"
     assert swap.attributes["pay_bucket"] == "1-3y"
     assert swap.attributes["pay_midpoint_years"] == "1.9"
+
+
+def test_receive_fixed_swap_derives_and_unknown_direction_warns(db_session: Session) -> None:
+    seed_sample_bank(db_session)
+    db_session.flush()
+    seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    seed_directional_swap_positions(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    result = derive_facts(db_session, _ctx(), SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+
+    group = next(item for item in result.groups if item.group == "irr_swap")
+    assert group.status == "derived"
+    assert group.rows == 1
+    # The receive-fixed swap flows through without a warning; only the
+    # unknown-direction swap is skipped.
+    assert not any("IRS-T-002" in warning for warning in group.warnings)
+    assert any("IRS-T-003" in warning and "'basis_swap'" in warning for warning in group.warnings)
+
+    grouped = _by_group(_facts(db_session, result))
+    swaps = grouped["irr_swap"]
+    assert set(swaps) == {"IRS-T-002"}
+
+    swap = swaps["IRS-T-002"]
+    assert set(swap.attributes) == SEED_IRR_SWAP_KEYS | PROVENANCE_KEYS
+    assert swap.attributes["direction"] == "receive_fixed"
+    assert swap.attributes["pay_rate_pct"] == "25.3"  # the swap's fixed rate
+    # Legs invert versus a pay-fixed swap: the fixed leg is RECEIVED at the
+    # remaining maturity (1095 days -> 1-3y) and the floating 91d T-bill leg
+    # is PAID at its index-reset bucket (91 days -> 1-3m).
+    assert swap.attributes["receive_bucket"] == "1-3y"
+    assert swap.attributes["receive_midpoint_years"] == "1.9"
+    assert swap.attributes["pay_bucket"] == "1-3m"
+    assert swap.attributes["pay_midpoint_years"] == "0.17"
 
 
 def test_hedges_bring_breaching_nop_under_the_limits(db_session: Session) -> None:

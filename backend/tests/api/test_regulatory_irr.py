@@ -116,7 +116,9 @@ def test_run_all_irr_scenarios_persists_seven_runs_with_golden_metrics(  # noqa:
     assert Decimal(metrics["worst_eve_change_ghs"]) == Decimal("14986975.3393")
     assert _four_dp(metrics["worst_eve_change_pct_tier1"]) == Decimal("5.3525")
     assert Decimal(metrics["tier1_ghs"]) == Decimal("280000000")
-    assert Decimal(metrics["nii_base_ghs"]) == Decimal("253780000")
+    # Base NII = 253.78M on-balance-sheet book + 0.6M swap carry
+    # (120M x (25.8 floating index at the 0.17y curve point - 25.3 pay fixed)/100).
+    assert Decimal(metrics["nii_base_ghs"]) == Decimal("254380000")
     assert _four_dp(metrics["asset_duration"]) == Decimal("0.8290")
     assert _four_dp(metrics["liability_duration"]) == Decimal("0.3267")
     assert _four_dp(metrics["duration_gap"]) == Decimal("0.4807")

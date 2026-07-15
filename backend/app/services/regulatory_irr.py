@@ -771,21 +771,52 @@ def _positions_from_facts(
 
 
 def _swap_legs(fact: BankFinancialFact, curve: dict[Decimal, Decimal]) -> list[IrrPosition]:
+    """Decompose an interest-rate swap fact into its two hedge legs.
+
+    The fact attributes locate the leg the bank RECEIVES (``receive_bucket`` /
+    ``receive_midpoint_years`` → the asset leg) and the leg it PAYS
+    (``pay_bucket`` / ``pay_midpoint_years`` → the liability leg);
+    ``pay_rate_pct`` always carries the swap's FIXED rate (the starter-template
+    column keeps its pay-fixed name for both directions). ``direction``
+    determines which leg is fixed and which floats:
+
+    - ``pay_fixed``: receive leg floats (rate = base-curve zero at its
+      midpoint, i.e. the current floating index rate), pay leg is fixed.
+    - ``receive_fixed``: the mirror image — receive leg is fixed, pay leg
+      floats at the base-curve zero for its midpoint.
+
+    Both legs price into gap/EVE/duration and accrue into base NII, where they
+    net to the swap carry (see ``app.domain.irr.engine.compute_nii``). An
+    unrecognized direction fails the run as data rather than mispricing.
+    """
     attributes = fact.attributes
+    direction = str(attributes.get("direction", "pay_fixed")).strip().lower()
+    if direction not in ("pay_fixed", "receive_fixed"):
+        raise IrrRunError(
+            "unsupported_swap_direction",
+            f"Swap fact '{fact.category}' has unsupported direction {direction!r}; "
+            "expected 'pay_fixed' or 'receive_fixed'.",
+            {"category": fact.category, "direction": direction},
+        )
     notional = Decimal(str(fact.amount))
     receive_midpoint = Decimal(str(attributes["receive_midpoint_years"]))
     pay_midpoint = Decimal(str(attributes["pay_midpoint_years"]))
-    # Pay-fixed swap = long a floating receive leg (asset) + short a fixed pay leg
-    # (liability). Both are marked as hedges so they price into gap/EVE/duration
-    # but are excluded from the accrual net-interest-income base.
-    receive_rate = curve.get(receive_midpoint, _ZERO)
+    fixed_rate = Decimal(str(attributes["pay_rate_pct"]))
+    if direction == "pay_fixed":
+        receive_rate = curve.get(receive_midpoint, _ZERO)
+        pay_rate = fixed_rate
+        receive_kind, pay_kind = "float", "fixed"
+    else:
+        receive_rate = fixed_rate
+        pay_rate = curve.get(pay_midpoint, _ZERO)
+        receive_kind, pay_kind = "fixed", "float"
     return [
         IrrPosition(
             side="asset",
             bucket=attributes["receive_bucket"],
             amount=notional,
             rate_pct=receive_rate,
-            fixed_or_float="float",
+            fixed_or_float=receive_kind,
             midpoint_years=receive_midpoint,
             source="swap",
             is_hedge=True,
@@ -794,8 +825,8 @@ def _swap_legs(fact: BankFinancialFact, curve: dict[Decimal, Decimal]) -> list[I
             side="liability",
             bucket=attributes["pay_bucket"],
             amount=notional,
-            rate_pct=Decimal(str(attributes["pay_rate_pct"])),
-            fixed_or_float="fixed",
+            rate_pct=pay_rate,
+            fixed_or_float=pay_kind,
             midpoint_years=pay_midpoint,
             source="swap",
             is_hedge=True,

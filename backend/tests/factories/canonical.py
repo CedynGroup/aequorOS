@@ -629,6 +629,100 @@ def seed_hedge_and_swap_positions(
     session.flush()
 
 
+def seed_directional_swap_positions(
+    session: Session, *, organization_id: UUID, bank_id: UUID, as_of: date = FIXTURE_AS_OF
+) -> None:
+    """Overlay one receive-fixed IRS and one unknown-direction IRS.
+
+    Kept separate from ``seed_hedge_and_swap_positions`` so the pay-fixed
+    overlay's exact fact set stays assertable; tests exercising the direction
+    handling call this one.
+    """
+    batch = IngestionBatch(
+        organization_id=organization_id,
+        bank_id=bank_id,
+        source_system="EXCEL_CSV",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=as_of,
+    )
+    session.add(batch)
+    session.flush()
+    lineage = LineageRecord(
+        organization_id=organization_id,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="directional-swap-fixture",
+        input_lineage_ids=[],
+    )
+    session.add(lineage)
+    session.flush()
+
+    common = {
+        "organization_id": organization_id,
+        "bank_id": bank_id,
+        "as_of_date": as_of,
+        "source_system": "EXCEL_CSV",
+        "ingestion_batch_id": batch.id,
+        "lineage_id": lineage.id,
+        "validation_status": "accepted",
+    }
+
+    def swap(source_reference: str, maturity: date, attributes: dict[str, Any]) -> None:
+        row = CanonicalPosition(
+            **common,
+            source_reference=source_reference,
+            position_type="INTEREST_RATE_SWAP",
+            currency="GHS",
+        )
+        session.add(row)
+        session.flush()
+        session.add(
+            CanonicalPositionSnapshot(
+                **common,
+                source_reference=source_reference,
+                position_id=row.id,
+                balance=Decimal("20000000"),
+                notional=Decimal("20000000"),
+                contractual_maturity=maturity,
+                attributes=attributes,
+            )
+        )
+
+    # Receive-fixed IRS: same economics as IRS-T-001 with the legs inverted —
+    # the fixed leg is received (remaining maturity, 1-3y) and the floating
+    # 91d T-bill leg is paid (index reset, 1-3m).
+    swap(
+        "SWAP/2",
+        as_of + timedelta(days=1095),
+        {
+            "swap_id": "IRS-T-002",
+            "direction": "RECEIVE_FIXED",
+            "notional_ghs": "20000000",
+            "pay_rate_pct": "25.3",
+            "receive_index": "91D_TBILL",
+            "tenor_years": "3",
+            "mtm_ghs": "-800000",
+        },
+    )
+    # Unknown direction: must be skipped with a warning, never derived.
+    swap(
+        "SWAP/3",
+        as_of + timedelta(days=1095),
+        {
+            "swap_id": "IRS-T-003",
+            "direction": "BASIS_SWAP",
+            "notional_ghs": "20000000",
+            "pay_rate_pct": "25.3",
+            "receive_index": "91D_TBILL",
+            "tenor_years": "3",
+            "mtm_ghs": "0",
+        },
+    )
+    session.flush()
+
+
 def _seed_reference_rows(
     session: Session, common: dict[str, Any], batch_id: UUID, as_of: date
 ) -> None:

@@ -196,9 +196,60 @@ def test_ear_golden() -> None:
 
 
 def test_base_nii_golden() -> None:
-    # Σ asset(amount*rate) - Σ liability(amount*rate) over the non-hedge book.
+    # Σ asset(amount*rate) - Σ liability(amount*rate) over the whole book,
+    # decomposed swap legs included. Hand-derived:
+    #   on-balance-sheet book: assets 561.56M - liabilities 307.78M = 253.78M;
+    #   swap carry = 120M × (25.8 floating index - 25.3 pay fixed)/100 = +0.6M
+    #   (the floating index is the base-curve zero at the 0.17y receive-leg
+    #   midpoint, the 91d T-bill reset point).
+    # Total = 253,780,000 + 600,000 = 254,380,000.
     nii = compute_nii(_positions())
-    assert nii == Decimal("253780000")
+    assert nii == Decimal("254380000")
+
+
+def test_base_nii_includes_exactly_the_swap_carry() -> None:
+    # The same book with and without the swap legs must differ by exactly the
+    # hand-computed carry: 120,000,000 × (25.8 - 25.3)/100 = 600,000.
+    with_swap = compute_nii(_positions())
+    without_swap = compute_nii([p for p in _positions() if not p.is_hedge])
+    assert without_swap == Decimal("253780000")
+    assert with_swap - without_swap == Decimal("600000")
+
+
+def test_receive_fixed_legs_flip_the_carry_sign() -> None:
+    # Mirror-image decomposition of the same swap: the fixed leg becomes the
+    # asset (receive side) and the floating leg the liability (pay side), so
+    # carry = 120M × (25.3 fixed - 25.8 floating)/100 = -600,000.
+    receive_fixed_legs = [
+        P(
+            "asset",
+            "1-3y",
+            Decimal("120") * M,
+            Decimal("25.3"),
+            "fixed",
+            Decimal("1.9"),
+            "swap",
+            True,
+        ),
+        P(
+            "liability",
+            "1-3m",
+            Decimal("120") * M,
+            Decimal("25.8"),
+            "float",
+            Decimal("0.17"),
+            "swap",
+            True,
+        ),
+    ]
+    assert compute_nii(receive_fixed_legs) == Decimal("-600000")
+    # Gap contributions flip buckets and sides versus the pay-fixed legs.
+    gap = compute_gap(receive_fixed_legs)
+    by_bucket = {bucket.bucket: bucket for bucket in gap.buckets}
+    assert by_bucket["1-3y"].rsa == Decimal("120") * M
+    assert by_bucket["1-3y"].rsl == Decimal("0")
+    assert by_bucket["1-3m"].rsl == Decimal("120") * M
+    assert by_bucket["1-3m"].rsa == Decimal("0")
 
 
 def test_base_eve_reduced_hand_check() -> None:
