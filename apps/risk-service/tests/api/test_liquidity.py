@@ -104,6 +104,8 @@ def test_legacy_successful_run_returns_honest_unavailable_summary(
         "calculation_run_id": run["id"],
         "calculation_input_hash": run["input_hash"],
         "analysis_version": None,
+        "sources_coverage_threshold": None,
+        "sources_coverage_threshold_rule_version": None,
         "status": "not_calculated",
         "currency": None,
         "as_of_date": run["as_of_date"],
@@ -123,6 +125,8 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
         "calculation_run_id": None,
         "calculation_input_hash": None,
         "analysis_version": None,
+        "sources_coverage_threshold": None,
+        "sources_coverage_threshold_rule_version": None,
         "status": "not_calculated",
         "currency": None,
         "as_of_date": None,
@@ -168,6 +172,8 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
     assert summary["calculation_run_id"] == run["id"]
     assert summary["calculation_input_hash"] == run["input_hash"]
     assert summary["analysis_version"] == "liquidity-v1.0.0"
+    assert summary["sources_coverage_threshold"] == "1.20"
+    assert summary["sources_coverage_threshold_rule_version"] == "liquidity-v1.0.0"
     assert {metric["key"] for metric in summary["metrics"]} == {
         "minimum_cash_balance",
         "peak_liquidity_gap",
@@ -378,6 +384,8 @@ def test_liquidity_summary_reads_immutable_persisted_metrics(
         )
         assert analysis is not None
         persisted = dict(analysis.result)
+        persisted["sources_coverage_threshold"] = "1.3500"
+        persisted["sources_coverage_threshold_rule_version"] = "liquidity-v0.9.0"
         persisted["metrics"] = [
             {
                 **metric,
@@ -408,6 +416,8 @@ def test_liquidity_summary_reads_immutable_persisted_metrics(
 
     assert historical.status_code == 200, historical.text
     assert historical.json()["analysis_version"] == "liquidity-v1.0.0"
+    assert historical.json()["sources_coverage_threshold"] == "1.3500"
+    assert historical.json()["sources_coverage_threshold_rule_version"] == "liquidity-v0.9.0"
     metrics = {metric["key"]: metric for metric in historical.json()["metrics"]}
     assert metrics["credit_reliance"]["value"] is None
     assert metrics["credit_reliance"]["availability"] == "unavailable"
@@ -445,6 +455,42 @@ def test_zero_finding_run_persists_liquidity_analysis(db_client: TestClient) -> 
         )
     assert analysis is not None
     assert analysis.analysis_version == "liquidity-v1.0.0"
+    assert analysis.result["sources_coverage_threshold"] == "1.20"
+    assert analysis.result["sources_coverage_threshold_rule_version"] == "liquidity-v1.0.0"
+
+
+def test_legacy_liquidity_analysis_without_persisted_threshold_remains_readable(
+    db_client: TestClient,
+) -> None:
+    case = CaseFactory(db_client).create()
+    scenario = _ready_scenario(db_client, case.id)
+    _financial_inputs(case.id)
+    run = db_client.post(
+        f"/api/v1/cases/{case.id}/calculation-runs",
+        headers=headers(),
+        json={"scenario_id": scenario["id"]},
+    ).json()
+    with get_sessionmaker()() as session:
+        analysis = session.scalar(
+            select(LiquidityAnalysisResult).where(LiquidityAnalysisResult.run_id == UUID(run["id"]))
+        )
+        assert analysis is not None
+        legacy_result = dict(analysis.result)
+        legacy_result.pop("sources_coverage_threshold")
+        legacy_result.pop("sources_coverage_threshold_rule_version")
+        analysis.result = legacy_result
+        session.commit()
+
+    summary = db_client.get(
+        f"/api/v1/cases/{case.id}/liquidity/summary",
+        headers=headers(),
+        params={"run_id": run["id"]},
+    )
+
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["status"] == "ready"
+    assert summary.json()["sources_coverage_threshold"] is None
+    assert summary.json()["sources_coverage_threshold_rule_version"] is None
 
 
 def test_liquidity_review_rejects_findings_not_owned_by_workflow(

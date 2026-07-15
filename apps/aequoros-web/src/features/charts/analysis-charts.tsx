@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
+  Legend,
   Line,
   LineChart,
   ReferenceLine,
@@ -21,6 +22,11 @@ import type {
 
 const CHART_HEIGHT = 280;
 const MIN_CHART_WIDTH = 520;
+const LEGEND_STYLE = {
+  fontFamily: "inherit",
+  fontSize: 11,
+  fontVariantNumeric: "tabular-nums",
+} as const;
 
 export function ForecastTrajectoryChart({
   series,
@@ -78,6 +84,7 @@ export function ForecastTrajectoryChart({
             formatter={(value) => formatMoney(value, currency)}
           />
           <Tooltip content={<ForecastTooltip currency={currency} />} />
+          <Legend verticalAlign="top" height={28} wrapperStyle={LEGEND_STYLE} />
           <Line
             type="linear"
             dataKey="assets"
@@ -134,7 +141,7 @@ export function LiquidityCoverageChart({
   return (
     <ChartFrame
       title="Sources coverage by period"
-      description="Persisted forecast sources divided by uses; the line marks the classification threshold."
+      description={`Persisted forecast sources divided by uses; the line marks the ${series.thresholdRuleVersion} classification threshold.`}
       unavailableSpans={series.unavailableSpans}
     >
       {(width, animate) => (

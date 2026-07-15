@@ -421,6 +421,14 @@ describe("CalculationsTab", () => {
       await screen.findByText("Projected balance sheet outputs"),
     ).toBeInTheDocument();
     expect(screen.getByText("$4,550.00")).toBeInTheDocument();
+    const history = screen.getByText("Run history").closest("section");
+    expect(history).toHaveClass("min-w-0", "overflow-hidden");
+    expect(history?.querySelector("button")).toHaveClass("overflow-hidden");
+    expect(
+      screen.getByRole("table", {
+        name: "Projected balance sheet outputs",
+      }).parentElement,
+    ).toHaveClass("max-w-full", "overflow-x-auto");
   });
 
   it("shows running status and disables rerun while polling", async () => {

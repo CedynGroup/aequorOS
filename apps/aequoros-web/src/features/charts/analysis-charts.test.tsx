@@ -56,6 +56,9 @@ describe("ForecastTrajectoryChart", () => {
     expect(
       container.querySelectorAll("[data-chart-point^='forecast-']"),
     ).toHaveLength(6);
+    expect(screen.getByText("Assets")).toBeInTheDocument();
+    expect(screen.getByText("Liabilities")).toBeInTheDocument();
+    expect(screen.getByText("Equity")).toBeInTheDocument();
     expect(
       screen.getByText(/Period 2: Forecast period 2 is missing/),
     ).toBeInTheDocument();
@@ -71,6 +74,7 @@ describe("LiquidityCoverageChart", () => {
       availability: "ready",
       reason: null,
       threshold: { decimal: "1.20", pixel: 1.2 },
+      thresholdRuleVersion: "liquidity-v1.0.0",
       points: [
         coveragePoint(1, "1.3000"),
         { periodNumber: 2, periodEnd: null, coverage: null },
@@ -95,6 +99,7 @@ describe("LiquidityCoverageChart", () => {
     expect(threshold).toBeInTheDocument();
     expect(threshold?.getAttribute("y1")).toBe(threshold?.getAttribute("y2"));
     expect(screen.getByText("1.20x threshold")).toBeInTheDocument();
+    expect(screen.getByText(/liquidity-v1\.0\.0/)).toBeInTheDocument();
     expect(
       screen.getByText(/Period 2: Coverage is not meaningful/),
     ).toBeInTheDocument();
@@ -109,6 +114,7 @@ describe("LiquidityCoverageChart", () => {
           points: [],
           unavailableSpans: [],
           threshold: { decimal: "1.20", pixel: 1.2 },
+          thresholdRuleVersion: "liquidity-v1.0.0",
         }}
       />,
     );

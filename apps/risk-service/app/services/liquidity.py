@@ -45,6 +45,7 @@ WORKFLOW_ID = LIQUIDITY_WORKFLOW_ID
 RISK_TYPE = LIQUIDITY_RISK_TYPE
 NEGATIVE_CASH_RULE_ID = "liquidity.negative_cash"
 SOURCES_COVERAGE_RULE_ID = "liquidity.sources_coverage"
+SOURCES_COVERAGE_THRESHOLD = Decimal("1.20")
 CREDIT_RELIANCE_RULE_ID = "liquidity.credit_reliance"
 RULE_IDS = frozenset((NEGATIVE_CASH_RULE_ID, SOURCES_COVERAGE_RULE_ID, CREDIT_RELIANCE_RULE_ID))
 MONEY = Decimal("0.0001")
@@ -199,7 +200,7 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
     if (
         minimum_coverage is not None
         and coverage_period is not None
-        and minimum_coverage < Decimal("1.20")
+        and minimum_coverage < SOURCES_COVERAGE_THRESHOLD
     ):
         concerns.append(
             {
@@ -266,6 +267,8 @@ def generate_findings(  # noqa: PLR0913
             result={
                 "currency": periods[0].currency,
                 "metrics": [metric.model_dump(mode="json") for metric in result.metrics],
+                "sources_coverage_threshold": str(SOURCES_COVERAGE_THRESHOLD),
+                "sources_coverage_threshold_rule_version": RULE_VERSION,
             },
             generated_at=datetime.now(UTC),
         )
@@ -526,6 +529,8 @@ def get_summary(
             calculation_run_id=None,
             calculation_input_hash=None,
             analysis_version=None,
+            sources_coverage_threshold=None,
+            sources_coverage_threshold_rule_version=None,
             status="not_calculated",
             currency=None,
             as_of_date=None,
@@ -547,6 +552,8 @@ def get_summary(
             calculation_run_id=run.id,
             calculation_input_hash=run.input_hash,
             analysis_version=None,
+            sources_coverage_threshold=None,
+            sources_coverage_threshold_rule_version=None,
             status="not_calculated",
             currency=None,
             as_of_date=run.as_of_date,
@@ -580,6 +587,10 @@ def get_summary(
         calculation_run_id=run.id,
         calculation_input_hash=run.input_hash,
         analysis_version=analysis.analysis_version,
+        sources_coverage_threshold=analysis.result.get("sources_coverage_threshold"),
+        sources_coverage_threshold_rule_version=analysis.result.get(
+            "sources_coverage_threshold_rule_version"
+        ),
         status="ready",
         currency=cast(str, analysis.result["currency"]),
         as_of_date=run.as_of_date,

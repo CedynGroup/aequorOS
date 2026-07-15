@@ -106,22 +106,32 @@ export interface LiquidityCoverageSeries {
   points: LiquidityCoveragePoint[];
   unavailableSpans: UnavailableSpan[];
   threshold: DecimalChartValue | null;
+  thresholdRuleVersion: string | null;
 }
 
 const MISSING_LIQUIDITY_THRESHOLD_REASON =
-  "The persisted classification threshold is not available in the liquidity analysis contract.";
+  "This legacy liquidity analysis does not include a persisted classification threshold and rule version.";
 
 export function liquidityCoverageToSeries(
   run: CalculationRunRead,
   summary: LiquiditySummaryRead,
 ): LiquidityCoverageSeries {
+  const threshold = summary.sourcesCoverageThreshold
+    ? decimalChartValue(summary.sourcesCoverageThreshold)
+    : null;
+  const thresholdRuleVersion =
+    summary.sourcesCoverageThresholdRuleVersion ?? null;
+  const hasPersistedThreshold = Boolean(threshold && thresholdRuleVersion);
   if (!run.outputs.length) {
     return {
-      availability: "unavailable",
-      reason: MISSING_LIQUIDITY_THRESHOLD_REASON,
+      availability: hasPersistedThreshold ? "empty" : "unavailable",
+      reason: hasPersistedThreshold
+        ? "This run has no forecast periods to chart."
+        : MISSING_LIQUIDITY_THRESHOLD_REASON,
       points: [],
       unavailableSpans: [],
-      threshold: null,
+      threshold,
+      thresholdRuleVersion,
     };
   }
 
@@ -155,14 +165,17 @@ export function liquidityCoverageToSeries(
   const hasValue = points.some((point) => point.coverage);
 
   return {
-    availability: "unavailable",
-    reason: hasValue
+    availability: hasPersistedThreshold && hasValue ? "ready" : "unavailable",
+    reason: !hasPersistedThreshold
       ? MISSING_LIQUIDITY_THRESHOLD_REASON
-      : (metric?.diagnostic ??
-        "Sources coverage is not meaningful for the persisted forecast."),
+      : hasValue
+        ? null
+        : (metric?.diagnostic ??
+          "Sources coverage is not meaningful for the persisted forecast."),
     points,
     unavailableSpans,
-    threshold: null,
+    threshold,
+    thresholdRuleVersion,
   };
 }
 

@@ -227,10 +227,13 @@ GET /api/v1/cases/{case_id}/liquidity/summary?scenario_id={scenario_id}&run_id={
 ```
 
 The summary reports minimum cash, peak liquidity gap, minimum sources coverage,
-credit reliance, and cash runway. A metric is returned as unavailable with an
-explicit diagnostic when its denominator is not positive. Findings are ordered
-by severity and include links to forecast periods, canonical inputs, and
-reviewed scenario assumptions, all bound to the calculation input hash.
+credit reliance, and cash runway. It also returns the persisted sources-coverage
+classification threshold and rule version used for the immutable analysis;
+legacy analyses created before those fields were stored return both as null. A
+metric is returned as unavailable with an explicit diagnostic when its
+denominator is not positive. Findings are ordered by severity and include links
+to forecast periods, canonical inputs, and reviewed scenario assumptions, all
+bound to the calculation input hash.
 
 Review an open liquidity finding with:
 

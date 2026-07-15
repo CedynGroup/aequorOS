@@ -147,6 +147,8 @@ export * from "./LiquidityMetricDiagnostic";
 export * from "./LiquidityMetricRead";
 export * from "./LiquidityMetricValue";
 export * from "./LiquidityReviewAction";
+export * from "./LiquiditySourcesCoverageThreshold";
+export * from "./LiquiditySourcesCoverageThresholdRuleVersion";
 export * from "./LiquiditySummaryAsOfDate";
 export * from "./LiquiditySummaryRead";
 export * from "./LiquiditySummaryStatus";

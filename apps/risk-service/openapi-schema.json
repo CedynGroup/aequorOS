@@ -6734,6 +6734,29 @@
             ],
             "title": "Scenario Id"
           },
+          "sources_coverage_threshold": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Liquidity Sources Coverage Threshold"
+          },
+          "sources_coverage_threshold_rule_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Liquidity Sources Coverage Threshold Rule Version"
+          },
           "status": {
             "$ref": "#/components/schemas/LiquiditySummaryStatus"
           }
@@ -6744,6 +6767,8 @@
           "calculation_run_id",
           "calculation_input_hash",
           "analysis_version",
+          "sources_coverage_threshold",
+          "sources_coverage_threshold_rule_version",
           "status",
           "currency",
           "as_of_date",

@@ -148,6 +148,8 @@ function summary(
     calculationRunId: "run-1",
     calculationInputHash: "abcdef1234567890",
     analysisVersion: "liquidity-v1.0.0",
+    sourcesCoverageThreshold: "1.20",
+    sourcesCoverageThresholdRuleVersion: "liquidity-v1.0.0",
     status: "ready",
     currency: "USD",
     asOfDate: "2026-07-13",
@@ -238,6 +240,22 @@ describe("LiquidityTab", () => {
       "href",
       "/cases/case-1?tab=calculations#calculation-run-run-1-forecast-period-1",
     );
+  });
+
+  it("keeps the honest unavailable state for legacy analyses without thresholds", async () => {
+    vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(
+      summary({
+        sourcesCoverageThreshold: null,
+        sourcesCoverageThresholdRuleVersion: null,
+      }),
+    );
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    expect(
+      await screen.findByText("Liquidity coverage unavailable"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/legacy liquidity analysis/)).toBeInTheDocument();
   });
 
   it("renders undefined ratio metrics with their persisted diagnostic", async () => {

@@ -77,12 +77,26 @@ class LiquiditySummaryRead(ClosedModel):
     calculation_run_id: UUID | None
     calculation_input_hash: str | None
     analysis_version: str | None
+    sources_coverage_threshold: Decimal | None = Field(title="Liquidity Sources Coverage Threshold")
+    sources_coverage_threshold_rule_version: str | None = Field(
+        title="Liquidity Sources Coverage Threshold Rule Version"
+    )
     status: LiquiditySummaryStatus
     currency: str | None
     as_of_date: date | None = Field(title="Liquidity Summary As Of Date")
     metrics: list[LiquidityMetricRead]
     findings: list[LiquidityFindingRead]
     generated_at: datetime | None
+
+    @model_validator(mode="after")
+    def validate_sources_coverage_threshold(self) -> LiquiditySummaryRead:
+        if (self.sources_coverage_threshold is None) != (
+            self.sources_coverage_threshold_rule_version is None
+        ):
+            raise ValueError(
+                "Liquidity sources coverage threshold and rule version must be provided together."
+            )
+        return self
 
 
 class LiquidityFindingReview(ClosedModel):

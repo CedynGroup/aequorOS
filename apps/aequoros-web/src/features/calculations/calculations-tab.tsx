@@ -373,27 +373,29 @@ function RunHistory({
   onNext: () => void;
 }) {
   return (
-    <Panel>
+    <Panel className="min-w-0 overflow-hidden">
       <PanelHeader title="Run history" meta={`${total} persisted`} />
-      <div className="space-y-2 p-3">
+      <div className="min-w-0 space-y-2 p-3">
         {runs.map((run) => (
           <button
             key={run.id}
             type="button"
-            className={`block w-full rounded-md border p-2 text-left text-xs ${
+            className={`block min-w-0 w-full overflow-hidden rounded-md border p-2 text-left text-xs ${
               selectedRunId === run.id
                 ? "border-[rgb(var(--primary))] bg-[rgb(var(--muted))]"
                 : "border-[rgb(var(--border))]"
             }`}
             onClick={() => onSelect(run.id)}
           >
-            <span className="flex items-center justify-between gap-2">
-              <span className="font-medium">
+            <span className="flex min-w-0 items-center justify-between gap-2">
+              <span className="min-w-0 truncate font-medium">
                 {scenarioNames.get(run.scenarioId) ?? "Forecast"}
               </span>
-              <Badge tone={runTone[run.status]}>{run.status}</Badge>
+              <span className="shrink-0">
+                <Badge tone={runTone[run.status]}>{run.status}</Badge>
+              </span>
             </span>
-            <span className="mt-1 block text-[rgb(var(--muted-foreground))]">
+            <span className="mt-1 block truncate text-[rgb(var(--muted-foreground))]">
               {run.createdAt.toLocaleString()} · {run.forecastPeriods} periods
             </span>
           </button>
@@ -441,7 +443,7 @@ function RunOutput({
   const running = run.status === "queued" || run.status === "running";
   const readOnly = readOnlyReason !== null;
   return (
-    <Panel>
+    <Panel className="min-w-0 overflow-hidden">
       <PanelHeader
         title="Forecast result"
         meta={`${run.engineVersion} · as of ${dateOnly(run.asOfDate)}`}
@@ -621,7 +623,7 @@ function ForecastTable({
   rows: ForecastPeriodRead[];
 }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="max-w-full overflow-x-auto overscroll-x-contain">
       <table className="w-full min-w-[760px] border-collapse text-right text-xs">
         <caption className="sr-only">Projected balance sheet outputs</caption>
         <thead>

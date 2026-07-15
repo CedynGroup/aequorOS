@@ -70,8 +70,14 @@ function liquiditySummary(
     availability: "available",
     description: "Coverage",
   },
+  overrides: Partial<LiquiditySummaryRead> = {},
 ): LiquiditySummaryRead {
-  return { metrics: [metric] } as LiquiditySummaryRead;
+  return {
+    metrics: [metric],
+    sourcesCoverageThreshold: "1.20",
+    sourcesCoverageThresholdRuleVersion: "liquidity-v1.0.0",
+    ...overrides,
+  } as LiquiditySummaryRead;
 }
 
 describe("forecastRunToSeries", () => {
@@ -130,9 +136,10 @@ describe("liquidityCoverageToSeries", () => {
       decimal: "0.1667",
       pixel: 0.1667,
     });
-    expect(series.threshold).toBeNull();
-    expect(series.availability).toBe("unavailable");
-    expect(series.reason).toContain("persisted classification threshold");
+    expect(series.threshold).toEqual({ decimal: "1.20", pixel: 1.2 });
+    expect(series.thresholdRuleVersion).toBe("liquidity-v1.0.0");
+    expect(series.availability).toBe("ready");
+    expect(series.reason).toBeNull();
   });
 
   it("renders non-positive uses as a gap with the persisted diagnostic", () => {
@@ -157,7 +164,7 @@ describe("liquidityCoverageToSeries", () => {
       }),
     );
 
-    expect(series.availability).toBe("unavailable");
+    expect(series.availability).toBe("ready");
     expect(
       series.points.map((point) => point.coverage?.decimal ?? null),
     ).toEqual(["1.2000", null, "1.2000"]);
@@ -178,6 +185,21 @@ describe("liquidityCoverageToSeries", () => {
     );
     expect(series.availability).toBe("unavailable");
     expect(series.points[0].coverage).toBeNull();
+  });
+
+  it("keeps the unavailable contract-gap state for legacy analyses", () => {
+    const series = liquidityCoverageToSeries(
+      run([forecastPeriod(1)]),
+      liquiditySummary(undefined, {
+        sourcesCoverageThreshold: null,
+        sourcesCoverageThresholdRuleVersion: null,
+      }),
+    );
+
+    expect(series.availability).toBe("unavailable");
+    expect(series.threshold).toBeNull();
+    expect(series.thresholdRuleVersion).toBeNull();
+    expect(series.reason).toContain("legacy liquidity analysis");
   });
 });
 

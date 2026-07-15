@@ -149,11 +149,12 @@ diagnostics for unavailable metrics. Severity-ranked findings show rationale
 and deep-linked evidence for forecast outputs, canonical financial inputs, and
 scenario assumptions.
 
-The tab reserves a lazy-loaded sources-coverage chart for per-period values and
-the persisted classification threshold. The current liquidity contract does not
-expose that threshold, so the UI explicitly marks the chart unavailable rather
-than re-deriving a classification boundary; metrics and findings remain
-available below it.
+The tab includes a lazy-loaded sources-coverage chart for per-period values and
+the persisted classification threshold. The summary contract returns the
+threshold and rule version used to classify that immutable run, so historical
+reference lines never drift with frontend or current-rule changes. Analyses
+created before that metadata was persisted explicitly show the chart as
+unavailable; metrics and findings remain available below it.
 
 Open findings can be acknowledged or dismissed; dismissal requires a reason.
 Mutation errors remain visible and successful reviews refresh both the
@@ -182,8 +183,8 @@ persisted failure history, preservation of prior output, and tenant isolation.
 The capital journey creates baseline and downside forecasts and projections,
 reviews indicators and finding evidence, compares aligned scenarios, exercises
 API error and comparison-diagnostic states, and verifies tenant isolation. These
-journeys also smoke-test the forecast and capital SVG charts and the explicit
-liquidity-chart unavailable state.
+journeys also smoke-test the forecast, liquidity, and capital SVG charts,
+including the persisted liquidity threshold reference line.
 From the repository root:
 
 ```bash
@@ -249,7 +250,7 @@ The web app uses a feature-based split so each operational surface owns its UI a
 - `src/features/liquidity/liquidity-client.ts`: generated-client adapter for liquidity summary and finding review requests
 - `src/features/liquidity/liquidity-tab.tsx`: scenario/run selection, metric diagnostics, evidence links, and finding review states
 - `src/features/charts/analysis-chart-adapters.ts`: pure generated-DTO adapters for forecast, liquidity, and capital chart series
-- `src/features/charts/analysis-charts.tsx`: lazy-loaded Recharts visualizations, annotated gaps, accessible SVG metadata, and reduced-motion behavior
+- `src/features/charts/analysis-charts.tsx`: lazy-loaded Recharts visualizations, legends and annotated gaps, accessible SVG metadata, and reduced-motion behavior
 - `src/features/charts/chart-shell.tsx`: visualization loading and failure isolation that preserves authoritative content
 - `src/features/demo-data/demo-data.ts`: frontend-only fallback/demo data helpers
 - `src/shared/route-ui.tsx`: route-level empty, error, and data-list helpers
@@ -288,6 +289,8 @@ drilldown and the upload, map, validate, correct, retry, revalidate, cash-flow
 entry, and covenant-entry journeys. `e2e/capital-projection.spec.ts` covers the
 deterministic capital projection, comparison chart, finding-evidence, failure,
 and tenant-isolation workflow. `e2e/risk-console.spec.ts` covers forecast-chart
-rendering and the liquidity-chart unavailable state in its seeded analysis
-journeys, and also verifies the compact scenario table and that the console has
-no horizontal overflow at 1440x1000 and 1280x800 viewports.
+rendering and the persisted liquidity-threshold reference line in its seeded
+analysis journeys, and also verifies the compact scenario table and that the
+console has no horizontal overflow at 1440x1000 and 1280x800 viewports.
+Component coverage retains the unavailable state for legacy analyses without
+persisted threshold metadata.

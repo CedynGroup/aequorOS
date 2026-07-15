@@ -74,6 +74,20 @@ import {
   LiquiditySummaryStatusToJSON,
   LiquiditySummaryStatusToJSONTyped,
 } from "./LiquiditySummaryStatus";
+import type { LiquiditySourcesCoverageThreshold } from "./LiquiditySourcesCoverageThreshold";
+import {
+  LiquiditySourcesCoverageThresholdFromJSON,
+  LiquiditySourcesCoverageThresholdFromJSONTyped,
+  LiquiditySourcesCoverageThresholdToJSON,
+  LiquiditySourcesCoverageThresholdToJSONTyped,
+} from "./LiquiditySourcesCoverageThreshold";
+import type { LiquiditySourcesCoverageThresholdRuleVersion } from "./LiquiditySourcesCoverageThresholdRuleVersion";
+import {
+  LiquiditySourcesCoverageThresholdRuleVersionFromJSON,
+  LiquiditySourcesCoverageThresholdRuleVersionFromJSONTyped,
+  LiquiditySourcesCoverageThresholdRuleVersionToJSON,
+  LiquiditySourcesCoverageThresholdRuleVersionToJSONTyped,
+} from "./LiquiditySourcesCoverageThresholdRuleVersion";
 import type { LiquiditySummaryAsOfDate } from "./LiquiditySummaryAsOfDate";
 import {
   LiquiditySummaryAsOfDateFromJSON,
@@ -150,6 +164,18 @@ export interface LiquiditySummaryRead {
   scenarioId: ScenarioId;
   /**
    *
+   * @type {LiquiditySourcesCoverageThreshold}
+   * @memberof LiquiditySummaryRead
+   */
+  sourcesCoverageThreshold: LiquiditySourcesCoverageThreshold;
+  /**
+   *
+   * @type {LiquiditySourcesCoverageThresholdRuleVersion}
+   * @memberof LiquiditySummaryRead
+   */
+  sourcesCoverageThresholdRuleVersion: LiquiditySourcesCoverageThresholdRuleVersion;
+  /**
+   *
    * @type {LiquiditySummaryStatus}
    * @memberof LiquiditySummaryRead
    */
@@ -179,6 +205,16 @@ export function instanceOfLiquiditySummaryRead(
     return false;
   if (!("metrics" in value) || value["metrics"] === undefined) return false;
   if (!("scenarioId" in value) || value["scenarioId"] === undefined)
+    return false;
+  if (
+    !("sourcesCoverageThreshold" in value) ||
+    value["sourcesCoverageThreshold"] === undefined
+  )
+    return false;
+  if (
+    !("sourcesCoverageThresholdRuleVersion" in value) ||
+    value["sourcesCoverageThresholdRuleVersion"] === undefined
+  )
     return false;
   if (!("status" in value) || value["status"] === undefined) return false;
   return true;
@@ -211,6 +247,13 @@ export function LiquiditySummaryReadFromJSONTyped(
     generatedAt: GeneratedAtFromJSON(json["generated_at"]),
     metrics: (json["metrics"] as Array<any>).map(LiquidityMetricReadFromJSON),
     scenarioId: ScenarioIdFromJSON(json["scenario_id"]),
+    sourcesCoverageThreshold: LiquiditySourcesCoverageThresholdFromJSON(
+      json["sources_coverage_threshold"],
+    ),
+    sourcesCoverageThresholdRuleVersion:
+      LiquiditySourcesCoverageThresholdRuleVersionFromJSON(
+        json["sources_coverage_threshold_rule_version"],
+      ),
     status: LiquiditySummaryStatusFromJSON(json["status"]),
   };
 }
@@ -240,6 +283,13 @@ export function LiquiditySummaryReadToJSONTyped(
     generated_at: GeneratedAtToJSON(value["generatedAt"]),
     metrics: (value["metrics"] as Array<any>).map(LiquidityMetricReadToJSON),
     scenario_id: ScenarioIdToJSON(value["scenarioId"]),
+    sources_coverage_threshold: LiquiditySourcesCoverageThresholdToJSON(
+      value["sourcesCoverageThreshold"],
+    ),
+    sources_coverage_threshold_rule_version:
+      LiquiditySourcesCoverageThresholdRuleVersionToJSON(
+        value["sourcesCoverageThresholdRuleVersion"],
+      ),
     status: LiquiditySummaryStatusToJSON(value["status"]),
   };
 }

@@ -438,7 +438,9 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
   const growth = page
     .getByLabel("Revenue growth value", { exact: true })
     .first();
-  await growth.fill((await growth.inputValue()) === "7" ? "8" : "7");
+  const incrementGrowth = async () =>
+    growth.fill((Number(await growth.inputValue()) + 0.01).toFixed(2));
+  await incrementGrowth();
   await growth
     .locator("xpath=ancestor::tr")
     .getByRole("button", { name: "Save", exact: true })
@@ -468,7 +470,7 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
   ).toBe(true);
 
   await page.getByRole("tab", { name: "Scenarios" }).click();
-  await growth.fill((await growth.inputValue()) === "9" ? "10" : "9");
+  await incrementGrowth();
   await growth
     .locator("xpath=ancestor::tr")
     .getByRole("button", { name: "Save", exact: true })
@@ -552,10 +554,14 @@ test("reviews liquidity metrics, evidence, finding status, and tenant isolation"
     page.getByText(/Baseline · deterministic forecast/),
   ).toBeVisible();
   await expect(page.getByText("Minimum cash balance")).toBeVisible();
-  await expect(page.getByText("Liquidity coverage unavailable")).toBeVisible();
   await expect(
-    page.getByText(/persisted classification threshold is not available/),
+    page.locator('svg[aria-label="Liquidity sources coverage chart"]'),
   ).toBeVisible();
+  const thresholdLine = page.locator(".liquidity-threshold-line line");
+  await expect(thresholdLine).toHaveCount(1);
+  await expect(thresholdLine).toHaveAttribute("y1", /\d/);
+  await expect(thresholdLine).toHaveAttribute("y2", /\d/);
+  await expect(page.getByText(/liquidity-v1\.0\.0/).first()).toBeVisible();
   await expect(page.getByText(/Supporting evidence \(/).first()).toBeVisible();
   await page
     .getByText(/Supporting evidence \(/)
@@ -590,6 +596,8 @@ test("renders liquidity empty and error states", async ({ page }) => {
         calculation_run_id: null,
         calculation_input_hash: null,
         analysis_version: null,
+        sources_coverage_threshold: null,
+        sources_coverage_threshold_rule_version: null,
         status: "not_calculated",
         currency: null,
         as_of_date: null,
@@ -626,6 +634,8 @@ test("renders liquidity empty and error states", async ({ page }) => {
         calculation_run_id: "22222222-2222-4222-8222-222222222222",
         calculation_input_hash: "a".repeat(64),
         analysis_version: "liquidity-v1.0.0",
+        sources_coverage_threshold: "1.20",
+        sources_coverage_threshold_rule_version: "liquidity-v1.0.0",
         status: "ready",
         currency: "USD",
         as_of_date: "2026-07-14",
