@@ -23,7 +23,9 @@ test("shows and navigates the adverse case-health summary in frontend demo mode"
   await expect(health.getByText("Non-compliant")).toBeVisible();
   await expect(health.getByText("Needs More Info")).toBeVisible();
   expect(
-    await health.evaluate((element) => element.scrollWidth <= element.clientWidth),
+    await health.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth,
+    ),
   ).toBe(true);
 
   if (evidenceDir) {
@@ -36,9 +38,7 @@ test("shows and navigates the adverse case-health summary in frontend demo mode"
   await health.getByRole("button", { name: /Covenants/ }).click();
   await expect(page).toHaveURL(/tab=financial/);
   await expect
-    .poll(() =>
-      page.evaluate(() => document.activeElement?.id),
-    )
+    .poll(() => page.evaluate(() => document.activeElement?.id))
     .toBe("case-health-target-financial");
   await expect(page.getByText("Non-compliant", { exact: true })).toBeVisible();
 });
