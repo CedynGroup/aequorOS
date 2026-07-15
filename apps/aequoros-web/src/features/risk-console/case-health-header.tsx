@@ -289,22 +289,35 @@ function findingState(findings: FindingRead[]) {
   const activeFindings = findings.filter(
     (finding) => finding.status === "open" || finding.status === "needs_review",
   );
-  const historicalCount = findings.length - activeFindings.length;
+  const resolvedCount = findings.filter(
+    (finding) => finding.status === "resolved",
+  ).length;
+  const otherHistoryCount =
+    findings.length - activeFindings.length - resolvedCount;
+  const historySummary = [
+    resolvedCount ? `${resolvedCount} resolved` : null,
+    otherHistoryCount ? `${otherHistoryCount} other historical` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
   if (!activeFindings.length)
     return (
       <span
-        aria-label={`No active findings, ${historicalCount} historical`}
+        aria-label={`No active findings, ${historySummary}`}
         className="flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-xs font-semibold text-[rgb(var(--muted-foreground))] tabular-nums"
       >
         <span>No active</span>
-        <span>+{historicalCount} historical</span>
+        <FindingHistory
+          resolvedCount={resolvedCount}
+          otherHistoryCount={otherHistoryCount}
+        />
       </span>
     );
   const counts = countSeverities(activeFindings);
   const summary = (["critical", "high", "medium", "low"] as const)
     .map((severity) => `${counts[severity]} ${severity}`)
     .join(", ")
-    .concat(historicalCount ? `, ${historicalCount} historical` : "");
+    .concat(historySummary ? `, ${historySummary}` : "");
   return (
     <span
       aria-label={summary}
@@ -314,12 +327,34 @@ function findingState(findings: FindingRead[]) {
       <SeverityCount severity="high" count={counts.high} />
       <SeverityCount severity="medium" count={counts.medium} />
       <SeverityCount severity="low" count={counts.low} />
-      {historicalCount ? (
+      <FindingHistory
+        resolvedCount={resolvedCount}
+        otherHistoryCount={otherHistoryCount}
+      />
+    </span>
+  );
+}
+
+function FindingHistory({
+  resolvedCount,
+  otherHistoryCount,
+}: {
+  resolvedCount: number;
+  otherHistoryCount: number;
+}) {
+  return (
+    <>
+      {resolvedCount ? (
         <span className="text-[rgb(var(--muted-foreground))]">
-          +{historicalCount} historical
+          +{resolvedCount} resolved
         </span>
       ) : null}
-    </span>
+      {otherHistoryCount ? (
+        <span className="text-[rgb(var(--muted-foreground))]">
+          +{otherHistoryCount} other history
+        </span>
+      ) : null}
+    </>
   );
 }
 

@@ -329,14 +329,17 @@ describe("CaseHealthHeader", () => {
 
     expect(
       await screen.findByLabelText(
-        "0 critical, 1 high, 1 medium, 0 low, 5 historical",
+        "0 critical, 1 high, 1 medium, 0 low, 1 resolved, 4 other historical",
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Critical: 0 active findings")).toBeVisible();
     expect(screen.getByLabelText("High: 1 active findings")).toBeVisible();
     expect(screen.getByLabelText("Medium: 1 active findings")).toBeVisible();
     expect(screen.getByLabelText("Low: 0 active findings")).toBeVisible();
-    expect(screen.getByText("+5 historical")).toHaveClass(
+    expect(screen.getByText("+1 resolved")).toHaveClass(
+      "text-[rgb(var(--muted-foreground))]",
+    );
+    expect(screen.getByText("+4 other history")).toHaveClass(
       "text-[rgb(var(--muted-foreground))]",
     );
     expect(screen.queryByText(/^[CHML]\d+$/)).not.toBeInTheDocument();
@@ -352,9 +355,12 @@ describe("CaseHealthHeader", () => {
     renderHeader(null);
 
     expect(
-      await screen.findByLabelText("No active findings, 2 historical"),
+      await screen.findByLabelText(
+        "No active findings, 1 resolved, 1 other historical",
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByText("+2 historical")).toBeInTheDocument();
+    expect(screen.getByText("+1 resolved")).toBeInTheDocument();
+    expect(screen.getByText("+1 other history")).toBeInTheDocument();
     expect(screen.queryByText("C0")).not.toBeInTheDocument();
     expect(screen.queryByText("H0")).not.toBeInTheDocument();
   });
@@ -467,7 +473,7 @@ describe("CaseHealthHeader", () => {
     expect(screen.getByText("Validated")).toBeInTheDocument();
     expect(screen.getByText("Ready")).toBeInTheDocument();
     expect(screen.getByTitle("Forecast #1 · Succeeded")).toBeInTheDocument();
-    expect(screen.getByText("+1 historical")).toBeInTheDocument();
+    expect(screen.getByText("+1 resolved")).toBeInTheDocument();
     expect(screen.getByText("Non-compliant")).toBeInTheDocument();
     expect(screen.getByText("Needs More Info")).toBeInTheDocument();
     expect(financialWorkspace).not.toHaveBeenCalled();
