@@ -1,9 +1,14 @@
 import AppShell from '@/components/shell/AppShell';
+import BankProvider from '@/components/shell/BankContext';
 
 export default function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <BankProvider>
+      <AppShell>{children}</AppShell>
+    </BankProvider>
+  );
 }

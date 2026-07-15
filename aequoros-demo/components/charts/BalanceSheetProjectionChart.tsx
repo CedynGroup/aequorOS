@@ -11,25 +11,32 @@ import {
   Legend,
   ReferenceLine,
 } from 'recharts';
-import type { BalanceSheetProjection } from '@/lib/data/forecasting';
+
+export type BalanceSheetPoint = {
+  /** X-axis label (e.g. "Y0", "2027-03"). */
+  month: string;
+  /** GHS millions. */
+  loans: number;
+  securities: number;
+  cash: number;
+};
 
 export default function BalanceSheetProjectionChart({
   data,
-  horizonMonths = 36,
+  height = 340,
 }: {
-  data: BalanceSheetProjection[];
-  horizonMonths?: number;
+  data: BalanceSheetPoint[];
+  height?: number;
 }) {
-  const slice = data.slice(0, horizonMonths + 1);
   return (
-    <ResponsiveContainer width="100%" height={340}>
-      <AreaChart data={slice} margin={{ top: 12, right: 24, left: 0, bottom: 8 }}>
+    <ResponsiveContainer width="100%" height={height}>
+      <AreaChart data={data} margin={{ top: 12, right: 24, left: 0, bottom: 8 }}>
         <CartesianGrid stroke="#E4E8EC" strokeDasharray="3 3" vertical={false} />
         <XAxis
           dataKey="month"
           axisLine={{ stroke: '#D0D7DE' }}
           tickLine={false}
-          interval={Math.max(1, Math.floor(horizonMonths / 12))}
+          interval={0}
         />
         <YAxis
           axisLine={false}
@@ -59,16 +66,16 @@ export default function BalanceSheetProjectionChart({
         />
         <Area
           type="monotone"
-          dataKey="govSecs"
+          dataKey="securities"
           stackId="1"
           stroke="#1A4D5C"
           fill="#1A4D5C"
           fillOpacity={0.85}
-          name="GoG securities"
+          name="Securities"
         />
         <Area
           type="monotone"
-          dataKey="cashAndBoG"
+          dataKey="cash"
           stackId="1"
           stroke="#2D7FF9"
           fill="#2D7FF9"

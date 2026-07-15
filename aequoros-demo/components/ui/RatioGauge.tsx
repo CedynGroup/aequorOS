@@ -9,6 +9,7 @@ export default function RatioGauge({
   value,
   threshold,
   internalBuffer,
+  bufferLabel = 'Internal buffer',
   status,
   decimals = 1,
   suffix = '%',
@@ -17,6 +18,7 @@ export default function RatioGauge({
   value: number;
   threshold: number;
   internalBuffer?: number;
+  bufferLabel?: string;
   status: StatusTone;
   decimals?: number;
   suffix?: string;
@@ -87,7 +89,7 @@ export default function RatioGauge({
         </span>
         {internalBuffer && (
           <span>
-            Internal buffer{' '}
+            {bufferLabel}{' '}
             <span className="font-mono font-medium text-navy tabular-nums">
               {internalBuffer}
               {suffix}

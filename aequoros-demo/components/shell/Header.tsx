@@ -1,10 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Bell, Search, ChevronDown, Calendar, Menu } from 'lucide-react';
-import { bank, treasurer } from '@/lib/data/bank';
+import { useState, useEffect, useRef } from 'react';
+import { Bell, Search, ChevronDown, Calendar, Check, Menu } from 'lucide-react';
+import { useBankContext } from './BankContext';
+import { fmtDateUTC } from '@/lib/api/values';
 import CommandPalette from './CommandPalette';
 import NotificationDrawer from './NotificationDrawer';
+
+// Static UI persona for the demo shell — chrome, not financial data.
+const treasurer = {
+  name: 'Akua Mensah',
+  role: 'Head of Treasury & ALM',
+  initials: 'AM',
+};
 
 export default function Header({
   onMobileMenu,
@@ -13,6 +21,7 @@ export default function Header({
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const { bank } = useBankContext();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -39,10 +48,12 @@ export default function Header({
           </button>
         )}
         <div className="text-body min-w-0">
-          <span className="font-medium text-navy truncate">{bank.name}</span>
+          <span className="font-medium text-navy truncate">
+            {bank?.name ?? '—'}
+          </span>
           <span className="hidden md:inline mx-2 text-slate-light">|</span>
           <span className="hidden md:inline text-slate text-caption">
-            BoG license · {bank.licenseClass}
+            BoG license · {bank ? capitalize(bank.licenseType) : '—'}
           </span>
         </div>
       </div>
@@ -71,14 +82,7 @@ export default function Header({
           <Search size={16} aria-hidden />
         </button>
 
-        <button
-          type="button"
-          className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-caption font-medium text-slate hover:bg-surface"
-        >
-          <Calendar size={13} aria-hidden />
-          As of <span className="font-mono text-navy">{bank.asOf}</span>
-          <ChevronDown size={12} aria-hidden />
-        </button>
+        <PeriodSelector />
 
         <button
           type="button"
@@ -113,4 +117,89 @@ export default function Header({
       <NotificationDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
     </header>
   );
+}
+
+/** Real reporting-period selector backed by the risk service. */
+function PeriodSelector() {
+  const { period, periods, setPeriodId } = useBankContext();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative hidden md:block" ref={ref}>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-caption font-medium text-slate hover:bg-surface"
+      >
+        <Calendar size={13} aria-hidden />
+        As of{' '}
+        <span className="font-mono text-navy">
+          {period ? fmtDateUTC(period.periodEnd) : '—'}
+        </span>
+        <ChevronDown size={12} aria-hidden />
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          aria-label="Reporting period"
+          className="absolute right-0 mt-1 w-56 max-h-80 overflow-y-auto bg-white border border-border-light rounded-md shadow-lg py-1 z-40"
+        >
+          {periods.map((p) => {
+            const selected = p.id === period?.id;
+            return (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => {
+                    setPeriodId(p.id);
+                    setOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-caption text-left hover:bg-surface ${
+                    selected ? 'text-navy font-medium' : 'text-slate'
+                  }`}
+                >
+                  <span>
+                    {p.label}
+                    <span className="ml-2 font-mono text-[10px] text-slate">
+                      {fmtDateUTC(p.periodEnd)}
+                    </span>
+                  </span>
+                  {selected && (
+                    <Check size={12} className="text-action shrink-0" aria-hidden />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }

@@ -14,6 +14,12 @@ importers:
 
   aequoros-demo:
     dependencies:
+      '@aequoros/risk-service-api':
+        specifier: workspace:*
+        version: link:../packages/risk-service-api
+      '@tanstack/react-query':
+        specifier: ^5
+        version: 5.101.0(react@18.3.1)
       '@vercel/analytics':
         specifier: ^1.3.1
         version: 1.6.1(next@14.2.15(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
@@ -4720,6 +4726,11 @@ snapshots:
       '@tanstack/query-devtools': 5.101.0
       '@tanstack/react-query': 5.101.0(react@19.2.7)
       react: 19.2.7
+
+  '@tanstack/react-query@5.101.0(react@18.3.1)':
+    dependencies:
+      '@tanstack/query-core': 5.101.0
+      react: 18.3.1
 
   '@tanstack/react-query@5.101.0(react@19.2.7)':
     dependencies:

@@ -1,93 +1,176 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import StatusPill from '@/components/ui/StatusPill';
-import { bank } from '@/lib/data/bank';
+import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
+import { useBankContext } from '@/components/shell/BankContext';
+import { apiBaseUrl } from '@/lib/api/client';
+import { useBank, useCashflowHistory } from '@/lib/api/hooks';
+import { labelize } from '@/lib/api/values';
+
+const JURISDICTIONS: Record<string, string> = {
+  GH: 'Ghana',
+};
+
+/** Ping the risk-service liveness endpoint directly (outside the generated client). */
+function useRiskServiceHealth() {
+  return useQuery({
+    queryKey: ['health', 'risk-service'],
+    queryFn: async () => {
+      const healthUrl = `${apiBaseUrl.replace(/\/api\/v1\/?$/, '')}/api/health/live`;
+      const response = await fetch(healthUrl, {
+        signal: AbortSignal.timeout(4000),
+      });
+      if (!response.ok) throw new Error(`Health check failed (${response.status})`);
+      return (await response.json()) as { status?: string };
+    },
+    retry: false,
+    refetchInterval: 60_000,
+  });
+}
 
 export default function SettingsPage() {
+  const { bank, periods } = useBankContext();
+  const bankQuery = useBank(bank?.id);
+  const profile = bankQuery.data ?? bank;
+
+  const health = useRiskServiceHealth();
+  // Tiny query against the cashflow proxy — 503 means the ML sidecar is offline.
+  const sidecarProbe = useCashflowHistory(bank?.id, 30);
+
+  const riskServiceTone: StatusTone = health.isLoading
+    ? 'slate'
+    : health.data?.status === 'ok'
+    ? 'success'
+    : 'critical';
+  const riskServiceStatus = health.isLoading
+    ? 'Checking…'
+    : health.data?.status === 'ok'
+    ? 'OK'
+    : 'Down';
+
+  const sidecarTone: StatusTone = sidecarProbe.isLoading
+    ? 'slate'
+    : sidecarProbe.data
+    ? 'success'
+    : 'amber';
+  const sidecarStatus = sidecarProbe.isLoading
+    ? 'Checking…'
+    : sidecarProbe.data
+    ? 'OK'
+    : 'Offline';
+
   return (
     <>
       <PageHeader title="Settings" subtitle="Bank profile, integrations, governance" />
 
       <div className="px-8 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader title="Bank profile" subtitle="Reporting entity configuration" />
+          <CardHeader title="Bank profile" subtitle="Reporting entity from the risk service" />
           <CardBody>
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-body">
               <div>
                 <dt className="text-micro font-medium uppercase tracking-wider text-slate">
                   Legal name
                 </dt>
-                <dd className="mt-1 text-navy">{bank.name}</dd>
+                <dd className="mt-1 text-navy">{profile?.name ?? '—'}</dd>
               </div>
               <div>
                 <dt className="text-micro font-medium uppercase tracking-wider text-slate">
                   Jurisdiction
                 </dt>
-                <dd className="mt-1 text-navy">{bank.jurisdiction}</dd>
+                <dd className="mt-1 text-navy">
+                  {profile
+                    ? JURISDICTIONS[profile.jurisdictionCode] ??
+                      profile.jurisdictionCode
+                    : '—'}
+                </dd>
               </div>
               <div>
                 <dt className="text-micro font-medium uppercase tracking-wider text-slate">
                   Regulator
                 </dt>
-                <dd className="mt-1 text-navy">{bank.regulator}</dd>
+                <dd className="mt-1 text-navy">Bank of Ghana</dd>
               </div>
               <div>
                 <dt className="text-micro font-medium uppercase tracking-wider text-slate">
                   License class
                 </dt>
-                <dd className="mt-1 text-navy">{bank.licenseClass}</dd>
+                <dd className="mt-1 text-navy">
+                  {profile ? labelize(profile.licenseType) : '—'}
+                </dd>
               </div>
               <div>
                 <dt className="text-micro font-medium uppercase tracking-wider text-slate">
                   Reporting currency
                 </dt>
-                <dd className="mt-1 font-mono text-navy">GHS</dd>
+                <dd className="mt-1 font-mono text-navy">
+                  {profile?.currency ?? '—'}
+                </dd>
               </div>
               <div>
                 <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  Founded
+                  Reporting periods
                 </dt>
-                <dd className="mt-1 text-navy">{bank.founded}</dd>
+                <dd className="mt-1 text-navy">
+                  {periods.length} loaded
+                  {periods.length > 0 &&
+                    ` · latest ${periods[0]?.label ?? ''}`}
+                </dd>
               </div>
             </dl>
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader title="Core banking integrations" subtitle="Source systems and connectors" />
+          <CardHeader
+            title="Platform services"
+            subtitle="Live service connections behind this demo"
+          />
           <CardBody className="space-y-3">
-            {[
-              { name: 'Temenos T24', status: 'Connected · API', tone: 'success' as const },
-              { name: 'BoG submission portal', status: 'Connected · v2.4', tone: 'success' as const },
-              { name: 'Treasury Markets feed (BoG, Bloomberg)', status: 'Connected', tone: 'success' as const },
-              { name: 'Snowflake analytical warehouse', status: 'Active', tone: 'success' as const },
-              { name: 'Identity provider (Okta)', status: 'Connected · SAML', tone: 'success' as const },
-            ].map((i) => (
-              <div
-                key={i.name}
-                className="flex items-center justify-between gap-3 py-2 border-b border-border-light last:border-b-0"
-              >
-                <span className="text-body text-navy">{i.name}</span>
-                <span className="flex items-center gap-2">
-                  <span className="text-caption text-slate">{i.status}</span>
-                  <StatusPill tone={i.tone}>OK</StatusPill>
-                </span>
+            <div className="flex items-center justify-between gap-3 py-2 border-b border-border-light">
+              <div className="min-w-0">
+                <p className="text-body text-navy">Risk service API</p>
+                <p className="text-caption text-slate font-mono truncate">
+                  {apiBaseUrl}
+                </p>
               </div>
-            ))}
+              <span className="flex items-center gap-2 shrink-0">
+                <span className="text-caption text-slate">
+                  Regulatory engines · canonical data
+                </span>
+                <StatusPill tone={riskServiceTone}>{riskServiceStatus}</StatusPill>
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 py-2">
+              <div className="min-w-0">
+                <p className="text-body text-navy">Cash-flow ML sidecar</p>
+                <p className="text-caption text-slate">
+                  LSTM daily cash-flow forecasts, proxied via the risk service
+                </p>
+              </div>
+              <span className="flex items-center gap-2 shrink-0">
+                <span className="text-caption text-slate">
+                  Optional — LCR forecasting page degrades gracefully
+                </span>
+                <StatusPill tone={sidecarTone}>{sidecarStatus}</StatusPill>
+              </span>
+            </div>
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader title="Governance" subtitle="Model risk, audit, security" />
+          <CardHeader title="Governance" subtitle="Platform design principles" />
           <CardBody>
             <ul className="space-y-3 text-body text-navy/85">
               {[
-                'Model Risk Management aligned with SR 11-7',
-                'End-to-end encryption (AES-256 at rest, TLS 1.3 in transit)',
-                'Role-based access control with quarterly access review',
+                'Every calculation persists an immutable run with engine version and input hash',
+                'Regulatory math executes server-side only — the UI renders API payloads',
+                'Tenant isolation on every request via organization-scoped headers',
+                'Deterministic engines: identical inputs reproduce identical outputs',
                 'Full audit trail and data lineage across all calculations',
-                'SOC 2 Type II roadmap in progress',
-                'Data residency options per jurisdiction (GHS data resident in West Africa region)',
+                'Synthetic demo dataset — no production bank data in this environment',
               ].map((g) => (
                 <li key={g} className="flex items-start gap-3">
                   <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0 mt-2" aria-hidden />
@@ -99,7 +182,10 @@ export default function SettingsPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Users & roles" subtitle="Active platform users" />
+          <CardHeader
+            title="Demo personas"
+            subtitle="Illustrative roles for the demo walkthrough — not real accounts"
+          />
           <CardBody className="p-0">
             <ul className="divide-y divide-border-light">
               {[

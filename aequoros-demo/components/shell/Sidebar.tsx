@@ -16,7 +16,15 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 
-const groups = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  code?: string;
+  postMvp?: boolean;
+};
+
+const groups: { label: string; items: NavItem[] }[] = [
   {
     label: 'Overview',
     items: [{ href: '/', label: 'Home', icon: LayoutDashboard }],
@@ -24,11 +32,29 @@ const groups = [
   {
     label: 'Modules',
     items: [
-      { href: '/irr', label: 'Interest Rate Risk', icon: Activity, code: '01' },
+      {
+        href: '/irr',
+        label: 'Interest Rate Risk',
+        icon: Activity,
+        code: '01',
+        postMvp: true,
+      },
       { href: '/liquidity', label: 'Liquidity Risk', icon: Droplet, code: '02' },
-      { href: '/fx', label: 'FX Risk', icon: DollarSign, code: '03' },
+      {
+        href: '/fx',
+        label: 'FX Risk',
+        icon: DollarSign,
+        code: '03',
+        postMvp: true,
+      },
       { href: '/basel', label: 'Basel Capital', icon: ShieldCheck, code: '04' },
-      { href: '/ftp', label: 'Funds Transfer Pricing', icon: GitBranch, code: '05' },
+      {
+        href: '/ftp',
+        label: 'Funds Transfer Pricing',
+        icon: GitBranch,
+        code: '05',
+        postMvp: true,
+      },
       {
         href: '/forecasting',
         label: 'Balance Sheet Forecasting',
@@ -83,7 +109,12 @@ export default function Sidebar() {
                     >
                       <Icon size={16} className="shrink-0" aria-hidden />
                       <span className="flex-1 truncate">{item.label}</span>
-                      {'code' in item && item.code && (
+                      {item.postMvp && (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wider bg-white/10 text-white/60 border border-white/15">
+                          Post-MVP
+                        </span>
+                      )}
+                      {item.code && (
                         <span
                           className={`font-mono text-[10px] ${
                             active ? 'text-action' : 'text-white/30'

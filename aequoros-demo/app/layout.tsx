@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter, IBM_Plex_Mono } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
+import Providers from './providers';
 import './globals.css';
 
 const inter = Inter({
@@ -36,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${plexMono.variable}`}>
       <body className="font-sans text-body bg-surface-alt text-navy">
-        {children}
+        <Providers>{children}</Providers>
         <Analytics />
       </body>
     </html>

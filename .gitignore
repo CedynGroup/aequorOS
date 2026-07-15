@@ -10,3 +10,6 @@ pnpm-debug.log*
 
 # Local Claude Code worktrees.
 .claude/worktrees/
+
+# Local data-engine sample inputs (37MB xlsx/csv) — regenerable, not source.
+data/

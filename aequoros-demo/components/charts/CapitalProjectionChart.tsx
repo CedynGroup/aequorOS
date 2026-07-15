@@ -16,13 +16,20 @@ export default function CapitalProjectionChart({
   data,
   bogMin = 10,
   internalBuffer = 13.5,
+  bufferLabel = 'Buffer',
+  criticalFloor,
+  height = 300,
 }: {
   data: { month: string; car: number; tier1: number }[];
   bogMin?: number;
   internalBuffer?: number;
+  bufferLabel?: string;
+  /** Optional supervisory-intervention floor (e.g. 9%) rendered below the minimum. */
+  criticalFloor?: number;
+  height?: number;
 }) {
   return (
-    <ResponsiveContainer width="100%" height={300}>
+    <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 12, right: 24, left: 0, bottom: 8 }}>
         <CartesianGrid stroke="#E4E8EC" strokeDasharray="3 3" vertical={false} />
         <XAxis dataKey="month" axisLine={{ stroke: '#D0D7DE' }} tickLine={false} />
@@ -31,6 +38,11 @@ export default function CapitalProjectionChart({
           tickLine={false}
           tickFormatter={(v) => `${v}%`}
           width={48}
+          domain={[
+            (dataMin: number) =>
+              Math.floor(Math.min(dataMin, criticalFloor ?? bogMin) - 1),
+            (dataMax: number) => Math.ceil(dataMax + 1),
+          ]}
         />
         <Tooltip formatter={(v: number, name) => [`${v.toFixed(1)}%`, name]} />
         <Legend
@@ -56,12 +68,25 @@ export default function CapitalProjectionChart({
           stroke="#C97C00"
           strokeDasharray="2 4"
           label={{
-            value: `Buffer ${internalBuffer}%`,
+            value: `${bufferLabel} ${internalBuffer}%`,
             position: 'insideTopRight',
             fill: '#C97C00',
             fontSize: 11,
           }}
         />
+        {criticalFloor !== undefined && (
+          <ReferenceLine
+            y={criticalFloor}
+            stroke="#7A1712"
+            strokeDasharray="6 3"
+            label={{
+              value: `Critical ${criticalFloor}%`,
+              position: 'insideBottomLeft',
+              fill: '#7A1712',
+              fontSize: 11,
+            }}
+          />
+        )}
         <Line
           type="monotone"
           dataKey="car"

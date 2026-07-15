@@ -11,6 +11,13 @@ import {
   CartesianGrid,
 } from 'recharts';
 
+type RatioPoint = {
+  month: string;
+  value: number;
+  /** false → computed inline (not persisted) — rendered as a hollow point. */
+  stored?: boolean;
+};
+
 export default function RatioHistoryChart({
   data,
   threshold = 100,
@@ -20,7 +27,7 @@ export default function RatioHistoryChart({
   color = '#0E8A4F',
   label = 'Ratio',
 }: {
-  data: { month: string; value: number }[];
+  data: RatioPoint[];
   threshold?: number;
   internalBuffer?: number;
   yMin?: number;
@@ -28,8 +35,9 @@ export default function RatioHistoryChart({
   color?: string;
   label?: string;
 }) {
-  const min = yMin ?? Math.min(...data.map((d) => d.value), threshold) - 5;
-  const max = yMax ?? Math.max(...data.map((d) => d.value)) + 5;
+  const min =
+    yMin ?? Math.floor(Math.min(...data.map((d) => d.value), threshold) - 5);
+  const max = yMax ?? Math.ceil(Math.max(...data.map((d) => d.value)) + 5);
 
   return (
     <ResponsiveContainer width="100%" height={260}>
@@ -44,7 +52,7 @@ export default function RatioHistoryChart({
           domain={[min, max]}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => `${v}%`}
+          tickFormatter={(v: number) => `${Math.round(v)}%`}
           width={48}
         />
         <Tooltip
@@ -79,7 +87,26 @@ export default function RatioHistoryChart({
           dataKey="value"
           stroke={color}
           strokeWidth={2}
-          dot={{ r: 3, fill: color }}
+          dot={(props) => {
+            const { key, cx, cy, payload } = props as {
+              key?: string;
+              cx?: number;
+              cy?: number;
+              payload?: RatioPoint;
+            };
+            const hollow = payload?.stored === false;
+            return (
+              <circle
+                key={key}
+                cx={cx}
+                cy={cy}
+                r={3}
+                fill={hollow ? '#FFFFFF' : color}
+                stroke={color}
+                strokeWidth={hollow ? 1.5 : 0}
+              />
+            );
+          }}
           activeDot={{ r: 5 }}
         />
       </LineChart>

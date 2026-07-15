@@ -1,11 +1,118 @@
-import { AlertTriangle, ChevronRight } from 'lucide-react';
+'use client';
+
+import { AlertTriangle, Loader2, PlayCircle, Zap } from 'lucide-react';
+import type {
+  RegulatoryRunRead,
+  RegulatoryScenarioCode,
+} from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
+import StatusPill from '@/components/ui/StatusPill';
+import RunBadge from '@/components/ui/RunBadge';
+import EmptyState from '@/components/ui/EmptyState';
+import QueryBoundary from '@/components/ui/QueryBoundary';
 import { Card, CardHeader, CardBody } from '@/components/ui/Card';
-import { stressScenarios, lcr, nsfr } from '@/lib/data/liquidity';
-import { bank } from '@/lib/data/bank';
+import DataTable, { type Column } from '@/components/ui/DataTable';
+import { useBankContext } from '@/components/shell/BankContext';
+import {
+  useRegulatoryRun,
+  useRegulatoryRuns,
+  useRunAllLiquidityScenarios,
+} from '@/lib/api/hooks';
+import { fmtDateUTC, labelize, num, statusTone } from '@/lib/api/values';
+import { fmtCurrency, fmtPct } from '@/lib/format';
+
+const STRESS_SCENARIOS = ['idiosyncratic', 'market_wide', 'combined'] as const;
+
+const SCENARIO_LABELS: Record<string, string> = {
+  baseline: 'Baseline',
+  idiosyncratic: 'Idiosyncratic stress',
+  market_wide: 'Market-wide stress',
+  combined: 'Combined stress (BoG severe)',
+};
+
+const SCENARIO_DESCRIPTIONS: Record<string, string> = {
+  idiosyncratic:
+    'Counterparty-specific funding shock — stressed deposit run-off rates applied to the reporting period.',
+  market_wide:
+    'System-wide market stress — inflow haircuts and HQLA securities haircuts applied to the reporting period.',
+  combined:
+    'Concurrent idiosyncratic and market-wide shock per the BoG ILAAP severe scenario.',
+};
+
+function runMetric(run: RegulatoryRunRead | undefined, key: string): number | null {
+  const value = run?.metrics?.[key];
+  if (value === undefined || value === null) return null;
+  return num(value as string);
+}
+
+function metricStatus(
+  run: RegulatoryRunRead | undefined,
+  metricCode: string
+): string | null {
+  return (
+    run?.metricResults.find((m) => m.metricCode === metricCode)?.status ?? null
+  );
+}
+
+function sumSection(run: RegulatoryRunRead | undefined, section: string): number | null {
+  if (!run) return null;
+  const lines = run.lineItems.filter((line) => line.section === section);
+  if (!lines.length) return null;
+  return lines.reduce((s, line) => s + num(line.weightedAmount), 0);
+}
 
 export default function StressScenarios() {
+  const { bank, period } = useBankContext();
+  const bankId = bank?.id;
+  const periodId = period?.id;
+
+  const runsQuery = useRegulatoryRuns(bankId, {
+    module: 'liquidity',
+    reportingPeriodId: periodId,
+    limit: 100,
+  });
+  const runAll = useRunAllLiquidityScenarios(bankId);
+
+  // Latest run per scenario — list is created_at descending.
+  const latestIds = new Map<string, string>();
+  for (const run of runsQuery.data?.runs ?? []) {
+    if (!latestIds.has(run.scenarioCode)) {
+      latestIds.set(run.scenarioCode, run.id);
+    }
+  }
+
+  const baselineRun = useRegulatoryRun(bankId, latestIds.get('baseline'));
+  const idioRun = useRegulatoryRun(bankId, latestIds.get('idiosyncratic'));
+  const marketRun = useRegulatoryRun(bankId, latestIds.get('market_wide'));
+  const combinedRun = useRegulatoryRun(bankId, latestIds.get('combined'));
+
+  const runByScenario: Record<string, RegulatoryRunRead | undefined> = {
+    baseline: baselineRun.data,
+    idiosyncratic: idioRun.data,
+    market_wide: marketRun.data,
+    combined: combinedRun.data,
+  };
+
+  const hasRuns = latestIds.size > 0;
+  const baselineLcr = runMetric(baselineRun.data, 'lcr_pct');
+  const baselineNsfr = runMetric(baselineRun.data, 'nsfr_pct');
+
+  const runAllButton = (
+    <button
+      type="button"
+      disabled={runAll.isPending || !periodId}
+      onClick={() => periodId && runAll.mutate({ reportingPeriodId: periodId })}
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700 disabled:opacity-60"
+    >
+      {runAll.isPending ? (
+        <Loader2 size={13} className="animate-spin" aria-hidden />
+      ) : (
+        <Zap size={13} aria-hidden />
+      )}
+      Run all scenarios
+    </button>
+  );
+
   return (
     <>
       <PageHeader
@@ -16,149 +123,405 @@ export default function StressScenarios() {
         ]}
         title="Stress Scenarios"
         subtitle="Basel III-aligned liquidity stress per BoG ILAAP framework"
-        asOf={bank.asOf}
+        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
+        action={runAllButton}
       />
 
-      <div className="px-8 py-6 space-y-6">
-        {/* Baseline reference */}
-        <div className="card px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-6">
-          <div>
-            <p className="text-micro font-medium uppercase tracking-wider text-slate">
-              Baseline LCR
-            </p>
-            <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
-              {lcr.current.toFixed(1)}%
-            </p>
-          </div>
-          <div>
-            <p className="text-micro font-medium uppercase tracking-wider text-slate">
-              Baseline NSFR
-            </p>
-            <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
-              {nsfr.current.toFixed(1)}%
-            </p>
-          </div>
-          <div>
-            <p className="text-micro font-medium uppercase tracking-wider text-slate">
-              Internal LCR buffer
-            </p>
-            <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
-              {lcr.internalBuffer}%
-            </p>
-          </div>
-          <div>
-            <p className="text-micro font-medium uppercase tracking-wider text-slate">
-              Survival horizon
-            </p>
-            <p className="mt-1 font-mono text-h1 text-navy tabular-nums">30 d</p>
-          </div>
-        </div>
+      <QueryBoundary
+        isLoading={runsQuery.isLoading}
+        error={runsQuery.error}
+        onRetry={() => runsQuery.refetch()}
+      >
+        <div className="px-8 py-6 space-y-6">
+          {!hasRuns ? (
+            <EmptyState
+              Icon={PlayCircle}
+              title="No stress runs for this period"
+              description={`Run all scenarios to calculate baseline, idiosyncratic, market-wide, and combined liquidity stress results for ${period?.label ?? 'this period'}. Each scenario persists an auditable regulatory run.`}
+              action={runAllButton}
+            />
+          ) : (
+            <>
+              {/* Baseline reference strip */}
+              <div className="card px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div>
+                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
+                    Baseline LCR
+                  </p>
+                  <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
+                    {baselineLcr === null ? '—' : fmtPct(baselineLcr, 2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
+                    Baseline NSFR
+                  </p>
+                  <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
+                    {baselineNsfr === null ? '—' : fmtPct(baselineNsfr, 2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
+                    Baseline HQLA
+                  </p>
+                  <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
+                    {runMetric(baselineRun.data, 'hqla_total_ghs') === null
+                      ? '—'
+                      : fmtCurrency(
+                          runMetric(baselineRun.data, 'hqla_total_ghs') ?? 0,
+                          'GHS'
+                        )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
+                    Survival horizon
+                  </p>
+                  <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
+                    30 d
+                  </p>
+                </div>
+              </div>
 
-        {/* Scenario cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {stressScenarios.map((s) => {
-            const breach = s.severity === 'critical';
-            return (
-              <Card key={s.id} className={breach ? 'border-l-4 border-l-critical' : ''}>
+              {/* Scenario cards */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {STRESS_SCENARIOS.map((scenario) => (
+                  <ScenarioCard
+                    key={scenario}
+                    scenario={scenario}
+                    run={runByScenario[scenario]}
+                    isLoading={
+                      latestIds.has(scenario) && !runByScenario[scenario]
+                    }
+                    baselineLcr={baselineLcr}
+                    baselineNsfr={baselineNsfr}
+                  />
+                ))}
+              </div>
+
+              {/* Comparison table */}
+              <Card>
                 <CardHeader
-                  title={s.name}
-                  subtitle={s.description}
-                  action={<StatusPill tone={s.severity as StatusTone} />}
+                  title="Scenario comparison"
+                  subtitle="Latest stored run per scenario for this reporting period"
                 />
-                <CardBody className="space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                        LCR after stress
-                      </p>
-                      <p className="mt-1 font-mono text-h1 tabular-nums">
-                        <span
-                          className={
-                            s.lcrAfter >= 100 ? 'text-success' : 'text-critical'
-                          }
-                        >
-                          {s.lcrAfter.toFixed(1)}%
-                        </span>
-                      </p>
-                      <p className="mt-1 font-mono text-caption text-critical tabular-nums">
-                        {s.lcrChange.toFixed(1)} pts
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                        NSFR after stress
-                      </p>
-                      <p className="mt-1 font-mono text-h1 tabular-nums">
-                        <span
-                          className={
-                            s.nsfrAfter >= 100 ? 'text-success' : 'text-critical'
-                          }
-                        >
-                          {s.nsfrAfter.toFixed(1)}%
-                        </span>
-                      </p>
-                      <p className="mt-1 font-mono text-caption text-critical tabular-nums">
-                        {s.nsfrChange.toFixed(1)} pts
-                      </p>
-                    </div>
-                  </div>
-
-                  {s.breachDay && (
-                    <div className="flex items-start gap-2 px-3 py-2.5 rounded bg-critical-light border border-critical/20">
-                      <AlertTriangle
-                        size={14}
-                        className="text-critical shrink-0 mt-0.5"
-                        aria-hidden
-                      />
-                      <p className="text-caption text-critical leading-relaxed">
-                        First LCR breach projected at <span className="font-mono font-semibold">Day +{s.breachDay}</span>.
-                        Activate ILAAP contingency plan.
-                      </p>
-                    </div>
-                  )}
-
-                  <div>
-                    <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                      Treasury notes
-                    </p>
-                    <p className="mt-2 text-body text-navy/85 leading-relaxed">
-                      {s.notes}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="w-full inline-flex items-center justify-center gap-1 px-3 py-2 text-caption font-medium text-action border border-action/30 bg-action-light rounded hover:bg-action/10"
-                  >
-                    Open detailed scenario
-                    <ChevronRight size={13} aria-hidden />
-                  </button>
+                <CardBody className="p-0">
+                  <ComparisonTable runs={runByScenario} />
                 </CardBody>
               </Card>
-            );
-          })}
-        </div>
+            </>
+          )}
 
-        {/* Methodology footer */}
-        <Card>
-          <CardHeader title="Methodology" subtitle="ILAAP and Basel III stress alignment" />
-          <CardBody className="text-body text-navy/85 leading-relaxed space-y-3">
-            <p>
-              Stress factors applied to baseline LCR and NSFR per BoG&apos;s ILAAP
-              framework and Basel III §35-36 (LCR) and §50-52 (NSFR). HQLA
-              haircuts revalued under each scenario; behavioral runoff
-              assumptions adjusted by scenario severity multiplier.
-            </p>
-            <p>
-              Idiosyncratic and market-wide are calibrated to BoG severe
-              tolerance levels documented in the 2025 Industry Stress Test
-              Review. Combined scenario assumes simultaneous shock with no
-              central bank backstop. Recalculated daily; ILAAP submission
-              quarterly.
-            </p>
-          </CardBody>
-        </Card>
-      </div>
+          {/* Methodology footer */}
+          <Card>
+            <CardHeader
+              title="Methodology"
+              subtitle="ILAAP and Basel III stress alignment"
+            />
+            <CardBody className="text-body text-navy/85 leading-relaxed space-y-3">
+              <p>
+                Stress factors applied to baseline LCR and NSFR per BoG&apos;s
+                ILAAP framework and Basel III §35-36 (LCR) and §50-52 (NSFR).
+                Each scenario reruns the regulatory engines with stressed
+                run-off rates, inflow multipliers, and HQLA haircuts, and
+                persists an auditable run with its full input snapshot.
+              </p>
+              <p>
+                Idiosyncratic and market-wide shocks are calibrated to BoG
+                severe tolerance levels; the combined scenario assumes a
+                simultaneous shock with no central bank backstop. ILAAP
+                submission quarterly.
+              </p>
+            </CardBody>
+          </Card>
+        </div>
+      </QueryBoundary>
     </>
   );
+}
+
+function ScenarioCard({
+  scenario,
+  run,
+  isLoading,
+  baselineLcr,
+  baselineNsfr,
+}: {
+  scenario: RegulatoryScenarioCode;
+  run: RegulatoryRunRead | undefined;
+  isLoading: boolean;
+  baselineLcr: number | null;
+  baselineNsfr: number | null;
+}) {
+  const label = SCENARIO_LABELS[scenario] ?? labelize(scenario);
+  const lcr = runMetric(run, 'lcr_pct');
+  const nsfr = runMetric(run, 'nsfr_pct');
+  const lcrStatus = metricStatus(run, 'lcr_pct');
+  const breach = lcrStatus === 'red';
+
+  return (
+    <Card className={breach ? 'border-l-4 border-l-critical' : ''}>
+      <CardHeader
+        title={label}
+        subtitle={SCENARIO_DESCRIPTIONS[scenario]}
+        action={
+          run ? <StatusPill tone={statusTone(lcrStatus)} /> : undefined
+        }
+      />
+      <CardBody className="space-y-5">
+        {!run ? (
+          <p className="text-body text-slate">
+            {isLoading ? 'Loading scenario run…' : 'Not yet run for this period.'}
+          </p>
+        ) : run.status !== 'succeeded' ? (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded bg-critical-light border border-critical/20">
+            <AlertTriangle
+              size={14}
+              className="text-critical shrink-0 mt-0.5"
+              aria-hidden
+            />
+            <p className="text-caption text-critical leading-relaxed">
+              Run {run.status}
+              {run.error ? ` — ${run.error.message}` : '.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <ScenarioMetric
+                label="LCR after stress"
+                value={lcr}
+                baseline={baselineLcr}
+                status={lcrStatus}
+              />
+              <ScenarioMetric
+                label="NSFR after stress"
+                value={nsfr}
+                baseline={baselineNsfr}
+                status={metricStatus(run, 'nsfr_pct')}
+              />
+            </div>
+
+            {breach && (
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded bg-critical-light border border-critical/20">
+                <AlertTriangle
+                  size={14}
+                  className="text-critical shrink-0 mt-0.5"
+                  aria-hidden
+                />
+                <p className="text-caption text-critical leading-relaxed">
+                  LCR falls below the regulatory minimum under this scenario.
+                  Activate the ILAAP contingency funding plan.
+                </p>
+              </div>
+            )}
+
+            <ScenarioAssumptions run={run} />
+            <RunBadge run={run} />
+          </>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function ScenarioMetric({
+  label,
+  value,
+  baseline,
+  status,
+}: {
+  label: string;
+  value: number | null;
+  baseline: number | null;
+  status: string | null;
+}) {
+  const change =
+    value !== null && baseline !== null ? value - baseline : null;
+  const valueColor =
+    status === 'red'
+      ? 'text-critical'
+      : status === 'amber'
+      ? 'text-warning'
+      : 'text-success';
+  return (
+    <div>
+      <p className="text-micro font-medium uppercase tracking-wider text-slate">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-h1 tabular-nums">
+        <span className={valueColor}>
+          {value === null ? '—' : fmtPct(value, 2)}
+        </span>
+      </p>
+      {change !== null && (
+        <p
+          className={`mt-1 font-mono text-caption tabular-nums ${
+            change < 0 ? 'text-critical' : 'text-success'
+          }`}
+        >
+          {change >= 0 ? '+' : ''}
+          {change.toFixed(2)} pts vs baseline
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Stressed run-off assumptions vs baseline parameters, from the run inputs. */
+function ScenarioAssumptions({ run }: { run: RegulatoryRunRead }) {
+  const inputs = run.inputs as {
+    shocks?: Record<string, string>;
+    parameters?: { outflow_runoff_rates_pct?: Record<string, string> };
+  };
+  const shocks = inputs.shocks ?? {};
+  const baseRates = inputs.parameters?.outflow_runoff_rates_pct ?? {};
+  const entries = Object.entries(shocks);
+  const runoffOverrides = entries.filter(([key]) => key.startsWith('runoff:'));
+  const otherShocks = entries.filter(([key]) => !key.startsWith('runoff:'));
+
+  if (!entries.length) {
+    return (
+      <p className="text-caption text-slate">
+        No shocks applied — regulatory base assumptions.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <p className="text-micro font-medium uppercase tracking-wider text-slate">
+        Stress assumptions
+      </p>
+      {runoffOverrides.length > 0 && (
+        <table className="mt-2 w-full text-caption border-collapse">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="text-left py-1.5 text-micro font-medium uppercase tracking-wider text-slate">
+                Run-off category
+              </th>
+              <th className="text-right py-1.5 text-micro font-medium uppercase tracking-wider text-slate">
+                Base %
+              </th>
+              <th className="text-right py-1.5 text-micro font-medium uppercase tracking-wider text-slate">
+                Stressed %
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {runoffOverrides.map(([key, value]) => {
+              const category = key.slice('runoff:'.length);
+              const base = baseRates[category];
+              return (
+                <tr key={key} className="border-b border-border-light last:border-b-0">
+                  <td className="py-1.5 text-navy/90">{labelize(category)}</td>
+                  <td className="py-1.5 text-right font-mono text-slate tabular-nums">
+                    {base !== undefined ? `${num(base).toFixed(0)}%` : '—'}
+                  </td>
+                  <td className="py-1.5 text-right font-mono font-medium text-navy tabular-nums">
+                    {num(value).toFixed(0)}%
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      {otherShocks.length > 0 && (
+        <dl className="mt-2 space-y-1">
+          {otherShocks.map(([key, value]) => (
+            <div key={key} className="flex items-center justify-between gap-3 text-caption">
+              <dt className="text-slate">{shockLabel(key)}</dt>
+              <dd className="font-mono text-navy tabular-nums">
+                {shockValue(key, value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  );
+}
+
+function shockLabel(key: string): string {
+  if (key === 'inflow_multiplier') return 'Inflow multiplier';
+  if (key === 'hqla_securities_haircut_pct') return 'HQLA securities haircut';
+  if (key.startsWith('asf:')) return `ASF weight · ${labelize(key.slice(4))}`;
+  if (key.startsWith('rsf:')) return `RSF weight · ${labelize(key.slice(4))}`;
+  return labelize(key);
+}
+
+function shockValue(key: string, value: string): string {
+  if (key === 'inflow_multiplier') return `×${num(value)}`;
+  if (key.includes('pct') || key.startsWith('asf:') || key.startsWith('rsf:')) {
+    return `${num(value).toFixed(0)}%`;
+  }
+  return value;
+}
+
+type ComparisonRow = {
+  label: string;
+  unit: 'ghs' | 'pct';
+  values: (number | null)[];
+};
+
+function ComparisonTable({
+  runs,
+}: {
+  runs: Record<string, RegulatoryRunRead | undefined>;
+}) {
+  const scenarios = ['baseline', ...STRESS_SCENARIOS];
+  const rows: ComparisonRow[] = [
+    {
+      label: 'HQLA',
+      unit: 'ghs',
+      values: scenarios.map((s) => runMetric(runs[s], 'hqla_total_ghs')),
+    },
+    {
+      label: 'Outflows (weighted)',
+      unit: 'ghs',
+      values: scenarios.map((s) => sumSection(runs[s], 'outflow')),
+    },
+    {
+      label: 'Inflows (weighted)',
+      unit: 'ghs',
+      values: scenarios.map((s) => sumSection(runs[s], 'inflow')),
+    },
+    {
+      label: 'Net outflows (30d)',
+      unit: 'ghs',
+      values: scenarios.map((s) => runMetric(runs[s], 'net_outflows_30d_ghs')),
+    },
+    {
+      label: 'LCR',
+      unit: 'pct',
+      values: scenarios.map((s) => runMetric(runs[s], 'lcr_pct')),
+    },
+    {
+      label: 'NSFR',
+      unit: 'pct',
+      values: scenarios.map((s) => runMetric(runs[s], 'nsfr_pct')),
+    },
+  ];
+
+  const columns: Column<ComparisonRow>[] = [
+    {
+      key: 'metric',
+      header: 'Metric',
+      render: (r) => r.label,
+      width: '28%',
+    },
+    ...scenarios.map((scenario, i) => ({
+      key: scenario,
+      header: SCENARIO_LABELS[scenario] ?? labelize(scenario),
+      numeric: true,
+      render: (r: ComparisonRow) => {
+        const value = r.values[i];
+        if (value === null) return '—';
+        return r.unit === 'pct' ? fmtPct(value, 2) : fmtCurrency(value, 'GHS');
+      },
+    })),
+  ];
+
+  return <DataTable columns={columns} rows={rows} />;
 }

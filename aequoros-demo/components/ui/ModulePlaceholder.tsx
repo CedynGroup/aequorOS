@@ -1,8 +1,11 @@
-import { Wrench } from 'lucide-react';
+import { CalendarClock } from 'lucide-react';
 import PageHeader from './PageHeader';
 import { Card, CardBody } from './Card';
-import { bank } from '@/lib/data/bank';
 
+/**
+ * Landing page for modules that are specified in the product architecture
+ * but scheduled after the MVP. Honest framing only — no fake data.
+ */
 export default function ModulePlaceholder({
   moduleNumber,
   title,
@@ -22,22 +25,19 @@ export default function ModulePlaceholder({
         breadcrumbs={[{ label: 'Modules', href: '/' }, { label: title }]}
         title={title}
         subtitle={subtitle}
-        asOf={bank.asOf}
       />
 
       <div className="px-8 py-6 space-y-6">
         <div className="card border-l-4 border-l-action bg-action-light/40 p-5 flex items-start gap-3">
-          <Wrench size={18} className="text-action shrink-0 mt-0.5" aria-hidden />
+          <CalendarClock size={18} className="text-action shrink-0 mt-0.5" aria-hidden />
           <div>
             <p className="text-body font-medium text-navy">
-              Module {moduleNumber} · In active development
+              Module {moduleNumber} · Post-MVP module
             </p>
             <p className="mt-1 text-body text-navy/80 leading-relaxed max-w-3xl">
-              The full {title} module is being built out as part of the
-              prototype roadmap. The Liquidity Risk module is fully interactive
-              today; this module is wired into navigation and will receive its
-              dashboards, scenarios, AI components, and reports in the next
-              build phase.
+              This module is specified in the full product architecture and
+              scheduled post-seed. The MVP implements Liquidity Risk, Basel
+              Capital, and Balance Sheet Forecasting end-to-end.
             </p>
           </div>
         </div>
@@ -45,9 +45,9 @@ export default function ModulePlaceholder({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <div className="px-5 py-4 border-b border-border-light">
-              <h3 className="text-h3 text-navy">Screens to be built</h3>
+              <h3 className="text-h3 text-navy">Planned screens</h3>
               <p className="text-caption text-slate mt-0.5">
-                Per AequorOS Figma Design Brief
+                Per the AequorOS product architecture
               </p>
             </div>
             <CardBody>

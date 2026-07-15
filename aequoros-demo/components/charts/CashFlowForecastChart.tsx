@@ -10,25 +10,58 @@ import {
   Tooltip,
   CartesianGrid,
   ReferenceLine,
-  Legend,
 } from 'recharts';
-import type { CashFlowPoint } from '@/lib/data/liquidity';
+
+export type HistoryPoint = {
+  /** Day offset relative to the as-of date (≤ 0). */
+  day: number;
+  netFlow: number;
+};
+
+export type ForecastPoint = {
+  /** Day offset after the as-of date (≥ 1). */
+  day: number;
+  netFlow: number;
+  lower: number;
+  upper: number;
+};
+
+type ChartRow = {
+  day: number;
+  actual?: number;
+  forecast?: number;
+  lower?: number;
+  upper?: number;
+};
 
 export default function CashFlowForecastChart({
-  data,
-  showStatic = true,
-  horizonDays = 90,
+  history,
+  forecast,
+  showBand = true,
+  forecastLabel = 'LSTM forecast',
 }: {
-  data: CashFlowPoint[];
-  showStatic?: boolean;
-  horizonDays?: 30 | 60 | 90;
+  history: HistoryPoint[];
+  forecast: ForecastPoint[];
+  showBand?: boolean;
+  forecastLabel?: string;
 }) {
-  const sliced = data.slice(0, horizonDays);
+  const rows: ChartRow[] = [
+    ...history.map((p) => ({ day: p.day, actual: p.netFlow })),
+    ...forecast.map((p) => ({
+      day: p.day,
+      forecast: p.netFlow,
+      lower: p.lower,
+      upper: p.upper,
+    })),
+  ];
+
+  const horizon = forecast.length || 30;
+  const span = rows.length || 1;
 
   return (
     <ResponsiveContainer width="100%" height={340}>
       <ComposedChart
-        data={sliced}
+        data={rows}
         margin={{ top: 16, right: 24, left: 0, bottom: 8 }}
       >
         <CartesianGrid stroke="#E4E8EC" strokeDasharray="3 3" vertical={false} />
@@ -36,8 +69,8 @@ export default function CashFlowForecastChart({
           dataKey="day"
           axisLine={{ stroke: '#D0D7DE' }}
           tickLine={false}
-          tickFormatter={(v) => `D+${v}`}
-          interval={Math.floor(horizonDays / 12)}
+          tickFormatter={(v: number) => (v > 0 ? `D+${v}` : `D${v}`)}
+          interval={Math.max(0, Math.floor(span / 12) - 1)}
         />
         <YAxis
           axisLine={false}
@@ -46,59 +79,66 @@ export default function CashFlowForecastChart({
           width={50}
         />
         <Tooltip
-          labelFormatter={(v) => `Day +${v}`}
+          labelFormatter={(v: number) => (v > 0 ? `Day +${v}` : `Day ${v}`)}
           formatter={(value: number, name: string) => [
             `GHS ${value.toFixed(2)}M`,
             name,
           ]}
         />
-        <Legend
-          verticalAlign="top"
-          align="right"
-          iconType="line"
-          height={28}
-          wrapperStyle={{ fontSize: '11px', paddingBottom: '8px' }}
-        />
         <ReferenceLine y={0} stroke="#5A6776" strokeWidth={1} />
-
-        {/* LSTM confidence band */}
-        <Area
-          type="monotone"
-          dataKey="upper"
-          stroke="none"
-          fill="#2D7FF9"
-          fillOpacity={0.08}
-          name="LSTM 95% upper"
-          legendType="none"
-        />
-        <Area
-          type="monotone"
-          dataKey="lower"
-          stroke="none"
-          fill="#FFFFFF"
-          fillOpacity={1}
-          name="LSTM 95% lower"
-          legendType="none"
+        <ReferenceLine
+          x={0}
+          stroke="#D0D7DE"
+          strokeDasharray="4 3"
+          label={{
+            value: 'As of',
+            position: 'insideTopLeft',
+            fill: '#5A6776',
+            fontSize: 11,
+          }}
         />
 
-        {showStatic && (
-          <Line
+        {/* Confidence band (paint upper fill, then mask below lower) */}
+        {showBand && (
+          <Area
             type="monotone"
-            dataKey="netStatic"
-            stroke="#5A6776"
-            strokeDasharray="4 3"
-            strokeWidth={1.5}
-            dot={false}
-            name="Static behavioral"
+            dataKey="upper"
+            stroke="none"
+            fill="#2D7FF9"
+            fillOpacity={0.08}
+            name="95% upper"
+            legendType="none"
+            tooltipType="none"
           />
         )}
+        {showBand && (
+          <Area
+            type="monotone"
+            dataKey="lower"
+            stroke="none"
+            fill="#FFFFFF"
+            fillOpacity={1}
+            name="95% lower"
+            legendType="none"
+            tooltipType="none"
+          />
+        )}
+
         <Line
           type="monotone"
-          dataKey="netLstm"
+          dataKey="actual"
+          stroke="#5A6776"
+          strokeWidth={1.5}
+          dot={false}
+          name="Actual net flow"
+        />
+        <Line
+          type="monotone"
+          dataKey="forecast"
           stroke="#2D7FF9"
           strokeWidth={2}
           dot={false}
-          name="LSTM forecast"
+          name={`${forecastLabel} (${horizon}d)`}
         />
       </ComposedChart>
     </ResponsiveContainer>

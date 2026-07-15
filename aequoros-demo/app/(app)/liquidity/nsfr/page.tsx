@@ -1,43 +1,116 @@
+'use client';
+
+import { Loader2, PlayCircle } from 'lucide-react';
+import type { RegulatoryLineItemRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import RatioGauge from '@/components/ui/RatioGauge';
 import KPICard from '@/components/ui/KPICard';
+import RunBadge from '@/components/ui/RunBadge';
+import EmptyState from '@/components/ui/EmptyState';
+import QueryBoundary from '@/components/ui/QueryBoundary';
 import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import DataTable, { type Column } from '@/components/ui/DataTable';
-import { nsfr } from '@/lib/data/liquidity';
-import { bank } from '@/lib/data/bank';
+import { useBankContext } from '@/components/shell/BankContext';
+import {
+  useCreateRegulatoryRun,
+  useLiquidityDashboard,
+  useRegulatoryRun,
+} from '@/lib/api/hooks';
+import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
 import { fmtCurrency } from '@/lib/format';
 
-type AsfRow = {
+type WeightedRow = {
   item: string;
   balanceGHS: number;
-  factor: number;
-  asfGHS: number;
+  factor: number | null;
+  weightedGHS: number;
+  isTotal?: boolean;
 };
 
-type RsfRow = {
-  item: string;
-  balanceGHS: number;
-  factor: number;
-  rsfGHS: number;
-};
+function toRow(line: RegulatoryLineItemRead): WeightedRow {
+  return {
+    item: line.description,
+    balanceGHS: num(line.exposureAmount),
+    factor: line.ratePct === null ? null : num(line.ratePct),
+    weightedGHS: num(line.weightedAmount),
+  };
+}
 
-const asfColumns: Column<AsfRow>[] = [
-  { key: 'item', header: 'Liability category', render: (r) => r.item, width: '50%' },
-  { key: 'bal', header: 'Balance', numeric: true, render: (r) => fmtCurrency(r.balanceGHS) },
-  { key: 'fct', header: 'ASF factor', numeric: true, render: (r) => `${r.factor}%` },
-  { key: 'asf', header: 'ASF amount', numeric: true, render: (r) => fmtCurrency(r.asfGHS) },
-];
-
-const rsfColumns: Column<RsfRow>[] = [
-  { key: 'item', header: 'Asset category', render: (r) => r.item, width: '50%' },
-  { key: 'bal', header: 'Balance', numeric: true, render: (r) => fmtCurrency(r.balanceGHS) },
-  { key: 'fct', header: 'RSF factor', numeric: true, render: (r) => `${r.factor}%` },
-  { key: 'rsf', header: 'RSF amount', numeric: true, render: (r) => fmtCurrency(r.rsfGHS) },
-];
+function weightedColumns(
+  categoryHeader: string,
+  factorHeader: string,
+  amountHeader: string
+): Column<WeightedRow>[] {
+  return [
+    { key: 'item', header: categoryHeader, render: (r) => r.item, width: '50%' },
+    {
+      key: 'bal',
+      header: 'Balance',
+      numeric: true,
+      render: (r) => (r.isTotal ? '—' : fmtCurrency(r.balanceGHS)),
+    },
+    {
+      key: 'fct',
+      header: factorHeader,
+      numeric: true,
+      render: (r) => (r.factor === null ? '—' : `${r.factor.toFixed(0)}%`),
+    },
+    {
+      key: 'amt',
+      header: amountHeader,
+      numeric: true,
+      render: (r) => fmtCurrency(r.weightedGHS),
+    },
+  ];
+}
 
 export default function NSFRDashboard() {
-  const totalASF = nsfr.asfBreakdown.reduce((s, r) => s + r.asfGHS, 0);
-  const totalRSF = nsfr.rsfBreakdown.reduce((s, r) => s + r.rsfGHS, 0);
+  const { bank, period } = useBankContext();
+  const bankId = bank?.id;
+  const periodId = period?.id;
+
+  const dashboard = useLiquidityDashboard(bankId, periodId);
+  const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
+  const runBaseline = useCreateRegulatoryRun(bankId);
+
+  const data = dashboard.data;
+  const run = latestRun.data;
+  const nsfrThreshold = num(
+    run?.metricResults.find((m) => m.metricCode === 'nsfr_pct')?.thresholdMin ??
+      '100'
+  );
+
+  const asfRows = (run?.lineItems ?? [])
+    .filter((line) => line.section === 'asf')
+    .map(toRow);
+  const rsfRows = (run?.lineItems ?? [])
+    .filter((line) => line.section === 'rsf')
+    .map(toRow);
+  const asfTotal = num(run?.metrics?.['asf_total_ghs']);
+  const rsfTotal = num(run?.metrics?.['rsf_total_ghs']);
+
+  const runBaselineButton = (
+    <button
+      type="button"
+      disabled={runBaseline.isPending || !periodId}
+      onClick={() =>
+        periodId &&
+        runBaseline.mutate({
+          module: 'liquidity',
+          reportingPeriodId: periodId,
+          scenarioCode: 'baseline',
+        })
+      }
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700 disabled:opacity-60"
+    >
+      {runBaseline.isPending ? (
+        <Loader2 size={13} className="animate-spin" aria-hidden />
+      ) : (
+        <PlayCircle size={13} aria-hidden />
+      )}
+      Run baseline
+    </button>
+  );
 
   return (
     <>
@@ -49,95 +122,142 @@ export default function NSFRDashboard() {
         ]}
         title="Net Stable Funding Ratio"
         subtitle="Basel III NSFR per BoG CRD · 1-year stable funding horizon"
-        asOf={bank.asOf}
+        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
+        action={
+          <div className="flex items-center gap-2">
+            {run && <RunBadge run={run} />}
+            {runBaselineButton}
+          </div>
+        }
       />
 
-      <div className="px-8 py-6 space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          <div className="lg:col-span-2">
-            <RatioGauge
-              label="Net Stable Funding Ratio"
-              value={nsfr.current}
-              threshold={nsfr.threshold}
-              status="compliant"
-            />
+      <QueryBoundary
+        isLoading={dashboard.isLoading || latestRun.isLoading}
+        error={dashboard.error ?? latestRun.error}
+        onRetry={() => {
+          void dashboard.refetch();
+          void latestRun.refetch();
+        }}
+      >
+        {data && (
+          <div className="px-8 py-6 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-2">
+                <RatioGauge
+                  label="Net Stable Funding Ratio"
+                  value={num(data.metrics.nsfrPct)}
+                  threshold={nsfrThreshold}
+                  status={statusTone(data.metrics.nsfrStatus)}
+                  decimals={2}
+                />
+              </div>
+              <KPICard
+                label="Available stable funding"
+                value={num(data.metrics.asfTotalGhs) / 1_000_000}
+                prefix="GHS"
+                suffix="M"
+                decimals={1}
+                status={statusTone(data.metrics.nsfrStatus)}
+              />
+              <KPICard
+                label="Required stable funding"
+                value={num(data.metrics.rsfTotalGhs) / 1_000_000}
+                prefix="GHS"
+                suffix="M"
+                decimals={1}
+                status={statusTone(data.metrics.nsfrStatus)}
+              />
+            </div>
+
+            {!run ? (
+              <EmptyState
+                title="No stored baseline run for this period"
+                description="ASF and RSF line-item detail comes from a persisted baseline liquidity run. Run baseline to calculate and store the full NSFR breakdown."
+                action={runBaselineButton}
+              />
+            ) : (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader
+                      title="Available Stable Funding (ASF)"
+                      subtitle="Liability-side weighting per Basel III §50"
+                    />
+                    <CardBody className="p-0">
+                      <DataTable
+                        columns={weightedColumns(
+                          'Liability category',
+                          'ASF factor',
+                          'ASF amount'
+                        )}
+                        rows={[
+                          ...asfRows,
+                          {
+                            item: 'TOTAL ASF',
+                            balanceGHS: 0,
+                            factor: null,
+                            weightedGHS: asfTotal,
+                            isTotal: true,
+                          },
+                        ]}
+                        totalsRowMatcher={(r) => Boolean(r.isTotal)}
+                      />
+                    </CardBody>
+                  </Card>
+
+                  <Card>
+                    <CardHeader
+                      title="Required Stable Funding (RSF)"
+                      subtitle="Asset-side weighting per Basel III §52"
+                    />
+                    <CardBody className="p-0">
+                      <DataTable
+                        columns={weightedColumns(
+                          'Asset category',
+                          'RSF factor',
+                          'RSF amount'
+                        )}
+                        rows={[
+                          ...rsfRows,
+                          {
+                            item: 'TOTAL RSF',
+                            balanceGHS: 0,
+                            factor: null,
+                            weightedGHS: rsfTotal,
+                            isTotal: true,
+                          },
+                        ]}
+                        totalsRowMatcher={(r) => Boolean(r.isTotal)}
+                      />
+                    </CardBody>
+                  </Card>
+                </div>
+
+                <p className="text-caption text-slate">
+                  NSFR = Total ASF{' '}
+                  <span className="font-mono text-navy">
+                    {fmtCurrency(asfTotal, 'GHS')}
+                  </span>{' '}
+                  / Total RSF{' '}
+                  <span className="font-mono text-navy">
+                    {fmtCurrency(rsfTotal, 'GHS')}
+                  </span>{' '}
+                  ={' '}
+                  <span className="font-mono font-medium text-success">
+                    {num(data.metrics.nsfrPct).toFixed(2)}%
+                  </span>
+                  . BoG minimum {nsfrThreshold.toFixed(0)}%.{' '}
+                  {bank?.name ?? 'The bank'} holds{' '}
+                  <span className="font-mono text-navy">
+                    {(num(data.metrics.nsfrPct) - nsfrThreshold).toFixed(2)} pts
+                  </span>{' '}
+                  of headroom.
+                </p>
+              </>
+            )}
           </div>
-          <KPICard
-            label="Available stable funding"
-            value={nsfr.asfGHS / 1_000_000}
-            prefix="GHS"
-            suffix="M"
-            decimals={1}
-            status="compliant"
-            sparkline={[1490, 1500, 1505, 1515, 1520, 1525, 1528, 1530]}
-          />
-          <KPICard
-            label="Required stable funding"
-            value={nsfr.rsfGHS / 1_000_000}
-            prefix="GHS"
-            suffix="M"
-            decimals={1}
-            status="compliant"
-            sparkline={[1280, 1284, 1288, 1290, 1292, 1294, 1296, 1297]}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader
-              title="Available Stable Funding (ASF)"
-              subtitle="Liability-side weighting per Basel III §50"
-            />
-            <CardBody className="p-0">
-              <DataTable
-                columns={asfColumns}
-                rows={[
-                  ...nsfr.asfBreakdown,
-                  {
-                    item: 'TOTAL ASF',
-                    balanceGHS: nsfr.asfBreakdown.reduce((s, r) => s + r.balanceGHS, 0),
-                    factor: 0,
-                    asfGHS: totalASF,
-                  } as AsfRow,
-                ]}
-                totalsRowMatcher={(r) => r.item.startsWith('TOTAL')}
-              />
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader
-              title="Required Stable Funding (RSF)"
-              subtitle="Asset-side weighting per Basel III §52"
-            />
-            <CardBody className="p-0">
-              <DataTable
-                columns={rsfColumns}
-                rows={[
-                  ...nsfr.rsfBreakdown,
-                  {
-                    item: 'TOTAL RSF',
-                    balanceGHS: nsfr.rsfBreakdown.reduce((s, r) => s + r.balanceGHS, 0),
-                    factor: 0,
-                    rsfGHS: totalRSF,
-                  } as RsfRow,
-                ]}
-                totalsRowMatcher={(r) => r.item.startsWith('TOTAL')}
-              />
-            </CardBody>
-          </Card>
-        </div>
-
-        <p className="text-caption text-slate">
-          NSFR = Total ASF{' '}
-          <span className="font-mono text-navy">{fmtCurrency(totalASF, 'GHS')}</span>{' '}
-          / Total RSF{' '}
-          <span className="font-mono text-navy">{fmtCurrency(totalRSF, 'GHS')}</span>{' '}
-          = <span className="font-mono font-medium text-success">{nsfr.current.toFixed(1)}%</span>.
-          BoG minimum 100%. Sample Bank Limited remains compliant with{' '}
-          <span className="font-mono text-navy">+18.0 pts</span> headroom.
-        </p>
-      </div>
+        )}
+      </QueryBoundary>
     </>
   );
 }
