@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.core.config import Settings, get_settings
 
 
-def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_settings_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Run from an empty directory so a developer's local .env (created per the
+    # README) cannot shadow the true defaults under test.
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("APP_ENV", raising=False)
     monkeypatch.delenv("APP_NAME", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)

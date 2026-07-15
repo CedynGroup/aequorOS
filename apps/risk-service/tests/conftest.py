@@ -28,7 +28,9 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("APP_NAME", "risk-service")
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.delenv("CORS_ORIGINS", raising=False)
+    # Set (not delete) so a developer's local .env cannot leak into the suite:
+    # environment variables take priority over the env_file in pydantic-settings.
+    monkeypatch.setenv("CORS_ORIGINS", "")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
     get_settings.cache_clear()
     get_engine.cache_clear()

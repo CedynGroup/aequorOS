@@ -1,0 +1,444 @@
+"""End-to-end Data Engine journeys: workbook in, canonical state and lineage out."""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from pathlib import Path
+from typing import Any
+
+import openpyxl
+from fastapi.testclient import TestClient
+
+from app.domain.ingestion.contracts import EntityMapping, MappingConfig
+from tests.adapters.excel_csv import fixtures
+from tests.api.helpers import ORG_2, headers
+
+AS_OF = str(fixtures.AS_OF)
+
+FULL_MAPPING = MappingConfig(
+    field_mappings={
+        "gl_account": EntityMapping(
+            source_table="GL",
+            fields={
+                "source_reference": "Code",
+                "account_code": "Code",
+                "name": "Label",
+                "account_class": "Class",
+            },
+        ),
+        "counterparty": EntityMapping(
+            source_table="Customers",
+            fields={
+                "source_reference": "CustomerId",
+                "name": "CustomerName",
+                "counterparty_type": "Segment",
+                "country_code": "Country",
+            },
+        ),
+        "product": EntityMapping(
+            source_table="Products",
+            fields={
+                "source_reference": "ProductCode",
+                "product_code": "ProductCode",
+                "name": "ProductName",
+            },
+        ),
+        "position": EntityMapping(
+            source_table="Loans",
+            fields={
+                "source_reference": "AccountRef",
+                "position_type": "Type",
+                "currency": "Ccy",
+                "balance": "Outstanding",
+                "counterparty_reference": "Customer",
+                "product_code": "Product",
+                "interest_rate": "Rate",
+                "rate_type": "RateKind",
+                "contractual_maturity": "Maturity",
+            },
+        ),
+    },
+    enum_mappings={
+        "counterparty_type": {"RETAIL": "RETAIL_INDIVIDUAL", "CORP": "CORPORATE"},
+        "rate_type": {"F": "FIXED", "V": "FLOATING", "FLOAT": "FLOATING"},
+    },
+    product_mappings={"LN.CORP.5Y": "CORPORATE_LOAN_UNRATED_100RW"},
+)
+
+RECON_MAPPING = MappingConfig(
+    field_mappings={
+        "gl_account": EntityMapping(
+            source_table="GL",
+            fields={
+                "source_reference": "Code",
+                "account_code": "Code",
+                "name": "Label",
+                "account_class": "Class",
+                "balance": "Balance",
+            },
+        ),
+        "position": EntityMapping(
+            source_table="Loans",
+            fields={
+                "source_reference": "AccountRef",
+                "position_type": "Type",
+                "currency": "Ccy",
+                "balance": "Outstanding",
+                "gl_account_code": "GLAccount",
+            },
+        ),
+    },
+)
+
+
+def seed_bank(client: TestClient) -> str:
+    response = client.post("/api/v1/banks/seed-demo", headers=headers())
+    assert response.status_code == 200, response.text
+    return response.json()["bank_id"]
+
+
+def activate_mapping(client: TestClient, bank_id: str, mapping: MappingConfig) -> str:
+    response = client.post(
+        f"/api/v1/banks/{bank_id}/mapping-configs",
+        headers=headers(),
+        json={
+            "source_system": "EXCEL_CSV",
+            "name": "Workbook mapping",
+            "config": mapping.model_dump(mode="json"),
+            "activate": True,
+            "reason": "Onboarding mapping for tests.",
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["id"]
+
+
+def start_batch(client: TestClient, bank_id: str, location: Path) -> dict[str, Any]:
+    response = client.post(
+        f"/api/v1/banks/{bank_id}/ingestion-batches",
+        headers=headers(),
+        json={
+            "source_system": "EXCEL_CSV",
+            "as_of_date": AS_OF,
+            "location": str(location),
+            "reason": "Month-end ingestion.",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+class TestHappyPath:
+    def test_workbook_to_accepted_canonical_state(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
+
+        started = start_batch(db_client, bank_id, workbook)
+        batch = started["batch"]
+        assert started["reused"] is False
+        assert batch["status"] == "accepted"
+        assert batch["records_extracted"] == 8
+        assert batch["records_translated"] == 8
+        assert batch["records_accepted"] == 8
+        assert batch["records_error"] == 0
+        assert batch["validation_report"]["summary"]["overall_status"] == "ACCEPTED"
+        assert batch["content_hash"]
+
+        positions = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions",
+            headers=headers(),
+            params={"as_of_date": AS_OF},
+        ).json()["positions"]
+        assert len(positions) == 2
+        by_reference = {position["source_reference"]: position for position in positions}
+        assert Decimal(by_reference["LN-0001"]["balance"]) == Decimal("1500000.50")
+        assert by_reference["LN-0001"]["rate_type"] == "FIXED"
+        assert by_reference["LN-0001"]["validation_status"] == "accepted"
+
+    def test_identical_rerun_is_idempotent(self, db_client: TestClient, tmp_path: Path) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
+
+        first = start_batch(db_client, bank_id, workbook)
+        second = start_batch(db_client, bank_id, workbook)
+        assert second["reused"] is True
+        assert second["batch"]["id"] == first["batch"]["id"]
+
+        positions = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"]
+        assert len(positions) == 2
+
+    def test_restatement_supersedes_prior_snapshots(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
+        first = start_batch(db_client, bank_id, workbook)
+
+        original = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"]
+        original_snapshot = {
+            position["source_reference"]: position["snapshot_id"] for position in original
+        }
+
+        loaded = openpyxl.load_workbook(workbook)
+        loaded["Loans"]["D2"] = 1600000.00  # restate LN-0001's balance
+        loaded.save(workbook)
+        second = start_batch(db_client, bank_id, workbook)
+        assert second["reused"] is False
+        assert second["batch"]["id"] != first["batch"]["id"]
+
+        restated = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"]
+        assert len(restated) == 2
+        by_reference = {position["source_reference"]: position for position in restated}
+        assert Decimal(by_reference["LN-0001"]["balance"]) == Decimal("1600000")
+        assert by_reference["LN-0001"]["snapshot_id"] != original_snapshot["LN-0001"]
+
+    def test_lineage_walks_from_position_to_extraction(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        start_batch(db_client, bank_id, fixtures.build_well_formed(tmp_path / "bank.xlsx"))
+
+        position = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"][0]
+        walk = db_client.get(f"/api/v1/lineage/{position['lineage_id']}", headers=headers()).json()
+        operations = [node["operation_type"] for node in walk["nodes"]]
+        assert operations == ["VALIDATION", "ADAPTER_TRANSLATE", "ADAPTER_EXTRACT"]
+        assert walk["nodes"][-1]["input_lineage_ids"] == []
+
+
+class TestGatingAndFailure:
+    def test_reconciliation_break_rejects_the_batch(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, RECON_MAPPING)
+        workbook = fixtures.build_reconciliation_workbook(
+            tmp_path / "recon.xlsx", gl_balance="1500"
+        )
+
+        started = start_batch(db_client, bank_id, workbook)
+        batch = started["batch"]
+        assert batch["status"] == "rejected"
+        assert batch["records_blocked"] == 3
+        report = batch["validation_report"]
+        assert report["summary"]["overall_status"] == "REJECTED"
+        assert report["reconciliation"]["gl_vs_subledger"]["1000"]["within_tolerance"] is False
+
+        positions = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"]
+        assert positions == []
+
+    def test_reconciled_workbook_is_accepted(self, db_client: TestClient, tmp_path: Path) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, RECON_MAPPING)
+        workbook = fixtures.build_reconciliation_workbook(
+            tmp_path / "recon.xlsx", gl_balance="1000"
+        )
+        started = start_batch(db_client, bank_id, workbook)
+        assert started["batch"]["status"] == "accepted"
+
+    def test_missing_file_persists_a_failed_batch(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        started = start_batch(db_client, bank_id, tmp_path / "nowhere.xlsx")
+        batch = started["batch"]
+        assert batch["status"] == "failed"
+        assert batch["error_code"] == "connection_failed"
+        assert "does not exist" in batch["error_message"]
+
+    def test_untranslatable_rows_are_preserved_for_review(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        workbook = fixtures.build_dirty_cells(tmp_path / "dirty.xlsx")
+        # The dirty fixture has only a Loans sheet; other mapped sheets are absent.
+        started = start_batch(db_client, bank_id, workbook)
+        batch = started["batch"]
+
+        failures = db_client.get(
+            f"/api/v1/banks/{bank_id}/ingestion-batches/{batch['id']}/translation-failures",
+            headers=headers(),
+        ).json()["failures"]
+        assert len(failures) == 1
+        assert failures[0]["raw_record"]["Outstanding"] == "TBC"
+        assert "balance" in failures[0]["error_message"]
+
+    def test_ingestion_requires_an_active_mapping_config(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
+        response = db_client.post(
+            f"/api/v1/banks/{bank_id}/ingestion-batches",
+            headers=headers(),
+            json={
+                "source_system": "EXCEL_CSV",
+                "as_of_date": AS_OF,
+                "location": str(workbook),
+                "reason": "No mapping yet.",
+            },
+        )
+        assert response.status_code == 422
+        assert "active mapping config" in response.json()["error"]["message"]
+
+
+class TestTenantIsolation:
+    def test_other_tenants_see_nothing(self, db_client: TestClient, tmp_path: Path) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        started = start_batch(
+            db_client, bank_id, fixtures.build_well_formed(tmp_path / "bank.xlsx")
+        )
+        position = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"][0]
+
+        foreign = headers(ORG_2)
+        assert (
+            db_client.get(f"/api/v1/banks/{bank_id}/ingestion-batches", headers=foreign).status_code
+            == 404
+        )
+        assert (
+            db_client.get(
+                f"/api/v1/banks/{bank_id}/ingestion-batches/{started['batch']['id']}",
+                headers=foreign,
+            ).status_code
+            == 404
+        )
+        assert (
+            db_client.get(f"/api/v1/lineage/{position['lineage_id']}", headers=foreign).status_code
+            == 404
+        )
+
+
+class TestManualOverride:
+    def test_override_supersedes_with_provenance_and_lineage(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        start_batch(db_client, bank_id, fixtures.build_well_formed(tmp_path / "bank.xlsx"))
+        position = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"][0]
+
+        response = db_client.post(
+            f"/api/v1/banks/{bank_id}/position-snapshots/{position['snapshot_id']}/override",
+            headers=headers(),
+            json={
+                "field": "behavioral_maturity_months",
+                "value": 48,
+                "reason": "Bank policy: cap NMD duration at 4 years.",
+            },
+        )
+        assert response.status_code == 200, response.text
+        overridden = response.json()
+        assert overridden["behavioral_maturity_months"] == 48
+        assert overridden["superseded_snapshot_id"] == position["snapshot_id"]
+        provenance = overridden["enrichment_provenance"]["behavioral_maturity_months"]
+        assert provenance["source"] == "MANUAL_OVERRIDE"
+        assert provenance["override"]["reason"].startswith("Bank policy")
+
+        walk = db_client.get(
+            f"/api/v1/lineage/{overridden['lineage_id']}", headers=headers()
+        ).json()
+        operations = [node["operation_type"] for node in walk["nodes"]]
+        assert operations == [
+            "HUMAN_OVERRIDE",
+            "VALIDATION",
+            "ADAPTER_TRANSLATE",
+            "ADAPTER_EXTRACT",
+        ]
+
+        current = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"]
+        by_reference = {item["source_reference"]: item for item in current}
+        assert by_reference[position["source_reference"]]["snapshot_id"] == overridden["id"]
+
+    def test_superseded_snapshot_cannot_be_overridden(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        start_batch(db_client, bank_id, fixtures.build_well_formed(tmp_path / "bank.xlsx"))
+        position = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"][0]
+        url = f"/api/v1/banks/{bank_id}/position-snapshots/{position['snapshot_id']}/override"
+
+        first = db_client.post(
+            url,
+            headers=headers(),
+            json={"field": "ifrs9_stage", "value": 2, "reason": "Credit review outcome."},
+        )
+        assert first.status_code == 200
+        stale = db_client.post(
+            url,
+            headers=headers(),
+            json={"field": "ifrs9_stage", "value": 3, "reason": "Second thoughts."},
+        )
+        assert stale.status_code == 409
+
+
+class TestT24ThroughTheApi:
+    def test_t24_ingestion_fails_honestly_while_skeleton(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        response = db_client.post(
+            f"/api/v1/banks/{bank_id}/mapping-configs",
+            headers=headers(),
+            json={
+                "source_system": "T24",
+                "name": "T24 placeholder mapping",
+                "config": {},
+                "activate": True,
+                "reason": "Prepare for portal access.",
+            },
+        )
+        assert response.status_code == 200
+        started = db_client.post(
+            f"/api/v1/banks/{bank_id}/ingestion-batches",
+            headers=headers(),
+            json={
+                "source_system": "T24",
+                "as_of_date": AS_OF,
+                "location": "tafj://bank-t24.internal",
+                "reason": "Attempt native T24 pull.",
+            },
+        )
+        assert started.status_code == 201
+        batch = started.json()["batch"]
+        assert batch["status"] == "failed"
+        assert batch["error_code"] == "connection_failed"
+        assert "pending Temenos" in batch["error_message"]
+
+
+class TestMappingConfigVersioning:
+    def test_versions_increment_and_single_active_is_enforced(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        second_id = activate_mapping(db_client, bank_id, FULL_MAPPING)
+
+        configs = db_client.get(
+            f"/api/v1/banks/{bank_id}/mapping-configs", headers=headers()
+        ).json()["configs"]
+        assert [config["version"] for config in configs] == [2, 1]
+        assert [config["status"] for config in configs] == ["active", "retired"]
+        assert configs[0]["id"] == second_id

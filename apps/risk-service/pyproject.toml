@@ -9,6 +9,7 @@ dependencies = [
   "boto3",
   "fastapi[standard]",
   "loguru",
+  "openpyxl",
   "psycopg[binary]",
   "pydantic-settings",
   "sqlalchemy",

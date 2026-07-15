@@ -4,6 +4,13 @@ from app.models.calculation import (
     CalculationRun,
     LiquidityAnalysisResult,
 )
+from app.models.canonical import (
+    CanonicalCounterparty,
+    CanonicalGlAccount,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+)
 from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
 from app.models.financial import (
     FinancialAccount,
@@ -18,7 +25,29 @@ from app.models.financial import (
     FinancialSourceRow,
     FinancialValidationIssue,
 )
+from app.models.ingestion import (
+    IngestionBatch,
+    LineageRecord,
+    MappingConfigRecord,
+    TranslationFailure,
+)
 from app.models.organization import Organization
+from app.models.regulatory import (
+    Bank,
+    BankFinancialFact,
+    BankReportingPeriod,
+    ParamCapitalThreshold,
+    ParamLcrRunoffRate,
+    ParamNsfrWeight,
+    ParamRiskWeight,
+    ParamStressShock,
+)
+from app.models.regulatory_run import (
+    RegulatoryLineItem,
+    RegulatoryMetricResult,
+    RegulatoryRun,
+    RegulatoryValidation,
+)
 from app.models.risk import (
     Document,
     DocumentChunk,
@@ -38,6 +67,14 @@ from app.models.user import User
 
 __all__ = [
     "AuditEvent",
+    "Bank",
+    "BankFinancialFact",
+    "BankReportingPeriod",
+    "CanonicalCounterparty",
+    "CanonicalGlAccount",
+    "CanonicalPosition",
+    "CanonicalPositionSnapshot",
+    "CanonicalProduct",
     "CapitalIndicator",
     "CapitalProjection",
     "CapitalProjectionFinding",
@@ -58,8 +95,21 @@ __all__ = [
     "FinancialReportingPeriod",
     "FinancialSourceRow",
     "FinancialValidationIssue",
+    "IngestionBatch",
     "Job",
+    "LineageRecord",
+    "MappingConfigRecord",
     "Organization",
+    "TranslationFailure",
+    "ParamCapitalThreshold",
+    "ParamLcrRunoffRate",
+    "ParamNsfrWeight",
+    "ParamRiskWeight",
+    "ParamStressShock",
+    "RegulatoryLineItem",
+    "RegulatoryMetricResult",
+    "RegulatoryRun",
+    "RegulatoryValidation",
     "RiskAssessment",
     "RiskAssessmentRun",
     "RiskCase",
