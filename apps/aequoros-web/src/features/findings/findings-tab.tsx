@@ -157,6 +157,11 @@ export function FindingReviewItem({
     finding.source === "deterministic_rule" &&
     finding.details.liquidity?.workflow_id === "liquidity_analysis";
   const queryClient = useQueryClient();
+  const evidence = useQuery({
+    queryKey: ["finding-evidence", tenant, finding.id],
+    queryFn: () => riskApi.findingEvidence(tenant, finding.id),
+    enabled: finding.riskType === "covenant_breach",
+  });
   const form = useForm<FindingStatusForm>({
     resolver: zodResolver(findingStatusSchema),
     defaultValues: {
@@ -194,6 +199,42 @@ export function FindingReviewItem({
     <FindingReviewCard
       finding={finding}
       metadata={`${finding.riskType} - score impact ${finding.scoreImpact ?? "n/a"}`}
+      evidence={
+        evidence.data?.length ? (
+          <details className="rounded border border-cyan-200 bg-cyan-50/60 p-2">
+            <summary className="cursor-pointer font-medium">
+              Source evidence ({evidence.data.length})
+            </summary>
+            <div className="mt-2 space-y-2">
+              {evidence.data.map((item) => {
+                const sourceUrl =
+                  typeof item.locator.source_url === "string"
+                    ? item.locator.source_url
+                    : undefined;
+                return (
+                  <div key={item.id} className="space-y-1">
+                    <div>
+                      {item.document?.filename ?? "Canonical source"}
+                      {item.pageNumber ? ` · page ${item.pageNumber}` : ""}
+                    </div>
+                    {item.quote ? (
+                      <blockquote>“{item.quote}”</blockquote>
+                    ) : null}
+                    {sourceUrl ? (
+                      <a
+                        href={sourceUrl}
+                        className="font-medium text-[rgb(var(--primary))] underline"
+                      >
+                        Open linked financial record
+                      </a>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        ) : null
+      }
     >
       {isLiquidityWorkflowFinding ? (
         <div className="border-t border-[rgb(var(--border))] pt-2 text-[rgb(var(--muted-foreground))]">

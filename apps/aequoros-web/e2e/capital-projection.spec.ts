@@ -129,7 +129,7 @@ async function installBackend(
   incompatibleComparison = false,
 ) {
   let generated = false;
-  await page.route("http://127.0.0.1:8003/api/v1/**", async (route) => {
+  await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     const method = request.method();
@@ -356,6 +356,7 @@ test("projects capital, compares scenarios, reviews evidence, and enforces tenan
   await expect(page.getByText("-$25.00")).toBeVisible();
   await captureEvidence(page, "capital-projection-success.png");
 
+  await console.openConnectionSettings();
   await page
     .getByLabel("Tenant org id")
     .fill("22222222-2222-4222-8222-222222222222");

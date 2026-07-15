@@ -103,6 +103,10 @@ run = "uv run alembic upgrade head"
 description = "Create local DB roles, run migrations, and grant app privileges"
 run = "./scripts/bootstrap_db.sh"
 
+[tasks."risk-service:reset-demo"]
+description = "Restore the fixed demo tenant to the pristine narrative portfolio"
+run = "PYTHONPATH=. uv run python scripts/reset_demo.py"
+
 [tasks."risk-service:revision"]
 description = "Create Alembic revision"
 usage = '''

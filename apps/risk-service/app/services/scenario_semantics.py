@@ -32,7 +32,7 @@ def resolve_engine_assumptions(
             ambiguous.append(
                 {
                     "category": category,
-                    "assumption_ids": [str(item.id) for item in candidates],
+                    "assumptions": [item.label or item.key for item in candidates],
                     "corrective_action": (
                         f"Keep one {category.replace('_', ' ')} assumption or use the canonical "
                         f"key '{engine_key}'."

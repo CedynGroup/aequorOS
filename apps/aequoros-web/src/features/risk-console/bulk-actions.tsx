@@ -11,12 +11,16 @@ export { BulkResult } from "./bulk-result";
 export function BulkActionDialog({
   selectedIds,
   tenant,
+  mutationDisabled = false,
 }: {
   selectedIds: string[];
   tenant: TenantHeaders;
+  mutationDisabled?: boolean;
 }) {
   const actionLabel =
-    selectedIds.length === 0 ? "Select cases" : `Bulk actions (${selectedIds.length})`;
+    selectedIds.length === 0
+      ? "Select cases"
+      : `Bulk actions (${selectedIds.length})`;
 
   return (
     <Dialog>
@@ -24,8 +28,12 @@ export function BulkActionDialog({
         <Button
           size="sm"
           variant="outline"
-          disabled={selectedIds.length === 0}
-          title={selectedIds.length === 0 ? "Select one or more queue rows to enable bulk actions." : undefined}
+          disabled={mutationDisabled || selectedIds.length === 0}
+          title={
+            selectedIds.length === 0
+              ? "Select one or more queue rows to enable bulk actions."
+              : undefined
+          }
         >
           {actionLabel}
         </Button>

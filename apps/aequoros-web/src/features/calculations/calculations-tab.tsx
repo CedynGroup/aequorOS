@@ -23,7 +23,6 @@ import {
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { formatMoney } from "../../lib/money";
-import { truncateId } from "../../lib/utils";
 import {
   focusWorkspaceTarget,
   workspaceHash,
@@ -290,6 +289,14 @@ export function CalculationsTab({
         <div className="grid gap-3 @5xl/calculations:grid-cols-[250px_minmax(0,1fr)]">
           <RunHistory
             runs={runs.data?.runs ?? []}
+            scenarioNames={
+              new Map(
+                availableScenarios.map((scenario) => [
+                  scenario.id,
+                  scenario.name,
+                ]),
+              )
+            }
             total={runs.data?.total ?? 0}
             selectedRunId={selectedSummary?.id ?? selectedRunId}
             onSelect={setSelectedRunId}
@@ -332,6 +339,7 @@ export function CalculationsTab({
 
 function RunHistory({
   runs,
+  scenarioNames,
   total,
   selectedRunId,
   onSelect,
@@ -341,6 +349,7 @@ function RunHistory({
   onNext,
 }: {
   runs: CalculationRunSummaryRead[];
+  scenarioNames: ReadonlyMap<string, string>;
   total: number;
   selectedRunId: string;
   onSelect: (id: string) => void;
@@ -365,7 +374,9 @@ function RunHistory({
             onClick={() => onSelect(run.id)}
           >
             <span className="flex items-center justify-between gap-2">
-              <span className="font-mono">{truncateId(run.id)}</span>
+              <span className="font-medium">
+                {scenarioNames.get(run.scenarioId) ?? "Forecast"}
+              </span>
               <Badge tone={runTone[run.status]}>{run.status}</Badge>
             </span>
             <span className="mt-1 block text-[rgb(var(--muted-foreground))]">
@@ -418,8 +429,8 @@ function RunOutput({
   return (
     <Panel>
       <PanelHeader
-        title={`Run ${truncateId(run.id)}`}
-        meta={`${run.engineVersion} · input ${run.inputHash.slice(0, 12)} · as of ${dateOnly(run.asOfDate)}`}
+        title="Forecast result"
+        meta={`${run.engineVersion} · as of ${dateOnly(run.asOfDate)}`}
         actions={
           readOnly ? null : (
             <Button
@@ -518,7 +529,7 @@ function DiagnosticDetails({
   const missing = [
     "missing_categories",
     "unreviewed_assumptions",
-    "reporting_period_ids",
+    "reporting_periods",
   ]
     .flatMap((key) => (Array.isArray(details[key]) ? details[key] : []))
     .filter((item): item is string => typeof item === "string");
@@ -546,6 +557,7 @@ function DiagnosticDetails({
 
 function diagnosticRecord(record: Record<string, unknown>) {
   const identity = [
+    record.label,
     record.type,
     record.balance_type,
     record.obligation_type,
@@ -560,8 +572,8 @@ function diagnosticRecord(record: Record<string, unknown>) {
         (value): value is string => typeof value === "string",
       )
     : [];
-  const assumptionIds = Array.isArray(record.assumption_ids)
-    ? record.assumption_ids.filter(
+  const assumptions = Array.isArray(record.assumptions)
+    ? record.assumptions.filter(
         (value): value is string => typeof value === "string",
       )
     : [];
@@ -571,13 +583,12 @@ function diagnosticRecord(record: Record<string, unknown>) {
       : null;
   return [
     identity,
-    typeof record.id === "string" ? record.id : null,
     typeof record.cash_flow_date === "string"
       ? `cash-flow date ${record.cash_flow_date}`
       : null,
     periodBounds,
     missingFields.length ? `missing ${missingFields.join(", ")}` : null,
-    assumptionIds.length ? `assumptions ${assumptionIds.join(", ")}` : null,
+    assumptions.length ? `assumptions ${assumptions.join(", ")}` : null,
   ]
     .filter(Boolean)
     .join(" — ");

@@ -40,6 +40,12 @@ export interface FinancialManualEditRead {
    * @type {string}
    * @memberof FinancialManualEditRead
    */
+  editedByDisplayName?: string | null;
+  /**
+   *
+   * @type {string}
+   * @memberof FinancialManualEditRead
+   */
   fieldName: string;
   /**
    *
@@ -125,6 +131,10 @@ export function FinancialManualEditReadFromJSONTyped(
     caseId: json["case_id"],
     createdAt: new Date(json["created_at"]),
     editedBy: json["edited_by"],
+    editedByDisplayName:
+      json["edited_by_display_name"] == null
+        ? undefined
+        : json["edited_by_display_name"],
     fieldName: json["field_name"],
     id: json["id"],
     newValue: json["new_value"],
@@ -154,6 +164,7 @@ export function FinancialManualEditReadToJSONTyped(
     case_id: value["caseId"],
     created_at: value["createdAt"].toISOString(),
     edited_by: value["editedBy"],
+    edited_by_display_name: value["editedByDisplayName"],
     field_name: value["fieldName"],
     id: value["id"],
     new_value: value["newValue"],

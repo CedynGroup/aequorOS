@@ -221,7 +221,7 @@ describe("CalculationsTab", () => {
 
     renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
     await user.click(
-      await screen.findByRole("button", { name: /30000000\.\.\.0002/ }),
+      await screen.findByRole("button", { name: /Archived downside/ }),
     );
 
     expect(
@@ -277,6 +277,107 @@ describe("CalculationsTab", () => {
       expect(rerun).not.toHaveBeenCalled();
     },
   );
+
+  it.each([
+    "calculation-run-not-a-uuid-forecast-period-1",
+    `calculation-run-${run().id}-forecast-period-0`,
+    `calculation-run-${run().id}-forecast-period-1.5`,
+    `calculation-run-${run().id}-forecast-period-invalid`,
+  ])("ignores malformed calculation evidence fragment %s", async (target) => {
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+
+    expect(await screen.findByText("No calculation runs")).toBeInTheDocument();
+    expect(riskApi.calculationRun).not.toHaveBeenCalled();
+  });
+
+  it("preserves an archived evidence run in read-only audit mode", async () => {
+    const target = `calculation-run-${run().id}-forecast-period-1`;
+    const archivedScenario = { ...scenario(), archivedAt: now };
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${target}`,
+    );
+    vi.mocked(riskApi.scenarios).mockResolvedValue(
+      scenarioWorkspace([archivedScenario]),
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(runList());
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("Archived forecast audit"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Archived", { exact: true })).toBeInTheDocument();
+    expect(
+      screen.getByText("Archived scenario · read only"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("$4,550.00")).toBeInTheDocument();
+    expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, caseId, true);
+    expect(
+      screen.queryByRole("button", { name: "Run forecast" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Rerun current inputs" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("makes archived runs selected from history read-only", async () => {
+    const user = userEvent.setup();
+    const activeRun = run();
+    const archivedScenarioId = "20000000-0000-4000-8000-000000000002";
+    const archivedRun = run({
+      id: "30000000-0000-4000-8000-000000000002",
+      scenarioId: archivedScenarioId,
+      createdAt: new Date("2026-07-12T12:00:00Z"),
+    });
+    vi.mocked(riskApi.scenarios).mockResolvedValue(
+      scenarioWorkspace([
+        scenario(),
+        {
+          ...scenario(),
+          id: archivedScenarioId,
+          name: "Archived downside",
+          archivedAt: now,
+        },
+      ]),
+    );
+    vi.spyOn(riskApi, "calculationRuns").mockResolvedValue(
+      runList([activeRun, archivedRun]),
+    );
+    vi.mocked(riskApi.calculationRun).mockImplementation(
+      (_tenant, _caseId, requestedRunId) =>
+        Promise.resolve(
+          requestedRunId === archivedRun.id ? archivedRun : activeRun,
+        ),
+    );
+
+    renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
+    await user.click(
+      await screen.findByRole("button", { name: /30000000\.\.\.0002/ }),
+    );
+
+    expect(
+      await screen.findByText("Archived forecast audit"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Archived scenario · read only"),
+    ).toBeInTheDocument();
+    expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, caseId, true);
+    expect(
+      screen.queryByRole("button", { name: "Run forecast" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Rerun current inputs" }),
+    ).not.toBeInTheDocument();
+  });
 
   it.each([
     "calculation-run-not-a-uuid-forecast-period-1",
@@ -369,9 +470,12 @@ describe("CalculationsTab", () => {
       await screen.findByText("active_obligation_amounts_missing"),
     ).toBeInTheDocument();
     expect(screen.getByText("Enter every missing amount.")).toBeInTheDocument();
+    expect(screen.getByText(/term_loan/)).toHaveTextContent(
+      "missing outstanding_amount",
+    );
     expect(
-      screen.getByText(/50000000-0000-4000-8000-000000000001/),
-    ).toHaveTextContent("missing outstanding_amount");
+      screen.queryByText(/50000000-0000-4000-8000-000000000001/),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText("Prior valid output preserved"),
     ).toBeInTheDocument();
@@ -414,11 +518,12 @@ describe("CalculationsTab", () => {
     expect(
       await screen.findByText("cash_flow_date_outside_reporting_period"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/60000000-0000-4000-8000-000000000001/),
-    ).toHaveTextContent(
+    expect(screen.getByText(/operations/)).toHaveTextContent(
       "cash-flow date 2027-01-01 — period 2026-01-01 to 2026-12-31",
     );
+    expect(
+      screen.queryByText(/60000000-0000-4000-8000-000000000001/),
+    ).not.toBeInTheDocument();
     expect(screen.getByText(/review workspace/)).toBeInTheDocument();
   });
 
@@ -588,7 +693,9 @@ describe("CalculationsTab", () => {
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(tenant, caseId, undefined, 25, 25),
     );
-    expect(await screen.findByText("30000000...0026")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /Baseline/ }),
+    ).toBeInTheDocument();
     expect(riskApi.calculationRun).toHaveBeenCalledWith(
       tenant,
       caseId,
@@ -640,10 +747,14 @@ describe("CalculationsTab", () => {
     const view = renderWithQuery(
       <CalculationsTab tenant={tenant} caseId={caseId} />,
     );
-    await screen.findByText("Baseline");
+    expect(await screen.findByLabelText("Forecast scenario")).toHaveTextContent(
+      "Baseline",
+    );
 
     view.rerender(<CalculationsTab tenant={tenant} caseId={nextCaseId} />);
-    await screen.findByText("New case baseline");
+    expect(await screen.findByLabelText("Forecast scenario")).toHaveTextContent(
+      "New case baseline",
+    );
     await user.click(screen.getByRole("button", { name: "Run forecast" }));
     await user.click(
       screen.getByRole("button", { name: "Rerun current inputs" }),

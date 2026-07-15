@@ -87,6 +87,12 @@ export interface ScoreRead {
   runId: string | null;
   /**
    *
+   * @type {string}
+   * @memberof ScoreRead
+   */
+  runReference: string | null;
+  /**
+   *
    * @type {number}
    * @memberof ScoreRead
    */
@@ -117,6 +123,8 @@ export function instanceOfScoreRead(value: object): value is ScoreRead {
   if (!("ruleResults" in value) || value["ruleResults"] === undefined)
     return false;
   if (!("runId" in value) || value["runId"] === undefined) return false;
+  if (!("runReference" in value) || value["runReference"] === undefined)
+    return false;
   if (!("score" in value) || value["score"] === undefined) return false;
   if (!("scoringVersion" in value) || value["scoringVersion"] === undefined)
     return false;
@@ -145,6 +153,7 @@ export function ScoreReadFromJSONTyped(
     riskLevel: RiskLevelFromJSON(json["risk_level"]),
     ruleResults: json["rule_results"],
     runId: json["run_id"],
+    runReference: json["run_reference"],
     score: json["score"],
     scoringVersion: json["scoring_version"],
   };
@@ -173,6 +182,7 @@ export function ScoreReadToJSONTyped(
     risk_level: RiskLevelToJSON(value["riskLevel"]),
     rule_results: value["ruleResults"],
     run_id: value["runId"],
+    run_reference: value["runReference"],
     score: value["score"],
     scoring_version: value["scoringVersion"],
   };

@@ -14,6 +14,12 @@ import {
 import { DEFAULT_USER_ID } from "../../lib/constants";
 
 const pageSize = 12;
+export const DEMO_CASE_IDS = [
+  "90000000-0000-4000-8000-000000000001",
+  "90000000-0000-4000-8000-000000000002",
+  "90000000-0000-4000-8000-000000000003",
+  "90000000-0000-4000-8000-000000000004",
+] as const;
 
 export function emptyWorkspace(
   organizationId: string,
@@ -96,7 +102,9 @@ export function mockCaseList(
   };
 }
 
-export function mockCase(organizationId: string, caseId: string): CaseRead {
+export type MockCaseRead = CaseRead & { scoreRunReference: string };
+
+export function mockCase(organizationId: string, caseId: string): MockCaseRead {
   const queueItem =
     mockCases(organizationId).find((item) => item.id === caseId) ??
     mockCases(organizationId)[0];
@@ -108,14 +116,15 @@ export function mockCase(organizationId: string, caseId: string): CaseRead {
     decidedAt: queueItem.decision
       ? new Date(queueItem.updatedAt.getTime() - 600_000)
       : null,
-    description:
-      "Frontend-only demo case seeded to exercise queue, detail, tabs, and empty financial workspace states while the backend API is unavailable.",
+    description: `Read-only presenter view for ${queueItem.subjectName ?? "this borrower"}.`,
     metadata: {
       mocked: true,
       source: "aequoros-web demo seed",
     },
     scoredAt: new Date(queueItem.updatedAt.getTime() - 1_800_000),
     scoringVersion: "demo-v1",
+    scoreRunReference:
+      queueItem.scoreRunReference ?? "Demo score reference unavailable",
   };
 }
 
@@ -124,46 +133,46 @@ function mockCases(organizationId: string): CaseQueueItemRead[] {
   return [
     mockQueueItem(
       organizationId,
-      "90000000-0000-4000-8000-000000000001",
-      "Covenant review - Northstar Foods",
+      DEMO_CASE_IDS[0],
+      "Annual review — Volta Aluminium Industries Plc",
       CaseStatus.InReview,
-      RiskLevel.High,
-      "needs_more_info",
-      82,
-      4,
+      RiskLevel.Low,
+      null,
+      18,
+      0,
       now - 3_600_000,
     ),
     mockQueueItem(
       organizationId,
-      "90000000-0000-4000-8000-000000000002",
-      "Quarterly liquidity packet - Mariner Trust",
-      CaseStatus.Active,
-      RiskLevel.Medium,
-      null,
-      57,
-      2,
+      DEMO_CASE_IDS[1],
+      "Covenant exception — Adom Textiles & Garments Ltd",
+      CaseStatus.InReview,
+      RiskLevel.High,
+      "needs_more_info",
+      78,
+      1,
       now - 8_600_000,
     ),
     mockQueueItem(
       organizationId,
-      "90000000-0000-4000-8000-000000000003",
-      "Basel capital review - Harbor Bank",
-      CaseStatus.Completed,
-      RiskLevel.Low,
-      "approved",
-      22,
-      0,
+      DEMO_CASE_IDS[2],
+      "Liquidity stress review — Kivu Fresh Produce Logistics Ltd",
+      CaseStatus.Active,
+      RiskLevel.High,
+      null,
+      66,
+      1,
       now - 26_000_000,
     ),
     mockQueueItem(
       organizationId,
-      "90000000-0000-4000-8000-000000000004",
-      "Exception review - Cedar Lending",
-      CaseStatus.Draft,
-      RiskLevel.Critical,
-      "escalated",
-      94,
-      7,
+      DEMO_CASE_IDS[3],
+      "Completed review — Baobab Health Distribution SA",
+      CaseStatus.Completed,
+      RiskLevel.Medium,
+      "approved",
+      31,
+      0,
       now - 42_000_000,
     ),
   ];
@@ -180,18 +189,28 @@ function mockQueueItem(
   openFindingsCount: number,
   updatedTime: number,
 ): CaseQueueItemRead {
+  const subjectName = title.split(" — ")[1] ?? "Demo borrower";
   return {
     id,
     organizationId,
     title,
     caseType: "financial_statement_review",
-    subjectType: "institution",
-    subjectName: title.split(" - ")[1] ?? "Demo institution",
+    subjectType: "borrower",
+    subjectName,
     status,
     assignedToUserId: DEFAULT_USER_ID,
-    assigneeDisplayName: "Demo Analyst",
-    assigneeEmail: "analyst@aequoros.local",
+    assigneeDisplayName: "Ama Mensah",
+    assigneeEmail: "ama.mensah@aequoros.demo",
     riskScore,
+    scoreRunReference: `${subjectName.split(" ")[0]} ${
+      subjectName.startsWith("Volta")
+        ? "annual"
+        : subjectName.startsWith("Adom")
+          ? "covenant"
+          : subjectName.startsWith("Kivu")
+            ? "liquidity"
+            : "committee"
+    } credit assessment 2026-07-01 run 1`,
     riskLevel,
     decision,
     findingsCount: openFindingsCount + 1,

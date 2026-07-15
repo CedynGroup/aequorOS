@@ -44,6 +44,8 @@ import {
   DocumentReadFromJSON,
   type ErrorResponse,
   ErrorResponseFromJSON,
+  type EvidenceRead,
+  EvidenceReadFromJSON,
   type FinancialDataWorkspaceRead,
   FinancialDataWorkspaceReadFromJSON,
   type FindingCreate,
@@ -74,6 +76,8 @@ import {
   ScenarioValidationReadFromJSON,
   type ScenarioWorkspaceRead,
   ScenarioWorkspaceReadFromJSON,
+  type ScoreRead,
+  ScoreReadFromJSON,
   type UploadRequest,
   type UploadRequestResponse,
   UploadRequestResponseFromJSON,
@@ -199,6 +203,11 @@ export const riskApi = {
   },
   getCase(tenant: TenantHeaders, caseId: string) {
     return apiJson<CaseRead>(`/cases/${caseId}`, tenant, CaseReadFromJSON);
+  },
+  scores(tenant: TenantHeaders, caseId: string) {
+    return apiJson<ScoreRead[]>(`/cases/${caseId}/scores`, tenant, (json) =>
+      (json as unknown[]).map(ScoreReadFromJSON),
+    );
   },
   caseTaxonomy(tenant: TenantHeaders) {
     return apiJson<CaseTaxonomyRead>(
@@ -555,6 +564,13 @@ export const riskApi = {
   findings(tenant: TenantHeaders, caseId: string) {
     return apiJson<FindingRead[]>(`/cases/${caseId}/findings`, tenant, (json) =>
       (json as unknown[]).map(FindingReadFromJSON),
+    );
+  },
+  findingEvidence(tenant: TenantHeaders, findingId: string) {
+    return apiJson<EvidenceRead[]>(
+      `/findings/${findingId}/evidence`,
+      tenant,
+      (json) => (json as unknown[]).map(EvidenceReadFromJSON),
     );
   },
   createFinding(tenant: TenantHeaders, caseId: string, payload: FindingCreate) {

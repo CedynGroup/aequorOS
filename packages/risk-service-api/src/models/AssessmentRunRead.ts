@@ -73,6 +73,12 @@ export interface AssessmentRunRead {
   promptVersion: string | null;
   /**
    *
+   * @type {string}
+   * @memberof AssessmentRunRead
+   */
+  reference: string;
+  /**
+   *
    * @type {Date}
    * @memberof AssessmentRunRead
    */
@@ -111,6 +117,7 @@ export function instanceOfAssessmentRunRead(
     return false;
   if (!("promptVersion" in value) || value["promptVersion"] === undefined)
     return false;
+  if (!("reference" in value) || value["reference"] === undefined) return false;
   if (!("startedAt" in value) || value["startedAt"] === undefined) return false;
   if (!("status" in value) || value["status"] === undefined) return false;
   if (!("summary" in value) || value["summary"] === undefined) return false;
@@ -139,6 +146,7 @@ export function AssessmentRunReadFromJSONTyped(
     inputHash: json["input_hash"],
     organizationId: json["organization_id"],
     promptVersion: json["prompt_version"],
+    reference: json["reference"],
     startedAt: json["started_at"] == null ? null : new Date(json["started_at"]),
     status: json["status"],
     summary: json["summary"],
@@ -170,6 +178,7 @@ export function AssessmentRunReadToJSONTyped(
     input_hash: value["inputHash"],
     organization_id: value["organizationId"],
     prompt_version: value["promptVersion"],
+    reference: value["reference"],
     started_at:
       value["startedAt"] == null
         ? null

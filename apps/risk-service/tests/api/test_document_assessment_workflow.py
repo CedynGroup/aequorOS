@@ -88,3 +88,41 @@ def test_phase_1_happy_path_e2e(db_client: TestClient, fake_storage) -> None:  #
         db_client.get(f"/api/v1/jobs/{run_body['job_id']}", headers=headers(ORG_2)).status_code
         == 404
     )
+
+
+def test_assessment_run_references_are_unique_and_console_visible(
+    db_client: TestClient,
+) -> None:
+    case_id = str(CaseFactory(db_client).create().id)
+    assessment_factory = AssessmentFactory(db_client)
+    first_assessment = assessment_factory.create(
+        case_id=case_id,
+        name="Credit review",
+    )
+    second_assessment = assessment_factory.create(
+        case_id=case_id,
+        name="Credit review",
+    )
+
+    run_ids = [
+        db_client.post(
+            f"/api/v1/assessments/{assessment.id}/run",
+            headers=headers(),
+        ).json()["run_id"]
+        for assessment in (first_assessment, second_assessment)
+    ]
+    run_details = [
+        db_client.get(f"/api/v1/assessment-runs/{run_id}", headers=headers()).json()
+        for run_id in run_ids
+    ]
+
+    assert {detail["reference"].rsplit(" run ", 1)[1] for detail in run_details} == {
+        "1",
+        "2",
+    }
+    assert all(detail["reference"].startswith("Credit review ") for detail in run_details)
+    first_runs = db_client.get(
+        f"/api/v1/assessments/{first_assessment.id}/runs",
+        headers=headers(),
+    ).json()
+    assert first_runs[0]["reference"] == run_details[0]["reference"]

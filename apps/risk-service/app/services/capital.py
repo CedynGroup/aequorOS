@@ -655,7 +655,7 @@ def _read_projection(
             CapitalFindingRead(
                 finding=FindingRead.model_validate(finding),
                 evidence=[
-                    EvidenceRead(**evidence.__dict__)
+                    EvidenceRead.model_validate(evidence, from_attributes=True)
                     for evidence in list_finding_evidence(db, ctx, finding.id)
                 ],
             )

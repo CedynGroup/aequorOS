@@ -23,7 +23,6 @@ import {
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { formatDecimal, formatMoney } from "../../lib/money";
-import { truncateId } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { FindingReviewCard } from "../findings/finding-review-card";
 import { liquidityReviewClient } from "./liquidity-client";
@@ -239,7 +238,8 @@ export function LiquidityTab({
               >
                 {selectableRuns.map((run) => (
                   <SelectItem key={run.id} value={run.id}>
-                    {truncateId(run.id)} · {run.createdAt.toLocaleString()}
+                    Forecast from {run.createdAt.toLocaleString()} ·{" "}
+                    {run.forecastPeriods} periods
                   </SelectItem>
                 ))}
               </Select>
@@ -323,8 +323,7 @@ function LiquidityAnalysis({
             {scenarioArchived ? <Badge tone="warning">Archived</Badge> : null}
           </div>
           <p className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
-            {scenarioName} · run {truncateId(summary.calculationRunId ?? "")} ·
-            forecast input {summary.calculationInputHash?.slice(0, 12)} · as of{" "}
+            {scenarioName} · deterministic forecast · as of{" "}
             {formatDate(summary.asOfDate)}
           </p>
         </div>

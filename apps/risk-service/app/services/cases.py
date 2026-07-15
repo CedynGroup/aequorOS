@@ -21,6 +21,7 @@ from app.domain.risk_constants import (
     RiskLevel,
 )
 from app.models import RiskCase, RiskCaseDecision, RiskFinding, RiskScore, User
+from app.services.assessment_references import assessment_run_references
 from app.services.audit import record_event
 from app.services.case_types import (
     BulkArchiveCaseActionCommand,
@@ -130,6 +131,7 @@ def list_cases(db: Session, ctx: TenantContext, filters: CaseFilters) -> CaseLis
     )
     counts = finding_counts_for_cases(db, ctx, [case.id for case in rows])
     assignees = assignees_for_cases(db, ctx, rows)
+    score_references = latest_score_run_references_for_cases(db, ctx, rows)
     return CaseListResult(
         items=[
             CaseQueueItem(
@@ -138,6 +140,7 @@ def list_cases(db: Session, ctx: TenantContext, filters: CaseFilters) -> CaseLis
                 open_findings_count=counts.get(case.id, (0, 0))[1],
                 assignee_display_name=assignees.get(case.assigned_to_user_id, (None, None))[0],
                 assignee_email=assignees.get(case.assigned_to_user_id, (None, None))[1],
+                score_run_reference=score_references.get(case.id),
             )
             for case in rows
         ],
@@ -238,6 +241,63 @@ def assignees_for_cases(
         )
     ).all()
     return {user_id: (display_name, email) for user_id, display_name, email in rows}
+
+
+def latest_score_run_references_for_cases(
+    db: Session, ctx: TenantContext, cases: list[RiskCase]
+) -> dict[UUID, str]:
+    case_ids = [case.id for case in cases if case.risk_score is not None]
+    if not case_ids:
+        return {}
+    ranked_scores = (
+        select(
+            RiskScore.case_id.label("case_id"),
+            RiskScore.run_id.label("run_id"),
+            func.row_number()
+            .over(
+                partition_by=RiskScore.case_id,
+                order_by=(RiskScore.created_at.desc(), RiskScore.id.desc()),
+            )
+            .label("position"),
+        )
+        .where(
+            RiskScore.organization_id == ctx.organization_id,
+            RiskScore.case_id.in_(case_ids),
+        )
+        .subquery()
+    )
+    rows = db.execute(
+        select(ranked_scores.c.case_id, ranked_scores.c.run_id).where(
+            ranked_scores.c.position == 1,
+            ranked_scores.c.run_id.is_not(None),
+        )
+    ).all()
+    run_ids = {run_id for _, run_id in rows if run_id is not None}
+    references = assessment_run_references(db, ctx.organization_id, run_ids)
+    return {
+        case_id: references[run_id]
+        for case_id, run_id in rows
+        if run_id is not None and run_id in references
+    }
+
+
+def user_display_names(
+    db: Session, organization_id: UUID, user_ids: set[UUID | None]
+) -> dict[UUID, str]:
+    resolved_ids = {user_id for user_id in user_ids if user_id is not None}
+    if not resolved_ids:
+        return {}
+    rows = db.execute(
+        select(User.id, User.display_name).where(
+            User.organization_id == organization_id,
+            User.id.in_(resolved_ids),
+        )
+    ).all()
+    return {
+        user_id: display_name.strip()
+        for user_id, display_name in rows
+        if display_name and display_name.strip()
+    }
 
 
 def update_case(

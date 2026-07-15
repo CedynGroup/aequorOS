@@ -23,7 +23,7 @@ import {
   Skeleton,
 } from "../../components/ui";
 import { riskApi, type TenantHeaders } from "../../lib/api";
-import { formatJson, formatMoney, labelize, truncateId } from "../../lib/utils";
+import { formatJson, formatMoney, labelize } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { FindingReviewItem } from "../findings/findings-tab";
 
@@ -367,7 +367,7 @@ function ProjectionSummary({ projection }: { projection: Projection }) {
     <Panel>
       <PanelHeader
         title="Projected capital indicators"
-        meta={`Run ${truncateId(projection.calculationRunId)} · ${projection.engineVersion}`}
+        meta={`Immutable forecast evidence · ${projection.engineVersion}`}
       />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[680px] text-left text-xs">
@@ -561,9 +561,20 @@ function CapitalFindings({
               {evidence.map((item) => (
                 <div key={item.id} className="mt-2 grid gap-1">
                   <div>{item.quote ?? "Calculation evidence"}</div>
-                  <pre className="overflow-auto whitespace-pre-wrap text-[11px] text-[rgb(var(--muted-foreground))]">
-                    {formatJson(item.locator)}
-                  </pre>
+                  {typeof item.locator.source_url === "string" ? (
+                    <a
+                      className="text-[rgb(var(--primary))] underline"
+                      href={item.locator.source_url}
+                    >
+                      {typeof item.locator.label === "string"
+                        ? item.locator.label
+                        : "Open forecast evidence"}
+                    </a>
+                  ) : (
+                    <span className="text-[rgb(var(--muted-foreground))]">
+                      Linked to immutable forecast evidence
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -583,8 +594,8 @@ function runLabel(
 ) {
   const scenarioLabel = scenario
     ? `${scenario.name} (${labelize(scenario.scenarioType)})`
-    : `Unknown scenario ${truncateId(run.scenarioId)}`;
-  return `${scenarioLabel} · ${run.createdAt.toLocaleString()} · ${truncateId(run.id)}`;
+    : "Unlabelled scenario";
+  return `${scenarioLabel} · forecast from ${run.createdAt.toLocaleString()}`;
 }
 
 function attemptLabel(
@@ -593,7 +604,7 @@ function attemptLabel(
 ) {
   const scenarioLabel = scenario
     ? `${scenario.name} (${labelize(scenario.scenarioType)})`
-    : `Unknown scenario ${truncateId(attempt.scenarioId)}`;
+    : "Unlabelled scenario";
   return `${labelize(attempt.status)} · ${scenarioLabel} · ${attempt.createdAt.toLocaleString()}`;
 }
 

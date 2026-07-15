@@ -26,10 +26,12 @@ capital projection workflow:
 - Latest capital summaries, baseline-versus-downside comparisons, and generated findings with evidence
 - Versioned liquidity metrics and severity-ranked findings generated from successful forecasts
 - Liquidity finding evidence, acknowledge/dismiss review actions, and audit events
+- Human-readable assignee, reviewer, and assessment-run references in case review responses
+- Presenter-safe JSON and HTML case reports with internal identifiers removed or redacted
 - Audit events, per-field manual edit history, and source-record traceability
 
 Regulatory LCR/NSFR and Basel regulatory-capital scoring, full ingestion pipelines, auth,
-background workers, advanced forecast configuration, and report generation are
+background workers, advanced forecast configuration, and regulatory report generation are
 intentionally not implemented yet.
 
 ## Requirements
@@ -90,6 +92,32 @@ context work in local demos:
 X-Org-Id: 11111111-1111-4111-8111-111111111111
 X-User-Id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
 ```
+
+After bootstrap, restore the full narrative demo portfolio with the local
+admin connection. The reset replaces only the fixed demo tenant in one
+transaction, is safe to repeat between meetings, refuses an unexpected
+organization name, and rolls back to the previous portfolio if seeding fails:
+
+```bash
+RISK_DEMO_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:15432/risk_service \
+  mise run risk-service:reset-demo
+```
+
+The portfolio and exact presenter journey are documented in
+[`../../docs/demo-playbook.md`](../../docs/demo-playbook.md).
+
+Case detail, queue, decision, score, assessment-run, and financial-workspace
+responses retain their internal IDs for API consumers while also returning
+human-readable assignee, reviewer, and assessment-run references for display.
+Assessment-run references use the assessment name, UTC run date, and the run's
+stable ordinal within that name and date.
+
+Completed cases can be rendered with `GET /api/v1/cases/{case_id}/report`.
+JSON is returned by default; send `Accept: text/html` for the committee-ready
+HTML view. Report payloads replace user and assessment identifiers with names
+or stable references, omit entity IDs, redact UUID values nested in finding and
+score details, and give UUID-bearing object keys distinct deterministic aliases
+so separate evidence remains distinguishable.
 
 Health endpoints:
 

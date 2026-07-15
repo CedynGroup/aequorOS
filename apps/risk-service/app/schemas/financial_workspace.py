@@ -386,6 +386,7 @@ class FinancialManualEditRead(BaseModel):
     previous_value: JsonValue
     new_value: JsonValue
     edited_by: UUID | None
+    edited_by_display_name: str | None = None
     reason: str | None
     created_at: datetime
 

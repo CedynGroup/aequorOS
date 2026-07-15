@@ -46,3 +46,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Liquidity summaries and acknowledge/dismiss review actions live under
   `/api/v1/cases/{case_id}/liquidity`; reuse the shared case-finding review card in SPA analysis
   verticals.
+- Restore the fixed four-case presenter portfolio with `RISK_DEMO_DATABASE_URL=... mise run
+risk-service:reset-demo`. The Core-insert reset is idempotent, deletes only the known demo
+  tenant, and pre-populates forecast, liquidity, capital, finding, decision, and report inputs in
+  explicit dependency order. The presenter journey is documented in `docs/demo-playbook.md`.

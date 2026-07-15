@@ -28,9 +28,11 @@ describe("parseSearchState", () => {
     });
   });
 
-  it("defaults report mode to json and archived to false", () => {
-    expect(parseSearchState({ report: "xml", archived: "false" })).toMatchObject({
-      report: "json",
+  it("defaults report mode to html and archived to false", () => {
+    expect(
+      parseSearchState({ report: "xml", archived: "false" }),
+    ).toMatchObject({
+      report: "html",
       archived: false,
     });
   });

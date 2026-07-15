@@ -32,6 +32,7 @@ class AssessmentRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    reference: str
     organization_id: UUID
     assessment_id: UUID
     status: str

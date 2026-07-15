@@ -121,14 +121,59 @@ describe("CaseWorkspace", () => {
     renderWorkspace();
 
     expect(
-      screen.getByText("Covenant review - Northstar Foods"),
+      screen.getByText("Annual review — Volta Aluminium Industries Plc"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Ama Mensah")).toBeInTheDocument();
     expect(
       screen.getByText("Assign, unassign, and archive"),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/Single-case actions are left disabled/),
     ).toBeInTheDocument();
+  });
+
+  it("shows the assessment reference beside a live case score", async () => {
+    vi.spyOn(riskApi, "scores").mockResolvedValue([
+      {
+        id: "score-1",
+        organizationId: DEFAULT_ORG_ID,
+        caseId,
+        assessmentId: "assessment-1",
+        runId: "run-1",
+        runReference: "Score 2026-07-14 run 2",
+        score: 82,
+        riskLevel: "high",
+        scoringVersion: "demo-v1",
+        inputHash: "a".repeat(64),
+        inputSnapshot: {},
+        ruleResults: [],
+        createdAt: new Date("2026-07-14T12:00:00Z"),
+      },
+    ]);
+    const caseData = mockCase(DEFAULT_ORG_ID, caseId);
+
+    renderWorkspace({
+      mockCaseData: undefined,
+      caseQuery: {
+        data: caseData,
+        error: null,
+        isError: false,
+        isFetching: false,
+      },
+    });
+
+    expect(
+      await screen.findByText("Score 2026-07-14 run 2"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a stable assessment reference for a frontend demo score", () => {
+    const caseData = mockCase(DEFAULT_ORG_ID, caseId);
+
+    renderWorkspace({ mockCaseData: caseData });
+
+    expect(screen.getByText(caseData.scoreRunReference)).toBeInTheDocument();
+    expect(screen.queryByText("Reference unavailable")).not.toBeInTheDocument();
   });
 
   it("keeps analysis verticals in case-detail tabs rather than workflow navigation", () => {
@@ -172,6 +217,7 @@ describe("CaseWorkspace", () => {
         previousDecision: null,
         reason: "Ready for approval",
         decidedBy: DEFAULT_USER_ID,
+        decidedByDisplayName: "Demo User One",
         createdAt: new Date(),
       } as CaseDecisionRead);
 
@@ -191,6 +237,40 @@ describe("CaseWorkspace", () => {
         reason: "Ready for approval",
       });
     });
+  });
+
+  it("shows the resolved decision reviewer without exposing their identifier", async () => {
+    vi.spyOn(riskApi, "decisions").mockResolvedValue([
+      {
+        id: "decision-1",
+        organizationId: DEFAULT_ORG_ID,
+        caseId,
+        decision: "approved",
+        previousDecision: null,
+        reason: "Ready for approval",
+        decidedBy: DEFAULT_USER_ID,
+        decidedByDisplayName: "Ama Mensah",
+        createdAt: new Date(),
+      } as CaseDecisionRead,
+    ]);
+
+    renderWorkspace({ activeTab: "decisions" });
+
+    expect(
+      await screen.findByText("Decided by Ama Mensah"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(DEFAULT_USER_ID)).not.toBeInTheDocument();
+  });
+
+  it("disables decision mutations in demo mode", async () => {
+    vi.spyOn(riskApi, "decisions").mockResolvedValue([]);
+
+    renderWorkspace({ activeTab: "decisions", mockWorkspace: true });
+
+    expect(
+      await screen.findByRole("button", { name: "Submit decision" }),
+    ).toBeDisabled();
+    expect(screen.getByPlaceholderText("Reason")).toBeDisabled();
   });
 
   it("retires capital mutations when the selected case is archived", async () => {

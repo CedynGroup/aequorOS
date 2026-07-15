@@ -38,7 +38,7 @@ import {
   Textarea,
 } from "../../components/ui";
 import type { TenantHeaders } from "../../lib/api";
-import { cn, labelize, truncateId } from "../../lib/utils";
+import { cn, labelize } from "../../lib/utils";
 import {
   focusWorkspaceTarget,
   workspaceHash,
@@ -64,6 +64,10 @@ type RecordCollection =
 type FinancialRecord = { id: string };
 type FormValues = Record<string, string>;
 type RecordSourceLinks = FinancialDataWorkspaceRead["recordSourceLinks"];
+type RelationshipCollection = Extract<
+  RecordCollection,
+  "institutions" | "accounts" | "reportingPeriods" | "obligations"
+>;
 
 type FieldConfig = {
   key: string;
@@ -71,6 +75,7 @@ type FieldConfig = {
   required?: boolean;
   type?: "text" | "number" | "date" | "select";
   options?: string[];
+  relationship?: RelationshipCollection;
 };
 
 type SectionConfig = {
@@ -123,7 +128,11 @@ const sections: SectionConfig[] = [
       { key: "accountType", label: "Type" },
       { key: "currency" },
       { key: "status", type: "select", options: accountStatuses },
-      { key: "institutionId", label: "Institution ID" },
+      {
+        key: "institutionId",
+        label: "Institution",
+        relationship: "institutions",
+      },
     ],
   },
   {
@@ -157,8 +166,12 @@ const sections: SectionConfig[] = [
       { key: "amount", required: true, type: "number" },
       { key: "currency" },
       { key: "asOfDate", label: "As-of date", type: "date" },
-      { key: "accountId", label: "Account ID" },
-      { key: "reportingPeriodId", label: "Reporting period ID" },
+      { key: "accountId", label: "Account", relationship: "accounts" },
+      {
+        key: "reportingPeriodId",
+        label: "Reporting period",
+        relationship: "reportingPeriods",
+      },
     ],
   },
   {
@@ -178,8 +191,12 @@ const sections: SectionConfig[] = [
         options: ["inflow", "outflow"],
       },
       { key: "category", required: true },
-      { key: "accountId", label: "Account ID" },
-      { key: "reportingPeriodId", label: "Reporting period ID" },
+      { key: "accountId", label: "Account", relationship: "accounts" },
+      {
+        key: "reportingPeriodId",
+        label: "Reporting period",
+        relationship: "reportingPeriods",
+      },
     ],
   },
   {
@@ -198,9 +215,17 @@ const sections: SectionConfig[] = [
       { key: "maturityDate", label: "Maturity", type: "date" },
       { key: "interestRate", label: "Interest rate", type: "number" },
       { key: "status", type: "select", options: obligationStatuses },
-      { key: "institutionId", label: "Institution ID" },
-      { key: "accountId", label: "Account ID" },
-      { key: "reportingPeriodId", label: "Reporting period ID" },
+      {
+        key: "institutionId",
+        label: "Institution",
+        relationship: "institutions",
+      },
+      { key: "accountId", label: "Account", relationship: "accounts" },
+      {
+        key: "reportingPeriodId",
+        label: "Reporting period",
+        relationship: "reportingPeriods",
+      },
     ],
   },
   {
@@ -226,8 +251,16 @@ const sections: SectionConfig[] = [
         type: "select",
         options: [automaticCompliance, "unknown", "compliant", "non_compliant"],
       },
-      { key: "obligationId", label: "Obligation ID" },
-      { key: "reportingPeriodId", label: "Reporting period ID" },
+      {
+        key: "obligationId",
+        label: "Obligation",
+        relationship: "obligations",
+      },
+      {
+        key: "reportingPeriodId",
+        label: "Reporting period",
+        relationship: "reportingPeriods",
+      },
     ],
   },
 ];
@@ -384,7 +417,7 @@ function ManualEditHistory({
                   <td className="px-3 py-2">
                     <div>{labelize(edit.recordTable)}</div>
                     <div className="text-[11px] text-[rgb(var(--muted-foreground))]">
-                      {labelize(edit.fieldName)} · {truncateId(edit.recordId)}
+                      {labelize(edit.fieldName)}
                     </div>
                   </td>
                   <td className="px-3 py-2">
@@ -394,7 +427,9 @@ function ManualEditHistory({
                   <td className="px-3 py-2">
                     {edit.reason ?? "No reason recorded"}
                   </td>
-                  <td className="px-3 py-2">{edit.editedBy ?? "Unknown"}</td>
+                  <td className="px-3 py-2">
+                    {edit.editedByDisplayName?.trim() || "Unknown reviewer"}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -565,6 +600,7 @@ function FinancialSection({
         <MutationForm
           mode="create"
           config={config}
+          workspace={workspace}
           tenant={tenant}
           caseId={caseId}
           client={client}
@@ -728,9 +764,15 @@ function FinancialRecordRows({
                 focusedCell === id && "bg-amber-100",
               )}
             >
-              {renderCell(
-                (row as unknown as Record<string, unknown>)[field.key],
-              )}
+              {field.relationship
+                ? relationshipLabel(
+                    workspace,
+                    field.relationship,
+                    (row as unknown as Record<string, unknown>)[field.key],
+                  )
+                : renderCell(
+                    (row as unknown as Record<string, unknown>)[field.key],
+                  )}
             </td>
           );
         })}
@@ -776,6 +818,7 @@ function FinancialRecordRows({
               mode="update"
               record={row}
               config={config}
+              workspace={workspace}
               onCancel={onEdit}
               onSavingChange={onSavingChange}
               submissionBlocked={submissionBlocked}
@@ -819,9 +862,7 @@ function SourceDrilldown({
             <div>
               <Label>Document / row</Label>
               <div>
-                {source?.documentId
-                  ? truncateId(source.documentId)
-                  : "No document ID"}{" "}
+                {source?.documentId ? "Source document" : "No source document"}{" "}
                 · row {source?.rowIndex ?? "n/a"}
               </div>
               <code className="break-all text-[10px]">
@@ -845,6 +886,7 @@ function MutationForm({
   mode,
   record,
   config,
+  workspace,
   tenant,
   caseId,
   client,
@@ -856,6 +898,7 @@ function MutationForm({
   mode: "create" | "update";
   record?: FinancialRecord;
   config: SectionConfig & { kind?: EditableFinancialKind };
+  workspace: FinancialDataWorkspaceRead;
   tenant: TenantHeaders;
   caseId: string;
   client: FinancialReviewClient;
@@ -985,7 +1028,25 @@ function MutationForm({
               {field.label ?? labelize(field.key)}
               {field.required ? " *" : ""}
             </Label>
-            {field.type === "select" ? (
+            {field.relationship ? (
+              <select
+                aria-label={field.label ?? labelize(field.key)}
+                value={values[field.key] ?? ""}
+                onChange={(event) => updateField(field.key, event.target.value)}
+                className="h-8 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2.5 text-sm outline-none focus:border-[rgb(var(--focus))]"
+              >
+                <option value="">None</option>
+                {relationshipOptions(
+                  workspace,
+                  field.relationship,
+                  values[field.key],
+                ).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : field.type === "select" ? (
               <select
                 aria-label={field.label ?? labelize(field.key)}
                 value={values[field.key] ?? ""}
@@ -1346,6 +1407,215 @@ function cellIdentifier(table: string, recordId: string, field: string) {
   return `financial-${table}-${recordId}-${snakeToCamel(field)}`;
 }
 
+function relationshipOptions(
+  workspace: FinancialDataWorkspaceRead,
+  collection: RelationshipCollection,
+  selectedId?: string,
+) {
+  const records: FinancialRecord[] = workspace[collection];
+  const labels = relationshipRecordLabels(workspace, collection);
+  const options = records.map((record) => ({
+    value: record.id,
+    label: labels.get(record.id) ?? "Unavailable linked record",
+  }));
+  if (selectedId && !records.some((record) => record.id === selectedId)) {
+    options.push({ value: selectedId, label: "Unavailable linked record" });
+  }
+  return options;
+}
+
+function relationshipLabel(
+  workspace: FinancialDataWorkspaceRead,
+  collection: RelationshipCollection,
+  value: unknown,
+) {
+  if (typeof value !== "string" || !value) return "None";
+  const records: FinancialRecord[] = workspace[collection];
+  const record = records.find((candidate) => candidate.id === value);
+  return record
+    ? (relationshipRecordLabels(workspace, collection).get(record.id) ??
+        "Unavailable linked record")
+    : "Unavailable linked record";
+}
+
+function relationshipRecordLabels(
+  workspace: FinancialDataWorkspaceRead,
+  collection: RelationshipCollection,
+): Map<string, string> {
+  switch (collection) {
+    case "institutions":
+      return collisionSafeLabels(
+        workspace.institutions.map((institution) => ({
+          id: institution.id,
+          base: institution.name || "Unnamed institution",
+          qualifiers: [
+            institution.referenceCode
+              ? `reference ${institution.referenceCode}`
+              : undefined,
+            institution.institutionType
+              ? labelize(institution.institutionType)
+              : undefined,
+          ],
+        })),
+      );
+    case "accounts": {
+      const institutionLabels: Map<string, string> = relationshipRecordLabels(
+        workspace,
+        "institutions",
+      );
+      return collisionSafeLabels(
+        workspace.accounts.map((account) => {
+          const accountNumber = account.accountNumber?.replace(/\s/g, "");
+          const lastFour = accountNumber?.slice(-4);
+          return {
+            id: account.id,
+            base: account.accountName || "Unnamed account",
+            qualifiers: [
+              lastFour ? `account ending ${lastFour}` : undefined,
+              account.institutionId
+                ? `at ${institutionLabels.get(account.institutionId) ?? "unavailable institution"}`
+                : undefined,
+              account.currency ?? undefined,
+              account.accountType ? labelize(account.accountType) : undefined,
+              accountNumber ? `account number ${accountNumber}` : undefined,
+            ],
+          };
+        }),
+      );
+    }
+    case "reportingPeriods":
+      return collisionSafeLabels(
+        workspace.reportingPeriods.map((period) => {
+          const asOfDate = inputValue(period.asOfDate);
+          const startDate = inputValue(period.startDate);
+          const endDate = inputValue(period.endDate);
+          const dateContext = asOfDate
+            ? `as of ${asOfDate}`
+            : startDate && endDate
+              ? `${startDate} to ${endDate}`
+              : endDate
+                ? `ending ${endDate}`
+                : startDate
+                  ? `starting ${startDate}`
+                  : undefined;
+          return {
+            id: period.id,
+            base:
+              period.label ||
+              (asOfDate
+                ? `As of ${asOfDate}`
+                : endDate
+                  ? `${labelize(period.periodType || "period")} ending ${endDate}`
+                  : labelize(period.periodType || "Unnamed period")),
+            qualifiers: [
+              period.label ? dateContext : undefined,
+              labelize(period.periodType),
+            ],
+          };
+        }),
+      );
+    case "obligations":
+      return obligationRecordLabels(workspace);
+  }
+}
+
+function collisionSafeLabels(
+  records: Array<{
+    id: string;
+    base: string;
+    qualifiers: Array<string | undefined>;
+  }>,
+) {
+  const labels = records.map(({ id, base }) => ({ id, label: base }));
+  const qualifierCount = Math.max(
+    0,
+    ...records.map(({ qualifiers }) => qualifiers.length),
+  );
+
+  for (let index = 0; index < qualifierCount; index += 1) {
+    const counts = countLabels(labels.map(({ label }) => label));
+    labels.forEach((label, recordIndex) => {
+      const qualifier = records[recordIndex].qualifiers[index];
+      if ((counts.get(label.label) ?? 0) > 1 && qualifier) {
+        label.label = `${label.label} - ${qualifier}`;
+      }
+    });
+  }
+
+  const counts = countLabels(labels.map(({ label }) => label));
+  const occurrence = new Map<string, number>();
+  return new Map(
+    labels.map(({ id, label }) => {
+      if ((counts.get(label) ?? 0) < 2) return [id, label];
+      const entry = (occurrence.get(label) ?? 0) + 1;
+      occurrence.set(label, entry);
+      return [id, `${label} - entry ${entry}`];
+    }),
+  );
+}
+
+function obligationRecordLabels(workspace: FinancialDataWorkspaceRead) {
+  const accounts = new Map(
+    workspace.accounts.map((account) => [account.id, account]),
+  );
+  const institutions = new Map(
+    workspace.institutions.map((institution) => [institution.id, institution]),
+  );
+  const labels = workspace.obligations.map((obligation) => {
+    const details = obligation.details as Record<string, unknown>;
+    const facilityName =
+      inputValue(details.facility_name) ||
+      inputValue(details.facilityName) ||
+      labelize(
+        obligation.facilityType ||
+          obligation.obligationType ||
+          "Unnamed obligation",
+      );
+    const account = obligation.accountId
+      ? accounts.get(obligation.accountId)
+      : undefined;
+    const institution = obligation.institutionId
+      ? institutions.get(obligation.institutionId)
+      : undefined;
+    const linkedName = account?.accountName || institution?.name;
+    return {
+      id: obligation.id,
+      base: linkedName ? `${facilityName} - ${linkedName}` : facilityName,
+      currency: obligation.currency,
+      accountNumber: account?.accountNumber,
+    };
+  });
+
+  const baseCounts = countLabels(labels.map(({ base }) => base));
+  const withCurrency = labels.map((label) => ({
+    ...label,
+    label:
+      (baseCounts.get(label.base) ?? 0) > 1 && label.currency
+        ? `${label.base} (${label.currency})`
+        : label.base,
+  }));
+  const currencyCounts = countLabels(withCurrency.map(({ label }) => label));
+
+  return new Map(
+    withCurrency.map(({ id, label, accountNumber }) => {
+      const lastFour = accountNumber?.replace(/\s/g, "").slice(-4);
+      return [
+        id,
+        (currencyCounts.get(label) ?? 0) > 1 && lastFour
+          ? `${label} - account ending ${lastFour}`
+          : label,
+      ];
+    }),
+  );
+}
+
+function countLabels(labels: string[]) {
+  return labels.reduce((counts, label) => {
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+}
+
 function renderCell(value: unknown) {
   if (value == null || value === "")
     return <span className="text-[rgb(var(--muted-foreground))]">None</span>;
@@ -1354,18 +1624,10 @@ function renderCell(value: unknown) {
     return (
       <code className="break-all text-[10px]">{JSON.stringify(value)}</code>
     );
-  if (
-    typeof value === "string" &&
-    value.length > 20 &&
-    /^[0-9a-f-]{16,}$/i.test(value)
-  )
-    return (
-      <span
-        title={value}
-        className="rounded bg-[rgb(var(--muted))] px-1.5 py-0.5 font-mono text-[10px]"
-      >
-        {truncateId(value)}
-      </span>
-    );
+  if (typeof value === "string" && isInternalId(value)) return "Linked record";
   return String(value);
+}
+
+function isInternalId(value: string) {
+  return value.length > 20 && /^[0-9a-f-]{16,}$/i.test(value);
 }

@@ -34,12 +34,6 @@ export interface ReportAssessment {
    * @type {string}
    * @memberof ReportAssessment
    */
-  id: string;
-  /**
-   *
-   * @type {string}
-   * @memberof ReportAssessment
-   */
   name: string;
   /**
    *
@@ -58,7 +52,6 @@ export function instanceOfReportAssessment(
   if (!("assessmentType" in value) || value["assessmentType"] === undefined)
     return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
-  if (!("id" in value) || value["id"] === undefined) return false;
   if (!("name" in value) || value["name"] === undefined) return false;
   if (!("status" in value) || value["status"] === undefined) return false;
   return true;
@@ -78,7 +71,6 @@ export function ReportAssessmentFromJSONTyped(
   return {
     assessmentType: json["assessment_type"],
     createdAt: new Date(json["created_at"]),
-    id: json["id"],
     name: json["name"],
     status: json["status"],
   };
@@ -99,7 +91,6 @@ export function ReportAssessmentToJSONTyped(
   return {
     assessment_type: value["assessmentType"],
     created_at: value["createdAt"].toISOString(),
-    id: value["id"],
     name: value["name"],
     status: value["status"],
   };

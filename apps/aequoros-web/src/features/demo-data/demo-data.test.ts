@@ -28,16 +28,16 @@ describe("demo data helpers", () => {
       {
         q: "",
         status: "all",
-        risk: RiskLevel.Critical,
+        risk: RiskLevel.High,
         archived: false,
         sort: CaseSort.RiskScoreDesc,
       },
       1,
     );
 
-    expect(result.total).toBe(1);
-    expect(result.items[0].title).toContain("Cedar Lending");
-    expect(result.items[0].riskLevel).toBe(RiskLevel.Critical);
+    expect(result.total).toBe(2);
+    expect(result.items[0].title).toContain("Adom Textiles");
+    expect(result.items[0].riskLevel).toBe(RiskLevel.High);
   });
 
   it("creates a mock detail record from queue data", () => {

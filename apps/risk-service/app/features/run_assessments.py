@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, status
 
 from app.api.deps import DbSession, Tenant
-from app.models import RiskAssessment, RiskAssessmentRun
+from app.models import RiskAssessment
 from app.schemas.assessments import (
     AssessmentCreate,
     AssessmentRead,
@@ -43,10 +43,10 @@ def run_assessment(assessment_id: UUID, db: DbSession, ctx: Tenant) -> RunRespon
 @router.get("/assessments/{assessment_id}/runs", response_model=list[AssessmentRunRead])
 def list_assessment_runs(
     assessment_id: UUID, db: DbSession, ctx: Tenant
-) -> list[RiskAssessmentRun]:
+) -> list[AssessmentRunRead]:
     return assessments_service.list_assessment_runs(db, ctx, assessment_id)
 
 
 @router.get("/assessment-runs/{run_id}", response_model=AssessmentRunRead)
-def get_assessment_run(run_id: UUID, db: DbSession, ctx: Tenant) -> RiskAssessmentRun:
-    return assessments_service.get_run_or_404(db, ctx.organization_id, run_id)
+def get_assessment_run(run_id: UUID, db: DbSession, ctx: Tenant) -> AssessmentRunRead:
+    return assessments_service.get_assessment_run_read(db, ctx.organization_id, run_id)

@@ -28,12 +28,6 @@ export interface ReportFinding {
    * @type {string}
    * @memberof ReportFinding
    */
-  id: string;
-  /**
-   *
-   * @type {string}
-   * @memberof ReportFinding
-   */
   rationale: string | null;
   /**
    *
@@ -90,7 +84,6 @@ export interface ReportFinding {
  */
 export function instanceOfReportFinding(value: object): value is ReportFinding {
   if (!("details" in value) || value["details"] === undefined) return false;
-  if (!("id" in value) || value["id"] === undefined) return false;
   if (!("rationale" in value) || value["rationale"] === undefined) return false;
   if (!("riskType" in value) || value["riskType"] === undefined) return false;
   if (!("ruleId" in value) || value["ruleId"] === undefined) return false;
@@ -117,7 +110,6 @@ export function ReportFindingFromJSONTyped(
   }
   return {
     details: json["details"],
-    id: json["id"],
     rationale: json["rationale"],
     riskType: json["risk_type"],
     ruleId: json["rule_id"],
@@ -144,7 +136,6 @@ export function ReportFindingToJSONTyped(
 
   return {
     details: value["details"],
-    id: value["id"],
     rationale: value["rationale"],
     risk_type: value["riskType"],
     rule_id: value["ruleId"],

@@ -16,15 +16,26 @@ VITE_RISK_API_BASE_URL=http://127.0.0.1:8003/api/v1 pnpm --filter @aequoros/aequ
 
 ## Demo Data
 
-Seed the demo tenants and users, cases, decisions, findings, and the canonical
-financial inputs used by the forecast journey with:
+Restore the four-case narrative portfolio, including reviewed scenarios,
+forecast history, liquidity analysis, source evidence, decisions, and the
+completed report case, with:
 
 ```bash
 RISK_DEMO_DATABASE_URL=postgresql://postgres:postgres@localhost:15432/risk_service \
-  pnpm --filter @aequoros/aequoros-web seed:demo
+  pnpm --filter @aequoros/aequoros-web reset:demo
 ```
 
-The seed runs direct inserts and needs a local admin database role because application roles are protected by row-level security.
+The command is an idempotent, transactional reset scoped to the fixed demo
+tenant. It needs a local admin database role because application roles are
+protected by row-level security; if seeding fails, the prior portfolio remains
+intact. See the [ten-minute demo playbook](../../docs/demo-playbook.md) for the
+presenter path.
+
+The frontend-only fallback uses the same four borrower narratives and is a
+read-only presenter workspace. In that mode, document, financial, scenario,
+forecast, liquidity, capital, finding, and decision mutations are disabled.
+Archived cases are likewise read-only. Document download links remain
+available because they do not mutate case data.
 
 ## Financial Review
 
@@ -47,8 +58,27 @@ Covenant compliance can be set explicitly or left on automatic recalculation;
 automatic recalculation omits the compliance status so the backend derives it
 from the covenant inputs.
 
+Relationship fields use named institution, account, reporting-period, and
+obligation selectors. Duplicate names are disambiguated with banker-readable
+attributes rather than internal identifiers. Source drilldowns and edit history
+also use neutral labels or resolved reviewer names instead of record and user
+IDs.
+
 When frontend demo mode is active, the entire financial workspace is read-only,
 including backend-loaded records, mapping, and revalidation.
+
+## Presenter-Safe Review
+
+The queue and case overview show resolved assignee names and stable assessment
+run references. Decisions and manual-edit history show reviewer names. Forecast
+history, diagnostics, financial relationships, and capital evidence use
+scenario or business labels instead of internal IDs; evidence links still deep
+link to the exact immutable record.
+
+The Report tab defaults to the HTML committee view, with a JSON toggle for
+technical review. Both representations omit entity identifiers and redact UUIDs
+that appear inside nested report evidence while preserving distinct aliases for
+UUID-bearing object keys.
 
 ## Capital Review
 
@@ -110,7 +140,7 @@ docker compose up -d
 mise run risk-service:bootstrap-db
 
 cd ../aequoros-web
-RISK_DEMO_DATABASE_URL=postgresql://postgres:postgres@localhost:15432/risk_service pnpm seed:demo
+RISK_DEMO_DATABASE_URL=postgresql://postgres:postgres@localhost:15432/risk_service pnpm reset:demo
 
 cd ../..
 DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service \

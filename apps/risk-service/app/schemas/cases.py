@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -136,6 +136,7 @@ class CaseRead(BaseModel):
     description: str | None
     status: CaseStatus
     assigned_to_user_id: UUID | None
+    assignee_display_name: str | None = None
     assigned_at: datetime | None
     risk_score: int | None
     risk_level: RiskLevel | None
@@ -148,6 +149,10 @@ class CaseRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None
+
+    @classmethod
+    def from_case(cls, case: Any, assignee_display_name: str | None) -> CaseRead:
+        return cls.model_validate({**case.__dict__, "assignee_display_name": assignee_display_name})
 
 
 class CaseQueueItemRead(BaseModel):
@@ -162,6 +167,7 @@ class CaseQueueItemRead(BaseModel):
     assignee_display_name: str | None
     assignee_email: str | None
     risk_score: int | None
+    score_run_reference: str | None
     risk_level: RiskLevel | None
     decision: CaseDecision | None
     findings_count: int
@@ -184,6 +190,7 @@ class CaseQueueItemRead(BaseModel):
             assignee_display_name=item.assignee_display_name,
             assignee_email=item.assignee_email,
             risk_score=case.risk_score,
+            score_run_reference=item.score_run_reference,
             risk_level=RiskLevel(case.risk_level) if case.risk_level is not None else None,
             decision=CaseDecision(case.decision) if case.decision is not None else None,
             findings_count=item.findings_count,
@@ -279,6 +286,7 @@ class CaseDecisionRead(BaseModel):
     previous_decision: CaseDecision | None
     reason: str | None
     decided_by: UUID | None
+    decided_by_display_name: str | None = None
     created_at: datetime
 
 
@@ -290,6 +298,7 @@ class ScoreRead(BaseModel):
     case_id: UUID
     assessment_id: UUID | None
     run_id: UUID | None
+    run_reference: str | None
     score: int
     risk_level: RiskLevel
     scoring_version: str

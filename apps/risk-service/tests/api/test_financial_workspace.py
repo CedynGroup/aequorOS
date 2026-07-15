@@ -70,6 +70,7 @@ def test_financial_workspace_returns_grouped_records(db_client: TestClient) -> N
     assert body["record_source_links"][0]["record_id"] == body["balances"][0]["id"]
     assert body["manual_edits"][0]["field_name"] == "account_name"
     assert body["manual_edits"][0]["record_id"] == body["accounts"][0]["id"]
+    assert body["manual_edits"][0]["edited_by_display_name"] == "Demo User One"
     assert body["validation_issues"][0]["rule_id"] == "missing_currency"
     assert body["validation_issues"][0]["code"] == "missing_currency"
     assert body["validation_issues"][0]["issue_key"] == "missing_currency:test-seed"

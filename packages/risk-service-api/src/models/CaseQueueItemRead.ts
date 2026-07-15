@@ -113,6 +113,12 @@ export interface CaseQueueItemRead {
   riskScore: number | null;
   /**
    *
+   * @type {string}
+   * @memberof CaseQueueItemRead
+   */
+  scoreRunReference: string | null;
+  /**
+   *
    * @type {CaseStatus}
    * @memberof CaseQueueItemRead
    */
@@ -173,6 +179,11 @@ export function instanceOfCaseQueueItemRead(
     return false;
   if (!("riskLevel" in value) || value["riskLevel"] === undefined) return false;
   if (!("riskScore" in value) || value["riskScore"] === undefined) return false;
+  if (
+    !("scoreRunReference" in value) ||
+    value["scoreRunReference"] === undefined
+  )
+    return false;
   if (!("status" in value) || value["status"] === undefined) return false;
   if (!("subjectName" in value) || value["subjectName"] === undefined)
     return false;
@@ -207,6 +218,7 @@ export function CaseQueueItemReadFromJSONTyped(
     organizationId: json["organization_id"],
     riskLevel: RiskLevelFromJSON(json["risk_level"]),
     riskScore: json["risk_score"],
+    scoreRunReference: json["score_run_reference"],
     status: CaseStatusFromJSON(json["status"]),
     subjectName: json["subject_name"],
     subjectType: json["subject_type"],
@@ -240,6 +252,7 @@ export function CaseQueueItemReadToJSONTyped(
     organization_id: value["organizationId"],
     risk_level: RiskLevelToJSON(value["riskLevel"]),
     risk_score: value["riskScore"],
+    score_run_reference: value["scoreRunReference"],
     status: CaseStatusToJSON(value["status"]),
     subject_name: value["subjectName"],
     subject_type: value["subjectType"],

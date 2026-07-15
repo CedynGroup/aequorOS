@@ -1,6 +1,7 @@
 import type { CaseRead } from "@aequoros/risk-service-api";
 import { Loader2 } from "lucide-react";
 import { lazy, Suspense, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   Alert,
@@ -13,11 +14,13 @@ import {
   TabsTrigger,
 } from "../../components/ui";
 import type { TenantHeaders } from "../../lib/api";
+import { riskApi } from "../../lib/api";
 import type { ConsoleTab, ReportMode } from "../../lib/constants";
-import { formatJson, labelize, truncateId } from "../../lib/utils";
+import { formatJson, labelize } from "../../lib/utils";
 import { ErrorPanel } from "../../shared/route-ui";
 import { DecisionBadge, RiskBadge, StatusBadge, relative } from "./format";
 import type { UpdateSearch } from "./types";
+import type { MockCaseRead } from "../demo-data/demo-data";
 
 const FinancialTab = lazy(() =>
   import("../financial/financial-tab").then((module) => ({
@@ -86,7 +89,7 @@ export function CaseWorkspace({
     isError: boolean;
     isFetching: boolean;
   };
-  mockCaseData?: CaseRead;
+  mockCaseData?: MockCaseRead;
   mockWorkspace: boolean;
 }) {
   const selectedCase = mockCaseData ?? (caseQuery.data as CaseRead | undefined);
@@ -98,7 +101,7 @@ export function CaseWorkspace({
     <Panel className="min-h-[640px] overflow-hidden">
       <PanelHeader
         title="Case Detail"
-        meta={caseId ? truncateId(caseId) : "Select a case from the queue"}
+        meta={caseId ? "Borrower risk review" : "Select a case from the queue"}
         actions={
           caseQuery.isFetching ? (
             <Loader2 className="size-4 animate-spin" />
@@ -137,7 +140,13 @@ export function CaseWorkspace({
               </TabsList>
             </div>
             <TabsContent value="overview" className="m-0 p-3">
-              <OverviewTab caseData={selectedCase} />
+              <OverviewTab
+                tenant={tenant}
+                caseId={caseId}
+                caseData={selectedCase}
+                loadScores={!mockCaseData}
+                scoreRunReference={mockCaseData?.scoreRunReference}
+              />
             </TabsContent>
             <TabsContent value="financial" className="m-0 p-3">
               <LazyTabBoundary>
@@ -150,7 +159,11 @@ export function CaseWorkspace({
             </TabsContent>
             <TabsContent value="scenarios" className="m-0 p-3">
               <LazyTabBoundary>
-                <ScenariosTab tenant={tenant} caseId={caseId} />
+                <ScenariosTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="calculations" className="m-0 p-3">
@@ -195,12 +208,20 @@ export function CaseWorkspace({
             </TabsContent>
             <TabsContent value="decisions" className="m-0 p-3">
               <LazyTabBoundary>
-                <DecisionsTab tenant={tenant} caseId={caseId} />
+                <DecisionsTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="documents" className="m-0 p-3">
               <LazyTabBoundary>
-                <DocumentsTab tenant={tenant} caseId={caseId} />
+                <DocumentsTab
+                  tenant={tenant}
+                  caseId={caseId}
+                  mutationDisabled={mockWorkspace || caseRetired}
+                />
               </LazyTabBoundary>
             </TabsContent>
             <TabsContent value="report" className="m-0 p-3">
@@ -250,7 +271,11 @@ function CaseSummary({ data }: { data?: CaseRead }) {
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-[rgb(var(--muted-foreground))]">
         <span>Assignee</span>
-        <span>{truncateId(data.assignedToUserId)}</span>
+        <span>
+          {data.assignedToUserId
+            ? data.assigneeDisplayName?.trim() || "Unknown reviewer"
+            : "Unassigned"}
+        </span>
         <span>Created</span>
         <span>{relative(data.createdAt)}</span>
         <span>Updated</span>
@@ -260,8 +285,26 @@ function CaseSummary({ data }: { data?: CaseRead }) {
   );
 }
 
-function OverviewTab({ caseData }: { caseData?: CaseRead }) {
+function OverviewTab({
+  tenant,
+  caseId,
+  caseData,
+  loadScores,
+  scoreRunReference,
+}: {
+  tenant: TenantHeaders;
+  caseId: string;
+  caseData?: CaseRead;
+  loadScores: boolean;
+  scoreRunReference?: string;
+}) {
+  const scoresQuery = useQuery({
+    queryKey: ["case-scores", tenant, caseId],
+    queryFn: () => riskApi.scores(tenant, caseId),
+    enabled: loadScores && caseData?.riskScore != null,
+  });
   if (!caseData) return <Skeleton className="h-52" />;
+  const latestScore = scoresQuery.data?.[0];
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <InfoBlock title="Workflow">
@@ -283,6 +326,16 @@ function OverviewTab({ caseData }: { caseData?: CaseRead }) {
           label="Scoring version"
           value={caseData.scoringVersion ?? "None"}
         />
+        {caseData.riskScore != null ? (
+          <KeyValue
+            label="Assessment run"
+            value={
+              latestScore?.runReference ??
+              scoreRunReference ??
+              "Reference unavailable"
+            }
+          />
+        ) : null}
         <KeyValue label="Decision" value={labelize(caseData.decision)} />
       </InfoBlock>
       <InfoBlock title="Metadata">

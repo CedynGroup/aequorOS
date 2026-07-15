@@ -317,7 +317,6 @@ def generate_findings(  # noqa: PLR0913
 
     metrics_by_key = {item.key: item.model_dump(mode="json") for item in result.metrics}
     for concern in result.concerns:
-        evidence_periods = concern.get("periods", [concern["period"]])
         finding = RiskFinding(
             organization_id=ctx.organization_id,
             case_id=run.case_id,
@@ -348,67 +347,14 @@ def generate_findings(  # noqa: PLR0913
         )
         db.add(finding)
         db.flush()
-        for period in evidence_periods:
+        for evidence in liquidity_finding_evidence(run, concern):
             db.add(
                 RiskFindingEvidence(
                     organization_id=ctx.organization_id,
                     finding_id=finding.id,
-                    quote=concern["rationale"],
-                    locator={
-                        "source_type": "forecast_output",
-                        "label": f"Forecast period {period.period_number}",
-                        "source_url": (
-                            f"/cases/{run.case_id}?tab=calculations"
-                            f"#calculation-run-{run.id}-forecast-period-{period.period_number}"
-                        ),
-                        "calculation_run_id": str(run.id),
-                        "forecast_period_id": str(period.id),
-                        "period_number": period.period_number,
-                        "period_end": period.period_end.isoformat(),
-                        "input_hash": run.input_hash,
-                    },
-                    relevance=Decimal(1),
+                    **evidence,
                 )
             )
-        for source_type, collection, records in (
-            (
-                "canonical_input",
-                "reportingPeriods",
-                [run.inputs["reporting_period"]] if run.inputs.get("reporting_period") else [],
-            ),
-            ("canonical_input", "balances", run.inputs.get("balances", [])),
-            ("canonical_input", "cashFlows", run.inputs.get("cash_flows", [])),
-            ("canonical_input", "obligations", run.inputs.get("obligations", [])),
-            (
-                "scenario_assumption",
-                "assumptions",
-                run.inputs.get("scenario", {}).get("assumptions", []),
-            ),
-        ):
-            for record in records:
-                record_id = record.get("id")
-                if not record_id:
-                    continue
-                db.add(
-                    RiskFindingEvidence(
-                        organization_id=ctx.organization_id,
-                        finding_id=finding.id,
-                        locator={
-                            "source_type": source_type,
-                            "label": _source_label(source_type, record),
-                            "source_url": _source_url(
-                                run.case_id,
-                                source_type,
-                                record_id,
-                                collection=collection,
-                                scenario_id=run.scenario_id,
-                            ),
-                            "record_id": record_id,
-                            "input_hash": run.input_hash,
-                        },
-                        relevance=Decimal("0.75"),
-                    )
-                )
         record_event(
             db,
             ctx,
@@ -438,6 +384,69 @@ def generate_findings(  # noqa: PLR0913
             ),
         },
     )
+
+
+def liquidity_finding_evidence(
+    run: CalculationRun, concern: dict[str, Any]
+) -> list[dict[str, Any]]:
+    evidence = [
+        {
+            "quote": concern["rationale"],
+            "locator": {
+                "source_type": "forecast_output",
+                "label": f"Forecast period {period.period_number}",
+                "source_url": (
+                    f"/cases/{run.case_id}?tab=calculations"
+                    f"#calculation-run-{run.id}-forecast-period-{period.period_number}"
+                ),
+                "calculation_run_id": str(run.id),
+                "forecast_period_id": str(period.id),
+                "period_number": period.period_number,
+                "period_end": period.period_end.isoformat(),
+                "input_hash": run.input_hash,
+            },
+            "relevance": Decimal(1),
+        }
+        for period in concern.get("periods", [concern["period"]])
+    ]
+    for source_type, collection, records in (
+        (
+            "canonical_input",
+            "reportingPeriods",
+            [run.inputs["reporting_period"]] if run.inputs.get("reporting_period") else [],
+        ),
+        ("canonical_input", "balances", run.inputs.get("balances", [])),
+        ("canonical_input", "cashFlows", run.inputs.get("cash_flows", [])),
+        ("canonical_input", "obligations", run.inputs.get("obligations", [])),
+        (
+            "scenario_assumption",
+            "assumptions",
+            run.inputs.get("scenario", {}).get("assumptions", []),
+        ),
+    ):
+        for record in records:
+            record_id = record.get("id")
+            if not record_id:
+                continue
+            evidence.append(
+                {
+                    "locator": {
+                        "source_type": source_type,
+                        "label": _source_label(source_type, record),
+                        "source_url": _source_url(
+                            run.case_id,
+                            source_type,
+                            record_id,
+                            collection=collection,
+                            scenario_id=run.scenario_id,
+                        ),
+                        "record_id": record_id,
+                        "input_hash": run.input_hash,
+                    },
+                    "relevance": Decimal("0.75"),
+                }
+            )
+    return evidence
 
 
 def lock_finding_publication(

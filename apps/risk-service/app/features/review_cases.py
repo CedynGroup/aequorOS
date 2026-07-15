@@ -12,7 +12,7 @@ from app.domain.risk_constants import (
     CaseStatus,
     RiskLevel,
 )
-from app.models import RiskCase, RiskScore
+from app.models import RiskCase
 from app.schemas.cases import (
     CaseAssign,
     CaseCreate,
@@ -23,13 +23,14 @@ from app.schemas.cases import (
     ScoreRead,
 )
 from app.services import cases as cases_service
+from app.services.assessment_references import assessment_run_references
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
 
 @router.post("", response_model=CaseRead, status_code=status.HTTP_201_CREATED)
-def create_case(payload: CaseCreate, db: DbSession, ctx: Tenant) -> RiskCase:
-    return cases_service.create_case(db, ctx, payload.to_command())
+def create_case(payload: CaseCreate, db: DbSession, ctx: Tenant) -> CaseRead:
+    return case_read(db, ctx, cases_service.create_case(db, ctx, payload.to_command()))
 
 
 @router.get("", response_model=CaseListRead)
@@ -94,25 +95,46 @@ def case_summary(db: DbSession, ctx: Tenant) -> CaseSummaryRead:
 
 
 @router.get("/{case_id}", response_model=CaseRead)
-def get_case(case_id: UUID, db: DbSession, ctx: Tenant) -> RiskCase:
-    return cases_service.get_case_or_404(db, ctx.organization_id, case_id)
+def get_case(case_id: UUID, db: DbSession, ctx: Tenant) -> CaseRead:
+    return case_read(db, ctx, cases_service.get_case_or_404(db, ctx.organization_id, case_id))
 
 
 @router.patch("/{case_id}", response_model=CaseRead)
-def update_case(case_id: UUID, payload: CaseUpdate, db: DbSession, ctx: Tenant) -> RiskCase:
-    return cases_service.update_case(db, ctx, case_id, payload.to_command())
+def update_case(case_id: UUID, payload: CaseUpdate, db: DbSession, ctx: Tenant) -> CaseRead:
+    return case_read(db, ctx, cases_service.update_case(db, ctx, case_id, payload.to_command()))
 
 
 @router.post("/{case_id}/assign", response_model=CaseRead)
-def assign_case(case_id: UUID, payload: CaseAssign, db: DbSession, ctx: Tenant) -> RiskCase:
-    return cases_service.assign_case(db, ctx, case_id, payload.assigned_to_user_id)
+def assign_case(case_id: UUID, payload: CaseAssign, db: DbSession, ctx: Tenant) -> CaseRead:
+    return case_read(
+        db, ctx, cases_service.assign_case(db, ctx, case_id, payload.assigned_to_user_id)
+    )
 
 
 @router.get("/{case_id}/scores", response_model=list[ScoreRead])
-def list_case_scores(case_id: UUID, db: DbSession, ctx: Tenant) -> list[RiskScore]:
-    return cases_service.list_case_scores(db, ctx, case_id)
+def list_case_scores(case_id: UUID, db: DbSession, ctx: Tenant) -> list[ScoreRead]:
+    scores = cases_service.list_case_scores(db, ctx, case_id)
+    references = assessment_run_references(
+        db,
+        ctx.organization_id,
+        {score.run_id for score in scores if score.run_id is not None},
+    )
+    return [
+        ScoreRead.model_validate(
+            {
+                **score.__dict__,
+                "run_reference": references.get(score.run_id) if score.run_id is not None else None,
+            }
+        )
+        for score in scores
+    ]
 
 
 @router.post("/{case_id}/archive", response_model=CaseRead)
-def archive_case(case_id: UUID, db: DbSession, ctx: Tenant) -> RiskCase:
-    return cases_service.archive_case(db, ctx, case_id)
+def archive_case(case_id: UUID, db: DbSession, ctx: Tenant) -> CaseRead:
+    return case_read(db, ctx, cases_service.archive_case(db, ctx, case_id))
+
+
+def case_read(db: DbSession, ctx: Tenant, case: RiskCase) -> CaseRead:
+    assignee = cases_service.assignees_for_cases(db, ctx, [case]).get(case.assigned_to_user_id)
+    return CaseRead.from_case(case, assignee[0] if assignee else None)

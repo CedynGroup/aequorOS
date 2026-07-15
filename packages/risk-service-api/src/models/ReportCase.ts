@@ -22,7 +22,7 @@ export interface ReportCase {
    * @type {string}
    * @memberof ReportCase
    */
-  assignedToUserId: string | null;
+  assignedTo: string | null;
   /**
    *
    * @type {string}
@@ -41,12 +41,6 @@ export interface ReportCase {
    * @memberof ReportCase
    */
   decision: string | null;
-  /**
-   *
-   * @type {string}
-   * @memberof ReportCase
-   */
-  id: string;
   /**
    *
    * @type {string}
@@ -95,12 +89,11 @@ export interface ReportCase {
  * Check if a given object implements the ReportCase interface.
  */
 export function instanceOfReportCase(value: object): value is ReportCase {
-  if (!("assignedToUserId" in value) || value["assignedToUserId"] === undefined)
+  if (!("assignedTo" in value) || value["assignedTo"] === undefined)
     return false;
   if (!("caseType" in value) || value["caseType"] === undefined) return false;
   if (!("decidedAt" in value) || value["decidedAt"] === undefined) return false;
   if (!("decision" in value) || value["decision"] === undefined) return false;
-  if (!("id" in value) || value["id"] === undefined) return false;
   if (!("riskLevel" in value) || value["riskLevel"] === undefined) return false;
   if (!("riskScore" in value) || value["riskScore"] === undefined) return false;
   if (!("scoringVersion" in value) || value["scoringVersion"] === undefined)
@@ -126,11 +119,10 @@ export function ReportCaseFromJSONTyped(
     return json;
   }
   return {
-    assignedToUserId: json["assigned_to_user_id"],
+    assignedTo: json["assigned_to"],
     caseType: json["case_type"],
     decidedAt: json["decided_at"] == null ? null : new Date(json["decided_at"]),
     decision: json["decision"],
-    id: json["id"],
     riskLevel: json["risk_level"],
     riskScore: json["risk_score"],
     scoringVersion: json["scoring_version"],
@@ -154,14 +146,13 @@ export function ReportCaseToJSONTyped(
   }
 
   return {
-    assigned_to_user_id: value["assignedToUserId"],
+    assigned_to: value["assignedTo"],
     case_type: value["caseType"],
     decided_at:
       value["decidedAt"] == null
         ? null
         : (value["decidedAt"] as any).toISOString(),
     decision: value["decision"],
-    id: value["id"],
     risk_level: value["riskLevel"],
     risk_score: value["riskScore"],
     scoring_version: value["scoringVersion"],

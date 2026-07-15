@@ -216,7 +216,7 @@ async function installFinancialBackend(page: Page) {
     cashFlowCorrectionAttempts: 0,
   };
 
-  await page.route("http://127.0.0.1:8003/api/v1/**", async (route) => {
+  await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;

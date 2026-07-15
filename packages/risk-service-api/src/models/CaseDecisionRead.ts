@@ -45,6 +45,12 @@ export interface CaseDecisionRead {
   decidedBy: string | null;
   /**
    *
+   * @type {string}
+   * @memberof CaseDecisionRead
+   */
+  decidedByDisplayName?: string | null;
+  /**
+   *
    * @type {CaseDecision}
    * @memberof CaseDecisionRead
    */
@@ -109,6 +115,10 @@ export function CaseDecisionReadFromJSONTyped(
     caseId: json["case_id"],
     createdAt: new Date(json["created_at"]),
     decidedBy: json["decided_by"],
+    decidedByDisplayName:
+      json["decided_by_display_name"] == null
+        ? undefined
+        : json["decided_by_display_name"],
     decision: CaseDecisionFromJSON(json["decision"]),
     id: json["id"],
     organizationId: json["organization_id"],
@@ -133,6 +143,7 @@ export function CaseDecisionReadToJSONTyped(
     case_id: value["caseId"],
     created_at: value["createdAt"].toISOString(),
     decided_by: value["decidedBy"],
+    decided_by_display_name: value["decidedByDisplayName"],
     decision: CaseDecisionToJSON(value["decision"]),
     id: value["id"],
     organization_id: value["organizationId"],
