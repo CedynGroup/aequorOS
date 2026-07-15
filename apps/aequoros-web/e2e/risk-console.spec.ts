@@ -3,7 +3,12 @@ import { expect, test } from "playwright/test";
 import { apiBaseUrl, healthUrl, isRiskServiceReady } from "./support/backend";
 import { RequestTracker } from "./support/request-tracker";
 import { RiskConsolePage } from "./support/risk-console-page";
-import { completedCase, demoTenant, northstarCase } from "./support/test-data";
+import {
+  breachingCase,
+  completedCase,
+  demoTenant,
+  northstarCase,
+} from "./support/test-data";
 
 const evidenceDir = process.env.NO_MISTAKES_EVIDENCE_DIR;
 
@@ -158,13 +163,12 @@ test("summarizes the seeded breaching case without optimistic defaults", async (
   page,
   request,
 }) => {
-  const breachingCaseId = "90000000-0000-4000-8000-000000000002";
   const tenantHeaders = {
     "X-Org-Id": demoTenant.orgId,
     "X-User-Id": demoTenant.userId,
   };
   const findingsResponse = await request.get(
-    `${apiBaseUrl}/cases/${breachingCaseId}/findings`,
+    `${apiBaseUrl}/cases/${breachingCase.id}/findings`,
     { headers: tenantHeaders },
   );
   test.skip(
@@ -183,7 +187,7 @@ test("summarizes the seeded breaching case without optimistic defaults", async (
       counts[finding.severity as keyof typeof counts] += 1;
   }
 
-  await page.goto(`/cases/${breachingCaseId}?tab=overview`);
+  await page.goto(`/cases/${breachingCase.id}?tab=overview`);
 
   const health = page.getByTestId("case-health-header");
   await expect(
@@ -192,10 +196,13 @@ test("summarizes the seeded breaching case without optimistic defaults", async (
     ),
   ).toBeVisible();
   await expect(health.getByText("Non-compliant")).toBeVisible();
-  await expect(health.getByLabel("Critical: 0 active findings")).toBeVisible();
-  await expect(health.getByLabel("High: 0 active findings")).toBeVisible();
-  await expect(health.getByLabel("Medium: 1 active findings")).toBeVisible();
-  await expect(health.getByLabel("Low: 0 active findings")).toBeVisible();
+  for (const severity of ["critical", "high", "medium", "low"] as const) {
+    await expect(
+      health.getByLabel(
+        `${severity[0].toUpperCase()}${severity.slice(1)}: ${counts[severity]} active findings`,
+      ),
+    ).toBeVisible();
+  }
   await expect(health.getByText(/^[CHML]\d+$/)).toHaveCount(0);
 
   await expectGlanceableCaseHealth(page, { width: 1280, height: 800 });
