@@ -92,13 +92,6 @@ const summary = await liquidity.getLiquiditySummary({
   runId,
 });
 
-if (
-  summary.sourcesCoverageThreshold !== null &&
-  summary.sourcesCoverageThresholdRuleVersion !== null
-) {
-  // Render this immutable run's classification reference line.
-}
-
 const reviewed = await liquidity.reviewLiquidityFinding({
   caseId,
   findingId,
@@ -109,8 +102,5 @@ const reviewed = await liquidity.reviewLiquidityFinding({
 ```
 
 Summary reads can omit `scenarioId` and `runId` to select the newest successful
-run. `sourcesCoverageThreshold` and
-`sourcesCoverageThresholdRuleVersion` are returned together for current
-analyses and are both null for legacy analyses that predate persisted
-classification metadata. Finding review requires both tenant headers;
-dismissal also requires a non-empty reason.
+run. Finding review requires both tenant headers; dismissal also requires a
+non-empty reason.
