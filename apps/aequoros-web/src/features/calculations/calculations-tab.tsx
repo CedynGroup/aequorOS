@@ -256,17 +256,19 @@ export function CalculationsTab({
                 </span>
               </div>
             </div>
-            <Button
-              disabled={
-                mutationDisabled ||
-                isSubmitting ||
-                !activeScenarioId ||
-                !validForecastPeriods
-              }
-              onClick={() => start.mutate()}
-            >
-              {start.isPending ? "Starting…" : "Run forecast"}
-            </Button>
+            {archivedAudit ? null : (
+              <Button
+                disabled={
+                  mutationDisabled ||
+                  isSubmitting ||
+                  !activeScenarioId ||
+                  !validForecastPeriods
+                }
+                onClick={() => start.mutate()}
+              >
+                {start.isPending ? "Starting…" : "Run forecast"}
+              </Button>
+            )}
           </div>
           {mutationDisabled ? (
             <div className="px-3 pb-3">
