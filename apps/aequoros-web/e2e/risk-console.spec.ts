@@ -413,6 +413,7 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await expect(
     page.getByRole("button", { name: "Rerun current inputs" }),
   ).toHaveCount(0);
+  await captureEvidence(page, "archived-forecast-audit-read-only");
 
   await page.getByRole("button", { name: /Baseline/ }).first().click();
   await expect(page.getByText("Archived forecast audit")).toHaveCount(0);
@@ -448,7 +449,9 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await page
     .getByRole("option", { name: "Downside liquidity copy · Archived" })
     .click();
-  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
+  await expect(
+    liquidityPanel.getByText("Archived", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Acknowledge" })).toHaveCount(
     0,
   );
@@ -457,7 +460,7 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await page.goto(`/cases/${northstarCase.id}?tab=calculations`);
   await page
     .getByRole("button", {
-      name: /Downside liquidity copy/,
+      name: /Downside liquidity copy succeeded/,
     })
     .first()
     .click();
@@ -474,7 +477,9 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
     `/cases/${northstarCase.id}?tab=calculations#calculation-run-${archivedRun.id}-forecast-period-1`,
   );
   await expect(page.getByText("Archived forecast audit")).toBeVisible();
-  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
+  await expect(
+    forecastPanel.getByText("Archived", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Archived scenario · read only")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Run forecast" }),
@@ -485,6 +490,7 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
 
   await page.getByRole("combobox", { name: "Organization" }).click();
   await page.getByRole("option", { name: "AequorOS Isolated Tenant" }).click();
+  await expect(page.getByText("0 cases", { exact: true })).toBeVisible();
   await expect(page.getByText("No case selected")).toBeVisible();
 });
 
@@ -607,6 +613,7 @@ test("runs, reruns, fails, and reviews persisted balance-sheet forecasts with te
 
   await page.getByRole("combobox", { name: "Organization" }).click();
   await page.getByRole("option", { name: "AequorOS Isolated Tenant" }).click();
+  await expect(page.getByText("0 cases", { exact: true })).toBeVisible();
   await expect(page.getByText("No case selected")).toBeVisible();
 });
 
@@ -687,6 +694,7 @@ test("reviews liquidity metrics, evidence, finding status, and tenant isolation"
 
   await page.getByRole("combobox", { name: "Organization" }).click();
   await page.getByRole("option", { name: "AequorOS Isolated Tenant" }).click();
+  await expect(page.getByText("0 cases", { exact: true })).toBeVisible();
   await expect(page.getByText("No case selected")).toBeVisible();
 });
 
