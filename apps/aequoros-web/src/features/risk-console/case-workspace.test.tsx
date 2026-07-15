@@ -7,7 +7,7 @@ import { useState } from "react";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
-import { mockCase } from "../demo-data/demo-data";
+import { DEMO_CASE_IDS, mockCase } from "../demo-data/demo-data";
 import { financialReviewClient } from "../financial/financial-client";
 import { CaseWorkspace } from "./case-workspace";
 
@@ -364,6 +364,8 @@ describe("CaseWorkspace", () => {
 
     renderWorkspace({
       activeTab: "decisions",
+      caseId: DEMO_CASE_IDS[1],
+      mockCaseData: mockCase(DEFAULT_ORG_ID, DEMO_CASE_IDS[1]),
       mockWorkspace: true,
     });
 

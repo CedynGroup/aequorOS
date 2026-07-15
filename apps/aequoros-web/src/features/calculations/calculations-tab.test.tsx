@@ -232,10 +232,21 @@ describe("CalculationsTab", () => {
       screen.getByText("Archived scenario · read only"),
     ).toBeInTheDocument();
     expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, caseId, true);
-    expect(screen.getByRole("button", { name: "Run forecast" })).toBeEnabled();
+    expect(
+      screen.queryByRole("button", { name: "Run forecast" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Rerun current inputs" }),
     ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Baseline/ }));
+
+    expect(
+      await screen.findByRole("button", { name: "Run forecast" }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Rerun current inputs" }),
+    ).toBeEnabled();
   });
 
   it.each([
