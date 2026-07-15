@@ -310,6 +310,35 @@ describe("ScenariosTab", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
+  it("rejects ratio values whose shifted result is unsafe", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(workspace());
+    const update = vi.spyOn(riskApi, "updateAssumption");
+    const create = vi.spyOn(riskApi, "createAssumption");
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+    const value = await screen.findByLabelText("Revenue growth value");
+    await user.clear(value);
+    await user.type(value, "1e-1001");
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Assumption key"), "stress_rate");
+    await user.type(screen.getByLabelText("Assumption label"), "Stress rate");
+    await user.selectOptions(
+      screen.getByLabelText("New assumption value type"),
+      "number",
+    );
+    await user.type(screen.getByLabelText("New assumption value"), "1e-1001");
+    await user.type(screen.getByLabelText("Assumption unit"), "ratio");
+
+    expect(
+      screen.getByRole("button", { name: "Add assumption" }),
+    ).toBeDisabled();
+    expect(update).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("ignores malformed scenario evidence fragments", async () => {
     window.history.replaceState(
       null,

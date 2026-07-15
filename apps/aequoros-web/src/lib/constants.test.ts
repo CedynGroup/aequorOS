@@ -43,17 +43,68 @@ describe("tenantConfiguration", () => {
     ).toBe(false);
   });
 
+  it("canonicalizes configured tenant UUIDs", () => {
+    vi.stubEnv(
+      "VITE_RISK_TENANTS",
+      JSON.stringify([
+        {
+          name: " Configured Bank ",
+          orgId: " 33333333-3333-4333-8333-33333333333A ",
+          userId: " CCCCCCCC-CCCC-4CCC-8CCC-CCCCCCCCCCCC ",
+        },
+      ]),
+    );
+
+    expect(tenantConfiguration()).toEqual({
+      status: "ready",
+      tenants: [
+        {
+          name: "Configured Bank",
+          orgId: "33333333-3333-4333-8333-33333333333a",
+          userId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        },
+      ],
+    });
+  });
+
   it.each([
     ["", "must contain valid JSON"],
     ["not-json", "must contain valid JSON"],
     ["[]", "must be a non-empty JSON array"],
     ['[{"name":"Configured Bank","orgId":"org-1"}]', "entry 1"],
+    [
+      '[{"name":"Configured Bank","orgId":"not-a-uuid","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc"}]',
+      "entry 1",
+    ],
   ])("rejects explicitly supplied invalid tenant JSON", (value, reason) => {
     vi.stubEnv("VITE_RISK_TENANTS", value);
 
     expect(tenantConfiguration()).toEqual({
       status: "error",
       error: expect.stringContaining(reason),
+    });
+  });
+
+  it("rejects duplicate canonical organization UUIDs", () => {
+    vi.stubEnv(
+      "VITE_RISK_TENANTS",
+      JSON.stringify([
+        {
+          name: "First Bank",
+          orgId: "33333333-3333-4333-8333-33333333333A",
+          userId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        },
+        {
+          name: "Second Bank",
+          orgId: "33333333-3333-4333-8333-33333333333a",
+          userId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        },
+      ]),
+    );
+
+    expect(tenantConfiguration()).toEqual({
+      status: "error",
+      error: expect.stringContaining("duplicate orgId"),
     });
   });
 

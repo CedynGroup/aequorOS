@@ -588,7 +588,11 @@ function ScenarioEditor({
               disabled={
                 !newAssumption.key.trim() ||
                 !newAssumption.label.trim() ||
-                !isValidValue(newAssumption.value, newAssumption.valueType) ||
+                !isValidValue(
+                  newAssumption.value,
+                  newAssumption.valueType,
+                  newAssumption.unit,
+                ) ||
                 add.isPending
               }
               onClick={() => add.mutate()}
@@ -629,7 +633,7 @@ function AssumptionRow({
     setPersistedValue(assumption.value);
   }, [assumption.unit, assumption.updatedAt, assumption.value]);
   const nextValue = typedUnitValue(value, valueType, assumption.unit);
-  const validValue = isValidValue(value, valueType);
+  const validValue = isValidValue(value, valueType, assumption.unit);
   const dirty =
     valueType !== valueTypeOf(persistedValue) || nextValue !== persistedValue;
   const update = useMutation({
@@ -847,9 +851,14 @@ function shiftDecimal(value: string, places: number): string | null {
   }`;
 }
 
-function isValidValue(value: string, valueType: AssumptionValueType): boolean {
+function isValidValue(
+  value: string,
+  valueType: AssumptionValueType,
+  unit?: string | null,
+): boolean {
   if (valueType === "number") {
-    return decimalParts(value) !== null && Number.isFinite(Number(value));
+    if (decimalParts(value) === null) return false;
+    return Number.isFinite(typedUnitValue(value, valueType, unit));
   }
   if (valueType === "boolean") return value === "true" || value === "false";
   return true;

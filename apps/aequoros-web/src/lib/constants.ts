@@ -51,11 +51,13 @@ export function tenantConfiguration(): TenantConfiguration {
   if (invalidIndex !== -1) {
     return {
       status: "error",
-      error: `VITE_RISK_TENANTS entry ${invalidIndex + 1} must contain non-empty string name, orgId, and userId fields.`,
+      error: `VITE_RISK_TENANTS entry ${invalidIndex + 1} must contain a non-empty name and valid UUID orgId and userId fields.`,
     };
   }
 
-  const tenants = parsed as unknown as TenantDirectory;
+  const tenants = parsed.map(
+    normalizeTenantOption,
+  ) as unknown as TenantDirectory;
   if (new Set(tenants.map((tenant) => tenant.orgId)).size !== tenants.length) {
     return {
       status: "error",
@@ -80,10 +82,27 @@ function isTenantOption(value: unknown): value is TenantOption {
     typeof candidate.name === "string" &&
     candidate.name.trim() !== "" &&
     typeof candidate.orgId === "string" &&
-    candidate.orgId.trim() !== "" &&
+    isUuid(candidate.orgId) &&
     typeof candidate.userId === "string" &&
-    candidate.userId.trim() !== ""
+    isUuid(candidate.userId)
   );
+}
+
+function isUuid(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value.trim(),
+    )
+  );
+}
+
+function normalizeTenantOption(tenant: TenantOption): TenantOption {
+  return {
+    name: tenant.name.trim(),
+    orgId: tenant.orgId.trim().toLowerCase(),
+    userId: tenant.userId.trim().toLowerCase(),
+  };
 }
 
 export const tabs = [
