@@ -68,6 +68,7 @@ export const MappingConfigCreateSourceSystemEnum = {
   DbDirect: "DB_DIRECT",
   SftpDrop: "SFTP_DROP",
   ApiGeneric: "API_GENERIC",
+  ApiPush: "API_PUSH",
   Manual: "MANUAL",
 } as const;
 export type MappingConfigCreateSourceSystemEnum =

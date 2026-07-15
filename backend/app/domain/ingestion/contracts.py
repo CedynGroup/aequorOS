@@ -165,6 +165,9 @@ class RawRecord(BaseModel):
     # Populated for entity_type == "reference": the dataset kind the matched
     # reference mapping declared for this table.
     dataset_kind: str | None = None
+    # The source table (sheet, CSV stem, payload key) the record came from,
+    # so batch reports can show a per-table extraction breakdown.
+    source_table: str | None = None
 
 
 class SourceTableSummary(BaseModel):

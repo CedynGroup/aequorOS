@@ -28,6 +28,9 @@ import type {
   MappingConfigRead,
   PositionSnapshotOverrideCreate,
   PositionSnapshotRead,
+  PushBatchOpen,
+  PushBatchStatusRead,
+  PushRecordsPage,
   TranslationFailureListRead,
 } from "../models/index";
 import {
@@ -63,6 +66,12 @@ import {
   PositionSnapshotOverrideCreateToJSON,
   PositionSnapshotReadFromJSON,
   PositionSnapshotReadToJSON,
+  PushBatchOpenFromJSON,
+  PushBatchOpenToJSON,
+  PushBatchStatusReadFromJSON,
+  PushBatchStatusReadToJSON,
+  PushRecordsPageFromJSON,
+  PushRecordsPageToJSON,
   TranslationFailureListReadFromJSON,
   TranslationFailureListReadToJSON,
 } from "../models/index";
@@ -72,6 +81,13 @@ export interface ActivateBankDataRequest {
   xOrgId: string;
   xUserId: string;
   dataActivationCreate: DataActivationCreate;
+}
+
+export interface CommitPushBatchRequest {
+  bankId: string;
+  pushBatchId: string;
+  xOrgId: string;
+  xUserId: string;
 }
 
 export interface CreateMappingConfigRequest {
@@ -84,6 +100,13 @@ export interface CreateMappingConfigRequest {
 export interface GetIngestionBatchRequest {
   bankId: string;
   batchId: string;
+  xOrgId: string;
+  xUserId?: string | null;
+}
+
+export interface GetPushBatchRequest {
+  bankId: string;
+  pushBatchId: string;
   xOrgId: string;
   xUserId?: string | null;
 }
@@ -121,12 +144,27 @@ export interface ListTranslationFailuresRequest {
   xUserId?: string | null;
 }
 
+export interface OpenPushBatchRequest {
+  bankId: string;
+  xOrgId: string;
+  xUserId: string;
+  pushBatchOpen: PushBatchOpen;
+}
+
 export interface OverridePositionSnapshotRequest {
   bankId: string;
   snapshotId: string;
   xOrgId: string;
   xUserId: string;
   positionSnapshotOverrideCreate: PositionSnapshotOverrideCreate;
+}
+
+export interface StagePushBatchRecordsRequest {
+  bankId: string;
+  pushBatchId: string;
+  xOrgId: string;
+  xUserId: string;
+  pushRecordsPage: PushRecordsPage;
 }
 
 export interface StartIngestionBatchRequest {
@@ -233,6 +271,90 @@ export class IngestionApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<DataActivationRead> {
     const response = await this.activateBankDataRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Commit Push Batch
+   */
+  async commitPushBatchRaw(
+    requestParameters: CommitPushBatchRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<IngestionBatchStartRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling commitPushBatch().',
+      );
+    }
+
+    if (requestParameters["pushBatchId"] == null) {
+      throw new runtime.RequiredError(
+        "pushBatchId",
+        'Required parameter "pushBatchId" was null or undefined when calling commitPushBatch().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling commitPushBatch().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling commitPushBatch().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/commit`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"push_batch_id"}}`,
+            encodeURIComponent(String(requestParameters["pushBatchId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      IngestionBatchStartReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Commit Push Batch
+   */
+  async commitPushBatch(
+    requestParameters: CommitPushBatchRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<IngestionBatchStartRead> {
+    const response = await this.commitPushBatchRaw(
       requestParameters,
       initOverrides,
     );
@@ -394,6 +516,83 @@ export class IngestionApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<IngestionBatchRead> {
     const response = await this.getIngestionBatchRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Get Push Batch
+   */
+  async getPushBatchRaw(
+    requestParameters: GetPushBatchRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PushBatchStatusRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getPushBatch().',
+      );
+    }
+
+    if (requestParameters["pushBatchId"] == null) {
+      throw new runtime.RequiredError(
+        "pushBatchId",
+        'Required parameter "pushBatchId" was null or undefined when calling getPushBatch().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling getPushBatch().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/push-batches/{push_batch_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"push_batch_id"}}`,
+            encodeURIComponent(String(requestParameters["pushBatchId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PushBatchStatusReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Get Push Batch
+   */
+  async getPushBatch(
+    requestParameters: GetPushBatchRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PushBatchStatusRead> {
+    const response = await this.getPushBatchRaw(
       requestParameters,
       initOverrides,
     );
@@ -748,6 +947,88 @@ export class IngestionApi extends runtime.BaseAPI {
   }
 
   /**
+   * Open Push Batch
+   */
+  async openPushBatchRaw(
+    requestParameters: OpenPushBatchRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PushBatchStatusRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling openPushBatch().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling openPushBatch().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling openPushBatch().',
+      );
+    }
+
+    if (requestParameters["pushBatchOpen"] == null) {
+      throw new runtime.RequiredError(
+        "pushBatchOpen",
+        'Required parameter "pushBatchOpen" was null or undefined when calling openPushBatch().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/push-batches`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: PushBatchOpenToJSON(requestParameters["pushBatchOpen"]),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PushBatchStatusReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Open Push Batch
+   */
+  async openPushBatch(
+    requestParameters: OpenPushBatchRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PushBatchStatusRead> {
+    const response = await this.openPushBatchRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Override Position Snapshot
    */
   async overridePositionSnapshotRaw(
@@ -837,6 +1118,100 @@ export class IngestionApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<PositionSnapshotRead> {
     const response = await this.overridePositionSnapshotRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Stage Push Batch Records
+   */
+  async stagePushBatchRecordsRaw(
+    requestParameters: StagePushBatchRecordsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PushBatchStatusRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling stagePushBatchRecords().',
+      );
+    }
+
+    if (requestParameters["pushBatchId"] == null) {
+      throw new runtime.RequiredError(
+        "pushBatchId",
+        'Required parameter "pushBatchId" was null or undefined when calling stagePushBatchRecords().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling stagePushBatchRecords().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling stagePushBatchRecords().',
+      );
+    }
+
+    if (requestParameters["pushRecordsPage"] == null) {
+      throw new runtime.RequiredError(
+        "pushRecordsPage",
+        'Required parameter "pushRecordsPage" was null or undefined when calling stagePushBatchRecords().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/records`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"push_batch_id"}}`,
+            encodeURIComponent(String(requestParameters["pushBatchId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: PushRecordsPageToJSON(requestParameters["pushRecordsPage"]),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PushBatchStatusReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Stage Push Batch Records
+   */
+  async stagePushBatchRecords(
+    requestParameters: StagePushBatchRecordsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PushBatchStatusRead> {
+    const response = await this.stagePushBatchRecordsRaw(
       requestParameters,
       initOverrides,
     );

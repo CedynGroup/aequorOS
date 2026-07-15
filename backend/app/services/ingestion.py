@@ -344,6 +344,7 @@ def start_ingestion(
         records_extracted=len(extraction.records),
         records_translated=records.record_count,
         reference_rows=records.reference_row_counts,
+        tables=_tables_breakdown(extraction, records, outcome.record_statuses),
     )
     batch.validation_report = report
     batch.status = outcome.overall_status
@@ -749,6 +750,85 @@ def _table_resolution_findings(
         ),
     )
     return findings
+
+
+def _tables_breakdown(
+    extraction: ExtractionResult,
+    records: CanonicalRecords,
+    record_statuses: dict[tuple[str, str], str],
+) -> list[dict[str, Any]]:
+    """Per-table extraction visibility for the validation report.
+
+    One entry per table the adapter actually FOUND in the source — matched or
+    not — so a multi-tab workbook shows which tabs loaded, what each resolved
+    to, and how its rows fared through validation. Unmatched tables carry the
+    near-miss diagnosis when a configured mapping almost resolved to them.
+    """
+    extracted: dict[str, int] = {}
+    resolved: dict[str, set[str]] = {}
+    table_by_locator: dict[str, str] = {}
+    for record in extraction.records:
+        table = record.source_table
+        if table is None:
+            continue
+        extracted[table] = extracted.get(table, 0) + 1
+        target = (
+            f"reference:{record.dataset_kind}"
+            if record.entity_type == "reference"
+            else record.entity_type
+        )
+        resolved.setdefault(table, set()).add(target)
+        table_by_locator[record.source_locator] = table
+
+    status_counts: dict[str, dict[str, int]] = {}
+
+    def count_status(entity_type: str, source_reference: str, source_locator: str) -> None:
+        table = table_by_locator.get(source_locator)
+        if table is None:
+            return
+        record_status = record_statuses.get((entity_type, source_reference), "accepted")
+        counts = status_counts.setdefault(
+            table, {"accepted": 0, "warning": 0, "error": 0, "blocked": 0}
+        )
+        counts[record_status] = counts.get(record_status, 0) + 1
+
+    for gl_account in records.gl_accounts:
+        count_status("gl_account", gl_account.source_reference, gl_account.source_locator)
+    for counterparty in records.counterparties:
+        count_status("counterparty", counterparty.source_reference, counterparty.source_locator)
+    for product in records.products:
+        count_status("product", product.source_reference, product.source_locator)
+    for position in records.positions:
+        count_status("position", position.source_reference, position.source_locator)
+    for row in records.reference_rows:
+        count_status("reference_row", f"{row.dataset_kind}:{row.row_index}", row.source_locator)
+
+    def suggestion_for(table_name: str) -> str | None:
+        for unmatched in extraction.unmatched_mappings:
+            if unmatched.suggestion == table_name:
+                return (
+                    f"Near-match for configured mapping {unmatched.mapping!r} "
+                    f"(expected one of {list(unmatched.expected)})."
+                )
+        return None
+
+    breakdown: list[dict[str, Any]] = []
+    for table in extraction.source_tables:
+        counts = status_counts.get(table.name, {})
+        resolved_to = " + ".join(sorted(resolved.get(table.name, ()))) or None
+        breakdown.append(
+            {
+                "source_table": table.name,
+                "resolved_to": resolved_to,
+                "rows_extracted": extracted.get(table.name, 0),
+                "rows_accepted": counts.get("accepted", 0),
+                "rows_warning": counts.get("warning", 0),
+                "rows_error": counts.get("error", 0),
+                "rows_blocked": counts.get("blocked", 0),
+                "suggestion": None if resolved_to else suggestion_for(table.name),
+            }
+        )
+    return breakdown
 
 
 def _resolve_adapter(source_system: str) -> SourceAdapter:

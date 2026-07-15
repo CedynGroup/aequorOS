@@ -6,7 +6,7 @@
  * banking adapters surface their honest pipeline status.
  */
 
-import { CheckCircle2, Clock, FileSpreadsheet, Server } from 'lucide-react';
+import { CheckCircle2, Clock, FileSpreadsheet, Server, Webhook } from 'lucide-react';
 import { useBankContext } from '@/components/shell/BankContext';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
 import { isApiError } from '@/lib/api/client';
@@ -34,7 +34,7 @@ export default function SourcesPanel() {
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <div className="card p-5 border-l-4 border-l-success">
           <div className="flex items-center gap-2">
             <FileSpreadsheet size={18} className="text-success" aria-hidden />
@@ -64,6 +64,31 @@ export default function SourcesPanel() {
                 None — activate a starter mapping below before ingesting.
               </p>
             )}
+          </div>
+        </div>
+
+        <div className="card p-5 border-l-4 border-l-success">
+          <div className="flex items-center gap-2">
+            <Webhook size={18} className="text-success" aria-hidden />
+            <h3 className="text-h3 text-navy">API push</h3>
+            <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium text-success">
+              <CheckCircle2 size={13} aria-hidden /> Connected · programmatic
+            </span>
+          </div>
+          <p className="mt-2 text-body text-slate leading-relaxed">
+            The institution&apos;s middleware POSTs JSON through the push
+            endpoints (open → stage records → commit) — same pipeline,
+            validation gating, and lineage as file uploads. Canonical field
+            names need zero mapping configuration; an API_PUSH mapping
+            translates foreign field names when middleware cannot conform.
+          </p>
+          <div className="mt-3 pt-3 border-t border-border-light">
+            <p className="text-micro uppercase tracking-wider text-slate">
+              Developer guide
+            </p>
+            <p className="mt-1 text-caption font-mono text-navy">
+              docs/API_INTEGRATION.md
+            </p>
           </div>
         </div>
 

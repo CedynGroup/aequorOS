@@ -18,10 +18,12 @@ import {
   ArtifactPath,
   BatchStatusPill,
   CountStrip,
+  TablesBreakdownTable,
   batchBlockerDetails,
   formatDate,
   formatDateTime,
   referenceRowCounts,
+  tablesBreakdown,
 } from '@/components/data-engine/shared';
 
 type ReportFailure = {
@@ -80,6 +82,8 @@ export default function BatchDetailPage({
   const blockerDetails = batchBlockerDetails(batch);
   const referenceCounts = referenceRowCounts(batch);
   const suppressed = report.suppressed_findings ?? {};
+  const tables = tablesBreakdown(batch);
+  const unmatchedTables = tables.filter((entry) => entry.resolved_to === null);
 
   return (
     <>
@@ -123,6 +127,21 @@ export default function BatchDetailPage({
               {batch.errorCode ?? 'failure'}
             </p>
             <p className="mt-1 text-body text-navy/80">{batch.errorMessage}</p>
+          </div>
+        )}
+
+        {tables.length > 0 && (
+          <div className="card p-5">
+            <h2 className="text-h3 text-navy">Tables in this upload</h2>
+            <p className="mt-1 text-caption text-slate">
+              Every sheet / table the source contained and what the active
+              mapping resolved it to.
+              {unmatchedTables.length > 0 &&
+                ` ${unmatchedTables.length} table${unmatchedTables.length > 1 ? 's' : ''} matched no mapping and ${unmatchedTables.length > 1 ? 'were' : 'was'} skipped.`}
+            </p>
+            <div className="mt-3">
+              <TablesBreakdownTable tables={tables} />
+            </div>
           </div>
         )}
 

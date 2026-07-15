@@ -2020,6 +2020,7 @@
               "DB_DIRECT",
               "SFTP_DROP",
               "API_GENERIC",
+              "API_PUSH",
               "MANUAL"
             ],
             "title": "Source System",
@@ -10004,6 +10005,7 @@
               "DB_DIRECT",
               "SFTP_DROP",
               "API_GENERIC",
+              "API_PUSH",
               "MANUAL"
             ],
             "title": "Source System",
@@ -10187,6 +10189,7 @@
               "DB_DIRECT",
               "SFTP_DROP",
               "API_GENERIC",
+              "API_PUSH",
               "MANUAL"
             ],
             "title": "Source System",
@@ -11694,6 +11697,7 @@
               "DB_DIRECT",
               "SFTP_DROP",
               "API_GENERIC",
+              "API_PUSH",
               "MANUAL"
             ],
             "title": "Source System",
@@ -11766,6 +11770,7 @@
               "DB_DIRECT",
               "SFTP_DROP",
               "API_GENERIC",
+              "API_PUSH",
               "MANUAL"
             ],
             "title": "Source System",
@@ -12428,6 +12433,159 @@
           "nsfr_pct"
         ],
         "title": "ProjectionYearRead",
+        "type": "object"
+      },
+      "PushBatchOpen": {
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of_date",
+          "idempotency_key",
+          "reason"
+        ],
+        "title": "PushBatchOpen",
+        "type": "object"
+      },
+      "PushBatchStatusRead": {
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "bank_id": {
+            "format": "uuid",
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "committed_batch_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Committed Batch Id"
+          },
+          "expires_note": {
+            "title": "Expires Note",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "pages_staged": {
+            "title": "Pages Staged",
+            "type": "integer"
+          },
+          "push_batch_id": {
+            "format": "uuid",
+            "title": "Push Batch Id",
+            "type": "string"
+          },
+          "records_staged": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Records Staged",
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "staging",
+              "committed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_records_staged": {
+            "title": "Total Records Staged",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "push_batch_id",
+          "bank_id",
+          "as_of_date",
+          "idempotency_key",
+          "status",
+          "pages_staged",
+          "records_staged",
+          "total_records_staged",
+          "committed_batch_id",
+          "expires_note"
+        ],
+        "title": "PushBatchStatusRead",
+        "type": "object"
+      },
+      "PushRecordsPage": {
+        "description": "One page of records: canonical entities and/or reference datasets.\n\nKeys are constrained to the canonical entity types and reference dataset\nkinds; each value is a list of records whose field names follow the\ndocumented contract (or the bank's API_PUSH mapping config).",
+        "properties": {
+          "entities": {
+            "additionalProperties": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "enum": [
+                "gl_account",
+                "counterparty",
+                "product",
+                "position"
+              ]
+            },
+            "title": "Entities",
+            "type": "object"
+          },
+          "reference": {
+            "additionalProperties": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "enum": [
+                "capital_structure",
+                "behavioral_assumptions",
+                "yield_curve",
+                "fx_rates_current",
+                "fx_rates_historical",
+                "historical_cashflows",
+                "historical_financials",
+                "business_units",
+                "institution"
+              ]
+            },
+            "title": "Reference",
+            "type": "object"
+          }
+        },
+        "title": "PushRecordsPage",
         "type": "object"
       },
       "ReadinessResponse": {
@@ -20055,6 +20213,507 @@
           }
         },
         "summary": "Override Position Snapshot",
+        "tags": [
+          "ingestion"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/push-batches": {
+      "post": {
+        "operationId": "openPushBatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushBatchOpen"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushBatchStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Open Push Batch",
+        "tags": [
+          "ingestion"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}": {
+      "get": {
+        "operationId": "getPushBatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "push_batch_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Push Batch Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushBatchStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Push Batch",
+        "tags": [
+          "ingestion"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/commit": {
+      "post": {
+        "operationId": "commitPushBatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "push_batch_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Push Batch Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionBatchStartRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Commit Push Batch",
+        "tags": [
+          "ingestion"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/records": {
+      "post": {
+        "operationId": "stagePushBatchRecords",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "push_batch_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Push Batch Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushRecordsPage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushBatchStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Stage Push Batch Records",
         "tags": [
           "ingestion"
         ]

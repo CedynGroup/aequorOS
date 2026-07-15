@@ -8,7 +8,8 @@ contract every adapter implements.
 Importing this package registers every shipped adapter with the registry.
 """
 
+from app.adapters.api_push.adapter import ApiPushAdapter
 from app.adapters.excel_csv.adapter import ExcelCsvAdapter
 from app.adapters.temenos_t24.adapter import TemenosT24Adapter
 
-__all__ = ["ExcelCsvAdapter", "TemenosT24Adapter"]
+__all__ = ["ApiPushAdapter", "ExcelCsvAdapter", "TemenosT24Adapter"]

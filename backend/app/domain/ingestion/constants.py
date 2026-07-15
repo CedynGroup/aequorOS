@@ -18,6 +18,7 @@ SOURCE_SYSTEMS: tuple[str, ...] = (
     "DB_DIRECT",
     "SFTP_DROP",
     "API_GENERIC",
+    "API_PUSH",
     "MANUAL",
 )
 SourceSystem = Literal[
@@ -28,6 +29,7 @@ SourceSystem = Literal[
     "DB_DIRECT",
     "SFTP_DROP",
     "API_GENERIC",
+    "API_PUSH",
     "MANUAL",
 ]
 

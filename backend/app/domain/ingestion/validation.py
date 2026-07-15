@@ -197,6 +197,7 @@ def build_validation_report(
     records_extracted: int,
     records_translated: int,
     reference_rows: dict[str, int] | None = None,
+    tables: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """The machine-readable report persisted on the batch and shown to operators."""
     statuses = list(outcome.record_statuses.values())
@@ -230,6 +231,10 @@ def build_validation_report(
             "reference_rows": reference_rows or {},
             "overall_status": outcome.overall_status.upper(),
         },
+        # One entry per table FOUND in the source — including tables no
+        # mapping resolved — so multi-tab workbooks show exactly which tabs
+        # loaded and which were skipped.
+        "tables": tables or [],
         "reconciliation": outcome.reconciliation,
         "failures": listed,
     }

@@ -667,6 +667,66 @@ class TestHonestZeroExtraction:
         assert all(f["rule"] != "no_tables_matched" for f in report["failures"])
 
 
+NEAR_MISS_MAPPING = MappingConfig(
+    field_mappings={
+        "gl_account": FULL_MAPPING.field_mappings["gl_account"],
+        "product": FULL_MAPPING.field_mappings["product"],
+        "position": FULL_MAPPING.field_mappings["position"],
+        # Typo'd table: the workbook's sheet is "Customers".
+        "counterparty": EntityMapping(
+            source_table="Customer_Master",
+            fields=FULL_MAPPING.field_mappings["counterparty"].fields,
+        ),
+    },
+    enum_mappings=FULL_MAPPING.enum_mappings,
+)
+
+
+class TestTablesBreakdown:
+    def test_every_sheet_in_a_multi_tab_workbook_is_listed(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
+
+        batch = start_batch(db_client, bank_id, workbook)["batch"]
+        tables = {entry["source_table"]: entry for entry in batch["validation_report"]["tables"]}
+        assert set(tables) == {"GL", "Customers", "Products", "Loans"}
+        assert tables["GL"]["resolved_to"] == "gl_account"
+        assert tables["Customers"]["resolved_to"] == "counterparty"
+        assert tables["Products"]["resolved_to"] == "product"
+        assert tables["Loans"]["resolved_to"] == "position"
+        for entry in tables.values():
+            assert entry["rows_extracted"] == 2
+            assert entry["rows_accepted"] == 2
+            assert entry["rows_warning"] == 0
+            assert entry["rows_error"] == 0
+            assert entry["suggestion"] is None
+
+    def test_unmatched_sheet_is_flagged_with_the_near_miss_mapping(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, NEAR_MISS_MAPPING)
+        workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
+
+        batch = start_batch(db_client, bank_id, workbook)["batch"]
+        assert batch["status"] == "accepted_with_warnings"
+        tables = {entry["source_table"]: entry for entry in batch["validation_report"]["tables"]}
+        assert set(tables) == {"GL", "Customers", "Products", "Loans"}
+
+        unmatched = tables["Customers"]
+        assert unmatched["resolved_to"] is None
+        assert unmatched["rows_extracted"] == 0
+        assert unmatched["rows_accepted"] == 0
+        assert "counterparty" in unmatched["suggestion"]
+        assert "Customer_Master" in unmatched["suggestion"]
+        # The matched tabs still load in full.
+        assert tables["Loans"]["resolved_to"] == "position"
+        assert tables["Loans"]["rows_extracted"] == 2
+
+
 class TestReferenceDatasetIngestion:
     def test_aliased_entities_and_reference_rows_ingest_together(
         self, db_client: TestClient, tmp_path: Path

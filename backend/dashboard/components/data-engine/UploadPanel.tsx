@@ -17,6 +17,7 @@ import { useUploadAndIngest } from '@/lib/api/ingestion';
 import {
   BatchStatusPill,
   CountStrip,
+  TablesChips,
   batchBlockerDetails,
   referenceRowTotal,
 } from './shared';
@@ -190,6 +191,7 @@ export default function UploadPanel() {
                 )}
               </div>
               {outcome.batch && <CountStrip batch={outcome.batch} />}
+              {outcome.batch && <TablesChips batch={outcome.batch} />}
               {outcome.batch &&
                 batchBlockerDetails(outcome.batch).map((detail, i) => (
                   <div

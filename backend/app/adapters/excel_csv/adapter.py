@@ -206,6 +206,7 @@ class ExcelCsvAdapter(SourceAdapter):
                             source_locator=f"{path.name}#{table.name}!R{row_number}",
                             data=row,
                             dataset_kind=dataset_kind,
+                            source_table=table.name,
                         )
                     )
 

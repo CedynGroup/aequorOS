@@ -26,11 +26,23 @@ export function BatchStatusPill({ status }: { status: string }) {
   );
 }
 
+export type TableBreakdownEntry = {
+  source_table: string;
+  resolved_to: string | null;
+  rows_extracted: number;
+  rows_accepted: number;
+  rows_warning: number;
+  rows_error: number;
+  rows_blocked: number;
+  suggestion: string | null;
+};
+
 type ValidationReport = {
   summary?: {
     reference_rows?: Record<string, number>;
     [key: string]: unknown;
   };
+  tables?: TableBreakdownEntry[];
   failures?: {
     rule: string;
     severity: string;
@@ -53,6 +65,105 @@ export function referenceRowCounts(batch: IngestionBatchRead): Record<string, nu
 
 export function referenceRowTotal(batch: IngestionBatchRead): number {
   return Object.values(referenceRowCounts(batch)).reduce((sum, count) => sum + count, 0);
+}
+
+/** Per-table extraction breakdown: every table found in the source. */
+export function tablesBreakdown(batch: IngestionBatchRead): TableBreakdownEntry[] {
+  return validationReport(batch).tables ?? [];
+}
+
+/**
+ * Dense per-table view: tab/file-table name → what it resolved to → row
+ * outcomes. Unmatched tables render in warning tone with the near-miss
+ * suggestion, so a multi-tab workbook never *looks* like one tab ingested.
+ */
+export function TablesBreakdownTable({ tables }: { tables: TableBreakdownEntry[] }) {
+  if (tables.length === 0) return null;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-caption">
+        <thead>
+          <tr className="text-left text-micro uppercase tracking-wider text-slate">
+            <th className="py-1.5 pr-4 font-medium">Table in source</th>
+            <th className="py-1.5 pr-4 font-medium">Resolved to</th>
+            <th className="py-1.5 pr-4 font-medium text-right">Extracted</th>
+            <th className="py-1.5 pr-4 font-medium text-right">Accepted</th>
+            <th className="py-1.5 pr-4 font-medium text-right">Warnings</th>
+            <th className="py-1.5 font-medium text-right">Errors</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border-light">
+          {tables.map((entry) => {
+            const unmatched = entry.resolved_to === null;
+            return (
+              <tr key={entry.source_table}>
+                <td className="py-1.5 pr-4 font-mono text-navy">
+                  {entry.source_table}
+                  {unmatched && entry.suggestion && (
+                    <p className="mt-0.5 font-sans text-micro text-warning">
+                      {entry.suggestion}
+                    </p>
+                  )}
+                </td>
+                <td
+                  className={`py-1.5 pr-4 font-mono ${unmatched ? 'text-warning' : 'text-navy'}`}
+                >
+                  {entry.resolved_to ?? 'not mapped — skipped'}
+                </td>
+                <td className="py-1.5 pr-4 text-right font-mono text-navy">
+                  {entry.rows_extracted}
+                </td>
+                <td className="py-1.5 pr-4 text-right font-mono text-success">
+                  {entry.rows_accepted}
+                </td>
+                <td
+                  className={`py-1.5 pr-4 text-right font-mono ${entry.rows_warning > 0 ? 'text-warning' : 'text-slate'}`}
+                >
+                  {entry.rows_warning}
+                </td>
+                <td
+                  className={`py-1.5 text-right font-mono ${entry.rows_error + entry.rows_blocked > 0 ? 'text-critical' : 'text-slate'}`}
+                >
+                  {entry.rows_error + entry.rows_blocked}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Compact one-line chips per table for upload result rows. */
+export function TablesChips({ batch }: { batch: IngestionBatchRead }) {
+  const tables = tablesBreakdown(batch);
+  if (tables.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {tables.map((entry) => {
+        const unmatched = entry.resolved_to === null;
+        return (
+          <span
+            key={entry.source_table}
+            title={unmatched ? (entry.suggestion ?? 'No mapping matched this table.') : undefined}
+            className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-micro font-mono ${
+              unmatched
+                ? 'border-warning/40 bg-warning-light/40 text-warning'
+                : 'border-border text-navy'
+            }`}
+          >
+            {entry.source_table}
+            <span className={unmatched ? '' : 'text-slate'}>
+              {unmatched
+                ? '→ unmatched'
+                : `→ ${entry.resolved_to} (${entry.rows_extracted})`}
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 /** BLOCKER finding details — the found-versus-expected diagnosis on rejection. */
