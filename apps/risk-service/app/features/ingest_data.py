@@ -4,7 +4,7 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 
 from app.api.deps import DbSession, MutationTenant, Tenant
 from app.schemas.ingestion import (
@@ -13,6 +13,7 @@ from app.schemas.ingestion import (
     IngestionBatchListRead,
     IngestionBatchRead,
     IngestionBatchStartRead,
+    IngestionUploadRead,
     LineageWalkRead,
     MappingConfigCreate,
     MappingConfigListRead,
@@ -27,6 +28,8 @@ from app.storage.config import StorageRetiredError
 from app.storage.factory import get_storage_client
 
 router = APIRouter(tags=["ingestion"])
+
+MAX_UPLOAD_BYTES = 50_000_000
 
 
 def get_ingestion_storage() -> StorageClient:
@@ -61,6 +64,33 @@ def create_mapping_config(
 )
 def list_mapping_configs(bank_id: UUID, db: DbSession, ctx: Tenant) -> MappingConfigListRead:
     return ingestion.list_mapping_configs(db, ctx, bank_id)
+
+
+@router.post(
+    "/banks/{bank_id}/ingestion-uploads",
+    response_model=IngestionUploadRead,
+    status_code=201,
+    operation_id="uploadIngestionSource",
+)
+async def upload_ingestion_source(
+    bank_id: UUID,
+    db: DbSession,
+    ctx: MutationTenant,
+    storage: IngestionStorage,
+    file: UploadFile,
+) -> IngestionUploadRead:
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Upload exceeds the {MAX_UPLOAD_BYTES // 1_000_000} MB limit.",
+        )
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Uploaded file is empty.",
+        )
+    return ingestion.upload_source(db, ctx, bank_id, storage, file.filename or "upload", content)
 
 
 @router.post(

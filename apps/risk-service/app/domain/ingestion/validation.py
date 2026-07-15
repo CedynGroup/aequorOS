@@ -67,6 +67,7 @@ def default_validation_config() -> ValidationConfig:
         rules=[
             RuleConfig(name="structural_duplicate_source_references", severity="ERROR"),
             RuleConfig(name="structural_unresolved_references", severity="ERROR"),
+            RuleConfig(name="structural_unknown_counterparty", severity="WARNING"),
             RuleConfig(
                 name="position_rate_bounds",
                 severity="ERROR",
@@ -94,6 +95,12 @@ class ValidationContext:
     # Prior-generation balances keyed by position source_reference; supplied
     # by the orchestrator when a previous accepted batch exists.
     prior_balances: dict[str, Decimal] | None = None
+    # Current-generation canonical references already ingested for this bank,
+    # so cross-batch links (counterparty file today, positions tomorrow)
+    # resolve instead of flagging.
+    known_counterparties: frozenset[str] = frozenset()
+    known_products: frozenset[str] = frozenset()
+    known_gl_accounts: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -254,16 +261,13 @@ def _rule_unresolved_references(
     context: ValidationContext,
     outcome: ValidationOutcome,
 ) -> list[Finding]:
-    counterparties = {record.source_reference for record in records.counterparties}
-    products = {record.product_code for record in records.products}
-    gl_accounts = {record.account_code for record in records.gl_accounts}
+    products = {record.product_code for record in records.products} | context.known_products
+    gl_accounts = {
+        record.account_code for record in records.gl_accounts
+    } | context.known_gl_accounts
     findings: list[Finding] = []
     for position in records.positions:
         dangling: list[str] = []
-        if position.counterparty_reference is not None and (
-            counterparties and position.counterparty_reference not in counterparties
-        ):
-            dangling.append(f"counterparty {position.counterparty_reference!r}")
         if position.product_code is not None and (
             products and position.product_code not in products
         ):
@@ -281,7 +285,43 @@ def _rule_unresolved_references(
                     entity_type="position",
                     source_reference=position.source_reference,
                     source_locator=position.source_locator,
-                    detail=f"References missing from batch: {', '.join(dangling)}.",
+                    detail=(
+                        f"References not found in this batch or previously "
+                        f"ingested data: {', '.join(dangling)}."
+                    ),
+                )
+            )
+    return findings
+
+
+def _rule_unknown_counterparty(
+    records: CanonicalRecords,
+    rule: RuleConfig,
+    context: ValidationContext,
+    outcome: ValidationOutcome,
+) -> list[Finding]:
+    """Counterparty master gaps are an onboarding reality, so the default
+    severity is WARNING: the position still aggregates into the balance
+    sheet, while the gap stays visible until the counterparty file lands."""
+    known = {
+        record.source_reference for record in records.counterparties
+    } | context.known_counterparties
+    findings: list[Finding] = []
+    for position in records.positions:
+        reference = position.counterparty_reference
+        if reference is not None and known and reference not in known:
+            findings.append(
+                Finding(
+                    rule=rule.name,
+                    category="STRUCTURAL",
+                    severity=rule.severity,
+                    entity_type="position",
+                    source_reference=position.source_reference,
+                    source_locator=position.source_locator,
+                    detail=(
+                        f"Counterparty {reference!r} is not in this batch or "
+                        f"previously ingested data."
+                    ),
                 )
             )
     return findings
@@ -462,6 +502,7 @@ def _rule_unusual_balance_change(
 
 _RULES = {
     "structural_duplicate_source_references": _rule_duplicate_source_references,
+    "structural_unknown_counterparty": _rule_unknown_counterparty,
     "structural_unresolved_references": _rule_unresolved_references,
     "position_rate_bounds": _rule_position_rate_bounds,
     "currency_iso_4217": _rule_currency_iso_4217,

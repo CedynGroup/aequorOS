@@ -578,6 +578,9 @@ export const ListRegulatoryRunsModuleEnum = {
   Forecast: "forecast",
   Optimizer: "optimizer",
   Whatif: "whatif",
+  Irr: "irr",
+  Fx: "fx",
+  Ftp: "ftp",
 } as const;
 export type ListRegulatoryRunsModuleEnum =
   (typeof ListRegulatoryRunsModuleEnum)[keyof typeof ListRegulatoryRunsModuleEnum];

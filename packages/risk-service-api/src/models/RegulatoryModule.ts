@@ -20,6 +20,9 @@ export const RegulatoryModule = {
   Forecast: "forecast",
   Optimizer: "optimizer",
   Whatif: "whatif",
+  Irr: "irr",
+  Fx: "fx",
+  Ftp: "ftp",
 } as const;
 export type RegulatoryModule =
   (typeof RegulatoryModule)[keyof typeof RegulatoryModule];

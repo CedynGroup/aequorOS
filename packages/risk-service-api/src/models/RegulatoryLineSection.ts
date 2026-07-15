@@ -25,6 +25,15 @@ export const RegulatoryLineSection = {
   OperationalRwa: "operational_rwa",
   CapitalComponent: "capital_component",
   Ratio: "ratio",
+  IrrGap: "irr_gap",
+  IrrEve: "irr_eve",
+  IrrEar: "irr_ear",
+  FxPosition: "fx_position",
+  FxVar: "fx_var",
+  FxHedge: "fx_hedge",
+  FtpCurve: "ftp_curve",
+  FtpProduct: "ftp_product",
+  FtpBranch: "ftp_branch",
 } as const;
 export type RegulatoryLineSection =
   (typeof RegulatoryLineSection)[keyof typeof RegulatoryLineSection];

@@ -43,10 +43,22 @@ class MappingConfigListRead(BaseModel):
     configs: list[MappingConfigRead]
 
 
+class IngestionUploadRead(BaseModel):
+    """A source file staged in the bank's temp tier, ready to ingest."""
+
+    object_path: str
+    filename: str
+    byte_size: int
+    checksum_sha256: str
+    # Pass this verbatim as IngestionBatchCreate.location.
+    location: str
+
+
 class IngestionBatchCreate(BaseModel):
     source_system: SourceSystem
     as_of_date: date
-    # Adapter-specific source location: a file path for EXCEL_CSV.
+    # Source location: a server file path, or "temp://{object_path}" for a
+    # file previously staged via the upload endpoint.
     location: str = Field(min_length=1)
     mapping_config_id: UUID | None = None
     adapter_options: dict[str, Any] = Field(default_factory=dict)

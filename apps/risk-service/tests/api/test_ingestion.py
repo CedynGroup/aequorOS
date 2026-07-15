@@ -356,6 +356,77 @@ class TestStorageArtifacts:
         assert len(raw_objects) == 1
 
 
+class TestUploadFlow:
+    def upload(self, client: TestClient, bank_id: str, path: Path) -> dict[str, Any]:
+        with path.open("rb") as handle:
+            response = client.post(
+                f"/api/v1/banks/{bank_id}/ingestion-uploads",
+                headers=headers(),
+                files={"file": (path.name, handle, "application/octet-stream")},
+            )
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    def test_upload_then_ingest_from_temp_tier(
+        self, db_client: TestClient, tmp_path: Path, storage_engine
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        workbook = fixtures.build_well_formed(tmp_path / "uploaded.xlsx")
+
+        staged = self.upload(db_client, bank_id, workbook)
+        assert staged["filename"] == "uploaded.xlsx"
+        assert staged["byte_size"] == workbook.stat().st_size
+        assert staged["location"].startswith("temp://uploads/")
+
+        started = db_client.post(
+            f"/api/v1/banks/{bank_id}/ingestion-batches",
+            headers=headers(),
+            json={
+                "source_system": "EXCEL_CSV",
+                "as_of_date": AS_OF,
+                "location": staged["location"],
+                "reason": "Ingest uploaded workbook.",
+            },
+        )
+        assert started.status_code == 201, started.text
+        batch = started.json()["batch"]
+        assert batch["status"] == "accepted"
+        assert batch["records_accepted"] == 8
+        assert batch["raw_artifact_path"].endswith("/uploaded.xlsx")
+        assert batch["content_hash"] == staged["checksum_sha256"]
+
+    def test_missing_staged_object_fails_the_batch_loudly(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        started = db_client.post(
+            f"/api/v1/banks/{bank_id}/ingestion-batches",
+            headers=headers(),
+            json={
+                "source_system": "EXCEL_CSV",
+                "as_of_date": AS_OF,
+                "location": "temp://uploads/never-staged/ghost.xlsx",
+                "reason": "Ingest a ghost.",
+            },
+        )
+        assert started.status_code == 201
+        batch = started.json()["batch"]
+        assert batch["status"] == "failed"
+        assert batch["error_code"] == "storage_error"
+
+    def test_empty_upload_is_rejected(self, db_client: TestClient, tmp_path: Path) -> None:
+        bank_id = seed_bank(db_client)
+        empty = tmp_path / "empty.xlsx"
+        empty.write_bytes(b"")
+        with empty.open("rb") as handle:
+            response = db_client.post(
+                f"/api/v1/banks/{bank_id}/ingestion-uploads",
+                headers=headers(),
+                files={"file": (empty.name, handle, "application/octet-stream")},
+            )
+        assert response.status_code == 422
+
+
 class TestTenantIsolation:
     def test_other_tenants_see_nothing(self, db_client: TestClient, tmp_path: Path) -> None:
         bank_id = seed_bank(db_client)

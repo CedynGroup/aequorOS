@@ -18,6 +18,7 @@ import type {
   IngestionBatchListRead,
   IngestionBatchRead,
   IngestionBatchStartRead,
+  IngestionUploadRead,
   LineageWalkRead,
   MappingConfigCreate,
   MappingConfigListRead,
@@ -39,6 +40,8 @@ import {
   IngestionBatchReadToJSON,
   IngestionBatchStartReadFromJSON,
   IngestionBatchStartReadToJSON,
+  IngestionUploadReadFromJSON,
+  IngestionUploadReadToJSON,
   LineageWalkReadFromJSON,
   LineageWalkReadToJSON,
   MappingConfigCreateFromJSON,
@@ -108,6 +111,13 @@ export interface StartIngestionBatchRequest {
   xOrgId: string;
   xUserId: string;
   ingestionBatchCreate: IngestionBatchCreate;
+}
+
+export interface UploadIngestionSourceRequest {
+  bankId: string;
+  xOrgId: string;
+  xUserId: string;
+  file: Blob;
 }
 
 export interface WalkLineageRequest {
@@ -733,6 +743,106 @@ export class IngestionApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<IngestionBatchStartRead> {
     const response = await this.startIngestionBatchRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Upload Ingestion Source
+   */
+  async uploadIngestionSourceRaw(
+    requestParameters: UploadIngestionSourceRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<IngestionUploadRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling uploadIngestionSource().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling uploadIngestionSource().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling uploadIngestionSource().',
+      );
+    }
+
+    if (requestParameters["file"] == null) {
+      throw new runtime.RequiredError(
+        "file",
+        'Required parameter "file" was null or undefined when calling uploadIngestionSource().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const consumes: runtime.Consume[] = [
+      { contentType: "multipart/form-data" },
+    ];
+    // @ts-ignore: canConsumeForm may be unused
+    const canConsumeForm = runtime.canConsumeForm(consumes);
+
+    let formParams: { append(param: string, value: any): any };
+    let useForm = false;
+    // use FormData to transmit files using content-type "multipart/form-data"
+    useForm = canConsumeForm;
+    if (useForm) {
+      formParams = new FormData();
+    } else {
+      formParams = new URLSearchParams();
+    }
+
+    if (requestParameters["file"] != null) {
+      formParams.append("file", requestParameters["file"] as any);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/ingestion-uploads`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: formParams,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      IngestionUploadReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Upload Ingestion Source
+   */
+  async uploadIngestionSource(
+    requestParameters: UploadIngestionSourceRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<IngestionUploadRead> {
+    const response = await this.uploadIngestionSourceRaw(
       requestParameters,
       initOverrides,
     );

@@ -17,6 +17,7 @@
 export const RegulatoryMetricUnit = {
   Pct: "pct",
   Ghs: "ghs",
+  Years: "years",
 } as const;
 export type RegulatoryMetricUnit =
   (typeof RegulatoryMetricUnit)[keyof typeof RegulatoryMetricUnit];

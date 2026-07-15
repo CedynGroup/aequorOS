@@ -18,11 +18,30 @@ NULLABLE_UNION_MODELS = {
 }
 
 
+def _mark_binary_uploads(node: Any) -> None:
+    """Convert OpenAPI 3.1 binary-content strings to ``format: binary``.
+
+    FastAPI emits multipart file fields as ``{"type": "string",
+    "contentMediaType": ...}``; typescript-fetch only maps ``format: binary``
+    to Blob, so without this the generated upload parameter is a string.
+    """
+    if isinstance(node, dict):
+        if node.get("type") == "string" and "contentMediaType" in node:
+            node.pop("contentMediaType")
+            node["format"] = "binary"
+        for value in node.values():
+            _mark_binary_uploads(value)
+    elif isinstance(node, list):
+        for item in node:
+            _mark_binary_uploads(item)
+
+
 def prepare_schema(schema: dict[str, Any]) -> dict[str, Any]:
     prepared = deepcopy(schema)
     components = prepared["components"]["schemas"]
     for model_name in NULLABLE_UNION_MODELS:
         components[model_name].pop("additionalProperties", None)
+    _mark_binary_uploads(prepared)
     return prepared
 
 

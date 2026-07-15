@@ -13,6 +13,7 @@ export * from "./IngestionApi";
 export * from "./JobsApi";
 export * from "./LiquidityApi";
 export * from "./RegulatoryCapitalApi";
+export * from "./RegulatoryIrrApi";
 export * from "./RegulatoryLiquidityApi";
 export * from "./ScenariosApi";
 export * from "./TaxonomyApi";

@@ -66,8 +66,8 @@ class TestIndividualRules:
         assert finding.rule == rule.name
         assert "2 times" in finding.detail
 
-    def test_dangling_counterparty_reference_flagged(self) -> None:
-        rule = RuleConfig(name="structural_unresolved_references", severity="ERROR")
+    def test_unknown_counterparty_warns_by_default(self) -> None:
+        rule = RuleConfig(name="structural_unknown_counterparty", severity="WARNING")
         known = CounterpartyData(
             source_reference="C-001",
             source_locator="wb#Customers!R2",
@@ -80,7 +80,27 @@ class TestIndividualRules:
             context(),
         )
         (finding,) = outcome.findings
-        assert "counterparty 'C-404'" in finding.detail
+        assert finding.severity == "WARNING"
+        assert "'C-404'" in finding.detail
+
+    def test_previously_ingested_counterparty_resolves(self) -> None:
+        rule = RuleConfig(name="structural_unknown_counterparty", severity="WARNING")
+        outcome = run_validation(
+            records_of(make_position(counterparty_reference="C-EARLIER")),
+            config_with(rule),
+            ValidationContext(as_of_date=AS_OF, known_counterparties=frozenset({"C-EARLIER"})),
+        )
+        assert outcome.findings == []
+
+    def test_dangling_product_reference_is_an_error(self) -> None:
+        rule = RuleConfig(name="structural_unresolved_references", severity="ERROR")
+        outcome = run_validation(
+            records_of(make_position(product_code="LN.GHOST")),
+            config_with(rule),
+            ValidationContext(as_of_date=AS_OF, known_products=frozenset({"LN.REAL"})),
+        )
+        (finding,) = outcome.findings
+        assert "product 'LN.GHOST'" in finding.detail
 
     def test_rate_bounds_use_configured_limits(self) -> None:
         rule = RuleConfig(

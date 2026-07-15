@@ -31,6 +31,12 @@ export const RegulatoryScenarioCode = {
   CediDepreciation20: "cedi_depreciation_20",
   DefaultSpike: "default_spike",
   MprCut200: "mpr_cut_200",
+  ParallelUp200: "parallel_up_200",
+  ParallelDown200: "parallel_down_200",
+  ShortUp250: "short_up_250",
+  ShortDown250: "short_down_250",
+  Steepener: "steepener",
+  Flattener: "flattener",
 } as const;
 export type RegulatoryScenarioCode =
   (typeof RegulatoryScenarioCode)[keyof typeof RegulatoryScenarioCode];

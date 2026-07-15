@@ -16,6 +16,7 @@ import hashlib
 import io
 import json
 import re
+import tempfile
 from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
@@ -65,6 +66,7 @@ from app.schemas.ingestion import (
     IngestionBatchListRead,
     IngestionBatchRead,
     IngestionBatchStartRead,
+    IngestionUploadRead,
     LineageNodeRead,
     LineageWalkRead,
     MappingConfigCreate,
@@ -161,6 +163,60 @@ def list_mapping_configs(db: Session, ctx: TenantContext, bank_id: UUID) -> Mapp
     )
 
 
+class _BatchFailure(Exception):
+    """Carries the persisted failed-batch response out of the prepare phase."""
+
+    def __init__(self, response: IngestionBatchStartRead) -> None:
+        self.response = response
+
+
+def _prepare_extraction(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    payload: IngestionBatchCreate,
+    storage: StorageClient,
+):
+    """Resolve mapping, materialize the source, and extract raw records.
+
+    Any expected failure (unreachable source, staged object missing, broken
+    file) is persisted as a failed batch and raised as :class:`_BatchFailure`
+    so the orchestrator has a single success path.
+    """
+    mapping_record = _resolve_mapping_config(db, ctx, bank, payload)
+    mapping = MappingConfig.model_validate(mapping_record.config)
+    adapter = _resolve_adapter(payload.source_system)
+
+    def fail(code: str, message: str) -> _BatchFailure:
+        batch = _new_batch(ctx, bank, payload, adapter, mapping_record)
+        return _BatchFailure(_fail_batch(db, ctx, batch, payload.reason, code, message))
+
+    try:
+        source_path = _materialize_source(db, bank, payload, storage)
+    except StorageError as exc:
+        raise fail("storage_error", str(exc)) from exc
+
+    entity_tables = {
+        entity_type: entity_mapping.source_table
+        for entity_type, entity_mapping in mapping.field_mappings.items()
+    }
+    adapter_config = AdapterConfig(
+        location=source_path,
+        options={"entity_tables": entity_tables, **payload.adapter_options},
+    )
+
+    connection = adapter.validate_connection(adapter_config)
+    if not connection.ok:
+        raise fail("connection_failed", connection.detail)
+
+    try:
+        extraction = adapter.extract(adapter_config, payload.as_of_date, list(ENTITY_TYPES))
+    except Exception as exc:  # noqa: BLE001 - a broken source fails the batch, not the API
+        raise fail("extraction_failed", str(exc)) from exc
+
+    return adapter, mapping_record, mapping, source_path, extraction
+
+
 def start_ingestion(
     db: Session,
     ctx: TenantContext,
@@ -169,31 +225,16 @@ def start_ingestion(
     storage: StorageClient,
 ) -> IngestionBatchStartRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    mapping_record = _resolve_mapping_config(db, ctx, bank, payload)
-    mapping = MappingConfig.model_validate(mapping_record.config)
-    adapter = _resolve_adapter(payload.source_system)
-
-    entity_tables = {
-        entity_type: entity_mapping.source_table
-        for entity_type, entity_mapping in mapping.field_mappings.items()
-    }
-    adapter_config = AdapterConfig(
-        location=payload.location,
-        options={"entity_tables": entity_tables, **payload.adapter_options},
-    )
-
-    connection = adapter.validate_connection(adapter_config)
-    if not connection.ok:
-        batch = _new_batch(ctx, bank, payload, adapter, mapping_record)
-        return _fail_batch(db, ctx, batch, payload.reason, "connection_failed", connection.detail)
-
     try:
-        extraction = adapter.extract(adapter_config, payload.as_of_date, list(ENTITY_TYPES))
-    except Exception as exc:  # noqa: BLE001 - a broken source fails the batch, not the API
-        batch = _new_batch(ctx, bank, payload, adapter, mapping_record)
-        return _fail_batch(db, ctx, batch, payload.reason, "extraction_failed", str(exc))
+        adapter, mapping_record, mapping, source_path, extraction = _prepare_extraction(
+            db, ctx, bank, payload, storage
+        )
+    except _BatchFailure as failure:
+        return failure.response
 
-    existing = _find_accepted_batch(db, ctx, bank, payload, extraction.content_hash)
+    existing = _find_accepted_batch(
+        db, ctx, bank, payload, extraction.content_hash, mapping_record.id
+    )
     if existing is not None:
         return IngestionBatchStartRead(
             batch=IngestionBatchRead.model_validate(existing, from_attributes=True), reused=True
@@ -222,7 +263,7 @@ def start_ingestion(
         ctx,
         (bank, payload, adapter, mapping_record),
         lambda: _persist_raw_artifact(
-            ctx, bank_slug(db, bank), batch, extract_node, payload, storage
+            ctx, bank_slug(db, bank), batch, extract_node, source_path, storage
         ),
     )
     if storage_failure is not None:
@@ -255,9 +296,13 @@ def start_ingestion(
         )
 
     batch.status = "validating"
+    known_counterparties, known_products, known_gl_accounts = _known_references(db, ctx, bank)
     context = ValidationContext(
         as_of_date=payload.as_of_date,
         prior_balances=_prior_balances(db, ctx, bank, payload.as_of_date),
+        known_counterparties=known_counterparties,
+        known_products=known_products,
+        known_gl_accounts=known_gl_accounts,
     )
     outcome = run_validation(records, default_validation_config(), context)
     validate_node = _lineage(
@@ -655,13 +700,18 @@ def _new_batch(
     )
 
 
-def _find_accepted_batch(
+def _find_accepted_batch(  # noqa: PLR0913 - mirrors record_event's shape
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     payload: IngestionBatchCreate,
     content_hash: str | None,
+    mapping_config_id: UUID,
 ) -> IngestionBatch | None:
+    """Idempotency lookup: the same content under the same mapping for the
+    same business date. The mapping config is part of the key — re-ingesting
+    one workbook under a different mapping (e.g. its Deposits sheet after its
+    Loans sheet) is deliberately a new batch."""
     if content_hash is None:
         return None
     return db.scalar(
@@ -671,6 +721,7 @@ def _find_accepted_batch(
             IngestionBatch.source_system == payload.source_system,
             IngestionBatch.as_of_date == payload.as_of_date,
             IngestionBatch.content_hash == content_hash,
+            IngestionBatch.mapping_config_id == mapping_config_id,
             IngestionBatch.status.in_(BATCH_ACCEPTED_STATUSES),
         )
     )
@@ -718,6 +769,29 @@ def _lineage(  # noqa: PLR0913 - mirrors record_event's shape
     db.add(node)
     db.flush()
     return node
+
+
+def _known_references(
+    db: Session, ctx: TenantContext, bank: Bank
+) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+    """Current-generation canonical references already ingested for the bank."""
+
+    def current(column, model) -> frozenset[str]:
+        return frozenset(
+            db.scalars(
+                select(column).where(
+                    model.organization_id == ctx.organization_id,
+                    model.bank_id == bank.id,
+                    model.superseded_by.is_(None),
+                )
+            )
+        )
+
+    return (
+        current(CanonicalCounterparty.source_reference, CanonicalCounterparty),
+        current(CanonicalProduct.product_code, CanonicalProduct),
+        current(CanonicalGlAccount.account_code, CanonicalGlAccount),
+    )
 
 
 def _prior_balances(
@@ -771,7 +845,20 @@ def _persist_canonical(  # noqa: PLR0913
     def status_of(entity_type: str, source_reference: str) -> str:
         return record_statuses.get((entity_type, source_reference), "accepted")
 
-    gl_ids: dict[str, UUID] = {}
+    def existing_ids(key_column, model) -> dict[str, UUID]:
+        return dict(
+            db.execute(
+                select(key_column, model.id).where(
+                    model.organization_id == ctx.organization_id,
+                    model.bank_id == bank.id,
+                    model.superseded_by.is_(None),
+                )
+            ).all()
+        )
+
+    # Batch records supersede same-key existing rows below, so batch entries
+    # overwrite these lookups as they are (re)persisted.
+    gl_ids: dict[str, UUID] = existing_ids(CanonicalGlAccount.account_code, CanonicalGlAccount)
     for data in records.gl_accounts:
         row = CanonicalGlAccount(
             id=new_uuid7(),
@@ -806,7 +893,9 @@ def _persist_canonical(  # noqa: PLR0913
             if child is not None:
                 child.parent_account_id = gl_ids[data.parent_account_code]
 
-    counterparty_ids: dict[str, UUID] = {}
+    counterparty_ids: dict[str, UUID] = existing_ids(
+        CanonicalCounterparty.source_reference, CanonicalCounterparty
+    )
     for data in records.counterparties:
         row = CanonicalCounterparty(
             id=new_uuid7(),
@@ -837,7 +926,7 @@ def _persist_canonical(  # noqa: PLR0913
         db.add(row)
         counterparty_ids[data.source_reference] = row.id
 
-    product_ids: dict[str, UUID] = {}
+    product_ids: dict[str, UUID] = existing_ids(CanonicalProduct.product_code, CanonicalProduct)
     for data in records.products:
         row = CanonicalProduct(
             id=new_uuid7(),
@@ -959,6 +1048,85 @@ def _artifact_step(
         return _fail_batch(db, ctx, batch, payload.reason, "storage_error", str(exc))
 
 
+TEMP_SCHEME = "temp://"
+_FILENAME_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def upload_source(  # noqa: PLR0913 - mirrors record_event's shape
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    storage: StorageClient,
+    filename: str,
+    content: bytes,
+) -> IngestionUploadRead:
+    """Stage an uploaded source file in the bank's temp tier.
+
+    Uploads are proxied through the API rather than presigned so every byte
+    flows through StorageClient: encrypted, access-logged, and stamped with
+    provenance metadata. The temp tier's 30-day lifecycle cleans up staged
+    files that never get ingested.
+    """
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    slug = bank_slug(db, bank)
+    storage.ensure_institution(slug)
+
+    safe_name = _FILENAME_UNSAFE.sub("_", Path(filename or "upload").name) or "upload"
+    checksum = hashlib.sha256(content).hexdigest()
+    object_path = f"uploads/{new_uuid7()}/{safe_name}"
+    location = StorageLocation(institution_slug=slug, tier="temp", object_path=object_path)
+    storage.write(
+        location,
+        io.BytesIO(content),
+        ObjectMetadata(
+            institution_slug=slug,
+            tier="temp",
+            checksum_sha256=checksum,
+            written_at=utc_now(),
+            written_by=str(ctx.actor_user_id),
+            source_reference=safe_name,
+        ),
+    )
+    record_event(
+        db,
+        ctx,
+        event_type="ingestion_upload.staged",
+        entity_type="bank",
+        entity_id=bank.id,
+        details={"object_path": object_path, "filename": safe_name, "byte_size": len(content)},
+    )
+    db.commit()
+    return IngestionUploadRead(
+        object_path=object_path,
+        filename=safe_name,
+        byte_size=len(content),
+        checksum_sha256=checksum,
+        location=f"{TEMP_SCHEME}{object_path}",
+    )
+
+
+def _materialize_source(
+    db: Session, bank: Bank, payload: IngestionBatchCreate, storage: StorageClient
+) -> str:
+    """Resolve the batch source to a local file path the adapter can read.
+
+    ``temp://{object_path}`` locations are fetched from the bank's temp tier
+    into a scratch directory, preserving the original filename so the adapter
+    recognizes the format by suffix. Plain paths pass through unchanged.
+    """
+    if not payload.location.startswith(TEMP_SCHEME):
+        return payload.location
+    object_path = payload.location[len(TEMP_SCHEME) :]
+    slug = bank_slug(db, bank)
+    _, stream = storage.read(
+        StorageLocation(institution_slug=slug, tier="temp", object_path=object_path)
+    )
+    scratch = Path(tempfile.mkdtemp(prefix="aequoros-ingest-"))
+    local = scratch / (Path(object_path).name or "upload")
+    local.write_bytes(stream.read())
+    return str(local)
+
+
 _SLUG_UNSAFE = re.compile(r"[^a-z0-9-]+")
 
 
@@ -981,12 +1149,12 @@ def _persist_raw_artifact(  # noqa: PLR0913 - mirrors record_event's shape
     slug: str,
     batch: IngestionBatch,
     extract_node: LineageRecord,
-    payload: IngestionBatchCreate,
+    source_path: str,
     storage: StorageClient,
 ) -> None:
     """Store the untouched source file in the raw tier (storage.md §1.3)."""
     storage.ensure_institution(slug)
-    source = Path(payload.location)
+    source = Path(source_path)
     content = source.read_bytes()
     location = StorageLocation(
         institution_slug=slug,

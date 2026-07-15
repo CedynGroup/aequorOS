@@ -772,6 +772,20 @@
         "title": "BankSeedSummaryRead",
         "type": "object"
       },
+      "Body_uploadIngestionSource": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_uploadIngestionSource",
+        "type": "object"
+      },
       "Bsd2HeaderRead": {
         "additionalProperties": false,
         "properties": {
@@ -8907,6 +8921,397 @@
         "title": "IngestionBatchStartRead",
         "type": "object"
       },
+      "IngestionUploadRead": {
+        "description": "A source file staged in the bank's temp tier, ready to ingest.",
+        "properties": {
+          "byte_size": {
+            "title": "Byte Size",
+            "type": "integer"
+          },
+          "checksum_sha256": {
+            "title": "Checksum Sha256",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "object_path": {
+            "title": "Object Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_path",
+          "filename",
+          "byte_size",
+          "checksum_sha256",
+          "location"
+        ],
+        "title": "IngestionUploadRead",
+        "type": "object"
+      },
+      "IrrDashboardRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank": {
+            "$ref": "#/components/schemas/BankRead"
+          },
+          "eve_scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/IrrEveScenarioRead"
+            },
+            "title": "Eve Scenarios",
+            "type": "array"
+          },
+          "gap_table": {
+            "items": {
+              "$ref": "#/components/schemas/IrrGapBucketRead"
+            },
+            "title": "Gap Table",
+            "type": "array"
+          },
+          "latest_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Irr Dashboard Latest Run Id"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/IrrMetricsRead"
+          },
+          "period": {
+            "$ref": "#/components/schemas/BankReportingPeriodRead"
+          },
+          "stored": {
+            "title": "Stored",
+            "type": "boolean"
+          },
+          "trend": {
+            "items": {
+              "$ref": "#/components/schemas/IrrTrendPointRead"
+            },
+            "title": "Trend",
+            "type": "array"
+          },
+          "validations": {
+            "items": {
+              "$ref": "#/components/schemas/IrrValidationRead"
+            },
+            "title": "Validations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank",
+          "period",
+          "stored",
+          "latest_run_id",
+          "metrics",
+          "gap_table",
+          "eve_scenarios",
+          "trend",
+          "validations"
+        ],
+        "title": "IrrDashboardRead",
+        "type": "object"
+      },
+      "IrrEveScenarioRead": {
+        "additionalProperties": false,
+        "properties": {
+          "breach": {
+            "title": "Breach",
+            "type": "boolean"
+          },
+          "delta_eve_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Delta Eve Ghs",
+            "type": "string"
+          },
+          "delta_eve_pct_tier1": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Delta Eve Pct Tier1",
+            "type": "string"
+          },
+          "eve_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Eve Ghs",
+            "type": "string"
+          },
+          "scenario_code": {
+            "$ref": "#/components/schemas/IrrScenarioCode"
+          }
+        },
+        "required": [
+          "scenario_code",
+          "eve_ghs",
+          "delta_eve_ghs",
+          "delta_eve_pct_tier1",
+          "breach"
+        ],
+        "title": "IrrEveScenarioRead",
+        "type": "object"
+      },
+      "IrrGapBucketRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "cumulative_gap_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cumulative Gap Ghs",
+            "type": "string"
+          },
+          "gap_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Gap Ghs",
+            "type": "string"
+          },
+          "midpoint_years": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Midpoint Years",
+            "type": "string"
+          },
+          "rsa_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rsa Ghs",
+            "type": "string"
+          },
+          "rsl_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rsl Ghs",
+            "type": "string"
+          },
+          "within_12m": {
+            "title": "Within 12M",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bucket",
+          "midpoint_years",
+          "rsa_ghs",
+          "rsl_ghs",
+          "gap_ghs",
+          "cumulative_gap_ghs",
+          "within_12m"
+        ],
+        "title": "IrrGapBucketRead",
+        "type": "object"
+      },
+      "IrrMetricsRead": {
+        "additionalProperties": false,
+        "properties": {
+          "asset_duration": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Asset Duration",
+            "type": "string"
+          },
+          "cumulative_12m_gap_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cumulative 12M Gap Ghs",
+            "type": "string"
+          },
+          "duration_gap": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Duration Gap",
+            "type": "string"
+          },
+          "ear_down_200_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ear Down 200 Ghs",
+            "type": "string"
+          },
+          "ear_up_200_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ear Up 200 Ghs",
+            "type": "string"
+          },
+          "eve_base_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Eve Base Ghs",
+            "type": "string"
+          },
+          "eve_limit_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Eve Limit Pct",
+            "type": "string"
+          },
+          "eve_status": {
+            "$ref": "#/components/schemas/IrrStatus"
+          },
+          "liability_duration": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Liability Duration",
+            "type": "string"
+          },
+          "nii_base_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nii Base Ghs",
+            "type": "string"
+          },
+          "tier1_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tier1 Ghs",
+            "type": "string"
+          },
+          "worst_eve_change_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Worst Eve Change Ghs",
+            "type": "string"
+          },
+          "worst_eve_change_pct_tier1": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Worst Eve Change Pct Tier1",
+            "type": "string"
+          },
+          "worst_scenario_code": {
+            "$ref": "#/components/schemas/IrrScenarioCode"
+          }
+        },
+        "required": [
+          "eve_base_ghs",
+          "worst_scenario_code",
+          "worst_eve_change_ghs",
+          "worst_eve_change_pct_tier1",
+          "eve_status",
+          "eve_limit_pct",
+          "ear_up_200_ghs",
+          "ear_down_200_ghs",
+          "nii_base_ghs",
+          "asset_duration",
+          "liability_duration",
+          "duration_gap",
+          "cumulative_12m_gap_ghs",
+          "tier1_ghs"
+        ],
+        "title": "IrrMetricsRead",
+        "type": "object"
+      },
+      "IrrScenarioBatchCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reporting_period_id"
+        ],
+        "title": "IrrScenarioBatchCreate",
+        "type": "object"
+      },
+      "IrrScenarioCode": {
+        "enum": [
+          "baseline",
+          "parallel_up_200",
+          "parallel_down_200",
+          "short_up_250",
+          "short_down_250",
+          "steepener",
+          "flattener"
+        ],
+        "type": "string"
+      },
+      "IrrStatus": {
+        "enum": [
+          "green",
+          "amber",
+          "red"
+        ],
+        "type": "string"
+      },
+      "IrrTrendPointRead": {
+        "additionalProperties": false,
+        "properties": {
+          "cumulative_12m_gap_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cumulative 12M Gap Ghs",
+            "type": "string"
+          },
+          "duration_gap": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Duration Gap",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "stored": {
+            "title": "Stored",
+            "type": "boolean"
+          },
+          "worst_eve_change_pct_tier1": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Worst Eve Change Pct Tier1",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reporting_period_id",
+          "label",
+          "period_end",
+          "worst_eve_change_pct_tier1",
+          "duration_gap",
+          "cumulative_12m_gap_ghs",
+          "stored"
+        ],
+        "title": "IrrTrendPointRead",
+        "type": "object"
+      },
+      "IrrValidationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "rule_code": {
+            "title": "Rule Code",
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/RegulatoryValidationSeverity"
+          }
+        },
+        "required": [
+          "rule_code",
+          "passed",
+          "severity",
+          "message"
+        ],
+        "title": "IrrValidationRead",
+        "type": "object"
+      },
       "JobRead": {
         "properties": {
           "attempts": {
@@ -10784,7 +11189,16 @@
           "market_rwa",
           "operational_rwa",
           "capital_component",
-          "ratio"
+          "ratio",
+          "irr_gap",
+          "irr_eve",
+          "irr_ear",
+          "fx_position",
+          "fx_var",
+          "fx_hedge",
+          "ftp_curve",
+          "ftp_product",
+          "ftp_branch"
         ],
         "type": "string"
       },
@@ -10851,7 +11265,8 @@
       "RegulatoryMetricUnit": {
         "enum": [
           "pct",
-          "ghs"
+          "ghs",
+          "years"
         ],
         "type": "string"
       },
@@ -10861,7 +11276,10 @@
           "capital",
           "forecast",
           "optimizer",
-          "whatif"
+          "whatif",
+          "irr",
+          "fx",
+          "ftp"
         ],
         "type": "string"
       },
@@ -11240,7 +11658,13 @@
           "rate_shock_up_400",
           "cedi_depreciation_20",
           "default_spike",
-          "mpr_cut_200"
+          "mpr_cut_200",
+          "parallel_up_200",
+          "parallel_down_200",
+          "short_up_250",
+          "short_down_250",
+          "steepener",
+          "flattener"
         ],
         "type": "string"
       },
@@ -16469,6 +16893,383 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/ingestion-uploads": {
+      "post": {
+        "operationId": "uploadIngestionSource",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_uploadIngestionSource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionUploadRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Upload Ingestion Source",
+        "tags": [
+          "ingestion"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/irr/dashboard": {
+      "get": {
+        "operationId": "getIrrDashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reporting_period_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reporting Period Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IrrDashboardRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Irr Dashboard",
+        "tags": [
+          "regulatory-irr"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/irr/run-all-scenarios": {
+      "post": {
+        "operationId": "runAllIrrScenarios",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IrrScenarioBatchCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegulatoryRunBatchRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Run All Irr Scenarios",
+        "tags": [
+          "regulatory-irr"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/liquidity/dashboard": {
       "get": {
         "operationId": "getLiquidityDashboard",
@@ -17119,7 +17920,10 @@
                     "capital",
                     "forecast",
                     "optimizer",
-                    "whatif"
+                    "whatif",
+                    "irr",
+                    "fx",
+                    "ftp"
                   ],
                   "type": "string"
                 },
