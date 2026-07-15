@@ -22,6 +22,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Keep every financial mutation disabled while demo mode is active. Constrain account and
   obligation statuses to generated contract values; automatic covenant compliance recalculation
   must omit `complianceStatus` so the backend derives it from the covenant inputs.
+- The case-health header summarizes financial validation, scenario readiness, the latest forecast,
+  active findings by severity, covenant compliance, and decision state. Keep its queries tenant- and
+  case-scoped, reuse the owning tabs' cache keys, and make each summary navigate to and focus its tab
+  exactly once.
 - Validate web changes with `pnpm --filter @aequoros/aequoros-web typecheck`, `lint`, `test`, and
   `build`; deterministic financial review journeys are in `e2e/financial-review.spec.ts`.
 - Balance-sheet forecast attempts live under `/api/v1/cases/{case_id}/calculation-runs`.
