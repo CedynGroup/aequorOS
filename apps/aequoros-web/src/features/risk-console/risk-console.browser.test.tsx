@@ -4,6 +4,7 @@ import { page, userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 
+import "../../styles.css";
 import {
   DEFAULT_ORG_ID,
   DEFAULT_TENANT_OPTIONS,

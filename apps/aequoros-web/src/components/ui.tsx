@@ -227,12 +227,15 @@ export function Select({
       <SelectPrimitive.Trigger
         aria-label={ariaLabel ?? placeholder}
         className={cn(
-          "inline-flex h-8 min-w-36 items-center justify-between gap-2 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2.5 text-sm outline-none focus:border-[rgb(var(--focus))] disabled:cursor-not-allowed disabled:opacity-50",
+          "inline-flex h-8 min-w-36 items-center justify-between gap-2 overflow-hidden rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-2.5 text-sm outline-none focus:border-[rgb(var(--focus))] disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
       >
-        <SelectPrimitive.Value placeholder={placeholder} />
-        <SelectPrimitive.Icon>
+        <SelectPrimitive.Value
+          className="min-w-0 flex-1 truncate text-left"
+          placeholder={placeholder}
+        />
+        <SelectPrimitive.Icon className="shrink-0">
           <ChevronDown className="size-3.5" />
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
