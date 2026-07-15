@@ -137,6 +137,10 @@ test("summarizes the seeded breaching case without optimistic defaults", async (
     ),
   ).toBeVisible();
   await expect(health.getByText("Non-compliant")).toBeVisible();
+  expect(
+    await health.evaluate((header) => header.scrollWidth <= header.clientWidth),
+  ).toBe(true);
+  await captureEvidence(page, "seeded-breaching-case-health");
 });
 
 test("initializes, edits, reviews, copies, archives, and tenant-isolates scenarios", async ({

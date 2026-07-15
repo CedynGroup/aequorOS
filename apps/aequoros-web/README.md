@@ -51,6 +51,15 @@ forecast, liquidity, capital, finding, and decision mutations are disabled.
 Archived cases are likewise read-only. Document download links remain
 available because they do not mutate case data.
 
+The deterministic portfolio includes a non-compliant liquidity covenant for
+Mariner Cold Storage so the case-health summary and adverse-state journeys do
+not rely on optimistic defaults.
+
+When the API is unavailable, frontend demo mode provides populated, validated
+financial data, reviewed baseline and downside scenarios, an immutable
+successful forecast, active and historical findings, covenant status, and
+decision history. These review surfaces are read-only and make no API requests.
+
 ## Console Navigation And Scenario Review
 
 The top bar provides named demo organization and case selectors. Selecting an
@@ -66,6 +75,21 @@ entering `5` persists `0.05`. Other recognized units appear as input suffixes.
 Forecast horizons show a `years` suffix. Capital ratios and liquidity ratio
 metrics use percentage formatting with up to two decimal places, except minimum
 sources coverage, which remains a multiple such as `1.20x`.
+
+## Case Health
+
+The case detail header summarizes canonical financial validation, scenario
+readiness, the latest forecast and its stable `Forecast #N` reference, active
+findings by severity, historical finding count, covenant compliance, and the
+current decision. Loading, unavailable, empty, healthy, warning, and adverse
+states are explicit; an unavailable query is shown as unknown rather than
+healthy.
+
+Each summary is a keyboard-accessible link to its owning tab. Activating one
+updates the route and focuses the selected tab panel once. The header shares
+tenant- and case-scoped React Query keys with the owning tabs, so financial,
+scenario, forecast, finding, and decision changes refresh the summary without
+cross-case cache leakage.
 
 ## Financial Review
 
@@ -240,6 +264,7 @@ The web app uses a feature-based split so each operational surface owns its UI a
 - `src/features/risk-console/shell.tsx`: sidebar and top-bar console chrome
 - `src/features/risk-console/case-queue-panel.tsx`: queue filters, table, selection, and pagination
 - `src/features/risk-console/bulk-actions.tsx`: bulk action dialog, mutation, and result rendering
+- `src/features/risk-console/case-health-header.tsx`: case validation, scenario, forecast, finding, covenant, and decision summaries with owning-tab navigation
 - `src/features/risk-console/case-workspace.tsx`: detail summary, overview, financial, scenarios, forecast, capital, liquidity, decisions, documents, findings, and report tabs
 - `src/features/risk-console/format.tsx`: risk/status/decision badges and date formatting
 - `src/features/risk-console/types.ts`: feature-local queue/search helper types
@@ -281,6 +306,8 @@ Vitest tests are colocated with the module they protect:
 - `src/features/charts/analysis-charts.test.tsx`: SVG points, labels, threshold, gap annotations, and unavailable states
 - `src/features/charts/chart-shell.test.tsx`: lazy-loading fallback and chart-failure isolation
 - `src/features/demo-data/demo-data.test.ts`: fallback/demo data filtering and detail construction
+- `src/features/risk-console/case-health-header.test.tsx`: summary loading, empty, error, healthy, adverse, cache-refresh, and navigation states
+- `src/features/risk-console/case-workspace.test.tsx`: case-health tab routing, single-focus behavior, and populated read-only demo tabs
 - `src/routes/search.test.ts`: typed search-param parsing
 - `src/features/risk-console/risk-console.test.tsx`: bulk action result grouping
 
@@ -294,7 +321,8 @@ entry, and covenant-entry journeys. `e2e/capital-projection.spec.ts` covers the
 deterministic capital projection, comparison chart, finding-evidence, failure,
 and tenant-isolation workflow. `e2e/risk-console.spec.ts` covers forecast-chart
 rendering and the persisted liquidity-threshold reference line in its seeded
-analysis journeys, and also verifies the compact scenario table and that the
-console has no horizontal overflow at 1440x1000 and 1280x800 viewports.
+analysis journeys; it also verifies the compact scenario table, seeded breaching
+case-health summary, console overflow at 1440x1000, and header overflow at
+1280x800.
 Component coverage retains the unavailable state for legacy analyses without
 persisted threshold metadata.
