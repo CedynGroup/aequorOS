@@ -93,6 +93,13 @@ EXPECTED_FX_NET_LONG = Decimal("10280000")
 EXPECTED_FX_NET_SHORT = Decimal("0")
 FX_HISTORY_DAYS = 150
 
+# Hedge/swap overlay (seed_hedge_and_swap_positions): two hedges sell 700k USD
+# (delta -8,995,000 GHS at the 12.85 spot), so the raw +10.28M USD long
+# (29.4% of the fixture's 35M Tier 1 — a breach) lands at +1.285M (3.7%).
+HEDGE_USD_SOLD = Decimal("700000")
+EXPECTED_POST_HEDGE_USD_NET = Decimal("1285000")
+SWAP_NOTIONAL_GHS = Decimal("20000000")
+
 
 def seed_canonical_fixture(  # noqa: PLR0915 - one linear, readable fixture script
     session: Session, *, organization_id: UUID, bank_id: UUID, as_of: date = FIXTURE_AS_OF
@@ -490,6 +497,135 @@ def seed_canonical_fixture(  # noqa: PLR0915 - one linear, readable fixture scri
     )
 
     _seed_reference_rows(session, common, batch.id, as_of)
+    session.flush()
+
+
+def seed_hedge_and_swap_positions(
+    session: Session, *, organization_id: UUID, bank_id: UUID, as_of: date = FIXTURE_AS_OF
+) -> None:
+    """Overlay an FX hedge book and a pay-fixed IRS on the canonical fixture.
+
+    Kept separate from ``seed_canonical_fixture`` so the base fixture's raw
+    (unhedged) FX breach stays assertable; tests that want the hedged book
+    call both.
+    """
+    batch = IngestionBatch(
+        organization_id=organization_id,
+        bank_id=bank_id,
+        source_system="EXCEL_CSV",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=as_of,
+    )
+    session.add(batch)
+    session.flush()
+    lineage = LineageRecord(
+        organization_id=organization_id,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="hedge-swap-fixture",
+        input_lineage_ids=[],
+    )
+    session.add(lineage)
+    session.flush()
+
+    common = {
+        "organization_id": organization_id,
+        "bank_id": bank_id,
+        "as_of_date": as_of,
+        "source_system": "EXCEL_CSV",
+        "ingestion_batch_id": batch.id,
+        "lineage_id": lineage.id,
+        "validation_status": "accepted",
+    }
+
+    def hedge_or_swap(  # noqa: PLR0913 - keyword-only fixture builder
+        source_reference: str,
+        position_type: str,
+        currency: str,
+        *,
+        balance: str,
+        maturity: date,
+        attributes: dict[str, Any],
+    ) -> None:
+        row = CanonicalPosition(
+            **common,
+            source_reference=source_reference,
+            position_type=position_type,
+            currency=currency,
+        )
+        session.add(row)
+        session.flush()
+        session.add(
+            CanonicalPositionSnapshot(
+                **common,
+                source_reference=source_reference,
+                position_id=row.id,
+                balance=Decimal(balance),
+                notional=Decimal(balance),
+                contractual_maturity=maturity,
+                attributes=attributes,
+            )
+        )
+
+    # Effective forward: sells 600k USD against GHS.
+    hedge_or_swap(
+        "HEDGE/1",
+        "FX_HEDGE",
+        "USD",
+        balance="600000",
+        maturity=as_of + timedelta(days=90),
+        attributes={
+            "hedge_id": "FXH-T-001",
+            "instrument": "FORWARD",
+            "currency_pair": "USD/GHS",
+            "buy_currency": "GHS",
+            "sell_currency": "USD",
+            "notional_currency": "USD",
+            "contract_rate": "13.0",
+            "mtm_ghs": "250000",
+            "prospective_r2": "0.94",
+            "dollar_offset_ratio": "1.02",
+        },
+    )
+    # Ineffective option (R^2 below 0.80): still sells 100k USD economically.
+    hedge_or_swap(
+        "HEDGE/2",
+        "FX_HEDGE",
+        "USD",
+        balance="100000",
+        maturity=as_of + timedelta(days=45),
+        attributes={
+            "hedge_id": "FXH-T-002",
+            "instrument": "OPTION",
+            "currency_pair": "USD/GHS",
+            "buy_currency": "GHS",
+            "sell_currency": "USD",
+            "notional_currency": "USD",
+            "contract_rate": "12.9",
+            "mtm_ghs": "-20000",
+            "prospective_r2": "0.72",
+            "dollar_offset_ratio": "0.95",
+        },
+    )
+    # Pay-fixed IRS: 20M GHS, remaining tenor 3y (1095 days -> the 1-3y bucket).
+    hedge_or_swap(
+        "SWAP/1",
+        "INTEREST_RATE_SWAP",
+        "GHS",
+        balance="20000000",
+        maturity=as_of + timedelta(days=1095),
+        attributes={
+            "swap_id": "IRS-T-001",
+            "direction": "PAY_FIXED",
+            "notional_ghs": "20000000",
+            "pay_rate_pct": "25.3",
+            "receive_index": "91D_TBILL",
+            "tenor_years": "3",
+            "mtm_ghs": "800000",
+        },
+    )
     session.flush()
 
 

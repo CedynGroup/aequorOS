@@ -23,10 +23,14 @@ from tests.factories.canonical import (
     EXPECTED_FX_NET_LONG,
     EXPECTED_FX_NET_SHORT,
     EXPECTED_LOANS_GROSS,
+    EXPECTED_POST_HEDGE_USD_NET,
     EXPECTED_SECURITIES_BILLS,
     EXPECTED_SECURITIES_BONDS,
     FIXTURE_AS_OF,
+    HEDGE_USD_SOLD,
+    SWAP_NOTIONAL_GHS,
     seed_canonical_fixture,
+    seed_hedge_and_swap_positions,
 )
 
 EXPECTED_GROUPS = {
@@ -192,6 +196,124 @@ def test_derivation_creates_every_group_with_plausible_aggregates(  # noqa: PLR0
         assert source == "data_engine" or (
             source == "cash" and fact.attributes.get("derived_by") == "data_engine"
         )
+
+
+# The exact attribute payloads the FX and IRR services read from seed-shaped
+# hedge and swap facts, plus the provenance keys every derived fact carries.
+SEED_FX_HEDGE_KEYS = {
+    "hedge_id",
+    "instrument",
+    "pair",
+    "notional_ccy",
+    "rate",
+    "maturity_days",
+    "mtm_ghs",
+    "prospective_r2",
+    "dollar_offset_ratio",
+}
+SEED_IRR_SWAP_KEYS = {
+    "notional",
+    "pay_rate_pct",
+    "receive_index",
+    "tenor_years",
+    "direction",
+    "receive_bucket",
+    "receive_midpoint_years",
+    "pay_bucket",
+    "pay_midpoint_years",
+}
+PROVENANCE_KEYS = {"source", "derived_from"}
+FIXTURE_TIER1 = Decimal("35000000")  # 40M CET1 share capital - 5M goodwill
+AGGREGATE_LIMIT_PCT = Decimal("20")
+SINGLE_LIMIT_PCT = Decimal("10")
+
+
+def _prepare_hedged(db_session: Session) -> DerivationResult:
+    seed_sample_bank(db_session)
+    db_session.flush()
+    seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    seed_hedge_and_swap_positions(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    result = derive_facts(db_session, _ctx(), SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+    return result
+
+
+def test_fx_hedge_facts_are_seed_shaped(db_session: Session) -> None:
+    result = _prepare_hedged(db_session)
+
+    statuses = {group.group: group.status for group in result.groups}
+    assert statuses["fx_hedge"] == "derived"
+    grouped = _by_group(_facts(db_session, result))
+    hedges = grouped["fx_hedge"]
+    assert set(hedges) == {"FXH-T-001", "FXH-T-002"}
+
+    forward = hedges["FXH-T-001"]
+    assert set(forward.attributes) == SEED_FX_HEDGE_KEYS | PROVENANCE_KEYS
+    assert forward.amount == Decimal("250000")  # amount carries the MtM, like the seed
+    assert forward.attributes["instrument"] == "forward"
+    assert forward.attributes["pair"] == "USD/GHS"
+    assert forward.attributes["notional_ccy"] == "600000.0000"
+    assert forward.attributes["rate"] == "13.0"
+    assert forward.attributes["maturity_days"] == "90"
+    assert forward.attributes["prospective_r2"] == "0.94"
+    assert forward.attributes["dollar_offset_ratio"] == "1.02"
+
+    option = hedges["FXH-T-002"]
+    assert option.amount == Decimal("-20000")
+    assert option.attributes["instrument"] == "option"
+    assert option.attributes["prospective_r2"] == "0.72"  # fails the IFRS 9 screen
+
+
+def test_irr_swap_facts_are_seed_shaped(db_session: Session) -> None:
+    result = _prepare_hedged(db_session)
+
+    statuses = {group.group: group.status for group in result.groups}
+    assert statuses["irr_swap"] == "derived"
+    grouped = _by_group(_facts(db_session, result))
+    swaps = grouped["irr_swap"]
+    assert set(swaps) == {"IRS-T-001"}
+
+    swap = swaps["IRS-T-001"]
+    assert set(swap.attributes) == SEED_IRR_SWAP_KEYS | PROVENANCE_KEYS
+    assert swap.amount == SWAP_NOTIONAL_GHS
+    assert swap.attributes["notional"] == "20000000.0000"
+    assert swap.attributes["pay_rate_pct"] == "25.3"
+    assert swap.attributes["receive_index"] == "91d_tbill"
+    assert swap.attributes["direction"] == "pay_fixed"
+    assert swap.attributes["tenor_years"] == "3"
+    # Leg placement: floating receive at the 91-day reset, fixed pay at the
+    # remaining maturity — midpoints are canonical bucket midpoints, so the
+    # parameter-table discount curve keys match.
+    assert swap.attributes["receive_bucket"] == "1-3m"
+    assert swap.attributes["receive_midpoint_years"] == "0.17"
+    assert swap.attributes["pay_bucket"] == "1-3y"
+    assert swap.attributes["pay_midpoint_years"] == "1.9"
+
+
+def test_hedges_bring_breaching_nop_under_the_limits(db_session: Session) -> None:
+    # Raw book: +10.28M GHS USD long vs 35M Tier 1 = 29.4% — breaches both the
+    # 20% aggregate and 10% single-currency limits. The hedge book sells 700k
+    # USD (8.995M GHS at 12.85), landing the net at +1.285M = 3.7% (compliant).
+    raw_pct = EXPECTED_FX_NET_LONG / FIXTURE_TIER1 * 100
+    assert raw_pct > AGGREGATE_LIMIT_PCT
+    assert raw_pct > SINGLE_LIMIT_PCT
+
+    result = _prepare_hedged(db_session)
+    grouped = _by_group(_facts(db_session, result))
+
+    usd = grouped["fx_position"]["USD"]
+    assert usd.amount == EXPECTED_POST_HEDGE_USD_NET
+    assert usd.attributes["net_derivatives_ccy"] == f"-{HEDGE_USD_SOLD}.0000"
+    assert usd.attributes["net_ccy"] == "100000.0000"
+    assert usd.attributes["side"] == "long"
+
+    market = grouped["market_risk"]
+    assert market["net_long_fx"].amount == EXPECTED_POST_HEDGE_USD_NET
+    assert market["net_short_fx"].amount == Decimal("0")
+
+    post_pct = EXPECTED_POST_HEDGE_USD_NET / FIXTURE_TIER1 * 100
+    assert post_pct < SINGLE_LIMIT_PCT
+    assert post_pct < AGGREGATE_LIMIT_PCT
 
 
 def test_rederivation_is_idempotent_and_replaces_facts(db_session: Session) -> None:

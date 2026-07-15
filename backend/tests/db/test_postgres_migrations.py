@@ -663,3 +663,30 @@ def test_postgres_migrations_create_canonical_reference_rows_with_rls(
         "uq_canonical_reference_rows_id_org",
     }
     assert migrated_postgres_schema.constraints(constraints) == constraints
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_postgres_migrations_widen_position_types_for_hedges_and_swaps(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    """202607170003 widens the canonical position-type CHECK so FX hedge and
+    interest-rate-swap positions persist; the widened constraint must admit
+    exactly the model's POSITION_TYPES."""
+    with migrated_postgres_schema.app_engine.connect() as connection:
+        definition = connection.execute(
+            text(
+                """
+                SELECT pg_get_constraintdef(pg_constraint.oid)
+                FROM pg_constraint
+                JOIN pg_namespace ON pg_namespace.oid = pg_constraint.connamespace
+                WHERE pg_constraint.conname = 'ck_canonical_positions_position_type'
+                  AND pg_namespace.nspname = :schema_name
+                """
+            ),
+            {"schema_name": migrated_postgres_schema.schema_name},
+        ).scalar_one()
+    for position_type in ("FX_HEDGE", "INTEREST_RATE_SWAP", "LOAN", "LC_GUARANTEE"):
+        assert f"'{position_type}'" in definition

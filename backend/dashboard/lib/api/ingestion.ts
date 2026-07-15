@@ -91,10 +91,12 @@ const counterpartyMapping = {
 };
 
 // One position mapping serves every position sheet/file: loans, deposits,
-// securities, interbank, and the OBS register. Fallback column lists bridge
-// header differences (the LC/guarantee sheet has no balance_ccy and carries
-// issue/expiry dates instead of origination/maturity); columns the canonical
-// schema has no dedicated home for ride along in attributes.
+// securities, interbank, the OBS register, the FX hedge book, and the
+// interest-rate swap blotter. Fallback column lists bridge header differences
+// (the LC/guarantee sheet has no balance_ccy and carries issue/expiry dates
+// instead of origination/maturity; hedges and swaps carry trade/maturity
+// dates); columns the canonical schema has no dedicated home for ride along
+// in attributes (hedge pair/rate/MtM/effectiveness, swap legs, ...).
 const positionMapping = {
   sourceTable: 'Loans',
   sourceTableAliases: [
@@ -107,6 +109,10 @@ const positionMapping = {
     '09_interbank',
     'LC_and_Guarantees',
     '10_off_balance_sheet',
+    'FX_Hedges',
+    '18_fx_hedges',
+    'Interest_Rate_Swaps',
+    '19_interest_rate_swaps',
   ],
   fields: {
     source_reference: 'position_id',
@@ -117,8 +123,8 @@ const positionMapping = {
     counterparty_reference: 'counterparty_id',
     product_code: 'product_code',
     gl_account_code: 'gl_code',
-    origination_date: ['origination_date', 'issue_date'],
-    contractual_maturity: ['contractual_maturity', 'expiry_date'],
+    origination_date: ['origination_date', 'issue_date', 'trade_date'],
+    contractual_maturity: ['contractual_maturity', 'expiry_date', 'maturity_date'],
     next_repricing_date: 'next_repricing_date',
     interest_rate: 'interest_rate',
     rate_type: 'rate_type',
@@ -135,6 +141,24 @@ const positionMapping = {
     'isin',
     'credit_conversion_factor',
     'credit_equivalent_ghs',
+    // FX hedge book (18_fx_hedges / FX_Hedges)
+    'hedge_id',
+    'instrument',
+    'currency_pair',
+    'buy_currency',
+    'sell_currency',
+    'notional_currency',
+    'contract_rate',
+    'mtm_ghs',
+    'prospective_r2',
+    'dollar_offset_ratio',
+    // Interest-rate swaps (19_interest_rate_swaps / Interest_Rate_Swaps)
+    'swap_id',
+    'direction',
+    'pay_rate_pct',
+    'receive_index',
+    'tenor_years',
+    'counterparty_ref',
     'source_system',
     'source_reference',
   ],
@@ -201,7 +225,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     key: 'sample-bank-complete',
     name: 'Sample Bank complete (CSV + Excel)',
     description:
-      'One mapping for the whole Sample Bank dataset: GL, products, counterparties, and every position book, plus the reference datasets (capital, behavioral, market data, history). Aliases cover both the CSV files and the workbook sheets — upload the files in any order.',
+      'One mapping for the whole Sample Bank dataset: GL, products, counterparties, and every position book — including the treasury FX hedge book and interest-rate swap blotter — plus the reference datasets (capital, behavioral, market data, history). Aliases cover both the CSV files and the workbook sheets — upload the files in any order. Re-activating creates a new mapping-config version.',
     ingests: [
       '01_Balance_Sheet_Master.xlsx · 03_gl_accounts.csv · 04_products.csv',
       '02_Customer_Positions.xlsx · 06_loans.csv · 07_deposits.csv',
@@ -209,6 +233,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       '04_Capital_and_Behavioral.xlsx · 11/12_*.csv',
       '05_Market_Data.xlsx · 13_yield_curves.csv',
       '06_Historical_Data.xlsx · 16/17_*.csv',
+      '18_fx_hedges.csv · 19_interest_rate_swaps.csv',
     ],
     config: {
       fieldMappings: {

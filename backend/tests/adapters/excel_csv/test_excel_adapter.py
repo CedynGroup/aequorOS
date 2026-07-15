@@ -17,7 +17,7 @@ from app.domain.ingestion.contracts import (
 from tests.adapters.contract import AdapterContractSuite, as_of  # noqa: F401
 from tests.adapters.excel_csv import fixtures
 
-POSITION_FIELDS = {
+POSITION_FIELDS: dict[str, str | list[str]] = {
     "source_reference": "AccountRef",
     "position_type": "Type",
     "currency": "Ccy",
@@ -304,6 +304,87 @@ class TestTableResolutionAndAliases:
         assert obs.position_type == "LC_GUARANTEE"
         assert obs.balance == Decimal("500")  # fallback column NotionalCcy
         assert obs.attributes == {"CCF": "0.2"}
+
+    def test_fx_hedge_and_swap_books_ingest_with_types_and_attributes(self, tmp_path: Path) -> None:
+        """The starter template's hedge/swap carriage: canonical position types
+        flow from the position_type column, dates through the trade/maturity
+        fallbacks, and instrument specifics ride in attributes."""
+        adapter = ExcelCsvAdapter()
+        config = AdapterConfig(
+            location=str(fixtures.build_hedge_and_swap_book(tmp_path / "hedges.xlsx")),
+            options={"entity_tables": {"position": ["FX_Hedges", "Interest_Rate_Swaps"]}},
+        )
+        mapping = MappingConfig(
+            field_mappings={
+                "position": EntityMapping(
+                    source_table="FX_Hedges",
+                    source_table_aliases=["Interest_Rate_Swaps"],
+                    fields={
+                        "source_reference": "position_id",
+                        "position_type": "position_type",
+                        "currency": "currency",
+                        "balance": ["balance_ccy", "notional_ccy"],
+                        "notional": "notional_ccy",
+                        "origination_date": ["origination_date", "issue_date", "trade_date"],
+                        "contractual_maturity": [
+                            "contractual_maturity",
+                            "expiry_date",
+                            "maturity_date",
+                        ],
+                        "interest_rate": "interest_rate",
+                    },
+                    attribute_columns=[
+                        "hedge_id",
+                        "instrument",
+                        "currency_pair",
+                        "buy_currency",
+                        "sell_currency",
+                        "contract_rate",
+                        "mtm_ghs",
+                        "prospective_r2",
+                        "dollar_offset_ratio",
+                        "swap_id",
+                        "direction",
+                        "notional_ghs",
+                        "pay_rate_pct",
+                        "receive_index",
+                        "tenor_years",
+                    ],
+                )
+            },
+        )
+        extraction = adapter.extract(config, fixtures.AS_OF, ["position"])
+        records = adapter.translate(extraction, mapping)
+        assert not records.failures
+        by_reference = {p.source_reference: p for p in records.positions}
+        assert set(by_reference) == {"SBL-FXH-000001", "SBL-IRS-000001"}
+
+        hedge = by_reference["SBL-FXH-000001"]
+        assert hedge.position_type == "FX_HEDGE"
+        assert hedge.currency == "USD"
+        assert hedge.balance == Decimal("3000000")  # notional_ccy via fallback
+        assert hedge.origination_date == date(2026, 1, 30)  # trade_date fallback
+        assert hedge.contractual_maturity == date(2026, 7, 29)  # maturity_date fallback
+        assert hedge.attributes["hedge_id"] == "FXH-USD-001"
+        assert hedge.attributes["instrument"] == "FORWARD"
+        assert hedge.attributes["sell_currency"] == "USD"
+        assert hedge.attributes["contract_rate"] == "13.05"
+        assert hedge.attributes["prospective_r2"] == "0.94"
+        assert hedge.attributes["dollar_offset_ratio"] == "1.02"
+        assert "swap_id" not in hedge.attributes
+
+        swap = by_reference["SBL-IRS-000001"]
+        assert swap.position_type == "INTEREST_RATE_SWAP"
+        assert swap.currency == "GHS"
+        assert swap.balance == Decimal("60000000")
+        assert swap.interest_rate == Decimal("0.2475")
+        assert swap.contractual_maturity == date(2028, 4, 28)
+        assert swap.attributes["swap_id"] == "IRS-2026-001"
+        assert swap.attributes["direction"] == "PAY_FIXED"
+        assert swap.attributes["pay_rate_pct"] == "24.75"
+        assert swap.attributes["receive_index"] == "91D_TBILL"
+        assert swap.attributes["tenor_years"] == "2"  # Excel normalizes 2.0 -> 2
+        assert "hedge_id" not in swap.attributes
 
     def test_legacy_single_table_option_still_works(self, tmp_path: Path) -> None:
         adapter = ExcelCsvAdapter()

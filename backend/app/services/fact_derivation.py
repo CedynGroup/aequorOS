@@ -80,19 +80,31 @@ lcr_inflow
 market_risk / fx_position
     Per non-GHS currency: assets (LOAN, SECURITY_HOLDING, INTERBANK_PLACEMENT)
     minus liabilities (DEPOSIT, INTERBANK_BORROWING), both in original currency
-    and in GHS via the ingested ``balance_ghs``. Spot from ``fx_rates_current``.
-    LC_GUARANTEE is off-balance and excluded from the NOP. A currency without
-    a daily return history is excluded from ``fx_position`` (the VaR engine
-    requires a history) and warned. ``net_long_fx`` / ``net_short_fx`` are the
-    long/short sums over the included currencies.
+    and in GHS via the ingested ``balance_ghs``, plus the signed FX_HEDGE
+    notional deltas: a hedge's sell leg subtracts its notional from the sold
+    currency's net and its buy leg adds ``notional × contract_rate`` to the
+    bought currency's net (GHS legs are ignored — GHS is the base currency, so
+    only foreign-currency exposure moves). The delta per currency is carried
+    as ``net_derivatives_ccy`` in the fact attributes, mirroring the seed.
+    Spot from ``fx_rates_current``. LC_GUARANTEE is off-balance and excluded
+    from the NOP. A currency without a daily return history is excluded from
+    ``fx_position`` (the VaR engine requires a history) and warned.
+    ``net_long_fx`` / ``net_short_fx`` are the long/short sums over the
+    included currencies' post-hedge nets.
 
 fx_return_history
     ``fx_rates_historical`` per currency, chronological: simple daily returns
     ``r_t = S_t / S_(t-1) - 1`` (rounded to 6 dp), most recent 250 kept.
 
 fx_hedge
-    No hedge instruments exist in the canonical model — group skipped with a
-    note. The FX engine tolerates an empty hedge book.
+    FX_HEDGE positions → one fact per hedge (category = hedge id, amount =
+    ``mtm_ghs``, mirroring the seed): instrument lowercased onto the engine
+    vocabulary (forward | cross_currency_swap | option), pair, sell-leg
+    notional, contract rate, ``maturity_days`` = contractual maturity − as-of,
+    and the IFRS 9 effectiveness measures (``prospective_r2``,
+    ``dollar_offset_ratio``; a hedge missing either defaults it to 0 —
+    conservatively ineffective — with a warning). Skipped with a note when no
+    hedge positions exist (the FX engine tolerates an empty hedge book).
 
 operational_income
     Up to three trailing 12-month windows of ``historical_financials``
@@ -119,7 +131,15 @@ irr_position
     the canonical values so the parameter-table discount curve keys match.
 
 irr_swap
-    No swaps exist in the canonical model — group skipped with a note.
+    INTEREST_RATE_SWAP positions → one fact per swap (category = swap id,
+    amount = GHS notional) shaped exactly like the seed: ``pay_rate_pct``,
+    ``receive_index``, ``tenor_years``, ``direction``, and the engine's leg
+    placement — the floating receive leg buckets at the index reset tenor
+    (91d T-Bill → 1-3m) and the fixed pay leg at the remaining maturity, with
+    midpoints from the nine canonical buckets so the parameter-table discount
+    curve keys match. Only pay-fixed swaps derive (the IRR engine decomposes
+    pay-fixed only); anything else is skipped with a warning. Skipped with a
+    note when no swap positions exist.
 
 ftp_curve_point
     The ingested GHS sovereign yield curve, with a documented liquidity-premium
@@ -154,6 +174,7 @@ state.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -304,6 +325,7 @@ class DerivationResult:
 class _PositionRow:
     """One current-generation snapshot flattened to the fields derivation uses."""
 
+    source_reference: str
     position_type: str
     currency: str
     balance: Decimal
@@ -320,6 +342,8 @@ class _PositionRow:
     ecl_ghs: Decimal
     notional_ghs: Decimal
     ccf: Decimal | None
+    # The raw snapshot attributes: hedge/swap instrument terms live here.
+    attributes: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -397,14 +421,7 @@ def derive_facts(
     facts.extend(
         _fact(bank, period, spec) for spec in _derive_fx_returns(canonical, fx_currencies, groups)
     )
-    groups.append(
-        GroupResult(
-            group="fx_hedge",
-            status="skipped",
-            note="No hedge instruments exist in the canonical model; the FX module "
-            "reports an empty hedge book.",
-        )
-    )
+    facts.extend(_fact(bank, period, spec) for spec in _derive_fx_hedges(canonical, groups))
     facts.extend(
         _fact(bank, period, spec) for spec in _derive_operational_income(canonical, groups)
     )
@@ -413,14 +430,7 @@ def derive_facts(
     facts.extend(
         _fact(bank, period, spec) for spec in _derive_irr_positions(canonical, loan_rows, groups)
     )
-    groups.append(
-        GroupResult(
-            group="irr_swap",
-            status="skipped",
-            note="No interest-rate swaps exist in the canonical model; IRR runs on "
-            "the unhedged repricing book.",
-        )
-    )
+    facts.extend(_fact(bank, period, spec) for spec in _derive_irr_swaps(canonical, groups))
     curve = _derive_ftp_curve(canonical, groups)
     ftp_curve_specs = curve[0]
     facts.extend(_fact(bank, period, spec) for spec in ftp_curve_specs)
@@ -563,6 +573,7 @@ def _position_row(
         # GHS-denominated books carry no explicit conversion; fall back to balance.
         balance_ghs = balance if position.currency == "GHS" else _ZERO
     return _PositionRow(
+        source_reference=snapshot.source_reference,
         position_type=position.position_type,
         currency=position.currency,
         balance=balance,
@@ -579,6 +590,7 @@ def _position_row(
         ecl_ghs=_dec(attributes.get("ecl_provision_ghs"), _ZERO),
         notional_ghs=_dec(attributes.get("notional_ghs"), _ZERO),
         ccf=_dec_or_none(attributes.get("credit_conversion_factor")),
+        attributes=attributes,
     )
 
 
@@ -1191,6 +1203,38 @@ def _historical_currencies(canonical: _Canonical) -> set[str]:
     }
 
 
+def _fx_hedge_deltas(canonical: _Canonical, warnings: list[str]) -> dict[str, Decimal]:
+    """Signed per-currency notional deltas from the FX_HEDGE book.
+
+    Convention (documented in the mapping template): a hedge's ``balance`` is
+    its notional in the SELL currency; the sell leg subtracts that notional
+    from the sold currency's net, the buy leg adds ``notional × contract_rate``
+    (buy-currency units per sell-currency unit) to the bought currency's net.
+    GHS legs are ignored — GHS is the base currency, so only foreign-currency
+    exposure moves.
+    """
+    deltas: dict[str, Decimal] = {}
+    for row in canonical.by_type("FX_HEDGE"):
+        attributes = row.attributes
+        hedge_id = str(attributes.get("hedge_id") or row.source_reference)
+        sell = str(attributes.get("sell_currency") or row.currency).strip().upper()
+        buy = str(attributes.get("buy_currency") or "GHS").strip().upper()
+        notional = abs(row.balance)
+        if sell != "GHS":
+            deltas[sell] = deltas.get(sell, _ZERO) - notional
+        if buy != "GHS":
+            rate = _dec_or_none(attributes.get("contract_rate"))
+            if rate is None or rate <= _ZERO:
+                warnings.append(
+                    f"Hedge {hedge_id}: the {buy} buy leg carries no positive "
+                    "contract_rate to convert the sell-leg notional; the buy leg "
+                    "was excluded from the FX nets."
+                )
+            else:
+                deltas[buy] = deltas.get(buy, _ZERO) + notional * rate
+    return deltas
+
+
 def _derive_fx_positions(
     canonical: _Canonical, groups: list[GroupResult]
 ) -> tuple[list[_FactSpec], set[str]]:
@@ -1213,8 +1257,9 @@ def _derive_fx_positions(
             liabilities_ghs[row.currency] = (
                 liabilities_ghs.get(row.currency, _ZERO) + row.balance_ghs
             )
+    hedge_deltas = _fx_hedge_deltas(canonical, warnings)
 
-    currencies = sorted(set(assets_ccy) | set(liabilities_ccy))
+    currencies = sorted(set(assets_ccy) | set(liabilities_ccy) | set(hedge_deltas))
     specs: list[_FactSpec] = []
     included: set[str] = set()
     net_long = _ZERO
@@ -1226,9 +1271,14 @@ def _derive_fx_positions(
                 "history was ingested for this currency (VaR requires one)."
             )
             continue
-        net_ccy = assets_ccy.get(currency, _ZERO) - liabilities_ccy.get(currency, _ZERO)
-        net_ghs = assets_ghs.get(currency, _ZERO) - liabilities_ghs.get(currency, _ZERO)
-        spot = _resolve_spot(currency, spots.get(currency), net_ccy, net_ghs, warnings)
+        base_ccy = assets_ccy.get(currency, _ZERO) - liabilities_ccy.get(currency, _ZERO)
+        base_ghs = assets_ghs.get(currency, _ZERO) - liabilities_ghs.get(currency, _ZERO)
+        # The spot resolves from the on-balance book before hedge deltas apply,
+        # so an implied fallback rate stays consistent with the position data.
+        spot = _resolve_spot(currency, spots.get(currency), base_ccy, base_ghs, warnings)
+        delta = hedge_deltas.get(currency, _ZERO)
+        net_ccy = base_ccy + delta
+        net_ghs = base_ghs + delta * spot
         included.add(currency)
         if net_ghs >= _ZERO:
             net_long += net_ghs
@@ -1240,7 +1290,8 @@ def _derive_fx_positions(
                 category=currency,
                 amount=net_ghs,
                 derived_from="per-currency net of position balance_ghs "
-                "(assets − liabilities; LC/guarantees excluded as off-balance)",
+                "(assets − liabilities + signed FX_HEDGE notional deltas; "
+                "LC/guarantees excluded as off-balance)",
                 attributes={
                     "currency": currency,
                     "side": "long" if net_ghs >= _ZERO else "short",
@@ -1248,7 +1299,7 @@ def _derive_fx_positions(
                     "net_ccy": str(money(net_ccy)),
                     "assets_ccy": str(money(assets_ccy.get(currency, _ZERO))),
                     "liabilities_ccy": str(money(liabilities_ccy.get(currency, _ZERO))),
-                    "net_derivatives_ccy": "0",
+                    "net_derivatives_ccy": str(money(delta)),
                     "net_ghs": str(money(net_ghs)),
                 },
             )
@@ -1346,6 +1397,98 @@ def _derive_fx_returns(
                 note="No historical FX rates were ingested.",
             )
         )
+    return specs
+
+
+# The FX engine's hedge vocabulary and the synonyms sources commonly use.
+_HEDGE_INSTRUMENTS = ("forward", "cross_currency_swap", "option")
+_HEDGE_INSTRUMENT_SYNONYMS = {
+    "fx_forward": "forward",
+    "fwd": "forward",
+    "ndf": "forward",
+    "ccs": "cross_currency_swap",
+    "cross_currency": "cross_currency_swap",
+    "currency_swap": "cross_currency_swap",
+    "fx_option": "option",
+    "currency_option": "option",
+}
+
+
+def _hedge_instrument(raw: Any, hedge_id: str, warnings: list[str]) -> str:
+    slug = str(raw or "forward").strip().lower().replace(" ", "_").replace("-", "_")
+    slug = _HEDGE_INSTRUMENT_SYNONYMS.get(slug, slug)
+    if slug not in _HEDGE_INSTRUMENTS:
+        warnings.append(
+            f"Hedge {hedge_id}: instrument {str(raw)!r} is outside the engine vocabulary "
+            f"({', '.join(_HEDGE_INSTRUMENTS)}); carried through as {slug!r}."
+        )
+    return slug
+
+
+def _derive_fx_hedges(canonical: _Canonical, groups: list[GroupResult]) -> list[_FactSpec]:
+    rows = canonical.by_type("FX_HEDGE")
+    if not rows:
+        groups.append(
+            GroupResult(
+                group="fx_hedge",
+                status="skipped",
+                note="No FX hedge positions exist at this as-of date; the FX module "
+                "reports an empty hedge book.",
+            )
+        )
+        return []
+
+    warnings: list[str] = []
+    specs: list[_FactSpec] = []
+    used_categories: set[str] = set()
+    missing_effectiveness = 0
+    for row in sorted(rows, key=lambda item: item.source_reference):
+        attributes = row.attributes
+        hedge_id = str(attributes.get("hedge_id") or row.source_reference)
+        category = hedge_id if hedge_id not in used_categories else row.source_reference
+        used_categories.add(category)
+        instrument = _hedge_instrument(attributes.get("instrument"), hedge_id, warnings)
+        pair = str(attributes.get("currency_pair") or f"{row.currency}/GHS").strip().upper()
+        rate = _dec_or_none(attributes.get("contract_rate")) or _ZERO
+        mtm = _dec(attributes.get("mtm_ghs"), _ZERO)
+        r2 = _dec_or_none(attributes.get("prospective_r2"))
+        offset = _dec_or_none(attributes.get("dollar_offset_ratio"))
+        if r2 is None or offset is None:
+            missing_effectiveness += 1
+            r2 = r2 if r2 is not None else _ZERO
+            offset = offset if offset is not None else _ZERO
+        maturity_days = 0
+        if row.contractual_maturity is not None:
+            maturity_days = max((row.contractual_maturity - canonical.as_of).days, 0)
+        specs.append(
+            _FactSpec(
+                fact_group="fx_hedge",
+                category=category,
+                amount=mtm,
+                derived_from="FX_HEDGE position: sell-leg notional with IFRS 9 "
+                "effectiveness measures; amount is the hedge MtM in GHS",
+                attributes={
+                    "hedge_id": hedge_id,
+                    "instrument": instrument,
+                    "pair": pair,
+                    "notional_ccy": str(money(abs(row.balance))),
+                    "rate": str(rate),
+                    "maturity_days": str(maturity_days),
+                    "mtm_ghs": str(money(mtm)),
+                    "prospective_r2": str(r2),
+                    "dollar_offset_ratio": str(offset),
+                },
+            )
+        )
+    if missing_effectiveness:
+        warnings.append(
+            f"{missing_effectiveness} FX hedges carried no prospective_r2 or "
+            "dollar_offset_ratio; the missing measures defaulted to 0 "
+            "(conservatively ineffective)."
+        )
+    groups.append(
+        GroupResult(group="fx_hedge", status="derived", rows=len(specs), warnings=warnings)
+    )
     return specs
 
 
@@ -1601,6 +1744,116 @@ def _deposit_irr_placement(
     months = durations.get(row.product_code or "")
     bucket = _bucket_for_days(int(months * Decimal("30.44"))) if months is not None else "overnight"
     return "wholesale_call", bucket
+
+
+_INDEX_RESET = re.compile(r"^(\d+)\s*([dmy])")
+_DEFAULT_INDEX_RESET_DAYS = 91  # the 91-day T-Bill, Ghana's standard floating index
+_DAYS_PER_MONTH = Decimal("30.44")
+
+
+def _index_reset_days(receive_index: str) -> int:
+    """The floating leg's reset tenor in days, parsed from the index name.
+
+    ``91d_tbill`` → 91, ``6m_libor`` → 182; anything unparseable falls back to
+    the 91-day T-Bill reset.
+    """
+    match = _INDEX_RESET.match(receive_index.strip().lower())
+    if match is None:
+        return _DEFAULT_INDEX_RESET_DAYS
+    value = int(match.group(1))
+    unit = match.group(2)
+    if unit == "m":
+        return int(Decimal(value) * _DAYS_PER_MONTH)
+    if unit == "y":
+        return value * 365
+    return value
+
+
+def _derive_irr_swaps(canonical: _Canonical, groups: list[GroupResult]) -> list[_FactSpec]:
+    rows = canonical.by_type("INTEREST_RATE_SWAP")
+    if not rows:
+        groups.append(
+            GroupResult(
+                group="irr_swap",
+                status="skipped",
+                note="No interest-rate swap positions exist at this as-of date; IRR "
+                "runs on the unhedged repricing book.",
+            )
+        )
+        return []
+
+    warnings: list[str] = []
+    specs: list[_FactSpec] = []
+    used_categories: set[str] = set()
+    for row in sorted(rows, key=lambda item: item.source_reference):
+        attributes = row.attributes
+        swap_id = str(attributes.get("swap_id") or row.source_reference)
+        direction = str(attributes.get("direction") or "pay_fixed").strip().lower()
+        if direction != "pay_fixed":
+            warnings.append(
+                f"Swap {swap_id}: direction {direction!r} is not supported (the IRR "
+                "engine decomposes pay-fixed swaps only); the swap was excluded."
+            )
+            continue
+        notional = row.notional_ghs if row.notional_ghs > _ZERO else row.balance_ghs
+        if notional <= _ZERO:
+            warnings.append(f"Swap {swap_id}: no positive GHS notional; the swap was excluded.")
+            continue
+        pay_rate = _dec_or_none(attributes.get("pay_rate_pct"))
+        if pay_rate is None and row.interest_rate is not None:
+            pay_rate = row.interest_rate * _HUNDRED
+        if pay_rate is None:
+            warnings.append(f"Swap {swap_id}: no pay_rate_pct; the swap was excluded.")
+            continue
+        receive_index = str(attributes.get("receive_index") or "91d_tbill").strip().lower()
+        receive_bucket = _bucket_for_days(_index_reset_days(receive_index))
+        if row.contractual_maturity is not None:
+            remaining_days = max((row.contractual_maturity - canonical.as_of).days, 0)
+        else:
+            tenor = _dec(attributes.get("tenor_years"), _ZERO)
+            remaining_days = int(tenor * Decimal("365"))
+        pay_bucket = _bucket_for_days(remaining_days)
+        tenor_years = _dec_or_none(attributes.get("tenor_years"))
+        if tenor_years is None:
+            tenor_years = (Decimal(remaining_days) / Decimal("365")).quantize(Decimal("0.01"))
+        category = swap_id if swap_id not in used_categories else row.source_reference
+        used_categories.add(category)
+        specs.append(
+            _FactSpec(
+                fact_group="irr_swap",
+                category=category,
+                amount=notional,
+                derived_from="INTEREST_RATE_SWAP position: pay-fixed swap decomposed "
+                "by the IRR engine into a floating receive leg (index reset bucket) "
+                "and a fixed pay leg (remaining-maturity bucket)",
+                attributes={
+                    "notional": str(money(notional)),
+                    "pay_rate_pct": str(pay_rate),
+                    "receive_index": receive_index,
+                    "tenor_years": str(tenor_years),
+                    "direction": "pay_fixed",
+                    "receive_bucket": receive_bucket,
+                    "receive_midpoint_years": _BUCKET_MIDPOINT[receive_bucket],
+                    "pay_bucket": pay_bucket,
+                    "pay_midpoint_years": _BUCKET_MIDPOINT[pay_bucket],
+                },
+            )
+        )
+    if not specs:
+        groups.append(
+            GroupResult(
+                group="irr_swap",
+                status="skipped",
+                warnings=warnings,
+                note="No supported interest-rate swaps could be derived; IRR runs on "
+                "the unhedged repricing book.",
+            )
+        )
+        return []
+    groups.append(
+        GroupResult(group="irr_swap", status="derived", rows=len(specs), warnings=warnings)
+    )
+    return specs
 
 
 def _long_curve_rate(canonical: _Canonical) -> Decimal:
