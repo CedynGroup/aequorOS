@@ -12,7 +12,7 @@ importers:
         specifier: ^3.3.3
         version: 3.8.3
 
-  backend/risk-service: {}
+  backend: {}
 
   dashboard:
     dependencies:

@@ -3,7 +3,7 @@ name: Risk Service CI
 on:
   pull_request:
     paths:
-      - "backend/risk-service/**"
+      - "backend/**"
       - "packages/risk-service-api/**"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"

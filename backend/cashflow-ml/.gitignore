@@ -1,9 +1,0 @@
-.venv/
-.env
-.pytest_cache/
-.ruff_cache/
-.basedpyright/
-__pycache__/
-*.py[cod]
-!.python-version
-artifacts/

@@ -123,11 +123,12 @@ export default function CashFlowForecast() {
             <CloudOff size={18} className="text-critical shrink-0 mt-0.5" aria-hidden />
             <div className="min-w-0 flex-1">
               <p className="text-body font-medium text-navy">
-                Cash flow forecasting service is offline
+                Cash flow forecasting is unavailable
               </p>
               <p className="mt-1 text-body text-navy/80 leading-relaxed">
-                Start the ML sidecar in <span className="font-mono">apps/cashflow-ml</span>{' '}
-                (port 8010), then retry.
+                The backend could not load the forecasting model (
+                <span className="font-mono">app/ml</span>). Check the backend logs,
+                then retry.
               </p>
             </div>
             <button

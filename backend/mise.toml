@@ -1,0 +1,123 @@
+[tools]
+python = "3.13"
+uv = "latest"
+
+[tasks."risk-service:sync"]
+description = "Install dependencies with uv"
+run = "uv sync"
+
+[tasks."risk-service:hooks"]
+description = "Install pre-commit, commit-msg, and pre-push hooks"
+run = "uv run pre-commit install --config ../../.pre-commit-config.yaml --install-hooks"
+
+[tasks."risk-service:precommit"]
+description = "Run pre-commit hooks against all files"
+run = "uv run pre-commit run --all-files --config ../../.pre-commit-config.yaml"
+
+[tasks."risk-service:dev"]
+description = "Run FastAPI dev server"
+run = '''
+#!/usr/bin/env bash
+uv run fastapi dev app/main.py --host "${HOST:-127.0.0.1}" --port "${PORT:-8000}"
+'''
+
+[tasks."risk-service:test"]
+description = "Run pytest"
+run = "uv run pytest"
+
+[tasks."risk-service:test-postgres"]
+description = "Run pytest against local Docker Postgres"
+env = { TEST_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:15432/risk_service" }
+run = "uv run pytest"
+
+[tasks."risk-service:test-postgres-migrations"]
+description = "Run Postgres-backed Alembic migration tests; requires TEST_DATABASE_URL"
+run = "uv run pytest tests/db/test_postgres_migrations.py"
+
+[tasks."risk-service:lint"]
+description = "Run Ruff checks"
+run = "uv run ruff check ."
+
+[tasks."risk-service:format"]
+description = "Format Python files with Ruff"
+run = [
+  "uv run ruff format .",
+  "uv run ruff check . --fix",
+]
+
+[tasks."risk-service:typecheck"]
+description = "Run BasedPyright"
+run = "uv run basedpyright"
+
+[tasks."risk-service:check"]
+description = "Run lint, typecheck, and tests"
+depends = ["risk-service:lint", "risk-service:typecheck", "risk-service:test"]
+
+[tasks."risk-service:openapi-schema"]
+description = "Generate OpenAPI schema"
+run = "PYTHONPATH=. uv run python scripts/export_openapi_schema.py > openapi-schema.json"
+
+[tasks."risk-service:openapi-client"]
+description = "Generate TypeScript OpenAPI client"
+depends = ["risk-service:openapi-schema"]
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd .. && pwd)"
+OPENAPI_CLIENT="$ROOT/packages/risk-service-api"
+CLIENT_SCHEMA="openapi-client-schema.json"
+
+trap 'rm -f "$CLIENT_SCHEMA"' EXIT
+uv run python scripts/prepare_openapi_client_schema.py openapi-schema.json "$CLIENT_SCHEMA"
+
+echo "Generating TypeScript client from OpenAPI schema..."
+echo "Cleaning old generated files..."
+rm -rf "$OPENAPI_CLIENT/src"
+rm -rf "$OPENAPI_CLIENT/dist"
+rm -rf "$OPENAPI_CLIENT/.openapi-generator"
+
+uv run openapi-generator-cli generate \
+  -i "$CLIENT_SCHEMA" \
+  -g typescript-fetch \
+  -o "$OPENAPI_CLIENT" \
+  -c openapi-config.yaml \
+  --additional-properties=supportsES6=true \
+  --skip-validate-spec
+
+echo "Restoring source-first package.json configuration..."
+uv run python scripts/fix-api-client-package.py "$OPENAPI_CLIENT/package.json" openapi-schema.json
+
+echo "Normalizing generated TypeScript code..."
+(cd "$ROOT" && pnpm -w exec prettier --ignore-path /dev/null --write packages/risk-service-api/src/ packages/risk-service-api/README.md)
+
+echo ""
+echo "TypeScript client generated successfully."
+'''
+
+[tasks."risk-service:migrate"]
+description = "Run Alembic migrations; requires DATABASE_URL"
+run = "uv run alembic upgrade head"
+
+[tasks."risk-service:bootstrap-db"]
+description = "Create local DB roles, run migrations, and grant app privileges"
+run = "./scripts/bootstrap_db.sh"
+
+[tasks."risk-service:revision"]
+description = "Create Alembic revision"
+usage = '''
+arg "<message>" help="Revision message"
+'''
+run = '''
+#!/usr/bin/env bash
+uv run alembic revision --autogenerate -m "${usage_message?}"
+'''
+
+[tasks."risk-service:smoke"]
+description = "Run local smoke checks that do not require Postgres"
+depends = ["risk-service:sync"]
+run = [
+  "uv run ruff check .",
+  "uv run basedpyright",
+  "uv run pytest",
+]

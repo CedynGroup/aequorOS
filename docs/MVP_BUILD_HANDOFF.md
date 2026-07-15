@@ -8,10 +8,11 @@ built end-to-end on real, server-side, tenant-scoped calculation engines. The po
 Treasurer-facing UI (`dashboard`) pulls every number from the backend — zero hardcoded
 financial data.
 
-**Structure:** the monorepo was kept intact (no restructure). `dashboard` is the primary
-product UI; `backend/risk-service` + `backend/cashflow-ml` are the backend; `packages/risk-service-api`
-is the shared generated client. See ARCHITECTURE.md → "Structure decision" for why the
-proposed "move backend into dashboard / delete other apps" was declined.
+**Structure:** `dashboard` is the primary product UI; `backend` is the single backend
+service (the LSTM cash-flow module runs in-process at `backend/app/ml` — the former
+`cashflow-ml` sidecar was folded in); `packages/risk-service-api` is the shared generated
+client. See ARCHITECTURE.md → "Structure decision" for why the proposed "move backend
+into dashboard / delete other apps" was declined.
 
 ### Live-verified values (Sample Bank Ltd, 2026-03)
 
@@ -26,7 +27,8 @@ proposed "move backend into dashboard / delete other apps" was declined.
 | FTP | portfolio NIM / products below margin / NMD core | 7.20% / 2 / 66.5% |
 
 All six modules run via `.../run-all-scenarios` + `.../dashboard`; tenant isolation verified
-(org2 → 404 on every module). Backend suite: **558 passed, 16 skipped**; repo-wide `ruff` clean.
+(org2 → 404 on every module). Backend suite: **570 passed, 16 skipped** (incl. the in-process
+cash-flow ML tests, run with `CASHFLOW_FAST_TEST=1`); repo-wide `ruff` clean.
 
 ### Seed is idempotent
 
@@ -39,8 +41,7 @@ data-engine ingestion/canonical rows) before re-inserting, so it re-runs cleanly
 
 | Component | Path | Port | Role |
 |---|---|---|---|
-| Risk service (FastAPI) | `backend/risk-service` | 8003 | Regulatory calc engines, DB, S3 |
-| Cash-flow ML (FastAPI) | `backend/cashflow-ml` | 8010 | Trained LSTM cash-flow model |
+| Risk service (FastAPI) | `backend` | 8003 | Regulatory calc engines + in-process LSTM cash-flow model (`app/ml`), DB, S3 |
 | Product UI (Next.js) | `dashboard` | 3001 | Bank Treasurer console |
 | Generated API client | `packages/risk-service-api` | — | Typed contract shared by UI |
 | Postgres + MinIO | docker-compose | 15432 / 9000 | Data + object storage |
@@ -58,26 +59,25 @@ surface is **`dashboard`**.
 export PATH="$HOME/.nvm/versions/node/v24.18.0/bin:$PATH"
 
 # 1. Infra (Postgres + MinIO) — already provisioned; start if down
-cd "backend/risk-service" && docker compose up -d
+cd backend && docker compose up -d
 
 # 2. Migrate to head (run as the migration role, then re-grant the app role)
 DATABASE_URL=postgresql+psycopg://risk_service_migrator:risk_service_migrator@localhost:15432/risk_service \
   .venv/bin/alembic upgrade head
 
-# 3. Backend (tenant CORS for the demo origin)
+# 3. Backend (tenant CORS for the demo origin) — one service; the LSTM cash-flow
+#    module runs in-process (lazy-trains on the first forecast call, or reuses
+#    backend/artifacts/cashflow/ if already trained)
 DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service \
   CORS_ORIGINS=http://localhost:3001 \
   .venv/bin/fastapi run app/main.py --port 8003 &
 
-# 4. ML sidecar (model artifacts already trained; lazy-trains on first call otherwise)
-cd "../cashflow-ml" && .venv/bin/fastapi run app/main.py --port 8010 &
-
-# 5. Seed Sample Bank Ltd (idempotent; only needed if GET /banks is empty)
-#    Either: cd backend/risk-service && .venv/bin/python scripts/seed_sample_bank.py
+# 4. Seed Sample Bank Ltd (idempotent; only needed if GET /banks is empty)
+#    Either: cd backend && .venv/bin/python scripts/seed_sample_bank.py
 #    Or POST /api/v1/banks/seed-demo with the demo tenant headers.
 
-# 6. Demo UI
-cd "../.." && pnpm --filter @aequoros/dashboard dev   # http://localhost:3001
+# 5. Demo UI
+cd .. && pnpm --filter @aequoros/dashboard dev   # http://localhost:3001
 ```
 
 Demo tenant (baked into `dashboard/lib/api/client.ts`, override via
@@ -116,8 +116,9 @@ id; every new table has Postgres RLS enable/force + isolation policy.
    banner clears and a run badge (engine version + hash) appears.
 3. **Liquidity → NSFR** — ASF/RSF tables from the stored run's line items.
 4. **Liquidity → Cash Flow** (`/liquidity/forecast`) — toggle **LSTM ⇄ Static** and
-   **30/60/90**. LSTM shows the confidence band + accuracy panel. Stop the ML
-   sidecar → graceful "service offline" state with Retry.
+   **30/60/90**. LSTM shows the confidence band + accuracy panel. The model runs
+   in-process (first call may lazy-train); a 503 "service offline" state appears
+   only if the ML runtime (torch) fails to load.
 5. **Liquidity → Stress** — **Run all scenarios** → idiosyncratic 94.84% amber,
    combined 87.36% red; per-scenario stressed run-off assumptions are visible.
 6. **Liquidity → BSD-3** — formatted BoG return; verbatim preview-only note; 409
@@ -137,10 +138,11 @@ id; every new table has Postgres RLS enable/force + isolation policy.
 
 ## Test + validation gates (all green)
 
-- `backend/risk-service`: **498 passed, 16 skipped** (`ruff`, `basedpyright` clean).
+- `backend`: **570 passed, 16 skipped** (`ruff`, `basedpyright` clean).
 - `packages/risk-service-api`: typecheck + generated-contract tests pass.
 - `dashboard`: `typecheck` + `build` pass (24 static routes).
-- `backend/cashflow-ml`: 20 tests pass; model beats static baseline.
+- Cash-flow ML (`backend/app/ml` + `tests/ml`, in the backend suite): model beats static
+  baseline on the fast-test holdout; forecast/history contract tests run in-process.
 - Zero `lib/data/` imports remain in the demo (audited).
 
 ---
@@ -163,7 +165,7 @@ id; every new table has Postgres RLS enable/force + isolation policy.
 
 - Migrations must run as `risk_service_migrator` then re-grant `risk_service_app`
   (the data-engine slice added owner-only DDL). `scripts/bootstrap_db.sh` does both.
-- `backend/risk-service/.env` (local, untracked) points `DATABASE_URL` at a Homebrew
+- `backend/.env` (local, untracked) points `DATABASE_URL` at a Homebrew
   Postgres on 5432; unset it or align it to the Docker instance on 15432.
 - The demo's `lint` script is `next lint`, which prompts for ESLint setup (never
   configured). Real gates are `typecheck` + `build`. Configure ESLint or drop the script.

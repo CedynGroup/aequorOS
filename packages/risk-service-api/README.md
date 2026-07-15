@@ -18,7 +18,7 @@ From the repo root:
 mise run risk-service:openapi-client
 ```
 
-Or from `backend/risk-service`:
+Or from `backend`:
 
 ```bash
 mise run risk-service:openapi-client
