@@ -336,7 +336,7 @@ describe("CaseHealthHeader", () => {
     expect(screen.getByLabelText("High: 1 active findings")).toBeVisible();
     expect(screen.getByLabelText("Medium: 1 active findings")).toBeVisible();
     expect(screen.getByLabelText("Low: 0 active findings")).toBeVisible();
-    expect(screen.getByText("+5 resolved")).toHaveClass(
+    expect(screen.getByText("+5 historical")).toHaveClass(
       "text-[rgb(var(--muted-foreground))]",
     );
     expect(screen.queryByText(/^[CHML]\d+$/)).not.toBeInTheDocument();
@@ -354,7 +354,7 @@ describe("CaseHealthHeader", () => {
     expect(
       await screen.findByLabelText("No active findings, 2 historical"),
     ).toBeInTheDocument();
-    expect(screen.getByText("+2 resolved")).toBeInTheDocument();
+    expect(screen.getByText("+2 historical")).toBeInTheDocument();
     expect(screen.queryByText("C0")).not.toBeInTheDocument();
     expect(screen.queryByText("H0")).not.toBeInTheDocument();
   });
@@ -417,6 +417,37 @@ describe("CaseHealthHeader", () => {
     await waitFor(() => expect(riskApi.findings).toHaveBeenCalledTimes(2));
   });
 
+  it("refreshes findings when an older active forecast completes", async () => {
+    const latest = runs("succeeded").runs[0];
+    const active = { ...runs("running").runs[0], id: "run-older" };
+    const completed = { ...active, status: "succeeded" as const };
+    installQueries({
+      runList: { ...runs("succeeded"), runs: [latest, active], total: 8 },
+    });
+    vi.mocked(riskApi.calculationRuns)
+      .mockResolvedValueOnce({
+        ...runs("succeeded"),
+        runs: [latest, active],
+        total: 8,
+      })
+      .mockResolvedValue({
+        ...runs("succeeded"),
+        runs: [latest, completed],
+        total: 8,
+      });
+
+    renderHeader(null);
+
+    expect(
+      await screen.findByTitle("Forecast #8 · Succeeded"),
+    ).toBeInTheDocument();
+    await waitFor(
+      () => expect(riskApi.calculationRuns).toHaveBeenCalledTimes(2),
+      { timeout: 2500 },
+    );
+    await waitFor(() => expect(riskApi.findings).toHaveBeenCalledTimes(2));
+  });
+
   it("renders complete demo health without making live requests", () => {
     const financialWorkspace = vi.spyOn(riskApi, "financialWorkspace");
     const scenarios = vi.spyOn(riskApi, "scenarios");
@@ -436,7 +467,7 @@ describe("CaseHealthHeader", () => {
     expect(screen.getByText("Validated")).toBeInTheDocument();
     expect(screen.getByText("Ready")).toBeInTheDocument();
     expect(screen.getByTitle("Forecast #1 · Succeeded")).toBeInTheDocument();
-    expect(screen.getByText("+1 resolved")).toBeInTheDocument();
+    expect(screen.getByText("+1 historical")).toBeInTheDocument();
     expect(screen.getByText("Non-compliant")).toBeInTheDocument();
     expect(screen.getByText("Needs More Info")).toBeInTheDocument();
     expect(financialWorkspace).not.toHaveBeenCalled();

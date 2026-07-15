@@ -33,10 +33,10 @@ export function CaseHealthHeader({
 }) {
   const queryClient = useQueryClient();
   const runScope = `${tenant.orgId}:${tenant.userId}:${caseId}`;
-  const previousLatestRun = useRef<{
+  const previousRunStatuses = useRef<{
     scope: string;
-    status: CalculationStatus | undefined;
-  }>({ scope: runScope, status: undefined });
+    statuses: ReadonlyMap<string, CalculationStatus>;
+  }>({ scope: runScope, statuses: new Map() });
   const financial = useQuery({
     queryKey: ["financial-workspace", tenant, caseId],
     queryFn: () => riskApi.financialWorkspace(tenant, caseId),
@@ -63,25 +63,28 @@ export function CaseHealthHeader({
     queryFn: () => riskApi.findings(tenant, caseId),
     enabled: !demoData,
   });
-  const latestRunStatus = runs.data?.runs[0]?.status;
+  const runList = runs.data?.runs;
 
   useEffect(() => {
-    const previous = previousLatestRun.current;
-    previousLatestRun.current = { scope: runScope, status: latestRunStatus };
-    if (
+    const previous = previousRunStatuses.current;
+    const statuses = new Map(
+      runList?.map((run) => [run.id, run.status] as const) ?? [],
+    );
+    previousRunStatuses.current = { scope: runScope, statuses };
+    const runCompleted =
       previous.scope === runScope &&
-      previous.status &&
-      (["queued", "running"] as CalculationStatus[]).includes(
-        previous.status,
-      ) &&
-      latestRunStatus &&
-      !(["queued", "running"] as CalculationStatus[]).includes(latestRunStatus)
-    ) {
+      [...statuses].some(([runId, status]) => {
+        const previousStatus = previous.statuses.get(runId);
+        return (
+          previousStatus && isActiveRun(previousStatus) && !isActiveRun(status)
+        );
+      });
+    if (runCompleted) {
       void queryClient.invalidateQueries({
         queryKey: ["findings", tenant, caseId],
       });
     }
-  }, [caseId, latestRunStatus, queryClient, runScope, tenant]);
+  }, [caseId, queryClient, runList, runScope, tenant]);
 
   return (
     <section
@@ -294,7 +297,7 @@ function findingState(findings: FindingRead[]) {
         className="flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-xs font-semibold text-[rgb(var(--muted-foreground))] tabular-nums"
       >
         <span>No active</span>
-        <span>+{historicalCount} resolved</span>
+        <span>+{historicalCount} historical</span>
       </span>
     );
   const counts = countSeverities(activeFindings);
@@ -313,11 +316,15 @@ function findingState(findings: FindingRead[]) {
       <SeverityCount severity="low" count={counts.low} />
       {historicalCount ? (
         <span className="text-[rgb(var(--muted-foreground))]">
-          +{historicalCount} resolved
+          +{historicalCount} historical
         </span>
       ) : null}
     </span>
   );
+}
+
+function isActiveRun(status: CalculationStatus) {
+  return status === "queued" || status === "running";
 }
 
 function SeverityCount({
