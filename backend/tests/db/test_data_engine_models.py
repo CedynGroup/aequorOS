@@ -14,6 +14,7 @@ from app.models import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
+    CanonicalReferenceRow,
     IngestionBatch,
     LineageRecord,
     MappingConfigRecord,
@@ -349,3 +350,57 @@ class TestMappingConfigs:
         bank = make_bank(db_session)
         with pytest.raises(IntegrityError):
             self.make_config(db_session, bank, version=0)
+
+
+class TestCanonicalReferenceRows:
+    def make_reference_row(
+        self,
+        session: Session,
+        batch: IngestionBatch,
+        lineage: LineageRecord,
+        *,
+        dataset_kind: str = "yield_curve",
+        row_index: int = 1,
+    ) -> CanonicalReferenceRow:
+        row = CanonicalReferenceRow(
+            organization_id=ORG_1,
+            bank_id=batch.bank_id,
+            ingestion_batch_id=batch.id,
+            as_of_date=batch.as_of_date,
+            dataset_kind=dataset_kind,
+            row_index=row_index,
+            payload={"curve_name": "GHS_SOVEREIGN", "tenor_months": "3", "rate": "0.158"},
+            source_reference="05_Market_Data.xlsx#Yield_Curves!R2",
+            lineage_id=lineage.id,
+        )
+        session.add(row)
+        session.flush()
+        return row
+
+    def test_payload_round_trips(self, db_session: Session) -> None:
+        bank = make_bank(db_session)
+        batch = make_batch(db_session, bank)
+        lineage = make_lineage(db_session, batch)
+        row = self.make_reference_row(db_session, batch, lineage)
+        db_session.refresh(row)
+        assert row.payload["rate"] == "0.158"
+        assert row.dataset_kind == "yield_curve"
+
+    def test_row_index_is_unique_per_batch_and_kind(self, db_session: Session) -> None:
+        bank = make_bank(db_session)
+        batch = make_batch(db_session, bank)
+        lineage = make_lineage(db_session, batch)
+        self.make_reference_row(db_session, batch, lineage, row_index=1)
+        self.make_reference_row(db_session, batch, lineage, row_index=2)
+        self.make_reference_row(
+            db_session, batch, lineage, dataset_kind="fx_rates_current", row_index=1
+        )
+        with pytest.raises(IntegrityError):
+            self.make_reference_row(db_session, batch, lineage, row_index=1)
+
+    def test_dataset_kind_is_constrained(self, db_session: Session) -> None:
+        bank = make_bank(db_session)
+        batch = make_batch(db_session, bank)
+        lineage = make_lineage(db_session, batch)
+        with pytest.raises(IntegrityError):
+            self.make_reference_row(db_session, batch, lineage, dataset_kind="weather")

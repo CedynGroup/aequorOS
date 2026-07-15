@@ -45,6 +45,7 @@ from app.domain.ingestion.constants import (
     GL_ACCOUNT_CLASSES,
     POSITION_TYPES,
     RATE_TYPES,
+    REFERENCE_DATASET_KINDS,
     SOURCE_SYSTEMS,
     VALIDATION_STATUSES,
 )
@@ -243,6 +244,77 @@ class CanonicalPosition(CanonicalMetadataMixin, Base):
     position_type: Mapped[str] = mapped_column(String(32), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     origination_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
+class CanonicalReferenceRow(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
+    """One row of a module-facing reference dataset, preserved as ingested.
+
+    Reference datasets (capital structure, behavioral assumptions, yield
+    curves, FX rates, historical series) have no per-field canonical schema:
+    each mapped source row lands here as a stringified ``payload`` under its
+    ``dataset_kind``, scoped to the batch that produced it. Consumers read the
+    latest accepted batch per dataset kind; rows are batch-scoped, so no
+    supersession chain is needed.
+
+    Lineage: every reference row points at the batch's VALIDATION lineage
+    node — the same node its sibling canonical entities point at — which keeps
+    lineage participation consistent with the rest of the batch at the cost of
+    one shared node rather than one per row.
+    """
+
+    __tablename__ = "canonical_reference_rows"
+    __table_args__ = (
+        CheckConstraint(
+            f"dataset_kind IN ({_values(REFERENCE_DATASET_KINDS)})",
+            name="ck_canonical_reference_rows_dataset_kind",
+        ),
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+        ),
+        ForeignKeyConstraint(
+            ["ingestion_batch_id", "organization_id"],
+            ["ingestion_batches.id", "ingestion_batches.organization_id"],
+        ),
+        ForeignKeyConstraint(
+            ["lineage_id", "organization_id"],
+            ["lineage_records.id", "lineage_records.organization_id"],
+        ),
+        UniqueConstraint("id", "organization_id", name="uq_canonical_reference_rows_id_org"),
+        UniqueConstraint(
+            "ingestion_batch_id",
+            "dataset_kind",
+            "row_index",
+            name="uq_canonical_reference_rows_batch_kind_row",
+        ),
+        Index(
+            "ix_canonical_reference_rows_org_bank_kind_as_of",
+            "organization_id",
+            "bank_id",
+            "dataset_kind",
+            "as_of_date",
+        ),
+        Index(
+            "ix_canonical_reference_rows_org_batch",
+            "organization_id",
+            "ingestion_batch_id",
+        ),
+    )
+
+    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    ingestion_batch_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
+    dataset_kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    row_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The raw mapped row: original column names, typed values stringified
+    # (dates ISO), nulls preserved.
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
+    # Where in the source the row came from, e.g. "05_Market_Data.xlsx#Yield_Curves!R3".
+    source_reference: Mapped[str] = mapped_column(String(255), nullable=False)
+    lineage_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
 
 
 class CanonicalPositionSnapshot(CanonicalMetadataMixin, Base):

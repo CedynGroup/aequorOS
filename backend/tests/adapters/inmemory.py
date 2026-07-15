@@ -121,6 +121,8 @@ class InMemoryAdapter(SourceAdapter):
             "position": result.positions,
         }
         for record in raw_records.records:
+            if record.entity_type == "reference":
+                continue  # this reference subject only serves entity tables
             mapping = mapping_config.field_mappings.get(record.entity_type)
             if mapping is None:
                 result.failures.append(
@@ -134,8 +136,14 @@ class InMemoryAdapter(SourceAdapter):
                 )
                 continue
             values: dict[str, Any] = {"source_locator": record.source_locator}
-            for canonical_field, source_column in mapping.fields.items():
-                value = record.data.get(source_column)
+            for canonical_field, source_columns in mapping.fields.items():
+                if isinstance(source_columns, str):
+                    value = record.data.get(source_columns)
+                else:
+                    value = next(
+                        (record.data[column] for column in source_columns if column in record.data),
+                        None,
+                    )
                 enum_map = mapping_config.enum_mappings.get(canonical_field)
                 if enum_map is not None and value is not None:
                     value = enum_map.get(str(value), value)

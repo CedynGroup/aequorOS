@@ -18,8 +18,10 @@ import {
   ArtifactPath,
   BatchStatusPill,
   CountStrip,
+  batchBlockerDetails,
   formatDate,
   formatDateTime,
+  referenceRowCounts,
 } from '@/components/data-engine/shared';
 
 type ReportFailure = {
@@ -71,9 +73,13 @@ export default function BatchDetailPage({
     summary?: Record<string, unknown>;
     failures?: ReportFailure[];
     reconciliation?: Record<string, unknown>;
+    suppressed_findings?: Record<string, number>;
   };
   const findings = report.failures ?? [];
   const translationFailures = failuresQuery.data?.failures ?? [];
+  const blockerDetails = batchBlockerDetails(batch);
+  const referenceCounts = referenceRowCounts(batch);
+  const suppressed = report.suppressed_findings ?? {};
 
   return (
     <>
@@ -95,12 +101,49 @@ export default function BatchDetailPage({
       <div className="px-8 py-6 space-y-6 max-w-6xl">
         <CountStrip batch={batch} />
 
+        {batch.status === 'rejected' && (
+          <div className="card border-l-4 border-l-critical p-5 space-y-2">
+            <p className="text-body font-medium text-critical">
+              Batch rejected — nothing from this source was accepted
+            </p>
+            {(blockerDetails.length > 0
+              ? blockerDetails
+              : ['A blocking validation failure rejected the batch.']
+            ).map((detail, index) => (
+              <p key={index} className="text-body text-navy/80">
+                {detail}
+              </p>
+            ))}
+          </div>
+        )}
+
         {batch.errorMessage && (
           <div className="card border-l-4 border-l-critical p-5">
             <p className="text-body font-medium text-navy">
               {batch.errorCode ?? 'failure'}
             </p>
             <p className="mt-1 text-body text-navy/80">{batch.errorMessage}</p>
+          </div>
+        )}
+
+        {Object.keys(referenceCounts).length > 0 && (
+          <div className="card p-5">
+            <h2 className="text-h3 text-navy">Reference datasets</h2>
+            <p className="mt-1 text-caption text-slate">
+              Rows preserved verbatim per dataset kind for the calculation
+              modules (curves, capital, behavioral assumptions, history).
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {Object.entries(referenceCounts).map(([kind, count]) => (
+                <span
+                  key={kind}
+                  className="inline-flex items-center gap-2 rounded border border-border px-2.5 py-1 text-caption font-mono text-navy"
+                >
+                  {kind}
+                  <span className="text-slate">{count}</span>
+                </span>
+              ))}
+            </div>
           </div>
         )}
 
@@ -119,6 +162,15 @@ export default function BatchDetailPage({
 
         <section className="space-y-3">
           <h2 className="text-h2 text-navy">Validation findings</h2>
+          {Object.keys(suppressed).length > 0 && (
+            <p className="text-caption text-slate">
+              Large batch:{' '}
+              {Object.entries(suppressed)
+                .map(([rule, count]) => `${count} further ${rule} findings`)
+                .join(', ')}{' '}
+              are counted in the totals above but not listed individually.
+            </p>
+          )}
           {findings.length === 0 ? (
             <EmptyState
               title="No validation findings"

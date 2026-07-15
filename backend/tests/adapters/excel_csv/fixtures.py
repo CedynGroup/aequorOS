@@ -146,3 +146,39 @@ def build_positions_csv(path: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+def build_bank_realistic(path: Path) -> Path:
+    """Sheets named the way a bank Treasury team names them, plus a reference
+    table — exercises alias resolution and reference-dataset extraction."""
+    workbook = Workbook()
+    gl = _active_sheet(workbook)
+    gl.title = "General_Ledger"
+    gl.append(["Code", "Label", "Class"])
+    gl.append(["1000", "Cash and balances", "ASSET"])
+    gl.append(["2000", "Customer deposits", "LIABILITY"])
+
+    curves = workbook.create_sheet("Yield_Curves")
+    curves.append(["curve_name", "tenor_months", "rate", "quote_date"])
+    curves.append(["GHS_SOVEREIGN", 3, 0.158, date(2026, 6, 1)])
+    curves.append(["GHS_SOVEREIGN", 12, 0.181, date(2026, 6, 1)])
+
+    workbook.save(path)
+    return path
+
+
+def build_position_variants(path: Path) -> Path:
+    """Two position sheets with diverging headers (loan book + OBS register),
+    exercising multi-table extraction, fallback columns, and attribute columns."""
+    workbook = Workbook()
+    loans = _active_sheet(workbook)
+    loans.title = "Loans"
+    loans.append(["AccountRef", "Type", "Ccy", "Outstanding", "Rate", "RateKind"])
+    loans.append(["LN-0001", "LOAN", "GHS", 1000, 0.2, "F"])
+
+    obs = workbook.create_sheet("LC_and_Guarantees")
+    obs.append(["AccountRef", "Type", "Ccy", "NotionalCcy", "CCF"])
+    obs.append(["OBS-0001", "LC", "USD", 500, 0.2])
+
+    workbook.save(path)
+    return path

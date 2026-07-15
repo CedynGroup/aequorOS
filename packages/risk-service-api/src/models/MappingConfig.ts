@@ -18,6 +18,13 @@ import {
   EntityMappingToJSON,
   EntityMappingToJSONTyped,
 } from "./EntityMapping";
+import type { ReferenceMapping } from "./ReferenceMapping";
+import {
+  ReferenceMappingFromJSON,
+  ReferenceMappingFromJSONTyped,
+  ReferenceMappingToJSON,
+  ReferenceMappingToJSONTyped,
+} from "./ReferenceMapping";
 
 /**
  * Per-institution source-to-canonical translation rules.
@@ -54,6 +61,12 @@ export interface MappingConfig {
    * @memberof MappingConfig
    */
   productMappings?: { [key: string]: string };
+  /**
+   *
+   * @type {{ [key: string]: ReferenceMapping; }}
+   * @memberof MappingConfig
+   */
+  referenceMappings?: { [key: string]: ReferenceMapping };
 }
 
 /**
@@ -84,6 +97,10 @@ export function MappingConfigFromJSONTyped(
     options: json["options"] == null ? undefined : json["options"],
     productMappings:
       json["product_mappings"] == null ? undefined : json["product_mappings"],
+    referenceMappings:
+      json["reference_mappings"] == null
+        ? undefined
+        : mapValues(json["reference_mappings"], ReferenceMappingFromJSON),
   };
 }
 
@@ -107,5 +124,9 @@ export function MappingConfigToJSONTyped(
         : mapValues(value["fieldMappings"], EntityMappingToJSON),
     options: value["options"],
     product_mappings: value["productMappings"],
+    reference_mappings:
+      value["referenceMappings"] == null
+        ? undefined
+        : mapValues(value["referenceMappings"], ReferenceMappingToJSON),
   };
 }

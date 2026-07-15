@@ -4,9 +4,14 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 
 from app.api.deps import DbSession, MutationTenant, Tenant
+from app.schemas.data_activation import (
+    DataActivationCreate,
+    DataActivationListRead,
+    DataActivationRead,
+)
 from app.schemas.ingestion import (
     CanonicalPositionListRead,
     IngestionBatchCreate,
@@ -22,7 +27,7 @@ from app.schemas.ingestion import (
     PositionSnapshotRead,
     TranslationFailureListRead,
 )
-from app.services import ingestion
+from app.services import data_activation, ingestion
 from app.storage.client import StorageClient, StorageValidationError
 from app.storage.config import StorageRetiredError
 from app.storage.factory import get_storage_client
@@ -176,3 +181,33 @@ def override_position_snapshot(
 )
 def walk_lineage(lineage_id: UUID, db: DbSession, ctx: Tenant) -> LineageWalkRead:
     return ingestion.walk_lineage(db, ctx, lineage_id)
+
+
+@router.post(
+    "/banks/{bank_id}/data-activations",
+    response_model=DataActivationRead,
+    status_code=201,
+    operation_id="activateBankData",
+)
+def activate_bank_data(
+    bank_id: UUID,
+    payload: DataActivationCreate,
+    db: DbSession,
+    ctx: MutationTenant,
+) -> DataActivationRead:
+    """Derive module facts from canonical data and recompute every module."""
+    return data_activation.activate_bank_data(db, ctx, bank_id, payload)
+
+
+@router.get(
+    "/banks/{bank_id}/data-activations",
+    response_model=DataActivationListRead,
+    operation_id="listBankDataActivations",
+)
+def list_bank_data_activations(
+    bank_id: UUID,
+    db: DbSession,
+    ctx: Tenant,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> DataActivationListRead:
+    return data_activation.list_bank_data_activations(db, ctx, bank_id, limit=limit)

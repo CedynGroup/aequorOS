@@ -277,6 +277,7 @@ class TestReport:
             "records_warning": 0,
             "records_error": 1,
             "records_blocked": 0,
+            "reference_rows": {},
             "overall_status": "ACCEPTED_WITH_WARNINGS",
         }
         (failure,) = report["failures"]

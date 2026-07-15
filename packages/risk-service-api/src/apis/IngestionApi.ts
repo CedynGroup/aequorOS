@@ -13,6 +13,9 @@
 import * as runtime from "../runtime";
 import type {
   CanonicalPositionListRead,
+  DataActivationCreate,
+  DataActivationListRead,
+  DataActivationRead,
   ErrorResponse,
   IngestionBatchCreate,
   IngestionBatchListRead,
@@ -30,6 +33,12 @@ import type {
 import {
   CanonicalPositionListReadFromJSON,
   CanonicalPositionListReadToJSON,
+  DataActivationCreateFromJSON,
+  DataActivationCreateToJSON,
+  DataActivationListReadFromJSON,
+  DataActivationListReadToJSON,
+  DataActivationReadFromJSON,
+  DataActivationReadToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
   IngestionBatchCreateFromJSON,
@@ -58,6 +67,13 @@ import {
   TranslationFailureListReadToJSON,
 } from "../models/index";
 
+export interface ActivateBankDataRequest {
+  bankId: string;
+  xOrgId: string;
+  xUserId: string;
+  dataActivationCreate: DataActivationCreate;
+}
+
 export interface CreateMappingConfigRequest {
   bankId: string;
   xOrgId: string;
@@ -69,6 +85,13 @@ export interface GetIngestionBatchRequest {
   bankId: string;
   batchId: string;
   xOrgId: string;
+  xUserId?: string | null;
+}
+
+export interface ListBankDataActivationsRequest {
+  bankId: string;
+  xOrgId: string;
+  limit?: number;
   xUserId?: string | null;
 }
 
@@ -130,6 +153,92 @@ export interface WalkLineageRequest {
  *
  */
 export class IngestionApi extends runtime.BaseAPI {
+  /**
+   * Derive module facts from canonical data and recompute every module.
+   * Activate Bank Data
+   */
+  async activateBankDataRaw(
+    requestParameters: ActivateBankDataRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<DataActivationRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling activateBankData().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling activateBankData().',
+      );
+    }
+
+    if (requestParameters["xUserId"] == null) {
+      throw new runtime.RequiredError(
+        "xUserId",
+        'Required parameter "xUserId" was null or undefined when calling activateBankData().',
+      );
+    }
+
+    if (requestParameters["dataActivationCreate"] == null) {
+      throw new runtime.RequiredError(
+        "dataActivationCreate",
+        'Required parameter "dataActivationCreate" was null or undefined when calling activateBankData().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/data-activations`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: DataActivationCreateToJSON(
+          requestParameters["dataActivationCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      DataActivationReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Derive module facts from canonical data and recompute every module.
+   * Activate Bank Data
+   */
+  async activateBankData(
+    requestParameters: ActivateBankDataRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<DataActivationRead> {
+    const response = await this.activateBankDataRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Create Mapping Config
    */
@@ -285,6 +394,75 @@ export class IngestionApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<IngestionBatchRead> {
     const response = await this.getIngestionBatchRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * List Bank Data Activations
+   */
+  async listBankDataActivationsRaw(
+    requestParameters: ListBankDataActivationsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<DataActivationListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listBankDataActivations().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling listBankDataActivations().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["limit"] != null) {
+      queryParameters["limit"] = requestParameters["limit"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/data-activations`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      DataActivationListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * List Bank Data Activations
+   */
+  async listBankDataActivations(
+    requestParameters: ListBankDataActivationsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<DataActivationListRead> {
+    const response = await this.listBankDataActivationsRaw(
       requestParameters,
       initOverrides,
     );

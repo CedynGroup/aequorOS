@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Configuration,
   IngestionApi,
+  type DataActivationRead,
   type IngestionBatchCreate,
   type MappingConfig,
 } from '@aequoros/risk-service-api';
@@ -28,16 +29,23 @@ export const ingestionApi = new IngestionApi(
 const t = { xOrgId: tenant.orgId, xUserId: tenant.userId } as const;
 
 // ---------------------------------------------------------------------------
-// Starter mapping templates for the Sample Bank demo dataset.
+// Starter mapping template for the Sample Bank demo dataset.
 //
-// Column names below are the REAL headers of the demo files; source_table is
-// the sheet name (xlsx) or the file stem (csv) as the adapter's analyzer
-// names recovered tables. One mapping can serve several files: entities whose
-// table is absent from an uploaded file are simply skipped with a warning.
+// Column names below are the REAL headers of the demo files. Table names are
+// resolved exact -> case-insensitive -> normalized, and every mapping lists
+// the CSV file stem plus the workbook sheet name as aliases, so ONE template
+// serves both the /data CSV drops and the multi-sheet Excel workbooks.
+//
+// The mapping-config store enforces a single active config per
+// (bank, source system) and the console ingests with the active config, so
+// the templates are merged into one combined mapping: tables absent from a
+// given upload are skipped with a table_not_found warning, and a file where
+// NOTHING matches is rejected with a found-versus-expected diagnosis.
 // ---------------------------------------------------------------------------
 
 const glAccountMapping = {
   sourceTable: '03_gl_accounts',
+  sourceTableAliases: ['General_Ledger'],
   fields: {
     source_reference: 'gl_code',
     account_code: 'gl_code',
@@ -50,6 +58,7 @@ const glAccountMapping = {
 
 const productMapping = {
   sourceTable: '04_products',
+  sourceTableAliases: ['Product_Catalog'],
   fields: {
     source_reference: 'product_code',
     product_code: 'product_code',
@@ -57,10 +66,20 @@ const productMapping = {
     regulatory_category: 'regulatory_category',
     risk_weight_code: 'risk_weight',
   },
+  attributeColumns: [
+    'product_type',
+    'rate_type',
+    'currency',
+    'min_tenor_months',
+    'max_tenor_months',
+    'typical_rate_low',
+    'typical_rate_high',
+  ],
 };
 
 const counterpartyMapping = {
   sourceTable: 'Counterparties_Sample',
+  sourceTableAliases: ['05_counterparties'],
   fields: {
     source_reference: 'counterparty_id',
     name: 'counterparty_name',
@@ -68,42 +87,106 @@ const counterpartyMapping = {
     country_code: 'country',
     rating: 'credit_rating',
   },
+  attributeColumns: ['kyc_status', 'onboarded_date'],
 };
 
-const loanPositionFields = {
-  source_reference: 'position_id',
-  position_type: 'position_type',
-  currency: 'currency',
-  balance: 'balance_ccy',
-  notional: 'notional_ccy',
-  counterparty_reference: 'counterparty_id',
-  product_code: 'product_code',
-  gl_account_code: 'gl_code',
-  origination_date: 'origination_date',
-  contractual_maturity: 'contractual_maturity',
-  next_repricing_date: 'next_repricing_date',
-  interest_rate: 'interest_rate',
-  rate_type: 'rate_type',
-  rate_index: 'rate_index',
-  rate_spread: 'rate_spread',
-  ifrs9_stage: 'ifrs9_stage',
+// One position mapping serves every position sheet/file: loans, deposits,
+// securities, interbank, and the OBS register. Fallback column lists bridge
+// header differences (the LC/guarantee sheet has no balance_ccy and carries
+// issue/expiry dates instead of origination/maturity); columns the canonical
+// schema has no dedicated home for ride along in attributes.
+const positionMapping = {
+  sourceTable: 'Loans',
+  sourceTableAliases: [
+    '06_loans',
+    'Deposits',
+    '07_deposits',
+    'Government_Securities',
+    '08_securities',
+    'Interbank',
+    '09_interbank',
+    'LC_and_Guarantees',
+    '10_off_balance_sheet',
+  ],
+  fields: {
+    source_reference: 'position_id',
+    position_type: 'position_type',
+    currency: 'currency',
+    balance: ['balance_ccy', 'notional_ccy'],
+    notional: 'notional_ccy',
+    counterparty_reference: 'counterparty_id',
+    product_code: 'product_code',
+    gl_account_code: 'gl_code',
+    origination_date: ['origination_date', 'issue_date'],
+    contractual_maturity: ['contractual_maturity', 'expiry_date'],
+    next_repricing_date: 'next_repricing_date',
+    interest_rate: 'interest_rate',
+    rate_type: 'rate_type',
+    rate_index: 'rate_index',
+    rate_spread: 'rate_spread',
+    ifrs9_stage: 'ifrs9_stage',
+  },
+  attributeColumns: [
+    'balance_ghs',
+    'notional_ghs',
+    'ecl_provision_ghs',
+    'branch_id',
+    'issuer',
+    'isin',
+    'credit_conversion_factor',
+    'credit_equivalent_ghs',
+    'source_system',
+    'source_reference',
+  ],
 };
 
-// Deposits carry rate_type "NONE" (non-maturity products); the canonical
-// model treats that as no contractual rate basis, so the column is unmapped.
-const depositPositionFields = {
-  source_reference: 'position_id',
-  position_type: 'position_type',
-  currency: 'currency',
-  balance: 'balance_ccy',
-  notional: 'notional_ccy',
-  counterparty_reference: 'counterparty_id',
-  product_code: 'product_code',
-  gl_account_code: 'gl_code',
-  origination_date: 'origination_date',
-  contractual_maturity: 'contractual_maturity',
-  interest_rate: 'interest_rate',
-};
+const referenceMappings = {
+  institution: {
+    sourceTable: '01_institution',
+    sourceTableAliases: ['Institution'],
+    datasetKind: 'institution',
+  },
+  business_units: {
+    sourceTable: '02_business_units',
+    sourceTableAliases: ['Branches'],
+    datasetKind: 'business_units',
+  },
+  capital_structure: {
+    sourceTable: '11_capital_structure',
+    sourceTableAliases: ['Capital_Structure'],
+    datasetKind: 'capital_structure',
+  },
+  behavioral_assumptions: {
+    sourceTable: '12_behavioral_assumptions',
+    sourceTableAliases: ['Behavioral_Assumptions'],
+    datasetKind: 'behavioral_assumptions',
+  },
+  yield_curves: {
+    sourceTable: '13_yield_curves',
+    sourceTableAliases: ['Yield_Curves'],
+    datasetKind: 'yield_curve',
+  },
+  fx_rates_current: {
+    sourceTable: '14_fx_rates_current',
+    sourceTableAliases: ['FX_Rates_Current'],
+    datasetKind: 'fx_rates_current',
+  },
+  fx_rates_historical: {
+    sourceTable: '15_fx_rates_historical',
+    sourceTableAliases: ['FX_Rates_Historical'],
+    datasetKind: 'fx_rates_historical',
+  },
+  historical_cashflows: {
+    sourceTable: '16_historical_cashflows',
+    sourceTableAliases: ['Daily_Cashflows'],
+    datasetKind: 'historical_cashflows',
+  },
+  historical_financials: {
+    sourceTable: '17_historical_financials',
+    sourceTableAliases: ['Monthly_Financials'],
+    datasetKind: 'historical_financials',
+  },
+} satisfies MappingConfig['referenceMappings'];
 
 export type StarterTemplate = {
   key: string;
@@ -115,39 +198,32 @@ export type StarterTemplate = {
 
 export const STARTER_TEMPLATES: StarterTemplate[] = [
   {
-    key: 'loans',
-    name: 'Sample Bank — loans & reference data',
+    key: 'sample-bank-complete',
+    name: 'Sample Bank complete (CSV + Excel)',
     description:
-      'Maps GL accounts and products from the reference CSVs, plus counterparties and the Loans sheet of the Customer Positions workbook.',
+      'One mapping for the whole Sample Bank dataset: GL, products, counterparties, and every position book, plus the reference datasets (capital, behavioral, market data, history). Aliases cover both the CSV files and the workbook sheets — upload the files in any order.',
     ingests: [
-      '03_gl_accounts.csv',
-      '04_products.csv',
-      '02_Customer_Positions.xlsx (Counterparties + Loans)',
+      '01_Balance_Sheet_Master.xlsx · 03_gl_accounts.csv · 04_products.csv',
+      '02_Customer_Positions.xlsx · 06_loans.csv · 07_deposits.csv',
+      '03_Securities_and_Interbank.xlsx',
+      '04_Capital_and_Behavioral.xlsx · 11/12_*.csv',
+      '05_Market_Data.xlsx · 13_yield_curves.csv',
+      '06_Historical_Data.xlsx · 16/17_*.csv',
     ],
     config: {
       fieldMappings: {
         gl_account: glAccountMapping,
         product: productMapping,
         counterparty: counterpartyMapping,
-        position: { sourceTable: 'Loans', fields: loanPositionFields },
+        position: positionMapping,
       },
-      enumMappings: {},
-      productMappings: {},
-      options: {},
-    },
-  },
-  {
-    key: 'deposits',
-    name: 'Sample Bank — deposits',
-    description:
-      'Maps counterparties and the Deposits sheet of the Customer Positions workbook. Activate after ingesting loans, then re-upload the same workbook.',
-    ingests: ['02_Customer_Positions.xlsx (Counterparties + Deposits)'],
-    config: {
-      fieldMappings: {
-        counterparty: counterpartyMapping,
-        position: { sourceTable: 'Deposits', fields: depositPositionFields },
+      referenceMappings,
+      // LC / GUARANTEE rows normalize onto the canonical LC_GUARANTEE type;
+      // deposits' rate_type "NONE" is a recognized no-value placeholder and
+      // needs no mapping.
+      enumMappings: {
+        position_type: { LC: 'LC_GUARANTEE', GUARANTEE: 'LC_GUARANTEE' },
       },
-      enumMappings: {},
       productMappings: {},
       options: {},
     },
@@ -246,6 +322,65 @@ export function useActivateTemplate(bankId: string | undefined) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['de-mapping-configs', bankId] });
     },
+  });
+}
+
+/**
+ * Activate the bank's uploaded data: derive the module fact set for one as-of
+ * date and recompute all six modules. On success the reporting-period list is
+ * invalidated so the header selector picks up the new period, and every module
+ * dashboard query refetches against it.
+ */
+export function useActivateBankData(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation<
+    DataActivationRead,
+    unknown,
+    { asOfDate: string; runCalculations: boolean }
+  >({
+    mutationFn: ({ asOfDate, runCalculations }) =>
+      apiCall(() =>
+        ingestionApi.activateBankData({
+          ...t,
+          bankId: bankId!,
+          dataActivationCreate: {
+            asOfDate: new Date(`${asOfDate}T00:00:00Z`),
+            reason: 'Activated uploaded data from the Data Engine console.',
+            runCalculations,
+          },
+        }),
+      ),
+    onSuccess: () => {
+      // The new reporting period must appear in the header selector, and every
+      // module dashboard now has fresh runs for it.
+      void queryClient.invalidateQueries({ queryKey: ['periods', bankId] });
+      void queryClient.invalidateQueries({ queryKey: ['facts', bankId] });
+      for (const prefix of [
+        'liq-dashboard',
+        'cap-dashboard',
+        'irr-dashboard',
+        'fx-dashboard',
+        'ftp-dashboard',
+        'reg-runs',
+        'forecast-runs',
+        'cap-rwa',
+        'cap-structure',
+        'bsd3',
+        'bsd2',
+      ]) {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      }
+      void queryClient.invalidateQueries({ queryKey: ['de-activations', bankId] });
+    },
+  });
+}
+
+export function useDataActivations(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['de-activations', bankId],
+    queryFn: () =>
+      apiCall(() => ingestionApi.listBankDataActivations({ ...t, bankId: bankId! })),
+    enabled: Boolean(bankId),
   });
 }
 

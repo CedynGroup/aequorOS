@@ -11,24 +11,57 @@
  */
 
 import { mapValues } from "../runtime";
+import type { FieldsValue } from "./FieldsValue";
+import {
+  FieldsValueFromJSON,
+  FieldsValueFromJSONTyped,
+  FieldsValueToJSON,
+  FieldsValueToJSONTyped,
+} from "./FieldsValue";
+
 /**
- * How one canonical entity is populated from one source table.
+ * How one canonical entity is populated from source tables.
+ *
+ * Table resolution (documented precedence, applied per candidate name):
+ * exact match first, then case-insensitive, then normalized (strip
+ * non-alphanumerics, lowercase). ``source_table`` and every alias are
+ * resolved independently and all distinct matches are extracted, so one
+ * mapping can serve a CSV file stem (``03_gl_accounts``), a workbook sheet
+ * (``General_Ledger``), and several position sheets at once.
+ *
+ * A ``fields`` value may be a list of source columns: the first listed
+ * column that exists in the source row is used (even if its cell is empty),
+ * which lets one mapping span sheets with diverging headers (for example
+ * ``balance`` from ``balance_ccy`` on loan sheets and ``notional_ccy`` on
+ * letter-of-credit sheets).
  * @export
  * @interface EntityMapping
  */
 export interface EntityMapping {
   /**
    *
-   * @type {{ [key: string]: string; }}
+   * @type {Array<string>}
    * @memberof EntityMapping
    */
-  fields: { [key: string]: string };
+  attributeColumns?: Array<string>;
+  /**
+   *
+   * @type {{ [key: string]: FieldsValue; }}
+   * @memberof EntityMapping
+   */
+  fields: { [key: string]: FieldsValue };
   /**
    *
    * @type {string}
    * @memberof EntityMapping
    */
   sourceTable: string;
+  /**
+   *
+   * @type {Array<string>}
+   * @memberof EntityMapping
+   */
+  sourceTableAliases?: Array<string>;
 }
 
 /**
@@ -53,8 +86,14 @@ export function EntityMappingFromJSONTyped(
     return json;
   }
   return {
-    fields: json["fields"],
+    attributeColumns:
+      json["attribute_columns"] == null ? undefined : json["attribute_columns"],
+    fields: mapValues(json["fields"], FieldsValueFromJSON),
     sourceTable: json["source_table"],
+    sourceTableAliases:
+      json["source_table_aliases"] == null
+        ? undefined
+        : json["source_table_aliases"],
   };
 }
 
@@ -71,7 +110,9 @@ export function EntityMappingToJSONTyped(
   }
 
   return {
-    fields: value["fields"],
+    attribute_columns: value["attributeColumns"],
+    fields: mapValues(value["fields"], FieldsValueToJSON),
     source_table: value["sourceTable"],
+    source_table_aliases: value["sourceTableAliases"],
   };
 }

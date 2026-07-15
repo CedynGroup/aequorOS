@@ -16,6 +16,7 @@ Severity semantics (spec §6.2):
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -132,8 +133,14 @@ def run_validation(
     records: CanonicalRecords,
     config: ValidationConfig,
     context: ValidationContext,
+    extra_findings: Sequence[Finding] = (),
 ) -> ValidationOutcome:
+    """Run the configured rules; ``extra_findings`` lets the orchestrator
+    inject findings discovered upstream of validation (for example table
+    resolution failures during extraction) so they gate the batch through the
+    same severity semantics as rule findings."""
     outcome = ValidationOutcome()
+    outcome.findings.extend(extra_findings)
     for key in _record_keys(records):
         outcome.record_statuses[key] = "accepted"
 
@@ -178,26 +185,30 @@ def run_validation(
     return outcome
 
 
+# A rule that flags most of a 139k-row file would otherwise persist a
+# multi-megabyte report on the batch row; counts stay complete, the listed
+# findings per rule are capped, and the remainder is tallied per rule.
+MAX_REPORT_FINDINGS_PER_RULE = 200
+
+
 def build_validation_report(
     outcome: ValidationOutcome,
     *,
     records_extracted: int,
     records_translated: int,
+    reference_rows: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """The machine-readable report persisted on the batch and shown to operators."""
     statuses = list(outcome.record_statuses.values())
-    return {
-        "summary": {
-            "records_extracted": records_extracted,
-            "records_translated": records_translated,
-            "records_accepted": statuses.count("accepted"),
-            "records_warning": statuses.count("warning"),
-            "records_error": statuses.count("error"),
-            "records_blocked": statuses.count("blocked"),
-            "overall_status": outcome.overall_status.upper(),
-        },
-        "reconciliation": outcome.reconciliation,
-        "failures": [
+    listed: list[dict[str, Any]] = []
+    per_rule: dict[str, int] = {}
+    suppressed: dict[str, int] = {}
+    for finding in outcome.findings:
+        per_rule[finding.rule] = per_rule.get(finding.rule, 0) + 1
+        if per_rule[finding.rule] > MAX_REPORT_FINDINGS_PER_RULE:
+            suppressed[finding.rule] = suppressed.get(finding.rule, 0) + 1
+            continue
+        listed.append(
             {
                 "rule": finding.rule,
                 "category": finding.category,
@@ -207,9 +218,24 @@ def build_validation_report(
                 "source_locator": finding.source_locator,
                 "detail": finding.detail,
             }
-            for finding in outcome.findings
-        ],
+        )
+    report: dict[str, Any] = {
+        "summary": {
+            "records_extracted": records_extracted,
+            "records_translated": records_translated,
+            "records_accepted": statuses.count("accepted"),
+            "records_warning": statuses.count("warning"),
+            "records_error": statuses.count("error"),
+            "records_blocked": statuses.count("blocked"),
+            "reference_rows": reference_rows or {},
+            "overall_status": outcome.overall_status.upper(),
+        },
+        "reconciliation": outcome.reconciliation,
+        "failures": listed,
     }
+    if suppressed:
+        report["suppressed_findings"] = suppressed
+    return report
 
 
 _STATUS_RANK = {"accepted": 0, "warning": 1, "error": 2, "blocked": 3}
@@ -227,6 +253,11 @@ def _record_keys(records: CanonicalRecords) -> list[tuple[str, str]]:
     keys.extend(("counterparty", record.source_reference) for record in records.counterparties)
     keys.extend(("product", record.source_reference) for record in records.products)
     keys.extend(("position", record.source_reference) for record in records.positions)
+    # Reference rows carry no per-field rules yet, but they participate in
+    # record statuses so batch counters (accepted/blocked) include them.
+    keys.extend(
+        ("reference_row", f"{row.dataset_kind}:{row.row_index}") for row in records.reference_rows
+    )
     return keys
 
 

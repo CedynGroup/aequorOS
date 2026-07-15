@@ -8,7 +8,12 @@ import pytest
 
 from app.adapters.excel_csv.adapter import ExcelCsvAdapter
 from app.domain.ingestion.adapter import get_adapter_class
-from app.domain.ingestion.contracts import AdapterConfig, EntityMapping, MappingConfig
+from app.domain.ingestion.contracts import (
+    AdapterConfig,
+    EntityMapping,
+    MappingConfig,
+    ReferenceMapping,
+)
 from tests.adapters.contract import AdapterContractSuite, as_of  # noqa: F401
 from tests.adapters.excel_csv import fixtures
 
@@ -216,3 +221,162 @@ class TestUnreadableSources:
         status = adapter.validate_connection(AdapterConfig(location=str(legacy)))
         assert not status.ok
         assert "save the file as .xlsx" in status.detail
+
+
+class TestTableResolutionAndAliases:
+    def test_aliases_resolve_case_insensitively_and_normalized(self, tmp_path: Path) -> None:
+        adapter = ExcelCsvAdapter()
+        config = AdapterConfig(
+            location=str(fixtures.build_bank_realistic(tmp_path / "bank.xlsx")),
+            # "03_gl_accounts" misses; "general ledger" normalizes onto the
+            # "General_Ledger" sheet.
+            options={"entity_tables": {"gl_account": ["03_gl_accounts", "general ledger"]}},
+        )
+        extraction = adapter.extract(config, fixtures.AS_OF, ["gl_account"])
+        assert len(extraction.records) == 2
+        assert all(
+            r.source_locator.split("#")[1].startswith("General_Ledger") for r in extraction.records
+        )
+        assert extraction.unmatched_mappings == []
+
+    def test_unmatched_mapping_reports_tables_found_and_expected(self, tmp_path: Path) -> None:
+        adapter = ExcelCsvAdapter()
+        config = AdapterConfig(
+            location=str(fixtures.build_bank_realistic(tmp_path / "bank.xlsx")),
+            options={"entity_tables": {"position": ["06_loans", "Loans"]}},
+        )
+        extraction = adapter.extract(config, fixtures.AS_OF, ["position"])
+        assert extraction.records == []
+        assert {(t.name, t.row_count) for t in extraction.source_tables} == {
+            ("General_Ledger", 2),
+            ("Yield_Curves", 2),
+        }
+        (unmatched,) = extraction.unmatched_mappings
+        assert unmatched.mapping == "position"
+        assert unmatched.expected == ("06_loans", "Loans")
+
+    def test_close_miss_suggests_the_present_sheet(self, tmp_path: Path) -> None:
+        adapter = ExcelCsvAdapter()
+        config = AdapterConfig(
+            location=str(fixtures.build_bank_realistic(tmp_path / "bank.xlsx")),
+            options={"entity_tables": {"gl_account": ["General Ledger Accounts"]}},
+        )
+        extraction = adapter.extract(config, fixtures.AS_OF, ["gl_account"])
+        (unmatched,) = extraction.unmatched_mappings
+        assert unmatched.suggestion == "General_Ledger"
+
+    def test_multiple_position_sheets_extract_with_fallback_and_attribute_columns(
+        self, tmp_path: Path
+    ) -> None:
+        adapter = ExcelCsvAdapter()
+        config = AdapterConfig(
+            location=str(fixtures.build_position_variants(tmp_path / "positions.xlsx")),
+            options={"entity_tables": {"position": ["Loans", "LC_and_Guarantees"]}},
+        )
+        mapping = MappingConfig(
+            field_mappings={
+                "position": EntityMapping(
+                    source_table="Loans",
+                    source_table_aliases=["LC_and_Guarantees"],
+                    fields={
+                        "source_reference": "AccountRef",
+                        "position_type": "Type",
+                        "currency": "Ccy",
+                        "balance": ["Outstanding", "NotionalCcy"],
+                        "interest_rate": "Rate",
+                        "rate_type": "RateKind",
+                    },
+                    attribute_columns=["CCF"],
+                )
+            },
+            enum_mappings={
+                "position_type": {"LC": "LC_GUARANTEE"},
+                "rate_type": {"F": "FIXED"},
+            },
+        )
+        extraction = adapter.extract(config, fixtures.AS_OF, ["position"])
+        records = adapter.translate(extraction, mapping)
+        assert not records.failures
+        by_reference = {p.source_reference: p for p in records.positions}
+        assert by_reference["LN-0001"].balance == Decimal("1000")
+        assert by_reference["LN-0001"].attributes == {}
+        obs = by_reference["OBS-0001"]
+        assert obs.position_type == "LC_GUARANTEE"
+        assert obs.balance == Decimal("500")  # fallback column NotionalCcy
+        assert obs.attributes == {"CCF": "0.2"}
+
+    def test_legacy_single_table_option_still_works(self, tmp_path: Path) -> None:
+        adapter = ExcelCsvAdapter()
+        config = AdapterConfig(
+            location=str(fixtures.build_well_formed(tmp_path / "wb.xlsx")),
+            options={"entity_tables": {"position": "Loans"}},
+        )
+        extraction = adapter.extract(config, fixtures.AS_OF, ["position"])
+        assert len(extraction.records) == 2
+
+
+class TestReferenceDatasets:
+    def test_reference_rows_extract_and_stringify(self, tmp_path: Path) -> None:
+        adapter = ExcelCsvAdapter()
+        config = AdapterConfig(
+            location=str(fixtures.build_bank_realistic(tmp_path / "bank.xlsx")),
+            options={
+                "entity_tables": {},
+                "reference_tables": {
+                    "yield_curves": {
+                        "tables": ["13_yield_curves", "Yield_Curves"],
+                        "dataset_kind": "yield_curve",
+                    }
+                },
+            },
+        )
+        mapping = MappingConfig(
+            reference_mappings={
+                "yield_curves": ReferenceMapping(
+                    source_table="13_yield_curves",
+                    source_table_aliases=["Yield_Curves"],
+                    dataset_kind="yield_curve",
+                )
+            }
+        )
+        extraction = adapter.extract(config, fixtures.AS_OF, [])
+        assert len(extraction.records) == 2
+        assert all(record.entity_type == "reference" for record in extraction.records)
+
+        records = adapter.translate(extraction, mapping)
+        assert not records.failures
+        assert records.record_count == 2
+        assert records.reference_row_counts == {"yield_curve": 2}
+        first, second = records.reference_rows
+        assert (first.row_index, second.row_index) == (1, 2)
+        assert first.payload == {
+            "curve_name": "GHS_SOVEREIGN",
+            "tenor_months": "3",
+            "rate": "0.158",
+            "quote_date": "2026-06-01",  # dates land ISO-formatted
+        }
+
+    def test_reference_field_selection_restricts_payload_columns(self, tmp_path: Path) -> None:
+        adapter = ExcelCsvAdapter()
+        config = AdapterConfig(
+            location=str(fixtures.build_bank_realistic(tmp_path / "bank.xlsx")),
+            options={
+                "reference_tables": {
+                    "yield_curves": {"tables": ["Yield_Curves"], "dataset_kind": "yield_curve"}
+                }
+            },
+        )
+        mapping = MappingConfig(
+            reference_mappings={
+                "yield_curves": ReferenceMapping(
+                    source_table="Yield_Curves",
+                    dataset_kind="yield_curve",
+                    fields=["curve_name", "rate"],
+                )
+            }
+        )
+        records = adapter.translate(adapter.extract(config, fixtures.AS_OF, []), mapping)
+        assert records.reference_rows[0].payload == {
+            "curve_name": "GHS_SOVEREIGN",
+            "rate": "0.158",
+        }

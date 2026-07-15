@@ -4,6 +4,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import SourcesPanel from '@/components/data-engine/SourcesPanel';
 import UploadPanel from '@/components/data-engine/UploadPanel';
 import BatchesTable from '@/components/data-engine/BatchesTable';
+import ActivatePanel from '@/components/data-engine/ActivatePanel';
 
 export default function DataEnginePage() {
   return (
@@ -17,6 +18,7 @@ export default function DataEnginePage() {
         <SourcesPanel />
         <UploadPanel />
         <BatchesTable />
+        <ActivatePanel />
       </div>
     </>
   );

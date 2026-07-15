@@ -318,6 +318,13 @@ def schema_guard(schema: dict[str, Any], components: dict[str, Any]) -> str:  # 
     raise ValueError(f"Unsupported inline schema guard: {schema}")
 
 
+def map_value_schema(prop: dict[str, Any], components: dict[str, Any]) -> dict[str, Any] | None:
+    """The additionalProperties schema of a map-typed property, if it is one."""
+    resolved = components[prop["$ref"].rsplit("/", 1)[-1]] if "$ref" in prop else prop
+    additional = resolved.get("additionalProperties")
+    return additional if isinstance(additional, dict) else None
+
+
 def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
     document = json.loads(schema_path.read_text(encoding="utf-8"))
     components = document["components"]["schemas"]
@@ -333,6 +340,13 @@ def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
         property_pattern = re.compile(
             rf"^\s+(\w+)\??: {re.escape(alias)}(?: \| null)?;$", re.MULTILINE
         )
+        # The alias may also be generated for the value type of an inline map
+        # (additionalProperties), e.g. `fields: { [key: string]: FieldsValue; }`.
+        map_pattern = re.compile(
+            rf"^\s+(\w+)\??: \{{ \[key: string\]: {re.escape(alias)}(?: \| null)?; \}}"
+            rf"(?: \| null)?;$",
+            re.MULTILINE,
+        )
         for consumer, text in model_text.items():
             if consumer not in components:
                 continue
@@ -342,6 +356,17 @@ def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
                     value
                     for name, value in components[consumer].get("properties", {}).items()
                     if property_name(name) == generated_name
+                ]
+                if len(candidates) != 1:
+                    raise ValueError(f"Could not resolve {consumer}.{generated_name} for {alias}")
+                schemas.append(candidates[0])
+            for match in map_pattern.finditer(text):
+                generated_name = match.group(1)
+                candidates = [
+                    value_schema
+                    for name, value in components[consumer].get("properties", {}).items()
+                    if property_name(name) == generated_name
+                    and (value_schema := map_value_schema(value, components)) is not None
                 ]
                 if len(candidates) != 1:
                     raise ValueError(f"Could not resolve {consumer}.{generated_name} for {alias}")

@@ -10,6 +10,7 @@ from app.models.canonical import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
+    CanonicalReferenceRow,
 )
 from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
 from app.models.financial import (
@@ -75,6 +76,7 @@ __all__ = [
     "CanonicalPosition",
     "CanonicalPositionSnapshot",
     "CanonicalProduct",
+    "CanonicalReferenceRow",
     "CapitalIndicator",
     "CapitalProjection",
     "CapitalProjectionFinding",

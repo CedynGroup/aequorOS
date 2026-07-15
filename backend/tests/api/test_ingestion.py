@@ -9,8 +9,12 @@ from typing import Any
 
 import openpyxl
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy import text as sql_text
 
-from app.domain.ingestion.contracts import EntityMapping, MappingConfig
+from app.db.session import get_sessionmaker
+from app.domain.ingestion.contracts import EntityMapping, MappingConfig, ReferenceMapping
+from app.models import CanonicalReferenceRow
 from app.storage.client import StorageLocation
 from tests.adapters.excel_csv import fixtures
 from tests.api.helpers import ORG_2, headers
@@ -568,3 +572,148 @@ class TestMappingConfigVersioning:
         assert [config["version"] for config in configs] == [2, 1]
         assert [config["status"] for config in configs] == ["active", "retired"]
         assert configs[0]["id"] == second_id
+
+
+MISMATCHED_MAPPING = MappingConfig(
+    field_mappings={
+        "gl_account": EntityMapping(
+            source_table="03_gl_accounts",
+            fields={"source_reference": "gl_code", "account_code": "gl_code"},
+        ),
+        "position": EntityMapping(
+            source_table="06_loans",
+            fields={"source_reference": "position_id", "balance": "balance_ccy"},
+        ),
+    },
+)
+
+ALIASED_REFERENCE_MAPPING = MappingConfig(
+    field_mappings={
+        "gl_account": EntityMapping(
+            source_table="03_gl_accounts",
+            source_table_aliases=["General_Ledger"],
+            fields={
+                "source_reference": "Code",
+                "account_code": "Code",
+                "name": "Label",
+                "account_class": "Class",
+            },
+        ),
+    },
+    reference_mappings={
+        "yield_curves": ReferenceMapping(
+            source_table="13_yield_curves",
+            source_table_aliases=["Yield_Curves"],
+            dataset_kind="yield_curve",
+        ),
+        "fx_rates": ReferenceMapping(
+            source_table="14_fx_rates_current",
+            source_table_aliases=["FX_Rates_Current"],
+            dataset_kind="fx_rates_current",
+        ),
+    },
+)
+
+
+class TestHonestZeroExtraction:
+    def test_mismatched_mapping_rejects_with_found_versus_expected(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, MISMATCHED_MAPPING)
+        workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
+
+        started = start_batch(db_client, bank_id, workbook)
+        batch = started["batch"]
+        assert batch["status"] == "rejected"
+        assert batch["records_extracted"] == 0
+        assert batch["records_accepted"] == 0
+
+        report = batch["validation_report"]
+        assert report["summary"]["overall_status"] == "REJECTED"
+        blocker = next(f for f in report["failures"] if f["rule"] == "no_tables_matched")
+        assert blocker["severity"] == "BLOCKER"
+        # The message names what the source actually contains, with row counts...
+        assert "GL (2 rows)" in blocker["detail"]
+        assert "Loans (2 rows)" in blocker["detail"]
+        # ...and what the mapping expected to find.
+        assert "03_gl_accounts" in blocker["detail"]
+        assert "06_loans" in blocker["detail"]
+
+        warnings = [f for f in report["failures"] if f["rule"] == "table_not_found"]
+        assert {w["entity_type"] for w in warnings} == {"gl_account", "position"}
+
+        positions = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"]
+        assert positions == []
+
+    def test_partial_match_is_accepted_with_table_warnings(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        # The dirty fixture only has a Loans sheet; GL/Customers/Products miss.
+        workbook = fixtures.build_dirty_cells(tmp_path / "dirty.xlsx")
+
+        started = start_batch(db_client, bank_id, workbook)
+        batch = started["batch"]
+        assert batch["status"] == "accepted_with_warnings"
+        assert batch["records_extracted"] > 0
+
+        report = batch["validation_report"]
+        warnings = [f for f in report["failures"] if f["rule"] == "table_not_found"]
+        assert {w["entity_type"] for w in warnings} == {"gl_account", "counterparty", "product"}
+        assert all(f["rule"] != "no_tables_matched" for f in report["failures"])
+
+
+class TestReferenceDatasetIngestion:
+    def test_aliased_entities_and_reference_rows_ingest_together(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, ALIASED_REFERENCE_MAPPING)
+        workbook = fixtures.build_bank_realistic(tmp_path / "bank.xlsx")
+
+        started = start_batch(db_client, bank_id, workbook)
+        batch = started["batch"]
+        # fx_rates table is absent from this workbook -> warning, not failure.
+        assert batch["status"] == "accepted_with_warnings"
+        # 2 GL rows via the General_Ledger alias + 2 yield-curve reference rows.
+        assert batch["records_extracted"] == 4
+        assert batch["records_translated"] == 4
+        assert batch["records_accepted"] == 4
+
+        summary = batch["validation_report"]["summary"]
+        assert summary["reference_rows"] == {"yield_curve": 2}
+        warnings = [
+            f for f in batch["validation_report"]["failures"] if f["rule"] == "table_not_found"
+        ]
+        assert [w["entity_type"] for w in warnings] == ["reference:fx_rates"]
+
+    def test_reference_rows_land_in_the_canonical_reference_table(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, ALIASED_REFERENCE_MAPPING)
+        workbook = fixtures.build_bank_realistic(tmp_path / "bank.xlsx")
+        batch = start_batch(db_client, bank_id, workbook)["batch"]
+
+        session = get_sessionmaker()()
+        try:
+            if session.get_bind().dialect.name == "postgresql":
+                session.execute(
+                    sql_text("SELECT set_config('app.organization_id', :org, true)"),
+                    {"org": "11111111-1111-4111-8111-111111111111"},
+                )
+            rows = session.scalars(
+                select(CanonicalReferenceRow).order_by(CanonicalReferenceRow.row_index)
+            ).all()
+        finally:
+            session.close()
+        assert [row.row_index for row in rows] == [1, 2]
+        assert {row.dataset_kind for row in rows} == {"yield_curve"}
+        assert rows[0].payload["curve_name"] == "GHS_SOVEREIGN"
+        assert rows[0].payload["quote_date"] == "2026-06-01"
+        assert str(rows[0].ingestion_batch_id) == batch["id"]
+        assert rows[0].source_reference.startswith("bank.xlsx#Yield_Curves!R")

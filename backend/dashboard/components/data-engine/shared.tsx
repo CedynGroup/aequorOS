@@ -26,7 +26,44 @@ export function BatchStatusPill({ status }: { status: string }) {
   );
 }
 
+type ValidationReport = {
+  summary?: {
+    reference_rows?: Record<string, number>;
+    [key: string]: unknown;
+  };
+  failures?: {
+    rule: string;
+    severity: string;
+    entity_type: string | null;
+    source_reference: string | null;
+    source_locator: string | null;
+    detail: string;
+  }[];
+  suppressed_findings?: Record<string, number>;
+  [key: string]: unknown;
+};
+
+export function validationReport(batch: IngestionBatchRead): ValidationReport {
+  return (batch.validationReport ?? {}) as ValidationReport;
+}
+
+export function referenceRowCounts(batch: IngestionBatchRead): Record<string, number> {
+  return validationReport(batch).summary?.reference_rows ?? {};
+}
+
+export function referenceRowTotal(batch: IngestionBatchRead): number {
+  return Object.values(referenceRowCounts(batch)).reduce((sum, count) => sum + count, 0);
+}
+
+/** BLOCKER finding details — the found-versus-expected diagnosis on rejection. */
+export function batchBlockerDetails(batch: IngestionBatchRead): string[] {
+  return (validationReport(batch).failures ?? [])
+    .filter((failure) => failure.severity === 'BLOCKER')
+    .map((failure) => failure.detail);
+}
+
 export function CountStrip({ batch }: { batch: IngestionBatchRead }) {
+  const referenceRows = referenceRowTotal(batch);
   const items: { label: string; value: number; tone?: string }[] = [
     { label: 'Extracted', value: batch.recordsExtracted },
     { label: 'Translated', value: batch.recordsTranslated },
@@ -34,9 +71,10 @@ export function CountStrip({ batch }: { batch: IngestionBatchRead }) {
     { label: 'Warnings', value: batch.recordsWarning, tone: 'text-warning' },
     { label: 'Errors', value: batch.recordsError, tone: 'text-critical' },
     { label: 'Blocked', value: batch.recordsBlocked, tone: 'text-critical' },
+    { label: 'Ref rows', value: referenceRows },
   ];
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-6 gap-px bg-border-light rounded overflow-hidden border border-border-light">
+    <div className="grid grid-cols-4 sm:grid-cols-7 gap-px bg-border-light rounded overflow-hidden border border-border-light">
       {items.map((item) => (
         <div key={item.label} className="bg-white px-3 py-2">
           <p className="text-micro uppercase tracking-wider text-slate">{item.label}</p>

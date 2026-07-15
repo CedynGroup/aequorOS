@@ -38,10 +38,12 @@ from app.domain.ingestion.contracts import (
     ENTITY_TYPES,
     AdapterConfig,
     CanonicalRecords,
+    ExtractionResult,
     MappingConfig,
 )
 from app.domain.ingestion.enrichment import apply_manual_override
 from app.domain.ingestion.validation import (
+    Finding,
     ValidationContext,
     build_validation_report,
     default_validation_config,
@@ -54,6 +56,7 @@ from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
+    CanonicalReferenceRow,
     IngestionBatch,
     LineageRecord,
     MappingConfigRecord,
@@ -197,12 +200,23 @@ def _prepare_extraction(
         raise fail("storage_error", str(exc)) from exc
 
     entity_tables = {
-        entity_type: entity_mapping.source_table
+        entity_type: [entity_mapping.source_table, *entity_mapping.source_table_aliases]
         for entity_type, entity_mapping in mapping.field_mappings.items()
+    }
+    reference_tables = {
+        name: {
+            "tables": [reference.source_table, *reference.source_table_aliases],
+            "dataset_kind": reference.dataset_kind,
+        }
+        for name, reference in mapping.reference_mappings.items()
     }
     adapter_config = AdapterConfig(
         location=source_path,
-        options={"entity_tables": entity_tables, **payload.adapter_options},
+        options={
+            "entity_tables": entity_tables,
+            "reference_tables": reference_tables,
+            **payload.adapter_options,
+        },
     )
 
     connection = adapter.validate_connection(adapter_config)
@@ -304,7 +318,12 @@ def start_ingestion(
         known_products=known_products,
         known_gl_accounts=known_gl_accounts,
     )
-    outcome = run_validation(records, default_validation_config(), context)
+    outcome = run_validation(
+        records,
+        default_validation_config(),
+        context,
+        extra_findings=_table_resolution_findings(extraction, mapping),
+    )
     validate_node = _lineage(
         db,
         ctx,
@@ -324,6 +343,7 @@ def start_ingestion(
         outcome,
         records_extracted=len(extraction.records),
         records_translated=records.record_count,
+        reference_rows=records.reference_row_counts,
     )
     batch.validation_report = report
     batch.status = outcome.overall_status
@@ -669,6 +689,68 @@ def _resolve_mapping_config(
     return record
 
 
+def _table_resolution_findings(
+    extraction: ExtractionResult, mapping: MappingConfig
+) -> list[Finding]:
+    """Findings for configured tables the source did not contain.
+
+    Every unmatched mapping is a WARNING naming the closest present table, so
+    a partial upload (one file of a multi-file mapping) completes as accepted
+    with warnings. When NOTHING was extracted, the batch must not complete as
+    an accepted no-op: a BLOCKER lists what the source actually contains
+    (with row counts) against every table the mapping expects, and the normal
+    severity semantics reject the batch.
+    """
+    findings = [
+        Finding(
+            rule="table_not_found",
+            category="STRUCTURAL",
+            severity="WARNING",
+            entity_type=unmatched.mapping,
+            detail=(
+                f"No table matching {list(unmatched.expected)} was found for "
+                f"{unmatched.mapping!r}; the mapping was skipped."
+                + (
+                    f" Closest present table: {unmatched.suggestion!r}."
+                    if unmatched.suggestion
+                    else ""
+                )
+            ),
+        )
+        for unmatched in extraction.unmatched_mappings
+    ]
+    if extraction.records:
+        return findings
+
+    found = (
+        "; ".join(f"{table.name} ({table.row_count} rows)" for table in extraction.source_tables)
+        or "none"
+    )
+    expected_parts = [
+        f"{entity_type}: {[entry.source_table, *entry.source_table_aliases]}"
+        for entity_type, entry in mapping.field_mappings.items()
+    ]
+    expected_parts += [
+        f"reference:{name}: {[entry.source_table, *entry.source_table_aliases]}"
+        for name, entry in mapping.reference_mappings.items()
+    ]
+    expected = "; ".join(expected_parts) or "none (the mapping configures no tables)"
+    findings.insert(
+        0,
+        Finding(
+            rule="no_tables_matched",
+            category="STRUCTURAL",
+            severity="BLOCKER",
+            detail=(
+                "The active mapping matched no table in this source, so nothing "
+                f"was extracted. Tables found in the source: {found}. "
+                f"Tables the mapping expects: {expected}."
+            ),
+        ),
+    )
+    return findings
+
+
 def _resolve_adapter(source_system: str) -> SourceAdapter:
     try:
         adapter_cls = get_adapter_class(source_system)
@@ -824,7 +906,7 @@ def _prior_balances(
     return balances or None
 
 
-def _persist_canonical(  # noqa: PLR0913
+def _persist_canonical(  # noqa: PLR0913, PLR0915
     db: Session,
     ctx: TenantContext,
     bank: Bank,
@@ -833,6 +915,14 @@ def _persist_canonical(  # noqa: PLR0913
     records: CanonicalRecords,
     record_statuses: dict[tuple[str, str], str],
 ) -> None:
+    """Write the batch's canonical rows, superseding same-key current rows.
+
+    Current-generation lookups are preloaded per entity type instead of
+    queried per record, so a 139k-row deposit book persists in a handful of
+    statements. Supersessions of pre-existing rows are flushed before the
+    batch's inserts so the partial unique indexes over the current generation
+    never see two live rows for one natural key.
+    """
     common = {
         "organization_id": ctx.organization_id,
         "bank_id": bank.id,
@@ -845,20 +935,48 @@ def _persist_canonical(  # noqa: PLR0913
     def status_of(entity_type: str, source_reference: str) -> str:
         return record_statuses.get((entity_type, source_reference), "accepted")
 
-    def existing_ids(key_column, model) -> dict[str, UUID]:
-        return dict(
-            db.execute(
-                select(key_column, model.id).where(
-                    model.organization_id == ctx.organization_id,
-                    model.bank_id == bank.id,
-                    model.superseded_by.is_(None),
-                )
-            ).all()
+    def existing_ids(key_column: Any, model: Any) -> dict[str, UUID]:
+        rows = db.execute(
+            select(key_column, model.id).where(
+                model.organization_id == ctx.organization_id,
+                model.bank_id == bank.id,
+                model.superseded_by.is_(None),
+            )
         )
+        return {key: row_id for key, row_id in rows}
+
+    def current_by_key(key_column, model, *conditions: Any) -> dict[str, Any]:
+        rows = db.execute(
+            select(key_column, model).where(
+                model.organization_id == ctx.organization_id,
+                model.bank_id == bank.id,
+                model.superseded_by.is_(None),
+                *conditions,
+            )
+        )
+        return {key: row for key, row in rows}
+
+    def supersede(current: dict[Any, Any], key: Any, row: Any) -> None:
+        """Mark the current-generation holder of ``key`` superseded by ``row``.
+
+        Handles intra-batch duplicates too: the map always tracks the newest
+        generation, whether persistent or pending.
+        """
+        prior = current.get(key)
+        if prior is not None:
+            prior.superseded_by = row.id
+        current[key] = row
 
     # Batch records supersede same-key existing rows below, so batch entries
     # overwrite these lookups as they are (re)persisted.
     gl_ids: dict[str, UUID] = existing_ids(CanonicalGlAccount.account_code, CanonicalGlAccount)
+    current_gl = current_by_key(
+        CanonicalGlAccount.account_code,
+        CanonicalGlAccount,
+        CanonicalGlAccount.as_of_date == batch.as_of_date,
+    )
+    new_gl: dict[str, CanonicalGlAccount] = {}
+    new_gl_rows: list[CanonicalGlAccount] = []
     for data in records.gl_accounts:
         row = CanonicalGlAccount(
             id=new_uuid7(),
@@ -874,28 +992,21 @@ def _persist_canonical(  # noqa: PLR0913
             attributes=data.attributes,
             **common,
         )
-        _supersede_current(
-            db,
-            CanonicalGlAccount,
-            row.id,
-            CanonicalGlAccount.organization_id == ctx.organization_id,
-            CanonicalGlAccount.bank_id == bank.id,
-            CanonicalGlAccount.account_code == data.account_code,
-            CanonicalGlAccount.as_of_date == batch.as_of_date,
-        )
-        db.add(row)
+        supersede(current_gl, data.account_code, row)
         gl_ids[data.account_code] = row.id
-    db.flush()
-    # Second pass wires the hierarchy once every account id exists.
-    for data in records.gl_accounts:
-        if data.parent_account_code and data.parent_account_code in gl_ids:
-            child = db.get(CanonicalGlAccount, gl_ids[data.account_code])
-            if child is not None:
-                child.parent_account_id = gl_ids[data.parent_account_code]
+        new_gl[data.account_code] = row
+        new_gl_rows.append(row)
 
     counterparty_ids: dict[str, UUID] = existing_ids(
         CanonicalCounterparty.source_reference, CanonicalCounterparty
     )
+    current_counterparties = current_by_key(
+        CanonicalCounterparty.source_reference,
+        CanonicalCounterparty,
+        CanonicalCounterparty.source_system == batch.source_system,
+        CanonicalCounterparty.as_of_date == batch.as_of_date,
+    )
+    new_counterparties: list[CanonicalCounterparty] = []
     for data in records.counterparties:
         row = CanonicalCounterparty(
             id=new_uuid7(),
@@ -913,20 +1024,17 @@ def _persist_canonical(  # noqa: PLR0913
             attributes=data.attributes,
             **common,
         )
-        _supersede_current(
-            db,
-            CanonicalCounterparty,
-            row.id,
-            CanonicalCounterparty.organization_id == ctx.organization_id,
-            CanonicalCounterparty.bank_id == bank.id,
-            CanonicalCounterparty.source_system == batch.source_system,
-            CanonicalCounterparty.source_reference == data.source_reference,
-            CanonicalCounterparty.as_of_date == batch.as_of_date,
-        )
-        db.add(row)
+        supersede(current_counterparties, data.source_reference, row)
         counterparty_ids[data.source_reference] = row.id
+        new_counterparties.append(row)
 
     product_ids: dict[str, UUID] = existing_ids(CanonicalProduct.product_code, CanonicalProduct)
+    current_products = current_by_key(
+        CanonicalProduct.product_code,
+        CanonicalProduct,
+        CanonicalProduct.as_of_date == batch.as_of_date,
+    )
+    new_products: list[CanonicalProduct] = []
     for data in records.products:
         row = CanonicalProduct(
             id=new_uuid7(),
@@ -941,29 +1049,24 @@ def _persist_canonical(  # noqa: PLR0913
             attributes=data.attributes,
             **common,
         )
-        _supersede_current(
-            db,
-            CanonicalProduct,
-            row.id,
-            CanonicalProduct.organization_id == ctx.organization_id,
-            CanonicalProduct.bank_id == bank.id,
-            CanonicalProduct.product_code == data.product_code,
-            CanonicalProduct.as_of_date == batch.as_of_date,
-        )
-        db.add(row)
+        supersede(current_products, data.product_code, row)
         product_ids[data.product_code] = row.id
-    db.flush()
+        new_products.append(row)
 
+    current_positions = current_by_key(
+        CanonicalPosition.source_reference,
+        CanonicalPosition,
+        CanonicalPosition.source_system == batch.source_system,
+    )
+    current_snapshots = current_by_key(
+        CanonicalPositionSnapshot.position_id,
+        CanonicalPositionSnapshot,
+        CanonicalPositionSnapshot.as_of_date == batch.as_of_date,
+    )
+    new_positions: list[CanonicalPosition] = []
+    new_snapshots: list[CanonicalPositionSnapshot] = []
     for data in records.positions:
-        position = db.scalar(
-            select(CanonicalPosition).where(
-                CanonicalPosition.organization_id == ctx.organization_id,
-                CanonicalPosition.bank_id == bank.id,
-                CanonicalPosition.source_system == batch.source_system,
-                CanonicalPosition.source_reference == data.source_reference,
-                CanonicalPosition.superseded_by.is_(None),
-            )
-        )
+        position = current_positions.get(data.source_reference)
         if position is None:
             position = CanonicalPosition(
                 id=new_uuid7(),
@@ -976,8 +1079,8 @@ def _persist_canonical(  # noqa: PLR0913
                 origination_date=data.origination_date,
                 **common,
             )
-            db.add(position)
-            db.flush()
+            current_positions[data.source_reference] = position
+            new_positions.append(position)
 
         snapshot = CanonicalPositionSnapshot(
             id=new_uuid7(),
@@ -1005,25 +1108,47 @@ def _persist_canonical(  # noqa: PLR0913
             attributes=data.attributes,
             **common,
         )
-        _supersede_current(
-            db,
-            CanonicalPositionSnapshot,
-            snapshot.id,
-            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
-            CanonicalPositionSnapshot.position_id == position.id,
-            CanonicalPositionSnapshot.as_of_date == batch.as_of_date,
+        supersede(current_snapshots, position.id, snapshot)
+        new_snapshots.append(snapshot)
+
+    # Reference rows are batch-scoped; they share the batch's VALIDATION
+    # lineage node like every other record of the batch (one node per batch,
+    # not per row — cheap and consistent).
+    new_references = [
+        CanonicalReferenceRow(
+            id=new_uuid7(),
+            organization_id=ctx.organization_id,
+            bank_id=bank.id,
+            ingestion_batch_id=batch.id,
+            as_of_date=batch.as_of_date,
+            dataset_kind=data.dataset_kind,
+            row_index=data.row_index,
+            payload=dict(data.payload),
+            source_reference=data.source_locator[:255],
+            lineage_id=lineage_node.id,
         )
-        db.add(snapshot)
+        for data in records.reference_rows
+    ]
+
+    # Supersession UPDATEs of persistent rows go first so the partial unique
+    # indexes never see two current-generation rows during the inserts. The
+    # inserts are then flushed in FK dependency order explicitly: without
+    # relationship() mappings the unit of work does not order tables itself.
     db.flush()
-
-
-def _supersede_current(db: Session, model: type, new_id: UUID, *conditions: Any) -> None:
-    current = db.scalar(
-        select(model).where(*conditions, model.superseded_by.is_(None))  # type: ignore[attr-defined]
-    )
-    if current is not None:
-        current.superseded_by = new_id
-        db.flush()
+    db.add_all(new_gl_rows)
+    db.flush()
+    # Second pass wires the GL hierarchy once every account row exists.
+    for data in records.gl_accounts:
+        child = new_gl.get(data.account_code)
+        if child is not None and data.parent_account_code and data.parent_account_code in gl_ids:
+            child.parent_account_id = gl_ids[data.parent_account_code]
+    db.add_all(new_counterparties)
+    db.add_all(new_products)
+    db.add_all(new_positions)
+    db.flush()
+    db.add_all(new_snapshots)
+    db.add_all(new_references)
+    db.flush()
 
 
 def _artifact_step(

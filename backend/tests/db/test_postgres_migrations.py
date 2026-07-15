@@ -638,3 +638,28 @@ def test_postgres_migrations_create_liquidity_analysis_results_with_rls(
     assert migrated_postgres_schema.constraints({"uq_liquidity_analysis_results_run_id"}) == {
         "uq_liquidity_analysis_results_run_id"
     }
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_postgres_migrations_create_canonical_reference_rows_with_rls(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    tables = {"canonical_reference_rows"}
+    assert migrated_postgres_schema.tables(tables) == tables
+    indexes = {
+        "ix_canonical_reference_rows_org_bank_kind_as_of",
+        "ix_canonical_reference_rows_org_batch",
+    }
+    assert migrated_postgres_schema.indexes(indexes) == indexes
+    assert migrated_postgres_schema.policies(tables) == {
+        "canonical_reference_rows_tenant_isolation"
+    }
+    constraints = {
+        "ck_canonical_reference_rows_dataset_kind",
+        "uq_canonical_reference_rows_batch_kind_row",
+        "uq_canonical_reference_rows_id_org",
+    }
+    assert migrated_postgres_schema.constraints(constraints) == constraints

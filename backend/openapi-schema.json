@@ -1,6 +1,123 @@
 {
   "components": {
     "schemas": {
+      "ActivationGroupRead": {
+        "additionalProperties": false,
+        "properties": {
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation Group Note"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivationGroupStatus"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "group",
+          "status",
+          "rows",
+          "warnings"
+        ],
+        "title": "ActivationGroupRead",
+        "type": "object"
+      },
+      "ActivationGroupStatus": {
+        "enum": [
+          "derived",
+          "skipped"
+        ],
+        "type": "string"
+      },
+      "ActivationModule": {
+        "enum": [
+          "liquidity",
+          "capital",
+          "irr",
+          "fx",
+          "ftp",
+          "forecast"
+        ],
+        "type": "string"
+      },
+      "ActivationRunRead": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation Run Error"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation Run Headline"
+          },
+          "module": {
+            "$ref": "#/components/schemas/ActivationModule"
+          },
+          "scenarios_failed": {
+            "title": "Scenarios Failed",
+            "type": "integer"
+          },
+          "scenarios_succeeded": {
+            "title": "Scenarios Succeeded",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivationRunStatus"
+          }
+        },
+        "required": [
+          "module",
+          "status",
+          "scenarios_succeeded",
+          "scenarios_failed"
+        ],
+        "title": "ActivationRunRead",
+        "type": "object"
+      },
+      "ActivationRunStatus": {
+        "enum": [
+          "succeeded",
+          "partial",
+          "failed"
+        ],
+        "type": "string"
+      },
       "AssessmentCreate": {
         "properties": {
           "assessment_type": {
@@ -4204,6 +4321,208 @@
         "title": "CompleteUploadResponse",
         "type": "object"
       },
+      "DataActivationCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "run_calculations": {
+            "default": true,
+            "title": "Run Calculations",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "as_of_date",
+          "reason"
+        ],
+        "title": "DataActivationCreate",
+        "type": "object"
+      },
+      "DataActivationListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "activations": {
+            "items": {
+              "$ref": "#/components/schemas/DataActivationSummaryRead"
+            },
+            "title": "Activations",
+            "type": "array"
+          },
+          "bank_id": {
+            "format": "uuid",
+            "title": "Bank Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "activations"
+        ],
+        "title": "DataActivationListRead",
+        "type": "object"
+      },
+      "DataActivationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "bank_id": {
+            "format": "uuid",
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "facts_created": {
+            "title": "Facts Created",
+            "type": "integer"
+          },
+          "facts_deleted": {
+            "title": "Facts Deleted",
+            "type": "integer"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ActivationGroupRead"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "period_created": {
+            "title": "Period Created",
+            "type": "boolean"
+          },
+          "period_label": {
+            "title": "Period Label",
+            "type": "string"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ActivationRunRead"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "reporting_period_id",
+          "period_label",
+          "as_of_date",
+          "period_created",
+          "facts_deleted",
+          "facts_created",
+          "groups",
+          "runs",
+          "warnings"
+        ],
+        "title": "DataActivationRead",
+        "type": "object"
+      },
+      "DataActivationSummaryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "activated_at": {
+            "format": "date-time",
+            "title": "Activated At",
+            "type": "string"
+          },
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation As-Of Date"
+          },
+          "facts_created": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation Facts Created"
+          },
+          "modules_failed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation Modules Failed"
+          },
+          "modules_succeeded": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation Modules Succeeded"
+          },
+          "period_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation Period Label"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation Warning Count"
+          }
+        },
+        "required": [
+          "activated_at"
+        ],
+        "title": "DataActivationSummaryRead",
+        "type": "object"
+      },
       "DocumentRead": {
         "properties": {
           "case_id": {
@@ -4350,11 +4669,28 @@
         "type": "object"
       },
       "EntityMapping": {
-        "description": "How one canonical entity is populated from one source table.",
+        "description": "How one canonical entity is populated from source tables.\n\nTable resolution (documented precedence, applied per candidate name):\nexact match first, then case-insensitive, then normalized (strip\nnon-alphanumerics, lowercase). ``source_table`` and every alias are\nresolved independently and all distinct matches are extracted, so one\nmapping can serve a CSV file stem (``03_gl_accounts``), a workbook sheet\n(``General_Ledger``), and several position sheets at once.\n\nA ``fields`` value may be a list of source columns: the first listed\ncolumn that exists in the source row is used (even if its cell is empty),\nwhich lets one mapping span sheets with diverging headers (for example\n``balance`` from ``balance_ccy`` on loan sheets and ``notional_ccy`` on\nletter-of-credit sheets).",
         "properties": {
+          "attribute_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Attribute Columns",
+            "type": "array"
+          },
           "fields": {
             "additionalProperties": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
             },
             "title": "Fields",
             "type": "object"
@@ -4362,6 +4698,13 @@
           "source_table": {
             "title": "Source Table",
             "type": "string"
+          },
+          "source_table_aliases": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Table Aliases",
+            "type": "array"
           }
         },
         "required": [
@@ -11309,6 +11652,13 @@
             },
             "title": "Product Mappings",
             "type": "object"
+          },
+          "reference_mappings": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReferenceMapping"
+            },
+            "title": "Reference Mappings",
+            "type": "object"
           }
         },
         "title": "MappingConfig",
@@ -12116,6 +12466,50 @@
           "database"
         ],
         "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "ReferenceMapping": {
+        "description": "How one reference dataset is captured from one source table.\n\nReference rows are not translated field-by-field: the mapped table's rows\nare preserved as payload dicts (values stringified, dates ISO) under\n``dataset_kind``. ``fields`` optionally restricts which source columns are\nkept; empty keeps every column.",
+        "properties": {
+          "dataset_kind": {
+            "enum": [
+              "capital_structure",
+              "behavioral_assumptions",
+              "yield_curve",
+              "fx_rates_current",
+              "fx_rates_historical",
+              "historical_cashflows",
+              "historical_financials",
+              "business_units",
+              "institution"
+            ],
+            "title": "Dataset Kind",
+            "type": "string"
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "source_table": {
+            "title": "Source Table",
+            "type": "string"
+          },
+          "source_table_aliases": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Table Aliases",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_table",
+          "dataset_kind"
+        ],
+        "title": "ReferenceMapping",
         "type": "object"
       },
       "RegulatoryLineItemRead": {
@@ -16659,6 +17053,256 @@
         "summary": "Get Cashflow History",
         "tags": [
           "cashflow-forecast"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/data-activations": {
+      "get": {
+        "operationId": "listBankDataActivations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataActivationListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "List Bank Data Activations",
+        "tags": [
+          "ingestion"
+        ]
+      },
+      "post": {
+        "description": "Derive module facts from canonical data and recompute every module.",
+        "operationId": "activateBankData",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DataActivationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataActivationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Activate Bank Data",
+        "tags": [
+          "ingestion"
         ]
       }
     },

@@ -132,6 +132,32 @@ BATCH_ACCEPTED_STATUSES: tuple[str, ...] = ("accepted", "accepted_with_warnings"
 EXTRACTION_MODES: tuple[str, ...] = ("full", "incremental")
 ExtractionMode = Literal["full", "incremental"]
 
+# Reference datasets the modules consume as-is (curves, assumptions, history).
+# Unlike the entity types, these have no per-field canonical schema: rows are
+# preserved as payload dicts under a dataset kind and interpreted downstream.
+REFERENCE_DATASET_KINDS: tuple[str, ...] = (
+    "capital_structure",
+    "behavioral_assumptions",
+    "yield_curve",
+    "fx_rates_current",
+    "fx_rates_historical",
+    "historical_cashflows",
+    "historical_financials",
+    "business_units",
+    "institution",
+)
+ReferenceDatasetKind = Literal[
+    "capital_structure",
+    "behavioral_assumptions",
+    "yield_curve",
+    "fx_rates_current",
+    "fx_rates_historical",
+    "historical_cashflows",
+    "historical_financials",
+    "business_units",
+    "institution",
+]
+
 LINEAGE_OPERATION_TYPES: tuple[str, ...] = (
     "ADAPTER_EXTRACT",
     "ADAPTER_TRANSLATE",
