@@ -55,10 +55,12 @@ The deterministic portfolio includes a non-compliant liquidity covenant for
 Mariner Trust so the case-health summary and adverse-state journeys do
 not rely on optimistic defaults.
 
-When the API is unavailable, frontend demo mode provides populated, validated
-financial data, reviewed baseline and downside scenarios, an immutable
-successful forecast, active and historical findings, covenant status, and
-decision history. These review surfaces are read-only and make no API requests.
+When the API is unavailable, enable frontend demo mode from the console to use
+populated, validated financial data, reviewed baseline and downside scenarios,
+an immutable successful forecast, active and historical findings, covenant
+status, and decision history. The case-health header and the Financial,
+Scenarios, Forecast, Findings, and Decisions tabs use these read-only fixtures
+without making workspace API requests.
 
 ## Console Navigation And Scenario Review
 
@@ -265,23 +267,24 @@ The web app uses a feature-based split so each operational surface owns its UI a
 - `src/features/risk-console/case-queue-panel.tsx`: queue filters, table, selection, and pagination
 - `src/features/risk-console/bulk-actions.tsx`: bulk action dialog, mutation, and result rendering
 - `src/features/risk-console/case-health-header.tsx`: case validation, scenario, forecast, finding, covenant, and decision summaries with owning-tab navigation
-- `src/features/risk-console/case-workspace.tsx`: detail summary, overview, financial, scenarios, forecast, capital, liquidity, decisions, documents, findings, and report tabs
+- `src/features/risk-console/case-workspace.tsx`: detail summary, case-health and demo-data orchestration, and overview, financial, scenarios, forecast, capital, liquidity, decisions, documents, findings, and report tabs
 - `src/features/risk-console/format.tsx`: risk/status/decision badges and date formatting
 - `src/features/risk-console/types.ts`: feature-local queue/search helper types
 - `src/features/documents/documents-tab.tsx`: document upload-request, completion, parse, and download URL workflows
-- `src/features/findings/findings-tab.tsx`: manual finding creation plus shared finding review and status updates
+- `src/features/findings/findings-tab.tsx`: manual finding creation plus shared finding review, status updates, and read-only demo history
 - `src/features/financial/financial-client.ts`: generated-client adapter for financial workspace reads, mapping, validation, and supported mutations
 - `src/features/financial/financial-tab.tsx`: financial workspace loading, mapping, and revalidation controls
 - `src/features/financial/financial-sections.tsx`: grouped records, validation navigation, source traceability, audit history, and mutation forms
-- `src/features/scenarios/scenarios-tab.tsx`: scenario initialization, lifecycle, assumption editing and review, validation, and readiness
-- `src/features/calculations/calculations-tab.tsx`: forecast start and rerun controls, polling, paginated run history, diagnostics, and projected outputs
+- `src/features/scenarios/scenarios-tab.tsx`: scenario initialization, lifecycle, assumption editing and review, validation, readiness, and read-only demo scenarios
+- `src/features/calculations/calculations-tab.tsx`: forecast start and rerun controls, polling, paginated run history, diagnostics, projected outputs, and read-only demo forecasts
+- `src/features/decisions/decisions-tab.tsx`: decision recording and history with retired-case and demo-mode mutation guards
 - `src/features/capital/capital-tab.tsx`: projection generation and history, indicators, scenario comparison, findings, and evidence review
 - `src/features/liquidity/liquidity-client.ts`: generated-client adapter for liquidity summary and finding review requests
 - `src/features/liquidity/liquidity-tab.tsx`: scenario/run selection, metric diagnostics, evidence links, and finding review states
 - `src/features/charts/analysis-chart-adapters.ts`: pure generated-DTO adapters for forecast, liquidity, and capital chart series
 - `src/features/charts/analysis-charts.tsx`: lazy-loaded Recharts visualizations, legends and annotated gaps, accessible SVG metadata, and reduced-motion behavior
 - `src/features/charts/chart-shell.tsx`: visualization loading and failure isolation that preserves authoritative content
-- `src/features/demo-data/demo-data.ts`: frontend-only fallback/demo data helpers
+- `src/features/demo-data/demo-data.ts`: frontend-only queue fallbacks and internally consistent read-only case-health fixtures
 - `src/shared/route-ui.tsx`: route-level empty, error, and data-list helpers
 - `src/routes/risk-console.tsx`: thin route export for TanStack Router wiring
 
