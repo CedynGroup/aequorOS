@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import type { ConsoleTab } from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
-import { mockCaseHealth } from "../demo-data/demo-data";
+import { DEMO_CASE_IDS, mockCaseHealth } from "../demo-data/demo-data";
 import { CaseHealthHeader } from "./case-health-header";
 
 const tenant: TenantHeaders = { orgId: "org-1", userId: "user-1" };
@@ -459,13 +459,14 @@ describe("CaseHealthHeader", () => {
     const scenarios = vi.spyOn(riskApi, "scenarios");
     const calculationRuns = vi.spyOn(riskApi, "calculationRuns");
     const findings = vi.spyOn(riskApi, "findings");
+    const demoCaseId = DEMO_CASE_IDS[1];
 
     renderWithQuery(
       <CaseHealthHeader
         tenant={tenant}
-        caseId={caseId}
+        caseId={demoCaseId}
         decision="needs_more_info"
-        demoData={mockCaseHealth(tenant.orgId, caseId)}
+        demoData={mockCaseHealth(tenant.orgId, demoCaseId)}
         onNavigate={vi.fn<(tab: ConsoleTab) => void>()}
       />,
     );

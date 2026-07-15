@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
-import { mockCaseHealth } from "../demo-data/demo-data";
+import { DEMO_CASE_IDS, mockCaseHealth } from "../demo-data/demo-data";
 import { FindingsTab } from "./findings-tab";
 
 const tenant: TenantHeaders = {
@@ -197,12 +197,13 @@ describe("FindingsTab", () => {
     const findings = vi.spyOn(riskApi, "findings");
     const create = vi.spyOn(riskApi, "createFinding");
     const update = vi.spyOn(riskApi, "updateFinding");
-    const demoFindings = mockCaseHealth(DEFAULT_ORG_ID, "case-1").findings;
+    const demoCaseId = DEMO_CASE_IDS[1];
+    const demoFindings = mockCaseHealth(DEFAULT_ORG_ID, demoCaseId).findings;
 
     renderWithQuery(
       <FindingsTab
         tenant={tenant}
-        caseId="case-1"
+        caseId={demoCaseId}
         mutationDisabled
         mutationDisabledReason="demo"
         demoFindings={demoFindings}

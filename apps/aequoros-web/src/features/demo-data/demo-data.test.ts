@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_USER_ID } from "../../lib/constants";
 import {
+  DEMO_CASE_IDS,
   emptyWorkspace,
   mockCase,
   mockCaseHealth,
@@ -54,7 +55,7 @@ describe("demo data helpers", () => {
   });
 
   it("creates internally consistent case-health data for demo cases", () => {
-    const caseId = "90000000-0000-4000-8000-000000000001";
+    const caseId = DEMO_CASE_IDS[1];
     const health = mockCaseHealth("org-1", caseId);
 
     expect(health.financial.caseId).toBe(caseId);
@@ -87,12 +88,12 @@ describe("demo data helpers", () => {
         (validation) => validation.complete && validation.issueCount === 0,
       ),
     ).toBe(true);
-    expect(health.findings).toHaveLength(5);
+    expect(health.findings).toHaveLength(2);
     expect(
       health.findings.filter((finding) =>
         ["open", "needs_review"].includes(finding.status),
       ),
-    ).toHaveLength(4);
+    ).toHaveLength(1);
     expect(
       health.findings.filter((finding) => finding.status === "resolved"),
     ).toHaveLength(1);
