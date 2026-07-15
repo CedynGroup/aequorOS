@@ -119,9 +119,12 @@ export function CaseWorkspace({
 
   useEffect(() => {
     if (pendingHealthTab !== activeTab) return;
-    if (focusWorkspaceTarget(`case-health-target-${activeTab}`)) {
-      setPendingHealthTab(null);
-    }
+    const frame = window.requestAnimationFrame(() => {
+      if (focusWorkspaceTarget(`case-health-target-${activeTab}`)) {
+        setPendingHealthTab(null);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [activeTab, pendingHealthTab]);
 
   return (
