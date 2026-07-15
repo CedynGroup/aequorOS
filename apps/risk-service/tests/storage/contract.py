@@ -172,6 +172,22 @@ class StorageContractSuite:
         if fetched is not None:
             assert fetched == content
 
+    # -- encryption ---------------------------------------------------------------
+
+    def expected_kms_key(self) -> str | None:
+        """The key writes should be encrypted under; None when KMS is off."""
+        return None
+
+    def test_writes_carry_the_platform_kms_key(self, client: StorageClient, slug: str) -> None:
+        expected = self.expected_kms_key()
+        content = b"must be encrypted at rest"
+        location = StorageLocation(slug, "canonical", "encrypted/object.parquet")
+        written = client.write(
+            location, io.BytesIO(content), metadata_for(slug, "canonical", content)
+        )
+        assert written.metadata.kms_key_id == expected
+        assert client.get_metadata(location).kms_key_id == expected
+
     # -- health and audit -----------------------------------------------------------
 
     def test_health_check_reports_healthy(self, client: StorageClient) -> None:
@@ -184,3 +200,31 @@ class StorageContractSuite:
         assert {"write", "read", "list", "delete.logical", "delete.physical"} <= operations
         intact, detail = verify_chain(access_log.export_jsonl())
         assert intact, detail
+
+    def test_zz_audit_segments_flush_and_chain_across_flushes(
+        self, client: StorageClient, slug: str, access_log: HashChainedAccessLog
+    ) -> None:
+        """Runs last (zz): drains everything recorded by the suite so far,
+        performs more operations, drains again, and verifies the concatenated
+        segments as ONE chain — flushing must not break hash continuity."""
+        first_path = client.flush_access_log()
+        if first_path is None:
+            return  # backend has no audit sink configured
+        segments = [self.read_audit_segment(client, first_path)]
+
+        content = b"post-flush operation"
+        client.write(
+            StorageLocation(slug, "outputs", "audit/after-flush.json"),
+            io.BytesIO(content),
+            metadata_for(slug, "outputs", content),
+        )
+        second_path = client.flush_access_log()
+        assert second_path is not None
+        segments.append(self.read_audit_segment(client, second_path))
+
+        intact, detail = verify_chain("\n".join(segments))
+        assert intact, detail
+        assert client.flush_access_log() is None  # nothing new -> no segment
+
+    def read_audit_segment(self, client: StorageClient, segment_path: str) -> str:
+        raise NotImplementedError("backend test class must supply segment retrieval")

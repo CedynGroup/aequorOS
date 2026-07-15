@@ -11,12 +11,12 @@ from __future__ import annotations
 import io
 import logging
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import BinaryIO, Literal
 from uuid import uuid4
 
-from app.storage.access_log import AccessLogHook, null_access_log
+from app.storage.access_log import AccessLogHook, HashChainedAccessLog, null_access_log
 from app.storage.client import (
     RETAINED_TIERS,
     ObjectMetadata,
@@ -42,10 +42,18 @@ class _Version:
 
 
 class InMemoryStorageClient(StorageClient):
-    def __init__(self, *, env: str = "mvp", access_log: AccessLogHook | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        env: str = "mvp",
+        access_log: AccessLogHook | None = None,
+        kms_key_id: str | None = None,
+    ) -> None:
         self._env = env
         self._log = access_log or null_access_log
+        self._kms_key_id = kms_key_id
         self._objects: dict[tuple[str, str], list[_Version]] = {}
+        self.audit_segments: list[str] = []
 
     def _key(self, location: StorageLocation) -> tuple[str, str]:
         return (location.bucket_name(self._env), location.object_path)
@@ -74,6 +82,9 @@ class InMemoryStorageClient(StorageClient):
             raise StorageValidationError("; ".join(problems))
         if metadata.lineage_node_id is None:
             logger.warning("storage write without lineage_node_id: %s", location)
+
+        if metadata.kms_key_id is None and self._kms_key_id is not None:
+            metadata = replace(metadata, kms_key_id=self._kms_key_id)
 
         current = self._current(location)
         if (
@@ -171,6 +182,16 @@ class InMemoryStorageClient(StorageClient):
 
     def health_check(self) -> StorageHealth:
         return StorageHealth(healthy=True, backend="inmemory")
+
+    def flush_access_log(self) -> str | None:
+        if not isinstance(self._log, HashChainedAccessLog):
+            return None
+        segment = self._log.drain_segment()
+        if segment is None:
+            return None
+        jsonl, first, last = segment
+        self.audit_segments.append(jsonl)
+        return f"aequoros-{self._env}-audit-logs/segment-{first:08d}-{last:08d}.jsonl"
 
     def _resolve(self, location: StorageLocation, version_id: str | None) -> _Version:
         versions = self._objects.get(self._key(location), [])

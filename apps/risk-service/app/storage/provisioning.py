@@ -66,6 +66,8 @@ def provision_institution(
             )
         if tier == "temp":
             _ensure_temp_lifecycle(s3_client, bucket)
+        if settings.kms_key_id is not None:
+            _ensure_default_encryption(s3_client, bucket, settings.kms_key_id)
 
     return ProvisioningResult(
         institution_slug=institution_slug,
@@ -106,6 +108,41 @@ def deprovision_institution(
         s3_client.delete_bucket(Bucket=bucket)
         removed.append(bucket)
     return removed
+
+
+def ensure_audit_bucket(s3_client, settings: StorageEngineSettings, bucket: str) -> None:
+    """The platform-wide audit bucket: versioned, encrypted, never lifecycled.
+
+    Audit segments are retained for 7+ years (storage.md §9.2); no lifecycle
+    rule is set so nothing ever ages out implicitly.
+    """
+    if not _bucket_exists(s3_client, bucket):
+        s3_client.create_bucket(
+            Bucket=bucket,
+            CreateBucketConfiguration={"LocationConstraint": settings.region},
+        )
+        logger.info("provisioned audit bucket %s", bucket)
+    s3_client.put_bucket_versioning(Bucket=bucket, VersioningConfiguration={"Status": "Enabled"})
+    if settings.kms_key_id is not None:
+        _ensure_default_encryption(s3_client, bucket, settings.kms_key_id)
+
+
+def _ensure_default_encryption(s3_client, bucket: str, kms_key_id: str) -> None:
+    # MinIO requires the key ID inside the rule (a bare aws:kms rule is
+    # rejected as MalformedXML — probed 2026-07-15).
+    s3_client.put_bucket_encryption(
+        Bucket=bucket,
+        ServerSideEncryptionConfiguration={
+            "Rules": [
+                {
+                    "ApplyServerSideEncryptionByDefault": {
+                        "SSEAlgorithm": "aws:kms",
+                        "KMSMasterKeyID": kms_key_id,
+                    }
+                }
+            ]
+        },
+    )
 
 
 def _bucket_exists(s3_client, bucket: str) -> bool:

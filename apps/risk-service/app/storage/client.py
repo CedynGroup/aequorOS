@@ -211,7 +211,14 @@ class StorageClient(ABC):
     @abstractmethod
     def health_check(self) -> StorageHealth: ...
 
-    def ensure_institution(self, institution_slug: str) -> None:
+    def ensure_institution(self, institution_slug: str) -> None:  # noqa: B027
         """Idempotently provision the institution's buckets if the backend
         provisions in-band (MinIO). Cloud backends provision via Terraform
         (storage.md §3.3) and keep this a no-op."""
+
+    def flush_access_log(self) -> str | None:
+        """Persist access-log entries recorded since the last flush to the
+        platform audit bucket (storage.md §9.1) and return the segment path.
+        Returns None when nothing new was recorded or the backend has no
+        audit sink."""
+        return None

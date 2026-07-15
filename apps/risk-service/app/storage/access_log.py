@@ -77,6 +77,7 @@ class HashChainedAccessLog:
 
     identity: str
     entries: list[AccessLogEntry] = field(default_factory=list)
+    _flushed_through: int = 0
 
     def __call__(
         self,
@@ -107,6 +108,25 @@ class HashChainedAccessLog:
             json.dumps({**entry.payload(), "entry_hash": entry.entry_hash}, sort_keys=True)
             for entry in self.entries
         )
+
+    def drain_segment(self) -> tuple[str, int, int] | None:
+        """Entries recorded since the last drain, as (jsonl, first_seq, last_seq).
+
+        Entries stay in memory so the chain remains continuous across
+        segments: the first entry of segment N+1 carries the last hash of
+        segment N in ``prev_hash``, so concatenated segments verify as one
+        chain. Returns None when nothing new was recorded.
+        """
+        pending = self.entries[self._flushed_through :]
+        if not pending:
+            return None
+        jsonl = "\n".join(
+            json.dumps({**entry.payload(), "entry_hash": entry.entry_hash}, sort_keys=True)
+            for entry in pending
+        )
+        first, last = pending[0].sequence, pending[-1].sequence
+        self._flushed_through = len(self.entries)
+        return jsonl, first, last
 
 
 def verify_chain(jsonl: str) -> tuple[bool, str]:

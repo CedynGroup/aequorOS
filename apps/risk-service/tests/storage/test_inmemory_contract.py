@@ -20,8 +20,14 @@ class TestInMemoryStorageContract(StorageContractSuite):
 
     @pytest.fixture(scope="class")
     def client(self, access_log: HashChainedAccessLog) -> InMemoryStorageClient:
-        return InMemoryStorageClient(access_log=access_log)
+        return InMemoryStorageClient(access_log=access_log, kms_key_id="aequoros-key")
 
     def fetch_presigned(self, url: str) -> bytes | None:
         assert url.startswith("memory://")
         return None  # no HTTP surface; URL shape is the testable part
+
+    def expected_kms_key(self) -> str | None:
+        return "aequoros-key"
+
+    def read_audit_segment(self, client: InMemoryStorageClient, segment_path: str) -> str:
+        return client.audit_segments[-1]

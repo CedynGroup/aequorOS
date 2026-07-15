@@ -296,6 +296,7 @@ def start_ingestion(
     if storage_failure is not None:
         return storage_failure
 
+    storage.flush_access_log()
     _record_batch_event(db, ctx, batch, payload.reason)
     db.commit()
     return IngestionBatchStartRead(

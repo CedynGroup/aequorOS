@@ -7,17 +7,20 @@ applies: behavior differences (Object Lock, KES vs SSE-KMS) are handled here
 and never leak through the interface. GCS lands later as a true second
 implementation against the same contract suite.
 
-Encryption note: SSE headers are sent only when ``kms_key_id`` metadata is
-supplied AND the server supports it. The cedynhq MVP MinIO has no KES
-configured (probed 2026-07-14), so MVP writes are TLS-in-transit +
-IAM-scoped, with encryption-at-rest gated on KES deployment — a tracked
-deviation from §7, sanctioned because MVP carries synthetic data only.
+Encryption note: KES went live on the MVP MinIO on 2026-07-15 with the
+platform key ``aequoros-key``. Every write is SSE-KMS encrypted under the
+configured ``STORAGE_KMS_KEY_ID`` unless the caller names a different key in
+metadata, and provisioning sets the same key as each bucket's default so
+presigned uploads inherit it. One platform key for all institutions is a
+tracked deviation from §7.2 (one key per institution) until KES key creation
+is automated in onboarding.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterator
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, BinaryIO, Literal
 
@@ -25,7 +28,7 @@ import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
 
-from app.storage.access_log import AccessLogHook, null_access_log
+from app.storage.access_log import AccessLogHook, HashChainedAccessLog, null_access_log
 from app.storage.client import (
     RETAINED_TIERS,
     ObjectMetadata,
@@ -42,7 +45,7 @@ from app.storage.client import (
     Tier,
 )
 from app.storage.config import StorageEngineSettings, enforce_retirement
-from app.storage.provisioning import provision_institution
+from app.storage.provisioning import ensure_audit_bucket, provision_institution
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +102,9 @@ class S3CompatibleStorageClient(StorageClient):
                 self._log("write.noop", location, version_id=existing.get("VersionId"))
                 return self._to_storage_object(location, existing)
 
+        effective_key = metadata.kms_key_id or self._settings.kms_key_id
+        if effective_key is not None and metadata.kms_key_id is None:
+            metadata = replace(metadata, kms_key_id=effective_key)
         put_kwargs: dict[str, Any] = {
             "Bucket": bucket,
             "Key": location.object_path,
@@ -106,9 +112,9 @@ class S3CompatibleStorageClient(StorageClient):
             "ContentType": content_type,
             "Metadata": metadata.to_object_metadata(),
         }
-        if metadata.kms_key_id is not None:
+        if effective_key is not None:
             put_kwargs["ServerSideEncryption"] = "aws:kms"
-            put_kwargs["SSEKMSKeyId"] = metadata.kms_key_id
+            put_kwargs["SSEKMSKeyId"] = effective_key
         response = self._call("write", location, lambda: self._s3.put_object(**put_kwargs))
         stat = self._call(
             "write.stat",
@@ -268,6 +274,36 @@ class S3CompatibleStorageClient(StorageClient):
 
     def ensure_institution(self, institution_slug: str) -> None:
         provision_institution(self._s3, self._settings, institution_slug)
+
+    def flush_access_log(self) -> str | None:
+        if not isinstance(self._log, HashChainedAccessLog):
+            return None
+        segment = self._log.drain_segment()
+        if segment is None:
+            return None
+        jsonl, first, last = segment
+        bucket = f"aequoros-{self._env}-audit-logs"
+        ensure_audit_bucket(self._s3, self._settings, bucket)
+        stamp = datetime.now(UTC)
+        key = (
+            f"{self._log.identity}/{stamp:%Y-%m-%d}/{stamp:%H%M%S}-seq{first:08d}-{last:08d}.jsonl"
+        )
+        put_kwargs: dict[str, Any] = {
+            "Bucket": bucket,
+            "Key": key,
+            "Body": jsonl.encode(),
+            "ContentType": "application/jsonl",
+        }
+        if self._settings.kms_key_id is not None:
+            put_kwargs["ServerSideEncryption"] = "aws:kms"
+            put_kwargs["SSEKMSKeyId"] = self._settings.kms_key_id
+        try:
+            self._s3.put_object(**put_kwargs)
+        except (ClientError, BotoCoreError) as exc:
+            # Fail loudly in logs but never mask the operation being audited.
+            logger.error("access-log segment flush failed: %s", exc)
+            return None
+        return f"{bucket}/{key}"
 
     # -- internals ------------------------------------------------------------
 
