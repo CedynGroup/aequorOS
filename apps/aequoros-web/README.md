@@ -326,6 +326,7 @@ and tenant-isolation workflow. `e2e/risk-console.spec.ts` covers forecast-chart
 rendering and the persisted liquidity-threshold reference line in its seeded
 analysis journeys; it also verifies the compact scenario table, seeded breaching
 case-health summary, console overflow at 1440x1000, and header overflow at
-1280x800.
+1280x800. `e2e/case-health-demo.spec.ts` verifies the populated frontend-only
+adverse summary and its focused navigation to Financial.
 Component coverage retains the unavailable state for legacy analyses without
 persisted threshold metadata.

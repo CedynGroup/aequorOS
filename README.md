@@ -1,7 +1,7 @@
 # aequorOS
 
-AequorOS is a bank risk-review workspace for canonical financial data, scenario forecasts,
-liquidity and capital analysis, findings, decisions, and committee reports.
+AequorOS is a bank risk-review workspace with at-a-glance case health, canonical financial data,
+scenario forecasts, liquidity and capital analysis, findings, decisions, and committee reports.
 
 ## Run the MVP locally
 

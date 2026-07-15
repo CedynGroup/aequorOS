@@ -32,10 +32,13 @@ thresholds publish severity-ranked liquidity findings with input-hash-bound
 evidence; reviewers can acknowledge or dismiss them in the risk console. Each
 immutable result also records the sources-coverage classification threshold and
 rule version used by its chart and table, with an explicit legacy fallback when
-that metadata is absent. This slice still runs synchronously and does not include regulatory LCR/NSFR or
-stress calculations, Basel regulatory-capital scoring, advanced model configuration, constrained
-optimization, or final reporting. The broader sections below remain the target
-architecture for those later modules.
+that metadata is absent. The console also presents tenant- and case-scoped
+financial validation, scenario readiness, forecast, finding, covenant, and
+decision health with direct navigation to each owning review tab. This slice
+still runs synchronously and does not include regulatory LCR/NSFR or stress
+calculations, Basel regulatory-capital scoring, advanced model configuration,
+constrained optimization, or final reporting. The broader sections below remain
+the target architecture for those later modules.
 
 ---
 
