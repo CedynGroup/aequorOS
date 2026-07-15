@@ -2,6 +2,7 @@ import type {
   CalculationRunListRead,
   CalculationRunRead,
   CalculationRunSummaryRead,
+  ForecastPeriodRead,
   LiquidityFindingRead,
   LiquiditySummaryRead,
   ScenarioRead,
@@ -105,6 +106,28 @@ function runDetail(
     outputSchemaVersion: "balance-sheet-output-v1",
     outputs: [],
     updatedAt: item.createdAt,
+  };
+}
+
+function forecastPeriod(
+  periodNumber: number,
+  overrides: Partial<ForecastPeriodRead> = {},
+): ForecastPeriodRead {
+  return {
+    id: `period-${periodNumber}`,
+    periodNumber,
+    periodEnd: new Date(`202${periodNumber}-12-31T00:00:00Z`),
+    currency: "USD",
+    totalAssets: "1000.0000",
+    totalLiabilities: "600.0000",
+    totalEquity: "400.0000",
+    cash: "100.0000",
+    projectedInflows: "120.0000",
+    projectedOutflows: "80.0000",
+    creditDraw: "0.0000",
+    debtRepayment: "20.0000",
+    components: {},
+    ...overrides,
   };
 }
 
@@ -255,7 +278,36 @@ describe("LiquidityTab", () => {
     expect(
       await screen.findByText("Liquidity coverage unavailable"),
     ).toBeInTheDocument();
-    expect(screen.getByText(/legacy liquidity analysis/)).toBeInTheDocument();
+    expect(screen.getAllByText(/legacy liquidity analysis/)).toHaveLength(2);
+  });
+
+  it("renders the authoritative period coverage table with persisted metadata and gaps", async () => {
+    vi.mocked(riskApi.calculationRun).mockResolvedValue({
+      ...runDetail(),
+      outputs: [
+        forecastPeriod(1),
+        forecastPeriod(2, {
+          projectedOutflows: "0.0000",
+          debtRepayment: "0.0000",
+        }),
+      ],
+    });
+    vi.spyOn(liquidityReviewClient, "summary").mockResolvedValue(summary());
+
+    renderWithQuery(<LiquidityTab tenant={tenant} caseId="case-1" />);
+
+    const table = await screen.findByRole("table", {
+      name: /authoritative liquidity sources coverage values/i,
+    });
+    expect(table).toHaveTextContent("1.2000x");
+    expect(table).toHaveTextContent("1.20x");
+    expect(table).toHaveTextContent("liquidity-v1.0.0");
+    expect(table).toHaveTextContent(
+      "Unavailable — Sources coverage is not meaningful for forecast period 2.",
+    );
+    expect(table).toHaveTextContent(
+      "Unavailable — Forecast period 3 is missing from the persisted run.",
+    );
   });
 
   it("renders undefined ratio metrics with their persisted diagnostic", async () => {

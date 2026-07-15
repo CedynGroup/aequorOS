@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 
 from app.models import CalculationForecastPeriod
-from app.services.liquidity import calculate_metrics
+from app.services.liquidity import SOURCES_COVERAGE_THRESHOLD, calculate_metrics
 
 
 def _period(  # noqa: PLR0913
@@ -55,6 +55,8 @@ def test_calculates_liquidity_metrics_and_findings_deterministically() -> None:
         "liquidity.sources_coverage",
     ]
     assert result.concerns[0]["severity"] == "high"
+    coverage_concern = result.concerns[1]
+    assert f"{SOURCES_COVERAGE_THRESHOLD}x coverage" in coverage_concern["rationale"]
 
 
 @pytest.mark.parametrize("outflows", ["0", "-10"])

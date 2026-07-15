@@ -212,8 +212,9 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
                     f"{coverage_period.period_number}."
                 ),
                 "rationale": (
-                    "Projected inflows and credit draws provide less than 1.20x coverage of "
-                    "projected outflows and debt repayment."
+                    f"Projected inflows and credit draws provide less than "
+                    f"{SOURCES_COVERAGE_THRESHOLD}x coverage of projected outflows and "
+                    "debt repayment."
                 ),
                 "period": coverage_period,
                 "metric_keys": ["minimum_sources_coverage"],

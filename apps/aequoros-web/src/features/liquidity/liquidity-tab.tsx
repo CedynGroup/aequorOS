@@ -26,7 +26,10 @@ import { riskApi, type TenantHeaders } from "../../lib/api";
 import { formatDecimal, formatMoney, formatPercent } from "../../lib/money";
 import { ErrorPanel } from "../../shared/route-ui";
 import { FindingReviewCard } from "../findings/finding-review-card";
-import { liquidityCoverageToSeries } from "../charts/analysis-chart-adapters";
+import {
+  liquidityCoverageToSeries,
+  type LiquidityCoverageSeries,
+} from "../charts/analysis-chart-adapters";
 import { ChartBoundary } from "../charts/chart-shell";
 import { liquidityReviewClient } from "./liquidity-client";
 
@@ -326,6 +329,8 @@ function LiquidityAnalysis({
   run: CalculationRunRead;
   summary: LiquiditySummaryRead;
 }) {
+  const coverageSeries = liquidityCoverageToSeries(run, summary);
+
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -347,10 +352,9 @@ function LiquidityAnalysis({
         title="Liquidity coverage"
         resetKey={`${summary.calculationRunId}:${summary.analysisVersion}`}
       >
-        <LiquidityCoverageChart
-          series={liquidityCoverageToSeries(run, summary)}
-        />
+        <LiquidityCoverageChart series={coverageSeries} />
       </ChartBoundary>
+      <LiquidityCoverageTable series={coverageSeries} />
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         {summary.metrics.map((metric) => (
           <MetricCard key={metric.key} metric={metric} />
@@ -384,6 +388,86 @@ function LiquidityAnalysis({
         )}
       </section>
     </div>
+  );
+}
+
+function LiquidityCoverageTable({
+  series,
+}: {
+  series: LiquidityCoverageSeries;
+}) {
+  return (
+    <section aria-labelledby="liquidity-coverage-table-heading">
+      <Label id="liquidity-coverage-table-heading">
+        Sources coverage by period
+      </Label>
+      <div className="mt-2 max-w-full overflow-x-auto overscroll-x-contain rounded-md border border-[rgb(var(--border))]">
+        <table className="w-full min-w-[760px] border-collapse text-left text-xs">
+          <caption className="sr-only">
+            Authoritative liquidity sources coverage values and persisted
+            classification metadata
+          </caption>
+          <thead>
+            <tr className="border-b border-[rgb(var(--border))] text-[rgb(var(--muted-foreground))]">
+              <th className="p-3">Period</th>
+              <th className="p-3">Period end</th>
+              <th className="p-3">Sources coverage</th>
+              <th className="p-3">Classification threshold</th>
+              <th className="p-3">Rule version</th>
+            </tr>
+          </thead>
+          <tbody>
+            {series.points.length ? (
+              series.points.map((point) => {
+                const unavailableReason = series.unavailableSpans.find(
+                  (span) => span.periodNumber === point.periodNumber,
+                )?.reason;
+                return (
+                  <tr
+                    key={point.periodNumber}
+                    className="border-b border-[rgb(var(--border))] last:border-0"
+                  >
+                    <td className="p-3 font-medium">{point.periodNumber}</td>
+                    <td className="p-3">
+                      {point.periodEnd
+                        ? point.periodEnd.toLocaleDateString()
+                        : "Unavailable"}
+                    </td>
+                    <td className="p-3 font-mono tabular-nums">
+                      {point.coverage ? (
+                        `${point.coverage.decimal}x`
+                      ) : (
+                        <span className="font-sans text-amber-700">
+                          Unavailable
+                          {unavailableReason ? ` — ${unavailableReason}` : ""}
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3 font-mono tabular-nums">
+                      {series.threshold
+                        ? `${series.threshold.decimal}x`
+                        : "Unavailable"}
+                    </td>
+                    <td className="p-3 font-mono">
+                      {series.thresholdRuleVersion ?? "Unavailable"}
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td
+                  className="p-3 text-[rgb(var(--muted-foreground))]"
+                  colSpan={5}
+                >
+                  {series.reason ?? "No forecast periods are available."}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
