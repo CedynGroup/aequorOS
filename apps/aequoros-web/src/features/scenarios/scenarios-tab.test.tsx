@@ -254,6 +254,49 @@ describe("ScenariosTab", () => {
     },
   );
 
+  it.each([
+    { entered: ".5", stored: 0.005 },
+    { entered: "+5", stored: 0.05 },
+    { entered: " 5 ", stored: 0.05 },
+  ])(
+    "scales accepted ratio input $entered as a percentage",
+    async ({ entered, stored }) => {
+      const user = userEvent.setup();
+      vi.spyOn(riskApi, "scenarios").mockResolvedValue(workspace());
+      const update = vi
+        .spyOn(riskApi, "updateAssumption")
+        .mockResolvedValue(mutation());
+
+      renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+      const value = await screen.findByLabelText("Revenue growth value");
+      await user.clear(value);
+      await user.type(value, entered);
+      await user.click(screen.getByRole("button", { name: "Save" }));
+
+      await waitFor(() => {
+        expect(update).toHaveBeenCalledWith(
+          tenant,
+          caseId,
+          scenario().id,
+          assumption().id,
+          { value: stored, reason: "Reviewer updated assumption" },
+        );
+      });
+    },
+  );
+
+  it("rejects numeric syntax that cannot be percentage-scaled", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(workspace());
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+    const value = await screen.findByLabelText("Revenue growth value");
+    await user.clear(value);
+    await user.type(value, "0x10");
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
   it("ignores malformed scenario evidence fragments", async () => {
     window.history.replaceState(
       null,

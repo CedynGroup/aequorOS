@@ -14,6 +14,11 @@ The app defaults to `http://127.0.0.1:8003/api/v1`. Override with:
 VITE_RISK_API_BASE_URL=http://127.0.0.1:8003/api/v1 pnpm --filter @aequoros/aequoros-web dev
 ```
 
+The organization selector defaults to the seeded demo tenants. Deployments can
+supply their current tenant directory as a JSON array of `name`, `orgId`, and
+`userId` values through `VITE_RISK_TENANTS`; this configuration boundary can be
+replaced by an authenticated tenant directory after MVP.
+
 ## Demo Data
 
 Restore the four-case narrative portfolio, including reviewed scenarios,

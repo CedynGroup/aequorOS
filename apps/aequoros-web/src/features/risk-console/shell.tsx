@@ -15,8 +15,7 @@ import {
 } from "lucide-react";
 
 import { Button, Select, SelectItem, Tooltip } from "../../components/ui";
-import type { ConsoleTab } from "../../lib/constants";
-import { DEMO_TENANTS } from "../../lib/constants";
+import type { ConsoleTab, TenantOption } from "../../lib/constants";
 import { cn } from "../../lib/utils";
 
 export function Sidebar({
@@ -83,6 +82,7 @@ export function Sidebar({
 
 export function TopBar({
   orgId,
+  tenants,
   chooseTenant,
   cases,
   caseId,
@@ -93,6 +93,7 @@ export function TopBar({
   seed,
 }: {
   orgId: string;
+  tenants: readonly TenantOption[];
   chooseTenant: (orgId: string) => void;
   cases: CaseQueueItemRead[];
   caseId?: string;
@@ -132,7 +133,7 @@ export function TopBar({
           onValueChange={chooseTenant}
           placeholder="Organization"
         >
-          {DEMO_TENANTS.map((tenant) => (
+          {tenants.map((tenant) => (
             <SelectItem key={tenant.orgId} value={tenant.orgId}>
               {tenant.name}
             </SelectItem>

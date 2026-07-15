@@ -4,7 +4,11 @@ import { page, userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 
-import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "../../lib/constants";
+import {
+  DEFAULT_ORG_ID,
+  DEFAULT_USER_ID,
+  tenantOptions,
+} from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
 import { mockCaseList } from "../demo-data/demo-data";
 import { BulkActionDialog } from "./bulk-actions";
@@ -16,6 +20,7 @@ const tenant = {
   orgId: DEFAULT_ORG_ID,
   userId: DEFAULT_USER_ID,
 };
+const tenants = tenantOptions();
 
 const cases = mockCaseList(
   DEFAULT_ORG_ID,
@@ -41,6 +46,7 @@ describe("risk console browser interactions", () => {
     render(
       <TopBar
         orgId={DEFAULT_ORG_ID}
+        tenants={tenants}
         chooseTenant={chooseTenant}
         cases={cases}
         caseId={cases[0].id}
@@ -80,6 +86,7 @@ describe("risk console browser interactions", () => {
     render(
       <TopBar
         orgId={DEFAULT_ORG_ID}
+        tenants={tenants}
         chooseTenant={vi.fn<TopBarProps["chooseTenant"]>()}
         cases={cases}
         caseId={cases[0].id}

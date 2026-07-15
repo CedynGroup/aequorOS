@@ -808,16 +808,25 @@ function valueInputForUnit(
   unit?: string | null,
 ): string {
   if (typeof value === "number" && unit === "ratio")
-    return shiftDecimal(String(value), 2);
+    return shiftDecimal(String(value), 2) ?? valueInput(value);
   return valueInput(value);
 }
 
-function shiftDecimal(value: string, places: number): string {
-  const match = /^(-?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(value);
-  if (!match) return value;
+const decimalPattern =
+  /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:e([+-]?\d+))?$/i;
 
-  const digits = `${match[2]}${match[3] ?? ""}`;
-  const decimalIndex = match[2].length + Number(match[4] ?? 0) + places;
+function decimalParts(value: string) {
+  return decimalPattern.exec(value.trim());
+}
+
+function shiftDecimal(value: string, places: number): string | null {
+  const match = decimalParts(value);
+  if (!match) return null;
+
+  const integerDigits = match[2] ?? "0";
+  const fractionDigits = match[2] === undefined ? match[4] : match[3];
+  const digits = `${integerDigits}${fractionDigits ?? ""}`;
+  const decimalIndex = integerDigits.length + Number(match[5] ?? 0) + places;
   const integer =
     decimalIndex <= 0
       ? "0"
@@ -837,7 +846,7 @@ function shiftDecimal(value: string, places: number): string {
 
 function isValidValue(value: string, valueType: AssumptionValueType): boolean {
   if (valueType === "number") {
-    return value.trim() !== "" && Number.isFinite(Number(value));
+    return decimalParts(value) !== null && Number.isFinite(Number(value));
   }
   if (valueType === "boolean") return value === "true" || value === "false";
   return true;
@@ -858,7 +867,9 @@ function typedUnitValue(
   valueType: AssumptionValueType,
   unit?: string | null,
 ): AssumptionValue {
-  if (valueType === "number" && unit === "ratio")
-    return Number(shiftDecimal(value, -2));
+  if (valueType === "number" && unit === "ratio") {
+    const shifted = shiftDecimal(value, -2);
+    return shifted === null ? Number.NaN : Number(shifted);
+  }
   return typedValue(value, valueType);
 }

@@ -1,16 +1,17 @@
 import { CaseSort } from "@aequoros/risk-service-api";
 import { useMatch, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
   DEFAULT_ORG_ID,
   DEFAULT_USER_ID,
-  DEMO_TENANTS,
+  activeTenantOption,
   type ConsoleTab,
   type ReportMode,
   isConsoleTab,
+  tenantOptions,
 } from "../../lib/constants";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { usePersistentState } from "../../lib/persistent-state";
@@ -22,6 +23,7 @@ import { pageSize } from "./types";
 import type { SearchState } from "../../routes/search";
 
 export function RiskConsoleRoute() {
+  const tenants = useMemo(tenantOptions, []);
   const router = useRouter();
   const navigate = useNavigate();
   const match = useMatch({ strict: false });
@@ -29,20 +31,26 @@ export function RiskConsoleRoute() {
   const search = match.search as SearchState;
   const [orgId, setOrgId] = usePersistentState(
     "aequoros.orgId",
-    DEFAULT_ORG_ID,
+    tenants[0]?.orgId ?? DEFAULT_ORG_ID,
   );
   const [userId, setUserId] = usePersistentState(
     "aequoros.userId",
-    DEFAULT_USER_ID,
+    tenants[0]?.userId ?? DEFAULT_USER_ID,
   );
   const [lastCaseId, setLastCaseId] = usePersistentState("aequoros.caseId", "");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [mockWorkspace, setMockWorkspace] = useState(false);
   const [queueVisible, setQueueVisible] = useState(() => !params.caseId);
+  const activeTenant = activeTenantOption(tenants, orgId);
   const tenant = useMemo<TenantHeaders>(
-    () => ({ orgId, userId }),
-    [orgId, userId],
+    () => ({ orgId: activeTenant.orgId, userId: activeTenant.userId }),
+    [activeTenant.orgId, activeTenant.userId],
   );
+
+  useEffect(() => {
+    if (orgId !== activeTenant.orgId) setOrgId(activeTenant.orgId);
+    if (userId !== activeTenant.userId) setUserId(activeTenant.userId);
+  }, [activeTenant, orgId, setOrgId, setUserId, userId]);
 
   const activeTab: ConsoleTab =
     search.tab && isConsoleTab(search.tab) ? search.tab : "overview";
@@ -109,7 +117,7 @@ export function RiskConsoleRoute() {
   };
 
   const chooseTenant = (nextOrgId: string) => {
-    const nextTenant = DEMO_TENANTS.find((item) => item.orgId === nextOrgId);
+    const nextTenant = tenants.find((item) => item.orgId === nextOrgId);
     if (!nextTenant) return;
     setOrgId(nextTenant.orgId);
     setUserId(nextTenant.userId);
@@ -134,7 +142,8 @@ export function RiskConsoleRoute() {
       <Sidebar activeTab={activeTab} onTab={(tab) => updateSearch({ tab })} />
       <main className="min-w-0 flex-1">
         <TopBar
-          orgId={orgId}
+          orgId={tenant.orgId}
+          tenants={tenants}
           chooseTenant={chooseTenant}
           cases={demoList?.items ?? casesQuery.data?.items ?? []}
           caseId={workspaceCaseId}
