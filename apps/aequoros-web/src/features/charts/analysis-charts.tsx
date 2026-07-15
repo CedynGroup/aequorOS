@@ -11,7 +11,7 @@ import {
 } from "recharts";
 
 import { Alert } from "../../components/ui";
-import { formatDecimal, formatMoney } from "../../lib/money";
+import { formatDecimal, formatMoney, formatPercent } from "../../lib/money";
 import type {
   CapitalComparisonSeries,
   DecimalChartValue,
@@ -491,14 +491,6 @@ function money(value: string | null | undefined, currency: string) {
 
 function rate(value: string | null | undefined) {
   return value ? formatPercent(value) : "Not meaningful";
-}
-
-function formatPercent(value: string) {
-  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
-  if (!match) return value;
-  const fraction = match[3] ?? "";
-  const shifted = `${match[1]}${match[2]}${fraction.slice(0, 2).padEnd(2, "0")}.${fraction.slice(2) || "0"}`;
-  return `${formatDecimal(shifted, 1)}%`;
 }
 
 function useChartWidth() {

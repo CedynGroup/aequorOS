@@ -309,6 +309,42 @@ describe("CapitalTab", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders the charted ratios in the authoritative comparison cards", async () => {
+    const baseline = projection();
+    const downside = {
+      ...projection(),
+      id: "40000000-0000-4000-8000-000000000002",
+      scenarioId: "20000000-0000-4000-8000-000000000002",
+    };
+    vi.mocked(riskApi.capitalSummary).mockResolvedValue(summary(baseline));
+    vi.mocked(riskApi.capitalComparison).mockResolvedValue({
+      caseId,
+      baseline,
+      downside,
+      diagnostic: null,
+      periods: [
+        {
+          periodNumber: 1,
+          baselineEquity: "50.0000",
+          baselineEquityToAssetsRatio: "0.12345678",
+          downsideEquity: "40.0000",
+          downsideEquityToAssetsRatio: "0.08765432",
+          equityDelta: "-10.0000",
+          equityToAssetsRatioDelta: "-0.03580246",
+        },
+      ],
+    });
+
+    renderWithQuery(<CapitalTab tenant={tenant} caseId={caseId} />);
+
+    expect(
+      await screen.findByText("Baseline equity / assets"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("12.3%")).toBeInTheDocument();
+    expect(screen.getByText("Downside equity / assets")).toBeInTheDocument();
+    expect(screen.getByText("8.8%")).toBeInTheDocument();
+  });
+
   it("keeps projection history visible when comparison is retired", async () => {
     const value = projection();
     vi.mocked(riskApi.capitalProjections).mockResolvedValue(attempts([value]));

@@ -302,6 +302,7 @@ describe("LiquidityTab", () => {
     expect(table).toHaveTextContent("1.2000x");
     expect(table).toHaveTextContent("1.20x");
     expect(table).toHaveTextContent("liquidity-v1.0.0");
+    expect(table).toHaveTextContent("12/31/2021");
     expect(table).toHaveTextContent(
       "Unavailable — Sources coverage is not meaningful for forecast period 2.",
     );

@@ -430,7 +430,9 @@ function LiquidityCoverageTable({
                     <td className="p-3 font-medium">{point.periodNumber}</td>
                     <td className="p-3">
                       {point.periodEnd
-                        ? point.periodEnd.toLocaleDateString()
+                        ? point.periodEnd.toLocaleDateString(undefined, {
+                            timeZone: "UTC",
+                          })
                         : "Unavailable"}
                     </td>
                     <td className="p-3 font-mono tabular-nums">

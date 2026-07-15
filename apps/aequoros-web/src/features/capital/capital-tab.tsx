@@ -506,6 +506,14 @@ function ScenarioComparison({
                     baseline.reportingCurrency,
                   )}
                 </span>
+                <span>Baseline equity / assets</span>
+                <span className="text-right font-mono">
+                  {percent(period.baselineEquityToAssetsRatio)}
+                </span>
+                <span>Downside equity / assets</span>
+                <span className="text-right font-mono">
+                  {percent(period.downsideEquityToAssetsRatio)}
+                </span>
                 <span>Downside delta</span>
                 <span className="text-right font-mono">
                   {formatMoney(period.equityDelta, baseline.reportingCurrency)}
