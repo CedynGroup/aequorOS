@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker info *)",
+      "Bash(mise --version)",
+      "Bash(uv --version)",
+      "Read(//opt/homebrew/**)",
+      "Bash(/opt/homebrew/bin/brew list *)",
+      "Bash(grep -iE '^\\(mise|uv|python@?3?\\\\.?1?3?\\)$')"
+    ]
+  }
+}

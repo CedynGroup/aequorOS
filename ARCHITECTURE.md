@@ -1,0 +1,228 @@
+# AequorOS Architecture
+
+Single source of truth for agents building new modules. Every claim below was verified against
+the code on 2026-07-14. When this document and the code disagree, the code wins — fix this file.
+
+Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
+
+---
+
+## 1. System map
+
+| Component | Path | Stack | Role |
+| --- | --- | --- | --- |
+| Risk service | `apps/risk-service` | FastAPI, Python 3.13, uv, SQLAlchemy 2.0, Alembic, Pydantic v2, Loguru, boto3 | The backend. Owns all persistence, calculation engines, findings, audit, and the OpenAPI contract. |
+| Web SPA | `apps/aequoros-web` | React 19, Vite 8, TanStack Router/Query/Table, Radix UI, Tailwind 4, oxlint, Vitest, Playwright | Risk console UI. Consumes the risk service exclusively through `packages/risk-service-api`. |
+| Generated API client | `packages/risk-service-api` | typescript-fetch output of openapi-generator 7.13 | Generated from the risk-service OpenAPI schema. Source-consumed (`main: ./src/index.ts`), never hand-edited. |
+| Marketing site | `aequoros-site` | Next.js 14 | Static marketing site. **Out of scope for this build. Do not touch.** |
+| Static prototype | `aequoros-demo` | Next.js 14, recharts, hardcoded data | Pre-MVP demo prototype. **Out of scope for this build. Do not touch.** |
+| Local infra | `apps/risk-service/docker-compose.yml` | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local` | Started with `docker compose up -d` from `apps/risk-service`. |
+
+Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `apps/risk-service/mise.toml`),
+`uv` for Python deps, `pnpm` workspaces (`pnpm-workspace.yaml` includes `apps/*`, `packages/*`,
+`aequoros-site`, `aequoros-demo`). Pre-commit config is at the repo root
+(`.pre-commit-config.yaml`): ruff check/format scoped to `^apps/risk-service/`, Conventional
+Commits enforcement, and a pre-push hook that runs `mise run risk-service:api-fresh`.
+
+Local DB bootstrap: `mise run risk-service:bootstrap-db` creates a migration role (may bypass RLS)
+and an app runtime role created with `NOBYPASSRLS`, runs migrations, and seeds two demo tenants.
+App connection string:
+`postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service`.
+
+---
+
+## 2. Tenancy model
+
+Verified in `apps/risk-service/app/api/deps.py`, `app/db/session.py`, and migration
+`alembic/versions/202605250002_enable_tenant_rls.py`.
+
+1. **Headers → context.** Every business request carries `X-Org-Id` (required) and `X-User-Id`
+   (required for mutations). `get_tenant_context` parses them into a frozen
+   `TenantContext(organization_id, actor_user_id)`; invalid/missing headers → `401` before any
+   service code runs. `get_mutation_tenant_context` is the same but makes `X-User-Id` mandatory.
+2. **Dependency aliases** (use these, never raw `Depends(...)` in feature modules):
+   - `DbSession` — tenant-validated SQLAlchemy session (`get_tenant_db_session`). It stores
+     `session.info["organization_id"]` and validates that the org exists and, when present, that
+     the actor is an **active user in the same org**.
+   - `Tenant` — read context. `MutationTenant` — mutation context (X-User-Id required).
+   - `Storage` — the `ObjectStorage` protocol (S3/MinIO), from `app/integrations/storage`.
+3. **Postgres RLS as the hard safety net.** A `Session` `after_begin` event in `app/db/session.py`
+   runs `SELECT set_config('app.organization_id', :org, true)` on every transaction (Postgres
+   only; a no-op on SQLite). Migrations `ENABLE`/`FORCE ROW LEVEL SECURITY` on every tenant table
+   and create a policy `USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)`.
+   **Every new tenant-owned table must get the same RLS treatment in its migration.**
+4. **Explicit filters are still mandatory.** Service queries always filter by
+   `organization_id` (and `case_id` where applicable) even though RLS exists — for readability,
+   index usage, and SQLite test compatibility.
+5. **Composite FK pattern.** Child tables carry denormalized `organization_id` (and `case_id`)
+   columns and declare composite `ForeignKeyConstraint`s to the parent's
+   `UniqueConstraint("id", "organization_id", ...)`, so a child row can never reference a parent
+   in another tenant. Exact example in
+   [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern), taken from
+   `app/models/calculation.py`.
+
+---
+
+## 3. The calculation-run pattern (reuse this for every new engine)
+
+The reference implementation is the balance-sheet forecast + capital + liquidity chain. Concrete
+tables (all in `app/models/calculation.py` and `app/models/capital.py`, migrations
+`202607130002`, `202607130003`, `202607140001`):
+
+| Table | Model | Purpose |
+| --- | --- | --- |
+| `calculation_runs` | `CalculationRun` | One immutable forecast attempt: status, scenario, `rerun_of_run_id`, `engine_version`, `input_schema_version`, `output_schema_version`, `input_hash` (SHA-256 of the canonical JSON snapshot), full `inputs` JSON snapshot, horizon, `as_of_date`, `started_at`/`completed_at`, `error_code`/`error_message`/`error_details`, `created_by`. |
+| `calculation_forecast_periods` | `CalculationForecastPeriod` | One row per annual output period, unique on `(run_id, period_number)`, `ondelete="CASCADE"`. Money at `Numeric(20, 4)`. |
+| `capital_projections` | `CapitalProjection` | Immutable capital attempt consuming one **successful** run; copies the run's `input_hash` and currency; own `engine_version` and lifecycle. |
+| `capital_indicators` | `CapitalIndicator` | Per-period ratios at `Numeric(12, 8)`, `pressure_level` check constraint. |
+| `capital_projection_findings` | `CapitalProjectionFinding` | Join table linking generated `RiskFinding` rows to the projection. |
+| `liquidity_analysis_results` | `LiquidityAnalysisResult` | Exactly one per successful run (`UniqueConstraint("run_id")`), versioned via `analysis_version`, metrics stored as JSON. |
+
+Invariants every new engine must copy (verified in `app/services/calculations.py`,
+`app/services/capital.py`, `app/services/liquidity.py`):
+
+- **Immutability + append-only history.** Reruns create a new row (`rerun_of_run_id` link);
+  failed attempts are persisted with named diagnostics and never replace prior successful output.
+- **Status lifecycle** `queued` → `running` → `succeeded` | `failed`, enforced by a
+  `CheckConstraint`. The engine **commits `queued` and `running` before executing**, then opens a
+  repeatable-read transaction (`_begin_repeatable_read`) to assemble the input snapshot, so the
+  lifecycle contract survives a later move to workers.
+- **Snapshot + hash.** The full canonical input snapshot is stored as JSON; its SHA-256
+  (`_snapshot_hash`) is stored in `input_hash` and propagated to downstream artifacts (capital
+  projections, finding details, evidence locators) for reproducibility.
+- **Versions as module-level constants**, stored per row:
+  `ENGINE_VERSION = "balance-sheet-v1.0.0"`, `INPUT_SCHEMA_VERSION = "calculation-input-v1"`,
+  `OUTPUT_SCHEMA_VERSION = "balance-sheet-output-v1"` (calculations);
+  `ENGINE_VERSION = "capital-projection-v1.0.0"` (capital);
+  `RULE_VERSION = "liquidity-v1.0.0"` (liquidity). Internal version bumps do NOT bump `/api/v1`.
+- **Failures are data.** Domain input problems raise a typed exception
+  (`CalculationInputError`, `CapitalInputError`) carrying `{code, message, details}`; the service
+  persists a `failed` row and still returns `201` with actionable diagnostics. Unexpected
+  exceptions persist a sanitized diagnostic.
+- **Audit events** (`app/services/audit.py::record_event`) for lifecycle transitions, snapshot
+  establishment/rejection, finding generation/supersession/review — recorded in the same
+  transaction as the change.
+- **Findings + evidence publication** for threshold breaches (section 4).
+- **Concurrency**: `SELECT ... FOR UPDATE` on the case/scenario rows before mutating
+  (`_lock_active_case_and_scenario`), and Postgres advisory locks to serialize finding
+  publication per `(org, case, scenario)` (`liquidity.lock_finding_publication` /
+  `serialize_finding_publication`; both no-op on SQLite).
+
+---
+
+## 4. Findings infrastructure
+
+Generic, reusable workflow — verified in `app/models/risk.py` and `app/services/findings.py`:
+
+- `risk_findings` (`RiskFinding`): tenant + case scoped; `risk_type` (allow-list in
+  `app/domain/risk_constants.py::RISK_TYPES`), `severity` (`low|medium|high|critical`), `status`
+  (`open|accepted|acknowledged|dismissed|needs_review|resolved|superseded`), `source`
+  (`deterministic_rule|manual|imported`), `rule_id`, `rule_version`, free-form `details` JSON.
+- `risk_finding_evidence` (`RiskFindingEvidence`): per-finding evidence rows with optional
+  document/chunk references and a free-form `locator` JSON (source_type, label, `source_url`
+  deep link, record ids, `input_hash`).
+- Service helpers in `app/services/findings.py`: `get_finding_or_404`, `list_findings`,
+  `list_case_findings`, `create_case_finding`, `update_finding` / `apply_finding_update`
+  (validates status transitions, requires disposition reason for dismissal, stamps
+  `reviewed_by`/`reviewed_at` into `details`, emits `finding.status_changed`),
+  `is_liquidity_workflow_finding`, `list_finding_evidence`.
+
+How `app/services/liquidity.py` publishes findings (the template for new engines):
+
+1. `calculate_metrics(periods)` — pure, deterministic; returns metrics plus a list of "concern"
+   dicts (rule_id, severity, title, summary, rationale, affected periods, metric keys).
+2. `generate_findings(db, ctx, run, periods, ...)` — takes the advisory publication lock, upserts
+   the `LiquidityAnalysisResult`, marks prior `open`/`needs_review` findings for the same
+   scenario as `superseded` (reviewed findings are never touched), then creates one
+   `RiskFinding` per concern with `source="deterministic_rule"`, `rule_id`, `rule_version`, and
+   `details={"liquidity": {workflow_id, rule_version, calculation_run_id, scenario_id,
+   input_hash, metrics}}`, plus `RiskFindingEvidence` rows for each forecast period, canonical
+   input record, and scenario assumption — every locator carries the run's `input_hash` and a
+   case-workspace deep-link `source_url`.
+3. Workflow findings are protected from the generic `PATCH /api/v1/findings/{finding_id}`
+   endpoint (`allow_liquidity_workflow` flag); reviews go through the dedicated
+   `/liquidity/findings/{finding_id}/review` route.
+4. The web renders any of these through the shared `FindingReviewCard`
+   (`apps/aequoros-web/src/features/findings/finding-review-card.tsx`).
+
+---
+
+## 5. DECISION RECORD — Legacy case vertical vs. new bank-scoped regulatory vertical
+
+**Status: accepted for this build (2026-07). This section is a forward-looking decision, not a
+description of existing tables.**
+
+- The case-scoped credit-review vertical — `risk_cases`, documents/extractions, the financial
+  workspace (`financial_*` tables), case scenarios (`risk_scenarios`, `scenario_assumptions`),
+  and case-scoped `calculation_runs` / `capital_projections` / liquidity analysis — is **LEGACY**
+  as of this build. It stays in place: existing features keep working, its tests keep passing,
+  and its *patterns* (tenancy, immutable runs, findings, audit) are the blueprint for new work.
+- The new ALM/regulatory vertical is **bank-scoped, not case-scoped**. New tables for this build:
+  `banks`, `bank_reporting_periods`, `bank_financial_facts`, effective-dated `param_*` tables
+  (runoff rates, ASF/RSF weights, risk weights, thresholds, stress shocks — versioned with
+  `effective_from`/`effective_to`, jurisdiction, and approval metadata per
+  `IMPLEMENTATION_APPROACH.md` §5.6), and `regulatory_runs` following the calculation-run
+  pattern of section 3.
+- **New modules MUST NOT add dependencies on `risk_cases`** (no FKs, no `case_id` columns, no
+  case-scoped routes). Case tables are retained but deprecated for regulatory flows.
+- New API namespace: `/api/v1/banks/{bank_id}/...` (same tenancy deps, same composite-FK pattern
+  with `organization_id`, same RLS migration treatment).
+- LCR/NSFR, Basel RWA/capital-ratio, and stress engines belong to the new vertical and consume
+  bank facts + `param_*` rows, never financial-workspace case records.
+
+---
+
+## 6. OpenAPI contract flow
+
+Verified in `apps/risk-service/mise.toml`, root `mise.toml`, and `.pre-commit-config.yaml`.
+
+1. Backend routes/schemas change → regenerate:
+   `mise run risk-service:openapi-client`. This exports `openapi-schema.json` from the FastAPI
+   app, regenerates `packages/risk-service-api` with openapi-generator (typescript-fetch,
+   `supportsES6`), restores the source-first `package.json`, and runs Prettier over the generated
+   sources (generation intentionally bypasses the repo formatting exclusion to keep output
+   deterministic).
+2. Validate the generated package: `pnpm --filter @aequoros/risk-service-api test` (compiles and
+   runs `tests/generated-contracts.test.js`) and `type-check`.
+3. **Freshness gate**: `mise run risk-service:api-fresh` regenerates, type-checks, then asserts
+   `git status --porcelain` is clean for `apps/risk-service/openapi-schema.json` and
+   `packages/risk-service-api`. It runs on pre-push. A schema change without a committed
+   regenerated client fails the gate.
+4. `packages/risk-service-api/src` is excluded from style linting/formatting centrally; generated
+   files must contain no inline suppressions. Type-checking and package tests remain required.
+5. The web app must consume the generated client only — import types and
+   `FromJSON`/`ToJSON`/`*Api` classes from `@aequoros/risk-service-api`; never hand-roll payload
+   shapes (see CODEBASE_CONVENTIONS for the two sanctioned wrapper patterns).
+
+---
+
+## 7. ML service plan (cashflow-ml)
+
+**Status: planned for this build; `apps/cashflow-ml` does not exist yet.**
+
+- New service at `apps/cashflow-ml`: FastAPI + PyTorch LSTM for cash-flow forecasting. Separate
+  deployable, separate dependency tree (it must not bloat risk-service's env).
+- **Never exposed to the browser.** The SPA and external callers reach it ONLY through a
+  risk-service proxy endpoint that enforces tenant scoping (headers → `TenantContext` →
+  tenant-scoped input assembly) before forwarding. The ML service itself is tenant-unaware
+  compute; the risk service owns authorization, input snapshots, and run persistence.
+- The internal base URL is configuration: add a settings group to
+  `apps/risk-service/app/core/config.py` (`Settings`, pydantic-settings, env-alias pattern like
+  `StorageSettings`) — e.g. `CASHFLOW_ML_BASE_URL` — rather than hardcoding hosts.
+- ML inference results that feed decisions should be persisted through the section-3 run pattern
+  (snapshot, hash, versions, findings) like any other engine.
+
+---
+
+## 8. Validation commands
+
+| Target | Commands |
+| --- | --- |
+| risk-service (all) | `cd apps/risk-service && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check` |
+| risk-service vs Postgres | `docker compose up -d risk-postgres` then `mise run risk-service:test-postgres` (sets `TEST_DATABASE_URL`) |
+| risk-service migrations | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"` |
+| web | `pnpm --filter @aequoros/aequoros-web typecheck` · `lint` · `test` · `build` (e2e: `e2e`, deterministic journeys in `apps/aequoros-web/e2e/*.spec.ts`) |
+| generated client | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`) |
+| client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean) |
+
+All `mise run risk-service:*` tasks work from the repo root or from `apps/risk-service`.
