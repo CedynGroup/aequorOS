@@ -70,6 +70,14 @@ class LoggingSettings(BaseSettings):
         return log_level.upper()
 
 
+class CashflowMlSettings(BaseSettings):
+    model_config = SETTINGS_CONFIG
+
+    base_url: str = Field(default="http://127.0.0.1:8010", alias="CASHFLOW_ML_BASE_URL")
+    # Generous timeout: the ML service may lazy-train its model on the first call.
+    timeout_seconds: float = Field(default=60.0, alias="CASHFLOW_ML_TIMEOUT_SECONDS")
+
+
 class Settings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
@@ -78,6 +86,11 @@ class Settings(BaseSettings):
     cors: CorsSettings = Field(default_factory=CorsSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
+    cashflow_ml: CashflowMlSettings = Field(default_factory=CashflowMlSettings)
+
+    @property
+    def cashflow_ml_url(self) -> str:
+        return self.cashflow_ml.base_url
 
     @property
     def storage_configured(self) -> bool:

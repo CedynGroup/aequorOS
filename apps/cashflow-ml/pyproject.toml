@@ -1,0 +1,44 @@
+[project]
+name = "cashflow-ml"
+version = "0.1.0"
+description = "LSTM daily cash-flow forecasting service for the AequorOS MVP."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "fastapi[standard]",
+  "numpy",
+  "pydantic-settings",
+  "torch",
+]
+
+[dependency-groups]
+dev = [
+  "basedpyright",
+  "httpx",
+  "pytest",
+  "ruff",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "PL"]
+ignore = ["PLR2004"]
+
+[tool.basedpyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+include = ["app", "tests"]
+exclude = [".venv"]
+reportAny = false
+reportExplicitAny = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false
