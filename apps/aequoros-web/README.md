@@ -16,10 +16,17 @@ VITE_RISK_API_BASE_URL=http://127.0.0.1:8003/api/v1 pnpm --filter @aequoros/aequ
 
 The organization selector defaults to the seeded demo tenants. Deployments can
 supply their current tenant directory as a JSON array of `name`, `orgId`, and
-`userId` values through `VITE_RISK_TENANTS`; this configuration boundary can be
-replaced by an authenticated tenant directory after MVP. When the variable is
-set, invalid or empty configuration blocks the console with a configuration
-error instead of selecting a seeded tenant.
+`userId` values through `VITE_RISK_TENANTS`:
+
+```bash
+VITE_RISK_TENANTS='[{"name":"Configured Bank","orgId":"33333333-3333-4333-8333-333333333333","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc"}]' \
+  pnpm --filter @aequoros/aequoros-web dev
+```
+
+The configured list replaces the demo defaults. It must be non-empty, every
+entry must have a non-empty name and valid UUIDs, and organization UUIDs must be
+unique. Invalid configuration blocks the console with a configuration error.
+This boundary can be replaced by an authenticated tenant directory after MVP.
 
 ## Demo Data
 
@@ -228,6 +235,8 @@ The web app uses a feature-based split so each operational surface owns its UI a
 Vitest tests are colocated with the module they protect:
 
 - `src/lib/api.test.ts`: headers, error envelopes, API route/payload serialization
+- `src/lib/constants.test.ts`: tenant-directory defaults, validation, normalization, and selection
+- `src/lib/money.test.ts`: localized percentage separators, digits, and rounding
 - `src/features/documents/documents-tab.test.tsx`: document controls, upload request payloads, lifecycle actions
 - `src/features/findings/findings-tab.test.tsx`: finding create/update controls and payloads
 - `src/features/financial/financial-client.test.ts`: generated client routing, headers, serialization, and mutation decoding

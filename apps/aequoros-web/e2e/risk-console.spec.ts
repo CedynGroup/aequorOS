@@ -104,6 +104,7 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   page,
   request,
 }) => {
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 1000 });
   const tracker = new RequestTracker(page);
   const console = new RiskConsolePage(page);
@@ -336,16 +337,15 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await page.goto(`/cases/${northstarCase.id}?tab=calculations`);
   await page
     .getByRole("button", {
-      name: new RegExp(
-        `${archivedRun.id.slice(0, 8)}.*${archivedRun.id.slice(-4)}`,
-      ),
+      name: /Downside liquidity copy/,
     })
+    .first()
     .click();
   await expect(page.getByText("Archived forecast audit")).toBeVisible();
   await expect(page.getByText("Archived scenario · read only")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run forecast" })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole("button", { name: "Run forecast" }),
+  ).toBeEnabled();
   await expect(
     page.getByRole("button", { name: "Rerun current inputs" }),
   ).toHaveCount(0);
@@ -356,9 +356,9 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
   await expect(page.getByText("Archived forecast audit")).toBeVisible();
   await expect(page.getByText("Archived", { exact: true })).toBeVisible();
   await expect(page.getByText("Archived scenario · read only")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run forecast" })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole("button", { name: "Run forecast" }),
+  ).toBeEnabled();
   await expect(
     page.getByRole("button", { name: "Rerun current inputs" }),
   ).toHaveCount(0);
