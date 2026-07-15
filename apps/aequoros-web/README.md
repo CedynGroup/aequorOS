@@ -52,7 +52,7 @@ Archived cases are likewise read-only. Document download links remain
 available because they do not mutate case data.
 
 The deterministic portfolio includes a non-compliant liquidity covenant for
-Mariner Cold Storage so the case-health summary and adverse-state journeys do
+Mariner Trust so the case-health summary and adverse-state journeys do
 not rely on optimistic defaults.
 
 When the API is unavailable, frontend demo mode provides populated, validated
@@ -293,19 +293,19 @@ Vitest tests are colocated with the module they protect:
 - `src/lib/constants.test.ts`: tenant-directory defaults, validation, normalization, and selection
 - `src/lib/money.test.ts`: localized percentage separators, digits, and rounding
 - `src/features/documents/documents-tab.test.tsx`: document controls, upload request payloads, lifecycle actions
-- `src/features/findings/findings-tab.test.tsx`: finding create/update controls and payloads
+- `src/features/findings/findings-tab.test.tsx`: finding create/update controls, payloads, and read-only demo data
 - `src/features/financial/financial-client.test.ts`: generated client routing, headers, serialization, and mutation decoding
 - `src/features/financial/financial-tab.test.tsx`: loading, mapping, revalidation, and refresh failure states
 - `src/features/financial/financial-sections.test.tsx`: grouped review, validation focus, source traceability, audit history, and supported mutations
-- `src/features/scenarios/scenarios-tab.test.tsx`: scenario loading, empty, error, lifecycle, validation, editing, review, and save states
-- `src/features/calculations/calculations-tab.test.tsx`: forecast loading, empty, running, failure, success, rerun, history, and formatting states
+- `src/features/scenarios/scenarios-tab.test.tsx`: scenario loading, empty, error, lifecycle, validation, editing, review, save, cache-refresh, and read-only demo states
+- `src/features/calculations/calculations-tab.test.tsx`: forecast loading, empty, running, failure, success, rerun, history, formatting, and read-only demo states
 - `src/features/capital/capital-tab.test.tsx`: capital loading, empty, failure, success, comparison, evidence, pagination, and mutation-disabled states
 - `src/features/liquidity/liquidity-client.test.ts`: generated client routing, headers, query filters, and review payloads
 - `src/features/liquidity/liquidity-tab.test.tsx`: liquidity loading, empty, unavailable, historical-run, evidence, review, and error states
 - `src/features/charts/analysis-chart-adapters.test.ts`: decimal preservation, missing periods, liquidity-threshold availability, and comparison-basis series states
 - `src/features/charts/analysis-charts.test.tsx`: SVG points, labels, threshold, gap annotations, and unavailable states
 - `src/features/charts/chart-shell.test.tsx`: lazy-loading fallback and chart-failure isolation
-- `src/features/demo-data/demo-data.test.ts`: fallback/demo data filtering and detail construction
+- `src/features/demo-data/demo-data.test.ts`: fallback/demo data filtering, detail construction, and internally consistent case-health fixtures
 - `src/features/risk-console/case-health-header.test.tsx`: summary loading, empty, error, healthy, adverse, cache-refresh, and navigation states
 - `src/features/risk-console/case-workspace.test.tsx`: case-health tab routing, single-focus behavior, and populated read-only demo tabs
 - `src/routes/search.test.ts`: typed search-param parsing
