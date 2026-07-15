@@ -15,6 +15,7 @@ import { riskApi, type TenantHeaders } from "../../lib/api";
 import type { ConsoleTab } from "../../lib/constants";
 import { cn, labelize } from "../../lib/utils";
 import type { MockCaseHealthData } from "../demo-data/demo-data";
+import { financialReviewClient } from "../financial/financial-client";
 
 type HealthTone = "danger" | "muted" | "success" | "warning";
 
@@ -39,7 +40,7 @@ export function CaseHealthHeader({
   }>({ scope: runScope, statuses: new Map() });
   const financial = useQuery({
     queryKey: ["financial-workspace", tenant, caseId],
-    queryFn: () => riskApi.financialWorkspace(tenant, caseId),
+    queryFn: () => financialReviewClient.workspace(tenant, caseId),
     enabled: !demoData,
   });
   const scenarios = useQuery({
