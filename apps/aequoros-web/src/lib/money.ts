@@ -77,12 +77,19 @@ function formatDecimalParts(
     maximumFractionDigits: 0,
     numberingSystem: resolvedOptions.numberingSystem,
   }).format(BigInt(rounded.integer));
+  const digitFormatter = new Intl.NumberFormat(resolvedOptions.locale, {
+    maximumFractionDigits: 0,
+    numberingSystem: resolvedOptions.numberingSystem,
+    useGrouping: false,
+  });
   const decimalSeparator =
     decimalFormatter.formatToParts(0.1).find((part) => part.type === "decimal")
       ?.value ?? ".";
   const fraction = (
     trimTrailingZeros ? rounded.fraction.replace(/0+$/, "") : rounded.fraction
-  ).padEnd(minimumFractionDigits, "0");
+  )
+    .padEnd(minimumFractionDigits, "0")
+    .replace(/\d/g, (digit) => digitFormatter.format(Number(digit)));
   const formattedNumber = `${groupedInteger}${fraction ? decimalSeparator + fraction : ""}`;
   const parts = formatter.formatToParts(match[1] ? -0 : 0);
   let insertedNumber = false;
