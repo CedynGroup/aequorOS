@@ -17,7 +17,9 @@ VITE_RISK_API_BASE_URL=http://127.0.0.1:8003/api/v1 pnpm --filter @aequoros/aequ
 The organization selector defaults to the seeded demo tenants. Deployments can
 supply their current tenant directory as a JSON array of `name`, `orgId`, and
 `userId` values through `VITE_RISK_TENANTS`; this configuration boundary can be
-replaced by an authenticated tenant directory after MVP.
+replaced by an authenticated tenant directory after MVP. When the variable is
+set, invalid or empty configuration blocks the console with a configuration
+error instead of selecting a seeded tenant.
 
 ## Demo Data
 

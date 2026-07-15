@@ -826,7 +826,10 @@ function shiftDecimal(value: string, places: number): string | null {
   const integerDigits = match[2] ?? "0";
   const fractionDigits = match[2] === undefined ? match[4] : match[3];
   const digits = `${integerDigits}${fractionDigits ?? ""}`;
-  const decimalIndex = integerDigits.length + Number(match[5] ?? 0) + places;
+  const exponent = Number(match[5] ?? 0);
+  const decimalIndex = integerDigits.length + exponent + places;
+  if (!Number.isSafeInteger(decimalIndex) || Math.abs(decimalIndex) > 1_000)
+    return null;
   const integer =
     decimalIndex <= 0
       ? "0"

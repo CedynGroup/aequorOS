@@ -6,8 +6,8 @@ import { act } from "react";
 
 import {
   DEFAULT_ORG_ID,
+  DEFAULT_TENANT_OPTIONS,
   DEFAULT_USER_ID,
-  tenantOptions,
 } from "../../lib/constants";
 import { renderWithQuery } from "../../test/render";
 import { mockCaseList } from "../demo-data/demo-data";
@@ -20,7 +20,7 @@ const tenant = {
   orgId: DEFAULT_ORG_ID,
   userId: DEFAULT_USER_ID,
 };
-const tenants = tenantOptions();
+const tenants = DEFAULT_TENANT_OPTIONS;
 
 const cases = mockCaseList(
   DEFAULT_ORG_ID,

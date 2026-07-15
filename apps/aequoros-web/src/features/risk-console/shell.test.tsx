@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_ORG_ID, tenantOptions } from "../../lib/constants";
+import { DEFAULT_ORG_ID, DEFAULT_TENANT_OPTIONS } from "../../lib/constants";
 import { mockCaseList } from "../demo-data/demo-data";
 import { Sidebar, TopBar } from "./shell";
 
@@ -11,7 +11,7 @@ type SidebarProps = Parameters<typeof Sidebar>[0];
 type TopBarProps = Parameters<typeof TopBar>[0];
 
 describe("risk console shell", () => {
-  const tenants = tenantOptions();
+  const tenants = DEFAULT_TENANT_OPTIONS;
   it("routes sidebar tab clicks through the provided handler", () => {
     const onTab = vi.fn<SidebarProps["onTab"]>();
 

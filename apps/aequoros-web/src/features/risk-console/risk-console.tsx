@@ -10,8 +10,9 @@ import {
   activeTenantOption,
   type ConsoleTab,
   type ReportMode,
+  type TenantDirectory,
   isConsoleTab,
-  tenantOptions,
+  tenantConfiguration,
 } from "../../lib/constants";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { usePersistentState } from "../../lib/persistent-state";
@@ -23,7 +24,29 @@ import { pageSize } from "./types";
 import type { SearchState } from "../../routes/search";
 
 export function RiskConsoleRoute() {
-  const tenants = useMemo(tenantOptions, []);
+  const configuration = useMemo(tenantConfiguration, []);
+
+  if (configuration.status === "error") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[rgb(var(--background))] p-6">
+        <section
+          role="alert"
+          className="w-full max-w-xl rounded-lg border border-red-300 bg-[rgb(var(--surface))] p-6 shadow-sm"
+        >
+          <h1 className="text-lg font-semibold">Tenant configuration error</h1>
+          <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">
+            {configuration.error} Correct the deployment configuration and
+            reload the console.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  return <RiskConsole tenants={configuration.tenants} />;
+}
+
+function RiskConsole({ tenants }: { tenants: TenantDirectory }) {
   const router = useRouter();
   const navigate = useNavigate();
   const match = useMatch({ strict: false });

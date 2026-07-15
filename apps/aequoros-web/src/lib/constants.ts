@@ -8,8 +8,11 @@ export type TenantOption = {
   userId: string;
 };
 export type TenantDirectory = readonly [TenantOption, ...TenantOption[]];
+export type TenantConfiguration =
+  | { status: "ready"; tenants: TenantDirectory }
+  | { status: "error"; error: string };
 
-const defaultTenantOptions: TenantDirectory = [
+export const DEFAULT_TENANT_OPTIONS: TenantDirectory = [
   {
     name: "AequorOS Demo Organization",
     orgId: DEFAULT_ORG_ID,
@@ -22,24 +25,45 @@ const defaultTenantOptions: TenantDirectory = [
   },
 ];
 
-export function tenantOptions(): TenantDirectory {
+export function tenantConfiguration(): TenantConfiguration {
   const configured = import.meta.env.VITE_RISK_TENANTS;
-  if (!configured) return defaultTenantOptions;
+  if (configured === undefined)
+    return { status: "ready", tenants: DEFAULT_TENANT_OPTIONS };
 
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(configured);
-    if (
-      Array.isArray(parsed) &&
-      parsed.length > 0 &&
-      parsed.every(isTenantOption)
-    ) {
-      return parsed as unknown as TenantDirectory;
-    }
+    parsed = JSON.parse(configured);
   } catch {
-    return defaultTenantOptions;
+    return {
+      status: "error",
+      error: "VITE_RISK_TENANTS must contain valid JSON.",
+    };
   }
 
-  return defaultTenantOptions;
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    return {
+      status: "error",
+      error: "VITE_RISK_TENANTS must be a non-empty JSON array.",
+    };
+  }
+
+  const invalidIndex = parsed.findIndex((value) => !isTenantOption(value));
+  if (invalidIndex !== -1) {
+    return {
+      status: "error",
+      error: `VITE_RISK_TENANTS entry ${invalidIndex + 1} must contain non-empty string name, orgId, and userId fields.`,
+    };
+  }
+
+  const tenants = parsed as unknown as TenantDirectory;
+  if (new Set(tenants.map((tenant) => tenant.orgId)).size !== tenants.length) {
+    return {
+      status: "error",
+      error: "VITE_RISK_TENANTS must not contain duplicate orgId values.",
+    };
+  }
+
+  return { status: "ready", tenants };
 }
 
 export function activeTenantOption(

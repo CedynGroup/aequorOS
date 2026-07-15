@@ -297,6 +297,19 @@ describe("ScenariosTab", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
+  it("rejects extreme ratio exponents without crashing", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(riskApi, "scenarios").mockResolvedValue(workspace());
+
+    renderWithQuery(<ScenariosTab tenant={tenant} caseId={caseId} />);
+    const value = await screen.findByLabelText("Revenue growth value");
+    await user.clear(value);
+    await user.type(value, "1e999999999");
+
+    expect(value).toHaveValue("1e999999999");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
   it("ignores malformed scenario evidence fragments", async () => {
     window.history.replaceState(
       null,
