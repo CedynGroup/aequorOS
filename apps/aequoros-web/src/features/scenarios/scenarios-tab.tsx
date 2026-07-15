@@ -858,6 +858,7 @@ function typedUnitValue(
   valueType: AssumptionValueType,
   unit?: string | null,
 ): AssumptionValue {
-  const typed = typedValue(value, valueType);
-  return typeof typed === "number" && unit === "ratio" ? typed / 100 : typed;
+  if (valueType === "number" && unit === "ratio")
+    return Number(shiftDecimal(value, -2));
+  return typedValue(value, valueType);
 }

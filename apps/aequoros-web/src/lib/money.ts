@@ -32,6 +32,7 @@ export function formatDecimal(value: string, fractionDigits: number) {
 export function formatPercent(
   value: string | number,
   maximumFractionDigits = 2,
+  locales?: Intl.LocalesArgument,
 ) {
   const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(value));
   if (!match) return String(value);
@@ -41,7 +42,7 @@ export function formatPercent(
   if (!scaledMatch) return String(value);
   return formatDecimalParts(
     scaledMatch,
-    new Intl.NumberFormat(undefined, {
+    new Intl.NumberFormat(locales, {
       style: "percent",
       maximumFractionDigits,
     }),
@@ -68,11 +69,16 @@ function formatDecimalParts(
   const minimumFractionDigits = resolvedOptions.minimumFractionDigits ?? 0;
   const maximumFractionDigits = resolvedOptions.maximumFractionDigits ?? 2;
   const rounded = roundDecimal(match[2], match[3] ?? "", maximumFractionDigits);
-  const groupedInteger = new Intl.NumberFormat(undefined, {
+  const decimalFormatter = new Intl.NumberFormat(resolvedOptions.locale, {
+    minimumFractionDigits: 1,
+    numberingSystem: resolvedOptions.numberingSystem,
+  });
+  const groupedInteger = new Intl.NumberFormat(resolvedOptions.locale, {
     maximumFractionDigits: 0,
+    numberingSystem: resolvedOptions.numberingSystem,
   }).format(BigInt(rounded.integer));
   const decimalSeparator =
-    formatter.formatToParts(0.1).find((part) => part.type === "decimal")
+    decimalFormatter.formatToParts(0.1).find((part) => part.type === "decimal")
       ?.value ?? ".";
   const fraction = (
     trimTrailingZeros ? rounded.fraction.replace(/0+$/, "") : rounded.fraction

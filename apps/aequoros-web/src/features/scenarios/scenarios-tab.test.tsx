@@ -232,6 +232,7 @@ describe("ScenariosTab", () => {
   it.each([
     { stored: 0.123456, editable: "12.3456" },
     { stored: 0.045, editable: "4.5" },
+    { stored: 0.007, editable: "0.7" },
   ])(
     "preserves $stored as editable percent text without marking it dirty",
     async ({ stored, editable }) => {
