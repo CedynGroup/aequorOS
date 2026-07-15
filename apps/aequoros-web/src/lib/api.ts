@@ -1,6 +1,22 @@
 import {
   type AssumptionCreate,
   AssumptionCreateToJSON,
+  BanksApi,
+  type CapitalScenarioBatchCreate,
+  CashflowForecastApi,
+  type CashflowForecastMode,
+  type CashflowHorizon,
+  Configuration,
+  ForecastingApi,
+  type ForecastRunCreate,
+  type LiquidityScenarioBatchCreate,
+  type OptimizerRunCreate,
+  RegulatoryCapitalApi,
+  RegulatoryLiquidityApi,
+  type RegulatoryModule,
+  type RegulatoryRunCreate,
+  ResponseError,
+  type WhatIfRunCreate,
   type AssumptionReview,
   AssumptionReviewToJSON,
   type AssumptionUpdate,
@@ -168,6 +184,51 @@ export async function apiText(
   }
 
   return response.text();
+}
+
+export type RegulatoryRunQuery = {
+  module?: RegulatoryModule;
+  reportingPeriodId?: string;
+  scenarioCode?: string;
+  limit?: number;
+  offset?: number;
+};
+
+function generatedApiConfiguration() {
+  return new Configuration({
+    basePath: apiBaseUrl().replace(/\/api\/v1\/?$/, ""),
+  });
+}
+
+async function fromGenerated<T>(call: Promise<T>): Promise<T> {
+  try {
+    return await call;
+  } catch (error) {
+    if (error instanceof ResponseError) {
+      throw await parseFailure(error.response);
+    }
+    throw error;
+  }
+}
+
+function banksApi() {
+  return new BanksApi(generatedApiConfiguration());
+}
+
+function regulatoryLiquidityApi() {
+  return new RegulatoryLiquidityApi(generatedApiConfiguration());
+}
+
+function regulatoryCapitalApi() {
+  return new RegulatoryCapitalApi(generatedApiConfiguration());
+}
+
+function forecastingApi() {
+  return new ForecastingApi(generatedApiConfiguration());
+}
+
+function cashflowForecastApi() {
+  return new CashflowForecastApi(generatedApiConfiguration());
 }
 
 function toQuery(
@@ -596,6 +657,308 @@ export const riskApi = {
       },
     );
   },
+  listBanks(tenant: TenantHeaders) {
+    return fromGenerated(
+      banksApi().listBanks({ xOrgId: tenant.orgId, xUserId: tenant.userId }),
+    );
+  },
+  getBank(tenant: TenantHeaders, bankId: string) {
+    return fromGenerated(
+      banksApi().getBank({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+      }),
+    );
+  },
+  listBankReportingPeriods(tenant: TenantHeaders, bankId: string) {
+    return fromGenerated(
+      banksApi().listBankReportingPeriods({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+      }),
+    );
+  },
+  getBankPeriodFacts(tenant: TenantHeaders, bankId: string, periodId: string) {
+    return fromGenerated(
+      banksApi().getBankPeriodFacts({
+        bankId,
+        periodId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+      }),
+    );
+  },
+  seedDemoBank(tenant: TenantHeaders) {
+    return fromGenerated(
+      banksApi().seedDemoBank({
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+      }),
+    );
+  },
+  createRegulatoryRun(
+    tenant: TenantHeaders,
+    bankId: string,
+    payload: RegulatoryRunCreate,
+  ) {
+    return fromGenerated(
+      regulatoryLiquidityApi().createRegulatoryRun({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        regulatoryRunCreate: payload,
+      }),
+    );
+  },
+  listRegulatoryRuns(
+    tenant: TenantHeaders,
+    bankId: string,
+    query: RegulatoryRunQuery = {},
+  ) {
+    return fromGenerated(
+      regulatoryLiquidityApi().listRegulatoryRuns({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        module: query.module,
+        reportingPeriodId: query.reportingPeriodId,
+        scenarioCode: query.scenarioCode,
+        limit: query.limit,
+        offset: query.offset,
+      }),
+    );
+  },
+  getRegulatoryRun(tenant: TenantHeaders, bankId: string, runId: string) {
+    return fromGenerated(
+      regulatoryLiquidityApi().getRegulatoryRun({
+        bankId,
+        runId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+      }),
+    );
+  },
+  runAllLiquidityScenarios(
+    tenant: TenantHeaders,
+    bankId: string,
+    payload: LiquidityScenarioBatchCreate,
+  ) {
+    return fromGenerated(
+      regulatoryLiquidityApi().runAllLiquidityScenarios({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        liquidityScenarioBatchCreate: payload,
+      }),
+    );
+  },
+  getLiquidityDashboard(
+    tenant: TenantHeaders,
+    bankId: string,
+    reportingPeriodId?: string,
+  ) {
+    return fromGenerated(
+      regulatoryLiquidityApi().getLiquidityDashboard({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        reportingPeriodId,
+      }),
+    );
+  },
+  getBsd3Preview(
+    tenant: TenantHeaders,
+    bankId: string,
+    reportingPeriodId: string,
+  ) {
+    return fromGenerated(
+      regulatoryLiquidityApi().getBsd3Preview({
+        bankId,
+        reportingPeriodId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+      }),
+    );
+  },
+  runAllCapitalScenarios(
+    tenant: TenantHeaders,
+    bankId: string,
+    payload: CapitalScenarioBatchCreate,
+  ) {
+    return fromGenerated(
+      regulatoryCapitalApi().runAllCapitalScenarios({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        capitalScenarioBatchCreate: payload,
+      }),
+    );
+  },
+  getCapitalDashboard(
+    tenant: TenantHeaders,
+    bankId: string,
+    reportingPeriodId?: string,
+  ) {
+    return fromGenerated(
+      regulatoryCapitalApi().getCapitalDashboard({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        reportingPeriodId,
+      }),
+    );
+  },
+  getRwaBreakdown(
+    tenant: TenantHeaders,
+    bankId: string,
+    reportingPeriodId?: string,
+  ) {
+    return fromGenerated(
+      regulatoryCapitalApi().getRwaBreakdown({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        reportingPeriodId,
+      }),
+    );
+  },
+  getCapitalStructure(
+    tenant: TenantHeaders,
+    bankId: string,
+    reportingPeriodId?: string,
+  ) {
+    return fromGenerated(
+      regulatoryCapitalApi().getCapitalStructure({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        reportingPeriodId,
+      }),
+    );
+  },
+  getBsd2Preview(
+    tenant: TenantHeaders,
+    bankId: string,
+    reportingPeriodId: string,
+  ) {
+    return fromGenerated(
+      regulatoryCapitalApi().getBsd2Preview({
+        bankId,
+        reportingPeriodId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+      }),
+    );
+  },
+  listForecastScenarios(tenant: TenantHeaders, bankId: string) {
+    return fromGenerated(
+      forecastingApi().listForecastScenarios({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+      }),
+    );
+  },
+  createForecastRun(
+    tenant: TenantHeaders,
+    bankId: string,
+    payload: ForecastRunCreate,
+  ) {
+    return fromGenerated(
+      forecastingApi().createForecastRun({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        forecastRunCreate: payload,
+      }),
+    );
+  },
+  listForecastRuns(
+    tenant: TenantHeaders,
+    bankId: string,
+    limit = 25,
+    offset = 0,
+  ) {
+    return fromGenerated(
+      forecastingApi().listForecastRuns({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        limit,
+        offset,
+      }),
+    );
+  },
+  getForecastRun(tenant: TenantHeaders, bankId: string, runId: string) {
+    return fromGenerated(
+      forecastingApi().getForecastRun({
+        bankId,
+        runId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+      }),
+    );
+  },
+  runStrategicOptimizer(
+    tenant: TenantHeaders,
+    bankId: string,
+    payload: OptimizerRunCreate,
+  ) {
+    return fromGenerated(
+      forecastingApi().runStrategicOptimizer({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        optimizerRunCreate: payload,
+      }),
+    );
+  },
+  runWhatIfAnalysis(
+    tenant: TenantHeaders,
+    bankId: string,
+    payload: WhatIfRunCreate,
+  ) {
+    return fromGenerated(
+      forecastingApi().runWhatIfAnalysis({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        whatIfRunCreate: payload,
+      }),
+    );
+  },
+  getCashflowForecast(
+    tenant: TenantHeaders,
+    bankId: string,
+    horizon?: CashflowHorizon,
+    mode?: CashflowForecastMode,
+  ) {
+    return fromGenerated(
+      cashflowForecastApi().getCashflowForecast({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        horizon,
+        mode,
+      }),
+    );
+  },
+  getCashflowHistory(
+    tenant: TenantHeaders,
+    bankId: string,
+    days?: number,
+  ) {
+    return fromGenerated(
+      cashflowForecastApi().getCashflowHistory({
+        bankId,
+        xOrgId: tenant.orgId,
+        xUserId: tenant.userId,
+        days,
+      }),
+    );
+  },
 };
 
 function bulkPayloadToJson(payload: Payload) {
@@ -627,4 +990,19 @@ export function isApiError(error: unknown): error is ApiError {
     "code" in error &&
     "message" in error
   );
+}
+
+export function apiErrorDetail(
+  error: unknown,
+): { statusCode: number; code: string; message: string } | null {
+  if (!isApiError(error)) return null;
+  const details = error.response?.error.details as
+    | { error_code?: string; message?: string }
+    | null
+    | undefined;
+  return {
+    statusCode: error.statusCode,
+    code: details?.error_code ?? error.code,
+    message: details?.message ?? error.message,
+  };
 }

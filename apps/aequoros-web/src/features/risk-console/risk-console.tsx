@@ -11,12 +11,14 @@ import { toast } from "sonner";
 import {
   DEFAULT_ORG_ID,
   DEFAULT_USER_ID,
+  type ConsoleMode,
   type ConsoleTab,
   type ReportMode,
   isConsoleTab,
 } from "../../lib/constants";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { usePersistentState } from "../../lib/persistent-state";
+import { AlmConsole } from "../alm/alm-console";
 import { mockCase, mockCaseList } from "../demo-data/demo-data";
 import { CaseQueuePanel } from "./case-queue-panel";
 import { CaseWorkspace } from "./case-workspace";
@@ -37,6 +39,7 @@ export function RiskConsoleRoute() {
   const [mockWorkspace, setMockWorkspace] = useState(false);
   const tenant = useMemo<TenantHeaders>(() => ({ orgId, userId }), [orgId, userId]);
 
+  const mode: ConsoleMode = search.mode === "alm" ? "alm" : "cases";
   const activeTab: ConsoleTab =
     search.tab && isConsoleTab(search.tab) ? search.tab : "overview";
   const reportMode: ReportMode = search.report === "html" ? "html" : "json";
@@ -53,6 +56,7 @@ export function RiskConsoleRoute() {
   const taxonomyQuery = useQuery({
     queryKey: ["case-taxonomy", tenant],
     queryFn: () => riskApi.caseTaxonomy(tenant),
+    enabled: mode === "cases",
   });
   const casesQuery = useQuery({
     queryKey: ["cases", tenant, filters, page],
@@ -66,11 +70,12 @@ export function RiskConsoleRoute() {
         limit: pageSize,
         offset: (page - 1) * pageSize,
       }),
+    enabled: mode === "cases",
   });
   const caseQuery = useQuery({
     queryKey: ["case", tenant, caseId],
     queryFn: () => riskApi.getCase(tenant, caseId ?? ""),
-    enabled: Boolean(caseId),
+    enabled: Boolean(caseId) && mode === "cases",
   });
   const demoList = mockWorkspace ? mockCaseList(tenant.orgId, filters, page) : undefined;
   const demoCase = mockWorkspace && caseId ? mockCase(tenant.orgId, caseId) : undefined;
@@ -101,9 +106,29 @@ export function RiskConsoleRoute() {
     .filter((entry) => entry[1])
     .map(([id]) => id);
 
+  if (mode === "alm") {
+    return (
+      <AlmConsole
+        tenant={tenant}
+        orgId={orgId}
+        userId={userId}
+        setOrgId={setOrgId}
+        setUserId={setUserId}
+        search={search}
+        updateSearch={updateSearch}
+        refresh={refresh}
+      />
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-[rgb(var(--background))]">
-      <Sidebar activeTab={activeTab} onTab={(tab) => updateSearch({ tab })} />
+      <Sidebar
+        activeTab={activeTab}
+        onTab={(tab) => updateSearch({ tab })}
+        mode={mode}
+        onMode={(nextMode) => updateSearch({ mode: nextMode })}
+      />
       <main className="min-w-0 flex-1">
         <TopBar
           orgId={orgId}

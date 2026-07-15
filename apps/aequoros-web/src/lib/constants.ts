@@ -17,9 +17,32 @@ export const tabs = [
 
 export type ConsoleTab = (typeof tabs)[number];
 export type ReportMode = "json" | "html";
+export type ConsoleMode = "cases" | "alm";
 
 export function isConsoleTab(value: string | null): value is ConsoleTab {
   return tabs.includes(value as ConsoleTab);
+}
+
+export const almTabs = [
+  "overview",
+  "lcr",
+  "nsfr",
+  "liq-stress",
+  "cashflow",
+  "capital",
+  "rwa",
+  "structure",
+  "capital-stress",
+  "forecast",
+  "optimizer",
+  "whatif",
+  "submissions",
+] as const;
+
+export type AlmTab = (typeof almTabs)[number];
+
+export function isAlmTab(value: string | null): value is AlmTab {
+  return almTabs.includes(value as AlmTab);
 }
 
 export function apiBaseUrl() {

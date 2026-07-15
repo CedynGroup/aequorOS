@@ -25,6 +25,10 @@ describe("parseSearchState", () => {
       archived: true,
       sort: CaseSort.RiskScoreDesc,
       page: 3,
+      mode: "cases",
+      almTab: "overview",
+      bankId: undefined,
+      periodId: undefined,
     });
   });
 
@@ -32,6 +36,30 @@ describe("parseSearchState", () => {
     expect(parseSearchState({ report: "xml", archived: "false" })).toMatchObject({
       report: "json",
       archived: false,
+    });
+  });
+
+  it("parses ALM regulatory mode params", () => {
+    expect(
+      parseSearchState({
+        mode: "alm",
+        almTab: "capital-stress",
+        bankId: "33333333-3333-4333-8333-333333333333",
+        periodId: "44444444-4444-4444-8444-444444444444",
+      }),
+    ).toMatchObject({
+      mode: "alm",
+      almTab: "capital-stress",
+      bankId: "33333333-3333-4333-8333-333333333333",
+      periodId: "44444444-4444-4444-8444-444444444444",
+    });
+  });
+
+  it("keeps existing URLs on the cases mode with the overview ALM tab", () => {
+    expect(parseSearchState({ tab: "report", almTab: "not-a-tab" })).toMatchObject({
+      tab: "report",
+      mode: "cases",
+      almTab: "overview",
     });
   });
 });

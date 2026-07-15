@@ -4,7 +4,13 @@ import type {
   RiskLevel,
 } from "@aequoros/risk-service-api";
 
-import type { ConsoleTab, ReportMode } from "../lib/constants";
+import {
+  type AlmTab,
+  type ConsoleMode,
+  type ConsoleTab,
+  type ReportMode,
+  isAlmTab,
+} from "../lib/constants";
 
 export type SearchState = {
   tab?: ConsoleTab;
@@ -15,6 +21,10 @@ export type SearchState = {
   archived?: boolean;
   sort?: CaseSort;
   page?: number;
+  mode?: ConsoleMode;
+  almTab?: AlmTab;
+  bankId?: string;
+  periodId?: string;
 };
 
 export function parseSearchState(input: Record<string, unknown>): SearchState {
@@ -27,5 +37,12 @@ export function parseSearchState(input: Record<string, unknown>): SearchState {
     archived: input.archived === true || input.archived === "true",
     sort: typeof input.sort === "string" ? (input.sort as CaseSort) : undefined,
     page: Number.isFinite(Number(input.page)) ? Number(input.page) : undefined,
+    mode: input.mode === "alm" ? "alm" : "cases",
+    almTab:
+      typeof input.almTab === "string" && isAlmTab(input.almTab)
+        ? input.almTab
+        : "overview",
+    bankId: typeof input.bankId === "string" ? input.bankId : undefined,
+    periodId: typeof input.periodId === "string" ? input.periodId : undefined,
   };
 }

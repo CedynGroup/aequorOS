@@ -19,15 +19,20 @@ import {
   SelectItem,
   Tooltip,
 } from "../../components/ui";
-import type { ConsoleTab } from "../../lib/constants";
+import type { ConsoleMode, ConsoleTab } from "../../lib/constants";
 import { cn } from "../../lib/utils";
+import { ModeSwitch } from "../alm/alm-shell";
 
 export function Sidebar({
   activeTab,
   onTab,
+  mode = "cases",
+  onMode,
 }: {
   activeTab: ConsoleTab;
   onTab: (tab: ConsoleTab) => void;
+  mode?: ConsoleMode;
+  onMode?: (mode: ConsoleMode) => void;
 }) {
   const items: Array<{
     tab: ConsoleTab;
@@ -57,6 +62,7 @@ export function Sidebar({
           </div>
         </div>
       </div>
+      {onMode ? <ModeSwitch mode={mode} onMode={onMode} /> : null}
       <button className="mb-2 flex h-8 w-full items-center gap-2 rounded-md bg-[rgb(var(--muted))] px-2 text-left text-xs font-medium">
         <ListChecks className="size-4" />
         Case Queue
