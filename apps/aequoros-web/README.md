@@ -146,6 +146,12 @@ An empty, unavailable, loading, or failed visualization does not hide the run's
 tabular output. Run history remains contained at narrow widths, and wide
 forecast output tables scroll horizontally instead of clipping their values.
 
+The Forecast tab keeps immutable successful and failed run history. Selecting a
+run for an archived scenario opens read-only audit mode and disables rerunning
+that snapshot. New-run controls remain available whenever an active scenario is
+selected, so archived history cannot dead-end a reviewer who needs a fresh
+forecast.
+
 ## Capital Review
 
 The Capital tab lists immutable projection attempts and successful forecast runs
