@@ -233,8 +233,8 @@ describe("CalculationsTab", () => {
     ).toBeInTheDocument();
     expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, caseId, true);
     expect(
-      screen.queryByRole("button", { name: "Run forecast" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Run forecast" }),
+    ).toBeEnabled();
     expect(
       screen.queryByRole("button", { name: "Rerun current inputs" }),
     ).not.toBeInTheDocument();
