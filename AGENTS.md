@@ -58,3 +58,20 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   and is sorted by canonical JSON (`INPUT_SCHEMA_VERSION = "bank-facts-v2"`). The live engine
   re-derives facts (new UUIDs) on every refresh, so an id- or order-dependent hash would break
   official-run reproducibility. Never reintroduce `fact.id` into a `_build_snapshot`.
+- Market data flows only through `app/adapters/market_data/` (see ARCHITECTURE.md §3c and
+  docs/market_data_adapter.md). Every adapter pull delegates to `pull_runner.execute_pull` —
+  the single writer of market-data canonical state; never persist market data elsewhere.
+  Vendor catalogs carry only spec-documented identifiers (`supported: false` otherwise —
+  never invent Bloomberg mnemonics or RICs), and raw vendor errors/fields must never reach
+  bank-facing surfaces (classify via `errors.BankFacingErrorCode`; the contract suite's
+  leak canary enforces this).
+- Calculation modules consume market data ONLY via `app/services/market_data.py`
+  (DataScope + as-of + institution, source attribution + staleness on every view);
+  `fact_derivation` prefers canonical market-data entities and falls back to legacy
+  `canonical_reference_rows`. Cross-source disagreement is resolved at read time
+  (most-recent-refreshed wins) — supersession applies within a source series, not across
+  vendors.
+- Vendor credentials live only in `EncryptedDbVault` (AES-256-GCM,
+  `CREDENTIAL_VAULT_MASTER_KEY`), retrieved per pull cycle and discarded; connection APIs are
+  write-only for credential material (responses expose only fingerprint/expiry/status).
+  Scheduled pulls are gated on `MARKET_DATA_PULL_ENABLED` (default off).

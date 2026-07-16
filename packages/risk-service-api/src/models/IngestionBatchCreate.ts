@@ -67,6 +67,9 @@ export const IngestionBatchCreateSourceSystemEnum = {
   SftpDrop: "SFTP_DROP",
   ApiGeneric: "API_GENERIC",
   ApiPush: "API_PUSH",
+  Bloomberg: "BLOOMBERG",
+  Refinitiv: "REFINITIV",
+  ManualUpload: "MANUAL_UPLOAD",
   Manual: "MANUAL",
 } as const;
 export type IngestionBatchCreateSourceSystemEnum =

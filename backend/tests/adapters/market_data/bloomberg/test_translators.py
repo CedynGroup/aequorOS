@@ -40,7 +40,8 @@ def test_curve_bundle_converts_percents_to_decimal_fractions() -> None:
     assert len(bundle.curves) == 1
     curve = bundle.curves[0]
     assert curve.currency == "GHS"
-    assert curve.curve_name == "YIELD_CURVE_GHS"
+    # One economic curve keeps one name across vendors (matches Refinitiv).
+    assert curve.curve_name == "GHS_SOVEREIGN"
     assert curve.curve_type == "sovereign"
     # Points are sorted by tenor regardless of vendor response order.
     assert [point.tenor_months for point in curve.points] == [1, 3]

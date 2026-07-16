@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   GitBranch,
   TrendingUp,
+  BrainCircuit,
   FileBarChart2,
   FileCheck2,
   Settings,
@@ -32,7 +33,9 @@ const groups: { label: string; items: NavItem[] }[] = [
   },
   {
     label: 'Data',
-    items: [{ href: '/data-engine', label: 'Data Engine', icon: Database, code: '00' }],
+    items: [
+      { href: '/data-engine', label: 'Data Engine', icon: Database, code: '00' },
+    ],
   },
   {
     label: 'Modules',
@@ -62,6 +65,12 @@ const groups: { label: string; items: NavItem[] }[] = [
         label: 'Balance Sheet Forecasting',
         icon: TrendingUp,
         code: '06',
+      },
+      {
+        href: '/behavioral',
+        label: 'Behavioral Models',
+        icon: BrainCircuit,
+        code: '07',
       },
     ],
   },

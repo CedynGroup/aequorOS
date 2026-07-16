@@ -8,11 +8,13 @@
 
 import {
   BanksApi,
+  BehavioralModelsApi,
   CashflowForecastApi,
   Configuration,
   ForecastingApi,
   JobsApi,
   LiveEngineApi,
+  MarketDataApi,
   RegulatoryCapitalApi,
   RegulatoryFtpApi,
   RegulatoryFxApi,
@@ -47,6 +49,7 @@ export const tenant = {
 const configuration = new Configuration({ basePath: apiOrigin });
 
 export const banksApi = new BanksApi(configuration);
+export const behavioralModelsApi = new BehavioralModelsApi(configuration);
 export const regulatoryLiquidityApi = new RegulatoryLiquidityApi(configuration);
 export const regulatoryCapitalApi = new RegulatoryCapitalApi(configuration);
 export const regulatoryIrrApi = new RegulatoryIrrApi(configuration);
@@ -56,6 +59,7 @@ export const forecastingApi = new ForecastingApi(configuration);
 export const cashflowForecastApi = new CashflowForecastApi(configuration);
 export const liveEngineApi = new LiveEngineApi(configuration);
 export const jobsApi = new JobsApi(configuration);
+export const marketDataApi = new MarketDataApi(configuration);
 
 /**
  * Normalized error surfaced to the UI. `status` is the HTTP status code,

@@ -49,7 +49,9 @@ def curve_bundle(
     )
     record = CurveRecord(
         currency=currency,
-        curve_name=scope.value,
+        # Same naming as the Refinitiv translator so one economic curve keeps
+        # one name across sources; cross-source arbitration stays read-time.
+        curve_name=f"{currency}_SOVEREIGN",
         curve_type="sovereign",
         source_reference=",".join(obs.security for obs in ordered),
         points=points,

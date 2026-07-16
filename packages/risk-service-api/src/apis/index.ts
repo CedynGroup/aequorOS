@@ -1,5 +1,6 @@
 export * from "./AssessmentsApi";
 export * from "./BanksApi";
+export * from "./BehavioralModelsApi";
 export * from "./CalculationsApi";
 export * from "./CapitalApi";
 export * from "./CasesApi";
@@ -13,6 +14,7 @@ export * from "./IngestionApi";
 export * from "./JobsApi";
 export * from "./LiquidityApi";
 export * from "./LiveEngineApi";
+export * from "./MarketDataApi";
 export * from "./RegulatoryCapitalApi";
 export * from "./RegulatoryFtpApi";
 export * from "./RegulatoryFxApi";

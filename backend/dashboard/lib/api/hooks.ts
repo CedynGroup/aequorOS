@@ -16,9 +16,12 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type {
+  BehavioralApplyProduct,
   CashflowForecastMode,
   CashflowHorizon,
   ForecastRunCreate,
+  MarketDataConnectionCreate,
+  MarketDataConnectionUpdate,
   RegulatoryModule,
   RegulatoryScenarioCode,
   WhatIfShockCode,
@@ -27,11 +30,13 @@ import {
   ApiError,
   apiCall,
   banksApi,
+  behavioralModelsApi,
   cashflowForecastApi,
   forecastingApi,
   isApiError,
   jobsApi,
   liveEngineApi,
+  marketDataApi,
   regulatoryCapitalApi,
   regulatoryFtpApi,
   regulatoryFxApi,
@@ -642,6 +647,77 @@ export function useCashflowHistory(bankId: string | undefined, days: number) {
 }
 
 // ---------------------------------------------------------------------------
+// Behavioral ML models — per-tenant NMD-duration / prepayment / deposit-stability
+// ---------------------------------------------------------------------------
+
+export type BehavioralModelSlug =
+  | 'nmd-duration'
+  | 'prepayment'
+  | 'deposit-stability';
+
+/** Read a model's per-product estimates (trains on the bank's history on first call). */
+export function useBehavioralModel(
+  bankId: string | undefined,
+  model: BehavioralModelSlug
+) {
+  return useQuery({
+    queryKey: ['behavioral-model', bankId, model],
+    queryFn: () =>
+      apiCall(() =>
+        behavioralModelsApi.getBehavioralModel({ ...t, bankId: bankId!, model })
+      ),
+    enabled: Boolean(bankId),
+    retry: false,
+    // First call trains the model — keep the result warm.
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Retrain a model on the latest ingested history. */
+export function useTrainBehavioralModel(
+  bankId: string | undefined,
+  model: BehavioralModelSlug
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiCall(() =>
+        behavioralModelsApi.trainBehavioralModel({ ...t, bankId: bankId!, model })
+      ),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['behavioral-model', bankId, model], result);
+    },
+  });
+}
+
+/** Apply reviewed estimates as accepted behavioral assumptions the engines consume. */
+export function useApplyBehavioralModel(
+  bankId: string | undefined,
+  model: BehavioralModelSlug
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (products: BehavioralApplyProduct[]) =>
+      apiCall(() =>
+        behavioralModelsApi.applyBehavioralModel({
+          ...t,
+          bankId: bankId!,
+          model,
+          behavioralApplyRequest: { products },
+        })
+      ),
+    onSuccess: () => {
+      // Downstream ALM facts change once assumptions are applied.
+      ['behavioral-model', 'liquidity', 'ftp', 'irr', 'forecasting'].forEach(
+        (prefix) => {
+          void queryClient.invalidateQueries({ queryKey: [prefix] });
+        }
+      );
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Live engine — cross-module live view, per-module freshness, breach alerts,
 // and the two background pipeline actions ("Recompute now" → /refresh,
 // "Mint official run" → /official-runs).
@@ -805,6 +881,207 @@ export function useMintOfficialRun(bankId: string | undefined) {
       livePipelineInvalidatePrefixes.forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Market data sources — vendor connection lifecycle (create / validate / test /
+// rotate / disable / enable / revoke), the scope catalog with quota impact,
+// per-vendor monthly quota, and the manual template upload.
+//
+// Query keys: ['md-connections', bankId], ['md-scopes', bankId],
+// ['md-quota', bankId]. Every connection mutation invalidates the connections
+// list; pull-affecting ones also invalidate the quota ledger.
+// ---------------------------------------------------------------------------
+
+const marketDataInvalidatePrefixes = ['md-connections', 'md-quota'];
+
+export function useMarketDataConnections(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['md-connections', bankId],
+    queryFn: () =>
+      apiCall(() =>
+        marketDataApi.listMarketDataConnections({ ...t, bankId: bankId! })
+      ),
+    enabled: Boolean(bankId),
+  });
+}
+
+/** Every taxonomy scope with category, default frequency, vendor support, and
+ * per-pull quota impact — drives the scope checkboxes in the add-source flow. */
+export function useMarketDataScopes(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['md-scopes', bankId],
+    queryFn: () =>
+      apiCall(() => marketDataApi.listMarketDataScopes({ ...t, bankId: bankId! })),
+    enabled: Boolean(bankId),
+    // The scope catalog is static per deployment — no need to refetch.
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useMarketDataQuota(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['md-quota', bankId],
+    queryFn: () =>
+      apiCall(() => marketDataApi.getMarketDataQuota({ ...t, bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useCreateMarketDataConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: MarketDataConnectionCreate) =>
+      apiCall(() =>
+        marketDataApi.createMarketDataConnection({
+          ...t,
+          bankId: bankId!,
+          marketDataConnectionCreate: payload,
+        })
+      ),
+    onSuccess: () => {
+      marketDataInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+export function useValidateMarketDataConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      apiCall(() =>
+        marketDataApi.validateMarketDataConnection({
+          ...t,
+          bankId: bankId!,
+          connectionId,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['md-connections'] });
+    },
+  });
+}
+
+/** Representative test pull (§9.2 step 5): returns human-readable sample
+ * values on success, a bank-facing error otherwise. Never mutates state. */
+export function useTestMarketDataConnection(bankId: string | undefined) {
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      apiCall(() =>
+        marketDataApi.testMarketDataConnection({
+          ...t,
+          bankId: bankId!,
+          connectionId,
+        })
+      ),
+  });
+}
+
+/** Scope/schedule/name edits, and credential rotation when `credentials` is
+ * present (validated vendor-side first; 422 with a bank-facing message on
+ * failure, nothing changed). */
+export function useUpdateMarketDataConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      connectionId,
+      payload,
+    }: {
+      connectionId: string;
+      payload: MarketDataConnectionUpdate;
+    }) =>
+      apiCall(() =>
+        marketDataApi.updateMarketDataConnection({
+          ...t,
+          bankId: bankId!,
+          connectionId,
+          marketDataConnectionUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['md-connections'] });
+    },
+  });
+}
+
+export function useDisableMarketDataConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      apiCall(() =>
+        marketDataApi.disableMarketDataConnection({
+          ...t,
+          bankId: bankId!,
+          connectionId,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['md-connections'] });
+    },
+  });
+}
+
+export function useEnableMarketDataConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      apiCall(() =>
+        marketDataApi.enableMarketDataConnection({
+          ...t,
+          bankId: bankId!,
+          connectionId,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['md-connections'] });
+    },
+  });
+}
+
+/** Revoke (§10.5): wipes the stored credential, keeps the row for audit. */
+export function useRevokeMarketDataConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      apiCall(() =>
+        marketDataApi.revokeMarketDataConnection({
+          ...t,
+          bankId: bankId!,
+          connectionId,
+        })
+      ),
+    onSuccess: () => {
+      marketDataInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/** Run an uploaded template file as a manual market data pull (§8.3). */
+export function useUploadMarketData(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, asOfDate }: { file: File; asOfDate: string }) =>
+      apiCall(() =>
+        marketDataApi.uploadMarketData({
+          ...t,
+          bankId: bankId!,
+          file,
+          asOfDate: new Date(`${asOfDate}T00:00:00Z`),
+        })
+      ),
+    onSuccess: () => {
+      marketDataInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+      // Manual pulls land canonical market data the same way ingestion does.
+      void queryClient.invalidateQueries({ queryKey: ['de-batches', bankId] });
+      void queryClient.invalidateQueries({ queryKey: ['de-summary', bankId] });
     },
   });
 }

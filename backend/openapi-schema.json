@@ -1046,6 +1046,259 @@
         "title": "BankSeedSummaryRead",
         "type": "object"
       },
+      "BehavioralAccuracyRead": {
+        "additionalProperties": false,
+        "properties": {
+          "cvMae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cvmae"
+          },
+          "cvRmse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cvrmse"
+          },
+          "method": {
+            "$ref": "#/components/schemas/BehavioralMethod"
+          },
+          "monthCoverage": {
+            "title": "Monthcoverage",
+            "type": "integer"
+          },
+          "sampleCount": {
+            "title": "Samplecount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cvRmse",
+          "cvMae",
+          "sampleCount",
+          "monthCoverage",
+          "method"
+        ],
+        "title": "BehavioralAccuracyRead",
+        "type": "object"
+      },
+      "BehavioralApplyProduct": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "productCode": {
+            "title": "Productcode",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "productCode",
+          "value"
+        ],
+        "title": "BehavioralApplyProduct",
+        "type": "object"
+      },
+      "BehavioralApplyRead": {
+        "additionalProperties": false,
+        "properties": {
+          "appliedRows": {
+            "title": "Appliedrows",
+            "type": "integer"
+          },
+          "asOfDate": {
+            "format": "date",
+            "title": "Asofdate",
+            "type": "string"
+          },
+          "ingestionBatchId": {
+            "title": "Ingestionbatchid",
+            "type": "string"
+          },
+          "totalRows": {
+            "title": "Totalrows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ingestionBatchId",
+          "asOfDate",
+          "appliedRows",
+          "totalRows"
+        ],
+        "title": "BehavioralApplyRead",
+        "type": "object"
+      },
+      "BehavioralApplyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/BehavioralApplyProduct"
+            },
+            "title": "Products",
+            "type": "array"
+          }
+        },
+        "required": [
+          "products"
+        ],
+        "title": "BehavioralApplyRequest",
+        "type": "object"
+      },
+      "BehavioralMethod": {
+        "enum": [
+          "ml",
+          "baseline"
+        ],
+        "type": "string"
+      },
+      "BehavioralModelRead": {
+        "additionalProperties": false,
+        "properties": {
+          "accuracy": {
+            "$ref": "#/components/schemas/BehavioralAccuracyRead"
+          },
+          "asOfDate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asofdate"
+          },
+          "method": {
+            "$ref": "#/components/schemas/BehavioralMethod"
+          },
+          "modelId": {
+            "title": "Modelid",
+            "type": "string"
+          },
+          "modelVersion": {
+            "title": "Modelversion",
+            "type": "string"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/BehavioralProductEstimate"
+            },
+            "title": "Products",
+            "type": "array"
+          }
+        },
+        "required": [
+          "modelId",
+          "modelVersion",
+          "method",
+          "asOfDate",
+          "accuracy",
+          "products"
+        ],
+        "title": "BehavioralModelRead",
+        "type": "object"
+      },
+      "BehavioralProductEstimate": {
+        "additionalProperties": false,
+        "properties": {
+          "assumptionType": {
+            "title": "Assumptiontype",
+            "type": "string"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "corePct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corepct"
+          },
+          "incentiveCurve": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/IncentivePoint"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Incentivecurve"
+          },
+          "method": {
+            "$ref": "#/components/schemas/BehavioralMethod"
+          },
+          "productCode": {
+            "title": "Productcode",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "productCode",
+          "assumptionType",
+          "value",
+          "unit",
+          "confidence",
+          "method"
+        ],
+        "title": "BehavioralProductEstimate",
+        "type": "object"
+      },
       "Body_uploadIngestionSource": {
         "properties": {
           "file": {
@@ -1058,6 +1311,26 @@
           "file"
         ],
         "title": "Body_uploadIngestionSource",
+        "type": "object"
+      },
+      "Body_uploadMarketData": {
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "as_of_date"
+        ],
+        "title": "Body_uploadMarketData",
         "type": "object"
       },
       "Bsd2HeaderRead": {
@@ -2217,6 +2490,9 @@
               "SFTP_DROP",
               "API_GENERIC",
               "API_PUSH",
+              "BLOOMBERG",
+              "REFINITIV",
+              "MANUAL_UPLOAD",
               "MANUAL"
             ],
             "title": "Source System",
@@ -10256,6 +10532,25 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "IncentivePoint": {
+        "additionalProperties": false,
+        "properties": {
+          "cpr": {
+            "title": "Cpr",
+            "type": "number"
+          },
+          "incentiveBps": {
+            "title": "Incentivebps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "incentiveBps",
+          "cpr"
+        ],
+        "title": "IncentivePoint",
+        "type": "object"
+      },
       "IngestionBatchCreate": {
         "properties": {
           "adapter_options": {
@@ -10300,6 +10595,9 @@
               "SFTP_DROP",
               "API_GENERIC",
               "API_PUSH",
+              "BLOOMBERG",
+              "REFINITIV",
+              "MANUAL_UPLOAD",
               "MANUAL"
             ],
             "title": "Source System",
@@ -10484,6 +10782,9 @@
               "SFTP_DROP",
               "API_GENERIC",
               "API_PUSH",
+              "BLOOMBERG",
+              "REFINITIV",
+              "MANUAL_UPLOAD",
               "MANUAL"
             ],
             "title": "Source System",
@@ -10624,6 +10925,9 @@
               "SFTP_DROP",
               "API_GENERIC",
               "API_PUSH",
+              "BLOOMBERG",
+              "REFINITIV",
+              "MANUAL_UPLOAD",
               "MANUAL"
             ],
             "title": "Source System",
@@ -12283,6 +12587,9 @@
               "SFTP_DROP",
               "API_GENERIC",
               "API_PUSH",
+              "BLOOMBERG",
+              "REFINITIV",
+              "MANUAL_UPLOAD",
               "MANUAL"
             ],
             "title": "Source System",
@@ -12356,6 +12663,9 @@
               "SFTP_DROP",
               "API_GENERIC",
               "API_PUSH",
+              "BLOOMBERG",
+              "REFINITIV",
+              "MANUAL_UPLOAD",
               "MANUAL"
             ],
             "title": "Source System",
@@ -12387,6 +12697,402 @@
         ],
         "title": "MappingConfigRead",
         "type": "object"
+      },
+      "MarketDataConnectionCreate": {
+        "additionalProperties": false,
+        "description": "Onboard one vendor connection (\u00a79.2 steps 1-7).\n\n``credentials`` is required for vendor sources and forbidden for\n``manual_upload`` (which authenticates nothing). ``schedule`` maps scope\ncategory (or scope) names to ``PullFrequency`` names; omitted categories\nfall back to their \u00a79.2 step-6 defaults.",
+        "properties": {
+          "credential_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Credential Expires At"
+          },
+          "credentials": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Credentials"
+          },
+          "display_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Schedule Input"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "vendor": {
+            "$ref": "#/components/schemas/MarketDataVendor"
+          }
+        },
+        "required": [
+          "vendor",
+          "display_name"
+        ],
+        "title": "MarketDataConnectionCreate",
+        "type": "object"
+      },
+      "MarketDataConnectionListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/MarketDataConnectionRead"
+            },
+            "title": "Connections",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "connections",
+          "total"
+        ],
+        "title": "MarketDataConnectionListRead",
+        "type": "object"
+      },
+      "MarketDataConnectionRead": {
+        "additionalProperties": false,
+        "description": "One connection's bank-facing view. Never carries credential values \u2014\nonly status, fingerprint, and expiry (\u00a710.1/\u00a712.3).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "credential_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Credential Expires At"
+          },
+          "credential_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Credential Fingerprint"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_pull_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Last Pull At"
+          },
+          "last_pull_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Last Pull Status"
+          },
+          "last_validated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Last Validated At"
+          },
+          "schedule": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Connection Schedule",
+            "type": "object"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "validation_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Validation Error"
+          },
+          "vendor": {
+            "$ref": "#/components/schemas/MarketDataVendor"
+          }
+        },
+        "required": [
+          "id",
+          "vendor",
+          "display_name",
+          "status",
+          "scopes",
+          "schedule",
+          "credential_fingerprint",
+          "credential_expires_at",
+          "last_validated_at",
+          "last_pull_at",
+          "last_pull_status",
+          "created_at"
+        ],
+        "title": "MarketDataConnectionRead",
+        "type": "object"
+      },
+      "MarketDataConnectionUpdate": {
+        "additionalProperties": false,
+        "description": "Post-onboarding management (\u00a79.3) and credential rotation (\u00a710.4).\n\nWhen ``credentials`` is present the new set is validated against the\nvendor FIRST; only on success are the stored ciphertext, fingerprint, and\nexpiry swapped in one transaction. On failure nothing changes and the\nbank-facing error is returned as a 422.",
+        "properties": {
+          "credential_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Credential Expires At"
+          },
+          "credentials": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Credentials"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Schedule Input"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Scopes Update"
+          }
+        },
+        "title": "MarketDataConnectionUpdate",
+        "type": "object"
+      },
+      "MarketDataQuotaListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "vendors": {
+            "items": {
+              "$ref": "#/components/schemas/QuotaSummaryRead"
+            },
+            "title": "Vendors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "vendors"
+        ],
+        "title": "MarketDataQuotaListRead",
+        "type": "object"
+      },
+      "MarketDataScopeListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeInfoRead"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scopes"
+        ],
+        "title": "MarketDataScopeListRead",
+        "type": "object"
+      },
+      "MarketDataUploadRead": {
+        "additionalProperties": false,
+        "description": "Summary of one manual market data upload.\n\nWraps the ingestion batch the pull produced: its terminal status, the\nscopes persisted, canonical record count, and the operator-facing\nwarnings (row-level problems included) and errors.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "bank_id": {
+            "format": "uuid",
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "batch_id": {
+            "format": "uuid",
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "canonical_records_produced": {
+            "title": "Canonical Records Produced",
+            "type": "integer"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "quota_consumed": {
+            "title": "Quota Consumed",
+            "type": "integer"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "batch_id",
+          "bank_id",
+          "status",
+          "as_of_date",
+          "scopes",
+          "canonical_records_produced",
+          "quota_consumed",
+          "warnings",
+          "errors"
+        ],
+        "title": "MarketDataUploadRead",
+        "type": "object"
+      },
+      "MarketDataVendor": {
+        "enum": [
+          "bloomberg",
+          "refinitiv",
+          "manual_upload"
+        ],
+        "type": "string"
       },
       "OfficialRunRequest": {
         "additionalProperties": false,
@@ -13192,6 +13898,48 @@
           }
         },
         "title": "PushRecordsPage",
+        "type": "object"
+      },
+      "QuotaSummaryRead": {
+        "additionalProperties": false,
+        "description": "Current-month quota ledger for one vendor (\u00a711.1).",
+        "properties": {
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "monthly_cap": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Cap"
+          },
+          "pull_count": {
+            "title": "Pull Count",
+            "type": "integer"
+          },
+          "units_consumed": {
+            "title": "Units Consumed",
+            "type": "integer"
+          },
+          "vendor": {
+            "title": "Vendor",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vendor",
+          "month",
+          "units_consumed",
+          "monthly_cap",
+          "pull_count"
+        ],
+        "title": "QuotaSummaryRead",
         "type": "object"
       },
       "ReadinessResponse": {
@@ -14996,6 +15744,44 @@
         "title": "ScenarioWorkspaceRead",
         "type": "object"
       },
+      "ScopeInfoRead": {
+        "additionalProperties": false,
+        "description": "One taxonomy scope with its category, default pull frequency, the\nvendors whose catalogs serve it, and the per-pull quota impact (\u00a79.2\nstep 4). ``quota_units`` is the largest per-pull estimate across the\nsupporting vendors (manual upload always contributes zero).",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "default_frequency": {
+            "title": "Default Frequency",
+            "type": "string"
+          },
+          "quota_units": {
+            "title": "Quota Units",
+            "type": "integer"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "supported_by": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Supported By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scope",
+          "category",
+          "default_frequency",
+          "quota_units",
+          "supported_by"
+        ],
+        "title": "ScopeInfoRead",
+        "type": "object"
+      },
       "ScoreRead": {
         "properties": {
           "assessment_id": {
@@ -15083,6 +15869,41 @@
           "created_at"
         ],
         "title": "ScoreRead",
+        "type": "object"
+      },
+      "TestPullRead": {
+        "additionalProperties": false,
+        "description": "Result of the \u00a79.2 step-5 representative test pull: human-readable\nsample values on success, a bank-facing error otherwise.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Pull Error"
+          },
+          "sample_values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Test Pull Sample Values",
+            "type": "object"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "sample_values",
+          "error"
+        ],
+        "title": "TestPullRead",
         "type": "object"
       },
       "TranslationFailureListRead": {
@@ -17041,6 +17862,392 @@
         "summary": "Get Bank Alerts",
         "tags": [
           "live-engine"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/behavioral/{model}": {
+      "get": {
+        "operationId": "getBehavioralModel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id"
+            }
+          },
+          {
+            "in": "path",
+            "name": "model",
+            "required": true,
+            "schema": {
+              "enum": [
+                "nmd-duration",
+                "prepayment",
+                "deposit-stability"
+              ],
+              "title": "Model",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BehavioralModelRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Behavioral Model",
+        "tags": [
+          "behavioral-models"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/behavioral/{model}/apply": {
+      "post": {
+        "operationId": "applyBehavioralModel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id"
+            }
+          },
+          {
+            "in": "path",
+            "name": "model",
+            "required": true,
+            "schema": {
+              "enum": [
+                "nmd-duration",
+                "prepayment",
+                "deposit-stability"
+              ],
+              "title": "Model",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BehavioralApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BehavioralApplyRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Apply Behavioral Model",
+        "tags": [
+          "behavioral-models"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/behavioral/{model}/train": {
+      "post": {
+        "operationId": "trainBehavioralModel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id"
+            }
+          },
+          {
+            "in": "path",
+            "name": "model",
+            "required": true,
+            "schema": {
+              "enum": [
+                "nmd-duration",
+                "prepayment",
+                "deposit-stability"
+              ],
+              "title": "Model",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BehavioralModelRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Train Behavioral Model",
+        "tags": [
+          "behavioral-models"
         ]
       }
     },
@@ -19646,6 +20853,9 @@
                     "SFTP_DROP",
                     "API_GENERIC",
                     "API_PUSH",
+                    "BLOOMBERG",
+                    "REFINITIV",
+                    "MANUAL_UPLOAD",
                     "MANUAL"
                   ],
                   "type": "string"
@@ -21240,6 +22450,1335 @@
         "summary": "Create Mapping Config",
         "tags": [
           "ingestion"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/connections": {
+      "get": {
+        "operationId": "listMarketDataConnections",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataConnectionListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "List Market Data Connections",
+        "tags": [
+          "market-data"
+        ]
+      },
+      "post": {
+        "operationId": "createMarketDataConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketDataConnectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Create Market Data Connection",
+        "tags": [
+          "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}": {
+      "delete": {
+        "operationId": "revokeMarketDataConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Revoke Market Data Connection",
+        "tags": [
+          "market-data"
+        ]
+      },
+      "patch": {
+        "operationId": "updateMarketDataConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketDataConnectionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Update Market Data Connection",
+        "tags": [
+          "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/disable": {
+      "post": {
+        "operationId": "disableMarketDataConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Disable Market Data Connection",
+        "tags": [
+          "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/enable": {
+      "post": {
+        "operationId": "enableMarketDataConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Enable Market Data Connection",
+        "tags": [
+          "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/test": {
+      "post": {
+        "operationId": "testMarketDataConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestPullRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Test Market Data Connection",
+        "tags": [
+          "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/validate": {
+      "post": {
+        "operationId": "validateMarketDataConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Validate Market Data Connection",
+        "tags": [
+          "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/quota": {
+      "get": {
+        "operationId": "getMarketDataQuota",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataQuotaListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Market Data Quota",
+        "tags": [
+          "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/scopes": {
+      "get": {
+        "operationId": "listMarketDataScopes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataScopeListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "List Market Data Scopes",
+        "tags": [
+          "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/uploads": {
+      "post": {
+        "description": "Run an uploaded template file as a manual market data pull (\u00a78.3).",
+        "operationId": "uploadMarketData",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_uploadMarketData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataUploadRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Upload Market Data",
+        "tags": [
+          "market-data"
         ]
       }
     },
@@ -31970,6 +34509,123 @@
         "summary": "Walk Lineage",
         "tags": [
           "ingestion"
+        ]
+      }
+    },
+    "/api/v1/market-data/templates/{kind}": {
+      "get": {
+        "description": "Download the .xlsx upload template for one scope category (\u00a78.2).",
+        "operationId": "getMarketDataTemplate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "yield_curve",
+                "fx_rates",
+                "credit_ratings",
+                "macro_forecasts"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Market Data Template",
+        "tags": [
+          "market-data"
         ]
       }
     },

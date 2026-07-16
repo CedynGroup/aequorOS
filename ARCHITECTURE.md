@@ -163,6 +163,49 @@ snapshot ships), WebSocket/SSE push (polling today), per-bank cron UI, email/web
 
 ---
 
+## 3c. Market Data Adapter framework (docs/market_data_adapter.md)
+
+Layer-1 source adapters specialized for vendor market data, under
+`backend/app/adapters/market_data/`. Calculation modules never learn the vendor: they consume
+by `DataScope` + as-of + institution through `app/services/market_data.py`, and vendor concepts
+(Bloomberg mnemonics, Refinitiv RICs, raw vendor errors) never cross the adapter boundary.
+
+- **Canonical entities** (`app/models/canonical.py`, full mandatory-metadata mixin + RLS +
+  current-generation supersession): `canonical_yield_curves` (+`_points`), `canonical_fx_rates`,
+  `canonical_market_indices`, `canonical_counterparty_ratings`. Rates are decimal fractions
+  (0.158, never 15.8).
+- **`MarketDataAdapter(SourceAdapter)`** (`base.py`) with three shipped implementations, each
+  passing one shared contract suite (`tests/adapters/market_data/contract.py`, §4.3 categories +
+  a vendor-internal leak canary): `manual_upload` (production path — xlsx templates + parser +
+  upload/template endpoints; the staged `temp://` handle is the "credential"; zero vendor quota),
+  `refinitiv` (OAuth2 simulated, `ric_catalog.yaml`), `bloomberg` (enterprise-cert simulated,
+  `field_catalog.yaml`). Catalogs carry ONLY spec-documented vendor identifiers; everything else
+  is `supported: false` — never invent mnemonics/RICs. Live vendor transports are a Phase 2
+  drop-in behind the `TokenProvider`/transport protocols; fixtures drive all testing.
+- **One persistence spine** (`pull_runner.execute_pull`): batch + lineage
+  (EXTRACT→TRANSLATE→VALIDATION) + raw-tier preservation
+  (`market_data/{vendor}/{as_of}/{batch}/{scope}.json`, kept even for rejected pulls) +
+  business-rule validation + canonical persistence with supersession (idempotent re-pulls) +
+  quota accounting + canonical-tier cache + a debounced `pipeline_refresh` enqueue — so any
+  market-data arrival auto-recomputes dependent modules and flips official-run freshness to
+  stale.
+- **Multi-source**: each source's series supersedes within itself; cross-source disagreement
+  stays visible as parallel current rows, and reads arbitrate most-recent-refreshed-wins
+  (spec §15; consensus is Phase 3). Every read view carries `SourceAttribution`
+  (source_system, batch, ingested_at, stale, age) and fact derivation records the winning
+  source in `attributes["derived_from"]`; stale usage is attributed, never silent.
+- **Credentials**: `EncryptedDbVault` (AES-256-GCM, key from `CREDENTIAL_VAULT_MASTER_KEY`,
+  per-pull retrieve-and-discard, write-only at the API — responses carry only fingerprint,
+  expiry, status). Lifecycle states per §10.2 with expiry-driven
+  ACTIVE→EXPIRING_SOON→EXPIRED transitions on the scheduler tick. HashiCorp Vault is a
+  drop-in behind the `CredentialVault` protocol later.
+- **Scheduling**: `market_data_pull` jobs on the existing queue/worker; the hourly tick
+  enqueues due pulls per connection schedule, gated on `MARKET_DATA_PULL_ENABLED` (default
+  off). Quota is tracked per (bank, vendor, month) and estimated pre-pull; enforcement beyond
+  warnings is Phase 2 (§16.5).
+
+---
+
 ## 4. Findings infrastructure
 
 Generic, reusable workflow — verified in `app/models/risk.py` and `app/services/findings.py`:
