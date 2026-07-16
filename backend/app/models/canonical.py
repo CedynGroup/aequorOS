@@ -42,12 +42,17 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin, utc_now
 from app.domain.ingestion.constants import (
     COUNTERPARTY_TYPES,
+    FX_RATE_TYPES,
     GL_ACCOUNT_CLASSES,
+    MARKET_INDEX_SCENARIOS,
     POSITION_TYPES,
     RATE_TYPES,
+    RATING_AGENCIES,
+    RATING_WATCH_STATUSES,
     REFERENCE_DATASET_KINDS,
     SOURCE_SYSTEMS,
     VALIDATION_STATUSES,
+    YIELD_CURVE_TYPES,
 )
 
 
@@ -315,6 +320,191 @@ class CanonicalReferenceRow(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     # Where in the source the row came from, e.g. "05_Market_Data.xlsx#Yield_Curves!R3".
     source_reference: Mapped[str] = mapped_column(String(255), nullable=False)
     lineage_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+
+
+class CanonicalYieldCurve(CanonicalMetadataMixin, Base):
+    """A full yield curve as of a business date (market_data_adapter.md §13.1).
+
+    The curve header carries identity (currency + curve name + type); tenor
+    points live on ``canonical_yield_curve_points``. Re-pulling the same curve
+    for the same ``as_of_date`` supersedes the prior generation.
+    """
+
+    __tablename__ = "canonical_yield_curves"
+    __table_args__ = (
+        CheckConstraint(
+            f"curve_type IN ({_values(YIELD_CURVE_TYPES)})",
+            name="ck_canonical_yield_curves_curve_type",
+        ),
+        _current_generation_unique(
+            "canonical_yield_curves",
+            "organization_id",
+            "bank_id",
+            "as_of_date",
+            "currency",
+            "curve_name",
+        ),
+        *canonical_constraints("canonical_yield_curves"),
+    )
+
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    curve_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    curve_type: Mapped[str] = mapped_column(String(24), default="sovereign", nullable=False)
+
+
+class CanonicalYieldCurvePoint(CanonicalMetadataMixin, Base):
+    """One tenor + rate point on a canonical yield curve.
+
+    Rates are decimal fractions per data_engine.md §4.6 (``0.245``, never
+    ``24.5``); the CHECK bound of [-1, 1] admits negative-rate regimes while
+    rejecting percentage-style values at the door.
+    """
+
+    __tablename__ = "canonical_yield_curve_points"
+    __table_args__ = (
+        CheckConstraint(
+            "tenor_months > 0",
+            name="ck_canonical_yield_curve_points_tenor_months",
+        ),
+        CheckConstraint(
+            "rate >= -1 AND rate <= 1",
+            name="ck_canonical_yield_curve_points_rate",
+        ),
+        ForeignKeyConstraint(
+            ["yield_curve_id", "organization_id"],
+            ["canonical_yield_curves.id", "canonical_yield_curves.organization_id"],
+        ),
+        _current_generation_unique(
+            "canonical_yield_curve_points",
+            "organization_id",
+            "yield_curve_id",
+            "tenor_months",
+        ),
+        Index(
+            "ix_canonical_yield_curve_points_org_curve",
+            "organization_id",
+            "yield_curve_id",
+        ),
+        *canonical_constraints("canonical_yield_curve_points"),
+    )
+
+    yield_curve_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    tenor_months: Mapped[int] = mapped_column(Integer, nullable=False)
+    rate: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
+
+
+class CanonicalFxRate(CanonicalMetadataMixin, Base):
+    """A spot or forward FX rate (market_data_adapter.md §13.1).
+
+    Spot rates carry no tenor; forwards must carry one — the CHECK couples
+    ``rate_type`` and ``tenor_months`` so neither shape leaks in malformed.
+    The current-generation key coalesces the nullable tenor to 0 so two
+    "current" spots for the same pair cannot coexist.
+    """
+
+    __tablename__ = "canonical_fx_rates"
+    __table_args__ = (
+        CheckConstraint(
+            f"rate_type IN ({_values(FX_RATE_TYPES)})",
+            name="ck_canonical_fx_rates_rate_type",
+        ),
+        CheckConstraint(
+            "(rate_type = 'spot') = (tenor_months IS NULL)",
+            name="ck_canonical_fx_rates_spot_tenor",
+        ),
+        CheckConstraint("rate > 0", name="ck_canonical_fx_rates_rate_positive"),
+        Index(
+            "uq_canonical_fx_rates_current",
+            "organization_id",
+            "bank_id",
+            "as_of_date",
+            "base_currency",
+            "quote_currency",
+            "rate_type",
+            sql_text("coalesce(tenor_months, 0)"),
+            unique=True,
+            postgresql_where=sql_text("superseded_by IS NULL"),
+            sqlite_where=sql_text("superseded_by IS NULL"),
+        ),
+        *canonical_constraints("canonical_fx_rates"),
+    )
+
+    base_currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    quote_currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    rate_type: Mapped[str] = mapped_column(String(12), nullable=False)
+    tenor_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rate: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
+
+
+class CanonicalMarketIndex(CanonicalMetadataMixin, Base):
+    """A reference index or macro-forecast value (market_data_adapter.md §13.1).
+
+    Covers point-in-time indices (policy rate, GHS-IBOR) and scenario-shaped
+    macro forecasts (GHANA_GDP_FORECAST at a horizon under base/adverse/
+    severely_adverse). ``horizon_months`` is NULL for spot observations.
+    """
+
+    __tablename__ = "canonical_market_indices"
+    __table_args__ = (
+        CheckConstraint(
+            f"scenario IN ({_values(MARKET_INDEX_SCENARIOS)})",
+            name="ck_canonical_market_indices_scenario",
+        ),
+        Index(
+            "uq_canonical_market_indices_current",
+            "organization_id",
+            "bank_id",
+            "as_of_date",
+            "index_code",
+            "scenario",
+            sql_text("coalesce(horizon_months, 0)"),
+            unique=True,
+            postgresql_where=sql_text("superseded_by IS NULL"),
+            sqlite_where=sql_text("superseded_by IS NULL"),
+        ),
+        *canonical_constraints("canonical_market_indices"),
+    )
+
+    index_code: Mapped[str] = mapped_column(String(60), nullable=False)
+    value: Mapped[Decimal] = mapped_column(Numeric(28, 6), nullable=False)
+    scenario: Mapped[str] = mapped_column(String(24), default="base", nullable=False)
+    horizon_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class CanonicalCounterpartyRating(CanonicalMetadataMixin, Base):
+    """A rating-time-series observation for an issuer (market_data_adapter.md §13.1).
+
+    Specializes the counterparty entity for rating history: one current row
+    per issuer and agency per business date. ``rating_date`` is the agency's
+    action date, which can trail the pull ``as_of_date``.
+    """
+
+    __tablename__ = "canonical_counterparty_ratings"
+    __table_args__ = (
+        CheckConstraint(
+            f"agency IN ({_values(RATING_AGENCIES)})",
+            name="ck_canonical_counterparty_ratings_agency",
+        ),
+        CheckConstraint(
+            f"watch_status IN ({_values(RATING_WATCH_STATUSES)}) OR watch_status IS NULL",
+            name="ck_canonical_counterparty_ratings_watch_status",
+        ),
+        _current_generation_unique(
+            "canonical_counterparty_ratings",
+            "organization_id",
+            "bank_id",
+            "as_of_date",
+            "issuer",
+            "agency",
+        ),
+        *canonical_constraints("canonical_counterparty_ratings"),
+    )
+
+    issuer: Mapped[str] = mapped_column(String(120), nullable=False)
+    agency: Mapped[str] = mapped_column(String(24), nullable=False)
+    rating: Mapped[str] = mapped_column(String(16), nullable=False)
+    watch_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    rating_date: Mapped[date] = mapped_column(Date, nullable=False)
 
 
 class CanonicalPositionSnapshot(CanonicalMetadataMixin, Base):

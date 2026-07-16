@@ -7,12 +7,14 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
   "alembic",
   "boto3",
+  "cryptography",
   "fastapi[standard]",
   "loguru",
   "numpy",
   "openpyxl",
   "psycopg[binary]",
   "pydantic-settings",
+  "pyyaml",
   "sqlalchemy",
   "torch",
 ]

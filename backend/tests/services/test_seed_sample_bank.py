@@ -529,16 +529,18 @@ def test_seed_is_idempotent(db_session: Session) -> None:
 
 
 def test_get_active_params_excludes_superseded_rows(db_session: Session) -> None:
+    # The seeded baseline is effective from 2000-01-01 (open-ended) so
+    # historical backfills compute; the superseded generation sits before it.
     seed_sample_bank(db_session)
     superseded = ParamRiskWeight(
         organization_id=DEMO_ORG_ID,
         jurisdiction_code="GH",
         risk_weight_code="RW0",
         weight_pct=Decimal("10"),
-        effective_from=date(2024, 1, 1),
-        effective_to=date(2025, 1, 1),
-        approved_by="Bank of Ghana CRD 2024",
-        approval_timestamp=datetime(2024, 1, 1, tzinfo=UTC),
+        effective_from=date(1999, 1, 1),
+        effective_to=date(2000, 1, 1),
+        approved_by="Bank of Ghana CRD 1999",
+        approval_timestamp=datetime(1999, 1, 1, tzinfo=UTC),
     )
     db_session.add(superseded)
     db_session.commit()
@@ -548,11 +550,11 @@ def test_get_active_params_excludes_superseded_rows(db_session: Session) -> None
     assert superseded.id not in {row.id for row in active}
     assert all(row.approved_by == "Bank of Ghana CRD baseline" for row in active)
 
-    boundary = get_active_params(db_session, DEMO_ORG_ID, "GH", ParamRiskWeight, date(2025, 1, 1))
+    boundary = get_active_params(db_session, DEMO_ORG_ID, "GH", ParamRiskWeight, date(2000, 1, 1))
     assert {row.id for row in boundary} == {row.id for row in active}
 
     historical = get_active_params(
-        db_session, DEMO_ORG_ID, "GH", ParamRiskWeight, date(2024, 6, 30)
+        db_session, DEMO_ORG_ID, "GH", ParamRiskWeight, date(1999, 6, 30)
     )
     assert [row.id for row in historical] == [superseded.id]
 

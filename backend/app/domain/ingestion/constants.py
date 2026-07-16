@@ -19,6 +19,9 @@ SOURCE_SYSTEMS: tuple[str, ...] = (
     "SFTP_DROP",
     "API_GENERIC",
     "API_PUSH",
+    "BLOOMBERG",
+    "REFINITIV",
+    "MANUAL_UPLOAD",
     "MANUAL",
 )
 SourceSystem = Literal[
@@ -30,6 +33,9 @@ SourceSystem = Literal[
     "SFTP_DROP",
     "API_GENERIC",
     "API_PUSH",
+    "BLOOMBERG",
+    "REFINITIV",
+    "MANUAL_UPLOAD",
     "MANUAL",
 ]
 
@@ -187,3 +193,45 @@ LineageOperationType = Literal[
 
 MAPPING_CONFIG_STATUSES: tuple[str, ...] = ("draft", "active", "retired")
 MappingConfigStatus = Literal["draft", "active", "retired"]
+
+# Market data (market_data_adapter.md sections 10 and 13): canonical entity
+# value sets plus the vendor/credential-lifecycle vocabulary the operational
+# connection tables enforce.
+MARKET_DATA_VENDORS: tuple[str, ...] = ("bloomberg", "refinitiv", "manual_upload")
+MarketDataVendor = Literal["bloomberg", "refinitiv", "manual_upload"]
+
+MARKET_DATA_CONNECTION_STATUSES: tuple[str, ...] = (
+    "TESTING",
+    "ACTIVE",
+    "EXPIRING_SOON",
+    "EXPIRED",
+    "REVOKED",
+    "INVALID",
+    "REPLACED_PENDING_DELETION",
+    "DISABLED",
+)
+MarketDataConnectionStatus = Literal[
+    "TESTING",
+    "ACTIVE",
+    "EXPIRING_SOON",
+    "EXPIRED",
+    "REVOKED",
+    "INVALID",
+    "REPLACED_PENDING_DELETION",
+    "DISABLED",
+]
+
+YIELD_CURVE_TYPES: tuple[str, ...] = ("sovereign", "interbank", "swap", "credit_spread")
+YieldCurveType = Literal["sovereign", "interbank", "swap", "credit_spread"]
+
+FX_RATE_TYPES: tuple[str, ...] = ("spot", "forward")
+FxRateType = Literal["spot", "forward"]
+
+MARKET_INDEX_SCENARIOS: tuple[str, ...] = ("base", "adverse", "severely_adverse")
+MarketIndexScenario = Literal["base", "adverse", "severely_adverse"]
+
+RATING_AGENCIES: tuple[str, ...] = ("moodys", "sp", "fitch", "internal")
+RatingAgency = Literal["moodys", "sp", "fitch", "internal"]
+
+RATING_WATCH_STATUSES: tuple[str, ...] = ("positive", "negative", "stable", "developing")
+RatingWatchStatus = Literal["positive", "negative", "stable", "developing"]

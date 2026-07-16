@@ -6,11 +6,16 @@ from app.models.calculation import (
 )
 from app.models.canonical import (
     CanonicalCounterparty,
+    CanonicalCounterpartyRating,
+    CanonicalFxRate,
     CanonicalGlAccount,
+    CanonicalMarketIndex,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
     CanonicalReferenceRow,
+    CanonicalYieldCurve,
+    CanonicalYieldCurvePoint,
 )
 from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
 from app.models.financial import (
@@ -33,6 +38,7 @@ from app.models.ingestion import (
     TranslationFailure,
 )
 from app.models.live import LiveFinding, LiveMetric
+from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
 from app.models.organization import Organization
 from app.models.regulatory import (
     Bank,
@@ -73,11 +79,16 @@ __all__ = [
     "BankFinancialFact",
     "BankReportingPeriod",
     "CanonicalCounterparty",
+    "CanonicalCounterpartyRating",
+    "CanonicalFxRate",
     "CanonicalGlAccount",
+    "CanonicalMarketIndex",
     "CanonicalPosition",
     "CanonicalPositionSnapshot",
     "CanonicalProduct",
     "CanonicalReferenceRow",
+    "CanonicalYieldCurve",
+    "CanonicalYieldCurvePoint",
     "CapitalIndicator",
     "CapitalProjection",
     "CapitalProjectionFinding",
@@ -104,6 +115,8 @@ __all__ = [
     "LiveFinding",
     "LiveMetric",
     "MappingConfigRecord",
+    "MarketDataConnection",
+    "MarketDataQuotaUsage",
     "Organization",
     "TranslationFailure",
     "ParamCapitalThreshold",

@@ -52,7 +52,9 @@ APPROVED_BY = "Bank of Ghana CRD baseline"
 FX_APPROVED_BY = "BoG FX baseline"
 FTP_APPROVED_BY = "BoG FTP baseline"
 APPROVAL_TIMESTAMP = datetime(2025, 1, 1, tzinfo=UTC)
-EFFECTIVE_FROM = date(2025, 1, 1)
+# Far enough back that historical backfills (e.g. the 10-year simulator) find
+# active parameters for every period they compute.
+EFFECTIVE_FROM = date(2000, 1, 1)
 
 PERIOD_COUNT = 12
 FIRST_PERIOD_YEAR = 2025

@@ -14,6 +14,7 @@ SETTINGS_CONFIG = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8",
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CASHFLOW_ARTIFACTS_DIR = BACKEND_ROOT / "artifacts" / "cashflow"
+DEFAULT_BEHAVIORAL_ARTIFACTS_DIR = BACKEND_ROOT / "artifacts" / "behavioral"
 
 
 class AppSettings(BaseSettings):
@@ -89,6 +90,40 @@ class CashflowSettings(BaseSettings):
     )
 
 
+class BehavioralSettings(BaseSettings):
+    """Per-tenant behavioral ML models (``app/ml/behavioral``) settings.
+
+    ``BEHAVIORAL_FAST_TEST=1`` lowers the min-data gate for tests;
+    ``BEHAVIORAL_ARTIFACTS_DIR`` relocates the per-(org,bank) model artifacts.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    fast_test: bool = Field(default=False, alias="BEHAVIORAL_FAST_TEST")
+    artifacts_dir: Path = Field(
+        default=DEFAULT_BEHAVIORAL_ARTIFACTS_DIR, alias="BEHAVIORAL_ARTIFACTS_DIR"
+    )
+
+
+class MarketDataSettings(BaseSettings):
+    """Market data adapter framework settings (docs/market_data_adapter.md).
+
+    ``CREDENTIAL_VAULT_MASTER_KEY`` is the application-layer AES-256-GCM
+    master key material for the MVP encrypted-DB credential vault
+    (app/adapters/market_data/credential_manager.py); unset means the vault
+    refuses to operate. ``MARKET_DATA_PULL_ENABLED`` gates live vendor pulls
+    (off by default — MVP ships fixture-tested adapters without production
+    pulls, per market_data_adapter.md §14.1).
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    credential_vault_master_key: str | None = Field(
+        default=None, alias="CREDENTIAL_VAULT_MASTER_KEY"
+    )
+    market_data_pull_enabled: bool = Field(default=False, alias="MARKET_DATA_PULL_ENABLED")
+
+
 class WorkerSettings(BaseSettings):
     """Live-engine background worker and scheduler settings.
 
@@ -122,6 +157,8 @@ class Settings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     cashflow: CashflowSettings = Field(default_factory=CashflowSettings)
+    behavioral: BehavioralSettings = Field(default_factory=BehavioralSettings)
+    market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
 
     @property
