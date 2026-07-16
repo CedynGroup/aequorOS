@@ -51,9 +51,9 @@ forecast, liquidity, capital, finding, and decision mutations are disabled.
 Archived cases are likewise read-only. Document download links remain
 available because they do not mutate case data.
 
-The deterministic portfolio includes a non-compliant liquidity covenant for
-Mariner Trust so the case-health summary and adverse-state journeys do
-not rely on optimistic defaults.
+The deterministic portfolio includes a non-compliant current-ratio covenant for
+Adom Textiles so the case-health summary and adverse-state journeys do not rely
+on optimistic defaults.
 
 When the API is unavailable, enable frontend demo mode from the console to use
 populated, validated financial data, reviewed baseline and downside scenarios,
