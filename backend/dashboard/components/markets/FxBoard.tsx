@@ -19,7 +19,7 @@ function sparkColor(first: number, last: number): string {
 
 export default function FxBoard({ fxRates }: { fxRates: FxRateViewRead[] }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {fxRates.map((fx) => {
         const series = fx.history.map((point) => num(point.rate));
         const previous = series.length > 1 ? series[series.length - 2] : null;

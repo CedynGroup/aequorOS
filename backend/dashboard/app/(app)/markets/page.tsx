@@ -109,22 +109,26 @@ export default function MarketsPage() {
                   </Section>
                 )}
 
-                {data.fxRates.length > 0 && (
-                  <Section
-                    title="FX board"
-                    subtitle="Spot per pair (quote units per 1 base) with the trailing persisted history"
-                  >
-                    <FxBoard fxRates={data.fxRates} />
-                  </Section>
-                )}
+                {(data.fxRates.length > 0 || data.ratings.length > 0) && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                    {data.fxRates.length > 0 && (
+                      <Section
+                        title="FX board"
+                        subtitle="Spot per pair (quote units per 1 base) with the trailing persisted history"
+                      >
+                        <FxBoard fxRates={data.fxRates} />
+                      </Section>
+                    )}
 
-                {data.ratings.length > 0 && (
-                  <Section
-                    title="Ratings"
-                    subtitle="Latest issuer rating observations with agency and watch status"
-                  >
-                    <RatingsStrip ratings={data.ratings} />
-                  </Section>
+                    {data.ratings.length > 0 && (
+                      <Section
+                        title="Ratings"
+                        subtitle="Latest issuer rating observations with agency and watch status"
+                      >
+                        <RatingsStrip ratings={data.ratings} />
+                      </Section>
+                    )}
+                  </div>
                 )}
 
                 {data.indices.length > 0 && (

@@ -21,7 +21,7 @@ function watchTone(watchStatus: string | null | undefined): StatusTone {
 /** Ratings strip: one card per issuer with agency, rating, and watch chip. */
 export default function RatingsStrip({ ratings }: { ratings: RatingViewRead[] }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {ratings.map((rating) => (
         <div
           key={`${rating.issuer}-${rating.agency}`}
