@@ -13,13 +13,14 @@ import QueryBoundary from '@/components/ui/QueryBoundary';
 import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import RatioHistoryChart from '@/components/charts/RatioHistoryChart';
 import DonutChart from '@/components/charts/DonutChart';
+import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useCapitalDashboard,
   useCreateRegulatoryRun,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
+import { fmtDateUTC, isoDate, num, statusTone } from '@/lib/api/values';
 import { fmtCurrency } from '@/lib/format';
 
 const RWA_COLORS = {
@@ -107,6 +108,12 @@ export default function BaselDashboard() {
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <div className="flex items-center gap-2">
+            <FreshnessBadge
+              bankId={bankId}
+              periodId={periodId}
+              module="capital"
+              asOfDate={period ? isoDate(period.periodEnd) : undefined}
+            />
             {latestRun.data && <RunBadge run={latestRun.data} />}
             <Link
               href="/basel/submissions"

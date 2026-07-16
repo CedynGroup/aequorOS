@@ -383,23 +383,36 @@ def compute_stressed_var(
     2022-2023 cedi-crisis sub-window) and multiplies the resulting historical VaR
     by ``(1 + correlation_uplift)`` to reflect the tail co-movement the stress
     scenario prescribes.
+
+    When a bank's uploaded history is too short to reach the configured window,
+    the window is clamped to the tail of the available history (keeping its width
+    where it fits) so a short upload still yields a best-effort stress instead of
+    failing the whole FX analysis. With the full history present the window is
+    used exactly as configured, so this degradation is inert on complete data.
     """
     if not positions:
         raise FxComputationError("At least one FX position is required to compute stressed VaR.")
     start, end = crisis_window
     if start < 0 or start > end:
         raise FxComputationError(f"Invalid cedi-crisis window [{start}, {end}].")
+    shortest: int | None = None
     for position in positions:
         series = return_histories.get(position.currency)
         if series is None:
             raise MissingParameterError(f"fx_return_history:{position.currency}")
-        if end >= len(series):
-            raise FxComputationError(
-                f"Cedi-crisis window [{start}, {end}] exceeds the {len(series)}-observation "
-                f"return history for {position.currency}."
-            )
+        shortest = len(series) if shortest is None else min(shortest, len(series))
+    if not shortest:
+        raise FxComputationError("At least one return observation is required for stressed VaR.")
 
-    crisis_pnl = _portfolio_pnl(positions, return_histories, range(start, end + 1))
+    if end < shortest:
+        eff_start, eff_end = start, end
+    else:
+        width = end - start + 1
+        eff_len = min(width, shortest)
+        eff_end = shortest - 1
+        eff_start = eff_end - eff_len + 1
+
+    crisis_pnl = _portfolio_pnl(positions, return_histories, range(eff_start, eff_end + 1))
     base = _historical_var(crisis_pnl, confidence_pct)
     return money(base * (_ONE + correlation_uplift))
 

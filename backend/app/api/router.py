@@ -11,6 +11,7 @@ from app.features.list_taxonomy import router as taxonomy_router
 from app.features.manage_banks import router as banks_router
 from app.features.manage_capital import router as capital_router
 from app.features.manage_documents import router as documents_router
+from app.features.manage_live_engine import router as live_engine_router
 from app.features.manage_scenarios import router as scenarios_router
 from app.features.push_data import router as push_router
 from app.features.read_cashflow_forecast import router as cashflow_forecast_router
@@ -42,6 +43,7 @@ v1_router.include_router(regulatory_irr_router)
 v1_router.include_router(regulatory_fx_router)
 v1_router.include_router(regulatory_ftp_router)
 v1_router.include_router(forecasting_router)
+v1_router.include_router(live_engine_router)
 v1_router.include_router(cashflow_forecast_router)
 v1_router.include_router(bulk_update_cases_router)
 v1_router.include_router(cases_router)

@@ -89,6 +89,30 @@ class CashflowSettings(BaseSettings):
     )
 
 
+class WorkerSettings(BaseSettings):
+    """Live-engine background worker and scheduler settings.
+
+    ``RUN_INPROCESS_WORKER`` starts a daemon poll loop inside the API process
+    (off by default so tests/dev drive handlers synchronously). The scheduler is
+    inert unless ``OFFICIAL_RUN_ENABLED`` so no environment auto-mints the heavy
+    22-scenario official runs.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    run_inprocess_worker: bool = Field(default=False, alias="RUN_INPROCESS_WORKER")
+    pipeline_debounce_seconds: int = Field(default=15, alias="PIPELINE_DEBOUNCE_SECONDS")
+    worker_poll_seconds: float = Field(default=2.0, alias="WORKER_POLL_SECONDS")
+    official_run_hour: int = Field(default=2, alias="OFFICIAL_RUN_HOUR")
+    official_run_enabled: bool = Field(default=False, alias="OFFICIAL_RUN_ENABLED")
+    # The worker claims and processes jobs across every tenant, so its DB
+    # connection must see all rows. On an RLS-forced Postgres this requires a
+    # BYPASSRLS role (the app role is deliberately tenant-scoped). When unset,
+    # the worker falls back to DATABASE_URL (correct for SQLite tests and any
+    # deployment whose main role already bypasses RLS).
+    worker_database_url: str | None = Field(default=None, alias="WORKER_DATABASE_URL")
+
+
 class Settings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
@@ -98,6 +122,7 @@ class Settings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     cashflow: CashflowSettings = Field(default_factory=CashflowSettings)
+    worker: WorkerSettings = Field(default_factory=WorkerSettings)
 
     @property
     def storage_configured(self) -> bool:

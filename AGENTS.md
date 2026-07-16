@@ -46,3 +46,15 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Liquidity summaries and acknowledge/dismiss review actions live under
   `/api/v1/cases/{case_id}/liquidity`; reuse the shared case-finding review card in SPA analysis
   verticals.
+- The live engine is two-tier (see ARCHITECTURE.md §3b): ingestion enqueues a debounced
+  `pipeline_refresh` job that re-derives facts and upserts `live_metrics`/`live_findings` with
+  zero `RegulatoryRun` writes, while scheduled/on-demand `official_run` jobs mint the immutable
+  filing runs. Endpoints: `GET /banks/{id}/live-summary|freshness|alerts`,
+  `POST /banks/{id}/refresh|official-runs`.
+- The background worker claims jobs **across tenants**, so on RLS-forced Postgres it must run with
+  a BYPASSRLS role — set `WORKER_DATABASE_URL` (the tenant-scoped app role sees zero queued rows).
+  Falls back to `DATABASE_URL` for SQLite tests.
+- Regulatory `input_hash` must stay **value-based**: the snapshot `facts` list excludes `fact.id`
+  and is sorted by canonical JSON (`INPUT_SCHEMA_VERSION = "bank-facts-v2"`). The live engine
+  re-derives facts (new UUIDs) on every refresh, so an id- or order-dependent hash would break
+  official-run reproducibility. Never reintroduce `fact.id` into a `_build_snapshot`.

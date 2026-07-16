@@ -53,6 +53,13 @@ import {
   FtpMetricsReadToJSON,
   FtpMetricsReadToJSONTyped,
 } from "./FtpMetricsRead";
+import type { CapitalDashboardReadLive } from "./CapitalDashboardReadLive";
+import {
+  CapitalDashboardReadLiveFromJSON,
+  CapitalDashboardReadLiveFromJSONTyped,
+  CapitalDashboardReadLiveToJSON,
+  CapitalDashboardReadLiveToJSONTyped,
+} from "./CapitalDashboardReadLive";
 import type { BankRead } from "./BankRead";
 import {
   BankReadFromJSON,
@@ -112,6 +119,12 @@ export interface FtpDashboardRead {
    * @memberof FtpDashboardRead
    */
   latestRunId: FtpDashboardLatestRunId;
+  /**
+   *
+   * @type {CapitalDashboardReadLive}
+   * @memberof FtpDashboardRead
+   */
+  live?: CapitalDashboardReadLive;
   /**
    *
    * @type {FtpMetricsRead}
@@ -196,6 +209,10 @@ export function FtpDashboardReadFromJSONTyped(
     branches: (json["branches"] as Array<any>).map(FtpBranchReadFromJSON),
     curve: (json["curve"] as Array<any>).map(FtpCurvePointReadFromJSON),
     latestRunId: FtpDashboardLatestRunIdFromJSON(json["latest_run_id"]),
+    live:
+      json["live"] == null
+        ? undefined
+        : CapitalDashboardReadLiveFromJSON(json["live"]),
     metrics: FtpMetricsReadFromJSON(json["metrics"]),
     nmdSegments: (json["nmd_segments"] as Array<any>).map(
       FtpNmdSegmentReadFromJSON,
@@ -227,6 +244,7 @@ export function FtpDashboardReadToJSONTyped(
     branches: (value["branches"] as Array<any>).map(FtpBranchReadToJSON),
     curve: (value["curve"] as Array<any>).map(FtpCurvePointReadToJSON),
     latest_run_id: FtpDashboardLatestRunIdToJSON(value["latestRunId"]),
+    live: CapitalDashboardReadLiveToJSON(value["live"]),
     metrics: FtpMetricsReadToJSON(value["metrics"]),
     nmd_segments: (value["nmdSegments"] as Array<any>).map(
       FtpNmdSegmentReadToJSON,

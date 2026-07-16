@@ -17,13 +17,14 @@ import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import RatioHistoryChart from '@/components/charts/RatioHistoryChart';
 import YieldCurveChart, { type CurvePoint } from '@/components/charts/YieldCurveChart';
+import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useFtpDashboard,
   useRegulatoryRun,
   useRunAllFtpScenarios,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, labelize, num, statusTone } from '@/lib/api/values';
+import { fmtDateUTC, isoDate, labelize, num, statusTone } from '@/lib/api/values';
 import { fmtCurrency, fmtCurrencySigned, fmtPct } from '@/lib/format';
 
 export default function FtpDashboard() {
@@ -84,6 +85,12 @@ export default function FtpDashboard() {
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <div className="flex items-center gap-2">
+            <FreshnessBadge
+              bankId={bankId}
+              periodId={periodId}
+              module="ftp"
+              asOfDate={period ? isoDate(period.periodEnd) : undefined}
+            />
             {latestRun.data && <RunBadge run={latestRun.data} />}
             {runAllButton}
           </div>

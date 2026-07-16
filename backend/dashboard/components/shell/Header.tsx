@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Search, ChevronDown, Calendar, Check, Menu } from 'lucide-react';
+import { Search, ChevronDown, Calendar, Check, Menu } from 'lucide-react';
 import { useBankContext } from './BankContext';
 import { fmtDateUTC } from '@/lib/api/values';
 import CommandPalette from './CommandPalette';
-import NotificationDrawer from './NotificationDrawer';
+import AlertsBell from '@/components/live/AlertsBell';
 
 // Static UI persona for the demo shell — chrome, not financial data.
 const treasurer = {
@@ -20,7 +20,6 @@ export default function Header({
   onMobileMenu?: () => void;
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const { bank } = useBankContext();
 
   useEffect(() => {
@@ -84,15 +83,7 @@ export default function Header({
 
         <PeriodSelector />
 
-        <button
-          type="button"
-          aria-label="Notifications"
-          onClick={() => setNotifOpen(true)}
-          className="relative w-9 h-9 inline-flex items-center justify-center rounded text-slate hover:bg-surface"
-        >
-          <Bell size={16} aria-hidden />
-          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-action ring-2 ring-white" />
-        </button>
+        <AlertsBell />
 
         <button
           type="button"
@@ -114,7 +105,6 @@ export default function Header({
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      <NotificationDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
     </header>
   );
 }

@@ -37,6 +37,7 @@ from app.core.config import get_settings
 from app.ml.baseline import StaticBaseline
 from app.ml.config import MODEL_VERSION, TrainingConfig
 from app.ml.features import CALENDAR_FEATURE_COUNT, calendar_features
+from app.ml.real_series import load_real_daily_series
 from app.ml.synthetic import DailyFlow, generate_daily_series
 
 INPUT_SIZE = 1 + CALENDAR_FEATURE_COUNT
@@ -173,7 +174,10 @@ def train_and_save(
     cfg = config or TrainingConfig.from_settings(settings)
     out_dir = Path(artifacts_dir) if artifacts_dir is not None else settings.artifacts_dir
 
-    series = generate_daily_series(days=cfg.total_days)
+    series = (
+        load_real_daily_series() if cfg.use_real_series
+        else generate_daily_series(days=cfg.total_days)
+    )
     dates = [flow.date for flow in series]
     nets = np.array([flow.net for flow in series], dtype=np.float64)
 

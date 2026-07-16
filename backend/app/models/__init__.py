@@ -32,6 +32,7 @@ from app.models.ingestion import (
     MappingConfigRecord,
     TranslationFailure,
 )
+from app.models.live import LiveFinding, LiveMetric
 from app.models.organization import Organization
 from app.models.regulatory import (
     Bank,
@@ -100,6 +101,8 @@ __all__ = [
     "IngestionBatch",
     "Job",
     "LineageRecord",
+    "LiveFinding",
+    "LiveMetric",
     "MappingConfigRecord",
     "Organization",
     "TranslationFailure",

@@ -53,6 +53,13 @@ import {
   CapitalMetricsReadToJSON,
   CapitalMetricsReadToJSONTyped,
 } from "./CapitalMetricsRead";
+import type { CapitalDashboardReadLive } from "./CapitalDashboardReadLive";
+import {
+  CapitalDashboardReadLiveFromJSON,
+  CapitalDashboardReadLiveFromJSONTyped,
+  CapitalDashboardReadLiveToJSON,
+  CapitalDashboardReadLiveToJSONTyped,
+} from "./CapitalDashboardReadLive";
 import type { RwaCompositionRead } from "./RwaCompositionRead";
 import {
   RwaCompositionReadFromJSON,
@@ -105,6 +112,12 @@ export interface CapitalDashboardRead {
    * @memberof CapitalDashboardRead
    */
   latestRunId: CapitalDashboardLatestRunId;
+  /**
+   *
+   * @type {CapitalDashboardReadLive}
+   * @memberof CapitalDashboardRead
+   */
+  live?: CapitalDashboardReadLive;
   /**
    *
    * @type {CapitalMetricsRead}
@@ -185,6 +198,10 @@ export function CapitalDashboardReadFromJSONTyped(
       json["capital_structure"],
     ),
     latestRunId: CapitalDashboardLatestRunIdFromJSON(json["latest_run_id"]),
+    live:
+      json["live"] == null
+        ? undefined
+        : CapitalDashboardReadLiveFromJSON(json["live"]),
     metrics: CapitalMetricsReadFromJSON(json["metrics"]),
     period: BankReportingPeriodReadFromJSON(json["period"]),
     rwaComposition: RwaCompositionReadFromJSON(json["rwa_composition"]),
@@ -215,6 +232,7 @@ export function CapitalDashboardReadToJSONTyped(
       value["capitalStructure"],
     ),
     latest_run_id: CapitalDashboardLatestRunIdToJSON(value["latestRunId"]),
+    live: CapitalDashboardReadLiveToJSON(value["live"]),
     metrics: CapitalMetricsReadToJSON(value["metrics"]),
     period: BankReportingPeriodReadToJSON(value["period"]),
     rwa_composition: RwaCompositionReadToJSON(value["rwaComposition"]),

@@ -118,6 +118,66 @@
         ],
         "type": "string"
       },
+      "AlertItemRead": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "title": "Finding Id",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
+          },
+          "module": {
+            "$ref": "#/components/schemas/LiveModule"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertSeverity"
+          }
+        },
+        "required": [
+          "finding_id",
+          "module",
+          "severity",
+          "rule_id",
+          "message",
+          "metric",
+          "created_at"
+        ],
+        "title": "AlertItemRead",
+        "type": "object"
+      },
+      "AlertSeverity": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "type": "string"
+      },
       "AssessmentCreate": {
         "properties": {
           "assessment_type": {
@@ -495,6 +555,50 @@
           }
         ]
       },
+      "BankAlertsRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "format": "uuid",
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "by_module": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Module",
+            "type": "object"
+          },
+          "by_severity": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Severity",
+            "type": "object"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertItemRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bank_id",
+          "total",
+          "by_severity",
+          "by_module",
+          "items"
+        ],
+        "title": "BankAlertsRead",
+        "type": "object"
+      },
       "BankFactGroup": {
         "enum": [
           "balance_sheet",
@@ -710,6 +814,59 @@
           "deposit_behavior"
         ],
         "title": "BankFactsRead",
+        "type": "object"
+      },
+      "BankFreshnessRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "format": "uuid",
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "is_stale": {
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/FreshnessModuleRead"
+            },
+            "title": "Modules",
+            "type": "array"
+          },
+          "period_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Label"
+          },
+          "reporting_period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Period Id"
+          }
+        },
+        "required": [
+          "bank_id",
+          "reporting_period_id",
+          "period_label",
+          "modules",
+          "is_stale"
+        ],
+        "title": "BankFreshnessRead",
         "type": "object"
       },
       "BankListRead": {
@@ -2342,6 +2499,16 @@
               }
             ],
             "title": "Capital Dashboard Latest Run Id"
+          },
+          "live": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveModuleView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "metrics": {
             "$ref": "#/components/schemas/CapitalMetricsRead"
@@ -8966,6 +9133,74 @@
         "title": "ForecastScenarioRead",
         "type": "object"
       },
+      "FreshnessModuleRead": {
+        "additionalProperties": false,
+        "properties": {
+          "computed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Metric Computed At"
+          },
+          "is_stale": {
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "live_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Hash"
+          },
+          "module": {
+            "$ref": "#/components/schemas/LiveModule"
+          },
+          "official_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Official Run At"
+          },
+          "official_run_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Official Run Hash"
+          }
+        },
+        "required": [
+          "module",
+          "live_hash",
+          "official_run_hash",
+          "is_stale",
+          "computed_at",
+          "official_run_at"
+        ],
+        "title": "FreshnessModuleRead",
+        "type": "object"
+      },
       "FtpBranchRead": {
         "additionalProperties": false,
         "properties": {
@@ -9097,6 +9332,16 @@
               }
             ],
             "title": "Ftp Dashboard Latest Run Id"
+          },
+          "live": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveModuleView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "metrics": {
             "$ref": "#/components/schemas/FtpMetricsRead"
@@ -9562,6 +9807,16 @@
               }
             ],
             "title": "Fx Dashboard Latest Run Id"
+          },
+          "live": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveModuleView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "metrics": {
             "$ref": "#/components/schemas/FxMetricsRead"
@@ -10496,6 +10751,16 @@
             ],
             "title": "Irr Dashboard Latest Run Id"
           },
+          "live": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveModuleView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "metrics": {
             "$ref": "#/components/schemas/IrrMetricsRead"
           },
@@ -10819,6 +11084,31 @@
           "message"
         ],
         "title": "IrrValidationRead",
+        "type": "object"
+      },
+      "JobEnqueuedRead": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "job_type": {
+            "title": "Job Type",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "job_type",
+          "status"
+        ],
+        "title": "JobEnqueuedRead",
         "type": "object"
       },
       "JobRead": {
@@ -11167,6 +11457,16 @@
               }
             ],
             "title": "Latest Run Id"
+          },
+          "live": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveModuleView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "metrics": {
             "$ref": "#/components/schemas/LiquidityMetricsRead"
@@ -11774,6 +12074,133 @@
         "title": "LiquidityValidationRead",
         "type": "object"
       },
+      "LiveModule": {
+        "enum": [
+          "liquidity",
+          "capital",
+          "irr",
+          "fx",
+          "ftp",
+          "forecast"
+        ],
+        "type": "string"
+      },
+      "LiveModuleView": {
+        "additionalProperties": false,
+        "properties": {
+          "computed_at": {
+            "format": "date-time",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "computed_from_input_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed From Input Hash"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "title": "Metrics",
+            "type": "object"
+          },
+          "module": {
+            "$ref": "#/components/schemas/LiveModule"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LiveStatus"
+          }
+        },
+        "required": [
+          "module",
+          "status",
+          "metrics",
+          "computed_at",
+          "computed_from_input_hash"
+        ],
+        "title": "LiveModuleView",
+        "type": "object"
+      },
+      "LiveStatus": {
+        "enum": [
+          "green",
+          "amber",
+          "red",
+          "na"
+        ],
+        "type": "string"
+      },
+      "LiveSummaryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "format": "uuid",
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "computed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Summary Computed At"
+          },
+          "is_stale": {
+            "title": "Is Stale",
+            "type": "boolean"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/LiveModuleView"
+            },
+            "title": "Modules",
+            "type": "array"
+          },
+          "period_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Label"
+          },
+          "reporting_period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporting Period Id"
+          }
+        },
+        "required": [
+          "bank_id",
+          "reporting_period_id",
+          "period_label",
+          "modules",
+          "is_stale",
+          "computed_at"
+        ],
+        "title": "LiveSummaryRead",
+        "type": "object"
+      },
       "MappingConfig": {
         "description": "Per-institution source-to-canonical translation rules.\n\nThis is the onboarding deliverable. It is stored versioned in\n``mapping_configs`` and passed to ``SourceAdapter.translate`` verbatim, so\nevery translation is reproducible from the config version recorded on the\nbatch.",
         "properties": {
@@ -11959,6 +12386,27 @@
           "created_at"
         ],
         "title": "MappingConfigRead",
+        "type": "object"
+      },
+      "OfficialRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of_date",
+          "reason"
+        ],
+        "title": "OfficialRunRequest",
         "type": "object"
       },
       "OptimizerCandidateRead": {
@@ -12826,6 +13274,27 @@
           "dataset_kind"
         ],
         "title": "ReferenceMapping",
+        "type": "object"
+      },
+      "RefreshRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of_date",
+          "reason"
+        ],
+        "title": "RefreshRequest",
         "type": "object"
       },
       "RegulatoryLineItemRead": {
@@ -16445,6 +16914,136 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/alerts": {
+      "get": {
+        "operationId": "getBankAlerts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankAlertsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Bank Alerts",
+        "tags": [
+          "live-engine"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/canonical-positions": {
       "get": {
         "operationId": "listCanonicalPositions",
@@ -18370,6 +18969,141 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/freshness": {
+      "get": {
+        "operationId": "getBankFreshness",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reporting_period_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reporting Period Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankFreshnessRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Bank Freshness",
+        "tags": [
+          "live-engine"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/ftp/dashboard": {
       "get": {
         "operationId": "getFtpDashboard",
@@ -20154,6 +20888,124 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/live-summary": {
+      "get": {
+        "operationId": "getLiveSummary",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveSummaryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Live Summary",
+        "tags": [
+          "live-engine"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/mapping-configs": {
       "get": {
         "operationId": "listMappingConfigs",
@@ -20388,6 +21240,127 @@
         "summary": "Create Mapping Config",
         "tags": [
           "ingestion"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/official-runs": {
+      "post": {
+        "operationId": "mintOfficialRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfficialRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobEnqueuedRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Mint Official Run",
+        "tags": [
+          "live-engine"
         ]
       }
     },
@@ -21020,6 +21993,127 @@
         "summary": "Stage Push Batch Records",
         "tags": [
           "ingestion"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/refresh": {
+      "post": {
+        "operationId": "refreshBankData",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": true,
+            "schema": {
+              "title": "X-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobEnqueuedRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Refresh Bank Data",
+        "tags": [
+          "live-engine"
         ]
       }
     },

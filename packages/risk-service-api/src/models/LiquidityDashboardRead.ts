@@ -46,6 +46,13 @@ import {
   LiquidityMetricsReadToJSON,
   LiquidityMetricsReadToJSONTyped,
 } from "./LiquidityMetricsRead";
+import type { CapitalDashboardReadLive } from "./CapitalDashboardReadLive";
+import {
+  CapitalDashboardReadLiveFromJSON,
+  CapitalDashboardReadLiveFromJSONTyped,
+  CapitalDashboardReadLiveToJSON,
+  CapitalDashboardReadLiveToJSONTyped,
+} from "./CapitalDashboardReadLive";
 import type { LiquidityTrendPointRead } from "./LiquidityTrendPointRead";
 import {
   LiquidityTrendPointReadFromJSON,
@@ -91,6 +98,12 @@ export interface LiquidityDashboardRead {
    * @memberof LiquidityDashboardRead
    */
   latestRunId: LatestRunId;
+  /**
+   *
+   * @type {CapitalDashboardReadLive}
+   * @memberof LiquidityDashboardRead
+   */
+  live?: CapitalDashboardReadLive;
   /**
    *
    * @type {LiquidityMetricsRead}
@@ -174,6 +187,10 @@ export function LiquidityDashboardReadFromJSONTyped(
       LiquidityDashboardLineReadFromJSON,
     ),
     latestRunId: LatestRunIdFromJSON(json["latest_run_id"]),
+    live:
+      json["live"] == null
+        ? undefined
+        : CapitalDashboardReadLiveFromJSON(json["live"]),
     metrics: LiquidityMetricsReadFromJSON(json["metrics"]),
     outflows: (json["outflows"] as Array<any>).map(
       LiquidityDashboardLineReadFromJSON,
@@ -210,6 +227,7 @@ export function LiquidityDashboardReadToJSONTyped(
       LiquidityDashboardLineReadToJSON,
     ),
     latest_run_id: LatestRunIdToJSON(value["latestRunId"]),
+    live: CapitalDashboardReadLiveToJSON(value["live"]),
     metrics: LiquidityMetricsReadToJSON(value["metrics"]),
     outflows: (value["outflows"] as Array<any>).map(
       LiquidityDashboardLineReadToJSON,

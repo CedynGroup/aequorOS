@@ -18,15 +18,12 @@ import {
   type ListIngestionBatchesSourceSystemEnum,
   type MappingConfig,
 } from '@aequoros/risk-service-api';
-import { apiCall, tenant } from './client';
+import { apiCall, apiOrigin, tenant } from './client';
 
 export type IngestionSourceSystem = ListIngestionBatchesSourceSystemEnum;
 
-const baseUrl =
-  process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? 'http://127.0.0.1:8003/api/v1';
-
 export const ingestionApi = new IngestionApi(
-  new Configuration({ basePath: baseUrl.replace(/\/api\/v1\/?$/, '') }),
+  new Configuration({ basePath: apiOrigin }),
 );
 
 const t = { xOrgId: tenant.orgId, xUserId: tenant.userId } as const;
@@ -215,6 +212,68 @@ const referenceMappings = {
   },
 } satisfies MappingConfig['referenceMappings'];
 
+// Canonical passthrough: identity mapping for files whose headers already use
+// the AequorOS canonical field names — the format of the downloadable canonical
+// templates. Source table names match those template filenames.
+const canonicalGlMapping = {
+  sourceTable: 'gl_accounts',
+  fields: {
+    source_reference: 'source_reference',
+    account_code: 'account_code',
+    name: 'name',
+    account_class: 'account_class',
+    parent_account_code: 'parent_account_code',
+    currency: 'currency',
+    balance: 'balance',
+  },
+};
+
+const canonicalCounterpartyMapping = {
+  sourceTable: 'counterparties',
+  fields: {
+    source_reference: 'source_reference',
+    name: 'name',
+    counterparty_type: 'counterparty_type',
+    country_code: 'country_code',
+    rating: 'rating',
+    rating_source: 'rating_source',
+    group_reference: 'group_reference',
+  },
+};
+
+const canonicalProductMapping = {
+  sourceTable: 'products',
+  fields: {
+    source_reference: 'source_reference',
+    product_code: 'product_code',
+    name: 'name',
+    regulatory_category: 'regulatory_category',
+    risk_weight_code: 'risk_weight_code',
+  },
+};
+
+const canonicalPositionMapping = {
+  sourceTable: 'positions',
+  fields: {
+    source_reference: 'source_reference',
+    position_type: 'position_type',
+    currency: 'currency',
+    balance: 'balance',
+    notional: 'notional',
+    counterparty_reference: 'counterparty_reference',
+    product_code: 'product_code',
+    gl_account_code: 'gl_account_code',
+    origination_date: 'origination_date',
+    contractual_maturity: 'contractual_maturity',
+    next_repricing_date: 'next_repricing_date',
+    interest_rate: 'interest_rate',
+    rate_type: 'rate_type',
+    rate_index: 'rate_index',
+    rate_spread: 'rate_spread',
+    ifrs9_stage: 'ifrs9_stage',
+  },
+};
+
 export type StarterTemplate = {
   key: string;
   name: string;
@@ -252,6 +311,24 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       enumMappings: {
         position_type: { LC: 'LC_GUARANTEE', GUARANTEE: 'LC_GUARANTEE' },
       },
+      productMappings: {},
+      options: {},
+    },
+  },
+  {
+    key: 'canonical-passthrough',
+    name: 'Canonical passthrough (API field names)',
+    description:
+      'Identity mapping for files whose headers already use AequorOS canonical field names — the format of the downloadable canonical templates. Upload gl_accounts / counterparties / products / positions with canonical headers and they ingest with no column translation. Provider-neutral: map your core system to our spec once.',
+    ingests: ['gl_accounts.csv', 'counterparties.csv', 'products.csv', 'positions.csv'],
+    config: {
+      fieldMappings: {
+        gl_account: canonicalGlMapping,
+        product: canonicalProductMapping,
+        counterparty: canonicalCounterpartyMapping,
+        position: canonicalPositionMapping,
+      },
+      enumMappings: {},
       productMappings: {},
       options: {},
     },

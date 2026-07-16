@@ -90,6 +90,14 @@ Invariants every new engine must copy (verified in `app/services/calculations.py
 - **Snapshot + hash.** The full canonical input snapshot is stored as JSON; its SHA-256
   (`_snapshot_hash`) is stored in `input_hash` and propagated to downstream artifacts (capital
   projections, finding details, evidence locators) for reproducibility.
+  - **The hash is value-based, never identity-based.** The snapshot's `facts` list carries only
+    economic content (`fact_group`, `category`, `amount`, engine attributes) and is **sorted by
+    its canonical JSON**, so the hash is invariant to both fact-row UUID churn and DB return
+    order. `fact.id` must **never** enter the snapshot: the live engine re-derives facts on every
+    refresh (`fact_derivation` deletes and re-inserts each row with a fresh UUID), so an
+    id-dependent hash would make a filed official run non-reproducible after the next data change.
+    The `bank-facts-v2` input schema (all six regulatory modules) encodes this rule; `-v1`
+    embedded `fact.id` and predates the live engine.
 - **Versions as module-level constants**, stored per row:
   `ENGINE_VERSION = "balance-sheet-v1.0.0"`, `INPUT_SCHEMA_VERSION = "calculation-input-v1"`,
   `OUTPUT_SCHEMA_VERSION = "balance-sheet-output-v1"` (calculations);
@@ -107,6 +115,51 @@ Invariants every new engine must copy (verified in `app/services/calculations.py
   (`_lock_active_case_and_scenario`), and Postgres advisory locks to serialize finding
   publication per `(org, case, scenario)` (`liquidity.lock_finding_publication` /
   `serialize_finding_publication`; both no-op on SQLite).
+
+---
+
+## 3b. Live engine (two-tier: always-fresh view + immutable official runs)
+
+Ingestion is event-driven, not button-driven. A file upload or API push commits canonical data,
+then **enqueues** a background job; the dashboards update on their own. Two computation tiers sit
+on one canonical store — the live tier for intraday awareness, the official tier for filing.
+
+- **Job queue** (`app/services/job_queue.py`, reuses the `jobs` table). `enqueue` coalesces on a
+  `coalesce_key` (e.g. `refresh:{bank}:{as_of}`) and debounces via `run_after` so a burst of
+  uploads collapses into one refresh. `claim_next` uses `SELECT ... FOR UPDATE SKIP LOCKED`;
+  `fail_with_retry` backs off through `run_after` up to `max_attempts`.
+- **Worker** (`app/worker.py`). A poll loop (process `python -m app.worker`, or in-process behind
+  `RUN_INPROCESS_WORKER`) claims → dispatches by `job_type` → completes/retries. It reads the
+  `jobs` table **across tenants**, so on an RLS-forced Postgres it must connect with a BYPASSRLS
+  role: set `WORKER_DATABASE_URL` (the app role is deliberately tenant-scoped and cannot see the
+  queue). Per-job work then runs on a session scoped to that job's `organization_id`. When
+  `WORKER_DATABASE_URL` is unset it falls back to `DATABASE_URL` (correct for SQLite tests).
+- **Live tier** — `pipeline.run_refresh` (`job_type=pipeline_refresh`): re-derives facts, then for
+  each cheap module computes a baseline metric + limit evaluation (`compute_live`, reusing the
+  dashboards' inline path), **upserts** one `live_metrics` row, and reconciles open `live_findings`
+  (continuing breaches keep identity; cleared breaches are superseded). It creates **zero**
+  `RegulatoryRun` rows. Forecast has no cheap path, so its live row mirrors the latest succeeded
+  official forecast run (populated on the next refresh after an official run).
+- **Official tier** — `pipeline.run_official` (`job_type=official_run`): reuses
+  `data_activation.run_official_modules` to mint the immutable 22-scenario + forecast run set for
+  filing. Facts are re-derived only when the period has none, so repeat official runs on unchanged
+  facts reproduce the same `input_hash` per run (see the value-based hash invariant in §3).
+- **Freshness** (`app/services/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
+  live `input_hash` to the latest official run's `input_hash`. Because the hash is value-based, a
+  bare re-derivation of unchanged data stays **fresh**; only an actual economic change reads as
+  stale ("data changed since last filing run — mint an official run").
+- **Alerts** (`app/services/alerts.py`, `GET /banks/{id}/alerts`): open `critical`/`high`
+  `live_findings` across modules, surfaced by the header bell (polled).
+- **Scheduler** (`app/services/scheduler.py`): the worker enqueues a `scheduled_tick`; the handler
+  enqueues an `official_run` per bank whose daily filing time (`OFFICIAL_RUN_HOUR`) is due. Inert
+  unless `OFFICIAL_RUN_ENABLED`, so no environment auto-mints heavy runs.
+- **Robustness note.** Live compute degrades rather than fails on thin data: FX
+  `compute_stressed_var` clamps the cedi-crisis window to the available return history when a bank
+  has fewer observations than the configured window, so a short upload still yields a best-effort
+  stress instead of killing the whole FX module. On full history the window is used unchanged.
+
+Deferred to a later phase (foundations are laid): true CDC/streaming ingestion (only `full`
+snapshot ships), WebSocket/SSE push (polling today), per-bank cron UI, email/webhook delivery.
 
 ---
 

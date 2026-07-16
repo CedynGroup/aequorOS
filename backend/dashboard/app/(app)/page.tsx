@@ -19,6 +19,7 @@ import KPICard from '@/components/ui/KPICard';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import QueryBoundary from '@/components/ui/QueryBoundary';
+import LiveStatusCard from '@/components/live/LiveStatusCard';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useBankPeriodFacts,
@@ -153,6 +154,9 @@ export default function OverviewPage() {
                 href="/basel"
               />
             </div>
+
+            {/* Live status — cross-module current metrics + breach count */}
+            <LiveStatusCard />
 
             {/* Two-column: open findings + submissions readiness */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -11,6 +11,8 @@ import {
   CashflowForecastApi,
   Configuration,
   ForecastingApi,
+  JobsApi,
+  LiveEngineApi,
   RegulatoryCapitalApi,
   RegulatoryFtpApi,
   RegulatoryFxApi,
@@ -29,16 +31,20 @@ const baseUrl =
 /** Fully-qualified /api/v1 base of the risk service (for display + health checks). */
 export const apiBaseUrl = baseUrl;
 
+/**
+ * Base with the trailing /api/v1 stripped. Generated OpenAPI paths already
+ * carry /api/v1, so the client is configured with this. The single source of
+ * truth for the API origin — import it instead of re-deriving from env.
+ */
+export const apiOrigin = baseUrl.replace(/\/api\/v1\/?$/, '');
+
 /** Demo tenant identity, injected as X-Org-Id / X-User-Id on every call. */
 export const tenant = {
   orgId: process.env.NEXT_PUBLIC_DEMO_ORG_ID ?? DEFAULT_ORG_ID,
   userId: process.env.NEXT_PUBLIC_DEMO_USER_ID ?? DEFAULT_USER_ID,
 } as const;
 
-// Generated paths already include /api/v1 — strip it from the base path.
-const configuration = new Configuration({
-  basePath: baseUrl.replace(/\/api\/v1\/?$/, ''),
-});
+const configuration = new Configuration({ basePath: apiOrigin });
 
 export const banksApi = new BanksApi(configuration);
 export const regulatoryLiquidityApi = new RegulatoryLiquidityApi(configuration);
@@ -48,6 +54,8 @@ export const regulatoryFxApi = new RegulatoryFxApi(configuration);
 export const regulatoryFtpApi = new RegulatoryFtpApi(configuration);
 export const forecastingApi = new ForecastingApi(configuration);
 export const cashflowForecastApi = new CashflowForecastApi(configuration);
+export const liveEngineApi = new LiveEngineApi(configuration);
+export const jobsApi = new JobsApi(configuration);
 
 /**
  * Normalized error surfaced to the UI. `status` is the HTTP status code,

@@ -23,13 +23,21 @@ import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
 import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import ForecastRunView from '@/components/forecasting/ForecastRunView';
+import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useCreateForecastRun,
   useForecastRun,
   useForecastRuns,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, fmtTimestamp, labelize, num, shortId } from '@/lib/api/values';
+import {
+  fmtDateUTC,
+  fmtTimestamp,
+  isoDate,
+  labelize,
+  num,
+  shortId,
+} from '@/lib/api/values';
 import { fmtPct } from '@/lib/format';
 
 const PRESET_SCENARIOS: { code: ForecastScenarioCode; label: string }[] = [
@@ -80,6 +88,12 @@ export default function ForecastDashboard() {
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <div className="flex items-center gap-2">
+            <FreshnessBadge
+              bankId={bankId}
+              periodId={periodId}
+              module="forecast"
+              asOfDate={period ? isoDate(period.periodEnd) : undefined}
+            />
             <select
               value={scenario}
               onChange={(e) =>

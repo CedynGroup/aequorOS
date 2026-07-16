@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.banks import BankRead, BankReportingPeriodRead
+from app.schemas.live import LiveModuleView
 from app.schemas.regulatory_liquidity import IrrScenarioCode, RegulatoryValidationSeverity
 
 type IrrStatus = Literal["green", "amber", "red"]
@@ -83,3 +84,4 @@ class IrrDashboardRead(ClosedModel):
     eve_scenarios: list[IrrEveScenarioRead]
     trend: list[IrrTrendPointRead]
     validations: list[IrrValidationRead]
+    live: LiveModuleView | None = None

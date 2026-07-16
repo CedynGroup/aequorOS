@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.banks import BankRead, BankReportingPeriodRead
+from app.schemas.live import LiveModuleView
 from app.schemas.regulatory_liquidity import (
     CapitalScenarioCode,
     RegulatoryMetricUnit,
@@ -125,6 +126,7 @@ class CapitalDashboardRead(ClosedModel):
     trend: list[CapitalTrendPointRead]
     buffers: CapitalBuffersRead
     validations: list[CapitalValidationRead]
+    live: LiveModuleView | None = None
 
 
 class Bsd2HeaderRead(ClosedModel):

@@ -71,6 +71,37 @@ export function fmtTimestamp(d: Date): string {
 }
 
 /**
+ * Compact relative time for live/freshness signals: "just now", "3m ago",
+ * "2h ago", "5d ago". Falls back to an absolute timestamp beyond a week so a
+ * stale figure never masquerades as recent. Accepts a Date or ISO string;
+ * returns "—" for missing input.
+ */
+export function fmtRelative(
+  value: Date | string | null | undefined
+): string {
+  if (value === null || value === undefined) return '—';
+  const then = typeof value === 'string' ? new Date(value) : value;
+  const ms = then.getTime();
+  if (!Number.isFinite(ms)) return '—';
+  const diff = Date.now() - ms;
+  if (diff < 0) return 'just now';
+  const sec = Math.floor(diff / 1000);
+  if (sec < 45) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  return fmtTimestamp(then);
+}
+
+/** ISO date-only (YYYY-MM-DD) in UTC — the form pipeline as-of dates take. */
+export function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
  * Format a date-only value (e.g. reporting period end) in UTC so that
  * "2026-03-31" renders as 31 Mar 2026 in every timezone.
  */

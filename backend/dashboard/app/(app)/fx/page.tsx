@@ -18,13 +18,14 @@ import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import RatioHistoryChart from '@/components/charts/RatioHistoryChart';
 import SignedBarChart, { type SignedPoint } from '@/components/charts/SignedBarChart';
+import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useFxDashboard,
   useRegulatoryRun,
   useRunAllFxScenarios,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
+import { fmtDateUTC, isoDate, num, statusTone } from '@/lib/api/values';
 import { fmtCurrency, fmtCurrencySigned, fmtPct } from '@/lib/format';
 
 const SCENARIO_LABELS: Record<string, string> = {
@@ -95,6 +96,12 @@ export default function FxDashboard() {
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <div className="flex items-center gap-2">
+            <FreshnessBadge
+              bankId={bankId}
+              periodId={periodId}
+              module="fx"
+              asOfDate={period ? isoDate(period.periodEnd) : undefined}
+            />
             {latestRun.data && <RunBadge run={latestRun.data} />}
             {runAllButton}
           </div>

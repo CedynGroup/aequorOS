@@ -5,8 +5,6 @@
  * remains the authoritative full contract.
  */
 
-export const PUSH_DOC_PATH = 'docs/API_INTEGRATION.md';
-
 export type PushFlowStep = {
   step: number;
   title: string;
@@ -180,3 +178,37 @@ export const VALUE_CONVENTIONS: { rule: string; detail: string }[] = [
   { rule: 'Unknown fields', detail: "Ignored unless captured via attributes or a mapping config's attribute_columns." },
   { rule: 'Bad records', detail: 'Do NOT fail the request: they land in the batch\'s translation failures (raw record preserved) and the rest proceeds — same semantics as file ingestion.' },
 ];
+
+/** Self-contained, runnable end-to-end example (bash + curl + jq). */
+export const EXAMPLE_SCRIPT = `#!/usr/bin/env bash
+# AequorOS push API — end-to-end example. Requires: bash, curl, jq.
+set -euo pipefail
+
+BASE_URL="http://127.0.0.1:8003/api/v1"          # your endpoint
+ORG_ID="11111111-1111-4111-8111-111111111111"    # X-Org-Id
+USER_ID="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"   # X-User-Id (service account)
+AS_OF="2026-04-30"
+
+hdr=(-H "Content-Type: application/json" -H "X-Org-Id: $ORG_ID" -H "X-User-Id: $USER_ID")
+
+# The bank you are pushing for (first bank in this org shown here):
+BANK_ID=$(curl -s "$BASE_URL/banks" "\${hdr[@]}" | jq -r '.banks[0].id')
+
+# 1. Open a push batch. The idempotency key makes retries safe.
+PUSH_ID=$(curl -s -X POST "$BASE_URL/banks/$BANK_ID/push-batches" "\${hdr[@]}" \\
+  -d "{\\"as_of_date\\":\\"$AS_OF\\",\\"idempotency_key\\":\\"example-$AS_OF\\",\\"reason\\":\\"Example push\\"}" \\
+  | jq -r '.push_batch_id')
+
+# 2. Stage a page of records (<= 5,000 per page; every key optional).
+curl -s -X POST "$BASE_URL/banks/$BANK_ID/push-batches/$PUSH_ID/records" "\${hdr[@]}" \\
+  -d '{
+    "entities": {
+      "gl_account": [{"source_reference":"1000","account_code":"1000","name":"Cash and balances","account_class":"ASSET"}],
+      "position":   [{"source_reference":"LN-0001","position_type":"LOAN","currency":"GHS","balance":1500000.50}]
+    }
+  }' > /dev/null
+
+# 3. Commit — runs the full ingestion pipeline, returns the batch + report.
+curl -s -X POST "$BASE_URL/banks/$BANK_ID/push-batches/$PUSH_ID/commit" "\${hdr[@]}" \\
+  | jq '{status: .batch.status, accepted: .batch.records_accepted, warnings: .batch.records_warning, errors: .batch.records_error}'
+`;

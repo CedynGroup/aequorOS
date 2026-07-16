@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.errors import OPENAPI_ERROR_RESPONSES, register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.request_id import RequestIdMiddleware
+from app.worker import start_inprocess_worker
 
 
 def generate_operation_id(route: APIRoute) -> str:
@@ -38,6 +39,9 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(api_router, prefix="/api")
+
+    # Optional in-process live-engine worker (off unless RUN_INPROCESS_WORKER).
+    start_inprocess_worker()
     return app
 
 

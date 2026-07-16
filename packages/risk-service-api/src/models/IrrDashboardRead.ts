@@ -53,6 +53,13 @@ import {
   IrrMetricsReadToJSON,
   IrrMetricsReadToJSONTyped,
 } from "./IrrMetricsRead";
+import type { CapitalDashboardReadLive } from "./CapitalDashboardReadLive";
+import {
+  CapitalDashboardReadLiveFromJSON,
+  CapitalDashboardReadLiveFromJSONTyped,
+  CapitalDashboardReadLiveToJSON,
+  CapitalDashboardReadLiveToJSONTyped,
+} from "./CapitalDashboardReadLive";
 import type { BankRead } from "./BankRead";
 import {
   BankReadFromJSON,
@@ -98,6 +105,12 @@ export interface IrrDashboardRead {
    * @memberof IrrDashboardRead
    */
   latestRunId: IrrDashboardLatestRunId;
+  /**
+   *
+   * @type {CapitalDashboardReadLive}
+   * @memberof IrrDashboardRead
+   */
+  live?: CapitalDashboardReadLive;
   /**
    *
    * @type {IrrMetricsRead}
@@ -170,6 +183,10 @@ export function IrrDashboardReadFromJSONTyped(
     ),
     gapTable: (json["gap_table"] as Array<any>).map(IrrGapBucketReadFromJSON),
     latestRunId: IrrDashboardLatestRunIdFromJSON(json["latest_run_id"]),
+    live:
+      json["live"] == null
+        ? undefined
+        : CapitalDashboardReadLiveFromJSON(json["live"]),
     metrics: IrrMetricsReadFromJSON(json["metrics"]),
     period: BankReportingPeriodReadFromJSON(json["period"]),
     stored: json["stored"],
@@ -199,6 +216,7 @@ export function IrrDashboardReadToJSONTyped(
     ),
     gap_table: (value["gapTable"] as Array<any>).map(IrrGapBucketReadToJSON),
     latest_run_id: IrrDashboardLatestRunIdToJSON(value["latestRunId"]),
+    live: CapitalDashboardReadLiveToJSON(value["live"]),
     metrics: IrrMetricsReadToJSON(value["metrics"]),
     period: BankReportingPeriodReadToJSON(value["period"]),
     stored: value["stored"],

@@ -21,6 +21,10 @@ run = '''
 uv run fastapi dev app/main.py --host "${HOST:-127.0.0.1}" --port "${PORT:-8000}"
 '''
 
+[tasks."risk-service:worker"]
+description = "Run the live-engine background worker (claim → dispatch → retry)"
+run = "uv run python -m app.worker"
+
 [tasks."risk-service:test"]
 description = "Run pytest"
 run = "uv run pytest"

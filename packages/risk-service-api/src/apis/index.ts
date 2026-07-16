@@ -12,6 +12,7 @@ export * from "./HealthApi";
 export * from "./IngestionApi";
 export * from "./JobsApi";
 export * from "./LiquidityApi";
+export * from "./LiveEngineApi";
 export * from "./RegulatoryCapitalApi";
 export * from "./RegulatoryFtpApi";
 export * from "./RegulatoryFxApi";

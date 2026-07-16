@@ -28,6 +28,26 @@ def get_sessionmaker() -> sessionmaker:
     )
 
 
+def get_worker_sessionmaker() -> sessionmaker:
+    """Sessionmaker for the cross-tenant background worker.
+
+    Bound to ``WORKER_DATABASE_URL`` when set (a BYPASSRLS role on an
+    RLS-forced Postgres), else falling back to ``DATABASE_URL``. Handlers still
+    filter every query by organization_id/bank_id explicitly, so bypassing RLS
+    here is defense-reduced but not correctness-reducing.
+    """
+    settings = get_settings()
+    url = settings.worker.worker_database_url or settings.database.database_url
+    if url is None:
+        msg = "DATABASE_URL (or WORKER_DATABASE_URL) is required for the worker."
+        raise RuntimeError(msg)
+    return sessionmaker(
+        bind=get_engine(url),
+        autoflush=False,
+        expire_on_commit=False,
+    )
+
+
 @event.listens_for(Session, "after_begin")
 def set_tenant_rls_context(
     session: Session,

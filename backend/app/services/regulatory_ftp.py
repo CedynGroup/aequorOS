@@ -81,11 +81,16 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
 )
 from app.services.audit import record_event
+from app.services.live_block import live_block
+from app.services.live_types import (
+    LiveModuleResult,
+    findings_from_validations,
+)
 from app.services.params import get_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
 ENGINE_VERSION = "regulatory-ftp-v1.0.0"
-INPUT_SCHEMA_VERSION = "bank-facts-v1"
+INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "ftp-metrics-v1"
 MODULE_FTP = "ftp"
 BASELINE_SCENARIO = "baseline"
@@ -228,6 +233,7 @@ def get_ftp_dashboard(
         nmd_segments=nmd_segments,
         trend=_build_trend(db, ctx, bank, periods),
         validations=validations,
+        live=live_block(db, ctx, bank.id, period.id, MODULE_FTP),
     )
 
 
@@ -901,6 +907,42 @@ def _compute_inline_or_409(
         ) from exc
 
 
+def current_input_hash(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> str | None:
+    """The baseline input hash of the current canonical state for this period,
+    built with the same snapshot + hash as the immutable baseline run."""
+    facts = _load_facts(db, ctx, bank, period)
+    if not facts:
+        return None
+    active = _load_ftp_params_or_none(db, ctx, bank, period.period_end)
+    snapshot = _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active)
+    return _snapshot_hash(snapshot)
+
+
+def compute_live(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> LiveModuleResult:
+    """Cheap baseline live view — reuses the dashboard's unstored-branch path
+    and creates no RegulatoryRun."""
+    analysis = _compute_inline(db, ctx, bank, period)
+    metrics = _metrics_from_analysis(analysis)
+    live_metrics = {
+        "portfolio_nim_pct": str(metrics.portfolio_nim_pct),
+        "nmd_core_pct": str(metrics.nmd_core_pct),
+        "products_below_min_margin": str(metrics.products_below_min_margin),
+        "total_balance_ghs": str(metrics.total_balance_ghs),
+    }
+    status = metrics.nmd_core_status
+    findings = findings_from_validations(_validation_rows(analysis), status)
+    return LiveModuleResult(
+        metrics=live_metrics,
+        status=status,
+        input_hash=current_input_hash(db, ctx, bank, period),
+        findings=findings,
+    )
+
+
 def _curve_points_from_facts(facts: list[BankFinancialFact]) -> list[CurvePoint]:
     points: list[CurvePoint] = []
     for fact in facts:
@@ -1053,16 +1095,18 @@ def _build_snapshot(
             "period_end": period.period_end.isoformat(),
         },
         "as_of_date": period.period_end.isoformat(),
-        "facts": [
-            {
-                "id": str(fact.id),
-                "fact_group": fact.fact_group,
-                "category": fact.category,
-                "amount": str(fact.amount),
-                "attributes": _sorted_attributes(fact.attributes),
-            }
-            for fact in facts
-        ],
+        "facts": sorted(
+            (
+                {
+                    "fact_group": fact.fact_group,
+                    "category": fact.category,
+                    "amount": str(fact.amount),
+                    "attributes": _sorted_attributes(fact.attributes),
+                }
+                for fact in facts
+            ),
+            key=lambda entry: json.dumps(entry, sort_keys=True),
+        ),
         "parameters": _snapshot_parameters(active),
     }
 

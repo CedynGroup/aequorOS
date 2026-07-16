@@ -92,7 +92,7 @@ def test_create_base_forecast_run_persists_projection_and_outputs(  # noqa: PLR0
     assert run["module"] == "forecast"
     assert run["scenario_code"] == "base"
     assert run["engine_version"] == "regulatory-forecasting-v1.0.0"
-    assert run["input_schema_version"] == "bank-facts-v1"
+    assert run["input_schema_version"] == "bank-facts-v2"
     assert run["output_schema_version"] == "forecast-projection-v1"
     assert run["error"] is None
     assert len(run["input_hash"]) == 64

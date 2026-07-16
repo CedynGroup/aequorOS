@@ -14,13 +14,14 @@ import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import RatioHistoryChart from '@/components/charts/RatioHistoryChart';
 import HQLAStackChart from '@/components/charts/HQLAStackChart';
+import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useCreateRegulatoryRun,
   useLiquidityDashboard,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
+import { fmtDateUTC, isoDate, num, statusTone } from '@/lib/api/values';
 import { fmtCurrency, fmtPct } from '@/lib/format';
 
 const HQLA_COLORS = ['#0E8A4F', '#2D7FF9', '#1A4D5C', '#C97C00', '#5A6776'];
@@ -116,6 +117,12 @@ export default function LCRDashboard() {
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <div className="flex items-center gap-2">
+            <FreshnessBadge
+              bankId={bankId}
+              periodId={periodId}
+              module="liquidity"
+              asOfDate={period ? isoDate(period.periodEnd) : undefined}
+            />
             {latestRun.data && <RunBadge run={latestRun.data} />}
             <Link
               href="/liquidity/submission"

@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.banks import BankRead, BankReportingPeriodRead
+from app.schemas.live import LiveModuleView
 from app.schemas.regulatory_liquidity import RegulatoryValidationSeverity
 
 type FtpStatus = Literal["green", "amber", "red"]
@@ -117,3 +118,4 @@ class FtpDashboardRead(ClosedModel):
     nmd_segments: list[FtpNmdSegmentRead]
     trend: list[FtpTrendPointRead]
     validations: list[FtpValidationRead]
+    live: LiveModuleView | None = None

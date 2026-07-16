@@ -125,6 +125,24 @@ def test_stressed_var_uses_only_the_crisis_window() -> None:
     assert stressed != Decimal("2340000")
 
 
+def test_stressed_var_clamps_window_to_short_history() -> None:
+    # A bank that uploaded only four observations cannot reach the configured
+    # [2, 5] crisis slice: the window is clamped to the available tail (all four
+    # observations here) rather than failing the whole FX analysis.
+    positions = [_pos("USD", "30", "12.5")]
+    returns: dict[str, list[float]] = {"USD": [0.02, -0.05, -0.02, -0.04]}
+    stressed = compute_stressed_var(positions, returns, CONFIDENCE, (2, 5), Decimal("0.3"))
+    # Clamped window [0, 3]; worst return -0.05 -> 30M * 0.05 = 1500000 * 1.3.
+    assert stressed == Decimal("1950000")
+    # With the full history present the configured window is used unchanged.
+    long_returns: dict[str, list[float]] = {
+        "USD": [0.02, 0.02, -0.04, -0.02, -0.05, -0.01, 0.03, -0.06],
+    }
+    assert compute_stressed_var(
+        positions, long_returns, CONFIDENCE, (2, 5), Decimal("0.3")
+    ) == Decimal("1950000")
+
+
 def test_hedge_effectiveness_classification() -> None:
     hedges = [
         FxHedge(

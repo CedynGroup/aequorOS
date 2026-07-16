@@ -14,6 +14,7 @@ import {
 } from '@/components/data-engine/OverviewPanels';
 import BatchesTable from '@/components/data-engine/BatchesTable';
 import ActivatePanel from '@/components/data-engine/ActivatePanel';
+import LiveStatusCard from '@/components/live/LiveStatusCard';
 
 export default function DataEngineOverviewPage() {
   return (
@@ -25,6 +26,7 @@ export default function DataEngineOverviewPage() {
       />
       <div className="px-8 py-6 space-y-8 max-w-6xl">
         <IntegrationCards />
+        <LiveStatusCard />
         <CanonicalSummaryStrip />
         <BatchesTable
           limit={8}

@@ -30,7 +30,8 @@ from app.api.deps import TenantContext
 from app.core.config import CashflowSettings, get_settings
 from app.ml.baseline import forecast_static
 from app.ml.config import TrainingConfig
-from app.ml.synthetic import generate_daily_series
+from app.ml.real_series import load_real_daily_series
+from app.ml.synthetic import DailyFlow, generate_daily_series
 from app.models import Bank
 from app.schemas.cashflow_forecast import (
     CashflowForecastAccuracyRead,
@@ -40,6 +41,21 @@ from app.schemas.cashflow_forecast import (
     CashflowHistoryPointRead,
     CashflowHistoryRead,
 )
+
+
+def _load_series(config: TrainingConfig) -> list[DailyFlow]:
+    """Serving series: the real 10-year panel when enabled, else synthetic.
+
+    Falls back to the synthetic series if the real panel is missing so the
+    forecast endpoint never fails to construct just because the parquet is
+    absent (a missing ML runtime already degrades to a 503 elsewhere).
+    """
+    if config.use_real_series:
+        try:
+            return load_real_daily_series()
+        except FileNotFoundError:
+            pass
+    return generate_daily_series(days=config.total_days)
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -96,7 +112,7 @@ class ForecastService:
     def __init__(self, settings: CashflowSettings) -> None:
         self._settings = settings
         self._config = TrainingConfig.from_settings(settings)
-        self._series = generate_daily_series(days=self._config.total_days)
+        self._series = _load_series(self._config)
         self._model: CashFlowLSTM | None = None
         self._scaler: dict[str, float | int | str] | None = None
         self._metrics: dict[str, float | str] | None = None

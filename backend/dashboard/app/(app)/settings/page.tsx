@@ -3,11 +3,27 @@
 import { useQuery } from '@tanstack/react-query';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import CopyButton from '@/components/ui/CopyButton';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { useBankContext } from '@/components/shell/BankContext';
-import { apiBaseUrl } from '@/lib/api/client';
+import { apiBaseUrl, apiOrigin, tenant } from '@/lib/api/client';
 import { useBank, useCashflowHistory } from '@/lib/api/hooks';
 import { labelize } from '@/lib/api/values';
+
+/** A copyable UUID row for the identity grid. */
+function IdField({ label, value }: { label: string; value: string | undefined }) {
+  return (
+    <div className="sm:col-span-2">
+      <dt className="text-micro font-medium uppercase tracking-wider text-slate">
+        {label}
+      </dt>
+      <dd className="mt-1 flex items-center gap-2">
+        <code className="font-mono text-caption text-navy break-all">{value ?? '—'}</code>
+        {value && <CopyButton text={value} label={label} className="shrink-0" />}
+      </dd>
+    </div>
+  );
+}
 
 const JURISDICTIONS: Record<string, string> = {
   GH: 'Ghana',
@@ -18,7 +34,7 @@ function useRiskServiceHealth() {
   return useQuery({
     queryKey: ['health', 'risk-service'],
     queryFn: async () => {
-      const healthUrl = `${apiBaseUrl.replace(/\/api\/v1\/?$/, '')}/api/health/live`;
+      const healthUrl = `${apiOrigin}/api/health/live`;
       const response = await fetch(healthUrl, {
         signal: AbortSignal.timeout(4000),
       });
@@ -119,6 +135,9 @@ export default function SettingsPage() {
                     ` · latest ${periods[0]?.label ?? ''}`}
                 </dd>
               </div>
+              <IdField label="Organization ID (X-Org-Id)" value={profile?.organizationId} />
+              <IdField label="Bank ID" value={profile?.id} />
+              <IdField label="Service-account User ID (X-User-Id)" value={tenant.userId} />
             </dl>
           </CardBody>
         </Card>

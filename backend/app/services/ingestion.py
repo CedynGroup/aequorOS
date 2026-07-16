@@ -18,7 +18,7 @@ import json
 import re
 import tempfile
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
 from app.api.deps import TenantContext
+from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
 from app.domain.ingestion.adapter import SourceAdapter, get_adapter_class
@@ -85,6 +86,7 @@ from app.schemas.ingestion import (
     TranslationFailureListRead,
     TranslationFailureRead,
 )
+from app.services import job_queue
 from app.services.audit import record_event
 from app.services.data_activation import ACTIVATION_EVENT
 from app.storage.client import (
@@ -370,9 +372,41 @@ def start_ingestion(
 
     storage.flush_access_log()
     _record_batch_event(db, ctx, batch, payload.reason)
+    _enqueue_live_refresh(db, ctx, bank, payload, batch)
     db.commit()
     return IngestionBatchStartRead(
         batch=IngestionBatchRead.model_validate(batch, from_attributes=True), reused=False
+    )
+
+
+def _enqueue_live_refresh(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    payload: IngestionBatchCreate,
+    batch: IngestionBatch,
+) -> None:
+    """Trigger the automatic live pipeline for accepted batches.
+
+    Debounced + coalesced so a multi-file upload burst for one (bank, as-of)
+    settles into a single refresh. Rejected batches carry no canonical data, so
+    they never enqueue. Push ingestion routes through here too (it calls
+    ``start_ingestion``), so there is one trigger point for every source.
+    """
+    if batch.status not in BATCH_ACCEPTED_STATUSES:
+        return
+    job_payload: dict[str, str] = {"as_of_date": payload.as_of_date.isoformat()}
+    if ctx.actor_user_id is not None:
+        job_payload["actor_user_id"] = str(ctx.actor_user_id)
+    debounce = get_settings().worker.pipeline_debounce_seconds
+    job_queue.enqueue(
+        db,
+        ctx.organization_id,
+        "pipeline_refresh",
+        bank_id=bank.id,
+        payload=job_payload,
+        run_after=utc_now() + timedelta(seconds=debounce),
+        coalesce_key=f"refresh:{bank.id}:{payload.as_of_date.isoformat()}",
     )
 
 

@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.banks import BankRead, BankReportingPeriodRead
+from app.schemas.live import LiveModuleView
 from app.schemas.regulatory_liquidity import RegulatoryValidationSeverity
 
 type FxStatus = Literal["green", "amber", "red"]
@@ -109,3 +110,4 @@ class FxDashboardRead(ClosedModel):
     scenarios: list[FxScenarioNopRead]
     trend: list[FxTrendPointRead]
     validations: list[FxValidationRead]
+    live: LiveModuleView | None = None

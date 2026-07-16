@@ -24,11 +24,14 @@ import type {
   WhatIfShockCode,
 } from '@aequoros/risk-service-api';
 import {
+  ApiError,
   apiCall,
   banksApi,
   cashflowForecastApi,
   forecastingApi,
   isApiError,
+  jobsApi,
+  liveEngineApi,
   regulatoryCapitalApi,
   regulatoryFtpApi,
   regulatoryFxApi,
@@ -38,6 +41,15 @@ import {
 } from './client';
 
 const t = { xOrgId: tenant.orgId, xUserId: tenant.userId } as const;
+
+/**
+ * Polling cadence for the always-on "live" reads (live-summary, freshness,
+ * alerts) and the module dashboards. The backend recomputes in the background
+ * on ingestion, so the UI re-fetches on a timer to reflect it without a manual
+ * refresh. Kept above the 30s query staleTime so a poll actually re-fetches.
+ */
+const LIVE_REFETCH_MS = 20_000;
+const DASHBOARD_REFETCH_MS = 30_000;
 
 export function useBanks() {
   return useQuery({
@@ -106,6 +118,7 @@ export function useLiquidityDashboard(
         })
       ),
     enabled: Boolean(bankId && periodId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
 
@@ -124,6 +137,7 @@ export function useCapitalDashboard(
         })
       ),
     enabled: Boolean(bankId && periodId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
 
@@ -285,6 +299,7 @@ export function useIrrDashboard(
         })
       ),
     enabled: Boolean(bankId && periodId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
 
@@ -322,6 +337,7 @@ export function useFxDashboard(
         })
       ),
     enabled: Boolean(bankId && periodId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
 
@@ -359,6 +375,7 @@ export function useFtpDashboard(
         })
       ),
     enabled: Boolean(bankId && periodId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
 
@@ -621,5 +638,173 @@ export function useCashflowHistory(bankId: string | undefined, days: number) {
     enabled: Boolean(bankId),
     retry: false,
     staleTime: 5 * 60_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Live engine — cross-module live view, per-module freshness, breach alerts,
+// and the two background pipeline actions ("Recompute now" → /refresh,
+// "Mint official run" → /official-runs).
+//
+// The three read hooks poll on a timer so the dashboard reflects the backend's
+// automatic recompute-on-ingestion without any manual refresh. The two write
+// hooks enqueue a job, poll it to completion, then invalidate every live read
+// plus the module dashboards so the numbers and freshness badges update in one
+// step.
+// ---------------------------------------------------------------------------
+
+/** As-of + reason payload for a pipeline action. */
+export type PipelineActionInput = { asOfDate: string; reason: string };
+
+/** Cross-module current metrics + per-module status, polled. */
+export function useLiveSummary(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['live-summary', bankId],
+    queryFn: () =>
+      apiCall(() => liveEngineApi.getLiveSummary({ ...t, bankId: bankId! })),
+    enabled: Boolean(bankId),
+    refetchInterval: LIVE_REFETCH_MS,
+  });
+}
+
+/** Per-module live-vs-official-run freshness for a period, polled. */
+export function useBankFreshness(
+  bankId: string | undefined,
+  periodId?: string | undefined
+) {
+  return useQuery({
+    queryKey: ['freshness', bankId, periodId ?? null],
+    queryFn: () =>
+      apiCall(() =>
+        liveEngineApi.getBankFreshness({
+          ...t,
+          bankId: bankId!,
+          reportingPeriodId: periodId,
+        })
+      ),
+    enabled: Boolean(bankId),
+    refetchInterval: LIVE_REFETCH_MS,
+  });
+}
+
+/** Open limit-breach alerts across modules, polled — powers the header bell. */
+export function useBankAlerts(bankId: string | undefined, limit = 20) {
+  return useQuery({
+    queryKey: ['alerts', bankId, limit],
+    queryFn: () =>
+      apiCall(() =>
+        liveEngineApi.getBankAlerts({ ...t, bankId: bankId!, limit })
+      ),
+    enabled: Boolean(bankId),
+    refetchInterval: LIVE_REFETCH_MS,
+  });
+}
+
+// Every read that a pipeline action can move. Invalidated (by prefix) once a
+// refresh/official-run job completes so live numbers, freshness, alerts, and
+// module dashboards all re-fetch together.
+const livePipelineInvalidatePrefixes = [
+  'live-summary',
+  'freshness',
+  'alerts',
+  'liq-dashboard',
+  'cap-dashboard',
+  'irr-dashboard',
+  'fx-dashboard',
+  'ftp-dashboard',
+  'cap-rwa',
+  'cap-structure',
+  'bsd3',
+  'bsd2',
+  'reg-runs',
+  'reg-run',
+  'forecast-runs',
+  'facts',
+  'periods',
+];
+
+/**
+ * Poll a queued job to a terminal state. Resolves with the final job on
+ * success; rejects with a normalized ApiError on failure. Bounded so a stuck
+ * worker never hangs the mutation forever — on timeout it resolves with the
+ * last-seen job so the UI can still refresh and show progress.
+ */
+async function pollJobToCompletion(
+  jobId: string,
+  { intervalMs = 1500, timeoutMs = 120_000 } = {}
+) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const job = await apiCall(() => jobsApi.getJob({ ...t, jobId }));
+    if (job.status === 'succeeded') return job;
+    if (job.status === 'failed') {
+      throw new ApiError({
+        message: job.error ?? 'The background job failed.',
+        status: null,
+        code: 'job_failed',
+        errorCode: null,
+        details: job.progress,
+      });
+    }
+    if (Date.now() >= deadline) return job;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
+/**
+ * "Recompute now" — enqueue a live pipeline_refresh, poll it to completion, and
+ * refresh every live read + module dashboard. Derives facts and recomputes live
+ * metrics/findings without minting an immutable regulatory run.
+ */
+export function useRefreshBankData(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ asOfDate, reason }: PipelineActionInput) => {
+      const enqueued = await apiCall(() =>
+        liveEngineApi.refreshBankData({
+          ...t,
+          bankId: bankId!,
+          refreshRequest: {
+            asOfDate: new Date(`${asOfDate}T00:00:00Z`),
+            reason,
+          },
+        })
+      );
+      return pollJobToCompletion(enqueued.jobId);
+    },
+    onSuccess: () => {
+      livePipelineInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/**
+ * "Mint official run for filing" — enqueue an immutable official run, poll it to
+ * completion, and refresh every live read + module dashboard. The official run
+ * is what clears the freshness "data changed since last official run" state.
+ */
+export function useMintOfficialRun(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ asOfDate, reason }: PipelineActionInput) => {
+      const enqueued = await apiCall(() =>
+        liveEngineApi.mintOfficialRun({
+          ...t,
+          bankId: bankId!,
+          officialRunRequest: {
+            asOfDate: new Date(`${asOfDate}T00:00:00Z`),
+            reason,
+          },
+        })
+      );
+      return pollJobToCompletion(enqueued.jobId);
+    },
+    onSuccess: () => {
+      livePipelineInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
   });
 }

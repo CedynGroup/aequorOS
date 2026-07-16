@@ -92,7 +92,7 @@ def test_create_baseline_capital_run_persists_snapshot_metrics_and_outputs(  # n
     assert run["module"] == "capital"
     assert run["scenario_code"] == "baseline"
     assert run["engine_version"] == "regulatory-capital-v1.0.0"
-    assert run["input_schema_version"] == "bank-facts-v1"
+    assert run["input_schema_version"] == "bank-facts-v2"
     assert run["output_schema_version"] == "capital-metrics-v1"
     assert run["started_at"] is not None
     assert run["completed_at"] is not None
@@ -100,7 +100,7 @@ def test_create_baseline_capital_run_persists_snapshot_metrics_and_outputs(  # n
     assert len(run["input_hash"]) == 64
 
     snapshot = run["inputs"]
-    assert snapshot["schema_version"] == "bank-facts-v1"
+    assert snapshot["schema_version"] == "bank-facts-v2"
     assert snapshot["module"] == "capital"
     assert snapshot["scenario_code"] == "baseline"
     assert snapshot["as_of_date"] == "2026-03-31"

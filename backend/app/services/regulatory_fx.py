@@ -79,11 +79,17 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
 )
 from app.services.audit import record_event
+from app.services.live_block import live_block
+from app.services.live_types import (
+    LiveModuleResult,
+    findings_from_validations,
+    worst_status,
+)
 from app.services.params import get_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
 ENGINE_VERSION = "regulatory-fx-v1.0.0"
-INPUT_SCHEMA_VERSION = "bank-facts-v1"
+INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "fx-metrics-v1"
 MODULE_FX = "fx"
 BASELINE_SCENARIO = "baseline"
@@ -229,6 +235,7 @@ def get_fx_dashboard(
         scenarios=scenarios,
         trend=_build_trend(db, ctx, bank, periods),
         validations=validations,
+        live=live_block(db, ctx, bank.id, period.id, MODULE_FX),
     )
 
 
@@ -854,6 +861,45 @@ def _compute_inline_or_409(
         ) from exc
 
 
+def current_input_hash(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> str | None:
+    """The baseline input hash of the current canonical state for this period,
+    built with the same snapshot + hash as the immutable baseline run."""
+    facts = _load_facts(db, ctx, bank, period)
+    if not facts:
+        return None
+    active = _load_fx_params_or_none(db, ctx, bank, period.period_end)
+    snapshot = _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active)
+    return _snapshot_hash(snapshot)
+
+
+def compute_live(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> LiveModuleResult:
+    """Cheap baseline live view — reuses the dashboard's unstored-branch path
+    and creates no RegulatoryRun. An unhedged NOP breach surfaces here as a
+    failed error-severity validation, i.e. an alert-worthy finding."""
+    analysis = _compute_inline(db, ctx, bank, period)
+    metrics = _metrics_from_analysis(analysis)
+    live_metrics = {
+        "nop_ghs": str(metrics.nop_ghs),
+        "nop_pct_tier1": str(metrics.nop_pct_tier1),
+        "single_ccy_max_pct": str(metrics.single_ccy_max_pct),
+        "single_ccy_max_currency": metrics.single_ccy_max_currency,
+        "var_99_1d_ghs": str(metrics.var_99_1d_ghs),
+        "tier1_ghs": str(metrics.tier1_ghs),
+    }
+    status = worst_status(metrics.nop_status, metrics.single_ccy_status)
+    findings = findings_from_validations(_validation_rows(analysis), status)
+    return LiveModuleResult(
+        metrics=live_metrics,
+        status=status,
+        input_hash=current_input_hash(db, ctx, bank, period),
+        findings=findings,
+    )
+
+
 def _positions_from_facts(facts: list[BankFinancialFact]) -> list[FxPosition]:
     positions: list[FxPosition] = []
     for fact in facts:
@@ -1016,16 +1062,18 @@ def _build_snapshot(
             "period_end": period.period_end.isoformat(),
         },
         "as_of_date": period.period_end.isoformat(),
-        "facts": [
-            {
-                "id": str(fact.id),
-                "fact_group": fact.fact_group,
-                "category": fact.category,
-                "amount": str(fact.amount),
-                "attributes": _sorted_attributes(fact.attributes),
-            }
-            for fact in facts
-        ],
+        "facts": sorted(
+            (
+                {
+                    "fact_group": fact.fact_group,
+                    "category": fact.category,
+                    "amount": str(fact.amount),
+                    "attributes": _sorted_attributes(fact.attributes),
+                }
+                for fact in facts
+            ),
+            key=lambda entry: json.dumps(entry, sort_keys=True),
+        ),
         "parameters": _snapshot_parameters(active),
     }
 

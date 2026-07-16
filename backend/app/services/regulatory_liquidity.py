@@ -72,10 +72,16 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryValidationRead,
 )
 from app.services.audit import record_event
+from app.services.live_block import live_block
+from app.services.live_types import (
+    LiveModuleResult,
+    findings_from_validations,
+    worst_status,
+)
 from app.services.params import get_active_params
 
 ENGINE_VERSION = "regulatory-liquidity-v1.0.0"
-INPUT_SCHEMA_VERSION = "bank-facts-v1"
+INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "liquidity-metrics-v1"
 MODULE_LIQUIDITY = "liquidity"
 BASELINE_SCENARIO = "baseline"
@@ -263,6 +269,7 @@ def get_liquidity_dashboard(
         inflows=sections.get("inflow", []),
         trend=trend,
         validations=validations,
+        live=live_block(db, ctx, bank.id, period.id, MODULE_LIQUIDITY),
     )
 
 
@@ -870,6 +877,46 @@ def _compute_inline_or_409(
         ) from exc
 
 
+def current_input_hash(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> str | None:
+    """The baseline input hash of the current canonical state for this period.
+
+    Built with the SAME snapshot + hash the immutable baseline run uses, so the
+    freshness service can compare it against the latest official run's hash.
+    """
+    facts = _load_facts(db, ctx, bank, period)
+    if not facts:
+        return None
+    active = _load_active_params(db, ctx, bank, period.period_end)
+    snapshot = _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active, {})
+    return _snapshot_hash(snapshot)
+
+
+def compute_live(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> LiveModuleResult:
+    """Cheap baseline live view — reuses the dashboard's unstored-branch path
+    (``_compute_inline``/``_validation_rows``) and creates no RegulatoryRun."""
+    lcr, nsfr, params = _compute_inline(db, ctx, bank, period)
+    metrics = {
+        "lcr_pct": str(lcr.lcr_pct),
+        "nsfr_pct": str(nsfr.nsfr_pct),
+        "hqla_total_ghs": str(lcr.hqla_total),
+        "net_outflows_30d_ghs": str(lcr.net_outflows_total),
+        "asf_total_ghs": str(nsfr.asf_total),
+        "rsf_total_ghs": str(nsfr.rsf_total),
+    }
+    status = worst_status(lcr.status, nsfr.status)
+    findings = findings_from_validations(_validation_rows(lcr, nsfr, params), status)
+    return LiveModuleResult(
+        metrics=metrics,
+        status=status,
+        input_hash=current_input_hash(db, ctx, bank, period),
+        findings=findings,
+    )
+
+
 def _weighted_rows(items: list[RegulatoryLineItem], *, prefix: str) -> list[Bsd3WeightedRowRead]:
     return [
         Bsd3WeightedRowRead(
@@ -1003,18 +1050,20 @@ def _build_snapshot(  # noqa: PLR0913
             "period_end": period.period_end.isoformat(),
         },
         "as_of_date": period.period_end.isoformat(),
-        "facts": [
-            {
-                "id": str(fact.id),
-                "fact_group": fact.fact_group,
-                "category": fact.category,
-                "amount": str(fact.amount),
-                "hqla_level": fact.hqla_level,
-                "side": fact.attributes.get("side"),
-                "cash_derived": fact.attributes.get("source") == "cash",
-            }
-            for fact in facts
-        ],
+        "facts": sorted(
+            (
+                {
+                    "fact_group": fact.fact_group,
+                    "category": fact.category,
+                    "amount": str(fact.amount),
+                    "hqla_level": fact.hqla_level,
+                    "side": fact.attributes.get("side"),
+                    "cash_derived": fact.attributes.get("source") == "cash",
+                }
+                for fact in facts
+            ),
+            key=lambda entry: json.dumps(entry, sort_keys=True),
+        ),
         "parameters": {
             "outflow_runoff_rates_pct": _stringified(active.outflow_rates),
             "inflow_rates_pct": _stringified(active.inflow_rates),

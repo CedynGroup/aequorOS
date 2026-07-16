@@ -133,6 +133,18 @@ def list_bank_data_activations(
     return DataActivationListRead(bank_id=bank.id, activations=activations)
 
 
+def run_official_modules(
+    db: Session, ctx: TenantContext, bank_id: UUID, period_id: UUID
+) -> list[ActivationRunRead]:
+    """Public entry to the immutable 22-scenario + forecast official-run path.
+
+    Used by the background pipeline's ``run_official`` so scheduled and on-demand
+    filing runs mint the exact same immutable RegulatoryRun rows as an inline
+    activation.
+    """
+    return _run_all_modules(db, ctx, bank_id, period_id)
+
+
 def _run_all_modules(
     db: Session, ctx: TenantContext, bank_id: UUID, period_id: UUID
 ) -> list[ActivationRunRead]:

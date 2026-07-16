@@ -46,6 +46,13 @@ import {
   FxValidationReadToJSON,
   FxValidationReadToJSONTyped,
 } from "./FxValidationRead";
+import type { CapitalDashboardReadLive } from "./CapitalDashboardReadLive";
+import {
+  CapitalDashboardReadLiveFromJSON,
+  CapitalDashboardReadLiveFromJSONTyped,
+  CapitalDashboardReadLiveToJSON,
+  CapitalDashboardReadLiveToJSONTyped,
+} from "./CapitalDashboardReadLive";
 import type { FxMetricsRead } from "./FxMetricsRead";
 import {
   FxMetricsReadFromJSON,
@@ -106,6 +113,12 @@ export interface FxDashboardRead {
    * @memberof FxDashboardRead
    */
   latestRunId: FxDashboardLatestRunId;
+  /**
+   *
+   * @type {CapitalDashboardReadLive}
+   * @memberof FxDashboardRead
+   */
+  live?: CapitalDashboardReadLive;
   /**
    *
    * @type {FxMetricsRead}
@@ -195,6 +208,10 @@ export function FxDashboardReadFromJSONTyped(
     bank: BankReadFromJSON(json["bank"]),
     hedges: (json["hedges"] as Array<any>).map(FxHedgeReadFromJSON),
     latestRunId: FxDashboardLatestRunIdFromJSON(json["latest_run_id"]),
+    live:
+      json["live"] == null
+        ? undefined
+        : CapitalDashboardReadLiveFromJSON(json["live"]),
     metrics: FxMetricsReadFromJSON(json["metrics"]),
     period: BankReportingPeriodReadFromJSON(json["period"]),
     positions: (json["positions"] as Array<any>).map(
@@ -228,6 +245,7 @@ export function FxDashboardReadToJSONTyped(
     bank: BankReadToJSON(value["bank"]),
     hedges: (value["hedges"] as Array<any>).map(FxHedgeReadToJSON),
     latest_run_id: FxDashboardLatestRunIdToJSON(value["latestRunId"]),
+    live: CapitalDashboardReadLiveToJSON(value["live"]),
     metrics: FxMetricsReadToJSON(value["metrics"]),
     period: BankReportingPeriodReadToJSON(value["period"]),
     positions: (value["positions"] as Array<any>).map(

@@ -113,7 +113,7 @@ from app.services.audit import record_event
 from app.services.params import get_active_params
 
 ENGINE_VERSION = "regulatory-forecasting-v1.0.0"
-INPUT_SCHEMA_VERSION = "bank-facts-v1"
+INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "forecast-projection-v1"
 MODULE_FORECAST = "forecast"
 MODULE_OPTIMIZER = "optimizer"
@@ -952,23 +952,25 @@ def _build_snapshot(  # noqa: PLR0913
             "period_end": period.period_end.isoformat(),
         },
         "as_of_date": period.period_end.isoformat(),
-        "facts": [
-            {
-                "id": str(fact.id),
-                "fact_group": fact.fact_group,
-                "category": fact.category,
-                "amount": str(fact.amount),
-                "risk_weight_code": fact.risk_weight_code,
-                "hqla_level": fact.hqla_level,
-                "ccf_pct": str(fact.ccf_pct) if fact.ccf_pct is not None else None,
-                "income_year": fact.income_year,
-                "capital_tier": fact.capital_tier,
-                "is_deduction": fact.is_deduction,
-                "side": fact.attributes.get("side"),
-                "cash_derived": fact.attributes.get("source") == "cash",
-            }
-            for fact in facts
-        ],
+        "facts": sorted(
+            (
+                {
+                    "fact_group": fact.fact_group,
+                    "category": fact.category,
+                    "amount": str(fact.amount),
+                    "risk_weight_code": fact.risk_weight_code,
+                    "hqla_level": fact.hqla_level,
+                    "ccf_pct": str(fact.ccf_pct) if fact.ccf_pct is not None else None,
+                    "income_year": fact.income_year,
+                    "capital_tier": fact.capital_tier,
+                    "is_deduction": fact.is_deduction,
+                    "side": fact.attributes.get("side"),
+                    "cash_derived": fact.attributes.get("source") == "cash",
+                }
+                for fact in facts
+            ),
+            key=lambda entry: json.dumps(entry, sort_keys=True),
+        ),
         "parameters": {
             "outflow_runoff_rates_pct": _stringified(active.outflow_rates),
             "inflow_rates_pct": _stringified(active.inflow_rates),

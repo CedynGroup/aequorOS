@@ -7,52 +7,50 @@
  * docs/API_INTEGRATION.md, the authoritative contract).
  */
 
-import { useState } from 'react';
-import { Check, Copy, ShieldAlert, Webhook } from 'lucide-react';
+import { Download, ShieldAlert, Webhook } from 'lucide-react';
+import CopyButton from '@/components/ui/CopyButton';
+import { apiOrigin, tenant } from '@/lib/api/client';
+import { downloadTextFile } from '@/lib/download';
 import {
   ENTITY_SPECS,
-  PUSH_DOC_PATH,
+  EXAMPLE_SCRIPT,
   PUSH_FLOW_STEPS,
   REFERENCE_KINDS,
   VALUE_CONVENTIONS,
   type EntitySpec,
 } from './api-reference';
 
-const BASE_URL =
-  (process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? 'http://127.0.0.1:8003/api/v1').replace(
-    /\/api\/v1\/?$/,
-    '',
-  );
-
-function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      aria-label={`Copy ${label}`}
-      onClick={() => {
-        void navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 1500);
-        });
-      }}
-      className="inline-flex items-center gap-1 rounded border border-white/20 px-2 py-1 text-micro font-medium text-white/70 hover:text-white hover:border-white/40 transition-colors"
-    >
-      {copied ? <Check size={11} aria-hidden /> : <Copy size={11} aria-hidden />}
-      {copied ? 'Copied' : 'Copy'}
-    </button>
-  );
-}
-
-function CurlBlock({ curl, label }: { curl: string; label: string }) {
+function CodeBlock({ code, label }: { code: string; label: string }) {
   return (
     <div className="relative rounded bg-navy text-white">
       <div className="absolute right-2 top-2">
-        <CopyButton text={curl} label={label} />
+        <CopyButton text={code} label={label} variant="dark" />
       </div>
       <pre className="overflow-x-auto px-4 py-3 pr-20 text-caption font-mono leading-relaxed">
-        {curl}
+        {code}
       </pre>
+    </div>
+  );
+}
+
+/** A copyable connection value (base URL, tenant headers). */
+function ConnectionField({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <p className="text-micro uppercase tracking-wider text-slate">{label}</p>
+      <div className="mt-1 flex items-center gap-2">
+        <code className="text-body font-mono text-navy break-all">{value}</code>
+        <CopyButton text={value} label={label} className="shrink-0" />
+      </div>
+      {hint && <p className="mt-0.5 text-caption text-slate leading-relaxed">{hint}</p>}
     </div>
   );
 }
@@ -65,18 +63,18 @@ export function ConnectionCard() {
         <h2 className="text-h3 text-navy">Connection</h2>
       </div>
       <div className="mt-3 grid gap-4 md:grid-cols-2">
-        <div>
-          <p className="text-micro uppercase tracking-wider text-slate">Base URL</p>
-          <p className="mt-1 text-body font-mono text-navy">{BASE_URL}/api/v1</p>
-          <p className="mt-3 text-micro uppercase tracking-wider text-slate">
-            Authentication (MVP)
-          </p>
-          <p className="mt-1 text-body text-slate leading-relaxed">
-            Tenant headers on every request:{' '}
-            <code className="font-mono text-navy">X-Org-Id</code> (organization UUID) and{' '}
-            <code className="font-mono text-navy">X-User-Id</code> (the service-account
-            user acting for your middleware).
-          </p>
+        <div className="space-y-3">
+          <ConnectionField label="Base URL" value={`${apiOrigin}/api/v1`} />
+          <ConnectionField
+            label="X-Org-Id"
+            value={tenant.orgId}
+            hint="Your organization UUID — send on every request."
+          />
+          <ConnectionField
+            label="X-User-Id"
+            value={tenant.userId}
+            hint="The service-account user acting for your middleware."
+          />
         </div>
         <div className="rounded border border-warning/30 bg-warning-light/40 p-4">
           <p className="inline-flex items-center gap-1.5 text-caption font-medium text-warning">
@@ -90,11 +88,6 @@ export function ConnectionCard() {
           </p>
         </div>
       </div>
-      <p className="mt-4 pt-3 border-t border-border-light text-caption text-slate">
-        Full public contract, idempotency semantics, and a runnable example client:{' '}
-        <code className="font-mono text-navy">{PUSH_DOC_PATH}</code> (example:{' '}
-        <code className="font-mono text-navy">backend/scripts/push_api_example.py</code>).
-      </p>
     </section>
   );
 }
@@ -124,11 +117,41 @@ export function PushFlowSteps() {
             </div>
             <p className="mt-2 text-body text-slate leading-relaxed">{step.summary}</p>
             <div className="mt-3">
-              <CurlBlock curl={step.curl} label={`step ${step.step} curl example`} />
+              <CodeBlock code={step.curl} label={`step ${step.step} curl example`} />
             </div>
           </li>
         ))}
       </ol>
+    </section>
+  );
+}
+
+export function ExampleClient() {
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-h2 text-navy">Runnable example</h2>
+          <p className="mt-1 text-body text-slate leading-relaxed">
+            A self-contained script that opens a batch, stages a page, commits, and
+            prints the validation summary. Set the three variables and run it.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            downloadTextFile(
+              'aequoros_push_example.sh',
+              EXAMPLE_SCRIPT,
+              'text/x-shellscript;charset=utf-8',
+            )
+          }
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded text-caption font-medium border border-border text-slate hover:text-navy hover:border-slate"
+        >
+          <Download size={13} aria-hidden /> Download .sh
+        </button>
+      </div>
+      <CodeBlock code={EXAMPLE_SCRIPT} label="runnable push example" />
     </section>
   );
 }
