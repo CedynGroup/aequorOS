@@ -75,8 +75,9 @@ optionally reset the tour (`localStorage.removeItem('aeq-tour-done')`).
 
 ### Known demo caveats
 - Alert acknowledge and resolved-history are Phase 2 (read-only stream today).
-- Positions pagination is a tracked follow-up (the guard panel is intentional).
 - Role lenses are view permutations, not access control (Phase 2).
+- ORASS submission is a clearly-labeled sandbox simulator (BoG publishes no public API docs);
+  live onboarding is a channel swap — see docs/BOG_ONBOARDING.md.
 
 ---
 
