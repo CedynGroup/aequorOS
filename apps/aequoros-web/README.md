@@ -93,6 +93,10 @@ tenant- and case-scoped React Query keys with the owning tabs, so financial,
 scenario, forecast, finding, and decision changes refresh the summary without
 cross-case cache leakage.
 
+While any listed forecast is queued or running, the header polls its status.
+When a run becomes terminal, it refreshes the finding summary so newly generated
+findings appear without a manual reload.
+
 ## Financial Review
 
 The Financial tab loads the case's canonical financial workspace through the
@@ -135,6 +139,13 @@ The Report tab defaults to the HTML committee view, with a JSON toggle for
 technical review. Both representations omit entity identifiers and redact UUIDs
 that appear inside nested report evidence while preserving distinct aliases for
 UUID-bearing object keys.
+
+## Forecast Review
+
+The Forecast tab keeps immutable successful and failed run history. Selecting a
+run for an archived scenario opens read-only audit mode and removes start and
+rerun controls; selecting an active scenario restores the available forecast
+controls.
 
 ## Capital Review
 
