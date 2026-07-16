@@ -22,6 +22,7 @@ import type {
 
 const CHART_HEIGHT = 280;
 const MIN_CHART_WIDTH = 520;
+const MAX_Y_AXIS_TICKS = 6;
 const LEGEND_STYLE = {
   fontFamily: "inherit",
   fontSize: 11,
@@ -244,6 +245,7 @@ export function CapitalComparisonChart({
           />
           <DecimalYAxis values={values} formatter={formatPercent} />
           <Tooltip content={<CapitalTooltip />} />
+          <Legend verticalAlign="top" height={28} wrapperStyle={LEGEND_STYLE} />
           <Line
             type="linear"
             dataKey="baseline"
@@ -346,7 +348,10 @@ function DecimalYAxis({
     }
     return map;
   }, [values]);
-  const ticks = [...originals.keys()].sort((left, right) => left - right);
+  const valuesByPosition = [...originals.keys()].sort(
+    (left, right) => left - right,
+  );
+  const ticks = representativeTicks(valuesByPosition);
   return (
     <YAxis
       width={92}
@@ -356,6 +361,17 @@ function DecimalYAxis({
       }
       tick={{ fontSize: 10, style: { fontVariantNumeric: "tabular-nums" } }}
     />
+  );
+}
+
+export function representativeTicks(values: number[]) {
+  if (values.length <= MAX_Y_AXIS_TICKS) return values;
+  return Array.from(
+    { length: MAX_Y_AXIS_TICKS },
+    (_, index) =>
+      values[
+        Math.round((index * (values.length - 1)) / (MAX_Y_AXIS_TICKS - 1))
+      ],
   );
 }
 

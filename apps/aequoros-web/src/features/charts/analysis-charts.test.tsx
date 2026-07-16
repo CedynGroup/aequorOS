@@ -11,6 +11,7 @@ import {
   ForecastTrajectoryChart,
   formatChartDate,
   LiquidityCoverageChart,
+  representativeTicks,
 } from "./analysis-charts";
 
 describe("formatChartDate", () => {
@@ -65,6 +66,18 @@ describe("ForecastTrajectoryChart", () => {
     for (const path of container.querySelectorAll(".recharts-line-curve")) {
       expect(path.getAttribute("d")).not.toMatch(/L[^M]+L/);
     }
+  });
+});
+
+describe("representativeTicks", () => {
+  it("limits dense axes while retaining evenly distributed endpoints", () => {
+    expect(
+      representativeTicks(Array.from({ length: 36 }, (_, index) => index)),
+    ).toEqual([0, 7, 14, 21, 28, 35]);
+  });
+
+  it("retains every value on a sparse axis", () => {
+    expect(representativeTicks([1, 2, 3])).toEqual([1, 2, 3]);
   });
 });
 
@@ -153,6 +166,8 @@ describe("CapitalComparisonChart", () => {
       container.querySelectorAll("[data-chart-point='capital-downside']"),
     ).toHaveLength(2);
     expect(container.querySelectorAll(".recharts-line-curve")).toHaveLength(2);
+    expect(screen.getByText("Baseline")).toBeInTheDocument();
+    expect(screen.getByText("Downside")).toBeInTheDocument();
   });
 });
 

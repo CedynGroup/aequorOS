@@ -142,7 +142,7 @@ describe("liquidityCoverageToSeries", () => {
     expect(series.reason).toBeNull();
   });
 
-  it("renders non-positive uses as a gap with the persisted diagnostic", () => {
+  it("honors unavailable persisted coverage instead of classifying partial periods", () => {
     const diagnostic = "Coverage is unavailable for period 2.";
     const series = liquidityCoverageToSeries(
       run([
@@ -164,7 +164,8 @@ describe("liquidityCoverageToSeries", () => {
       }),
     );
 
-    expect(series.availability).toBe("ready");
+    expect(series.availability).toBe("unavailable");
+    expect(series.reason).toBe(diagnostic);
     expect(
       series.points.map((point) => point.coverage?.decimal ?? null),
     ).toEqual(["1.2000", null, "1.2000"]);

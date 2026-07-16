@@ -163,15 +163,22 @@ export function liquidityCoverageToSeries(
     return { periodNumber, periodEnd: row.periodEnd, coverage };
   });
   const hasValue = points.some((point) => point.coverage);
+  const metricIsAvailable = metric?.availability === "available";
 
   return {
-    availability: hasPersistedThreshold && hasValue ? "ready" : "unavailable",
+    availability:
+      hasPersistedThreshold && metricIsAvailable && hasValue
+        ? "ready"
+        : "unavailable",
     reason: !hasPersistedThreshold
       ? MISSING_LIQUIDITY_THRESHOLD_REASON
-      : hasValue
-        ? null
-        : (metric?.diagnostic ??
-          "Sources coverage is not meaningful for the persisted forecast."),
+      : !metricIsAvailable
+        ? (metric?.diagnostic ??
+          "The persisted sources coverage metric is unavailable.")
+        : hasValue
+          ? null
+          : (metric?.diagnostic ??
+            "Sources coverage is not meaningful for the persisted forecast."),
     points,
     unavailableSpans,
     threshold,
