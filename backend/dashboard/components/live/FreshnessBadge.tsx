@@ -75,7 +75,7 @@ export default function FreshnessBadge({
             reason: `Minted official ${module} run from the ${module} dashboard freshness badge.`,
           })
         }
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-caption font-medium text-white bg-navy hover:bg-navy-700 disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-caption font-medium btn-primary disabled:opacity-60"
       >
         {mint.isPending ? (
           <Loader2 size={12} className="animate-spin" aria-hidden />

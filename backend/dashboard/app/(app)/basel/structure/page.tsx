@@ -3,9 +3,10 @@
 import { Loader2, PlayCircle } from 'lucide-react';
 import type { CapitalLineRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
+import KpiStat from '@/components/ui/KpiStat';
+import SectionCard from '@/components/ui/SectionCard';
 import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   isNoBaselineRunError,
@@ -13,12 +14,12 @@ import {
   useCapitalStructure,
   useCreateRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num } from '@/lib/api/values';
+import { fmtDateUTC, num, shortId } from '@/lib/api/values';
+import { seriesColor } from '@/lib/chartTheme';
 import { fmtCurrencyFull } from '@/lib/format';
 
 function TierBlock({
   title,
-  tone,
   total,
   items,
   deductions,
@@ -26,7 +27,6 @@ function TierBlock({
   footnote,
 }: {
   title: string;
-  tone: string;
   total: number;
   items: CapitalLineRead[];
   deductions: CapitalLineRead[];
@@ -34,56 +34,53 @@ function TierBlock({
   footnote?: string;
 }) {
   return (
-    <Card className={`border-l-4 border-l-${tone}`}>
-      <CardHeader title={title} subtitle={description} />
-      <CardBody className="p-0">
-        <table className="w-full text-body">
-          <tbody>
-            {items.length === 0 && deductions.length === 0 && (
-              <tr className="border-b border-border-light">
-                <td className="px-5 py-2.5 text-slate" colSpan={2}>
-                  No instruments outstanding.
-                </td>
-              </tr>
-            )}
-            {items.map((it) => (
-              <tr key={it.lineCode} className="border-b border-border-light">
-                <td className="px-5 py-2.5 text-navy/85">{it.description}</td>
-                <td className="px-5 py-2.5 num text-navy/90">
-                  {fmtCurrencyFull(num(it.weightedAmount), 'GHS')}
-                </td>
-              </tr>
-            ))}
-            {deductions.map((d) => (
-              <tr
-                key={d.lineCode}
-                className="border-b border-border-light bg-critical-light/30"
-              >
-                <td className="px-5 py-2.5 text-critical text-caption">
-                  Less: {d.description}
-                </td>
-                <td className="px-5 py-2.5 num text-critical">
-                  {fmtCurrencyFull(-Math.abs(num(d.weightedAmount)), 'GHS')}
-                </td>
-              </tr>
-            ))}
-            <tr className="bg-surface font-medium border-t-2 border-navy">
-              <td className="px-5 py-3 text-navy uppercase text-caption tracking-wider">
-                {title} Total
-              </td>
-              <td className="px-5 py-3 num text-navy text-h3">
-                {fmtCurrencyFull(total, 'GHS')}
+    <SectionCard
+      title={title}
+      subtitle={description}
+      noPadding
+      footer={footnote ? <span>{footnote}</span> : undefined}
+    >
+      <table className="w-full text-body tnum">
+        <tbody>
+          {items.length === 0 && deductions.length === 0 && (
+            <tr className="border-b border-border-light">
+              <td className="px-5 py-2.5 text-slate" colSpan={2}>
+                No instruments outstanding.
               </td>
             </tr>
-          </tbody>
-        </table>
-        {footnote && (
-          <p className="px-5 py-3 text-caption text-slate border-t border-border-light leading-relaxed">
-            {footnote}
-          </p>
-        )}
-      </CardBody>
-    </Card>
+          )}
+          {items.map((it) => (
+            <tr key={it.lineCode} className="border-b border-border-light">
+              <td className="px-5 py-2.5 text-navy/85">{it.description}</td>
+              <td className="px-5 py-2.5 num text-navy/90">
+                {fmtCurrencyFull(num(it.weightedAmount), 'GHS')}
+              </td>
+            </tr>
+          ))}
+          {deductions.map((d) => (
+            <tr
+              key={d.lineCode}
+              className="border-b border-border-light bg-critical-light/30"
+            >
+              <td className="px-5 py-2.5 text-critical text-caption">
+                Less: {d.description}
+              </td>
+              <td className="px-5 py-2.5 num text-critical">
+                {fmtCurrencyFull(-Math.abs(num(d.weightedAmount)), 'GHS')}
+              </td>
+            </tr>
+          ))}
+          <tr className="bg-surface font-medium border-t-2 border-navy">
+            <td className="px-5 py-3 text-navy uppercase text-caption tracking-wider">
+              {title} Total
+            </td>
+            <td className="px-5 py-3 num text-navy text-h3">
+              {fmtCurrencyFull(total, 'GHS')}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </SectionCard>
   );
 }
 
@@ -106,6 +103,16 @@ export default function CapitalStructurePage() {
   const pctOfRwa = (value: number) =>
     totalRwa > 0 ? `${((value / totalRwa) * 100).toFixed(2)}% of RWA` : '—';
 
+  const cet1 = num(data?.cet1CapitalGhs);
+  const at1 = num(data?.at1CapitalGhs);
+  const tier2 = num(data?.tier2CapitalGhs);
+  const total = num(data?.totalCapitalGhs);
+  const compositionSegments = [
+    { label: 'CET1', value: cet1, color: seriesColor(0) },
+    { label: 'AT1', value: at1, color: seriesColor(1) },
+    { label: 'Tier 2', value: tier2, color: seriesColor(2) },
+  ].filter((s) => s.value > 0);
+
   const runBaselineButton = (
     <button
       type="button"
@@ -118,7 +125,7 @@ export default function CapitalStructurePage() {
           scenarioCode: 'baseline',
         })
       }
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700 disabled:opacity-60"
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
     >
       {runBaseline.isPending ? (
         <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -167,54 +174,94 @@ export default function CapitalStructurePage() {
           {data && (
             <div className="px-8 py-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="card p-5">
-                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                    CET1
-                  </p>
-                  <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
-                    {fmtCurrencyFull(num(data.cet1CapitalGhs), 'GHS')}
-                  </p>
-                  <p className="mt-1 text-caption text-slate">
-                    {pctOfRwa(num(data.cet1CapitalGhs))}
-                  </p>
-                </div>
-                <div className="card p-5">
-                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                    Tier 1 (CET1 + AT1)
-                  </p>
-                  <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
-                    {fmtCurrencyFull(num(data.tier1CapitalGhs), 'GHS')}
-                  </p>
-                  <p className="mt-1 text-caption text-slate">
-                    {pctOfRwa(num(data.tier1CapitalGhs))}
-                  </p>
-                </div>
-                <div className="card p-5">
-                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                    Total Capital
-                  </p>
-                  <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
-                    {fmtCurrencyFull(num(data.totalCapitalGhs), 'GHS')}
-                  </p>
-                  <p className="mt-1 text-caption text-slate">
-                    {pctOfRwa(num(data.totalCapitalGhs))} · CAR
-                  </p>
-                </div>
+                <KpiStat
+                  label="CET1"
+                  value={fmtCurrencyFull(cet1, 'GHS')}
+                  hint={pctOfRwa(cet1)}
+                />
+                <KpiStat
+                  label="Tier 1 (CET1 + AT1)"
+                  value={fmtCurrencyFull(num(data.tier1CapitalGhs), 'GHS')}
+                  hint={pctOfRwa(num(data.tier1CapitalGhs))}
+                />
+                <KpiStat
+                  label="Total capital"
+                  value={fmtCurrencyFull(total, 'GHS')}
+                  hint={`${pctOfRwa(total)} · CAR`}
+                />
               </div>
+
+              {/* Tier mix bar */}
+              <SectionCard
+                title="Tier mix"
+                subtitle="Share of total qualifying capital by tier"
+                footer={
+                  <span>
+                    Source run{' '}
+                    <span className="font-mono text-navy">
+                      {shortId(data.runId)}
+                    </span>
+                  </span>
+                }
+              >
+                <div>
+                  <div
+                    className="flex h-4 rounded-sm overflow-hidden"
+                    role="img"
+                    aria-label={compositionSegments
+                      .map(
+                        (s) =>
+                          `${s.label} ${
+                            total > 0 ? ((s.value / total) * 100).toFixed(1) : 0
+                          }%`
+                      )
+                      .join(', ')}
+                  >
+                    {compositionSegments.map((s) => (
+                      <div
+                        key={s.label}
+                        style={{
+                          width: `${total > 0 ? (s.value / total) * 100 : 0}%`,
+                          background: s.color,
+                        }}
+                        title={`${s.label} · ${fmtCurrencyFull(s.value, 'GHS')}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-3 flex items-center gap-6 flex-wrap text-caption">
+                    {compositionSegments.map((s) => (
+                      <span key={s.label} className="inline-flex items-center gap-2">
+                        <span
+                          className="w-2 h-2 rounded-sm"
+                          style={{ background: s.color }}
+                          aria-hidden
+                        />
+                        <span className="text-navy font-medium">{s.label}</span>
+                        <span className="font-mono text-navy tnum">
+                          {fmtCurrencyFull(s.value, 'GHS')}
+                        </span>
+                        <span className="font-mono text-slate tnum">
+                          {total > 0
+                            ? `${((s.value / total) * 100).toFixed(1)}%`
+                            : '—'}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </SectionCard>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <TierBlock
                   title="CET1"
-                  tone="navy"
-                  total={num(data.cet1CapitalGhs)}
+                  total={cet1}
                   items={data.cet1Components}
                   deductions={data.cet1Deductions}
                   description="Common Equity Tier 1 — highest quality capital"
                 />
                 <TierBlock
                   title="Additional Tier 1"
-                  tone="action"
-                  total={num(data.at1CapitalGhs)}
+                  total={at1}
                   items={data.at1Components}
                   deductions={[]}
                   description="Going-concern capital"
@@ -225,8 +272,7 @@ export default function CapitalStructurePage() {
                 />
                 <TierBlock
                   title="Tier 2"
-                  tone="teal"
-                  total={num(data.tier2CapitalGhs)}
+                  total={tier2}
                   items={data.tier2Components}
                   deductions={[]}
                   description="Gone-concern capital · Sub-debt and qualifying reserves"

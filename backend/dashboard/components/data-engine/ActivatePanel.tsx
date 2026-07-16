@@ -198,7 +198,7 @@ export default function ActivatePanel() {
                       reason: 'Minted official run for filing from the Data Engine console.',
                     })
                   }
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded text-caption font-medium bg-navy text-white hover:bg-navy-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded text-caption font-medium btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {mint.isPending && (
                     <Loader2 size={14} className="animate-spin" aria-hidden />

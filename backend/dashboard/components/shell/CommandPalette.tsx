@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import {
   Search,
   LayoutDashboard,
+  Gauge,
+  BellRing,
+  CandlestickChart,
+  Layers,
   Activity,
   Database,
   Droplet,
@@ -12,6 +16,7 @@ import {
   ShieldCheck,
   GitBranch,
   TrendingUp,
+  BrainCircuit,
   FileBarChart2,
   FileCheck2,
   Settings,
@@ -25,44 +30,54 @@ type Item = {
   href: string;
   icon: typeof LayoutDashboard;
   group: string;
+  /** Extra search terms not present in the label. */
+  keywords?: string;
 };
 
 const items: Item[] = [
-  { id: 'home', label: 'Home / Overview Dashboard', href: '/', icon: LayoutDashboard, group: 'Pages' },
+  { id: 'home', label: 'Command Center', href: '/', icon: LayoutDashboard, group: 'Command', keywords: 'home overview dashboard cockpit' },
+  { id: 'risk', label: 'Risk & Limits', href: '/risk', icon: Gauge, group: 'Command', keywords: 'limit utilization headroom breach appetite' },
+  { id: 'alerts', label: 'Alerts', href: '/alerts', icon: BellRing, group: 'Command', keywords: 'breach notification warning' },
 
-  { id: 'data-engine', label: 'Data Engine — Overview', hint: 'Module 00', href: '/data-engine', icon: Database, group: 'Data' },
-  { id: 'de-excel-csv', label: 'Data Engine — Excel & CSV', href: '/data-engine/excel-csv', icon: Database, group: 'Data' },
-  { id: 'de-api', label: 'Data Engine — API Push', href: '/data-engine/api', icon: Database, group: 'Data' },
-  { id: 'de-t24', label: 'Data Engine — Temenos T24', href: '/data-engine/t24', icon: Database, group: 'Data' },
-  { id: 'de-adapters', label: 'Data Engine — Other adapters', href: '/data-engine/adapters', icon: Database, group: 'Data' },
-  { id: 'de-canonical', label: 'Data Engine — Canonical Data', href: '/data-engine/positions', icon: Database, group: 'Data' },
+  { id: 'markets', label: 'Markets', href: '/markets', icon: CandlestickChart, group: 'Markets', keywords: 'rates curves fx spot yields treasury bills bonds' },
+  { id: 'positions', label: 'Positions', href: '/positions', icon: Layers, group: 'Markets', keywords: 'portfolio balance sheet instruments book' },
 
-  { id: 'irr', label: 'Interest Rate Risk — IRRBB Dashboard', hint: 'Module 01', href: '/irr', icon: Activity, group: 'Modules' },
+  { id: 'irr', label: 'IRRBB — Interest Rate Risk Dashboard', hint: 'Module 01', href: '/irr', icon: Activity, group: 'Modules', keywords: 'eve nii repricing gap duration basis' },
 
-  { id: 'lcr', label: 'Liquidity — LCR Dashboard', hint: 'Module 02', href: '/liquidity', icon: Droplet, group: 'Modules' },
-  { id: 'nsfr', label: 'Liquidity — NSFR Dashboard', href: '/liquidity/nsfr', icon: Droplet, group: 'Modules' },
-  { id: 'forecast', label: 'Liquidity — Cash Flow Forecast (LSTM)', href: '/liquidity/forecast', icon: Droplet, group: 'Modules' },
-  { id: 'stress', label: 'Liquidity — Stress Scenarios', href: '/liquidity/stress', icon: Droplet, group: 'Modules' },
-  { id: 'submission', label: 'Liquidity — BoG Submission Preview', href: '/liquidity/submission', icon: Droplet, group: 'Modules' },
+  { id: 'lcr', label: 'Liquidity — LCR Dashboard', hint: 'Module 02', href: '/liquidity', icon: Droplet, group: 'Modules', keywords: 'coverage ratio hqla outflows' },
+  { id: 'nsfr', label: 'Liquidity — NSFR Dashboard', href: '/liquidity/nsfr', icon: Droplet, group: 'Modules', keywords: 'stable funding asf rsf' },
+  { id: 'forecast', label: 'Liquidity — Cash Flow Forecast (LSTM)', href: '/liquidity/forecast', icon: Droplet, group: 'Modules', keywords: 'ml prediction cashflow' },
+  { id: 'stress', label: 'Liquidity — Stress Scenarios', href: '/liquidity/stress', icon: Droplet, group: 'Modules', keywords: 'runoff survival horizon' },
+  { id: 'submission', label: 'Liquidity — BoG Submission Preview', href: '/liquidity/submission', icon: Droplet, group: 'Modules', keywords: 'regulatory filing return' },
 
-  { id: 'fx', label: 'FX Risk — Net Open Position', hint: 'Module 03', href: '/fx', icon: DollarSign, group: 'Modules' },
+  { id: 'fx', label: 'FX Risk — Net Open Position', hint: 'Module 03', href: '/fx', icon: DollarSign, group: 'Modules', keywords: 'nop currency exposure usd gbp eur cedi' },
 
-  { id: 'basel', label: 'Basel Capital — Capital Dashboard', hint: 'Module 04', href: '/basel', icon: ShieldCheck, group: 'Modules' },
-  { id: 'rwa', label: 'Basel — RWA Breakdown', href: '/basel/rwa', icon: ShieldCheck, group: 'Modules' },
-  { id: 'capital-structure', label: 'Basel — Capital Structure', href: '/basel/structure', icon: ShieldCheck, group: 'Modules' },
-  { id: 'basel-stress', label: 'Basel — Stress Testing', href: '/basel/stress', icon: ShieldCheck, group: 'Modules' },
-  { id: 'basel-subs', label: 'Basel — BoG Submission Preview', href: '/basel/submissions', icon: ShieldCheck, group: 'Modules' },
+  { id: 'basel', label: 'Basel Capital — Capital Dashboard', hint: 'Module 04', href: '/basel', icon: ShieldCheck, group: 'Modules', keywords: 'car cet1 tier capital adequacy' },
+  { id: 'rwa', label: 'Basel — RWA Breakdown', href: '/basel/rwa', icon: ShieldCheck, group: 'Modules', keywords: 'risk weighted assets credit operational market' },
+  { id: 'capital-structure', label: 'Basel — Capital Structure', href: '/basel/structure', icon: ShieldCheck, group: 'Modules', keywords: 'tier 1 2 cet1 instruments' },
+  { id: 'basel-stress', label: 'Basel — Stress Testing', href: '/basel/stress', icon: ShieldCheck, group: 'Modules', keywords: 'scenario shock adverse' },
+  { id: 'basel-subs', label: 'Basel — BoG Submission Preview', href: '/basel/submissions', icon: ShieldCheck, group: 'Modules', keywords: 'regulatory filing return' },
 
-  { id: 'ftp', label: 'Funds Transfer Pricing — FTP Dashboard', hint: 'Module 05', href: '/ftp', icon: GitBranch, group: 'Modules' },
+  { id: 'ftp', label: 'FTP — Funds Transfer Pricing Dashboard', hint: 'Module 05', href: '/ftp', icon: GitBranch, group: 'Modules', keywords: 'margin spread pool matched maturity' },
 
-  { id: 'forecasting', label: 'Balance Sheet — Forecast Dashboard', hint: 'Module 06', href: '/forecasting', icon: TrendingUp, group: 'Modules' },
-  { id: 'forecast-scenario', label: 'Balance Sheet — Scenario Builder', href: '/forecasting/scenario', icon: TrendingUp, group: 'Modules' },
-  { id: 'forecast-optimizer', label: 'Balance Sheet — Strategy Optimizer', href: '/forecasting/optimizer', icon: TrendingUp, group: 'Modules' },
-  { id: 'forecast-whatif', label: 'Balance Sheet — What-if Analysis', href: '/forecasting/whatif', icon: TrendingUp, group: 'Modules' },
+  { id: 'forecasting', label: 'Forecasting — Balance Sheet Dashboard', hint: 'Module 06', href: '/forecasting', icon: TrendingUp, group: 'Modules', keywords: 'projection growth plan' },
+  { id: 'forecast-scenario', label: 'Forecasting — Scenario Builder', href: '/forecasting/scenario', icon: TrendingUp, group: 'Modules', keywords: 'assumptions what if' },
+  { id: 'forecast-optimizer', label: 'Forecasting — Strategy Optimizer', href: '/forecasting/optimizer', icon: TrendingUp, group: 'Modules', keywords: 'optimization mix' },
+  { id: 'forecast-whatif', label: 'Forecasting — What-if Analysis', href: '/forecasting/whatif', icon: TrendingUp, group: 'Modules', keywords: 'sensitivity shock' },
 
-  { id: 'reports', label: 'Reports Library', href: '/reports', icon: FileBarChart2, group: 'Filings' },
-  { id: 'submissions', label: 'Regulatory Submissions', href: '/submissions', icon: FileCheck2, group: 'Filings' },
-  { id: 'settings', label: 'Settings', href: '/settings', icon: Settings, group: 'Filings' },
+  { id: 'behavioral', label: 'Behavioral Models', hint: 'Module 07', href: '/behavioral', icon: BrainCircuit, group: 'Modules', keywords: 'nmd core deposits prepayment decay ml' },
+
+  { id: 'data-engine', label: 'Data Engine — Overview', hint: 'Module 00', href: '/data-engine', icon: Database, group: 'Data', keywords: 'ingestion integration upload' },
+  { id: 'de-excel-csv', label: 'Data Engine — Excel & CSV', href: '/data-engine/excel-csv', icon: Database, group: 'Data', keywords: 'upload spreadsheet import' },
+  { id: 'de-api', label: 'Data Engine — API Push', href: '/data-engine/api', icon: Database, group: 'Data', keywords: 'rest integration webhook token' },
+  { id: 'de-t24', label: 'Data Engine — Temenos T24', href: '/data-engine/t24', icon: Database, group: 'Data', keywords: 'core banking adapter' },
+  { id: 'de-adapters', label: 'Data Engine — Other adapters', href: '/data-engine/adapters', icon: Database, group: 'Data', keywords: 'flexcube finacle rubikon connector' },
+  { id: 'de-canonical', label: 'Data Engine — Canonical Data', href: '/data-engine/positions', icon: Database, group: 'Data', keywords: 'positions facts tables' },
+  { id: 'de-market', label: 'Data Engine — Market Data', href: '/data-engine/market-data', icon: Database, group: 'Data', keywords: 'rates feeds sources bog' },
+
+  { id: 'reports', label: 'Reports Library', href: '/reports', icon: FileBarChart2, group: 'Governance', keywords: 'export pdf board pack' },
+  { id: 'submissions', label: 'Regulatory Submissions', href: '/submissions', icon: FileCheck2, group: 'Governance', keywords: 'bog filing returns' },
+  { id: 'settings', label: 'Settings', href: '/settings', icon: Settings, group: 'Governance', keywords: 'configuration limits thresholds admin' },
 ];
 
 export default function CommandPalette({
@@ -78,13 +93,15 @@ export default function CommandPalette({
 
   const filtered = useMemo(() => {
     if (!query.trim()) return items;
-    const q = query.toLowerCase();
-    return items.filter(
-      (it) =>
-        it.label.toLowerCase().includes(q) ||
-        it.hint?.toLowerCase().includes(q) ||
-        it.group.toLowerCase().includes(q)
-    );
+    // Every whitespace-separated term must match somewhere in the item's
+    // label / hint / group / keywords haystack (simple fuzzy AND-filter).
+    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    return items.filter((it) => {
+      const haystack = `${it.label} ${it.hint ?? ''} ${it.group} ${
+        it.keywords ?? ''
+      }`.toLowerCase();
+      return terms.every((t) => haystack.includes(t));
+    });
   }, [query]);
 
   useEffect(() => {
@@ -137,9 +154,9 @@ export default function CommandPalette({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-navy/30 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
       />
-      <div className="relative w-full max-w-xl bg-white border border-border rounded-lg shadow-pop overflow-hidden">
+      <div className="relative w-full max-w-xl bg-surface-raised border border-border rounded-lg shadow-pop overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border-light">
           <Search size={16} className="text-slate" aria-hidden />
           <input
@@ -148,7 +165,7 @@ export default function CommandPalette({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search modules, screens, reports…"
-            className="flex-1 outline-none text-body text-navy placeholder:text-slate"
+            className="flex-1 bg-transparent outline-none text-body text-navy placeholder:text-slate"
           />
           <kbd className="text-[10px] font-mono text-slate bg-surface border border-border-light rounded px-1.5 py-0.5">
             ESC

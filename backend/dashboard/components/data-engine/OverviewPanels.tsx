@@ -236,7 +236,7 @@ export function CanonicalSummaryStrip() {
       <h2 className="text-h2 text-navy">Canonical model</h2>
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-border-light rounded overflow-hidden border border-border-light">
         {tiles.map((tile) => (
-          <div key={tile.label} className="bg-white px-3 py-2.5" title={tile.title}>
+          <div key={tile.label} className="bg-surface-raised px-3 py-2.5" title={tile.title}>
             <p className="text-micro uppercase tracking-wider text-slate">{tile.label}</p>
             <p className={`mt-1 font-mono text-h3 ${tile.tone ?? 'text-navy'} truncate`}>
               {tile.value}

@@ -101,10 +101,10 @@ export default function KPICard({
             data={sparkline}
             color={
               status === 'breach' || status === 'critical'
-                ? '#B3261E'
+                ? 'rgb(var(--crit))'
                 : status === 'approaching' || status === 'amber'
-                ? '#C97C00'
-                : '#0E8A4F'
+                ? 'rgb(var(--warn))'
+                : 'rgb(var(--ok))'
             }
             width={68}
             height={24}

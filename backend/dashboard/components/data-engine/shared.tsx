@@ -210,7 +210,7 @@ export function CountStrip({ batch }: { batch: IngestionBatchRead }) {
   return (
     <div className="grid grid-cols-4 sm:grid-cols-7 gap-px bg-border-light rounded overflow-hidden border border-border-light">
       {items.map((item) => (
-        <div key={item.label} className="bg-white px-3 py-2" title={item.title}>
+        <div key={item.label} className="bg-surface-raised px-3 py-2" title={item.title}>
           <p className="text-micro uppercase tracking-wider text-slate">{item.label}</p>
           <p className={`mt-0.5 font-mono text-h3 ${item.tone ?? 'text-navy'}`}>
             {item.value}

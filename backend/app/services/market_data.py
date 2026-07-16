@@ -315,6 +315,99 @@ def list_fx_base_currencies(
     return sorted(currency for currency in rows if currency != quote)
 
 
+# ---------------------------------------------------------------------------
+# Scope discovery for the consumption views: which scopes can the canonical
+# store answer at an as-of date? Same servability filters as the getters
+# (current generation, accepted/warning, business date at or before as-of);
+# each discovered key is then served through the arbitrating getter above.
+# ---------------------------------------------------------------------------
+
+
+def list_curve_currencies(
+    db: Session,
+    organization_id: UUID,
+    bank_id: UUID,
+    as_of: date,
+) -> list[str]:
+    """Currencies with at least one servable yield curve at ``as_of``."""
+    rows = db.scalars(
+        select(CanonicalYieldCurve.currency)
+        .where(
+            CanonicalYieldCurve.organization_id == organization_id,
+            CanonicalYieldCurve.bank_id == bank_id,
+            CanonicalYieldCurve.as_of_date <= as_of,
+            CanonicalYieldCurve.superseded_by.is_(None),
+            CanonicalYieldCurve.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+        )
+        .distinct()
+    ).all()
+    return sorted(rows)
+
+
+def list_fx_pairs(
+    db: Session,
+    organization_id: UUID,
+    bank_id: UUID,
+    as_of: date,
+) -> list[tuple[str, str]]:
+    """Distinct (base, quote) spot pairs servable at ``as_of``."""
+    rows = db.execute(
+        select(CanonicalFxRate.base_currency, CanonicalFxRate.quote_currency)
+        .where(
+            CanonicalFxRate.organization_id == organization_id,
+            CanonicalFxRate.bank_id == bank_id,
+            CanonicalFxRate.rate_type == "spot",
+            CanonicalFxRate.as_of_date <= as_of,
+            CanonicalFxRate.superseded_by.is_(None),
+            CanonicalFxRate.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+        )
+        .distinct()
+    ).all()
+    return sorted((base, quote) for base, quote in rows)
+
+
+def list_rating_issuers(
+    db: Session,
+    organization_id: UUID,
+    bank_id: UUID,
+    as_of: date,
+) -> list[str]:
+    """Issuers with at least one servable rating observation at ``as_of``."""
+    rows = db.scalars(
+        select(CanonicalCounterpartyRating.issuer)
+        .where(
+            CanonicalCounterpartyRating.organization_id == organization_id,
+            CanonicalCounterpartyRating.bank_id == bank_id,
+            CanonicalCounterpartyRating.as_of_date <= as_of,
+            CanonicalCounterpartyRating.superseded_by.is_(None),
+            CanonicalCounterpartyRating.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+        )
+        .distinct()
+    ).all()
+    return sorted(rows)
+
+
+def list_index_scopes(
+    db: Session,
+    organization_id: UUID,
+    bank_id: UUID,
+    as_of: date,
+) -> list[tuple[str, str]]:
+    """Distinct (index_code, scenario) pairs servable at ``as_of``."""
+    rows = db.execute(
+        select(CanonicalMarketIndex.index_code, CanonicalMarketIndex.scenario)
+        .where(
+            CanonicalMarketIndex.organization_id == organization_id,
+            CanonicalMarketIndex.bank_id == bank_id,
+            CanonicalMarketIndex.as_of_date <= as_of,
+            CanonicalMarketIndex.superseded_by.is_(None),
+            CanonicalMarketIndex.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+        )
+        .distinct()
+    ).all()
+    return sorted((code, scenario) for code, scenario in rows)
+
+
 def get_rating(  # noqa: PLR0913 - scope + tenant + as-of is the request key
     db: Session,
     organization_id: UUID,

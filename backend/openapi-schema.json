@@ -10324,6 +10324,88 @@
         "title": "FxMetricsRead",
         "type": "object"
       },
+      "FxRateHistoryPointRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "Fx History As Of Date",
+            "type": "string"
+          },
+          "rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of_date",
+          "rate"
+        ],
+        "title": "FxRateHistoryPointRead",
+        "type": "object"
+      },
+      "FxRateViewRead": {
+        "additionalProperties": false,
+        "description": "The authoritative spot for one pair: ``rate`` quote units per 1 base.\n\n``history`` is the trailing persisted spot series (ascending by business\ndate, capped) for sparkline rendering.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "Fx Rate As Of Date",
+            "type": "string"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/MarketDataAttributionRead"
+          },
+          "base": {
+            "title": "Base",
+            "type": "string"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/FxRateHistoryPointRead"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rate",
+            "type": "string"
+          },
+          "rate_type": {
+            "title": "Rate Type",
+            "type": "string"
+          },
+          "tenor_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rate Tenor Months"
+          }
+        },
+        "required": [
+          "base",
+          "quote",
+          "rate_type",
+          "tenor_months",
+          "rate",
+          "as_of_date",
+          "history",
+          "attribution"
+        ],
+        "title": "FxRateViewRead",
+        "type": "object"
+      },
       "FxScenarioBatchCreate": {
         "additionalProperties": false,
         "properties": {
@@ -10549,6 +10631,53 @@
           "cpr"
         ],
         "title": "IncentivePoint",
+        "type": "object"
+      },
+      "IndexViewRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "Index As Of Date",
+            "type": "string"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/MarketDataAttributionRead"
+          },
+          "horizon_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Horizon Months"
+          },
+          "index_code": {
+            "title": "Index Code",
+            "type": "string"
+          },
+          "scenario": {
+            "title": "Scenario",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_code",
+          "value",
+          "scenario",
+          "horizon_months",
+          "as_of_date",
+          "attribution"
+        ],
+        "title": "IndexViewRead",
         "type": "object"
       },
       "IngestionBatchCreate": {
@@ -12698,6 +12827,43 @@
         "title": "MappingConfigRead",
         "type": "object"
       },
+      "MarketDataAttributionRead": {
+        "additionalProperties": false,
+        "description": "Provenance + freshness for one served view (mirrors SourceAttribution).",
+        "properties": {
+          "age_seconds": {
+            "title": "Age Seconds",
+            "type": "number"
+          },
+          "ingested_at": {
+            "format": "date-time",
+            "title": "Market Data Ingested At",
+            "type": "string"
+          },
+          "ingestion_batch_id": {
+            "format": "uuid",
+            "title": "Ingestion Batch Id",
+            "type": "string"
+          },
+          "source_system": {
+            "title": "Source System",
+            "type": "string"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source_system",
+          "ingestion_batch_id",
+          "ingested_at",
+          "stale",
+          "age_seconds"
+        ],
+        "title": "MarketDataAttributionRead",
+        "type": "object"
+      },
       "MarketDataConnectionCreate": {
         "additionalProperties": false,
         "description": "Onboard one vendor connection (\u00a79.2 steps 1-7).\n\n``credentials`` is required for vendor sources and forbidden for\n``manual_upload`` (which authenticates nothing). ``schedule`` maps scope\ncategory (or scope) names to ``PullFrequency`` names; omitted categories\nfall back to their \u00a79.2 step-6 defaults.",
@@ -13093,6 +13259,60 @@
           "manual_upload"
         ],
         "type": "string"
+      },
+      "MarketDataViewsRead": {
+        "additionalProperties": false,
+        "description": "Everything the canonical store can answer for a bank at an as-of date.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "Market Data Views As Of Date",
+            "type": "string"
+          },
+          "bank_id": {
+            "format": "uuid",
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "curves": {
+            "items": {
+              "$ref": "#/components/schemas/YieldCurveViewRead"
+            },
+            "title": "Curves",
+            "type": "array"
+          },
+          "fx_rates": {
+            "items": {
+              "$ref": "#/components/schemas/FxRateViewRead"
+            },
+            "title": "Fx Rates",
+            "type": "array"
+          },
+          "indices": {
+            "items": {
+              "$ref": "#/components/schemas/IndexViewRead"
+            },
+            "title": "Indices",
+            "type": "array"
+          },
+          "ratings": {
+            "items": {
+              "$ref": "#/components/schemas/RatingViewRead"
+            },
+            "title": "Ratings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "as_of_date",
+          "curves",
+          "fx_rates",
+          "ratings",
+          "indices"
+        ],
+        "title": "MarketDataViewsRead",
+        "type": "object"
       },
       "OfficialRunRequest": {
         "additionalProperties": false,
@@ -13940,6 +14160,58 @@
           "pull_count"
         ],
         "title": "QuotaSummaryRead",
+        "type": "object"
+      },
+      "RatingViewRead": {
+        "additionalProperties": false,
+        "properties": {
+          "agency": {
+            "title": "Agency",
+            "type": "string"
+          },
+          "as_of_date": {
+            "format": "date",
+            "title": "Rating As Of Date",
+            "type": "string"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/MarketDataAttributionRead"
+          },
+          "issuer": {
+            "title": "Issuer",
+            "type": "string"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "string"
+          },
+          "rating_date": {
+            "format": "date",
+            "title": "Rating Date",
+            "type": "string"
+          },
+          "watch_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating Watch Status"
+          }
+        },
+        "required": [
+          "issuer",
+          "agency",
+          "rating",
+          "watch_status",
+          "rating_date",
+          "as_of_date",
+          "attribution"
+        ],
+        "title": "RatingViewRead",
         "type": "object"
       },
       "ReadinessResponse": {
@@ -16303,6 +16575,64 @@
           "net_income_delta"
         ],
         "title": "WhatIfYearDeltaRead",
+        "type": "object"
+      },
+      "YieldCurvePointRead": {
+        "additionalProperties": false,
+        "properties": {
+          "rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rate",
+            "type": "string"
+          },
+          "tenor_months": {
+            "title": "Tenor Months",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tenor_months",
+          "rate"
+        ],
+        "title": "YieldCurvePointRead",
+        "type": "object"
+      },
+      "YieldCurveViewRead": {
+        "additionalProperties": false,
+        "description": "One currency's authoritative curve; rates are decimal fractions.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "Yield Curve As Of Date",
+            "type": "string"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/MarketDataAttributionRead"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "curve_name": {
+            "title": "Curve Name",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/YieldCurvePointRead"
+            },
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency",
+          "curve_name",
+          "as_of_date",
+          "points",
+          "attribution"
+        ],
+        "title": "YieldCurveViewRead",
         "type": "object"
       },
       "app__schemas__financial_workspace__FinancialString120__1": {
@@ -23777,6 +24107,141 @@
           }
         },
         "summary": "Upload Market Data",
+        "tags": [
+          "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/views": {
+      "get": {
+        "operationId": "getMarketDataViews",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataViewsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Market Data Views",
         "tags": [
           "market-data"
         ]

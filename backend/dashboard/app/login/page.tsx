@@ -9,7 +9,7 @@ export default function LoginPage() {
     <PrototypeBanner />
     <div className="min-h-screen grid lg:grid-cols-[1fr,minmax(0,480px)]">
       {/* Left brand panel */}
-      <div className="hidden lg:flex flex-col justify-between bg-navy text-white p-12 relative overflow-hidden">
+      <div className="hidden lg:flex flex-col justify-between bg-nav text-white p-12 relative overflow-hidden">
         <Logo variant="dark" />
 
         <div className="relative">
@@ -60,7 +60,7 @@ export default function LoginPage() {
       </div>
 
       {/* Right login panel */}
-      <div className="flex items-center justify-center p-8 bg-white">
+      <div className="flex items-center justify-center p-8 bg-surface-raised">
         <div className="w-full max-w-sm">
           <div className="lg:hidden mb-10">
             <Logo variant="light" />
@@ -102,7 +102,7 @@ export default function LoginPage() {
 
             <Link
               href="/"
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-navy text-white rounded-md font-medium hover:bg-navy-700 transition-colors"
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 btn-primary font-medium transition-colors"
             >
               Enter platform
               <ArrowRight size={16} aria-hidden />

@@ -9,17 +9,25 @@ import {
   Tooltip,
   Cell,
 } from 'recharts';
+import { axisProps, chartTooltipProps } from '@/lib/chartTheme';
 
 type Item = {
   level: string;
   shareGHS: number;
   pct: number;
+  /** Any CSS color, including chart tokens like 'var(--chart-1)'. */
   color: string;
 };
 
-export default function HQLAStackChart({ data }: { data: Item[] }) {
+export default function HQLAStackChart({
+  data,
+  height = 220,
+}: {
+  data: Item[];
+  height?: number;
+}) {
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={height}>
       <BarChart
         data={data}
         margin={{ top: 8, right: 24, left: 8, bottom: 8 }}
@@ -27,8 +35,7 @@ export default function HQLAStackChart({ data }: { data: Item[] }) {
       >
         <XAxis
           type="number"
-          axisLine={{ stroke: '#D0D7DE' }}
-          tickLine={false}
+          {...axisProps}
           tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`}
         />
         <YAxis
@@ -36,11 +43,13 @@ export default function HQLAStackChart({ data }: { data: Item[] }) {
           dataKey="level"
           axisLine={false}
           tickLine={false}
-          width={70}
+          tick={axisProps.tick}
+          width={90}
         />
         <Tooltip
+          {...chartTooltipProps}
+          cursor={{ fill: 'rgb(var(--surface-hover))' }}
           formatter={(v: number) => [`GHS ${(v / 1_000_000).toFixed(1)}M`, 'Amount']}
-          cursor={{ fill: '#F5F7FA' }}
         />
         <Bar dataKey="shareGHS" radius={[0, 2, 2, 0]} maxBarSize={32}>
           {data.map((d, i) => (

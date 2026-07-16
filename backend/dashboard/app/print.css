@@ -1,0 +1,121 @@
+/**
+ * Board-pack print styles.
+ *
+ * Imported ONLY by report pages (app/(app)/reports/board-pack/page.tsx).
+ * globals.css already hides the aside/topbar chrome in @media print and
+ * remaps the semantic tokens to a light palette; this sheet adds the
+ * page-level rules that turn the board pack into a clean A4 document:
+ * page size + margins, per-section page breaks, table fidelity, and a
+ * reinforced light-palette override so a dark-themed session still prints
+ * light. Zero hex — every color goes through the token triplets.
+ */
+
+/* Screen: print-only elements stay hidden until the print pipeline runs. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm 12mm;
+  }
+
+  /* Force the light palette even when the session theme is dark. globals.css
+     carries the same override; repeated here so the board pack never depends
+     on load order for print fidelity. */
+  :root,
+  :root[data-theme='dark'],
+  :root[data-theme='light'] {
+    color-scheme: light;
+    --bg: 255 255 255;
+    --surface: 255 255 255;
+    --surface-raised: 255 255 255;
+    --surface-hover: 245 247 250;
+    --line: 208 215 222;
+    --line-strong: 160 170 180;
+    --heading: 0 0 0;
+    --text: 17 24 39;
+    --text-muted: 55 65 81;
+    --text-faint: 107 114 128;
+    --shadow-card: none;
+    --shadow-subtle: none;
+    --shadow-pop: none;
+  }
+
+  html,
+  body {
+    background: rgb(var(--bg)) !important;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  /* Anything flagged no-print (toolbars, buttons, tour chrome) disappears. */
+  .no-print {
+    display: none !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Board pack layout                                                    */
+  /* ------------------------------------------------------------------ */
+
+  .board-pack {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* One module (or cover / executive summary) per A4 page. */
+  .board-pack .bp-page {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .board-pack .bp-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  /* Never split a KPI, metric table, or card across a page boundary. */
+  .board-pack .card,
+  .board-pack table,
+  .board-pack .bp-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Cards print as bordered boxes — shadows do not survive paper. */
+  .board-pack .card {
+    box-shadow: none !important;
+    border: 1px solid rgb(var(--line));
+    background: rgb(var(--surface-raised)) !important;
+  }
+
+  /* Table fidelity: visible rules, no hover artifacts. */
+  .board-pack table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  .board-pack th,
+  .board-pack td {
+    border-bottom: 1px solid rgb(var(--line));
+  }
+
+  .board-pack thead th {
+    border-bottom: 1px solid rgb(var(--line-strong));
+  }
+
+  /* Charts are optional in print — tables and KPIs carry the numbers. */
+  .board-pack .bp-screen-only {
+    display: none !important;
+  }
+
+  /* Keep status pills and badges ink-friendly (bordered, not filled). */
+  .board-pack .bp-page a {
+    text-decoration: none;
+    color: inherit;
+  }
+}

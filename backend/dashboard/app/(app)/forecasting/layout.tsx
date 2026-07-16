@@ -1,10 +1,12 @@
 import ModuleTabs from '@/components/shell/ModuleTabs';
 
 const tabs = [
-  { href: '/forecasting', label: 'Forecast Dashboard' },
-  { href: '/forecasting/scenario', label: 'Scenario Builder' },
-  { href: '/forecasting/optimizer', label: 'Strategy Optimizer' },
-  { href: '/forecasting/whatif', label: 'What-if Analysis' },
+  { href: '/forecasting', label: 'Balance Sheet' },
+  { href: '/forecasting/nii', label: 'NII Forecast' },
+  { href: '/forecasting/scenario', label: 'Scenarios' },
+  { href: '/forecasting/whatif', label: 'What-if Lab' },
+  { href: '/forecasting/optimizer', label: 'Optimizer' },
+  { href: '/forecasting/assumptions', label: 'Assumptions' },
 ];
 
 export default function ForecastingLayout({

@@ -5,15 +5,19 @@ import { FileText, Info, Loader2, PlayCircle } from 'lucide-react';
 import type { LiquidityDashboardLineRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import RatioGauge from '@/components/ui/RatioGauge';
-import KPICard from '@/components/ui/KPICard';
+import KpiStat from '@/components/ui/KpiStat';
+import LimitBar from '@/components/ui/LimitBar';
+import ChartFrame from '@/components/ui/ChartFrame';
+import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
 import RunBadge from '@/components/ui/RunBadge';
+import Sparkline from '@/components/ui/Sparkline';
 import ValidationList from '@/components/ui/ValidationList';
 import QueryBoundary from '@/components/ui/QueryBoundary';
-import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import DataTable, { type Column } from '@/components/ui/DataTable';
-import RatioHistoryChart from '@/components/charts/RatioHistoryChart';
-import HQLAStackChart from '@/components/charts/HQLAStackChart';
+import RatioTrendChart from '@/components/liquidity/charts/RatioTrendChart';
+import NetOutflowChart from '@/components/liquidity/charts/NetOutflowChart';
+import { runComputedAt, runThresholds } from '@/components/liquidity/runData';
 import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
@@ -23,8 +27,6 @@ import {
 } from '@/lib/api/hooks';
 import { fmtDateUTC, isoDate, num, statusTone } from '@/lib/api/values';
 import { fmtCurrency, fmtPct } from '@/lib/format';
-
-const HQLA_COLORS = ['#0E8A4F', '#2D7FF9', '#1A4D5C', '#C97C00', '#5A6776'];
 
 type LineRow = {
   item: string;
@@ -68,7 +70,7 @@ function lineColumns(rateHeader: string, weightedHeader: string): Column<LineRow
   ];
 }
 
-export default function LCRDashboard() {
+export default function LiquidityCockpit() {
   const { bank, period } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
@@ -78,10 +80,15 @@ export default function LCRDashboard() {
   const runBaseline = useCreateRegulatoryRun(bankId);
 
   const data = dashboard.data;
-  const lcrThreshold = num(
-    latestRun.data?.metricResults.find((m) => m.metricCode === 'lcr_pct')
-      ?.thresholdMin ?? '100'
-  );
+  const run = latestRun.data;
+
+  // Regulatory floors from the stored run's parameter snapshot; the standard
+  // BoG CRD values are the fallback before a run is persisted.
+  const thresholds = runThresholds(run);
+  const lcrMin = thresholds['lcr_min'] ?? 100;
+  const lcrRedFloor = thresholds['lcr_amber_floor'] ?? 90;
+  const nsfrMin = thresholds['nsfr_min'] ?? 100;
+  const nsfrRedFloor = thresholds['nsfr_amber_floor'] ?? nsfrMin;
 
   const outflowRows = (data?.outflows ?? []).map(toRow);
   const inflowRows = (data?.inflows ?? []).map(toRow);
@@ -96,13 +103,23 @@ export default function LCRDashboard() {
   const hasInlineTrendPoints = (data?.trend ?? []).some((p) => !p.stored);
 
   const hqlaTotal = num(data?.metrics.hqlaTotalGhs);
-  const hqlaBreakdown = (data?.hqlaComposition ?? []).map((line, i) => ({
-    level: line.description,
-    label: line.lineCode,
-    shareGHS: num(line.weightedAmount),
-    pct: hqlaTotal > 0 ? Math.round((num(line.weightedAmount) / hqlaTotal) * 100) : 0,
-    color: HQLA_COLORS[i % HQLA_COLORS.length],
-  }));
+  const lcrTrend = (data?.trend ?? []).map((p) => num(p.lcrPct));
+  const nsfrTrend = (data?.trend ?? []).map((p) => num(p.nsfrPct));
+  const periodDelta = (series: number[]): number | undefined =>
+    series.length >= 2
+      ? series[series.length - 1] - series[series.length - 2]
+      : undefined;
+  const lcrDelta = periodDelta(lcrTrend);
+  const nsfrDelta = periodDelta(nsfrTrend);
+
+  const computedAt = runComputedAt(run);
+  const provenance = data ? (
+    <span>
+      {data.stored
+        ? 'Stored baseline run'
+        : 'Live computation — run baseline to persist'}
+    </span>
+  ) : undefined;
 
   return (
     <>
@@ -110,10 +127,10 @@ export default function LCRDashboard() {
         breadcrumbs={[
           { label: 'Modules', href: '/' },
           { label: 'Liquidity Risk' },
-          { label: 'LCR Dashboard' },
+          { label: 'Cockpit' },
         ]}
-        title="Liquidity Coverage Ratio"
-        subtitle="Basel III LCR per Bank of Ghana CRD framework · 30-day stressed horizon"
+        title="Liquidity Cockpit"
+        subtitle="Basel III LCR & NSFR per Bank of Ghana CRD framework · 30-day stressed horizon"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <div className="flex items-center gap-2">
@@ -123,7 +140,7 @@ export default function LCRDashboard() {
               module="liquidity"
               asOfDate={period ? isoDate(period.periodEnd) : undefined}
             />
-            {latestRun.data && <RunBadge run={latestRun.data} />}
+            {run && <RunBadge run={run} />}
             <Link
               href="/liquidity/submission"
               className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-action border border-action/30 bg-action-light rounded-md hover:bg-action/10"
@@ -142,7 +159,7 @@ export default function LCRDashboard() {
                   scenarioCode: 'baseline',
                 })
               }
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
             >
               {runBaseline.isPending ? (
                 <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -172,186 +189,248 @@ export default function LCRDashboard() {
               </div>
             )}
 
-            {/* Top row: ratio gauge + 2 KPIs */}
+            {/* Headline gauges + component KPIs */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               <div className="lg:col-span-2">
                 <RatioGauge
                   label="Liquidity Coverage Ratio"
                   value={num(data.metrics.lcrPct)}
-                  threshold={lcrThreshold}
-                  internalBuffer={90}
-                  bufferLabel="Amber floor"
+                  threshold={lcrMin}
+                  internalBuffer={lcrRedFloor}
+                  bufferLabel="Red floor"
                   status={statusTone(data.metrics.lcrStatus)}
                   decimals={2}
                 />
               </div>
-              <KPICard
+              <KpiStat
                 label="HQLA stock"
-                value={hqlaTotal / 1_000_000}
-                prefix="GHS"
-                suffix="M"
-                decimals={1}
-                status={statusTone(data.metrics.lcrStatus)}
+                value={fmtCurrency(hqlaTotal, 'GHS')}
+                status={
+                  data.metrics.lcrStatus === 'red'
+                    ? 'crit'
+                    : data.metrics.lcrStatus === 'amber'
+                    ? 'warn'
+                    : 'ok'
+                }
+                delta={lcrDelta}
+                deltaSuffix=" pts LCR"
+                hint="Post-haircut weighted"
               />
-              <KPICard
+              <KpiStat
                 label="30-day net outflows"
-                value={num(data.metrics.netOutflows30dGhs) / 1_000_000}
-                prefix="GHS"
-                suffix="M"
-                decimals={1}
-                status={statusTone(data.metrics.lcrStatus)}
+                value={fmtCurrency(num(data.metrics.netOutflows30dGhs), 'GHS')}
+                hint="Outflows − capped inflows"
               />
             </div>
 
-            {/* 12-period trend + HQLA composition */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="lg:col-span-2">
-                <CardHeader
-                  title="LCR — 12-period trend"
-                  subtitle="Reporting-period LCR across the trailing year"
-                  action={
-                    <StatusPill tone="success">
-                      Compliant{' '}
-                      {
-                        data.trend.filter((p) => num(p.lcrPct) >= lcrThreshold)
-                          .length
-                      }{' '}
-                      of {data.trend.length}
-                    </StatusPill>
-                  }
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-2">
+                <RatioGauge
+                  label="Net Stable Funding Ratio"
+                  value={num(data.metrics.nsfrPct)}
+                  threshold={nsfrMin}
+                  status={statusTone(data.metrics.nsfrStatus)}
+                  decimals={2}
                 />
-                <CardBody>
-                  <RatioHistoryChart
-                    data={data.trend.map((p) => ({
-                      month: p.label,
-                      value: num(p.lcrPct),
-                      stored: p.stored,
-                    }))}
-                    threshold={lcrThreshold}
-                    internalBuffer={90}
-                    color="#0E8A4F"
-                    label="LCR"
-                  />
-                  {hasInlineTrendPoints && (
-                    <p className="mt-2 text-caption text-slate">
+              </div>
+              <KpiStat
+                label="Available stable funding"
+                value={fmtCurrency(num(data.metrics.asfTotalGhs), 'GHS')}
+                delta={nsfrDelta}
+                deltaSuffix=" pts NSFR"
+                hint="Liability-side weighting"
+              />
+              <KpiStat
+                label="Required stable funding"
+                value={fmtCurrency(num(data.metrics.rsfTotalGhs), 'GHS')}
+                hint="Asset-side weighting"
+              />
+            </div>
+
+            {/* Regulatory floors — LCR & NSFR are floor limits (direction above) */}
+            <SectionCard
+              title="Regulatory floors"
+              subtitle="BoG CRD thresholds from the active parameter set — green ≥ minimum, amber down to the red floor"
+              computedAt={computedAt}
+              runBadge={run ? <RunBadge run={run} /> : undefined}
+              footer={provenance}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5">
+                <LimitBar
+                  label={
+                    <span className="inline-flex items-center gap-2">
+                      LCR
+                      <Sparkline data={lcrTrend} width={64} height={16} />
+                    </span>
+                  }
+                  value={num(data.metrics.lcrPct)}
+                  limit={lcrRedFloor}
+                  warnAt={lcrMin}
+                  direction="above"
+                  unit="%"
+                  limitLabel="Red floor"
+                  warnLabel="BoG minimum"
+                  format={(v) => v.toFixed(1)}
+                />
+                <LimitBar
+                  label={
+                    <span className="inline-flex items-center gap-2">
+                      NSFR
+                      <Sparkline data={nsfrTrend} width={64} height={16} />
+                    </span>
+                  }
+                  value={num(data.metrics.nsfrPct)}
+                  limit={nsfrRedFloor}
+                  warnAt={nsfrMin}
+                  direction="above"
+                  unit="%"
+                  limitLabel={nsfrRedFloor === nsfrMin ? 'BoG minimum' : 'Red floor'}
+                  warnLabel="BoG minimum"
+                  format={(v) => v.toFixed(1)}
+                />
+              </div>
+            </SectionCard>
+
+            {/* Trend + net-outflow decomposition */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <ChartFrame
+                className="lg:col-span-2"
+                title="LCR & NSFR — reporting-period trend"
+                subtitle={`Ratios across ${data.trend.length} reporting periods`}
+                height={260}
+                actions={
+                  <StatusPill tone="success">
+                    LCR compliant{' '}
+                    {data.trend.filter((p) => num(p.lcrPct) >= lcrMin).length} of{' '}
+                    {data.trend.length}
+                  </StatusPill>
+                }
+                footer={
+                  hasInlineTrendPoints ? (
+                    <span>
                       Hollow points are computed inline — run baseline on those
                       periods to persist them.
-                    </p>
-                  )}
-                </CardBody>
-              </Card>
-
-              <Card>
-                <CardHeader
-                  title="HQLA composition"
-                  subtitle="Post-haircut weighted liquid assets"
+                    </span>
+                  ) : (
+                    <span>All trend points are stored baseline runs.</span>
+                  )
+                }
+              >
+                <RatioTrendChart
+                  data={data.trend.map((p) => ({
+                    label: p.label,
+                    primary: num(p.lcrPct),
+                    secondary: num(p.nsfrPct),
+                    stored: p.stored,
+                  }))}
+                  threshold={lcrMin}
+                  thresholdLabel="Min"
+                  redFloor={lcrRedFloor}
+                  redFloorLabel="Red floor"
+                  primaryLabel="LCR"
+                  secondaryLabel="NSFR"
+                  height={260}
                 />
-                <CardBody className="space-y-4">
-                  <HQLAStackChart data={hqlaBreakdown} />
-                  <ul className="space-y-2 text-caption pt-2 border-t border-border-light">
-                    {hqlaBreakdown.map((h) => (
-                      <li key={h.level} className="flex items-center gap-3">
-                        <span
-                          className="w-2 h-2 rounded-sm shrink-0"
-                          style={{ background: h.color }}
-                          aria-hidden
-                        />
-                        <span className="text-navy flex-1 truncate font-medium">
-                          {h.level}
-                        </span>
-                        <span className="font-mono text-navy tabular-nums shrink-0">
-                          {fmtCurrency(h.shareGHS, 'GHS')}
-                        </span>
-                        <span className="font-mono text-slate tabular-nums w-10 text-right shrink-0">
-                          {h.pct}%
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardBody>
-              </Card>
+              </ChartFrame>
+
+              <ChartFrame
+                title="Net-outflow decomposition"
+                subtitle="Weighted 30-day outflows by category vs capped inflows"
+                height={260}
+                footer={
+                  capNote ? <span>{capNote.message}</span> : undefined
+                }
+              >
+                <NetOutflowChart
+                  outflows={outflowRows.map((r) => ({
+                    name: r.item,
+                    weighted: r.weightedGHS,
+                  }))}
+                  cappedInflows={cappedInflows}
+                  netOutflows={num(data.metrics.netOutflows30dGhs)}
+                  height={260}
+                />
+              </ChartFrame>
             </div>
 
             {/* Outflow & inflow tables */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader
-                  title="Cash outflows"
-                  subtitle="30-day stressed runoff per BoG CRD weights"
+              <SectionCard
+                title="Cash outflows"
+                subtitle="30-day stressed runoff per BoG CRD weights"
+                noPadding
+                computedAt={computedAt}
+                runBadge={run ? <RunBadge run={run} /> : undefined}
+                footer={provenance}
+              >
+                <DataTable
+                  columns={lineColumns('Runoff %', 'Stressed outflow')}
+                  rows={[
+                    ...outflowRows,
+                    {
+                      item: 'TOTAL CASH OUTFLOWS',
+                      balanceGHS: outflowRows.reduce(
+                        (s, r) => s + (r.balanceGHS ?? 0),
+                        0
+                      ),
+                      ratePct: null,
+                      weightedGHS: totalOutflows,
+                      isTotal: true,
+                    },
+                  ]}
+                  totalsRowMatcher={(r) => Boolean(r.isTotal)}
                 />
-                <CardBody className="p-0">
-                  <DataTable
-                    columns={lineColumns('Runoff %', 'Stressed outflow')}
-                    rows={[
-                      ...outflowRows,
-                      {
-                        item: 'TOTAL CASH OUTFLOWS',
-                        balanceGHS: outflowRows.reduce(
-                          (s, r) => s + (r.balanceGHS ?? 0),
-                          0
-                        ),
-                        ratePct: null,
-                        weightedGHS: totalOutflows,
-                        isTotal: true,
-                      },
-                    ]}
-                    totalsRowMatcher={(r) => Boolean(r.isTotal)}
-                  />
-                </CardBody>
-              </Card>
+              </SectionCard>
 
-              <Card>
-                <CardHeader
-                  title="Cash inflows"
-                  subtitle="Capped at 75% of outflows per Basel III"
+              <SectionCard
+                title="Cash inflows"
+                subtitle="Capped at 75% of outflows per Basel III"
+                noPadding
+                computedAt={computedAt}
+                runBadge={run ? <RunBadge run={run} /> : undefined}
+                footer={capNote ? <span>{capNote.message}</span> : provenance}
+              >
+                <DataTable
+                  columns={lineColumns('Inflow %', 'Weighted inflow')}
+                  rows={[
+                    ...inflowRows,
+                    {
+                      item: 'GROSS INFLOWS',
+                      balanceGHS: inflowRows.reduce(
+                        (s, r) => s + (r.balanceGHS ?? 0),
+                        0
+                      ),
+                      ratePct: null,
+                      weightedGHS: inflowRows.reduce(
+                        (s, r) => s + r.weightedGHS,
+                        0
+                      ),
+                      isTotal: true,
+                    },
+                    {
+                      item: 'CAPPED INFLOWS (min of gross, 75% of outflows)',
+                      balanceGHS: null,
+                      ratePct: null,
+                      weightedGHS: cappedInflows,
+                      isTotal: true,
+                    },
+                  ]}
+                  totalsRowMatcher={(r) => Boolean(r.isTotal)}
                 />
-                <CardBody className="p-0">
-                  <DataTable
-                    columns={lineColumns('Inflow %', 'Weighted inflow')}
-                    rows={[
-                      ...inflowRows,
-                      {
-                        item: 'GROSS INFLOWS',
-                        balanceGHS: inflowRows.reduce(
-                          (s, r) => s + (r.balanceGHS ?? 0),
-                          0
-                        ),
-                        ratePct: null,
-                        weightedGHS: inflowRows.reduce(
-                          (s, r) => s + r.weightedGHS,
-                          0
-                        ),
-                        isTotal: true,
-                      },
-                      {
-                        item: 'CAPPED INFLOWS (min of gross, 75% of outflows)',
-                        balanceGHS: null,
-                        ratePct: null,
-                        weightedGHS: cappedInflows,
-                        isTotal: true,
-                      },
-                    ]}
-                    totalsRowMatcher={(r) => Boolean(r.isTotal)}
-                  />
-                  {capNote && (
-                    <p className="px-4 py-3 text-caption text-slate border-t border-border-light">
-                      {capNote.message}
-                    </p>
-                  )}
-                </CardBody>
-              </Card>
+              </SectionCard>
             </div>
 
             {/* Validations */}
-            <Card>
-              <CardHeader
-                title="Validations"
-                subtitle="Regulatory rule evaluation for this period"
-              />
-              <CardBody className="p-0">
-                <ValidationList validations={data.validations} />
-              </CardBody>
-            </Card>
+            <SectionCard
+              title="Validations"
+              subtitle="Regulatory rule evaluation for this period"
+              noPadding
+              computedAt={computedAt}
+              runBadge={run ? <RunBadge run={run} /> : undefined}
+              footer={provenance}
+            >
+              <ValidationList validations={data.validations} />
+            </SectionCard>
 
             {/* Compliance summary line */}
             <p className="text-caption text-slate flex items-center gap-2 flex-wrap">

@@ -68,7 +68,7 @@ export default function TemplatesPanel() {
               type="button"
               onClick={() => setFormat(entry.key)}
               className={`px-3 py-1.5 rounded text-caption font-medium transition-colors ${
-                format === entry.key ? 'bg-navy text-white' : 'text-slate hover:text-navy'
+                format === entry.key ? 'bg-nav text-white' : 'text-slate hover:text-navy'
               }`}
             >
               {entry.label}

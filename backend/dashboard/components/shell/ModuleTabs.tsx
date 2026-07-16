@@ -8,7 +8,7 @@ export type Tab = { href: string; label: string };
 export default function ModuleTabs({ tabs }: { tabs: Tab[] }) {
   const pathname = usePathname();
   return (
-    <div className="bg-white border-b border-border-light px-8">
+    <div className="bg-surface-raised border-b border-border-light px-8">
       <nav className="-mb-px flex gap-1 overflow-x-auto" aria-label="Module sections">
         {tabs.map((t) => {
           const active =

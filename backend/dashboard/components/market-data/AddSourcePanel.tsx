@@ -363,7 +363,7 @@ export default function AddSourcePanel({
                         [category]: event.target.value,
                       }))
                     }
-                    className="w-full px-3 py-1.5 rounded border border-border text-body text-navy bg-white"
+                    className="w-full px-3 py-1.5 rounded border border-border text-body text-navy bg-surface-raised"
                   >
                     {FREQUENCY_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>

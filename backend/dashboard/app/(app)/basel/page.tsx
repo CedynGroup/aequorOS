@@ -2,17 +2,20 @@
 
 import Link from 'next/link';
 import { FileText, Info, Loader2, PlayCircle } from 'lucide-react';
-import type { RegulatoryRunRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
-import KPICard from '@/components/ui/KPICard';
-import RatioGauge from '@/components/ui/RatioGauge';
+import KpiStat, { type KpiStatus } from '@/components/ui/KpiStat';
+import LimitBar from '@/components/ui/LimitBar';
+import ChartFrame from '@/components/ui/ChartFrame';
+import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
 import RunBadge from '@/components/ui/RunBadge';
+import Sparkline from '@/components/ui/Sparkline';
 import ValidationList from '@/components/ui/ValidationList';
 import QueryBoundary from '@/components/ui/QueryBoundary';
-import { Card, CardHeader, CardBody } from '@/components/ui/Card';
-import RatioHistoryChart from '@/components/charts/RatioHistoryChart';
 import DonutChart from '@/components/charts/DonutChart';
+import RatioTrendChart from '@/components/liquidity/charts/RatioTrendChart';
+import CapitalWaterfallChart from '@/components/basel/charts/CapitalWaterfallChart';
+import { runComputedAt, runMetricThreshold } from '@/components/liquidity/runData';
 import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
@@ -21,25 +24,14 @@ import {
   useRegulatoryRun,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, isoDate, num, statusTone } from '@/lib/api/values';
-import { fmtCurrency } from '@/lib/format';
+import { seriesColor } from '@/lib/chartTheme';
+import { fmtCurrency, fmtPct } from '@/lib/format';
 
-const RWA_COLORS = {
-  credit: '#0A2540',
-  operational: '#1F6CE0',
-  market: '#2D7FF9',
-} as const;
-
-function metricThreshold(
-  run: RegulatoryRunRead | undefined,
-  metricCode: string
-): number | null {
-  const result = run?.metricResults.find((m) => m.metricCode === metricCode);
-  return result?.thresholdMin === null || result?.thresholdMin === undefined
-    ? null
-    : num(result.thresholdMin);
+function kpiStatus(status: 'green' | 'amber' | 'red' | string): KpiStatus {
+  return status === 'red' ? 'crit' : status === 'amber' ? 'warn' : 'ok';
 }
 
-export default function BaselDashboard() {
+export default function BaselOverview() {
   const { bank, period } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
@@ -49,11 +41,13 @@ export default function BaselDashboard() {
   const runBaseline = useCreateRegulatoryRun(bankId);
 
   const data = dashboard.data;
+  const run = latestRun.data;
   const carMin = num(data?.buffers.carMinPct ?? '10');
   const carEarlyWarning = num(data?.buffers.carEarlyWarningPct ?? '10.5');
-  const tier1Min = metricThreshold(latestRun.data, 'tier1_ratio_pct');
-  const cet1Min = metricThreshold(latestRun.data, 'cet1_ratio_pct');
-  const leverageMin = metricThreshold(latestRun.data, 'leverage_ratio_pct');
+  const carCritical = num(data?.buffers.carCriticalPct ?? '9');
+  const tier1Min = runMetricThreshold(run, 'tier1_ratio_pct');
+  const cet1Min = runMetricThreshold(run, 'cet1_ratio_pct');
+  const leverageMin = runMetricThreshold(run, 'leverage_ratio_pct');
 
   const totalRwa = num(data?.metrics.totalRwaGhs);
   const rwaSlices = data
@@ -61,39 +55,48 @@ export default function BaselDashboard() {
         {
           name: 'Credit risk',
           value: num(data.rwaComposition.creditRwaGhs),
-          color: RWA_COLORS.credit,
+          color: seriesColor(0),
         },
         {
           name: 'Operational risk',
           value: num(data.rwaComposition.operationalRwaGhs),
-          color: RWA_COLORS.operational,
+          color: seriesColor(1),
         },
         {
           name: 'Market risk',
           value: num(data.rwaComposition.marketRwaGhs),
-          color: RWA_COLORS.market,
+          color: seriesColor(2),
         },
       ]
     : [];
 
-  const trendPoints = (data?.trend ?? []).map((p) => ({
-    month: p.label,
-    value: num(p.carPct),
-    stored: p.stored,
-  }));
+  const carTrend = (data?.trend ?? []).map((p) => num(p.carPct));
+  const carDelta =
+    carTrend.length >= 2
+      ? carTrend[carTrend.length - 1] - carTrend[carTrend.length - 2]
+      : undefined;
   const hasInlineTrendPoints = (data?.trend ?? []).some((p) => !p.stored);
-  const compliantCount = trendPoints.filter((p) => p.value >= carMin).length;
+  const compliantCount = carTrend.filter((v) => v >= carMin).length;
 
   const structure = data?.capitalStructure;
-  const structureCells = structure
-    ? [
-        { label: 'CET1 capital', value: num(structure.cet1CapitalGhs) },
-        { label: 'AT1 capital', value: num(structure.at1CapitalGhs) },
-        { label: 'Tier 1 capital', value: num(structure.tier1CapitalGhs) },
-        { label: 'Tier 2 capital', value: num(structure.tier2CapitalGhs) },
-        { label: 'Total capital', value: num(structure.totalCapitalGhs) },
-      ]
-    : [];
+  const cet1Gross = structure
+    ? structure.cet1Components.reduce((s, c) => s + num(c.weightedAmount), 0)
+    : 0;
+  const deductions = structure
+    ? structure.cet1Deductions.reduce(
+        (s, c) => s + Math.abs(num(c.weightedAmount)),
+        0
+      )
+    : 0;
+
+  const computedAt = runComputedAt(run);
+  const provenance = data ? (
+    <span>
+      {data.stored
+        ? 'Stored baseline run'
+        : 'Live computation — run baseline to persist'}
+    </span>
+  ) : undefined;
 
   return (
     <>
@@ -101,7 +104,7 @@ export default function BaselDashboard() {
         breadcrumbs={[
           { label: 'Modules', href: '/' },
           { label: 'Basel Capital' },
-          { label: 'Capital Dashboard' },
+          { label: 'Overview' },
         ]}
         title="Basel Capital"
         subtitle="Capital Adequacy Ratio · Tier 1 / Tier 2 · BoG CRD framework"
@@ -114,7 +117,7 @@ export default function BaselDashboard() {
               module="capital"
               asOfDate={period ? isoDate(period.periodEnd) : undefined}
             />
-            {latestRun.data && <RunBadge run={latestRun.data} />}
+            {run && <RunBadge run={run} />}
             <Link
               href="/basel/submissions"
               className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-action border border-action/30 bg-action-light rounded-md hover:bg-action/10"
@@ -133,7 +136,7 @@ export default function BaselDashboard() {
                   scenarioCode: 'baseline',
                 })
               }
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
             >
               {runBaseline.isPending ? (
                 <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -163,50 +166,45 @@ export default function BaselDashboard() {
               </div>
             )}
 
-            {/* Top row: CAR gauge + Tier 1 / CET1 / Leverage KPIs */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-              <div className="lg:col-span-2">
-                <RatioGauge
-                  label="Capital Adequacy Ratio"
-                  value={num(data.metrics.carPct)}
-                  threshold={carMin}
-                  internalBuffer={carEarlyWarning}
-                  bufferLabel="Early warning"
-                  status={statusTone(data.metrics.carStatus)}
-                  decimals={2}
-                />
-              </div>
-              <KPICard
+            {/* Headline ratios */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <KpiStat
+                label="Capital Adequacy Ratio"
+                value={num(data.metrics.carPct).toFixed(2)}
+                unit="%"
+                status={kpiStatus(data.metrics.carStatus)}
+                delta={carDelta}
+                sparkline={<Sparkline data={carTrend} />}
+                hint={`BoG minimum ${carMin.toFixed(1)}%`}
+              />
+              <KpiStat
                 label="Tier 1 ratio"
-                value={num(data.metrics.tier1RatioPct)}
-                suffix="%"
-                decimals={2}
-                status={statusTone(data.metrics.tier1Status)}
-                footer={
+                value={num(data.metrics.tier1RatioPct).toFixed(2)}
+                unit="%"
+                status={kpiStatus(data.metrics.tier1Status)}
+                hint={
                   tier1Min !== null
                     ? `Regulatory minimum ${tier1Min.toFixed(1)}%`
                     : 'CET1 + AT1 / RWA'
                 }
               />
-              <KPICard
+              <KpiStat
                 label="CET1 ratio"
-                value={num(data.metrics.cet1RatioPct)}
-                suffix="%"
-                decimals={2}
-                status={statusTone(data.metrics.cet1Status)}
-                footer={
+                value={num(data.metrics.cet1RatioPct).toFixed(2)}
+                unit="%"
+                status={kpiStatus(data.metrics.cet1Status)}
+                hint={
                   cet1Min !== null
                     ? `Regulatory minimum ${cet1Min.toFixed(1)}%`
                     : 'Common equity Tier 1 / RWA'
                 }
               />
-              <KPICard
+              <KpiStat
                 label="Leverage ratio"
-                value={num(data.metrics.leverageRatioPct)}
-                suffix="%"
-                decimals={2}
-                status={statusTone(data.metrics.leverageStatus)}
-                footer={
+                value={num(data.metrics.leverageRatioPct).toFixed(2)}
+                unit="%"
+                status={kpiStatus(data.metrics.leverageStatus)}
+                hint={
                   leverageMin !== null
                     ? `Regulatory minimum ${leverageMin.toFixed(1)}%`
                     : 'Tier 1 / total exposures'
@@ -214,45 +212,113 @@ export default function BaselDashboard() {
               />
             </div>
 
-            {/* 12-period trend + RWA composition */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="lg:col-span-2">
-                <CardHeader
-                  title="CAR — 12-period trend"
-                  subtitle="Reporting-period CAR across the trailing year"
-                  action={
-                    <StatusPill tone="success">
-                      Compliant {compliantCount} of {trendPoints.length}
-                    </StatusPill>
-                  }
+            {/* Regulatory floors — CAR & companions are floor limits */}
+            <SectionCard
+              title="Regulatory floors"
+              subtitle="BoG CRD minimums — compliant while each ratio stays above its floor"
+              computedAt={computedAt}
+              runBadge={run ? <RunBadge run={run} /> : undefined}
+              footer={provenance}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5">
+                <LimitBar
+                  label="CAR"
+                  value={num(data.metrics.carPct)}
+                  limit={carMin}
+                  warnAt={carEarlyWarning}
+                  direction="above"
+                  unit="%"
+                  limitLabel="BoG minimum"
+                  warnLabel={data.buffers.carEarlyWarningLabel || 'Early warning'}
+                  format={(v) => v.toFixed(1)}
                 />
-                <CardBody>
-                  <RatioHistoryChart
-                    data={trendPoints}
-                    threshold={carMin}
-                    internalBuffer={carEarlyWarning}
-                    yMin={Math.floor(carMin - 2)}
-                    yMax={Math.ceil(
-                      Math.max(...trendPoints.map((p) => p.value), carMin) + 2
-                    )}
-                    color="#0E8A4F"
-                    label="CAR"
-                  />
-                  {hasInlineTrendPoints && (
-                    <p className="mt-2 text-caption text-slate">
+                <LimitBar
+                  label="Tier 1 ratio"
+                  value={num(data.metrics.tier1RatioPct)}
+                  limit={tier1Min ?? 8}
+                  warnAt={tier1Min ?? 8}
+                  direction="above"
+                  unit="%"
+                  limitLabel={
+                    tier1Min !== null ? 'Regulatory minimum' : 'Assumed minimum'
+                  }
+                  format={(v) => v.toFixed(1)}
+                />
+                <LimitBar
+                  label="CET1 ratio"
+                  value={num(data.metrics.cet1RatioPct)}
+                  limit={cet1Min ?? 6.5}
+                  warnAt={cet1Min ?? 6.5}
+                  direction="above"
+                  unit="%"
+                  limitLabel={
+                    cet1Min !== null ? 'Regulatory minimum' : 'Assumed minimum'
+                  }
+                  format={(v) => v.toFixed(1)}
+                />
+                <LimitBar
+                  label="Leverage ratio"
+                  value={num(data.metrics.leverageRatioPct)}
+                  limit={leverageMin ?? 6}
+                  warnAt={leverageMin ?? 6}
+                  direction="above"
+                  unit="%"
+                  limitLabel={
+                    leverageMin !== null
+                      ? 'Regulatory minimum'
+                      : 'Assumed minimum'
+                  }
+                  format={(v) => v.toFixed(1)}
+                />
+              </div>
+            </SectionCard>
+
+            {/* Trend + RWA composition */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <ChartFrame
+                className="lg:col-span-2"
+                title="CAR — reporting-period trend"
+                subtitle={`CAR and Tier 1 across ${carTrend.length} reporting periods`}
+                height={260}
+                actions={
+                  <StatusPill tone="success">
+                    Compliant {compliantCount} of {carTrend.length}
+                  </StatusPill>
+                }
+                footer={
+                  hasInlineTrendPoints ? (
+                    <span>
                       Hollow points are computed inline — run baseline on those
                       periods to persist them.
-                    </p>
-                  )}
-                </CardBody>
-              </Card>
-
-              <Card>
-                <CardHeader
-                  title="RWA composition"
-                  subtitle={`Total ${fmtCurrency(totalRwa, 'GHS')}`}
+                    </span>
+                  ) : (
+                    <span>All trend points are stored baseline runs.</span>
+                  )
+                }
+              >
+                <RatioTrendChart
+                  data={(data.trend ?? []).map((p) => ({
+                    label: p.label,
+                    primary: num(p.carPct),
+                    secondary: num(p.tier1RatioPct),
+                    stored: p.stored,
+                  }))}
+                  threshold={carMin}
+                  thresholdLabel="BoG min"
+                  redFloor={carEarlyWarning}
+                  redFloorLabel="Early warning"
+                  primaryLabel="CAR"
+                  secondaryLabel="Tier 1"
+                  yMin={Math.floor(Math.min(carCritical, ...carTrend) - 2)}
+                  height={260}
                 />
-                <CardBody className="space-y-4">
+              </ChartFrame>
+
+              <SectionCard
+                title="RWA composition"
+                subtitle={`Total ${fmtCurrency(totalRwa, 'GHS')}`}
+              >
+                <div className="space-y-4">
                   <DonutChart
                     data={rwaSlices}
                     centerLabel="Total RWA"
@@ -268,10 +334,10 @@ export default function BaselDashboard() {
                           aria-hidden
                         />
                         <span className="text-navy/85 flex-1">{s.name}</span>
-                        <span className="font-mono text-navy tabular-nums">
+                        <span className="font-mono text-navy tnum">
                           {fmtCurrency(s.value, 'GHS')}
                         </span>
-                        <span className="font-mono text-slate w-12 text-right tabular-nums">
+                        <span className="font-mono text-slate w-12 text-right tnum">
                           {totalRwa > 0
                             ? `${((s.value / totalRwa) * 100).toFixed(1)}%`
                             : '—'}
@@ -279,17 +345,45 @@ export default function BaselDashboard() {
                       </li>
                     ))}
                   </ul>
-                </CardBody>
-              </Card>
+                </div>
+              </SectionCard>
             </div>
 
+            {/* Capital waterfall */}
+            {structure && (
+              <ChartFrame
+                title="Capital waterfall"
+                subtitle="CET1 components → deductions → AT1 → Tier 2 → total qualifying capital"
+                height={280}
+                footer={
+                  <span>
+                    CET1 {fmtCurrency(num(structure.cet1CapitalGhs), 'GHS')} ·
+                    Tier 1 {fmtCurrency(num(structure.tier1CapitalGhs), 'GHS')} ·
+                    Total {fmtCurrency(num(structure.totalCapitalGhs), 'GHS')} ·{' '}
+                    {fmtPct(num(data.metrics.carPct), 2)} of RWA
+                  </span>
+                }
+              >
+                <CapitalWaterfallChart
+                  cet1Gross={cet1Gross}
+                  deductions={deductions}
+                  at1={num(structure.at1CapitalGhs)}
+                  tier2={num(structure.tier2CapitalGhs)}
+                  total={num(structure.totalCapitalGhs)}
+                  height={280}
+                />
+              </ChartFrame>
+            )}
+
             {/* Regulatory buffers */}
-            <Card>
-              <CardHeader
-                title="Regulatory buffer status"
-                subtitle="BoG CRD thresholds for the Capital Adequacy Ratio"
-              />
-              <CardBody className="grid grid-cols-2 md:grid-cols-5 gap-5">
+            <SectionCard
+              title="Regulatory buffer status"
+              subtitle="BoG CRD thresholds for the Capital Adequacy Ratio"
+              computedAt={computedAt}
+              runBadge={run ? <RunBadge run={run} /> : undefined}
+              footer={provenance}
+            >
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-5">
                 <BufferCell
                   label="BoG minimum CAR"
                   value={carMin}
@@ -302,7 +396,7 @@ export default function BaselDashboard() {
                 />
                 <BufferCell
                   label="Critical floor"
-                  value={num(data.buffers.carCriticalPct)}
+                  value={carCritical}
                   note="Supervisory intervention level"
                 />
                 <BufferCell
@@ -318,33 +412,20 @@ export default function BaselDashboard() {
                   note="Above the BoG minimum"
                   emphasis={statusTone(data.metrics.carStatus)}
                 />
-              </CardBody>
-            </Card>
-
-            {/* Capital structure summary strip */}
-            <div className="card px-5 py-4 grid grid-cols-2 md:grid-cols-5 gap-6">
-              {structureCells.map((cell) => (
-                <div key={cell.label}>
-                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                    {cell.label}
-                  </p>
-                  <p className="mt-1 font-mono text-h2 text-navy tabular-nums">
-                    {fmtCurrency(cell.value, 'GHS')}
-                  </p>
-                </div>
-              ))}
-            </div>
+              </div>
+            </SectionCard>
 
             {/* Validations */}
-            <Card>
-              <CardHeader
-                title="Validations"
-                subtitle="Regulatory rule evaluation for this period"
-              />
-              <CardBody className="p-0">
-                <ValidationList validations={data.validations} />
-              </CardBody>
-            </Card>
+            <SectionCard
+              title="Validations"
+              subtitle="Regulatory rule evaluation for this period"
+              noPadding
+              computedAt={computedAt}
+              runBadge={run ? <RunBadge run={run} /> : undefined}
+              footer={provenance}
+            >
+              <ValidationList validations={data.validations} />
+            </SectionCard>
           </div>
         )}
       </QueryBoundary>
@@ -378,7 +459,7 @@ function BufferCell({
       <p className="text-micro font-medium uppercase tracking-wider text-slate">
         {label}
       </p>
-      <p className={`font-mono text-h1 tabular-nums ${valueColor}`}>
+      <p className={`font-mono text-h1 tnum ${valueColor}`}>
         {value.toFixed(2)}
         {suffix}
       </p>

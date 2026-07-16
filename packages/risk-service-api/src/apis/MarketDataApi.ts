@@ -20,6 +20,7 @@ import type {
   MarketDataQuotaListRead,
   MarketDataScopeListRead,
   MarketDataUploadRead,
+  MarketDataViewsRead,
   TestPullRead,
 } from "../models/index";
 import {
@@ -39,6 +40,8 @@ import {
   MarketDataScopeListReadToJSON,
   MarketDataUploadReadFromJSON,
   MarketDataUploadReadToJSON,
+  MarketDataViewsReadFromJSON,
+  MarketDataViewsReadToJSON,
   TestPullReadFromJSON,
   TestPullReadToJSON,
 } from "../models/index";
@@ -73,6 +76,13 @@ export interface GetMarketDataQuotaRequest {
 export interface GetMarketDataTemplateRequest {
   kind: GetMarketDataTemplateKindEnum;
   xOrgId: string;
+  xUserId?: string | null;
+}
+
+export interface GetMarketDataViewsRequest {
+  bankId: string;
+  xOrgId: string;
+  asOf?: Date | null;
   xUserId?: string | null;
 }
 
@@ -505,6 +515,77 @@ export class MarketDataApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<void> {
     await this.getMarketDataTemplateRaw(requestParameters, initOverrides);
+  }
+
+  /**
+   * Get Market Data Views
+   */
+  async getMarketDataViewsRaw(
+    requestParameters: GetMarketDataViewsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<MarketDataViewsRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getMarketDataViews().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling getMarketDataViews().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["asOf"] != null) {
+      queryParameters["as_of"] = (requestParameters["asOf"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/market-data/views`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      MarketDataViewsReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Get Market Data Views
+   */
+  async getMarketDataViews(
+    requestParameters: GetMarketDataViewsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<MarketDataViewsRead> {
+    const response = await this.getMarketDataViewsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
   }
 
   /**

@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
+import { ChevronRight } from 'lucide-react';
 
 type Align = 'left' | 'right' | 'center';
 
@@ -6,6 +7,7 @@ export type Column<T> = {
   key: string;
   header: ReactNode;
   align?: Align;
+  /** Right-aligns and renders the cell in tabular-numeral mono (`.num`). */
   numeric?: boolean;
   width?: string;
   render: (row: T, idx: number) => ReactNode;
@@ -18,6 +20,10 @@ export default function DataTable<T>({
   emphasizeTotals = true,
   totalsRowMatcher,
   className = '',
+  stickyHeader = false,
+  maxHeight,
+  onRowClick,
+  rowClassName,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -25,12 +31,31 @@ export default function DataTable<T>({
   emphasizeTotals?: boolean;
   totalsRowMatcher?: (row: T) => boolean;
   className?: string;
+  /** Keeps the header row pinned while the body scrolls (pair with maxHeight). */
+  stickyHeader?: boolean;
+  /** Constrains the scroll container height, e.g. 420 or '60vh'. */
+  maxHeight?: number | string;
+  /** Makes rows interactive: pointer cursor, hover, chevron affordance. */
+  onRowClick?: (row: T, idx: number) => void;
+  rowClassName?: (row: T, idx: number) => string;
 }) {
   const padY = density === 'compact' ? 'py-1.5' : 'py-2.5';
+  const clickable = Boolean(onRowClick);
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTableRowElement>, row: T, i: number) => {
+    if (!onRowClick) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onRowClick(row, i);
+    }
+  };
 
   return (
-    <div className={`overflow-x-auto ${className}`}>
-      <table className="w-full text-body border-collapse">
+    <div
+      className={`overflow-x-auto ${maxHeight !== undefined ? 'overflow-y-auto' : ''} ${className}`}
+      style={maxHeight !== undefined ? { maxHeight } : undefined}
+    >
+      <table className="w-full text-body border-collapse tnum">
         <thead>
           <tr className="border-b border-border bg-surface">
             {columns.map((c) => (
@@ -39,6 +64,8 @@ export default function DataTable<T>({
                 scope="col"
                 style={{ width: c.width }}
                 className={`${padY} px-4 text-micro font-medium uppercase tracking-wider text-slate ${
+                  stickyHeader ? 'sticky top-0 z-10 bg-surface' : ''
+                } ${
                   c.align === 'right' || c.numeric
                     ? 'text-right'
                     : c.align === 'center'
@@ -49,6 +76,15 @@ export default function DataTable<T>({
                 {c.header}
               </th>
             ))}
+            {clickable && (
+              <th
+                scope="col"
+                aria-label="Open"
+                className={`${padY} px-2 w-8 ${
+                  stickyHeader ? 'sticky top-0 z-10 bg-surface' : ''
+                }`}
+              />
+            )}
           </tr>
         </thead>
         <tbody>
@@ -58,8 +94,15 @@ export default function DataTable<T>({
             return (
               <tr
                 key={i}
-                className={`border-b border-border-light last:border-b-0 ${
-                  isTotal ? 'bg-surface font-medium' : 'hover:bg-surface-alt'
+                onClick={onRowClick ? () => onRowClick(row, i) : undefined}
+                onKeyDown={
+                  onRowClick ? (e) => handleKeyDown(e, row, i) : undefined
+                }
+                tabIndex={clickable ? 0 : undefined}
+                className={`border-b border-border-light last:border-b-0 group ${
+                  isTotal ? 'bg-surface font-medium' : 'hover:bg-surface'
+                } ${clickable ? 'cursor-pointer' : ''} ${
+                  rowClassName ? rowClassName(row, i) : ''
                 }`}
               >
                 {columns.map((c) => (
@@ -78,6 +121,15 @@ export default function DataTable<T>({
                     {c.render(row, i)}
                   </td>
                 ))}
+                {clickable && (
+                  <td className={`${padY} px-2 align-middle text-right`}>
+                    <ChevronRight
+                      size={14}
+                      className="inline-block text-slate-light group-hover:text-action transition-colors"
+                      aria-hidden
+                    />
+                  </td>
+                )}
               </tr>
             );
           })}

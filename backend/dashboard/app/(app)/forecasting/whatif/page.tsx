@@ -1,40 +1,48 @@
 'use client';
 
+/**
+ * What-if Lab — two-panel shock laboratory over the deterministic 5-year
+ * projection engine. The left panel lists the shock library (the exact
+ * shock codes the API accepts) with the shocked-vs-base assumption diff
+ * from the persisted result; the right panel compares the base and shocked
+ * paths on any persisted metric, with per-year deltas and run provenance.
+ * Mutation flow (useRunWhatIf + stored-run hydration) is unchanged.
+ */
+
 import { useState } from 'react';
-import { Loader2, PlayCircle } from 'lucide-react';
+import { FlaskConical, Loader2, PlayCircle } from 'lucide-react';
 import type {
+  ProjectionYearRead,
   RegulatoryRunRead,
   WhatIfResultRead,
   WhatIfShockCode,
 } from '@aequoros/risk-service-api';
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine,
-  Legend,
-} from 'recharts';
 import PageHeader from '@/components/ui/PageHeader';
+import StatusPill from '@/components/ui/StatusPill';
+import EmptyState from '@/components/ui/EmptyState';
+import SectionCard from '@/components/ui/SectionCard';
+import ChartFrame from '@/components/ui/ChartFrame';
+import DeltaBadge from '@/components/ui/DeltaBadge';
 import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { Card, CardHeader, CardBody } from '@/components/ui/Card';
+import RunProvenance from '@/components/forecasting/RunProvenance';
+import ScenarioLinesChart, {
+  type ScenarioPoint,
+} from '@/components/forecasting/charts/ScenarioLinesChart';
+import { ASSUMPTION_FIELDS } from '@/components/forecasting/lib';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useRegulatoryRun,
   useRegulatoryRuns,
   useRunWhatIf,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, fmtTimestamp, num } from '@/lib/api/values';
+import { fmtDateUTC, num } from '@/lib/api/values';
 import { fmtCurrency, fmtCurrencySigned, fmtPct } from '@/lib/format';
 
-const SHOCKS: {
-  code: WhatIfShockCode;
-  label: string;
-  description: string;
-}[] = [
+// ---------------------------------------------------------------------------
+// Shock library — the four shock codes the what-if endpoint accepts.
+// ---------------------------------------------------------------------------
+
+const SHOCKS: { code: WhatIfShockCode; label: string; description: string }[] = [
   {
     code: 'rate_shock_up_400',
     label: 'Interest rate shock +400bps',
@@ -61,9 +69,18 @@ const SHOCKS: {
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Normalized view — fresh results and stored regulatory runs carry the same
+// payload (full projection paths, assumptions, deltas, year-5 comparison).
+// ---------------------------------------------------------------------------
+
 type PathPoint = {
   year: number;
   carPct: number;
+  lcrPct: number;
+  nsfrPct: number;
+  netIncome: number | null;
+  totalAssets: number;
 };
 
 type DeltaRow = {
@@ -86,8 +103,21 @@ type WhatIfView = {
     nsfrPct: Comparison;
     netIncome: Comparison;
   };
-  createdAt: Date | null;
+  baseAssumptions: Record<string, number>;
+  shockedAssumptions: Record<string, number>;
+  provenance: { runId: string; inputHash: string; createdAt: Date | null };
 };
+
+function pointFromRead(p: ProjectionYearRead): PathPoint {
+  return {
+    year: p.year,
+    carPct: num(p.carPct),
+    lcrPct: num(p.lcrPct),
+    nsfrPct: num(p.nsfrPct),
+    netIncome: p.year === 0 ? null : num(p.netIncome),
+    totalAssets: num(p.totalAssets),
+  };
+}
 
 function fromResult(result: WhatIfResultRead): WhatIfView {
   const comparison = (c: { base: string; shocked: string; delta: string }) => ({
@@ -95,12 +125,17 @@ function fromResult(result: WhatIfResultRead): WhatIfView {
     shocked: num(c.shocked),
     delta: num(c.delta),
   });
+  const assumptionMap = (a: Record<string, unknown>) => {
+    const out: Record<string, number> = {};
+    for (const field of ASSUMPTION_FIELDS) {
+      const raw = (a as Record<string, string | undefined>)[field.key];
+      if (raw !== undefined) out[field.apiKey] = num(raw);
+    }
+    return out;
+  };
   return {
-    basePath: result.basePath.map((p) => ({ year: p.year, carPct: num(p.carPct) })),
-    shockedPath: result.shockedPath.map((p) => ({
-      year: p.year,
-      carPct: num(p.carPct),
-    })),
+    basePath: result.basePath.map(pointFromRead),
+    shockedPath: result.shockedPath.map(pointFromRead),
     deltas: result.deltas.map((d) => ({
       year: d.year,
       carDeltaPp: num(d.carDeltaPp),
@@ -114,15 +149,28 @@ function fromResult(result: WhatIfResultRead): WhatIfView {
       nsfrPct: comparison(result.year5.nsfrPct),
       netIncome: comparison(result.year5.netIncome),
     },
-    createdAt: result.createdAt,
+    baseAssumptions: assumptionMap(
+      result.baseAssumptions as unknown as Record<string, unknown>
+    ),
+    shockedAssumptions: assumptionMap(
+      result.shockedAssumptions as unknown as Record<string, unknown>
+    ),
+    provenance: {
+      runId: result.runId,
+      inputHash: result.inputHash,
+      createdAt: result.createdAt,
+    },
   };
 }
 
 /** Stored what-if regulatory runs carry the payload as raw snake_case metrics. */
 function fromStoredRun(run: RegulatoryRunRead): WhatIfView | null {
+  type RawYear = Record<string, string | number | null> & { year: number };
   const metrics = run.metrics as {
-    base_path?: { year: number; car_pct: string }[];
-    shocked_path?: { year: number; car_pct: string }[];
+    base_path?: RawYear[];
+    shocked_path?: RawYear[];
+    base_assumptions?: Record<string, string>;
+    shocked_assumptions?: Record<string, string>;
     deltas?: {
       year: number;
       car_delta_pp: string;
@@ -133,21 +181,30 @@ function fromStoredRun(run: RegulatoryRunRead): WhatIfView | null {
     year5?: Record<string, { base: string; shocked: string; delta: string }>;
   };
   if (!Array.isArray(metrics.base_path) || !metrics.year5) return null;
+
+  const point = (p: RawYear): PathPoint => ({
+    year: p.year,
+    carPct: num(p.car_pct as string),
+    lcrPct: num(p.lcr_pct as string),
+    nsfrPct: num(p.nsfr_pct as string),
+    netIncome: p.year === 0 ? null : num(p.net_income as string),
+    totalAssets: num(p.total_assets as string),
+  });
   const comparison = (key: string): Comparison => {
     const c = metrics.year5?.[key];
     return c
       ? { base: num(c.base), shocked: num(c.shocked), delta: num(c.delta) }
       : { base: 0, shocked: 0, delta: 0 };
   };
+  const assumptionMap = (a: Record<string, string> | undefined) => {
+    const out: Record<string, number> = {};
+    for (const [key, value] of Object.entries(a ?? {})) out[key] = num(value);
+    return out;
+  };
+
   return {
-    basePath: metrics.base_path.map((p) => ({
-      year: p.year,
-      carPct: num(p.car_pct),
-    })),
-    shockedPath: (metrics.shocked_path ?? []).map((p) => ({
-      year: p.year,
-      carPct: num(p.car_pct),
-    })),
+    basePath: metrics.base_path.map(point),
+    shockedPath: (metrics.shocked_path ?? []).map(point),
     deltas: (metrics.deltas ?? []).map((d) => ({
       year: d.year,
       carDeltaPp: num(d.car_delta_pp),
@@ -161,16 +218,75 @@ function fromStoredRun(run: RegulatoryRunRead): WhatIfView | null {
       nsfrPct: comparison('nsfr_pct'),
       netIncome: comparison('net_income'),
     },
-    createdAt: run.createdAt,
+    baseAssumptions: assumptionMap(metrics.base_assumptions),
+    shockedAssumptions: assumptionMap(metrics.shocked_assumptions),
+    provenance: {
+      runId: run.id,
+      inputHash: run.inputHash,
+      createdAt: run.createdAt,
+    },
   };
 }
 
-export default function WhatIfAnalysis() {
+// ---------------------------------------------------------------------------
+// Metric registry for the comparison chart.
+// ---------------------------------------------------------------------------
+
+const WHATIF_METRICS = [
+  {
+    code: 'carPct',
+    label: 'CAR',
+    fmt: (v: number) => fmtPct(v, 2),
+    tick: (v: number) => `${Math.round(v)}%`,
+    threshold: 10,
+    thresholdLabel: 'BoG min 10%',
+  },
+  {
+    code: 'lcrPct',
+    label: 'LCR',
+    fmt: (v: number) => fmtPct(v, 1),
+    tick: (v: number) => `${Math.round(v)}%`,
+    threshold: 100,
+    thresholdLabel: 'BoG min 100%',
+  },
+  {
+    code: 'nsfrPct',
+    label: 'NSFR',
+    fmt: (v: number) => fmtPct(v, 1),
+    tick: (v: number) => `${Math.round(v)}%`,
+    threshold: 100,
+    thresholdLabel: 'BoG min 100%',
+  },
+  {
+    code: 'netIncome',
+    label: 'Net income',
+    fmt: (v: number) => fmtCurrency(v, 'GHS'),
+    tick: (v: number) => fmtCurrency(v, 'GHS', { decimals: 1 }),
+    threshold: undefined,
+    thresholdLabel: undefined,
+  },
+  {
+    code: 'totalAssets',
+    label: 'Total assets',
+    fmt: (v: number) => fmtCurrency(v, 'GHS'),
+    tick: (v: number) => fmtCurrency(v, 'GHS', { decimals: 1 }),
+    threshold: undefined,
+    thresholdLabel: undefined,
+  },
+] as const;
+
+type WhatIfMetricCode = (typeof WHATIF_METRICS)[number]['code'];
+
+export default function WhatIfLab() {
   const { bank, period } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
 
-  // Latest stored run per shock, for reload on mount.
+  const [activeShock, setActiveShock] = useState<WhatIfShockCode>(
+    'rate_shock_up_400'
+  );
+
+  // Latest stored run per shock, for reload on mount (unchanged wiring).
   const runsQuery = useRegulatoryRuns(bankId, { module: 'whatif', limit: 50 });
   const latestIds = new Map<string, string>();
   for (const run of runsQuery.data?.runs ?? []) {
@@ -189,7 +305,7 @@ export default function WhatIfAnalysis() {
     mpr_cut_200: storedMpr.data,
   };
 
-  // Fresh results from this session, keyed by shock.
+  // Fresh results from this session, keyed by shock (unchanged wiring).
   const [freshResults, setFreshResults] = useState<
     Partial<Record<WhatIfShockCode, WhatIfResultRead>>
   >({});
@@ -209,16 +325,26 @@ export default function WhatIfAnalysis() {
     );
   };
 
+  const viewFor = (code: WhatIfShockCode): WhatIfView | null => {
+    const fresh = freshResults[code];
+    if (fresh) return fromResult(fresh);
+    const stored = storedByShock[code];
+    return stored ? fromStoredRun(stored) : null;
+  };
+
+  const activeView = viewFor(activeShock);
+  const activeMeta = SHOCKS.find((s) => s.code === activeShock)!;
+
   return (
     <>
       <PageHeader
         breadcrumbs={[
           { label: 'Modules', href: '/' },
           { label: 'Balance Sheet Forecasting', href: '/forecasting' },
-          { label: 'What-if Analysis' },
+          { label: 'What-if Lab' },
         ]}
-        title="What-if Analysis"
-        subtitle="Pre-defined macro shocks applied to the base 5-year projection · Deterministic base-vs-shocked comparison"
+        title="What-if Lab"
+        subtitle="Deterministic macro shocks re-projected against the unshocked base run on identical canonical inputs"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
@@ -232,247 +358,318 @@ export default function WhatIfAnalysis() {
             <ErrorPanel error={runWhatIf.error} title="What-if run failed" />
           )}
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {SHOCKS.map((shock) => {
-              const fresh = freshResults[shock.code];
-              const stored = storedByShock[shock.code];
-              const view = fresh
-                ? fromResult(fresh)
-                : stored
-                ? fromStoredRun(stored)
-                : null;
-              return (
-                <ShockCard
-                  key={shock.code}
-                  label={shock.label}
-                  description={shock.description}
-                  view={view}
-                  isRunning={pendingShock === shock.code}
-                  disabled={runWhatIf.isPending || !periodId}
-                  onRun={() => runShock(shock.code)}
-                />
-              );
-            })}
-          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+            {/* Left panel — shock library */}
+            <SectionCard
+              title="Shock library"
+              subtitle="The four macro shocks the projection engine accepts"
+              className="xl:sticky xl:top-4"
+            >
+              <div className="space-y-3">
+                {SHOCKS.map((shock) => {
+                  const view = viewFor(shock.code);
+                  const isActive = shock.code === activeShock;
+                  const isRunning = pendingShock === shock.code;
+                  const breach =
+                    view !== null &&
+                    view.shockedPath.some((p) => p.carPct < 10);
+                  return (
+                    <button
+                      key={shock.code}
+                      type="button"
+                      onClick={() => setActiveShock(shock.code)}
+                      aria-pressed={isActive}
+                      className={`w-full text-left rounded-md border p-3.5 transition-colors ${
+                        isActive
+                          ? 'border-action bg-action-light/40'
+                          : 'border-border-light bg-surface-raised hover:border-border'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-body font-medium text-navy">
+                          {shock.label}
+                        </p>
+                        {isRunning ? (
+                          <StatusPill tone="pending">Running</StatusPill>
+                        ) : view ? (
+                          breach ? (
+                            <StatusPill tone="critical">CAR breach</StatusPill>
+                          ) : (
+                            <StatusPill tone="success">Run</StatusPill>
+                          )
+                        ) : (
+                          <StatusPill tone="slate">Not run</StatusPill>
+                        )}
+                      </div>
+                      <p className="mt-1 text-caption text-slate leading-relaxed">
+                        {shock.description}
+                      </p>
+                      {view && (
+                        <p className="mt-2 text-caption text-slate">
+                          Y5 CAR{' '}
+                          <span className="font-mono tnum text-navy">
+                            {fmtPct(view.year5.carPct.shocked, 2)}
+                          </span>{' '}
+                          <DeltaBadge
+                            value={view.year5.carPct.delta}
+                            suffix=" pp"
+                            decimals={2}
+                          />
+                        </p>
+                      )}
+                    </button>
+                  );
+                })}
 
-          <p className="text-caption text-slate max-w-3xl leading-relaxed">
-            Each shock re-runs the deterministic 5-year projection with the
-            shocked assumption set and compares it to the unshocked base run
-            on identical canonical inputs. {bank?.name ?? 'The bank'}&apos;s
-            results persist as auditable what-if regulatory runs.
-          </p>
+                <button
+                  type="button"
+                  disabled={runWhatIf.isPending || !periodId}
+                  onClick={() => runShock(activeShock)}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-caption font-medium btn-primary disabled:opacity-60"
+                >
+                  {pendingShock === activeShock ? (
+                    <Loader2 size={13} className="animate-spin" aria-hidden />
+                  ) : (
+                    <PlayCircle size={13} aria-hidden />
+                  )}
+                  {activeView ? 'Re-run' : 'Run'} {activeMeta.label}
+                </button>
+
+                <p className="text-caption text-slate leading-relaxed">
+                  Each run re-projects the full 5-year path with the shocked
+                  assumption set and persists an auditable what-if regulatory
+                  run alongside the unshocked base.
+                </p>
+              </div>
+            </SectionCard>
+
+            {/* Right panel — results */}
+            <div className="xl:col-span-2 space-y-6">
+              {!activeView ? (
+                <EmptyState
+                  Icon={FlaskConical}
+                  title={
+                    pendingShock === activeShock
+                      ? 'Running shock projection…'
+                      : 'Shock not yet run for this period'
+                  }
+                  description={`Run “${activeMeta.label}” to compare the shocked 5-year path against the deterministic base projection on identical canonical inputs.`}
+                />
+              ) : (
+                <ShockResult view={activeView} shockLabel={activeMeta.label} />
+              )}
+            </div>
+          </div>
         </div>
       </QueryBoundary>
     </>
   );
 }
 
-function ShockCard({
-  label,
-  description,
-  view,
-  isRunning,
-  disabled,
-  onRun,
-}: {
-  label: string;
-  description: string;
-  view: WhatIfView | null;
-  isRunning: boolean;
-  disabled: boolean;
-  onRun: () => void;
-}) {
-  const breach =
-    view !== null && view.shockedPath.some((p) => p.carPct < 10);
+// ---------------------------------------------------------------------------
+// Right panel — result view
+// ---------------------------------------------------------------------------
 
-  const chartData = (view?.basePath ?? []).map((point) => ({
-    month: `Y${point.year}`,
-    base: point.carPct,
-    shocked:
-      view?.shockedPath.find((p) => p.year === point.year)?.carPct ?? null,
-  }));
+function ShockResult({
+  view,
+  shockLabel,
+}: {
+  view: WhatIfView;
+  shockLabel: string;
+}) {
+  const [metricCode, setMetricCode] = useState<WhatIfMetricCode>('carPct');
+  const metric = WHATIF_METRICS.find((m) => m.code === metricCode)!;
+
+  const chartData: ScenarioPoint[] = view.basePath.map((p) => {
+    const shocked = view.shockedPath.find((s) => s.year === p.year);
+    return {
+      label: `Y${p.year}`,
+      base: p[metricCode],
+      shocked: shocked ? shocked[metricCode] : null,
+    };
+  });
+
+  // Assumption diff — which resolved assumptions the shock actually moved.
+  const movedAssumptions = ASSUMPTION_FIELDS.map((field) => ({
+    field,
+    base: view.baseAssumptions[field.apiKey],
+    shocked: view.shockedAssumptions[field.apiKey],
+  })).filter(
+    (d) =>
+      d.base !== undefined && d.shocked !== undefined && d.base !== d.shocked
+  );
 
   return (
-    <Card className={breach ? 'border-l-4 border-l-critical' : ''}>
-      <CardHeader
-        title={label}
-        subtitle={description}
-        action={
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={onRun}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700 disabled:opacity-60"
+    <>
+      {/* Year-5 delta chips */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <ComparisonCell
+          label="Y5 CAR"
+          comparison={view.year5.carPct}
+          fmt={(v) => fmtPct(v, 2)}
+          deltaSuffix=" pp"
+        />
+        <ComparisonCell
+          label="Y5 LCR"
+          comparison={view.year5.lcrPct}
+          fmt={(v) => fmtPct(v, 1)}
+          deltaSuffix=" pp"
+        />
+        <ComparisonCell
+          label="Y5 NSFR"
+          comparison={view.year5.nsfrPct}
+          fmt={(v) => fmtPct(v, 1)}
+          deltaSuffix=" pp"
+        />
+        <ComparisonCell
+          label="Y5 net income"
+          comparison={view.year5.netIncome}
+          fmt={(v) => fmtCurrency(v, 'GHS')}
+          currencyDelta
+        />
+      </div>
+
+      {/* Base vs shocked path */}
+      <ChartFrame
+        title="Base vs shocked path"
+        subtitle={`${shockLabel} · both paths persisted on the what-if run`}
+        height={280}
+        actions={
+          <select
+            value={metricCode}
+            onChange={(e) => setMetricCode(e.target.value as WhatIfMetricCode)}
+            aria-label="Comparison metric"
+            className="px-2.5 py-1.5 text-caption font-medium text-navy border border-border rounded-md bg-surface-raised hover:bg-surface"
           >
-            {isRunning ? (
-              <Loader2 size={13} className="animate-spin" aria-hidden />
-            ) : (
-              <PlayCircle size={13} aria-hidden />
-            )}
-            Run
-          </button>
+            {WHATIF_METRICS.map((m) => (
+              <option key={m.code} value={m.code}>
+                {m.label}
+              </option>
+            ))}
+          </select>
         }
-      />
-      <CardBody className="space-y-5">
-        {!view ? (
-          <p className="text-body text-slate">
-            {isRunning
-              ? 'Running shock projection…'
-              : 'Not yet run for this period — run the shock to compare against the base projection.'}
-          </p>
-        ) : (
-          <>
-            {/* Year-5 comparison strip */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <ComparisonCell
-                label="Y5 CAR"
-                comparison={view.year5.carPct}
-                fmt={(v) => fmtPct(v, 2)}
-                deltaFmt={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)} pp`}
-              />
-              <ComparisonCell
-                label="Y5 LCR"
-                comparison={view.year5.lcrPct}
-                fmt={(v) => fmtPct(v, 1)}
-                deltaFmt={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)} pp`}
-              />
-              <ComparisonCell
-                label="Y5 NSFR"
-                comparison={view.year5.nsfrPct}
-                fmt={(v) => fmtPct(v, 1)}
-                deltaFmt={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)} pp`}
-              />
-              <ComparisonCell
-                label="Y5 net income"
-                comparison={view.year5.netIncome}
-                fmt={(v) => fmtCurrency(v, 'GHS')}
-                deltaFmt={(v) => fmtCurrencySigned(v, 'GHS')}
-              />
-            </div>
+        footer={
+          <RunProvenance
+            runId={view.provenance.runId}
+            inputHash={view.provenance.inputHash}
+            createdAt={view.provenance.createdAt}
+            note="Shocked and base paths computed by the same engine on identical canonical inputs."
+          />
+        }
+      >
+        <ScenarioLinesChart
+          data={chartData}
+          series={[
+            { key: 'base', name: 'Base', colorIndex: 0 },
+            { key: 'shocked', name: 'Shocked', colorIndex: 3, dashed: true },
+          ]}
+          valueFormatter={metric.fmt}
+          tickFormatter={metric.tick}
+          threshold={metric.threshold}
+          thresholdLabel={metric.thresholdLabel}
+        />
+      </ChartFrame>
 
-            {/* Base vs shocked CAR path */}
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart
-                data={chartData}
-                margin={{ top: 12, right: 24, left: 0, bottom: 8 }}
-              >
-                <CartesianGrid
-                  stroke="#E4E8EC"
-                  strokeDasharray="3 3"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="month"
-                  axisLine={{ stroke: '#D0D7DE' }}
-                  tickLine={false}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `${v}%`}
-                  width={48}
-                  domain={[
-                    (dataMin: number) => Math.floor(Math.min(dataMin, 10) - 1),
-                    (dataMax: number) => Math.ceil(dataMax + 1),
-                  ]}
-                />
-                <Tooltip
-                  formatter={(v: number, name) => [`${v.toFixed(2)}%`, name]}
-                />
-                <Legend
-                  verticalAlign="top"
-                  align="right"
-                  height={28}
-                  iconType="line"
-                  wrapperStyle={{ fontSize: '11px' }}
-                />
-                <ReferenceLine
-                  y={10}
-                  stroke="#B3261E"
-                  strokeDasharray="4 4"
-                  label={{
-                    value: 'BoG min 10%',
-                    position: 'insideBottomRight',
-                    fill: '#B3261E',
-                    fontSize: 11,
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="base"
-                  stroke="#0A2540"
-                  strokeWidth={2}
-                  name="Base CAR"
-                  dot={{ r: 3, fill: '#0A2540' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="shocked"
-                  stroke="#B3261E"
-                  strokeWidth={2}
-                  name="Shocked CAR"
-                  dot={{ r: 3, fill: '#B3261E' }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* Per-year deltas */}
+        <SectionCard
+          title="Impact vs base by year"
+          subtitle="Persisted per-year deltas on the what-if run"
+          noPadding
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-caption border-collapse tnum">
+              <thead>
+                <tr className="border-b border-border bg-surface text-micro font-medium uppercase tracking-wider text-slate">
+                  <th className="text-left px-4 py-2">Year</th>
+                  <th className="text-right px-4 py-2">ΔCAR (pp)</th>
+                  <th className="text-right px-4 py-2">ΔLCR (pp)</th>
+                  <th className="text-right px-4 py-2">ΔNSFR (pp)</th>
+                  <th className="text-right px-4 py-2">Δ net income</th>
+                </tr>
+              </thead>
+              <tbody>
+                {view.deltas
+                  .filter((d) => d.year > 0)
+                  .map((d) => (
+                    <tr
+                      key={d.year}
+                      className="border-b border-border-light last:border-b-0"
+                    >
+                      <td className="px-4 py-2 font-medium text-navy">Y{d.year}</td>
+                      <DeltaCell value={d.carDeltaPp} fmt={(v) => v.toFixed(2)} />
+                      <DeltaCell value={d.lcrDeltaPp} fmt={(v) => v.toFixed(2)} />
+                      <DeltaCell value={d.nsfrDeltaPp} fmt={(v) => v.toFixed(2)} />
+                      <DeltaCell
+                        value={d.netIncomeDelta}
+                        fmt={(v) => fmtCurrency(Math.abs(v), 'GHS')}
+                        signed
+                      />
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
 
-            {/* Per-year deltas */}
-            <div>
-              <p className="text-micro font-medium uppercase tracking-wider text-slate mb-2">
-                Impact vs base by year
-              </p>
-              <table className="w-full text-caption border-collapse">
+        {/* Assumption diff */}
+        <SectionCard
+          title="What the shock moved"
+          subtitle="Shocked vs base resolved assumptions, from the persisted run payload"
+          noPadding
+        >
+          {movedAssumptions.length === 0 ? (
+            <p className="px-5 py-4 text-body text-slate">
+              The stored payload for this run does not include an assumption
+              diff — re-run the shock to persist one.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-caption border-collapse tnum">
                 <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-1.5 text-micro font-medium uppercase tracking-wider text-slate">
-                      Year
-                    </th>
-                    <th className="text-right py-1.5 text-micro font-medium uppercase tracking-wider text-slate">
-                      ΔCAR (pp)
-                    </th>
-                    <th className="text-right py-1.5 text-micro font-medium uppercase tracking-wider text-slate">
-                      ΔLCR (pp)
-                    </th>
-                    <th className="text-right py-1.5 text-micro font-medium uppercase tracking-wider text-slate">
-                      ΔNSFR (pp)
-                    </th>
-                    <th className="text-right py-1.5 text-micro font-medium uppercase tracking-wider text-slate">
-                      Δ net income
-                    </th>
+                  <tr className="border-b border-border bg-surface text-micro font-medium uppercase tracking-wider text-slate">
+                    <th className="text-left px-4 py-2">Assumption</th>
+                    <th className="text-right px-4 py-2">Base</th>
+                    <th className="text-right px-4 py-2">Shocked</th>
+                    <th className="text-right px-4 py-2">Δ</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {view.deltas
-                    .filter((d) => d.year > 0)
-                    .map((d) => (
-                      <tr
-                        key={d.year}
-                        className="border-b border-border-light last:border-b-0"
-                      >
-                        <td className="py-1.5 font-medium text-navy">Y{d.year}</td>
-                        <DeltaCell value={d.carDeltaPp} fmt={(v) => v.toFixed(2)} />
-                        <DeltaCell value={d.lcrDeltaPp} fmt={(v) => v.toFixed(2)} />
-                        <DeltaCell value={d.nsfrDeltaPp} fmt={(v) => v.toFixed(2)} />
-                        <DeltaCell
-                          value={d.netIncomeDelta}
-                          fmt={(v) => fmtCurrency(Math.abs(v), 'GHS')}
-                          signed
+                  {movedAssumptions.map(({ field, base, shocked }) => (
+                    <tr
+                      key={field.key}
+                      className="border-b border-border-light last:border-b-0"
+                    >
+                      <td className="px-4 py-2 text-navy/90">{field.label}</td>
+                      <td className="px-4 py-2 text-right font-mono tnum">
+                        {base.toFixed(2)}
+                        {field.unit}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono tnum text-navy font-medium">
+                        {shocked.toFixed(2)}
+                        {field.unit}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <DeltaBadge
+                          value={shocked - base}
+                          suffix={field.unit.trim() === 'pp' ? ' pp' : field.unit}
+                          decimals={2}
+                          invert={
+                            field.key === 'creditLossRatePct' ||
+                            field.key === 'costToIncomePct' ||
+                            field.key === 'fxDepreciationPct'
+                          }
                         />
-                      </tr>
-                    ))}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-
-            {view.createdAt && (
-              <p className="text-caption text-slate">
-                Last run {fmtTimestamp(view.createdAt)}
-              </p>
-            )}
-          </>
-        )}
-      </CardBody>
-    </Card>
+          )}
+        </SectionCard>
+      </div>
+    </>
   );
 }
 
@@ -480,30 +677,36 @@ function ComparisonCell({
   label,
   comparison,
   fmt,
-  deltaFmt,
+  deltaSuffix = '',
+  currencyDelta = false,
 }: {
   label: string;
   comparison: Comparison;
   fmt: (v: number) => string;
-  deltaFmt: (v: number) => string;
+  deltaSuffix?: string;
+  currencyDelta?: boolean;
 }) {
   return (
-    <div>
+    <div className="card px-4 py-3.5">
       <p className="text-micro font-medium uppercase tracking-wider text-slate">
         {label}
       </p>
-      <p className="mt-1 font-mono text-h2 text-navy tabular-nums">
+      <p className="mt-1 font-mono text-kpi text-navy tnum">
         {fmt(comparison.shocked)}
       </p>
-      <p className="text-caption text-slate">
-        base <span className="font-mono">{fmt(comparison.base)}</span>{' '}
-        <span
-          className={`font-mono font-medium ${
-            comparison.delta < 0 ? 'text-critical' : 'text-success'
-          }`}
-        >
-          {deltaFmt(comparison.delta)}
-        </span>
+      <p className="text-caption text-slate flex items-center gap-1.5 flex-wrap">
+        base <span className="font-mono tnum">{fmt(comparison.base)}</span>
+        {currencyDelta ? (
+          <span
+            className={`font-mono font-medium tnum ${
+              comparison.delta < 0 ? 'text-critical' : 'text-success'
+            }`}
+          >
+            {fmtCurrencySigned(comparison.delta, 'GHS')}
+          </span>
+        ) : (
+          <DeltaBadge value={comparison.delta} suffix={deltaSuffix} decimals={2} />
+        )}
       </p>
     </div>
   );
@@ -523,7 +726,7 @@ function DeltaCell({
     : `${value >= 0 ? '+' : ''}${fmt(value)}`;
   return (
     <td
-      className={`py-1.5 text-right font-mono tabular-nums ${
+      className={`px-4 py-2 text-right font-mono tnum ${
         value < 0 ? 'text-critical' : value > 0 ? 'text-success' : 'text-slate'
       }`}
     >

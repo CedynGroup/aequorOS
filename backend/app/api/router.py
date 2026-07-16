@@ -19,6 +19,7 @@ from app.features.push_data import router as push_router
 from app.features.read_behavioral_models import router as behavioral_models_router
 from app.features.read_cashflow_forecast import router as cashflow_forecast_router
 from app.features.read_financial_workspace import router as financial_workspace_router
+from app.features.read_market_data_views import router as market_data_views_router
 from app.features.record_case_decisions import router as case_decisions_router
 from app.features.review_cases import router as cases_router
 from app.features.review_findings import router as findings_router
@@ -66,4 +67,5 @@ v1_router.include_router(assessments_router)
 v1_router.include_router(findings_router)
 v1_router.include_router(liquidity_router)
 v1_router.include_router(taxonomy_router)
+v1_router.include_router(market_data_views_router)
 api_router.include_router(v1_router)

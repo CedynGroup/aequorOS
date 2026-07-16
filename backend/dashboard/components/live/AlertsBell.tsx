@@ -70,7 +70,7 @@ export default function AlertsBell() {
       >
         <Bell size={16} aria-hidden />
         {total > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 inline-flex items-center justify-center rounded-full bg-critical text-white text-[10px] font-semibold leading-none ring-2 ring-white">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 inline-flex items-center justify-center rounded-full bg-critical text-white text-[10px] font-semibold leading-none ring-2 ring-surface-raised">
             {total > 99 ? '99+' : total}
           </span>
         )}
@@ -80,7 +80,7 @@ export default function AlertsBell() {
         <div
           role="dialog"
           aria-label="Active breaches"
-          className="absolute right-0 mt-1.5 w-96 max-w-[calc(100vw-2rem)] bg-white border border-border rounded-md shadow-pop z-40 overflow-hidden"
+          className="absolute right-0 mt-1.5 w-96 max-w-[calc(100vw-2rem)] bg-surface-raised border border-border rounded-md shadow-pop z-40 overflow-hidden"
         >
           <div className="px-4 py-3 border-b border-border-light flex items-center justify-between">
             <div>

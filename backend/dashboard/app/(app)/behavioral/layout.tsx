@@ -1,6 +1,7 @@
 import ModuleTabs from '@/components/shell/ModuleTabs';
 
 const tabs = [
+  { href: '/behavioral', label: 'Overview' },
   { href: '/behavioral/nmd-duration', label: 'NMD Duration' },
   { href: '/behavioral/prepayment', label: 'Prepayment' },
   { href: '/behavioral/deposit-stability', label: 'Deposit Stability' },

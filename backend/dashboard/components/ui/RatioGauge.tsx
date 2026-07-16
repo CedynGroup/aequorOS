@@ -40,10 +40,10 @@ export default function RatioGauge({
 
   const fillColor =
     status === 'breach' || status === 'critical'
-      ? '#B3261E'
+      ? 'rgb(var(--crit))'
       : status === 'approaching' || status === 'amber'
-      ? '#C97C00'
-      : '#0E8A4F';
+      ? 'rgb(var(--warn))'
+      : 'rgb(var(--ok))';
 
   const variance = value - threshold;
   const varianceSign = variance >= 0 ? '+' : '';

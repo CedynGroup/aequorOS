@@ -76,7 +76,7 @@ export default function LiveStatusCard() {
                 ? livePrimaryMetric(module, view.metrics)
                 : null;
               return (
-                <div key={module} className="bg-white px-3 py-2.5">
+                <div key={module} className="bg-surface-raised px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-micro uppercase tracking-wider text-slate truncate">
                       {LIVE_MODULE_LABELS[module]}

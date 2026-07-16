@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Stacked asset-composition projection (loans / securities / cash).
+ * Used exclusively by the Balance Sheet Forecasting workspace.
+ * Token-themed via lib/chartTheme.ts — follows the active dark/light theme.
+ */
+
 import {
   ResponsiveContainer,
   AreaChart,
@@ -9,8 +15,14 @@ import {
   Tooltip,
   CartesianGrid,
   Legend,
-  ReferenceLine,
 } from 'recharts';
+import {
+  axisProps,
+  CHART_GRID,
+  chartLegendProps,
+  chartTooltipProps,
+  seriesColor,
+} from '@/lib/chartTheme';
 
 export type BalanceSheetPoint = {
   /** X-axis label (e.g. "Y0", "2027-03"). */
@@ -30,56 +42,48 @@ export default function BalanceSheetProjectionChart({
 }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={data} margin={{ top: 12, right: 24, left: 0, bottom: 8 }}>
-        <CartesianGrid stroke="#E4E8EC" strokeDasharray="3 3" vertical={false} />
-        <XAxis
-          dataKey="month"
-          axisLine={{ stroke: '#D0D7DE' }}
-          tickLine={false}
-          interval={0}
-        />
+      <AreaChart data={data} margin={{ top: 8, right: 16, left: 4, bottom: 4 }}>
+        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="month" {...axisProps} interval={0} />
         <YAxis
+          {...axisProps}
           axisLine={false}
-          tickLine={false}
-          tickFormatter={(v) => `${v}M`}
+          tickFormatter={(v: number) => `${v.toLocaleString()}M`}
           width={56}
         />
         <Tooltip
-          formatter={(v: number, name) => [`GHS ${v.toLocaleString()}M`, name]}
+          {...chartTooltipProps}
+          formatter={(v: number, name: string) => [
+            `GHS ${v.toLocaleString()}M`,
+            name,
+          ]}
         />
-        <Legend
-          verticalAlign="top"
-          align="right"
-          height={28}
-          iconType="circle"
-          wrapperStyle={{ fontSize: '11px' }}
-        />
-        <ReferenceLine x={0} stroke="#0A2540" strokeWidth={1} strokeDasharray="2 2" />
+        <Legend verticalAlign="top" align="right" height={28} {...chartLegendProps} />
         <Area
           type="monotone"
           dataKey="loans"
           stackId="1"
-          stroke="#0A2540"
-          fill="#0A2540"
-          fillOpacity={0.85}
+          stroke={seriesColor(0)}
+          fill={seriesColor(0)}
+          fillOpacity={0.8}
           name="Loans"
         />
         <Area
           type="monotone"
           dataKey="securities"
           stackId="1"
-          stroke="#1A4D5C"
-          fill="#1A4D5C"
-          fillOpacity={0.85}
+          stroke={seriesColor(1)}
+          fill={seriesColor(1)}
+          fillOpacity={0.8}
           name="Securities"
         />
         <Area
           type="monotone"
           dataKey="cash"
           stackId="1"
-          stroke="#2D7FF9"
-          fill="#2D7FF9"
-          fillOpacity={0.85}
+          stroke={seriesColor(2)}
+          fill={seriesColor(2)}
+          fillOpacity={0.8}
           name="Cash & BoG reserves"
         />
       </AreaChart>

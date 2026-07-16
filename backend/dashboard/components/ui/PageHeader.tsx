@@ -15,7 +15,7 @@ export default function PageHeader({
   asOf?: string;
 }) {
   return (
-    <div className="border-b border-border-light bg-white">
+    <div className="border-b border-border-light bg-surface-raised">
       <div className="px-8 py-5">
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav

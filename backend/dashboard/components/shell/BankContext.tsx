@@ -93,7 +93,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => banksQuery.refetch()}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
           >
             Retry
           </button>
@@ -128,7 +128,7 @@ function NoPeriodsPanel() {
       action={
         <Link
           href="/data-engine"
-          className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700"
+          className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary"
         >
           Open the Data Engine
         </Link>
@@ -149,7 +149,7 @@ function NoBanksPanel() {
             type="button"
             disabled={seed.isPending}
             onClick={() => seed.mutate()}
-            className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700 disabled:opacity-60"
+            className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary disabled:opacity-60"
           >
             {seed.isPending && (
               <Loader2 size={13} className="animate-spin" aria-hidden />

@@ -30,7 +30,7 @@ export default function PrototypeBanner() {
   if (dismissed) return null;
 
   return (
-    <div className="bg-navy text-white border-b border-white/10">
+    <div className="bg-nav text-white border-b border-white/10">
       <div className="px-4 md:px-6 py-2.5 flex items-center gap-3 text-caption">
         <Info size={14} className="text-action shrink-0" aria-hidden />
         <p className="flex-1 min-w-0">

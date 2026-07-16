@@ -54,7 +54,7 @@ export default function MarketDataPage() {
               <button
                 type="button"
                 onClick={() => setAdding(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
               >
                 <Plus size={13} aria-hidden />
                 Connect a source
@@ -168,7 +168,7 @@ function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
             <button
               type="submit"
               disabled={!file || !asOfDate || upload.isPending}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
             >
               {upload.isPending ? (
                 <Loader2 size={13} className="animate-spin" aria-hidden />

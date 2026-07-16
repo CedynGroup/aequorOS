@@ -1,6 +1,10 @@
 /**
  * Equilibrium Mark — triangle resting on a horizontal line.
  * Per design brief: "represents balance sheet equilibrium".
+ *
+ * variant='dark'  → for always-dark surfaces (nav rail, banners): white mark.
+ * variant='light' → theme-aware: follows the heading/text tokens so it stays
+ *                   legible in both the dark and light themes.
  */
 export default function Logo({
   variant = 'dark',
@@ -11,9 +15,11 @@ export default function Logo({
   showWordmark?: boolean;
   className?: string;
 }) {
-  const lineColor = variant === 'dark' ? '#FFFFFF' : '#0A2540';
-  const triangleColor = variant === 'dark' ? '#2D7FF9' : '#2D7FF9';
-  const wordColor = variant === 'dark' ? '#FFFFFF' : '#0A2540';
+  const lineColor = variant === 'dark' ? '#FFFFFF' : 'rgb(var(--heading))';
+  const triangleColor = 'rgb(var(--accent))';
+  const wordColor = variant === 'dark' ? '#FFFFFF' : 'rgb(var(--heading))';
+  const taglineColor =
+    variant === 'dark' ? 'rgba(202, 220, 252, 0.9)' : 'rgb(var(--text-muted))';
 
   return (
     <div className={`inline-flex items-center gap-2.5 ${className}`}>
@@ -29,14 +35,14 @@ export default function Logo({
           y1="46"
           x2="50"
           y2="46"
-          stroke={lineColor}
+          style={{ stroke: lineColor }}
           strokeWidth="3"
           strokeLinecap="round"
         />
         <polygon
           points="32,18 46,42 18,42"
           fill="none"
-          stroke={triangleColor}
+          style={{ stroke: triangleColor }}
           strokeWidth="3"
           strokeLinejoin="round"
         />
@@ -51,7 +57,7 @@ export default function Logo({
           </div>
           <div
             className="text-[9px] font-medium uppercase tracking-[0.2em] mt-0.5"
-            style={{ color: variant === 'dark' ? '#CADCFC' : '#5A6776' }}
+            style={{ color: taglineColor }}
           >
             Treasury Reimagined
           </div>

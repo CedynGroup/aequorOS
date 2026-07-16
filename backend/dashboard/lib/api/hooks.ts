@@ -44,6 +44,7 @@ import {
   regulatoryLiquidityApi,
   tenant,
 } from './client';
+import { ingestionApi } from './ingestion';
 
 const t = { xOrgId: tenant.orgId, xUserId: tenant.userId } as const;
 
@@ -1060,6 +1061,84 @@ export function useRevokeMarketDataConnection(bankId: string | undefined) {
       });
     },
   });
+}
+
+/**
+ * Vendor-blind market data consumption views for the Markets hub: every
+ * yield curve, FX spot (+ trailing history for sparklines), issuer rating,
+ * and macro index the canonical store can serve at the as-of date, each with
+ * source attribution and freshness. Omit `asOf` for "today" (latest pulls).
+ */
+export function useMarketDataViews(bankId: string | undefined, asOf?: string) {
+  return useQuery({
+    queryKey: ['md-views', bankId, asOf ?? null],
+    queryFn: () =>
+      apiCall(() =>
+        marketDataApi.getMarketDataViews({
+          ...t,
+          bankId: bankId!,
+          asOf: asOf ? new Date(`${asOf}T00:00:00Z`) : undefined,
+        })
+      ),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+/**
+ * Canonical positions for the /positions blotter, with a bounded wait.
+ *
+ * The canonical-positions endpoint has no server pagination and serializes
+ * the entire current-generation book; on history-loaded banks (400k+
+ * positions) that read never completes. This hook aborts after `timeoutMs`
+ * and surfaces a typed `position_read_timeout` ApiError so the page can
+ * explain the scale limitation instead of showing an infinite skeleton.
+ */
+export function useCanonicalPositionsBlotter(
+  bankId: string | undefined,
+  timeoutMs = 30_000
+) {
+  return useQuery({
+    queryKey: ['positions-blotter', bankId],
+    queryFn: async ({ signal }) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const onOuterAbort = () => controller.abort();
+      signal.addEventListener('abort', onOuterAbort);
+      try {
+        return await apiCall(() =>
+          ingestionApi.listCanonicalPositions(
+            { ...t, bankId: bankId! },
+            { signal: controller.signal }
+          )
+        );
+      } catch (error) {
+        if (controller.signal.aborted && !signal.aborted) {
+          throw new ApiError({
+            message:
+              'The canonical-positions read timed out — the endpoint has no ' +
+              'server pagination, and this bank’s position book is too ' +
+              'large to serialize in one response.',
+            status: null,
+            code: 'position_read_timeout',
+            errorCode: null,
+          });
+        }
+        throw error;
+      } finally {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', onOuterAbort);
+      }
+    },
+    enabled: Boolean(bankId),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Whether an error is the positions blotter's bounded-read timeout. */
+export function isPositionReadTimeout(error: unknown): boolean {
+  return isApiError(error) && error.code === 'position_read_timeout';
 }
 
 /** Run an uploaded template file as a manual market data pull (§8.3). */

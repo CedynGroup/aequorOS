@@ -6,12 +6,21 @@ import type {
   RegulatoryScenarioCode,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
+import KpiStat from '@/components/ui/KpiStat';
+import ChartFrame from '@/components/ui/ChartFrame';
+import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
 import RunBadge from '@/components/ui/RunBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
-import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import DataTable, { type Column } from '@/components/ui/DataTable';
+import StressDeltaChart from '@/components/liquidity/charts/StressDeltaChart';
+import {
+  runComputedAt,
+  runMetric,
+  runMetricStatus,
+  runSectionTotal,
+} from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useRegulatoryRun,
@@ -38,28 +47,6 @@ const SCENARIO_DESCRIPTIONS: Record<string, string> = {
   combined:
     'Concurrent idiosyncratic and market-wide shock per the BoG ILAAP severe scenario.',
 };
-
-function runMetric(run: RegulatoryRunRead | undefined, key: string): number | null {
-  const value = run?.metrics?.[key];
-  if (value === undefined || value === null) return null;
-  return num(value as string);
-}
-
-function metricStatus(
-  run: RegulatoryRunRead | undefined,
-  metricCode: string
-): string | null {
-  return (
-    run?.metricResults.find((m) => m.metricCode === metricCode)?.status ?? null
-  );
-}
-
-function sumSection(run: RegulatoryRunRead | undefined, section: string): number | null {
-  if (!run) return null;
-  const lines = run.lineItems.filter((line) => line.section === section);
-  if (!lines.length) return null;
-  return lines.reduce((s, line) => s + num(line.weightedAmount), 0);
-}
 
 export default function StressScenarios() {
   const { bank, period } = useBankContext();
@@ -96,13 +83,82 @@ export default function StressScenarios() {
   const hasRuns = latestIds.size > 0;
   const baselineLcr = runMetric(baselineRun.data, 'lcr_pct');
   const baselineNsfr = runMetric(baselineRun.data, 'nsfr_pct');
+  const baselineHqla = runMetric(baselineRun.data, 'hqla_total_ghs');
+
+  const gridRows = STRESS_SCENARIOS.map((scenario) => {
+    const run = runByScenario[scenario];
+    const lcr = runMetric(run, 'lcr_pct');
+    const nsfr = runMetric(run, 'nsfr_pct');
+    return {
+      scenario,
+      label: SCENARIO_LABELS[scenario] ?? labelize(scenario),
+      lcr,
+      nsfr,
+      lcrDelta: lcr !== null && baselineLcr !== null ? lcr - baselineLcr : null,
+      nsfrDelta:
+        nsfr !== null && baselineNsfr !== null ? nsfr - baselineNsfr : null,
+      status: runMetricStatus(run, 'lcr_pct'),
+      run,
+    };
+  });
+
+  const gridColumns: Column<(typeof gridRows)[number]>[] = [
+    {
+      key: 'scenario',
+      header: 'Scenario',
+      width: '30%',
+      render: (r) => (
+        <div>
+          <p className="font-medium text-navy">{r.label}</p>
+          <p className="text-caption text-slate">{SCENARIO_DESCRIPTIONS[r.scenario]}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'lcr',
+      header: 'LCR under stress',
+      numeric: true,
+      render: (r) => (r.lcr === null ? '—' : fmtPct(r.lcr, 2)),
+    },
+    {
+      key: 'lcrDelta',
+      header: 'Δ vs baseline',
+      numeric: true,
+      render: (r) =>
+        r.lcrDelta === null ? (
+          '—'
+        ) : (
+          <span className={r.lcrDelta < 0 ? 'text-critical' : 'text-success'}>
+            {r.lcrDelta >= 0 ? '+' : ''}
+            {r.lcrDelta.toFixed(2)} pts
+          </span>
+        ),
+    },
+    {
+      key: 'nsfr',
+      header: 'NSFR under stress',
+      numeric: true,
+      render: (r) => (r.nsfr === null ? '—' : fmtPct(r.nsfr, 2)),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      align: 'right',
+      render: (r) =>
+        r.run ? (
+          <StatusPill tone={statusTone(r.status)} />
+        ) : (
+          <StatusPill tone="pending">Not run</StatusPill>
+        ),
+    },
+  ];
 
   const runAllButton = (
     <button
       type="button"
       disabled={runAll.isPending || !periodId}
       onClick={() => periodId && runAll.mutate({ reportingPeriodId: periodId })}
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700 disabled:opacity-60"
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
     >
       {runAll.isPending ? (
         <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -119,9 +175,9 @@ export default function StressScenarios() {
         breadcrumbs={[
           { label: 'Modules', href: '/' },
           { label: 'Liquidity Risk', href: '/liquidity' },
-          { label: 'Stress Scenarios' },
+          { label: 'Stress' },
         ]}
-        title="Stress Scenarios"
+        title="Liquidity Stress"
         subtitle="Basel III-aligned liquidity stress per BoG ILAAP framework"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={runAllButton}
@@ -142,57 +198,71 @@ export default function StressScenarios() {
             />
           ) : (
             <>
-              {/* Baseline reference strip */}
-              <div className="card px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div>
-                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                    Baseline LCR
-                  </p>
-                  <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
-                    {baselineLcr === null ? '—' : fmtPct(baselineLcr, 2)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                    Baseline NSFR
-                  </p>
-                  <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
-                    {baselineNsfr === null ? '—' : fmtPct(baselineNsfr, 2)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                    Baseline HQLA
-                  </p>
-                  <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
-                    {runMetric(baselineRun.data, 'hqla_total_ghs') === null
-                      ? '—'
-                      : fmtCurrency(
-                          runMetric(baselineRun.data, 'hqla_total_ghs') ?? 0,
-                          'GHS'
-                        )}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                    Survival horizon
-                  </p>
-                  <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
-                    30 d
-                  </p>
-                </div>
+              {/* Baseline reference KPIs */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <KpiStat
+                  label="Baseline LCR"
+                  value={baselineLcr === null ? '—' : fmtPct(baselineLcr, 2)}
+                  hint="Latest stored baseline run"
+                />
+                <KpiStat
+                  label="Baseline NSFR"
+                  value={baselineNsfr === null ? '—' : fmtPct(baselineNsfr, 2)}
+                />
+                <KpiStat
+                  label="Baseline HQLA"
+                  value={
+                    baselineHqla === null ? '—' : fmtCurrency(baselineHqla, 'GHS')
+                  }
+                />
+                <KpiStat label="Survival horizon" value="30" unit="days" />
               </div>
 
-              {/* Scenario cards */}
+              {/* Scenario grid + delta chart */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <SectionCard
+                  className="lg:col-span-2"
+                  title="Scenario grid"
+                  subtitle="Latest stored run per scenario for this reporting period"
+                  noPadding
+                  computedAt={runComputedAt(baselineRun.data)}
+                  runBadge={
+                    baselineRun.data ? <RunBadge run={baselineRun.data} /> : undefined
+                  }
+                >
+                  <DataTable columns={gridColumns} rows={gridRows} />
+                </SectionCard>
+
+                <ChartFrame
+                  title="Ratio deterioration"
+                  subtitle="Stressed ratio minus baseline, per scenario"
+                  height={240}
+                >
+                  <StressDeltaChart
+                    data={gridRows.map((r) => ({
+                      scenario: labelize(r.scenario),
+                      lcrDelta:
+                        r.lcrDelta === null
+                          ? null
+                          : Number(r.lcrDelta.toFixed(2)),
+                      nsfrDelta:
+                        r.nsfrDelta === null
+                          ? null
+                          : Number(r.nsfrDelta.toFixed(2)),
+                    }))}
+                    height={240}
+                  />
+                </ChartFrame>
+              </div>
+
+              {/* Scenario detail cards */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {STRESS_SCENARIOS.map((scenario) => (
                   <ScenarioCard
                     key={scenario}
                     scenario={scenario}
                     run={runByScenario[scenario]}
-                    isLoading={
-                      latestIds.has(scenario) && !runByScenario[scenario]
-                    }
+                    isLoading={latestIds.has(scenario) && !runByScenario[scenario]}
                     baselineLcr={baselineLcr}
                     baselineNsfr={baselineNsfr}
                   />
@@ -200,25 +270,22 @@ export default function StressScenarios() {
               </div>
 
               {/* Comparison table */}
-              <Card>
-                <CardHeader
-                  title="Scenario comparison"
-                  subtitle="Latest stored run per scenario for this reporting period"
-                />
-                <CardBody className="p-0">
-                  <ComparisonTable runs={runByScenario} />
-                </CardBody>
-              </Card>
+              <SectionCard
+                title="Scenario comparison"
+                subtitle="Latest stored run per scenario for this reporting period"
+                noPadding
+              >
+                <ComparisonTable runs={runByScenario} />
+              </SectionCard>
             </>
           )}
 
           {/* Methodology footer */}
-          <Card>
-            <CardHeader
-              title="Methodology"
-              subtitle="ILAAP and Basel III stress alignment"
-            />
-            <CardBody className="text-body text-navy/85 leading-relaxed space-y-3">
+          <SectionCard
+            title="Methodology"
+            subtitle="ILAAP and Basel III stress alignment"
+          >
+            <div className="text-body text-navy/85 leading-relaxed space-y-3">
               <p>
                 Stress factors applied to baseline LCR and NSFR per BoG&apos;s
                 ILAAP framework and Basel III §35-36 (LCR) and §50-52 (NSFR).
@@ -232,8 +299,8 @@ export default function StressScenarios() {
                 simultaneous shock with no central bank backstop. ILAAP
                 submission quarterly.
               </p>
-            </CardBody>
-          </Card>
+            </div>
+          </SectionCard>
         </div>
       </QueryBoundary>
     </>
@@ -256,19 +323,19 @@ function ScenarioCard({
   const label = SCENARIO_LABELS[scenario] ?? labelize(scenario);
   const lcr = runMetric(run, 'lcr_pct');
   const nsfr = runMetric(run, 'nsfr_pct');
-  const lcrStatus = metricStatus(run, 'lcr_pct');
+  const lcrStatus = runMetricStatus(run, 'lcr_pct');
   const breach = lcrStatus === 'red';
 
   return (
-    <Card className={breach ? 'border-l-4 border-l-critical' : ''}>
-      <CardHeader
-        title={label}
-        subtitle={SCENARIO_DESCRIPTIONS[scenario]}
-        action={
-          run ? <StatusPill tone={statusTone(lcrStatus)} /> : undefined
-        }
-      />
-      <CardBody className="space-y-5">
+    <SectionCard
+      title={label}
+      subtitle={SCENARIO_DESCRIPTIONS[scenario]}
+      actions={run ? <StatusPill tone={statusTone(lcrStatus)} /> : undefined}
+      className={breach ? 'border-l-4 border-l-critical' : ''}
+      computedAt={runComputedAt(run)}
+      runBadge={run ? <RunBadge run={run} /> : undefined}
+    >
+      <div className="space-y-5">
         {!run ? (
           <p className="text-body text-slate">
             {isLoading ? 'Loading scenario run…' : 'Not yet run for this period.'}
@@ -298,7 +365,7 @@ function ScenarioCard({
                 label="NSFR after stress"
                 value={nsfr}
                 baseline={baselineNsfr}
-                status={metricStatus(run, 'nsfr_pct')}
+                status={runMetricStatus(run, 'nsfr_pct')}
               />
             </div>
 
@@ -311,17 +378,16 @@ function ScenarioCard({
                 />
                 <p className="text-caption text-critical leading-relaxed">
                   LCR falls below the regulatory minimum under this scenario.
-                  Activate the ILAAP contingency funding plan.
+                  Activate the contingency funding plan — see the CFP tab.
                 </p>
               </div>
             )}
 
             <ScenarioAssumptions run={run} />
-            <RunBadge run={run} />
           </>
         )}
-      </CardBody>
-    </Card>
+      </div>
+    </SectionCard>
   );
 }
 
@@ -336,8 +402,7 @@ function ScenarioMetric({
   baseline: number | null;
   status: string | null;
 }) {
-  const change =
-    value !== null && baseline !== null ? value - baseline : null;
+  const change = value !== null && baseline !== null ? value - baseline : null;
   const valueColor =
     status === 'red'
       ? 'text-critical'
@@ -349,14 +414,14 @@ function ScenarioMetric({
       <p className="text-micro font-medium uppercase tracking-wider text-slate">
         {label}
       </p>
-      <p className="mt-1 font-mono text-h1 tabular-nums">
+      <p className="mt-1 font-mono text-h1 tnum">
         <span className={valueColor}>
           {value === null ? '—' : fmtPct(value, 2)}
         </span>
       </p>
       {change !== null && (
         <p
-          className={`mt-1 font-mono text-caption tabular-nums ${
+          className={`mt-1 font-mono text-caption tnum ${
             change < 0 ? 'text-critical' : 'text-success'
           }`}
         >
@@ -415,10 +480,10 @@ function ScenarioAssumptions({ run }: { run: RegulatoryRunRead }) {
               return (
                 <tr key={key} className="border-b border-border-light last:border-b-0">
                   <td className="py-1.5 text-navy/90">{labelize(category)}</td>
-                  <td className="py-1.5 text-right font-mono text-slate tabular-nums">
+                  <td className="py-1.5 text-right font-mono text-slate tnum">
                     {base !== undefined ? `${num(base).toFixed(0)}%` : '—'}
                   </td>
-                  <td className="py-1.5 text-right font-mono font-medium text-navy tabular-nums">
+                  <td className="py-1.5 text-right font-mono font-medium text-navy tnum">
                     {num(value).toFixed(0)}%
                   </td>
                 </tr>
@@ -432,7 +497,7 @@ function ScenarioAssumptions({ run }: { run: RegulatoryRunRead }) {
           {otherShocks.map(([key, value]) => (
             <div key={key} className="flex items-center justify-between gap-3 text-caption">
               <dt className="text-slate">{shockLabel(key)}</dt>
-              <dd className="font-mono text-navy tabular-nums">
+              <dd className="font-mono text-navy tnum">
                 {shockValue(key, value)}
               </dd>
             </div>
@@ -480,12 +545,12 @@ function ComparisonTable({
     {
       label: 'Outflows (weighted)',
       unit: 'ghs',
-      values: scenarios.map((s) => sumSection(runs[s], 'outflow')),
+      values: scenarios.map((s) => runSectionTotal(runs[s], 'outflow')),
     },
     {
       label: 'Inflows (weighted)',
       unit: 'ghs',
-      values: scenarios.map((s) => sumSection(runs[s], 'inflow')),
+      values: scenarios.map((s) => runSectionTotal(runs[s], 'inflow')),
     },
     {
       label: 'Net outflows (30d)',

@@ -2,12 +2,13 @@
 
 export default function Sparkline({
   data,
-  color = '#0E8A4F',
+  color = 'rgb(var(--ok))',
   width = 80,
   height = 24,
   strokeWidth = 1.5,
 }: {
   data: number[];
+  /** Any CSS color, including token expressions like 'rgb(var(--ok))'. */
   color?: string;
   width?: number;
   height?: number;
@@ -38,7 +39,7 @@ export default function Sparkline({
       <polyline
         points={points}
         fill="none"
-        stroke={color}
+        style={{ stroke: color }}
         strokeWidth={strokeWidth}
         strokeLinejoin="round"
         strokeLinecap="round"

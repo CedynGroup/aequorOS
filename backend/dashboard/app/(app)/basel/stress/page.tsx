@@ -3,13 +3,15 @@
 import { AlertTriangle, CheckCircle2, Loader2, PlayCircle, Zap } from 'lucide-react';
 import type { RegulatoryRunRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
+import KpiStat from '@/components/ui/KpiStat';
+import SectionCard from '@/components/ui/SectionCard';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import RunBadge from '@/components/ui/RunBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
-import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import CapitalProjectionChart from '@/components/charts/CapitalProjectionChart';
+import { runComputedAt } from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useRegulatoryRun,
@@ -141,7 +143,7 @@ export default function CapitalStress() {
       type="button"
       disabled={runAll.isPending || !periodId}
       onClick={() => periodId && runAll.mutate({ reportingPeriodId: periodId })}
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700 disabled:opacity-60"
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
     >
       {runAll.isPending ? (
         <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -182,7 +184,7 @@ export default function CapitalStress() {
           ) : (
             <>
               {/* Baseline reference strip — as-of ratios */}
-              <div className="card px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <BaselineCell
                   label="Baseline CAR"
                   value={runMetric(baselineRun.data, 'car_pct')}
@@ -218,25 +220,26 @@ export default function CapitalStress() {
               </div>
 
               {/* Q4 comparison */}
-              <Card>
-                <CardHeader
-                  title="Quarter 4 comparison"
-                  subtitle="End-state position across scenarios · Latest stored run per scenario"
-                />
-                <CardBody className="p-0">
-                  <ComparisonTable runs={runByScenario} carMin={carMin} />
-                </CardBody>
-              </Card>
+              <SectionCard
+                title="Quarter 4 comparison"
+                subtitle="End-state position across scenarios · Latest stored run per scenario"
+                noPadding
+                computedAt={runComputedAt(baselineRun.data)}
+                runBadge={
+                  baselineRun.data ? <RunBadge run={baselineRun.data} /> : undefined
+                }
+              >
+                <ComparisonTable runs={runByScenario} carMin={carMin} />
+              </SectionCard>
             </>
           )}
 
           {/* Methodology footer */}
-          <Card>
-            <CardHeader
-              title="Methodology"
-              subtitle="ICAAP and BoG CRD stress alignment"
-            />
-            <CardBody className="text-body text-navy/85 leading-relaxed space-y-3">
+          <SectionCard
+            title="Methodology"
+            subtitle="ICAAP and BoG CRD stress alignment"
+          >
+            <div className="text-body text-navy/85 leading-relaxed space-y-3">
               <p>
                 Each scenario projects the four-quarter capital path from the
                 as-of position: CET1 evolves by retained quarterly income net
@@ -251,8 +254,8 @@ export default function CapitalStress() {
                 auditable regulatory run with its full input snapshot and
                 engine version.
               </p>
-            </CardBody>
-          </Card>
+            </div>
+          </SectionCard>
         </div>
       </QueryBoundary>
     </>
@@ -261,14 +264,11 @@ export default function CapitalStress() {
 
 function BaselineCell({ label, value }: { label: string; value: number | null }) {
   return (
-    <div>
-      <p className="text-micro font-medium uppercase tracking-wider text-slate">
-        {label}
-      </p>
-      <p className="mt-1 font-mono text-h1 text-navy tabular-nums">
-        {value === null ? '—' : fmtPct(value, 2)}
-      </p>
-    </div>
+    <KpiStat
+      label={label}
+      value={value === null ? '—' : fmtPct(value, 2)}
+      hint="Latest stored baseline run"
+    />
   );
 }
 
@@ -300,13 +300,15 @@ function ScenarioCard({
   }));
 
   return (
-    <Card className={breach ? 'border-l-4 border-l-critical' : ''}>
-      <CardHeader
-        title={label}
-        subtitle={SCENARIO_DESCRIPTIONS[scenario]}
-        action={run ? <StatusPill tone={tone} /> : undefined}
-      />
-      <CardBody className="space-y-5">
+    <SectionCard
+      title={label}
+      subtitle={SCENARIO_DESCRIPTIONS[scenario]}
+      actions={run ? <StatusPill tone={tone} /> : undefined}
+      className={breach ? 'border-l-4 border-l-critical' : ''}
+      computedAt={runComputedAt(run)}
+      runBadge={run ? <RunBadge run={run} /> : undefined}
+    >
+      <div className="space-y-5">
         {!run ? (
           <p className="text-body text-slate">
             {isLoading ? 'Loading scenario run…' : 'Not yet run for this period.'}
@@ -424,11 +426,10 @@ function ScenarioCard({
               </ul>
             </div>
 
-            <RunBadge run={run} />
           </>
         )}
-      </CardBody>
-    </Card>
+      </div>
+    </SectionCard>
   );
 }
 

@@ -40,7 +40,7 @@ function LineageChain({ lineageId }: { lineageId: string }) {
     <ol className="px-4 py-3 space-y-2">
       {nodes.map((node, index) => (
         <li key={node.id} className="flex items-start gap-3">
-          <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full bg-navy text-white text-[10px] font-mono">
+          <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full bg-nav text-white text-[10px] font-mono">
             {index + 1}
           </span>
           <div className="min-w-0">

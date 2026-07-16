@@ -85,9 +85,9 @@ export default function NotificationDrawer({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-navy/30 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
       />
-      <aside className="relative w-full max-w-md bg-white border-l border-border h-full flex flex-col shadow-pop">
+      <aside className="relative w-full max-w-md bg-surface-raised border-l border-border h-full flex flex-col shadow-pop">
         <div className="h-16 px-5 border-b border-border-light flex items-center justify-between">
           <div>
             <h2 className="text-h3 text-navy">Notifications</h2>

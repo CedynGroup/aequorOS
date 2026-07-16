@@ -1,14 +1,33 @@
 'use client';
 
+/**
+ * Settings — token'd governance cards:
+ *   · Institution profile — real bank fields from the risk service
+ *   · Appearance — real theme toggle (ThemeProvider)
+ *   · Users & roles — static demo roster, clearly labeled
+ *   · Data & compute — real service health, market-data connections, and the
+ *     official-run schedule note (read-only)
+ *   · About — engine versions and provenance from persisted regulatory runs
+ */
+
 import { useQuery } from '@tanstack/react-query';
+import { Moon, Sun } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import CopyButton from '@/components/ui/CopyButton';
+import RunBadge from '@/components/ui/RunBadge';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
+import { SkeletonLine } from '@/components/ui/Skeleton';
 import { useBankContext } from '@/components/shell/BankContext';
+import { useTheme, type Theme } from '@/components/shell/ThemeProvider';
+import { MODULE_LABELS, useLatestRunsByModule } from '@/components/reports/hooks';
 import { apiBaseUrl, apiOrigin, tenant } from '@/lib/api/client';
-import { useBank, useCashflowHistory } from '@/lib/api/hooks';
-import { labelize } from '@/lib/api/values';
+import {
+  useBank,
+  useCashflowHistory,
+  useMarketDataConnections,
+} from '@/lib/api/hooks';
+import { fmtRelative, labelize } from '@/lib/api/values';
 
 /** A copyable UUID row for the identity grid. */
 function IdField({ label, value }: { label: string; value: string | undefined }) {
@@ -46,14 +65,206 @@ function useRiskServiceHealth() {
   });
 }
 
+// Static demo roster — illustrative accounts only, never authentication.
+const DEMO_ROSTER: { name: string; title: string; chip: string }[] = [
+  { name: 'Akua Mensah', title: 'Head of Treasury & ALM', chip: 'Treasurer' },
+  { name: 'Kojo Aboagye', title: 'Assets & Liabilities Desk', chip: 'ALM Manager' },
+  { name: 'Yaa Adjei', title: 'Enterprise Risk', chip: 'Risk Officer' },
+  { name: 'Eric Inkoom Danso', title: 'Executive Office', chip: 'CFO' },
+];
+
 export default function SettingsPage() {
   const { bank, periods } = useBankContext();
   const bankQuery = useBank(bank?.id);
   const profile = bankQuery.data ?? bank;
 
+  return (
+    <>
+      <PageHeader
+        title="Settings"
+        subtitle="Institution profile, appearance, roles, data & compute"
+      />
+
+      <div className="px-8 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <InstitutionProfile
+          profile={profile}
+          periodCount={periods.length}
+          latestPeriodLabel={periods[0]?.label}
+        />
+        <div className="space-y-6">
+          <AppearancePanel />
+          <UsersRolesPanel />
+        </div>
+        <DataComputePanel bankId={bank?.id} />
+        <AboutPanel bankId={bank?.id} />
+      </div>
+    </>
+  );
+}
+
+function InstitutionProfile({
+  profile,
+  periodCount,
+  latestPeriodLabel,
+}: {
+  profile: ReturnType<typeof useBank>['data'] | null;
+  periodCount: number;
+  latestPeriodLabel: string | undefined;
+}) {
+  return (
+    <Card>
+      <CardHeader
+        title="Institution profile"
+        subtitle="Reporting entity from the risk service"
+      />
+      <CardBody>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-body">
+          <div>
+            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
+              Legal name
+            </dt>
+            <dd className="mt-1 text-navy">{profile?.name ?? '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
+              Jurisdiction
+            </dt>
+            <dd className="mt-1 text-navy">
+              {profile
+                ? JURISDICTIONS[profile.jurisdictionCode] ??
+                  profile.jurisdictionCode
+                : '—'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
+              Regulator
+            </dt>
+            <dd className="mt-1 text-navy">Bank of Ghana</dd>
+          </div>
+          <div>
+            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
+              License class
+            </dt>
+            <dd className="mt-1 text-navy">
+              {profile ? labelize(profile.licenseType) : '—'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
+              Reporting currency
+            </dt>
+            <dd className="mt-1 font-mono text-navy">
+              {profile?.currency ?? '—'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
+              Reporting periods
+            </dt>
+            <dd className="mt-1 text-navy">
+              {periodCount} loaded
+              {latestPeriodLabel && ` · latest ${latestPeriodLabel}`}
+            </dd>
+          </div>
+          <IdField label="Organization ID (X-Org-Id)" value={profile?.organizationId} />
+          <IdField label="Bank ID" value={profile?.id} />
+          <IdField label="Service-account User ID (X-User-Id)" value={tenant.userId} />
+        </dl>
+      </CardBody>
+    </Card>
+  );
+}
+
+function AppearancePanel() {
+  const { theme, setTheme } = useTheme();
+  const options: { value: Theme; label: string; Icon: typeof Sun }[] = [
+    { value: 'dark', label: 'Dark', Icon: Moon },
+    { value: 'light', label: 'Light', Icon: Sun },
+  ];
+  return (
+    <Card>
+      <CardHeader
+        title="Appearance"
+        subtitle="Theme preference — stored locally in this browser"
+      />
+      <CardBody>
+        <div
+          role="radiogroup"
+          aria-label="Theme"
+          className="inline-flex items-center gap-1 p-1 rounded-md bg-surface border border-border-light"
+        >
+          {options.map(({ value, label, Icon }) => {
+            const selected = theme === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setTheme(value)}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded text-caption font-medium transition-colors ${
+                  selected
+                    ? 'bg-surface-raised text-navy shadow-subtle border border-border-light'
+                    : 'text-slate hover:text-navy'
+                }`}
+              >
+                <Icon size={14} aria-hidden />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-caption text-slate leading-relaxed">
+          Both themes run on the same semantic tokens; printed reports always
+          render in the light palette.
+        </p>
+      </CardBody>
+    </Card>
+  );
+}
+
+function UsersRolesPanel() {
+  return (
+    <Card>
+      <CardHeader
+        title="Users & roles"
+        subtitle="Demo roster — illustrative accounts for the walkthrough, not authentication"
+        action={<StatusPill tone="slate">Demo roster</StatusPill>}
+      />
+      <CardBody className="p-0">
+        <ul className="divide-y divide-border-light">
+          {DEMO_ROSTER.map((user) => (
+            <li key={user.name} className="px-5 py-3 flex items-center gap-4">
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal text-white text-caption font-semibold shrink-0">
+                {user.name
+                  .split(' ')
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join('')}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-body text-navy font-medium truncate">
+                  {user.name}
+                </p>
+                <p className="text-caption text-slate truncate">{user.title}</p>
+              </div>
+              <StatusPill tone="action" className="shrink-0">
+                {user.chip}
+              </StatusPill>
+            </li>
+          ))}
+        </ul>
+      </CardBody>
+    </Card>
+  );
+}
+
+function DataComputePanel({ bankId }: { bankId: string | undefined }) {
   const health = useRiskServiceHealth();
   // Tiny query against the cashflow proxy — 503 means the ML sidecar is offline.
-  const sidecarProbe = useCashflowHistory(bank?.id, 30);
+  const sidecarProbe = useCashflowHistory(bankId, 30);
+  const connections = useMarketDataConnections(bankId);
 
   const riskServiceTone: StatusTone = health.isLoading
     ? 'slate'
@@ -77,158 +288,151 @@ export default function SettingsPage() {
     ? 'OK'
     : 'Offline';
 
+  const connectionRows = connections.data?.connections ?? [];
+  const activeConnections = connectionRows.filter(
+    (c) => c.status === 'active'
+  ).length;
+
   return (
-    <>
-      <PageHeader title="Settings" subtitle="Bank profile, integrations, governance" />
+    <Card>
+      <CardHeader
+        title="Data & compute"
+        subtitle="Read-only view of the services and feeds behind this workspace"
+      />
+      <CardBody className="space-y-3">
+        <div className="flex items-center justify-between gap-3 py-2 border-b border-border-light">
+          <div className="min-w-0">
+            <p className="text-body text-navy">Risk service API</p>
+            <p className="text-caption text-slate font-mono truncate">
+              {apiBaseUrl}
+            </p>
+          </div>
+          <StatusPill tone={riskServiceTone} className="shrink-0">
+            {riskServiceStatus}
+          </StatusPill>
+        </div>
 
-      <div className="px-8 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader title="Bank profile" subtitle="Reporting entity from the risk service" />
-          <CardBody>
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-body">
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  Legal name
-                </dt>
-                <dd className="mt-1 text-navy">{profile?.name ?? '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  Jurisdiction
-                </dt>
-                <dd className="mt-1 text-navy">
-                  {profile
-                    ? JURISDICTIONS[profile.jurisdictionCode] ??
-                      profile.jurisdictionCode
-                    : '—'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  Regulator
-                </dt>
-                <dd className="mt-1 text-navy">Bank of Ghana</dd>
-              </div>
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  License class
-                </dt>
-                <dd className="mt-1 text-navy">
-                  {profile ? labelize(profile.licenseType) : '—'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  Reporting currency
-                </dt>
-                <dd className="mt-1 font-mono text-navy">
-                  {profile?.currency ?? '—'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  Reporting periods
-                </dt>
-                <dd className="mt-1 text-navy">
-                  {periods.length} loaded
-                  {periods.length > 0 &&
-                    ` · latest ${periods[0]?.label ?? ''}`}
-                </dd>
-              </div>
-              <IdField label="Organization ID (X-Org-Id)" value={profile?.organizationId} />
-              <IdField label="Bank ID" value={profile?.id} />
-              <IdField label="Service-account User ID (X-User-Id)" value={tenant.userId} />
-            </dl>
-          </CardBody>
-        </Card>
+        <div className="flex items-center justify-between gap-3 py-2 border-b border-border-light">
+          <div className="min-w-0">
+            <p className="text-body text-navy">Cash-flow ML sidecar</p>
+            <p className="text-caption text-slate">
+              LSTM daily forecasts — optional; the LCR forecasting page degrades
+              gracefully
+            </p>
+          </div>
+          <StatusPill tone={sidecarTone} className="shrink-0">
+            {sidecarStatus}
+          </StatusPill>
+        </div>
 
-        <Card>
-          <CardHeader
-            title="Platform services"
-            subtitle="Live service connections behind this demo"
-          />
-          <CardBody className="space-y-3">
-            <div className="flex items-center justify-between gap-3 py-2 border-b border-border-light">
-              <div className="min-w-0">
-                <p className="text-body text-navy">Risk service API</p>
-                <p className="text-caption text-slate font-mono truncate">
-                  {apiBaseUrl}
-                </p>
-              </div>
-              <span className="flex items-center gap-2 shrink-0">
-                <span className="text-caption text-slate">
-                  Regulatory engines · canonical data
-                </span>
-                <StatusPill tone={riskServiceTone}>{riskServiceStatus}</StatusPill>
-              </span>
+        <div className="py-2 border-b border-border-light">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-body text-navy">Market data pulls</p>
+              <p className="text-caption text-slate">
+                Vendor connections managed in the Data Engine
+              </p>
             </div>
-            <div className="flex items-center justify-between gap-3 py-2">
-              <div className="min-w-0">
-                <p className="text-body text-navy">Cash-flow ML sidecar</p>
-                <p className="text-caption text-slate">
-                  LSTM daily cash-flow forecasts, proxied via the risk service
-                </p>
-              </div>
-              <span className="flex items-center gap-2 shrink-0">
-                <span className="text-caption text-slate">
-                  Optional — LCR forecasting page degrades gracefully
-                </span>
-                <StatusPill tone={sidecarTone}>{sidecarStatus}</StatusPill>
-              </span>
-            </div>
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader title="Governance" subtitle="Platform design principles" />
-          <CardBody>
-            <ul className="space-y-3 text-body text-navy/85">
-              {[
-                'Every calculation persists an immutable run with engine version and input hash',
-                'Regulatory math executes server-side only — the UI renders API payloads',
-                'Tenant isolation on every request via organization-scoped headers',
-                'Deterministic engines: identical inputs reproduce identical outputs',
-                'Full audit trail and data lineage across all calculations',
-                'Synthetic demo dataset — no production bank data in this environment',
-              ].map((g) => (
-                <li key={g} className="flex items-start gap-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0 mt-2" aria-hidden />
-                  {g}
-                </li>
-              ))}
-            </ul>
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader
-            title="Demo personas"
-            subtitle="Illustrative roles for the demo walkthrough — not real accounts"
-          />
-          <CardBody className="p-0">
-            <ul className="divide-y divide-border-light">
-              {[
-                { name: 'Akua Mensah', role: 'Head of Treasury & ALM', access: 'Treasury · Approver' },
-                { name: 'Yaa Adjei', role: 'Chief Risk Officer', access: 'All modules · CRO sign-off' },
-                { name: 'Kojo Aboagye', role: 'FX Trader', access: 'FX · Read/Write' },
-                { name: 'Ama Owusu', role: 'Compliance Lead', access: 'Submissions · Approver' },
-                { name: 'Eric Inkoom Danso', role: 'CEO · Sample Bank', access: 'Read-only · Board view' },
-              ].map((u) => (
-                <li key={u.name} className="px-5 py-3 flex items-center gap-4">
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal text-white text-caption font-semibold shrink-0">
-                    {u.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+            {connections.isLoading ? (
+              <SkeletonLine width={64} height={18} />
+            ) : (
+              <StatusPill
+                tone={activeConnections > 0 ? 'success' : 'slate'}
+                className="shrink-0"
+              >
+                {activeConnections > 0
+                  ? `${activeConnections} active`
+                  : 'None connected'}
+              </StatusPill>
+            )}
+          </div>
+          {connectionRows.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {connectionRows.map((connection) => (
+                <li
+                  key={connection.id}
+                  className="flex items-center justify-between gap-3 text-caption"
+                >
+                  <span className="text-navy/85 truncate">
+                    {connection.displayName}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-body text-navy font-medium truncate">{u.name}</p>
-                    <p className="text-caption text-slate truncate">{u.role}</p>
-                  </div>
-                  <span className="text-caption text-slate shrink-0">{u.access}</span>
+                  <span className="text-slate shrink-0">
+                    {labelize(connection.status)}
+                    {connection.lastPullAt &&
+                      ` · last pull ${fmtRelative(connection.lastPullAt)}`}
+                  </span>
                 </li>
               ))}
             </ul>
-          </CardBody>
-        </Card>
-      </div>
-    </>
+          )}
+        </div>
+
+        <div className="py-2">
+          <p className="text-body text-navy">Official-run schedule</p>
+          <p className="mt-1 text-caption text-slate leading-relaxed">
+            The live engine recomputes automatically on every ingestion.
+            Immutable official runs are minted on demand from each module
+            dashboard (or the pipeline actions) — typically at period close,
+            ahead of BSD filings.
+          </p>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+function AboutPanel({ bankId }: { bankId: string | undefined }) {
+  const { query, byModule } = useLatestRunsByModule(bankId);
+  const entries = Array.from(byModule.entries());
+  const latest = entries
+    .map(([, run]) => run)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+
+  return (
+    <Card>
+      <CardHeader
+        title="About"
+        subtitle="Engine versions from the persisted regulatory runs"
+        action={latest ? <RunBadge run={latest} /> : undefined}
+      />
+      <CardBody className="p-0">
+        {query.isLoading ? (
+          <div className="p-5 space-y-3">
+            <SkeletonLine width="60%" />
+            <SkeletonLine width="45%" />
+            <SkeletonLine width="52%" />
+          </div>
+        ) : entries.length === 0 ? (
+          <p className="px-5 py-4 text-body text-slate">
+            No successful runs yet — engine versions appear here once the first
+            module run is persisted.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border-light">
+            {entries.map(([module, run]) => (
+              <li
+                key={module}
+                className="px-5 py-2.5 flex items-center justify-between gap-3"
+              >
+                <span className="text-body text-navy">
+                  {MODULE_LABELS[module] ?? labelize(module)} engine
+                </span>
+                <span className="font-mono text-caption text-slate tnum">
+                  {run.engineVersion}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="px-5 py-3 border-t border-border-light bg-surface/60">
+          <p className="text-caption text-slate leading-relaxed">
+            Every calculation persists an immutable run with engine version and
+            input hash · regulatory math executes server-side only · identical
+            inputs reproduce identical outputs · synthetic demo dataset — no
+            production bank data.
+          </p>
+        </div>
+      </CardBody>
+    </Card>
   );
 }

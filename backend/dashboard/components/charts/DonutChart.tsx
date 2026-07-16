@@ -1,10 +1,12 @@
 'use client';
 
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
+import { chartTooltipProps } from '@/lib/chartTheme';
 
 export type DonutSlice = {
   name: string;
   value: number;
+  /** Any CSS color, including chart tokens like 'var(--chart-1)'. */
   color: string;
 };
 
@@ -40,14 +42,18 @@ export default function DonutChart({
             dataKey="value"
             startAngle={90}
             endAngle={-270}
-            stroke="#FFFFFF"
+            stroke="rgb(var(--surface-raised))"
             strokeWidth={2}
           >
             {data.map((s, i) => (
               <Cell key={i} fill={s.color} />
             ))}
           </Pie>
-          <Tooltip formatter={(v: number, name) => [formatter(v), name]} />
+          <Tooltip
+            {...chartTooltipProps}
+            cursor={false}
+            formatter={(v: number, name) => [formatter(v), name]}
+          />
         </PieChart>
       </ResponsiveContainer>
       {(centerLabel || centerValue) && (

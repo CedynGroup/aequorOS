@@ -1,5 +1,29 @@
 import type { Config } from 'tailwindcss';
 
+/**
+ * Legacy color names re-pointed at the semantic CSS variables defined in
+ * app/globals.css, so every existing page adapts to the dark/light theme
+ * without edits. Tokens are stored as RGB channel triplets, which keeps
+ * Tailwind opacity modifiers working (e.g. `text-navy/85`).
+ *
+ * Mapping (old name → token):
+ *   navy         → --heading        (heading text; the old dark-button role
+ *                                    moved to the `.btn-primary` class)
+ *   navy-900     → --nav-bg
+ *   navy-700     → --btn-primary-hover
+ *   nav          → --nav-bg         (always-dark rail/banner surfaces)
+ *   teal         → --btn-primary    (avatar/brand chip)
+ *   action       → --accent / --accent-hover / --accent-soft
+ *   success      → --ok / --ok-soft
+ *   warning      → --warn / --warn-soft
+ *   critical     → --crit / --crit-soft
+ *   slate        → --text-muted / --text-faint
+ *   ink          → --text           (default body copy)
+ *   surface      → --surface-hover (DEFAULT), --bg (alt),
+ *                  --surface-raised (raised), --surface (base)
+ *   border       → --line-strong (DEFAULT), --line (light)
+ *   focus        → --focus
+ */
 const config: Config = {
   content: [
     './app/**/*.{js,ts,jsx,tsx,mdx}',
@@ -8,46 +32,54 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // From AequorOS Figma Design Brief — banking palette
         navy: {
-          DEFAULT: '#0A2540',
-          900: '#061629',
-          800: '#0A2540',
-          700: '#143055',
+          DEFAULT: 'rgb(var(--heading) / <alpha-value>)',
+          900: 'rgb(var(--nav-bg) / <alpha-value>)',
+          800: 'rgb(var(--heading) / <alpha-value>)',
+          700: 'rgb(var(--btn-primary-hover) / <alpha-value>)',
+        },
+        nav: {
+          DEFAULT: 'rgb(var(--nav-bg) / <alpha-value>)',
         },
         teal: {
-          DEFAULT: '#1A4D5C',
-          dark: '#0F3340',
+          DEFAULT: 'rgb(var(--btn-primary) / <alpha-value>)',
+          dark: 'rgb(var(--nav-bg) / <alpha-value>)',
         },
         action: {
-          DEFAULT: '#2D7FF9',
-          hover: '#1F6CE0',
-          light: '#E8F0FE',
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          hover: 'rgb(var(--accent-hover) / <alpha-value>)',
+          light: 'rgb(var(--accent-soft) / <alpha-value>)',
         },
         success: {
-          DEFAULT: '#0E8A4F',
-          light: '#E5F4EC',
+          DEFAULT: 'rgb(var(--ok) / <alpha-value>)',
+          light: 'rgb(var(--ok-soft) / <alpha-value>)',
         },
         warning: {
-          DEFAULT: '#C97C00',
-          light: '#FBF1DF',
+          DEFAULT: 'rgb(var(--warn) / <alpha-value>)',
+          light: 'rgb(var(--warn-soft) / <alpha-value>)',
         },
         critical: {
-          DEFAULT: '#B3261E',
-          light: '#FBE9E7',
+          DEFAULT: 'rgb(var(--crit) / <alpha-value>)',
+          light: 'rgb(var(--crit-soft) / <alpha-value>)',
         },
         slate: {
-          DEFAULT: '#5A6776',
-          light: '#7A8693',
+          DEFAULT: 'rgb(var(--text-muted) / <alpha-value>)',
+          light: 'rgb(var(--text-faint) / <alpha-value>)',
+        },
+        ink: {
+          DEFAULT: 'rgb(var(--text) / <alpha-value>)',
         },
         surface: {
-          DEFAULT: '#F5F7FA',
-          alt: '#FAFBFC',
+          DEFAULT: 'rgb(var(--surface-hover) / <alpha-value>)',
+          alt: 'rgb(var(--bg) / <alpha-value>)',
+          raised: 'rgb(var(--surface-raised) / <alpha-value>)',
+          base: 'rgb(var(--surface) / <alpha-value>)',
         },
         border: {
-          DEFAULT: '#D0D7DE',
-          light: '#E4E8EC',
+          DEFAULT: 'rgb(var(--line-strong) / <alpha-value>)',
+          light: 'rgb(var(--line) / <alpha-value>)',
         },
+        focus: 'rgb(var(--focus) / <alpha-value>)',
       },
       fontFamily: {
         sans: [
@@ -59,7 +91,7 @@ const config: Config = {
         mono: ['var(--font-plex-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       fontSize: {
-        // Banking UI typography scale
+        // Dense enterprise typography scale
         'display': ['32px', { lineHeight: '40px', fontWeight: '600', letterSpacing: '-0.01em' }],
         'h1': ['24px', { lineHeight: '32px', fontWeight: '600' }],
         'h2': ['20px', { lineHeight: '28px', fontWeight: '600' }],
@@ -68,10 +100,13 @@ const config: Config = {
         'body-lg': ['16px', { lineHeight: '24px' }],
         'caption': ['12px', { lineHeight: '16px' }],
         'micro': ['11px', { lineHeight: '14px', letterSpacing: '0.04em' }],
+        // KPI numerics (IBM Plex Mono accent sizes)
+        'kpi': ['28px', { lineHeight: '34px', fontWeight: '600', letterSpacing: '-0.01em' }],
+        'kpi-lg': ['36px', { lineHeight: '42px', fontWeight: '600', letterSpacing: '-0.01em' }],
       },
       boxShadow: {
-        'subtle': '0 1px 2px rgba(10, 37, 64, 0.04), 0 1px 3px rgba(10, 37, 64, 0.06)',
-        'pop': '0 4px 12px rgba(10, 37, 64, 0.08)',
+        'subtle': 'var(--shadow-subtle)',
+        'pop': 'var(--shadow-pop)',
       },
     },
   },

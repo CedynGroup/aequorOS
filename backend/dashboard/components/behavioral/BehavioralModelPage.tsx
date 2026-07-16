@@ -6,20 +6,21 @@ import {
   CloudOff,
   Loader2,
   RotateCw,
-  Sparkles,
 } from 'lucide-react';
 import type {
   BehavioralApplyRead,
   BehavioralProductEstimate,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
-import KPICard from '@/components/ui/KPICard';
-import { Card, CardHeader, CardBody } from '@/components/ui/Card';
+import KpiStat from '@/components/ui/KpiStat';
+import SectionCard from '@/components/ui/SectionCard';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import StatusPill from '@/components/ui/StatusPill';
 import { SkeletonChart } from '@/components/ui/Skeleton';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
 import PrepaymentCurveChart from '@/components/charts/PrepaymentCurveChart';
+import FeedsChip, { type Feed } from '@/components/behavioral/FeedsChip';
+import ModelProvenanceCard from '@/components/behavioral/ModelProvenanceCard';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   isServiceUnavailableError,
@@ -42,10 +43,16 @@ export type BehavioralPageConfig = {
   avgDecimals: number;
   showCore?: boolean;
   showCurve?: boolean;
+  /** ALM engines consuming this model's accepted assumptions. */
+  feeds?: Feed[];
 };
 
 function confTone(c: number) {
   return c >= 0.5 ? 'compliant' : c >= 0.25 ? 'approaching' : 'pending';
+}
+
+function confStatus(c: number): 'ok' | 'warn' | 'crit' {
+  return c >= 0.5 ? 'ok' : c >= 0.25 ? 'warn' : 'crit';
 }
 
 export default function BehavioralModelPage({
@@ -85,7 +92,9 @@ export default function BehavioralModelPage({
     {
       key: 'product',
       header: 'Product',
-      render: (p) => <span className="font-mono text-caption text-navy">{p.productCode}</span>,
+      render: (p) => (
+        <span className="font-mono text-caption text-navy">{p.productCode}</span>
+      ),
     },
     {
       key: 'value',
@@ -93,7 +102,7 @@ export default function BehavioralModelPage({
       align: 'right',
       numeric: true,
       render: (p) => (
-        <span className="font-mono tabular-nums text-navy">{config.format(p.value)}</span>
+        <span className="font-mono tnum text-navy">{config.format(p.value)}</span>
       ),
     },
     ...(config.showCore
@@ -104,7 +113,7 @@ export default function BehavioralModelPage({
             align: 'right' as const,
             numeric: true,
             render: (p: BehavioralProductEstimate) => (
-              <span className="font-mono tabular-nums text-slate">
+              <span className="font-mono tnum text-slate">
                 {p.corePct != null ? `${(p.corePct * 100).toFixed(0)}%` : '—'}
               </span>
             ),
@@ -116,7 +125,9 @@ export default function BehavioralModelPage({
       header: 'Confidence',
       align: 'right',
       render: (p) => (
-        <StatusPill tone={confTone(p.confidence)}>{(p.confidence * 100).toFixed(0)}%</StatusPill>
+        <StatusPill tone={confTone(p.confidence)}>
+          {(p.confidence * 100).toFixed(0)}%
+        </StatusPill>
       ),
     },
     {
@@ -152,7 +163,14 @@ export default function BehavioralModelPage({
           { label: config.title },
         ]}
         title={config.title}
-        subtitle={config.subtitle}
+        subtitle={
+          <span className="inline-flex items-center gap-2 flex-wrap">
+            {config.subtitle}
+            {config.feeds?.map((feed) => (
+              <FeedsChip key={feed.href + feed.label} feed={feed} />
+            ))}
+          </span>
+        }
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <button
@@ -204,101 +222,120 @@ export default function BehavioralModelPage({
           </div>
         ) : result ? (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <KPICard
+            {/* Headline KPIs — all straight off the model payload */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <KpiStat
                 label={`Average ${config.valueLabel.toLowerCase()}`}
-                value={config.avgValue(avg)}
-                suffix={config.avgSuffix}
-                decimals={config.avgDecimals}
+                value={config.avgValue(avg).toFixed(config.avgDecimals)}
+                unit={config.avgSuffix}
+                hint={`across ${products.length} product${products.length === 1 ? '' : 's'}`}
               />
-              <KPICard
+              <KpiStat
                 label="Weighted confidence"
-                value={avgConf * 100}
-                suffix="%"
-                decimals={0}
-                status={confTone(avgConf)}
+                value={(avgConf * 100).toFixed(0)}
+                unit="%"
+                status={confStatus(avgConf)}
+                hint="mean per-product estimator confidence"
               />
-              <KPICard
-                label="Holdout CV error (RMSE)"
-                value={result.accuracy.cvRmse ?? 0}
-                decimals={3}
-                footer={result.accuracy.cvRmse == null ? 'not cross-validated' : 'time-series CV'}
+              <KpiStat
+                label="Holdout CV error"
+                value={
+                  result.accuracy.cvRmse != null
+                    ? result.accuracy.cvRmse.toFixed(3)
+                    : '—'
+                }
+                unit={result.accuracy.cvRmse != null ? 'RMSE' : undefined}
+                hint={
+                  result.accuracy.cvRmse == null
+                    ? 'not cross-validated'
+                    : result.accuracy.cvMae != null
+                    ? `time-series CV · MAE ${result.accuracy.cvMae.toFixed(3)}`
+                    : 'time-series CV'
+                }
               />
-              <KPICard
+              <KpiStat
                 label="Training data"
-                value={result.accuracy.sampleCount}
-                decimals={0}
-                footer={`${result.accuracy.monthCoverage} months · ${result.method.toUpperCase()}`}
-                status={result.method === 'ml' ? 'compliant' : 'pending'}
+                value={result.accuracy.sampleCount.toLocaleString('en-US')}
+                unit="rows"
+                status={result.method === 'ml' ? 'ok' : 'warn'}
+                hint={`${result.accuracy.monthCoverage} months · ${result.method.toUpperCase()}`}
               />
             </div>
 
-            {config.showCurve && activeCurve?.incentiveCurve && (
-              <Card>
-                <CardHeader
-                  title="Prepayment sensitivity"
-                  subtitle="Modelled annual CPR vs rate incentive (note rate − refinance rate)"
-                  action={
-                    <div className="flex flex-wrap gap-1">
-                      {curveProducts.map((p) => (
-                        <button
-                          key={p.productCode}
-                          type="button"
-                          onClick={() => setCurveCode(p.productCode)}
-                          className={`px-2 py-1 rounded text-micro font-mono transition-colors ${
-                            activeCurve.productCode === p.productCode
-                              ? 'bg-navy text-white'
-                              : 'text-slate hover:bg-surface'
-                          }`}
-                        >
-                          {p.productCode}
-                        </button>
-                      ))}
-                    </div>
-                  }
-                />
-                <CardBody>
-                  <PrepaymentCurveChart curve={activeCurve.incentiveCurve} />
-                </CardBody>
-              </Card>
-            )}
+            <ModelProvenanceCard result={result} />
 
-            <Card>
-              <CardHeader
-                title="Per-product estimates"
-                subtitle="Learned from this bank's ingested canonical history"
-                action={
-                  <span className="inline-flex items-center gap-2 text-caption text-action font-medium">
-                    <Sparkles size={13} aria-hidden />
-                    {result.modelVersion}
+            {config.showCurve && activeCurve?.incentiveCurve && (
+              <SectionCard
+                title="Prepayment sensitivity"
+                subtitle="Modelled annual CPR vs rate incentive (note rate − refinance rate)"
+                actions={
+                  <div className="flex flex-wrap gap-1">
+                    {curveProducts.map((p) => (
+                      <button
+                        key={p.productCode}
+                        type="button"
+                        onClick={() => setCurveCode(p.productCode)}
+                        className={`px-2 py-1 rounded text-micro font-mono transition-colors ${
+                          activeCurve.productCode === p.productCode
+                            ? 'bg-action text-white'
+                            : 'text-slate hover:bg-surface'
+                        }`}
+                      >
+                        {p.productCode}
+                      </button>
+                    ))}
+                  </div>
+                }
+                footer={
+                  <span>
+                    model{' '}
+                    <span className="font-mono text-navy">{result.modelVersion}</span>
                     {result.asOfDate && (
-                      <span className="text-slate font-normal">
-                        · as of{' '}
-                        <span className="font-mono text-navy">{fmtDateUTC(result.asOfDate)}</span>
-                      </span>
+                      <>
+                        {' '}· trained as of{' '}
+                        <span className="font-mono tnum text-navy">
+                          {fmtDateUTC(result.asOfDate)}
+                        </span>
+                      </>
                     )}
                   </span>
                 }
-              />
-              <CardBody>
-                {products.length ? (
-                  <DataTable columns={columns} rows={products} density="comfortable" />
-                ) : (
-                  <p className="text-body text-slate">
-                    No canonical history available for this bank yet — ingest position data to
-                    train the model.
-                  </p>
-                )}
-              </CardBody>
-            </Card>
+              >
+                <PrepaymentCurveChart curve={activeCurve.incentiveCurve} />
+              </SectionCard>
+            )}
+
+            <SectionCard
+              title="Per-product estimates"
+              subtitle="Learned from this bank's ingested canonical history"
+              actions={
+                result.asOfDate ? (
+                  <span className="text-caption text-slate">
+                    as of{' '}
+                    <span className="font-mono text-navy">
+                      {fmtDateUTC(result.asOfDate)}
+                    </span>
+                  </span>
+                ) : undefined
+              }
+              noPadding
+            >
+              {products.length ? (
+                <DataTable columns={columns} rows={products} density="comfortable" />
+              ) : (
+                <p className="px-5 py-4 text-body text-slate">
+                  No canonical history available for this bank yet — ingest position data to
+                  train the model.
+                </p>
+              )}
+            </SectionCard>
 
             {products.length > 0 && (
-              <Card>
-                <CardHeader
-                  title="Apply as reviewed assumptions"
-                  subtitle="Writes these estimates through the acceptance workflow; the ALM engines consume them on the next recompute"
-                />
-                <CardBody className="space-y-4">
+              <SectionCard
+                title="Apply as reviewed assumptions"
+                subtitle="Writes these estimates through the acceptance workflow; the ALM engines consume them on the next recompute"
+              >
+                <div className="space-y-4">
                   <p className="text-body text-navy/85 leading-relaxed">
                     Review the estimates above. Applying records them as a new accepted
                     behavioral-assumptions batch with model provenance (SR 11-7), preserving
@@ -322,7 +359,7 @@ export default function BehavioralModelPage({
                       type="button"
                       onClick={onApply}
                       disabled={apply.isPending}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-action text-white font-medium hover:bg-action-hover disabled:opacity-40"
+                      className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary disabled:opacity-40"
                     >
                       {apply.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />}
                       Apply {products.length} estimates
@@ -333,8 +370,8 @@ export default function BehavioralModelPage({
                       Could not apply — {String((apply.error as Error).message)}
                     </p>
                   ) : null}
-                </CardBody>
-              </Card>
+                </div>
+              </SectionCard>
             )}
           </>
         ) : null}

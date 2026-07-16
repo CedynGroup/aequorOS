@@ -1,6 +1,6 @@
 'use client';
 
-import { Info, Loader2, PlayCircle } from 'lucide-react';
+import { Download, Info, Loader2, PlayCircle } from 'lucide-react';
 import type {
   Bsd2RatioRowRead,
   Bsd2RowRead,
@@ -53,7 +53,7 @@ export default function Bsd2SubmissionPreview() {
           scenarioCode: 'baseline',
         })
       }
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-white bg-navy rounded-md hover:bg-navy-700 disabled:opacity-60"
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
     >
       {runBaseline.isPending ? (
         <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -66,20 +66,32 @@ export default function Bsd2SubmissionPreview() {
 
   return (
     <>
-      <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Basel Capital', href: '/basel' },
-          { label: 'BoG Submission' },
-        ]}
-        title={`BoG Capital Adequacy Return — ${period?.label ?? ''}`}
-        subtitle={
-          data
-            ? `Form ${data.header.formCode} · ${data.header.formTitle}`
-            : 'Form BSD-2 · Capital Adequacy Return'
-        }
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
-      />
+      {/* Page chrome is hidden when printing — only the return itself prints. */}
+      <div className="no-print">
+        <PageHeader
+          breadcrumbs={[
+            { label: 'Modules', href: '/' },
+            { label: 'Basel Capital', href: '/basel' },
+            { label: 'BoG Submission' },
+          ]}
+          title={`BoG Capital Adequacy Return — ${period?.label ?? ''}`}
+          subtitle={
+            data
+              ? `Form ${data.header.formCode} · ${data.header.formTitle}`
+              : 'Form BSD-2 · Capital Adequacy Return'
+          }
+          asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
+          action={
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface"
+            >
+              <Download size={13} aria-hidden /> Print / PDF
+            </button>
+          }
+        />
+      </div>
 
       {needsBaseline ? (
         <div className="px-8 py-6">
@@ -104,9 +116,9 @@ export default function Bsd2SubmissionPreview() {
           onRetry={() => preview.refetch()}
         >
           {data && (
-            <div className="px-8 py-6 space-y-6">
+            <div className="px-8 py-6 space-y-6 print:p-0 print:space-y-0">
               {/* Preview banner — API note rendered verbatim */}
-              <div className="card border-l-4 border-l-action bg-action-light/40 p-5 flex items-start gap-3">
+              <div className="no-print card border-l-4 border-l-action bg-action-light/40 p-5 flex items-start gap-3">
                 <Info size={18} className="text-action shrink-0 mt-0.5" aria-hidden />
                 <div>
                   <p className="text-body font-medium text-navy">
@@ -121,8 +133,8 @@ export default function Bsd2SubmissionPreview() {
                 </div>
               </div>
 
-              {/* The regulatory document */}
-              <div className="bg-white border border-border rounded-md shadow-subtle">
+              {/* The regulatory document — the only element that prints */}
+              <div className="bg-surface-raised border border-border rounded-md shadow-subtle print:border-0 print:shadow-none print:rounded-none">
                 {/* Form header */}
                 <div className="px-8 py-6 border-b border-border-light">
                   <div className="flex items-start justify-between gap-6 flex-wrap">
@@ -244,7 +256,7 @@ export default function Bsd2SubmissionPreview() {
               </div>
 
               {/* Validation checks */}
-              <Card>
+              <Card className="no-print">
                 <CardHeader
                   title="Validation checks"
                   subtitle="Regulatory rule evaluation for this return"
@@ -255,7 +267,7 @@ export default function Bsd2SubmissionPreview() {
               </Card>
 
               {/* Audit trail — stored run metadata */}
-              <Card>
+              <Card className="no-print">
                 <CardHeader
                   title="Audit trail"
                   subtitle="Immutable metadata of the baseline run behind this preview"

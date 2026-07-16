@@ -22,7 +22,7 @@ import {
 
 function CodeBlock({ code, label }: { code: string; label: string }) {
   return (
-    <div className="relative rounded bg-navy text-white">
+    <div className="relative rounded bg-nav text-white">
       <div className="absolute right-2 top-2">
         <CopyButton text={code} label={label} variant="dark" />
       </div>
@@ -107,7 +107,7 @@ export function PushFlowSteps() {
         {PUSH_FLOW_STEPS.map((step) => (
           <li key={step.step} className="card p-5">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-navy text-white text-caption font-mono">
+              <span className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-nav text-white text-caption font-mono">
                 {step.step}
               </span>
               <h3 className="text-h3 text-navy">{step.title}</h3>
