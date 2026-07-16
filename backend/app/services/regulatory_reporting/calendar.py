@@ -5,6 +5,11 @@ reporting dates inside the horizon, each with its deadline-rule due date, the
 current (non-superseded) package covering it, and a RAG grade —
 ``overdue`` (deadline passed without a submitted/acknowledged package),
 ``due_soon`` (deadline within the warning window), else ``on_track``.
+
+Downtime semantics (BoG Notice BG/FMD/2026/07): a package submitted via the
+email fallback is NOT complete until re-uploaded through ORASS, so a
+``submitted`` package with ``pending_orass_reupload`` still set does not
+satisfy its obligation for RAG purposes.
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ from app.schemas.regulatory_reporting import (
 )
 from app.services.regulatory_reporting.common import get_bank_or_404
 from app.services.regulatory_reporting.registry import REGISTRY, ReturnDefinition
+from app.services.regulatory_reporting.workflow import has_pending_orass_reupload
 
 DUE_SOON_DAYS = 7
 _COMPLETED_STATUSES = ("submitted", "acknowledged")
@@ -53,8 +59,14 @@ def _reporting_dates(definition: ReturnDefinition, as_of: date, horizon_end: dat
     return selected
 
 
-def _rag(due_date: date, as_of: date, package_status: str | None) -> str:
-    if package_status in _COMPLETED_STATUSES:
+def _rag(
+    due_date: date,
+    as_of: date,
+    package_status: str | None,
+    *,
+    pending_orass_reupload: bool = False,
+) -> str:
+    if package_status in _COMPLETED_STATUSES and not pending_orass_reupload:
         return "on_track"
     if as_of > due_date:
         return "overdue"
@@ -89,6 +101,7 @@ def list_obligations(
                     RegulatoryPackage.status != "superseded",
                 )
             )
+            pending_reupload = package is not None and has_pending_orass_reupload(db, package)
             obligations.append(
                 ReportingObligationRead(
                     return_code=definition.code,
@@ -105,7 +118,10 @@ def list_obligations(
                     ),
                     package_version=package.version if package is not None else None,
                     rag=_rag(  # type: ignore[arg-type]
-                        due_date, today, package.status if package is not None else None
+                        due_date,
+                        today,
+                        package.status if package is not None else None,
+                        pending_orass_reupload=pending_reupload,
                     ),
                 )
             )

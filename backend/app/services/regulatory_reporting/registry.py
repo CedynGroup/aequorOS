@@ -9,9 +9,12 @@ into, and an honest fidelity grade:
 - ``REPRESENTATIVE`` — professional reconstruction, awaiting the official form.
 
 Deadline rules are parameterized callables (reporting_date -> due_date).
-Entries whose deadline or citation still awaits the BoG research companion
-(docs/research/bog_returns_and_templates.md — the RR-3 wave) are marked with a
-TODO and graded no higher than ``PARTIAL``.
+Citations, deadlines, and fidelity grades follow the BoG research dossiers
+(docs/research/bog_returns_and_templates.md, read 2026-07-16, and
+docs/research/bog_orass_submission_channels.md §4–5). Where the public record
+runs out (marked UNKNOWN in the research) the entry says so explicitly and is
+graded no higher than the record supports — nothing invented is passed off as
+official.
 """
 
 from __future__ import annotations
@@ -93,16 +96,44 @@ REGISTRY: dict[str, ReturnDefinition] = {
             family="liquidity",
             title="Liquidity Returns (LCR & NSFR)",
             directive_citation=(
-                "BoG Liquidity Directive under the Capital Requirement framework "
-                "(2026 directive; appendix reference TBC from research)"
+                "Liquidity Monitoring Tools Directive (LMTD), 2026 (exposure draft, "
+                "Feb 2026; effective 1 Jan 2027) read with the Liquidity Risk "
+                "Management Directive, 2026. The LCR Directive, 2026 (banks only) is "
+                "referenced by name in LMTD ¶4 but is not public; NSFR has no BoG "
+                "directive — both are Basel-default pending BoG calibration."
             ),
             frequency="monthly",
-            # TODO(RR-3): confirm from docs/research/ — the 2026 liquidity
-            # directive puts the monthly LMT set at day 9 of the following
-            # month; the LCR/NSFR deadline is assumed to match until confirmed.
+            # CONFIRMED: LMTD Part II ¶7 — monthly reports "not later than 9
+            # days after the last day of each month"; the LCR deadline is
+            # assumed to match the liquidity pack until the LCR Directive is
+            # published (research gap G1).
             deadline_rule=monthly_day(9),
             generator="liquidity",
             template_id="bog-bsd3-liquidity-v1",
+            fidelity="PARTIAL",
+            default_channel="orass_sandbox",
+        ),
+        ReturnDefinition(
+            code="LMT",
+            family="liquidity",
+            title="Liquidity Monitoring Tools Return (LMTD Appendix Templates)",
+            directive_citation=(
+                "Liquidity Monitoring Tools Directive (LMTD), 2026 (exposure draft, "
+                "Feb 2026; effective 1 Jan 2027) — Appendix Reporting Templates, "
+                "Tables 1–11 published (CONFIRMED); monthly per Part II ¶7."
+            ),
+            frequency="monthly",
+            # CONFIRMED: LMTD Part II ¶7 — within 9 days after month end.
+            deadline_rule=monthly_day(9),
+            # Reuses the liquidity generator's snapshot: only the LCR-by-
+            # significant-currency subset (LMTD Table 11 taxonomy, aggregate
+            # currency) is honestly fillable today, hence PARTIAL rather than
+            # CONFIRMED despite the published appendix.
+            # TODO(RR-6): extend the liquidity snapshot with contractual
+            # maturity buckets and funding-concentration data so LMTD Tables
+            # 1–10 can be exported verbatim; never fabricate bucket values.
+            generator="liquidity",
+            template_id="bog-lmt-liquidity-v1",
             fidelity="PARTIAL",
             default_channel="orass_sandbox",
         ),
@@ -111,16 +142,21 @@ REGISTRY: dict[str, ReturnDefinition] = {
             family="capital",
             title="Capital Adequacy Return (CAR & RWA)",
             directive_citation=(
-                "BoG Capital Requirement Directive (Basel II/III CRD; "
-                "appendix reference TBC from research)"
+                "Capital Requirements Directive (CRD), 2018 (final, in force since "
+                "1 Jan 2019): CAR 10% + 3% conservation buffer = 13%, CET1 ≥ 6.5%, "
+                "leverage ≥ 6%. The CRD contains no return form and the ORASS CAR "
+                "return layout is not public (research §5.4, gap G3) — layout "
+                "reconstructed from CRD Parts 1–4 and Stress Testing Guideline "
+                "Appendix II Tables 2 & 5."
             ),
             frequency="monthly",
-            # TODO(RR-3): confirm from docs/research/ — CRD prudential returns
-            # are described as monthly/quarterly; day 14 is a placeholder.
+            # TODO(RR-3 follow-up): the CAR return deadline is UNKNOWN in the
+            # public record (monthly cadence REPORTED only, research §2 row 7);
+            # day 14 remains a placeholder until ORASS onboarding confirms it.
             deadline_rule=monthly_day(14),
             generator="capital",
             template_id="bog-bsd2-capital-v1",
-            fidelity="PARTIAL",
+            fidelity="REPRESENTATIVE",
             default_channel="orass_sandbox",
         ),
         ReturnDefinition(
@@ -128,12 +164,16 @@ REGISTRY: dict[str, ReturnDefinition] = {
             family="irrbb",
             title="IRRBB Pilot Return (Repricing Gap, ΔEVE & ΔNII by Shock)",
             directive_citation=(
-                "BoG IRRBB pilot programme (no published appendix; "
-                "professional reconstruction)"
+                "Guideline on Management and Measurement of IRRBB (exposure draft, "
+                "Feb 2026; effective 1 Jan 2027; one-year pilot with quarterly "
+                "reports from publication, ¶10). Appendix IV Table 8 ΔEVE/ΔNII grid "
+                "is published; engine shocks are Basel ±200 bp pending alignment to "
+                "the prescribed GHS ±450 bp standardised framework."
             ),
             frequency="quarterly",
-            # TODO(RR-3): confirm the pilot submission window from research.
-            deadline_rule=quarterly_days_after(21),
+            # CONFIRMED: quarterly reports "not later than nine (9) days after
+            # the ensuing quarter" (IRRBB Guideline ¶11, ¶55).
+            deadline_rule=quarterly_days_after(9),
             generator="irrbb",
             template_id="bog-irrbb-pilot-v1",
             fidelity="REPRESENTATIVE",
@@ -142,18 +182,24 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ReturnDefinition(
             code="FX-NOP",
             family="fx",
-            title="Net Open Position Return",
+            title="Net Open Position Return (Monthly Summary)",
             directive_citation=(
-                "BoG Net Open Position notice under the Foreign Exchange Act "
-                "(frequency/appendix TBC from research)"
+                "Revised Directive on FX Net Open Position Limits, Notice "
+                "BG/FMD/2026/07 (final, 10 Feb 2026): single-currency 0% to −10% of "
+                "NOF, aggregate ≤ 20% NOF. The confirmed cadence is DAILY Bank "
+                "Returns (DBK) by 10:00 a.m. the next business day via ORASS; "
+                "AequorOS registers this monthly summary while the DBK 102/300/400/"
+                "700 layouts remain unpublished (research §9, gap G5)."
             ),
             frequency="monthly",
-            # TODO(RR-3): confirm frequency and deadline from research — NOP
-            # reporting may be weekly; monthly day 10 is a placeholder.
+            # The monthly summary is an AequorOS registration (the official
+            # obligation is daily); day 10 is a placeholder aligned to the
+            # 9-day monthly-return convention plus one day, pending ORASS
+            # onboarding.
             deadline_rule=monthly_day(10),
             generator="fx",
             template_id="bog-fx-nop-v1",
-            fidelity="PARTIAL",
+            fidelity="REPRESENTATIVE",
             default_channel="email",
         ),
         ReturnDefinition(
@@ -161,12 +207,15 @@ REGISTRY: dict[str, ReturnDefinition] = {
             family="icaap_stress",
             title="ICAAP Data Companion & Stress Summary",
             directive_citation=(
-                "BoG ICAAP guideline under the Capital Requirement Directive "
-                "(submission window TBC from research)"
+                "ICAAP Guideline (Feb 2026) ¶72 — annual submission no later than "
+                "three months after year-end with Board resolutions; Stress Testing "
+                "Guideline (Feb 2026) ¶67 — stress results within the ICAAP 'by end "
+                "of March of the ensuing year', Appendix II Tables 1–6 published. "
+                "Both effective 1 Jan 2027."
             ),
             frequency="annual",
-            # TODO(RR-3): confirm the annual ICAAP submission date from
-            # research; end of Q1 after the reporting year is a placeholder.
+            # CONFIRMED: end of March of the ensuing year (Stress Testing
+            # Guideline ¶67; ICAAP Guideline ¶72/¶82).
             deadline_rule=annual_month_day(3, 31),
             generator="icaap_stress",
             template_id="bog-icaap-stress-v1",

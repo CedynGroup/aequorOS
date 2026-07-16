@@ -17,6 +17,7 @@ dependencies = [
   "pyarrow",
   "pydantic-settings",
   "pyyaml",
+  "reportlab",
   "scikit-learn",
   "sqlalchemy",
   "torch",

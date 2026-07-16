@@ -197,4 +197,54 @@ class ChannelConfigRead(ClosedModel):
 
 
 class PackageSubmitCreate(ClosedModel):
-    channel: ChannelCode
+    """Channel selection for submitRegulatoryPackage; omitted -> registry default."""
+
+    channel: ChannelCode | None = None
+
+
+class RegulatoryArtifactRead(ClosedModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: UUID
+    package_id: UUID
+    kind: ArtifactKind
+    object_path: str
+    checksum_sha256: str
+    size_bytes: int
+    created_at: datetime
+
+
+class SubmissionPollRead(ClosedModel):
+    """One poll cycle: the regulator-side status, the recorded poll event,
+    and the package after any resulting transition."""
+
+    poll_status: Literal["pending", "acknowledged", "rejected"]
+    event: SubmissionEventRead
+    package: RegulatoryPackageRead
+
+
+class EmailRecipientGuidanceRead(ClosedModel):
+    confirmed_consultation_address: str
+    confirmed_consultation_note: str
+    downtime_return_address: str | None
+    downtime_return_note: str
+
+
+class EmailFallbackAttachmentRead(ClosedModel):
+    kind: ArtifactKind
+    filename: str
+    object_path: str
+    size_bytes: int
+    checksum_sha256: str
+
+
+class EmailFallbackInstructionsRead(ClosedModel):
+    """Send-ready email fallback bundle (BG/FMD/2026/07 downtime workflow)."""
+
+    package_id: UUID
+    subject: str
+    recipient_guidance: EmailRecipientGuidanceRead
+    attachments: list[EmailFallbackAttachmentRead]
+    penalty_reminder: str
+    pending_orass_reupload: bool
+    instructions: str

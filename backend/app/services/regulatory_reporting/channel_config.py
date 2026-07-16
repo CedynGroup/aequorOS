@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.adapters.market_data.credential_manager import (
     credential_fingerprint,
+    decrypt_credential_envelope,
     derive_master_key,
     encrypt_credential_envelope,
 )
@@ -104,6 +105,38 @@ def put_channel_config(
     )
     db.commit()
     return _read(config)
+
+
+def channel_config_row(
+    db: Session, ctx: TenantContext, bank_id: UUID, channel: str
+) -> RegulatoryChannelConfig | None:
+    """The raw per-bank channel config row, or None when never configured."""
+    return _config_row(db, ctx, bank_id, channel)
+
+
+def decrypt_channel_credentials(config: RegulatoryChannelConfig) -> dict[str, Any] | None:
+    """Per-cycle credential retrieval (EncryptedDbVault discipline).
+
+    Returns the plaintext credential dict, which the caller must use for one
+    submission cycle only and then discard — never persist, log, or surface
+    it. Returns None when no credential material is stored.
+    """
+    if config.credential_ciphertext is None:
+        return None
+    key_material = get_settings().market_data.credential_vault_master_key
+    if not key_material:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "CREDENTIAL_VAULT_MASTER_KEY is not configured; stored channel "
+                "credentials cannot be retrieved for this submission."
+            ),
+        )
+    envelope = decrypt_credential_envelope(
+        derive_master_key(key_material), config.credential_ciphertext
+    )
+    credentials = envelope.get("credentials")
+    return credentials if isinstance(credentials, dict) else None
 
 
 def _encrypt(bank_id: UUID, channel: str, credentials: dict[str, Any]) -> str:

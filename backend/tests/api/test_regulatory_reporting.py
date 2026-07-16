@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import io
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -7,16 +10,22 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.db.session import get_sessionmaker
-from app.models import RegulatoryPackage, User
+from app.models import Bank, RegulatoryPackage, RegulatoryPackageArtifact, User
+from app.services.ingestion import bank_slug
+from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.services.sample_bank_seed import SAMPLE_BANK_ID
+from app.storage.client import ObjectMetadata, StorageLocation
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.storage.inmemory import InMemoryStorageClient
 
 CHECKER_USER_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 REPORTING_DATE = "2026-03-31"
-REGISTRY_CODES = {"BSD3", "BSD2", "IRRBB-PILOT", "FX-NOP", "ICAAP-STRESS"}
+REGISTRY_CODES = {"BSD3", "LMT", "BSD2", "IRRBB-PILOT", "FX-NOP", "ICAAP-STRESS"}
 
 
 def _seed_latest_period(db_client: TestClient) -> dict[str, Any]:
@@ -70,6 +79,70 @@ def _seed_checker_user() -> None:
             session.commit()
     finally:
         session.close()
+
+
+def _approve_package(db_client: TestClient, package_id: str) -> None:
+    _seed_checker_user()
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}"
+    validated = db_client.post(f"{base}/validate", headers=headers())
+    assert validated.status_code == 200 and validated.json()["status"] == "validated"
+    requested = db_client.post(f"{base}/request-approval", headers=headers(), json={})
+    assert requested.status_code == 200, requested.text
+    approved = db_client.post(
+        f"{base}/decide-approval",
+        headers=headers(ORG_1, CHECKER_USER_ID),
+        json={"action": "approved"},
+    )
+    assert approved.status_code == 200 and approved.json()["status"] == "approved"
+
+
+@pytest.fixture
+def fake_export_seam(
+    monkeypatch: pytest.MonkeyPatch, storage_engine: InMemoryStorageClient
+) -> InMemoryStorageClient:
+    """Fake the lazy exports seam: write real bytes to the in-memory outputs
+    tier (the same client db_client wires as the storage dependency) and mint
+    the artifact row — the download endpoint round-trips against it."""
+
+    def _fake_export(
+        db: Session, ctx: TenantContext, package: RegulatoryPackage, kind: str
+    ) -> RegulatoryPackageArtifact:
+        _ = ctx
+        bank = db.get(Bank, package.bank_id)
+        assert bank is not None
+        slug = bank_slug(db, bank)
+        content = f"{package.return_code}:{kind}:{package.id}".encode()
+        checksum = hashlib.sha256(content).hexdigest()
+        object_path = (
+            f"bog_returns/{package.reporting_date.isoformat()}/"
+            f"{package.id}/{package.return_code}.{kind}"
+        )
+        location = StorageLocation(institution_slug=slug, tier="outputs", object_path=object_path)
+        storage_engine.write(
+            location,
+            io.BytesIO(content),
+            ObjectMetadata(
+                institution_slug=slug,
+                tier="outputs",
+                checksum_sha256=checksum,
+                written_at=datetime.now(UTC),
+                written_by="test-exporter",
+            ),
+        )
+        artifact = RegulatoryPackageArtifact(
+            organization_id=package.organization_id,
+            package_id=package.id,
+            kind=kind,
+            object_path=object_path,
+            checksum_sha256=checksum,
+            size_bytes=len(content),
+        )
+        db.add(artifact)
+        db.flush()
+        return artifact
+
+    monkeypatch.setattr(reporting_workflow, "_resolve_exporter", lambda: _fake_export)
+    return storage_engine
 
 
 def test_generate_package_snapshots_sources_and_versions(db_client: TestClient) -> None:
@@ -327,19 +400,22 @@ def test_rejected_approval_returns_package_to_generated(db_client: TestClient) -
     assert revalidated.json()["status"] == "validated"
 
 
-def test_export_and_submit_are_stubbed_and_events_empty(db_client: TestClient) -> None:
+def test_submit_and_poll_gate_on_approval_and_events_start_empty(
+    db_client: TestClient,
+) -> None:
     period = _seed_latest_period(db_client)
     _run_liquidity_baseline(db_client, period["id"])
     package = _generate_bsd3(db_client).json()
     base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}"
 
-    export = db_client.post(f"{base}/export", headers=headers(), params={"kind": "xlsx"})
-    assert export.status_code == 501
-    assert "export" in export.json()["error"]["message"].lower()
-
+    # A merely-generated package cannot reach a channel (maker-checker first).
     submit = db_client.post(f"{base}/submit", headers=headers(), json={"channel": "email"})
-    assert submit.status_code == 501
-    assert "submission wave" in submit.json()["error"]["message"]
+    assert submit.status_code == 409
+    assert "generated" in submit.json()["error"]["message"]
+
+    poll = db_client.post(f"{base}/poll", headers=headers())
+    assert poll.status_code == 409
+    assert "submitted" in poll.json()["error"]["message"]
 
     events = db_client.get(f"{base}/submission-events", headers=headers())
     assert events.status_code == 200
@@ -484,8 +560,7 @@ def test_regulatory_reporting_endpoints_are_tenant_isolated(db_client: TestClien
         == 404
     )
     assert (
-        db_client.get(f"{base}/{package['id']}/submission-events", headers=org2).status_code
-        == 404
+        db_client.get(f"{base}/{package['id']}/submission-events", headers=org2).status_code == 404
     )
     assert (
         db_client.get(
@@ -509,5 +584,177 @@ def test_regulatory_reporting_endpoints_are_tenant_isolated(db_client: TestClien
         == 404
     )
 
+    # Export/submission wave endpoints are tenant-scoped 404s too.
+    assert (
+        db_client.post(
+            f"{base}/{package['id']}/export", headers=org2, params={"kind": "xlsx"}
+        ).status_code
+        == 404
+    )
+    assert (
+        db_client.post(f"{base}/{package['id']}/submit", headers=org2, json={}).status_code == 404
+    )
+    assert db_client.post(f"{base}/{package['id']}/poll", headers=org2).status_code == 404
+    assert (
+        db_client.get(
+            f"{base}/{package['id']}/email-fallback-instructions", headers=org2
+        ).status_code
+        == 404
+    )
+    assert (
+        db_client.get(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifacts/{uuid4()}/download",
+            headers=org2,
+        ).status_code
+        == 404
+    )
+
     # An unknown package id under the right tenant is also a 404.
     assert db_client.get(f"{base}/{uuid4()}", headers=headers()).status_code == 404
+
+
+def test_export_creates_artifact_and_download_round_trips(
+    db_client: TestClient, fake_export_seam: InMemoryStorageClient
+) -> None:
+    period = _seed_latest_period(db_client)
+    _run_liquidity_baseline(db_client, period["id"])
+    package = _generate_bsd3(db_client).json()
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}"
+
+    exported = db_client.post(f"{base}/export", headers=headers(), params={"kind": "xlsx"})
+    assert exported.status_code == 201, exported.text
+    artifact = exported.json()
+    assert artifact["kind"] == "xlsx"
+    assert artifact["package_id"] == package["id"]
+    assert artifact["object_path"].endswith(f"{package['id']}/BSD3.xlsx")
+    assert artifact["size_bytes"] > 0
+    assert len(artifact["checksum_sha256"]) == 64
+
+    download = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifacts/{artifact['id']}/download",
+        headers=headers(),
+    )
+    assert download.status_code == 200, download.text
+    expected = f"BSD3:xlsx:{package['id']}".encode()
+    assert download.content == expected
+    assert hashlib.sha256(download.content).hexdigest() == artifact["checksum_sha256"]
+    assert download.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert 'filename="BSD3.xlsx"' in download.headers["content-disposition"]
+
+    # Unknown artifact under the right tenant is a 404.
+    assert (
+        db_client.get(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifacts/{uuid4()}/download",
+            headers=headers(),
+        ).status_code
+        == 404
+    )
+
+
+def test_submit_default_channel_auto_exports_then_poll_acknowledges(
+    db_client: TestClient, fake_export_seam: InMemoryStorageClient
+) -> None:
+    period = _seed_latest_period(db_client)
+    _run_liquidity_baseline(db_client, period["id"])
+    package = _generate_bsd3(db_client).json()
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}"
+    _approve_package(db_client, package["id"])
+
+    # No channel in the payload -> the registry default for BSD3 (orass_sandbox);
+    # no artifacts yet -> the workflow auto-exports xlsx first.
+    submitted = db_client.post(f"{base}/submit", headers=headers(), json={})
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["status"] == "submitted"
+
+    events = db_client.get(f"{base}/submission-events", headers=headers()).json()
+    assert events["total"] == 1
+    event = events["events"][0]
+    assert event["channel"] == "orass_sandbox"
+    assert event["event"] == "submitted"
+    assert event["external_ref"].startswith("SANDBOX-ORASS-BSD3-")
+    assert event["detail"]["sandbox"] is True
+    assert "not publicly documented" in event["detail"]["note"]
+    assert event["detail"]["auto_exported_kinds"] == ["xlsx"]
+
+    polled = db_client.post(f"{base}/poll", headers=headers())
+    assert polled.status_code == 200, polled.text
+    body = polled.json()
+    assert body["poll_status"] == "acknowledged"
+    assert body["package"]["status"] == "acknowledged"
+    assert body["event"]["event"] == "status_poll"
+    assert body["event"]["detail"]["result"] == "acknowledged"
+
+    events = db_client.get(f"{base}/submission-events", headers=headers()).json()
+    assert [item["event"] for item in events["events"]] == [
+        "acknowledged",
+        "status_poll",
+        "submitted",
+    ]
+
+
+def test_downtime_then_email_fallback_then_orass_reupload(
+    db_client: TestClient, fake_export_seam: InMemoryStorageClient
+) -> None:
+    period = _seed_latest_period(db_client)
+    _run_liquidity_baseline(db_client, period["id"])
+    package = _generate_bsd3(db_client).json()
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}"
+    config_url = (
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-reporting/channel-configs/orass_sandbox"
+    )
+    _approve_package(db_client, package["id"])
+
+    # The operator can preview the guided email bundle at any time.
+    instructions = db_client.get(f"{base}/email-fallback-instructions", headers=headers())
+    assert instructions.status_code == 200, instructions.text
+    bundle = instructions.json()
+    assert bundle["pending_orass_reupload"] is True
+    assert "bsdletters@bog.gov.gh" in bundle["instructions"]
+    assert "500 penalty units" in bundle["penalty_reminder"]
+    assert "– submitted under ORASS downtime" in bundle["subject"]
+    assert bundle["recipient_guidance"]["downtime_return_address"] is None  # UNKNOWN per research
+
+    # ORASS is down -> structured 409 directing to the email fallback.
+    assert db_client.put(config_url, headers=headers(), json={"config": {"downtime": True}})
+    downtime = db_client.post(
+        f"{base}/submit", headers=headers(), json={"channel": "orass_sandbox"}
+    )
+    assert downtime.status_code == 409, downtime.text
+    details = downtime.json()["error"]["details"]
+    assert details["error_code"] == "channel_downtime"
+    assert details["fallback"]["channel"] == "email"
+    assert details["fallback"]["endpoint"].endswith(f"{package['id']}/submit")
+
+    # Email fallback submits but does NOT complete the obligation.
+    emailed = db_client.post(f"{base}/submit", headers=headers(), json={"channel": "email"})
+    assert emailed.status_code == 200, emailed.text
+    assert emailed.json()["status"] == "submitted"
+    events = db_client.get(f"{base}/submission-events", headers=headers()).json()
+    email_event = events["events"][0]
+    assert email_event["channel"] == "email"
+    assert email_event["external_ref"].startswith("EMAIL-BSD3-")
+    assert email_event["detail"]["pending_orass_reupload"] is True
+
+    # ORASS restored -> re-upload (submitted -> submitted) clears the flag.
+    assert db_client.put(config_url, headers=headers(), json={"config": {}})
+    reuploaded = db_client.post(
+        f"{base}/submit", headers=headers(), json={"channel": "orass_sandbox"}
+    )
+    assert reuploaded.status_code == 200, reuploaded.text
+    assert reuploaded.json()["status"] == "submitted"
+    events = db_client.get(f"{base}/submission-events", headers=headers()).json()
+    orass_event = events["events"][0]
+    assert orass_event["channel"] == "orass_sandbox"
+    assert orass_event["detail"]["pending_orass_reupload"] is False
+    assert orass_event["detail"]["reupload_of"] == email_event["external_ref"]
+
+    # After the re-upload the normal acknowledgement flow applies.
+    polled = db_client.post(f"{base}/poll", headers=headers())
+    assert polled.status_code == 200
+    assert polled.json()["poll_status"] == "acknowledged"
+
+    # A completed package cannot be submitted again.
+    again = db_client.post(f"{base}/submit", headers=headers(), json={"channel": "email"})
+    assert again.status_code == 409

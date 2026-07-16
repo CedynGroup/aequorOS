@@ -1,36 +1,51 @@
 """Regulatory Reporting & Submission Hub API (docs/regulatory_reporting.md §6).
 
-Export and channel submission are stubbed with 501 until the export/submission
-wave ships artifact rendering and concrete channels; every other endpoint is
-live. Credentials on channel configs are write-only: responses expose only the
-fingerprint, never the material.
+All endpoints are live, including export (artifact rendering via the exports
+seam), artifact download (outputs tier), and channel submission (ORASS sandbox
+simulator + BG/FMD/2026/07 email fallback + manual record). Credentials on
+channel configs are write-only: responses expose only the fingerprint, never
+the material.
 """
 
 from __future__ import annotations
 
 from datetime import date
+from pathlib import PurePosixPath
 from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbSession, MutationTenant, Tenant
+from app.features.ingest_data import IngestionStorage
 from app.schemas.regulatory_reporting import (
     ChannelConfigPut,
     ChannelConfigRead,
+    EmailFallbackInstructionsRead,
     PackageApprovalDecisionCreate,
     PackageApprovalRequestCreate,
     PackageSubmitCreate,
+    RegulatoryArtifactRead,
     RegulatoryPackageCreate,
     RegulatoryPackageListRead,
     RegulatoryPackageRead,
     ReportingObligationListRead,
     ReturnTemplateListRead,
     SubmissionEventListRead,
+    SubmissionPollRead,
 )
 from app.services import regulatory_reporting
+from app.services.regulatory_reporting import workflow as reporting_workflow
+from app.storage.client import StorageLocation, StorageNotFoundError
 
 router = APIRouter(tags=["regulatory-reporting"])
+
+_ARTIFACT_MEDIA_TYPES = {
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "csv": "text/csv",
+    "pdf": "application/pdf",
+}
 
 type ChannelPath = Literal["orass_sandbox", "email", "manual"]
 type PackageStatusFilter = Literal[
@@ -158,6 +173,8 @@ def decide_package_approval(
 
 @router.post(
     "/banks/{bank_id}/regulatory-packages/{package_id}/export",
+    response_model=RegulatoryArtifactRead,
+    status_code=status.HTTP_201_CREATED,
     operation_id="exportRegulatoryPackage",
 )
 def export_regulatory_package(
@@ -166,20 +183,45 @@ def export_regulatory_package(
     kind: Annotated[Literal["xlsx", "csv", "pdf"], Query()],
     db: DbSession,
     ctx: MutationTenant,
-) -> None:
-    _ = (bank_id, package_id, kind, db, ctx)
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail=(
-            "Export/submission wave pending: xlsx/csv/pdf artifact rendering ships in "
-            "the export wave. The package snapshot is already available via "
-            "getRegulatoryPackage."
-        ),
+) -> RegulatoryArtifactRead:
+    return reporting_workflow.export_package_artifact(db, ctx, bank_id, package_id, kind)
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-artifacts/{artifact_id}/download",
+    response_class=StreamingResponse,
+    operation_id="downloadRegulatoryArtifact",
+)
+def download_regulatory_artifact(
+    bank_id: UUID,
+    artifact_id: UUID,
+    db: DbSession,
+    ctx: Tenant,
+    storage: IngestionStorage,
+) -> StreamingResponse:
+    """Stream one exported artifact from the outputs tier."""
+    artifact, slug = reporting_workflow.prepare_artifact_download(db, ctx, bank_id, artifact_id)
+    location = StorageLocation(
+        institution_slug=slug, tier="outputs", object_path=artifact.object_path
+    )
+    try:
+        _descriptor, stream = storage.read(location)
+    except StorageNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The artifact's stored object was not found in the outputs tier.",
+        ) from exc
+    filename = PurePosixPath(artifact.object_path).name
+    return StreamingResponse(
+        stream,
+        media_type=_ARTIFACT_MEDIA_TYPES.get(artifact.kind, "application/octet-stream"),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
 @router.post(
     "/banks/{bank_id}/regulatory-packages/{package_id}/submit",
+    response_model=RegulatoryPackageRead,
     operation_id="submitRegulatoryPackage",
 )
 def submit_regulatory_package(
@@ -188,16 +230,41 @@ def submit_regulatory_package(
     payload: PackageSubmitCreate,
     db: DbSession,
     ctx: MutationTenant,
-) -> None:
-    _ = (bank_id, package_id, payload, db, ctx)
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail=(
-            "Export/submission wave pending: the ORASS sandbox and email/manual "
-            "channels ship in the submission wave. Approved packages remain queued "
-            "under their current status."
-        ),
+) -> RegulatoryPackageRead:
+    """Submit an approved package via the requested (or registry-default) channel."""
+    return reporting_workflow.submit_package_via_channel(
+        db, ctx, bank_id, package_id, channel_override=payload.channel
     )
+
+
+@router.post(
+    "/banks/{bank_id}/regulatory-packages/{package_id}/poll",
+    response_model=SubmissionPollRead,
+    operation_id="pollRegulatorySubmission",
+)
+def poll_regulatory_submission(
+    bank_id: UUID,
+    package_id: UUID,
+    db: DbSession,
+    ctx: MutationTenant,
+) -> SubmissionPollRead:
+    """Poll the latest channel submission; records regulator decisions."""
+    return reporting_workflow.poll_submission(db, ctx, bank_id, package_id)
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-packages/{package_id}/email-fallback-instructions",
+    response_model=EmailFallbackInstructionsRead,
+    operation_id="getEmailFallbackInstructions",
+)
+def get_email_fallback_instructions(
+    bank_id: UUID,
+    package_id: UUID,
+    db: DbSession,
+    ctx: Tenant,
+) -> EmailFallbackInstructionsRead:
+    """Preview the BG/FMD/2026/07 downtime email bundle without submitting."""
+    return reporting_workflow.email_fallback_instructions(db, ctx, bank_id, package_id)
 
 
 @router.get(
