@@ -392,9 +392,9 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
     .click();
   await expect(page.getByText("Archived forecast audit")).toBeVisible();
   await expect(page.getByText("Archived scenario · read only")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run forecast" })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole("button", { name: "Run forecast" }),
+  ).toBeEnabled();
   await expect(
     page.getByRole("button", { name: "Rerun current inputs" }),
   ).toHaveCount(0);
@@ -408,9 +408,9 @@ test("initializes, edits, reviews, copies, archives, and tenant-isolates scenari
     forecastPanel.getByText("Archived", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Archived scenario · read only")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run forecast" })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole("button", { name: "Run forecast" }),
+  ).toBeEnabled();
   await expect(
     page.getByRole("button", { name: "Rerun current inputs" }),
   ).toHaveCount(0);
