@@ -48,7 +48,7 @@ const items: Item[] = [
   { id: 'nsfr', label: 'Liquidity — NSFR Dashboard', href: '/liquidity/nsfr', icon: Droplet, group: 'Modules', keywords: 'stable funding asf rsf' },
   { id: 'forecast', label: 'Liquidity — Cash Flow Forecast (LSTM)', href: '/liquidity/forecast', icon: Droplet, group: 'Modules', keywords: 'ml prediction cashflow' },
   { id: 'stress', label: 'Liquidity — Stress Scenarios', href: '/liquidity/stress', icon: Droplet, group: 'Modules', keywords: 'runoff survival horizon' },
-  { id: 'submission', label: 'Liquidity — BoG Submission Preview', href: '/liquidity/submission', icon: Droplet, group: 'Modules', keywords: 'regulatory filing return' },
+  { id: 'submission', label: 'Liquidity — Official Returns (BSD3)', href: '/submissions/returns?code=BSD3', icon: Droplet, group: 'Modules', keywords: 'regulatory filing return bog' },
 
   { id: 'fx', label: 'FX Risk — Net Open Position', hint: 'Module 03', href: '/fx', icon: DollarSign, group: 'Modules', keywords: 'nop currency exposure usd gbp eur cedi' },
 
@@ -56,7 +56,7 @@ const items: Item[] = [
   { id: 'rwa', label: 'Basel — RWA Breakdown', href: '/basel/rwa', icon: ShieldCheck, group: 'Modules', keywords: 'risk weighted assets credit operational market' },
   { id: 'capital-structure', label: 'Basel — Capital Structure', href: '/basel/structure', icon: ShieldCheck, group: 'Modules', keywords: 'tier 1 2 cet1 instruments' },
   { id: 'basel-stress', label: 'Basel — Stress Testing', href: '/basel/stress', icon: ShieldCheck, group: 'Modules', keywords: 'scenario shock adverse' },
-  { id: 'basel-subs', label: 'Basel — BoG Submission Preview', href: '/basel/submissions', icon: ShieldCheck, group: 'Modules', keywords: 'regulatory filing return' },
+  { id: 'basel-subs', label: 'Basel — Official Returns (BSD2)', href: '/submissions/returns?code=BSD2', icon: ShieldCheck, group: 'Modules', keywords: 'regulatory filing return bog' },
 
   { id: 'ftp', label: 'FTP — Funds Transfer Pricing Dashboard', hint: 'Module 05', href: '/ftp', icon: GitBranch, group: 'Modules', keywords: 'margin spread pool matched maturity' },
 
@@ -76,7 +76,7 @@ const items: Item[] = [
   { id: 'de-market', label: 'Data Engine — Market Data', href: '/data-engine/market-data', icon: Database, group: 'Data', keywords: 'rates feeds sources bog' },
 
   { id: 'reports', label: 'Reports Library', href: '/reports', icon: FileBarChart2, group: 'Governance', keywords: 'export pdf board pack' },
-  { id: 'submissions', label: 'Regulatory Submissions', href: '/submissions', icon: FileCheck2, group: 'Governance', keywords: 'bog filing returns' },
+  { id: 'submissions', label: 'Regulatory Reporting', href: '/submissions', icon: FileCheck2, group: 'Governance', keywords: 'bog filing returns calendar approvals templates' },
   { id: 'settings', label: 'Settings', href: '/settings', icon: Settings, group: 'Governance', keywords: 'configuration limits thresholds admin' },
 ];
 

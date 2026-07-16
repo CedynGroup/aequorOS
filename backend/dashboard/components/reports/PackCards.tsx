@@ -63,8 +63,8 @@ export default function PackCards({
       form: 'BSD-2',
       title: 'BoG Capital Adequacy Return',
       description:
-        'Capital structure, risk-weighted assets, and capital ratios — generated from the latest successful baseline capital run on the Basel module.',
-      href: '/basel/submissions',
+        'Capital structure, risk-weighted assets, and capital ratios — generated from the latest successful baseline capital run; official packages live in the Regulatory Reporting hub.',
+      href: '/submissions/returns?code=BSD2',
       status: packStatus(bsd2),
       runId: bsd2.data?.runId,
     },
@@ -72,8 +72,8 @@ export default function PackCards({
       form: 'BSD-3',
       title: 'BoG Liquidity Return (LCR & NSFR)',
       description:
-        'Liquidity Coverage Ratio and Net Stable Funding Ratio — generated from the latest successful baseline liquidity run on the Liquidity module.',
-      href: '/liquidity/submission',
+        'Liquidity Coverage Ratio and Net Stable Funding Ratio — generated from the latest successful baseline liquidity run; official packages live in the Regulatory Reporting hub.',
+      href: '/submissions/returns?code=BSD3',
       status: packStatus(bsd3),
       runId: bsd3.data?.runId,
     },
@@ -107,7 +107,7 @@ export default function PackCards({
                 href={pack.href}
                 className="inline-flex items-center gap-1 text-caption font-medium text-action hover:text-action-hover"
               >
-                {pack.status.ready ? 'View return preview' : 'Open module page'}
+                Open returns workspace
                 <ChevronRight size={12} aria-hidden />
               </Link>
               {pack.runId && (

@@ -6,7 +6,6 @@ const tabs = [
   { href: '/basel/structure', label: 'Capital Structure' },
   { href: '/basel/stress', label: 'Stress' },
   { href: '/basel/planning', label: 'Planning' },
-  { href: '/basel/submissions', label: 'Submissions' },
 ];
 
 export default function BaselLayout({ children }: { children: React.ReactNode }) {

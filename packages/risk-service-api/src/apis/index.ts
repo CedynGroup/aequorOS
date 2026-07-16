@@ -20,6 +20,7 @@ export * from "./RegulatoryFtpApi";
 export * from "./RegulatoryFxApi";
 export * from "./RegulatoryIrrApi";
 export * from "./RegulatoryLiquidityApi";
+export * from "./RegulatoryReportingApi";
 export * from "./ScenariosApi";
 export * from "./TaxonomyApi";
 export * from "./TemenosApi";

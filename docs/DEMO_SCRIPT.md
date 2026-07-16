@@ -77,3 +77,25 @@ optionally reset the tour (`localStorage.removeItem('aeq-tour-done')`).
 - Alert acknowledge and resolved-history are Phase 2 (read-only stream today).
 - Positions pagination is a tracked follow-up (the guard panel is intentional).
 - Role lenses are view permutations, not access control (Phase 2).
+
+---
+
+## Act 6 — Official BoG submission (added with the Regulatory Reporting hub; +5 min)
+
+16. **Governance → Regulatory Reporting.** The calendar lands first: every BoG obligation
+    (LMT/BSD3 monthly ≤9 days, IRRBB quarterly, ICAAP end-March) with RAG status and — for
+    overdue items — indicative Act 930 penalty exposure. "This is the compliance officer's
+    morning screen."
+17. **Generate a return.** Returns → BSD3 for the latest period → Generate. The package is
+    an immutable snapshot carrying the input hash of every source calculation run — point at
+    the fidelity banner (directive citation; CONFIRMED vs REPRESENTATIVE honesty).
+18. **Validate + dual control.** Validation findings appear graded; request approval; switch
+    to Approvals and approve as a second officer (demo affordance, clearly labeled). Try
+    approving as the maker first — the 409 maker-checker refusal is the compliance story.
+19. **Export + submit.** Export Excel/PDF (open the PDF: cover, attestation block, provenance
+    appendix). Submit via ORASS — sandbox-labeled — poll to acknowledgement. The obligation
+    flips to on-track on the calendar.
+20. **The downtime drill (if time).** Settings → toggle channel downtime → submit → the 409
+    routes to the email fallback with the pre-formatted bundle; note the amber "pending ORASS
+    re-upload" state that refuses to call the obligation complete until the re-upload
+    acknowledges — exactly Notice BG/FMD/2026/07 semantics.

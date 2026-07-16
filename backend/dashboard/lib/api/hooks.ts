@@ -17,12 +17,17 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type {
+  ApprovalDecision,
+  ArtifactKind,
   BehavioralApplyProduct,
   CashflowForecastMode,
   CashflowHorizon,
+  ChannelCode,
   ForecastRunCreate,
   MarketDataConnectionCreate,
   MarketDataConnectionUpdate,
+  PackageStatusFilter,
+  RegulatoryArtifactRead,
   RegulatoryModule,
   RegulatoryScenarioCode,
   TemenosBackfillRequest,
@@ -46,6 +51,7 @@ import {
   regulatoryFxApi,
   regulatoryIrrApi,
   regulatoryLiquidityApi,
+  regulatoryReportingApi,
   temenosApi,
   tenant,
 } from './client';
@@ -1361,5 +1367,412 @@ export function useTriggerTemenosBackfill(bankId: string | undefined) {
           temenosBackfillRequest: payload,
         })
       ),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Regulatory Reporting & Submission Hub (docs/regulatory_reporting.md)
+//
+// Query keys: ['rr-obligations', bankId, horizon], ['rr-packages', bankId,
+// ...filters], ['rr-package', bankId, packageId], ['rr-events', bankId,
+// packageId], ['rr-templates'], ['rr-channel-config', bankId, channel],
+// ['rr-artifacts', bankId, packageId] (session-local export ledger — the API
+// exposes no artifact-list endpoint, so exports minted this session are the
+// downloadable set). Package mutations invalidate obligations + package reads.
+// ---------------------------------------------------------------------------
+
+const reportingInvalidatePrefixes = [
+  'rr-obligations',
+  'rr-packages',
+  'rr-package',
+  'rr-events',
+];
+
+/** Deadline board: every registry obligation in the horizon with RAG + package. */
+export function useReportingObligations(
+  bankId: string | undefined,
+  horizonMonths = 3
+) {
+  return useQuery({
+    queryKey: ['rr-obligations', bankId, horizonMonths],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.listReportingObligations({
+          ...t,
+          bankId: bankId!,
+          horizonMonths,
+        })
+      ),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export type RegulatoryPackageFilters = {
+  returnCode?: string;
+  /** ISO date (YYYY-MM-DD). */
+  reportingDate?: string;
+  status?: PackageStatusFilter;
+  includeSuperseded?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
+export function useRegulatoryPackages(
+  bankId: string | undefined,
+  filters: RegulatoryPackageFilters = {}
+) {
+  return useQuery({
+    queryKey: [
+      'rr-packages',
+      bankId,
+      filters.returnCode ?? null,
+      filters.reportingDate ?? null,
+      filters.status ?? null,
+      filters.includeSuperseded ?? true,
+      filters.limit ?? 25,
+      filters.offset ?? 0,
+    ],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.listRegulatoryPackages({
+          ...t,
+          bankId: bankId!,
+          returnCode: filters.returnCode,
+          reportingDate: filters.reportingDate
+            ? new Date(`${filters.reportingDate}T00:00:00Z`)
+            : undefined,
+          status: filters.status,
+          includeSuperseded: filters.includeSuperseded,
+          limit: filters.limit,
+          offset: filters.offset,
+        })
+      ),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useRegulatoryPackage(
+  bankId: string | undefined,
+  packageId: string | null | undefined
+) {
+  return useQuery({
+    queryKey: ['rr-package', bankId, packageId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.getRegulatoryPackage({
+          ...t,
+          bankId: bankId!,
+          packageId: packageId!,
+        })
+      ),
+    enabled: Boolean(bankId && packageId),
+  });
+}
+
+/** Generate (or regenerate — new version, prior becomes superseded). */
+export function useGenerateRegulatoryPackage(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      returnCode: string;
+      /** ISO date (YYYY-MM-DD). */
+      reportingDate: string;
+      notes?: string;
+    }) =>
+      apiCall(() =>
+        regulatoryReportingApi.createRegulatoryPackage({
+          ...t,
+          bankId: bankId!,
+          regulatoryPackageCreate: {
+            returnCode: payload.returnCode,
+            reportingDate: new Date(`${payload.reportingDate}T00:00:00Z`),
+            notes: payload.notes ?? null,
+          },
+        })
+      ),
+    onSuccess: () => {
+      reportingInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+export function useValidateRegulatoryPackage(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (packageId: string) =>
+      apiCall(() =>
+        regulatoryReportingApi.validateRegulatoryPackage({
+          ...t,
+          bankId: bankId!,
+          packageId,
+        })
+      ),
+    onSuccess: (pkg) => {
+      queryClient.setQueryData(['rr-package', bankId, pkg.id], pkg);
+      void queryClient.invalidateQueries({ queryKey: ['rr-packages'] });
+      void queryClient.invalidateQueries({ queryKey: ['rr-obligations'] });
+    },
+  });
+}
+
+export function useRequestPackageApproval(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ packageId, reason }: { packageId: string; reason?: string }) =>
+      apiCall(() =>
+        regulatoryReportingApi.requestPackageApproval({
+          ...t,
+          bankId: bankId!,
+          packageId,
+          packageApprovalRequestCreate: { reason: reason ?? null },
+        })
+      ),
+    onSuccess: (pkg) => {
+      queryClient.setQueryData(['rr-package', bankId, pkg.id], pkg);
+      void queryClient.invalidateQueries({ queryKey: ['rr-packages'] });
+      void queryClient.invalidateQueries({ queryKey: ['rr-obligations'] });
+    },
+  });
+}
+
+/**
+ * Maker-checker decision. `actingUserId` overrides the X-User-Id header for
+ * the demo "acting as a second officer" affordance — production derives the
+ * checker from the login. Deciding as the generator returns the backend's
+ * maker-checker 409, surfaced verbatim.
+ */
+export function useDecidePackageApproval(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      packageId,
+      action,
+      reason,
+      actingUserId,
+    }: {
+      packageId: string;
+      action: ApprovalDecision;
+      reason?: string;
+      actingUserId?: string;
+    }) =>
+      apiCall(() =>
+        regulatoryReportingApi.decidePackageApproval({
+          xOrgId: t.xOrgId,
+          xUserId: actingUserId ?? t.xUserId,
+          bankId: bankId!,
+          packageId,
+          packageApprovalDecisionCreate: { action, reason: reason ?? null },
+        })
+      ),
+    onSuccess: (pkg) => {
+      queryClient.setQueryData(['rr-package', bankId, pkg.id], pkg);
+      void queryClient.invalidateQueries({ queryKey: ['rr-packages'] });
+      void queryClient.invalidateQueries({ queryKey: ['rr-obligations'] });
+    },
+  });
+}
+
+/**
+ * Session-local artifact ledger for one package. The API has no artifact-list
+ * endpoint (exports are minted on demand), so artifacts exported in this
+ * session accumulate here via useExportRegulatoryPackage. Never invalidated.
+ */
+export function useSessionArtifacts(
+  bankId: string | undefined,
+  packageId: string | null | undefined
+) {
+  return useQuery<RegulatoryArtifactRead[]>({
+    queryKey: ['rr-artifacts', bankId, packageId],
+    queryFn: () => [],
+    enabled: Boolean(bankId && packageId),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
+/** Mint one export artifact (xlsx/csv/pdf) and record it in the session ledger. */
+export function useExportRegulatoryPackage(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ packageId, kind }: { packageId: string; kind: ArtifactKind }) =>
+      apiCall(() =>
+        regulatoryReportingApi.exportRegulatoryPackage({
+          ...t,
+          bankId: bankId!,
+          packageId,
+          kind,
+        })
+      ),
+    onSuccess: (artifact) => {
+      queryClient.setQueryData<RegulatoryArtifactRead[]>(
+        ['rr-artifacts', bankId, artifact.packageId],
+        (prev = []) => [
+          ...prev.filter((entry) => entry.id !== artifact.id),
+          artifact,
+        ]
+      );
+    },
+  });
+}
+
+/**
+ * Submit via the requested channel (omit for the registry default). ORASS
+ * downtime surfaces as a structured 409 with errorCode 'channel_downtime'
+ * and a `fallback` block in details — the UI renders the email-fallback panel.
+ */
+export function useSubmitRegulatoryPackage(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      packageId,
+      channel,
+    }: {
+      packageId: string;
+      channel?: ChannelCode;
+    }) =>
+      apiCall(() =>
+        regulatoryReportingApi.submitRegulatoryPackage({
+          ...t,
+          bankId: bankId!,
+          packageId,
+          packageSubmitCreate: { channel: channel ?? null },
+        })
+      ),
+    onSuccess: (pkg) => {
+      queryClient.setQueryData(['rr-package', bankId, pkg.id], pkg);
+      reportingInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/** One poll cycle against the latest channel submission; records decisions. */
+export function usePollRegulatorySubmission(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (packageId: string) =>
+      apiCall(() =>
+        regulatoryReportingApi.pollRegulatorySubmission({
+          ...t,
+          bankId: bankId!,
+          packageId,
+        })
+      ),
+    onSuccess: (poll) => {
+      queryClient.setQueryData(['rr-package', bankId, poll._package.id], poll._package);
+      reportingInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+export function useSubmissionEvents(
+  bankId: string | undefined,
+  packageId: string | null | undefined,
+  limit = 50
+) {
+  return useQuery({
+    queryKey: ['rr-events', bankId, packageId, limit],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.listSubmissionEvents({
+          ...t,
+          bankId: bankId!,
+          packageId: packageId!,
+          limit,
+        })
+      ),
+    enabled: Boolean(bankId && packageId),
+  });
+}
+
+/** Preview the BG/FMD/2026/07 downtime email bundle without submitting. */
+export function useEmailFallbackInstructions(
+  bankId: string | undefined,
+  packageId: string | null | undefined,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: ['rr-email-fallback', bankId, packageId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.getEmailFallbackInstructions({
+          ...t,
+          bankId: bankId!,
+          packageId: packageId!,
+        })
+      ),
+    enabled: Boolean(bankId && packageId) && enabled,
+  });
+}
+
+/** The return-template registry (citations, fidelity grades, default channels). */
+export function useReturnTemplates() {
+  return useQuery({
+    queryKey: ['rr-templates'],
+    queryFn: () => apiCall(() => regulatoryReportingApi.listReturnTemplates({ ...t })),
+    staleTime: 10 * 60_000,
+  });
+}
+
+/** Whether an error is the "no channel config yet" 404 (unconfigured state). */
+export function isChannelConfigMissingError(error: unknown): boolean {
+  return isApiError(error) && error.status === 404;
+}
+
+export function useChannelConfig(
+  bankId: string | undefined,
+  channel: ChannelCode
+) {
+  return useQuery({
+    queryKey: ['rr-channel-config', bankId, channel],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.getChannelConfig({
+          ...t,
+          bankId: bankId!,
+          channel,
+        })
+      ),
+    enabled: Boolean(bankId),
+    retry: false,
+  });
+}
+
+/** Upsert one channel config; `credentials` is write-only (fingerprint back). */
+export function useSaveChannelConfig(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      channel,
+      config,
+      credentials,
+    }: {
+      channel: ChannelCode;
+      config: Record<string, unknown>;
+      credentials?: Record<string, unknown>;
+    }) =>
+      apiCall(() =>
+        regulatoryReportingApi.putChannelConfig({
+          ...t,
+          bankId: bankId!,
+          channel,
+          channelConfigPut: {
+            config,
+            credentials: credentials ?? null,
+          },
+        })
+      ),
+    onSuccess: (config) => {
+      queryClient.setQueryData(
+        ['rr-channel-config', bankId, config.channel],
+        config
+      );
+    },
   });
 }

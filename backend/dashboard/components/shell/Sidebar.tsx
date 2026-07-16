@@ -72,7 +72,7 @@ const groups: { label: string; items: NavItem[] }[] = [
     label: 'Governance',
     items: [
       { href: '/reports', label: 'Reports', icon: FileBarChart2 },
-      { href: '/submissions', label: 'Submissions', icon: FileCheck2 },
+      { href: '/submissions', label: 'Regulatory Reporting', icon: FileCheck2 },
       { href: '/settings', label: 'Settings', icon: Settings },
     ],
   },

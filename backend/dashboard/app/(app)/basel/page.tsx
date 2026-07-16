@@ -119,11 +119,11 @@ export default function BaselOverview() {
             />
             {run && <RunBadge run={run} />}
             <Link
-              href="/basel/submissions"
+              href="/submissions/returns?code=BSD2"
               className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-action border border-action/30 bg-action-light rounded-md hover:bg-action/10"
             >
               <FileText size={13} aria-hidden />
-              Generate BoG return
+              Official returns →
             </Link>
             <button
               type="button"

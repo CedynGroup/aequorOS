@@ -20,7 +20,9 @@ import {
   RegulatoryFxApi,
   RegulatoryIrrApi,
   RegulatoryLiquidityApi,
+  RegulatoryReportingApi,
   ResponseError,
+  TemenosApi,
 } from '@aequoros/risk-service-api';
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8003/api/v1';
@@ -60,6 +62,8 @@ export const cashflowForecastApi = new CashflowForecastApi(configuration);
 export const liveEngineApi = new LiveEngineApi(configuration);
 export const jobsApi = new JobsApi(configuration);
 export const marketDataApi = new MarketDataApi(configuration);
+export const temenosApi = new TemenosApi(configuration);
+export const regulatoryReportingApi = new RegulatoryReportingApi(configuration);
 
 /**
  * Normalized error surfaced to the UI. `status` is the HTTP status code,

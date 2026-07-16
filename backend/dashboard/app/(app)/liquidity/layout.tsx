@@ -11,7 +11,6 @@ const tabs = [
   { href: '/liquidity/forecast', label: 'Cash Flow Forecast' },
   { href: '/liquidity/stress', label: 'Stress' },
   { href: '/liquidity/cfp', label: 'CFP' },
-  { href: '/liquidity/submission', label: 'Submission' },
 ];
 
 export default function LiquidityLayout({
