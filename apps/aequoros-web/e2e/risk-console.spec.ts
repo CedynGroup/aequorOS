@@ -12,6 +12,7 @@ async function captureEvidence(
   name: string,
 ) {
   if (!evidenceDir) return;
+  await page.waitForTimeout(1_600);
   await page.screenshot({ path: `${evidenceDir}/${name}.png`, fullPage: true });
 }
 

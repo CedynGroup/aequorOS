@@ -340,9 +340,9 @@ describe("CapitalTab", () => {
     expect(
       await screen.findByText("Baseline equity / assets"),
     ).toBeInTheDocument();
-    expect(screen.getByText("12.3%")).toBeInTheDocument();
+    expect(screen.getByText("12.35%")).toBeInTheDocument();
     expect(screen.getByText("Downside equity / assets")).toBeInTheDocument();
-    expect(screen.getByText("8.8%")).toBeInTheDocument();
+    expect(screen.getByText("8.77%")).toBeInTheDocument();
   });
 
   it("keeps projection history visible when comparison is retired", async () => {

@@ -102,5 +102,9 @@ const reviewed = await liquidity.reviewLiquidityFinding({
 ```
 
 Summary reads can omit `scenarioId` and `runId` to select the newest successful
-run. Finding review requires both tenant headers; dismissal also requires a
+run. Ready summaries expose `sourcesCoverageThreshold` together with
+`sourcesCoverageThresholdRuleVersion`, preserving the classification metadata
+for that immutable analysis. Both fields are nullable for legacy analyses and
+must be treated as an unavailable pair rather than replaced with a client-side
+default. Finding review requires both tenant headers; dismissal also requires a
 non-empty reason.
