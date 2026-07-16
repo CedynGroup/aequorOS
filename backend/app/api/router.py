@@ -14,7 +14,9 @@ from app.features.manage_documents import router as documents_router
 from app.features.manage_live_engine import router as live_engine_router
 from app.features.manage_market_data_connections import router as market_data_connections_router
 from app.features.manage_market_data_uploads import router as market_data_uploads_router
+from app.features.manage_regulatory_reporting import router as regulatory_reporting_router
 from app.features.manage_scenarios import router as scenarios_router
+from app.features.manage_temenos_connections import router as temenos_connections_router
 from app.features.push_data import router as push_router
 from app.features.read_behavioral_models import router as behavioral_models_router
 from app.features.read_cashflow_forecast import router as cashflow_forecast_router
@@ -46,10 +48,12 @@ v1_router.include_router(regulatory_capital_router)
 v1_router.include_router(regulatory_irr_router)
 v1_router.include_router(regulatory_fx_router)
 v1_router.include_router(regulatory_ftp_router)
+v1_router.include_router(regulatory_reporting_router)
 v1_router.include_router(forecasting_router)
 v1_router.include_router(live_engine_router)
 v1_router.include_router(market_data_uploads_router)
 v1_router.include_router(market_data_connections_router)
+v1_router.include_router(temenos_connections_router)
 v1_router.include_router(cashflow_forecast_router)
 v1_router.include_router(behavioral_models_router)
 v1_router.include_router(bulk_update_cases_router)

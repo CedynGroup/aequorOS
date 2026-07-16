@@ -50,6 +50,13 @@ from app.models.regulatory import (
     ParamRiskWeight,
     ParamStressShock,
 )
+from app.models.regulatory_reporting import (
+    RegulatoryChannelConfig,
+    RegulatoryPackage,
+    RegulatoryPackageApproval,
+    RegulatoryPackageArtifact,
+    RegulatorySubmissionEvent,
+)
 from app.models.regulatory_run import (
     RegulatoryLineItem,
     RegulatoryMetricResult,
@@ -71,6 +78,7 @@ from app.models.risk import (
     StoredObject,
 )
 from app.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
+from app.models.temenos import TemenosConnection
 from app.models.user import User
 
 __all__ = [
@@ -118,15 +126,21 @@ __all__ = [
     "MarketDataConnection",
     "MarketDataQuotaUsage",
     "Organization",
+    "TemenosConnection",
     "TranslationFailure",
     "ParamCapitalThreshold",
     "ParamLcrRunoffRate",
     "ParamNsfrWeight",
     "ParamRiskWeight",
     "ParamStressShock",
+    "RegulatoryChannelConfig",
     "RegulatoryLineItem",
     "RegulatoryMetricResult",
+    "RegulatoryPackage",
+    "RegulatoryPackageApproval",
+    "RegulatoryPackageArtifact",
     "RegulatoryRun",
+    "RegulatorySubmissionEvent",
     "RegulatoryValidation",
     "RiskAssessment",
     "RiskAssessmentRun",
