@@ -1888,6 +1888,45 @@
         ],
         "type": "string"
       },
+      "CanonicalCountsRead": {
+        "description": "Current-generation canonical record counts for one bank.",
+        "properties": {
+          "counterparties": {
+            "title": "Counterparties",
+            "type": "integer"
+          },
+          "gl_accounts": {
+            "title": "Gl Accounts",
+            "type": "integer"
+          },
+          "position_snapshots": {
+            "title": "Position Snapshots",
+            "type": "integer"
+          },
+          "positions": {
+            "title": "Positions",
+            "type": "integer"
+          },
+          "products": {
+            "title": "Products",
+            "type": "integer"
+          },
+          "reference_rows": {
+            "title": "Reference Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "positions",
+          "position_snapshots",
+          "counterparties",
+          "gl_accounts",
+          "products",
+          "reference_rows"
+        ],
+        "title": "CanonicalCountsRead",
+        "type": "object"
+      },
       "CanonicalPositionListRead": {
         "properties": {
           "as_of_date": {
@@ -10270,6 +10309,125 @@
           "reused"
         ],
         "title": "IngestionBatchStartRead",
+        "type": "object"
+      },
+      "IngestionSourceSummaryRead": {
+        "description": "Per-source-system rollup of ingestion history for one bank.",
+        "properties": {
+          "batches": {
+            "title": "Batches",
+            "type": "integer"
+          },
+          "last_batch_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Batch At"
+          },
+          "last_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "created",
+                  "extracting",
+                  "translating",
+                  "validating",
+                  "accepted",
+                  "accepted_with_warnings",
+                  "rejected",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Status"
+          },
+          "records_accepted_total": {
+            "title": "Records Accepted Total",
+            "type": "integer"
+          },
+          "records_warning_total": {
+            "title": "Records Warning Total",
+            "type": "integer"
+          },
+          "source_system": {
+            "enum": [
+              "EXCEL_CSV",
+              "T24",
+              "FINACLE",
+              "FLEXCUBE",
+              "DB_DIRECT",
+              "SFTP_DROP",
+              "API_GENERIC",
+              "API_PUSH",
+              "MANUAL"
+            ],
+            "title": "Source System",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_system",
+          "batches",
+          "last_batch_at",
+          "last_status",
+          "records_accepted_total",
+          "records_warning_total"
+        ],
+        "title": "IngestionSourceSummaryRead",
+        "type": "object"
+      },
+      "IngestionSummaryRead": {
+        "properties": {
+          "activations_count": {
+            "title": "Activations Count",
+            "type": "integer"
+          },
+          "bank_id": {
+            "format": "uuid",
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "canonical_counts": {
+            "$ref": "#/components/schemas/CanonicalCountsRead"
+          },
+          "last_activation_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activation At"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/IngestionSourceSummaryRead"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "sources",
+          "canonical_counts",
+          "activations_count",
+          "last_activation_at"
+        ],
+        "title": "IngestionSummaryRead",
         "type": "object"
       },
       "IngestionUploadRead": {
@@ -18739,6 +18897,33 @@
             }
           },
           {
+            "in": "query",
+            "name": "source_system",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "EXCEL_CSV",
+                    "T24",
+                    "FINACLE",
+                    "FLEXCUBE",
+                    "DB_DIRECT",
+                    "SFTP_DROP",
+                    "API_GENERIC",
+                    "API_PUSH",
+                    "MANUAL"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source System"
+            }
+          },
+          {
             "in": "header",
             "name": "X-Org-Id",
             "required": true,
@@ -19212,6 +19397,125 @@
           }
         },
         "summary": "List Translation Failures",
+        "tags": [
+          "ingestion"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/ingestion-summary": {
+      "get": {
+        "description": "Per-source ingestion rollup plus canonical model counts and activations.",
+        "operationId": "getIngestionSummary",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Org-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionSummaryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Get Ingestion Summary",
         "tags": [
           "ingestion"
         ]

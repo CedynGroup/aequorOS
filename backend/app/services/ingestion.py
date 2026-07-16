@@ -33,7 +33,7 @@ from app.api.deps import TenantContext
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
 from app.domain.ingestion.adapter import SourceAdapter, get_adapter_class
-from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES
+from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES, SourceSystem
 from app.domain.ingestion.contracts import (
     ENTITY_TYPES,
     AdapterConfig,
@@ -50,6 +50,7 @@ from app.domain.ingestion.validation import (
     run_validation,
 )
 from app.models import (
+    AuditEvent,
     Bank,
     CanonicalCounterparty,
     CanonicalGlAccount,
@@ -62,13 +63,17 @@ from app.models import (
     MappingConfigRecord,
     TranslationFailure,
 )
+from app.models.canonical import CanonicalMetadataMixin
 from app.schemas.ingestion import (
+    CanonicalCountsRead,
     CanonicalPositionListRead,
     CanonicalPositionRead,
     IngestionBatchCreate,
     IngestionBatchListRead,
     IngestionBatchRead,
     IngestionBatchStartRead,
+    IngestionSourceSummaryRead,
+    IngestionSummaryRead,
     IngestionUploadRead,
     LineageNodeRead,
     LineageWalkRead,
@@ -81,6 +86,7 @@ from app.schemas.ingestion import (
     TranslationFailureRead,
 )
 from app.services.audit import record_event
+from app.services.data_activation import ACTIVATION_EVENT
 from app.storage.client import (
     ObjectMetadata,
     StorageClient,
@@ -370,21 +376,147 @@ def start_ingestion(
     )
 
 
-def list_batches(db: Session, ctx: TenantContext, bank_id: UUID) -> IngestionBatchListRead:
+def list_batches(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    source_system: SourceSystem | None = None,
+) -> IngestionBatchListRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    batches = db.scalars(
-        select(IngestionBatch)
-        .where(
-            IngestionBatch.organization_id == ctx.organization_id,
-            IngestionBatch.bank_id == bank.id,
-        )
-        .order_by(IngestionBatch.id.desc())
+    query = select(IngestionBatch).where(
+        IngestionBatch.organization_id == ctx.organization_id,
+        IngestionBatch.bank_id == bank.id,
     )
+    if source_system is not None:
+        query = query.where(IngestionBatch.source_system == source_system)
+    batches = db.scalars(query.order_by(IngestionBatch.id.desc()))
     return IngestionBatchListRead(
         bank_id=bank.id,
         batches=[
             IngestionBatchRead.model_validate(batch, from_attributes=True) for batch in batches
         ],
+    )
+
+
+def get_ingestion_summary(db: Session, ctx: TenantContext, bank_id: UUID) -> IngestionSummaryRead:
+    """Per-source ingestion rollup plus current canonical model counts.
+
+    Cheap aggregates only: batch counts/record totals grouped by source
+    system, the latest batch per source (batch ids are UUIDv7, so ``max(id)``
+    is the most recent), current-generation canonical counts, and the
+    activation history the data-activation listing reads.
+    """
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    org_id = ctx.organization_id
+
+    rollups = db.execute(
+        select(
+            IngestionBatch.source_system,
+            func.count(IngestionBatch.id),
+            func.coalesce(func.sum(IngestionBatch.records_accepted), 0),
+            func.coalesce(func.sum(IngestionBatch.records_warning), 0),
+        )
+        .where(IngestionBatch.organization_id == org_id, IngestionBatch.bank_id == bank.id)
+        .group_by(IngestionBatch.source_system)
+    ).all()
+    # Latest batch per source. Portable top-1 query per source system (at
+    # most 9, all hitting the org/bank index) — Postgres has no max(uuid)
+    # aggregate, so a grouped max(id) subquery is not an option.
+    latest_by_source = {}
+    for source_system, _count, _accepted, _warning in rollups:
+        latest_by_source[source_system] = db.scalar(
+            select(IngestionBatch)
+            .where(
+                IngestionBatch.organization_id == org_id,
+                IngestionBatch.bank_id == bank.id,
+                IngestionBatch.source_system == source_system,
+            )
+            .order_by(IngestionBatch.id.desc())
+            .limit(1)
+        )
+    sources = [
+        IngestionSourceSummaryRead(
+            source_system=source_system,  # type: ignore[arg-type]
+            batches=batch_count,
+            last_batch_at=(
+                (latest.started_at or latest.created_at)
+                if (latest := latest_by_source.get(source_system)) is not None
+                else None
+            ),
+            last_status=latest.status if latest is not None else None,  # type: ignore[arg-type]
+            records_accepted_total=int(accepted_total),
+            records_warning_total=int(warning_total),
+        )
+        for source_system, batch_count, accepted_total, warning_total in rollups
+    ]
+    sources.sort(key=lambda source: source.source_system)
+
+    def _current_count(model: type[CanonicalMetadataMixin]) -> int:
+        return (
+            db.scalar(
+                select(func.count())
+                .select_from(model)
+                .where(
+                    model.organization_id == org_id,
+                    model.bank_id == bank.id,
+                    model.superseded_by.is_(None),
+                )
+            )
+            or 0
+        )
+
+    # Reference rows the modules actually consume: the latest batch per
+    # dataset kind (mirrors fact derivation's read pattern).
+    reference_groups = db.execute(
+        select(
+            CanonicalReferenceRow.dataset_kind,
+            CanonicalReferenceRow.ingestion_batch_id,
+            func.count(),
+        )
+        .where(
+            CanonicalReferenceRow.organization_id == org_id,
+            CanonicalReferenceRow.bank_id == bank.id,
+        )
+        .group_by(CanonicalReferenceRow.dataset_kind, CanonicalReferenceRow.ingestion_batch_id)
+    ).all()
+    latest_reference: dict[str, tuple[UUID, int]] = {}
+    for dataset_kind, batch_id, row_count in reference_groups:
+        current = latest_reference.get(dataset_kind)
+        if current is None or str(batch_id) > str(current[0]):
+            latest_reference[dataset_kind] = (batch_id, row_count)
+    reference_rows = sum(row_count for _, row_count in latest_reference.values())
+
+    activation_events = select(AuditEvent).where(
+        AuditEvent.organization_id == org_id,
+        AuditEvent.event_type == ACTIVATION_EVENT,
+        AuditEvent.entity_type == "bank",
+        AuditEvent.entity_id == bank.id,
+    )
+    activations_count = (
+        db.scalar(select(func.count()).select_from(activation_events.subquery())) or 0
+    )
+    last_activation_at = db.scalar(
+        select(func.max(AuditEvent.created_at)).where(
+            AuditEvent.organization_id == org_id,
+            AuditEvent.event_type == ACTIVATION_EVENT,
+            AuditEvent.entity_type == "bank",
+            AuditEvent.entity_id == bank.id,
+        )
+    )
+
+    return IngestionSummaryRead(
+        bank_id=bank.id,
+        sources=sources,
+        canonical_counts=CanonicalCountsRead(
+            positions=_current_count(CanonicalPosition),
+            position_snapshots=_current_count(CanonicalPositionSnapshot),
+            counterparties=_current_count(CanonicalCounterparty),
+            gl_accounts=_current_count(CanonicalGlAccount),
+            products=_current_count(CanonicalProduct),
+            reference_rows=reference_rows,
+        ),
+        activations_count=int(activations_count),
+        last_activation_at=last_activation_at,
     )
 
 

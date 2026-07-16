@@ -25,6 +25,10 @@ import {
   referenceRowCounts,
   tablesBreakdown,
 } from '@/components/data-engine/shared';
+import {
+  WARNING_COUNTS_LEGEND,
+  warningRuleHint,
+} from '@/components/data-engine/content';
 
 type ReportFailure = {
   rule: string;
@@ -85,6 +89,22 @@ export default function BatchDetailPage({
   const tables = tablesBreakdown(batch);
   const unmatchedTables = tables.filter((entry) => entry.resolved_to === null);
 
+  // Rules that produced warnings — listed findings plus the ones suppressed
+  // by volume — mapped to actionable operator hints where we have one.
+  const warningRules = new Set<string>([
+    ...findings
+      .filter((finding) => finding.severity === 'WARNING')
+      .map((finding) => finding.rule),
+    ...Object.keys(suppressed),
+  ]);
+  const warningHints =
+    batch.recordsWarning > 0
+      ? [...warningRules].flatMap((rule) => {
+          const hint = warningRuleHint(rule);
+          return hint ? [{ rule, hint }] : [];
+        })
+      : [];
+
   return (
     <>
       <PageHeader
@@ -103,7 +123,26 @@ export default function BatchDetailPage({
         subtitle={`${batch.sourceSystem} · as of ${formatDate(batch.asOfDate)} · started ${formatDateTime(batch.startedAt ?? batch.createdAt)}`}
       />
       <div className="px-8 py-6 space-y-6 max-w-6xl">
-        <CountStrip batch={batch} />
+        <div className="space-y-2">
+          <CountStrip batch={batch} />
+          <p className="text-caption text-slate">{WARNING_COUNTS_LEGEND}</p>
+        </div>
+
+        {warningHints.length > 0 && (
+          <div className="card border-l-4 border-l-warning p-5 space-y-3">
+            <p className="text-body font-medium text-navy">
+              {batch.recordsWarning.toLocaleString('en-GH')} rows carry data-quality
+              flags — they are in the canonical model and participate in calculations.
+              How to resolve the flags:
+            </p>
+            {warningHints.map(({ rule, hint }) => (
+              <div key={rule}>
+                <p className="text-caption font-mono text-warning">{rule}</p>
+                <p className="mt-0.5 text-body text-navy/80">{hint}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {batch.status === 'rejected' && (
           <div className="card border-l-4 border-l-critical p-5 space-y-2">

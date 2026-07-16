@@ -15,9 +15,12 @@ import {
   IngestionApi,
   type DataActivationRead,
   type IngestionBatchCreate,
+  type ListIngestionBatchesSourceSystemEnum,
   type MappingConfig,
 } from '@aequoros/risk-service-api';
 import { apiCall, tenant } from './client';
+
+export type IngestionSourceSystem = ListIngestionBatchesSourceSystemEnum;
 
 const baseUrl =
   process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? 'http://127.0.0.1:8003/api/v1';
@@ -268,11 +271,26 @@ export function useMappingConfigs(bankId: string | undefined) {
   });
 }
 
-export function useIngestionBatches(bankId: string | undefined) {
+export function useIngestionBatches(
+  bankId: string | undefined,
+  sourceSystem?: IngestionSourceSystem,
+) {
   return useQuery({
-    queryKey: ['de-batches', bankId],
+    queryKey: ['de-batches', bankId, sourceSystem ?? 'all'],
     queryFn: () =>
-      apiCall(() => ingestionApi.listIngestionBatches({ ...t, bankId: bankId! })),
+      apiCall(() =>
+        ingestionApi.listIngestionBatches({ ...t, bankId: bankId!, sourceSystem }),
+      ),
+    enabled: Boolean(bankId),
+  });
+}
+
+/** Per-source ingestion rollup + canonical model counts + activation history. */
+export function useIngestionSummary(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['de-summary', bankId],
+    queryFn: () =>
+      apiCall(() => ingestionApi.getIngestionSummary({ ...t, bankId: bankId! })),
     enabled: Boolean(bankId),
   });
 }
@@ -396,6 +414,7 @@ export function useActivateBankData(bankId: string | undefined) {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       }
       void queryClient.invalidateQueries({ queryKey: ['de-activations', bankId] });
+      void queryClient.invalidateQueries({ queryKey: ['de-summary', bankId] });
     },
   });
 }
@@ -430,6 +449,7 @@ export function useUploadAndIngest(bankId: string | undefined) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['de-batches', bankId] });
       void queryClient.invalidateQueries({ queryKey: ['de-positions', bankId] });
+      void queryClient.invalidateQueries({ queryKey: ['de-summary', bankId] });
     },
   });
 }

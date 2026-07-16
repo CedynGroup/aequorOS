@@ -21,6 +21,7 @@ import type {
   IngestionBatchListRead,
   IngestionBatchRead,
   IngestionBatchStartRead,
+  IngestionSummaryRead,
   IngestionUploadRead,
   LineageWalkRead,
   MappingConfigCreate,
@@ -52,6 +53,8 @@ import {
   IngestionBatchReadToJSON,
   IngestionBatchStartReadFromJSON,
   IngestionBatchStartReadToJSON,
+  IngestionSummaryReadFromJSON,
+  IngestionSummaryReadToJSON,
   IngestionUploadReadFromJSON,
   IngestionUploadReadToJSON,
   LineageWalkReadFromJSON,
@@ -104,6 +107,12 @@ export interface GetIngestionBatchRequest {
   xUserId?: string | null;
 }
 
+export interface GetIngestionSummaryRequest {
+  bankId: string;
+  xOrgId: string;
+  xUserId?: string | null;
+}
+
 export interface GetPushBatchRequest {
   bankId: string;
   pushBatchId: string;
@@ -128,6 +137,7 @@ export interface ListCanonicalPositionsRequest {
 export interface ListIngestionBatchesRequest {
   bankId: string;
   xOrgId: string;
+  sourceSystem?: ListIngestionBatchesSourceSystemEnum;
   xUserId?: string | null;
 }
 
@@ -523,6 +533,73 @@ export class IngestionApi extends runtime.BaseAPI {
   }
 
   /**
+   * Per-source ingestion rollup plus canonical model counts and activations.
+   * Get Ingestion Summary
+   */
+  async getIngestionSummaryRaw(
+    requestParameters: GetIngestionSummaryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<IngestionSummaryRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getIngestionSummary().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling getIngestionSummary().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/ingestion-summary`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      IngestionSummaryReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Per-source ingestion rollup plus canonical model counts and activations.
+   * Get Ingestion Summary
+   */
+  async getIngestionSummary(
+    requestParameters: GetIngestionSummaryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<IngestionSummaryRead> {
+    const response = await this.getIngestionSummaryRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Get Push Batch
    */
   async getPushBatchRaw(
@@ -761,6 +838,10 @@ export class IngestionApi extends runtime.BaseAPI {
     }
 
     const queryParameters: any = {};
+
+    if (requestParameters["sourceSystem"] != null) {
+      queryParameters["source_system"] = requestParameters["sourceSystem"];
+    }
 
     const headerParameters: runtime.HTTPHeaders = {};
 
@@ -1467,3 +1548,20 @@ export class IngestionApi extends runtime.BaseAPI {
     return await response.value();
   }
 }
+
+/**
+ * @export
+ */
+export const ListIngestionBatchesSourceSystemEnum = {
+  ExcelCsv: "EXCEL_CSV",
+  T24: "T24",
+  Finacle: "FINACLE",
+  Flexcube: "FLEXCUBE",
+  DbDirect: "DB_DIRECT",
+  SftpDrop: "SFTP_DROP",
+  ApiGeneric: "API_GENERIC",
+  ApiPush: "API_PUSH",
+  Manual: "MANUAL",
+} as const;
+export type ListIngestionBatchesSourceSystemEnum =
+  (typeof ListIngestionBatchesSourceSystemEnum)[keyof typeof ListIngestionBatchesSourceSystemEnum];

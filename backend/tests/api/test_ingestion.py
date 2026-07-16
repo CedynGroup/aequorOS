@@ -777,3 +777,121 @@ class TestReferenceDatasetIngestion:
         assert rows[0].payload["quote_date"] == "2026-06-01"
         assert str(rows[0].ingestion_batch_id) == batch["id"]
         assert rows[0].source_reference.startswith("bank.xlsx#Yield_Curves!R")
+
+
+class TestSourceFilterAndSummary:
+    def test_batch_history_filters_by_source_system(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        start_batch(db_client, bank_id, fixtures.build_well_formed(tmp_path / "bank.xlsx"))
+
+        unfiltered = db_client.get(
+            f"/api/v1/banks/{bank_id}/ingestion-batches", headers=headers()
+        ).json()["batches"]
+        assert len(unfiltered) == 1
+
+        excel = db_client.get(
+            f"/api/v1/banks/{bank_id}/ingestion-batches",
+            headers=headers(),
+            params={"source_system": "EXCEL_CSV"},
+        ).json()["batches"]
+        assert [batch["source_system"] for batch in excel] == ["EXCEL_CSV"]
+
+        pushed = db_client.get(
+            f"/api/v1/banks/{bank_id}/ingestion-batches",
+            headers=headers(),
+            params={"source_system": "API_PUSH"},
+        ).json()["batches"]
+        assert pushed == []
+
+        unknown = db_client.get(
+            f"/api/v1/banks/{bank_id}/ingestion-batches",
+            headers=headers(),
+            params={"source_system": "NOT_A_SOURCE"},
+        )
+        assert unknown.status_code == 422
+
+    def test_summary_rolls_up_sources_and_canonical_counts(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        started = start_batch(
+            db_client, bank_id, fixtures.build_well_formed(tmp_path / "bank.xlsx")
+        )
+        batch = started["batch"]
+
+        summary = db_client.get(
+            f"/api/v1/banks/{bank_id}/ingestion-summary", headers=headers()
+        ).json()
+        assert summary["bank_id"] == bank_id
+
+        assert len(summary["sources"]) == 1
+        source = summary["sources"][0]
+        assert source["source_system"] == "EXCEL_CSV"
+        assert source["batches"] == 1
+        assert source["last_status"] == batch["status"]
+        assert source["last_batch_at"] is not None
+        assert source["records_accepted_total"] == batch["records_accepted"]
+        assert source["records_warning_total"] == batch["records_warning"]
+
+        counts = summary["canonical_counts"]
+        # The well-formed workbook: 2 loans, 2 customers, 2 products, 2 GL rows.
+        assert counts["positions"] == 2
+        assert counts["position_snapshots"] == 2
+        assert counts["counterparties"] == 2
+        assert counts["gl_accounts"] == 2
+        assert counts["products"] == 2
+        assert counts["reference_rows"] == 0
+
+        assert summary["activations_count"] == 0
+        assert summary["last_activation_at"] is None
+
+    def test_summary_counts_only_current_generation_and_latest_reference_batch(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, ALIASED_REFERENCE_MAPPING)
+        workbook = fixtures.build_bank_realistic(tmp_path / "bank.xlsx")
+        start_batch(db_client, bank_id, workbook)
+
+        # Restate the same workbook (one changed cell) -> a second batch whose
+        # reference rows replace, not add to, the first batch's in the summary.
+        loaded = openpyxl.load_workbook(workbook)
+        sheet = loaded["General_Ledger"]
+        sheet.cell(row=2, column=2, value="Cash and balances (restated)")
+        loaded.save(workbook)
+        second = start_batch(db_client, bank_id, workbook)
+        assert second["reused"] is False
+
+        summary = db_client.get(
+            f"/api/v1/banks/{bank_id}/ingestion-summary", headers=headers()
+        ).json()
+        source = summary["sources"][0]
+        assert source["batches"] == 2
+        # Superseded GL generations are excluded; yield_curve rows count once.
+        assert summary["canonical_counts"]["gl_accounts"] == 2
+        assert summary["canonical_counts"]["reference_rows"] == 2
+
+    def test_summary_and_filter_are_tenant_scoped(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        start_batch(db_client, bank_id, fixtures.build_well_formed(tmp_path / "bank.xlsx"))
+
+        foreign = headers(ORG_2)
+        assert (
+            db_client.get(f"/api/v1/banks/{bank_id}/ingestion-summary", headers=foreign).status_code
+            == 404
+        )
+        assert (
+            db_client.get(
+                f"/api/v1/banks/{bank_id}/ingestion-batches",
+                headers=foreign,
+                params={"source_system": "EXCEL_CSV"},
+            ).status_code
+            == 404
+        )

@@ -6,6 +6,7 @@ import {
   Search,
   LayoutDashboard,
   Activity,
+  Database,
   Droplet,
   DollarSign,
   ShieldCheck,
@@ -28,6 +29,13 @@ type Item = {
 
 const items: Item[] = [
   { id: 'home', label: 'Home / Overview Dashboard', href: '/', icon: LayoutDashboard, group: 'Pages' },
+
+  { id: 'data-engine', label: 'Data Engine — Overview', hint: 'Module 00', href: '/data-engine', icon: Database, group: 'Data' },
+  { id: 'de-excel-csv', label: 'Data Engine — Excel & CSV', href: '/data-engine/excel-csv', icon: Database, group: 'Data' },
+  { id: 'de-api', label: 'Data Engine — API Push', href: '/data-engine/api', icon: Database, group: 'Data' },
+  { id: 'de-t24', label: 'Data Engine — Temenos T24', href: '/data-engine/t24', icon: Database, group: 'Data' },
+  { id: 'de-adapters', label: 'Data Engine — Other adapters', href: '/data-engine/adapters', icon: Database, group: 'Data' },
+  { id: 'de-canonical', label: 'Data Engine — Canonical Data', href: '/data-engine/positions', icon: Database, group: 'Data' },
 
   { id: 'irr', label: 'Interest Rate Risk — IRRBB Dashboard', hint: 'Module 01', href: '/irr', icon: Activity, group: 'Modules' },
 

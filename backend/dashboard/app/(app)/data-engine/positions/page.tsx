@@ -67,7 +67,7 @@ export default function CanonicalPositionsPage() {
       <PageHeader
         breadcrumbs={[
           { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Canonical Positions' },
+          { label: 'Canonical Data' },
         ]}
         title="Canonical positions"
         subtitle="The source-agnostic balance sheet produced by ingestion. Expand any row to trace it back to its source extraction."
@@ -84,7 +84,7 @@ export default function CanonicalPositionsPage() {
           (positionsQuery.data.positions.length === 0 ? (
             <EmptyState
               title="No canonical positions yet"
-              description="Ingest a positions file from the Sources & Ingestion tab to populate the canonical model."
+              description="Ingest a positions file from the Excel & CSV tab (or push via the API) to populate the canonical model."
             />
           ) : (
             <div className="card overflow-hidden">

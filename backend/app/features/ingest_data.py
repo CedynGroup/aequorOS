@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 
 from app.api.deps import DbSession, MutationTenant, Tenant
+from app.domain.ingestion.constants import SourceSystem
 from app.schemas.data_activation import (
     DataActivationCreate,
     DataActivationListRead,
@@ -18,6 +19,7 @@ from app.schemas.ingestion import (
     IngestionBatchListRead,
     IngestionBatchRead,
     IngestionBatchStartRead,
+    IngestionSummaryRead,
     IngestionUploadRead,
     LineageWalkRead,
     MappingConfigCreate,
@@ -119,8 +121,23 @@ def start_ingestion_batch(
     response_model=IngestionBatchListRead,
     operation_id="listIngestionBatches",
 )
-def list_ingestion_batches(bank_id: UUID, db: DbSession, ctx: Tenant) -> IngestionBatchListRead:
-    return ingestion.list_batches(db, ctx, bank_id)
+def list_ingestion_batches(
+    bank_id: UUID,
+    db: DbSession,
+    ctx: Tenant,
+    source_system: Annotated[SourceSystem | None, Query()] = None,
+) -> IngestionBatchListRead:
+    return ingestion.list_batches(db, ctx, bank_id, source_system=source_system)
+
+
+@router.get(
+    "/banks/{bank_id}/ingestion-summary",
+    response_model=IngestionSummaryRead,
+    operation_id="getIngestionSummary",
+)
+def get_ingestion_summary(bank_id: UUID, db: DbSession, ctx: Tenant) -> IngestionSummaryRead:
+    """Per-source ingestion rollup plus canonical model counts and activations."""
+    return ingestion.get_ingestion_summary(db, ctx, bank_id)
 
 
 @router.get(

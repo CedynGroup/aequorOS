@@ -3,6 +3,8 @@
 /**
  * Ingestion batch history: every attempt is immutable history — accepted,
  * rejected, and failed batches all stay visible with their diagnostics.
+ * Reused across the console: unfiltered (recent, overview) or filtered to
+ * one source system (integration tabs).
  */
 
 import Link from 'next/link';
@@ -11,7 +13,7 @@ import { useBankContext } from '@/components/shell/BankContext';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import EmptyState from '@/components/ui/EmptyState';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { useIngestionBatches } from '@/lib/api/ingestion';
+import { useIngestionBatches, type IngestionSourceSystem } from '@/lib/api/ingestion';
 import { BatchStatusPill, formatDate, formatDateTime } from './shared';
 
 const columns: Column<IngestionBatchRead>[] = [
@@ -41,6 +43,13 @@ const columns: Column<IngestionBatchRead>[] = [
     ),
   },
   {
+    key: 'system',
+    header: 'Via',
+    render: (batch) => (
+      <span className="font-mono text-caption text-slate">{batch.sourceSystem}</span>
+    ),
+  },
+  {
     key: 'status',
     header: 'Status',
     render: (batch) => <BatchStatusPill status={batch.status} />,
@@ -53,7 +62,14 @@ const columns: Column<IngestionBatchRead>[] = [
   },
   {
     key: 'issues',
-    header: 'Warn / Err',
+    header: (
+      <span
+        title="Data-quality flags are persisted rows that participate in calculations; rejected rows are excluded."
+        className="cursor-help underline decoration-dotted decoration-border underline-offset-2"
+      >
+        Flagged / Rejected
+      </span>
+    ),
     numeric: true,
     render: (batch) => (
       <span className="font-mono">
@@ -82,9 +98,21 @@ const columns: Column<IngestionBatchRead>[] = [
   },
 ];
 
-export default function BatchesTable() {
+export default function BatchesTable({
+  sourceSystem,
+  limit,
+  title = 'Ingestion history',
+  emptyDescription = 'Activate a mapping and upload a source file to run the first ingestion.',
+}: {
+  /** Restrict history to one source system (server-side filter). */
+  sourceSystem?: IngestionSourceSystem;
+  /** Show only the most recent N batches. */
+  limit?: number;
+  title?: string;
+  emptyDescription?: string;
+}) {
   const { bank } = useBankContext();
-  const batchesQuery = useIngestionBatches(bank?.id);
+  const batchesQuery = useIngestionBatches(bank?.id, sourceSystem);
 
   if (batchesQuery.isError) {
     return (
@@ -96,16 +124,21 @@ export default function BatchesTable() {
     );
   }
 
-  const batches = batchesQuery.data?.batches ?? [];
+  const all = batchesQuery.data?.batches ?? [];
+  const batches = limit !== undefined ? all.slice(0, limit) : all;
 
   return (
     <section className="space-y-3">
-      <h2 className="text-h2 text-navy">Ingestion history</h2>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-h2 text-navy">{title}</h2>
+        {limit !== undefined && all.length > batches.length && (
+          <p className="text-caption text-slate">
+            Showing the {batches.length} most recent of {all.length} batches
+          </p>
+        )}
+      </div>
       {batches.length === 0 ? (
-        <EmptyState
-          title="No ingestion batches yet"
-          description="Activate a mapping and upload a source file to run the first ingestion."
-        />
+        <EmptyState title="No ingestion batches yet" description={emptyDescription} />
       ) : (
         <div className="card overflow-hidden">
           <DataTable columns={columns} rows={batches} density="compact" />

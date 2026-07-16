@@ -6,6 +6,7 @@
  */
 
 import type { IngestionBatchRead } from '@aequoros/risk-service-api';
+import { BATCH_STATUS_EXPLAINERS } from './content';
 
 const STATUS_STYLES: Record<string, string> = {
   accepted: 'bg-success-light text-success border-success/30',
@@ -19,6 +20,7 @@ export function BatchStatusPill({ status }: { status: string }) {
     STATUS_STYLES[status] ?? 'bg-surface text-slate border-border';
   return (
     <span
+      title={BATCH_STATUS_EXPLAINERS[status]}
       className={`inline-flex items-center px-2 py-0.5 rounded-full border text-caption font-medium whitespace-nowrap ${style}`}
     >
       {status.replaceAll('_', ' ')}
@@ -175,19 +177,40 @@ export function batchBlockerDetails(batch: IngestionBatchRead): string[] {
 
 export function CountStrip({ batch }: { batch: IngestionBatchRead }) {
   const referenceRows = referenceRowTotal(batch);
-  const items: { label: string; value: number; tone?: string }[] = [
+  const items: { label: string; value: number; tone?: string; title?: string }[] = [
     { label: 'Extracted', value: batch.recordsExtracted },
     { label: 'Translated', value: batch.recordsTranslated },
-    { label: 'Accepted', value: batch.recordsAccepted, tone: 'text-success' },
-    { label: 'Warnings', value: batch.recordsWarning, tone: 'text-warning' },
-    { label: 'Errors', value: batch.recordsError, tone: 'text-critical' },
-    { label: 'Blocked', value: batch.recordsBlocked, tone: 'text-critical' },
+    {
+      label: 'Accepted',
+      value: batch.recordsAccepted,
+      tone: 'text-success',
+      title: 'Clean rows persisted to the canonical model.',
+    },
+    {
+      label: 'Warnings',
+      value: batch.recordsWarning,
+      tone: 'text-warning',
+      title:
+        'Persisted rows flagged for data quality — they participate in calculations. Not rejections.',
+    },
+    {
+      label: 'Errors',
+      value: batch.recordsError,
+      tone: 'text-critical',
+      title: 'Rejected rows — excluded from the canonical model and calculations.',
+    },
+    {
+      label: 'Blocked',
+      value: batch.recordsBlocked,
+      tone: 'text-critical',
+      title: 'Rows blocked by a batch-level blocking failure.',
+    },
     { label: 'Ref rows', value: referenceRows },
   ];
   return (
     <div className="grid grid-cols-4 sm:grid-cols-7 gap-px bg-border-light rounded overflow-hidden border border-border-light">
       {items.map((item) => (
-        <div key={item.label} className="bg-white px-3 py-2">
+        <div key={item.label} className="bg-white px-3 py-2" title={item.title}>
           <p className="text-micro uppercase tracking-wider text-slate">{item.label}</p>
           <p className={`mt-0.5 font-mono text-h3 ${item.tone ?? 'text-navy'}`}>
             {item.value}

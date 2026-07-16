@@ -103,6 +103,38 @@ class IngestionBatchListRead(BaseModel):
     batches: list[IngestionBatchRead]
 
 
+class IngestionSourceSummaryRead(BaseModel):
+    """Per-source-system rollup of ingestion history for one bank."""
+
+    source_system: SourceSystem
+    batches: int
+    last_batch_at: datetime | None
+    last_status: BatchStatus | None
+    records_accepted_total: int
+    records_warning_total: int
+
+
+class CanonicalCountsRead(BaseModel):
+    """Current-generation canonical record counts for one bank."""
+
+    positions: int
+    position_snapshots: int
+    counterparties: int
+    gl_accounts: int
+    products: int
+    # Rows in the latest batch per reference dataset kind — what the
+    # calculation modules actually consume.
+    reference_rows: int
+
+
+class IngestionSummaryRead(BaseModel):
+    bank_id: UUID
+    sources: list[IngestionSourceSummaryRead]
+    canonical_counts: CanonicalCountsRead
+    activations_count: int
+    last_activation_at: datetime | None
+
+
 class TranslationFailureRead(BaseModel):
     id: UUID
     entity_type: str
