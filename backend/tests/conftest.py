@@ -29,9 +29,15 @@ from tests.storage.inmemory import InMemoryStorageClient
 def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("APP_NAME", "risk-service")
-    monkeypatch.delenv("DATABASE_URL", raising=False)
     # Set (not delete) so a developer's local .env cannot leak into the suite:
-    # environment variables take priority over the env_file in pydantic-settings.
+    # environment variables take priority over the env_file in pydantic-settings,
+    # and the settings treat "" as unconfigured. Deleting the variable is NOT
+    # enough — pydantic-settings would still read the value from .env (the
+    # remote aequoros database, which no test may ever touch implicitly;
+    # Postgres-gated tests opt in explicitly via TEST_DATABASE_URL and run in
+    # a disposable per-run schema).
+    monkeypatch.setenv("DATABASE_URL", "")
+    monkeypatch.setenv("WORKER_DATABASE_URL", "")
     monkeypatch.setenv("CORS_ORIGINS", "")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
     get_settings.cache_clear()

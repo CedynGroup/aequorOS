@@ -63,7 +63,11 @@ Install the repo hooks after syncing dependencies:
 mise run risk-service:hooks
 ```
 
-For tests, `DATABASE_URL` can be unset. For migrations and database readiness checks, set `DATABASE_URL` to a Postgres database. For local object storage, the bundled Docker Compose file starts MinIO and creates the private `risk-local` bucket.
+The service runs against the **shared remote Postgres** (`pg.cedynhq.com:5433/aequoros_db`) —
+`DATABASE_URL` comes from `backend/.env` (untracked; see `.env.example` for the shape). The
+default test run needs no database at all (isolated SQLite); Postgres-gated tests opt in via
+`TEST_DATABASE_URL` and run in disposable per-run schemas, so the remote database is safe to
+test against. The bundled Docker Compose remains available for fully-local/offline work.
 
 ## Run The API
 
@@ -71,7 +75,17 @@ For tests, `DATABASE_URL` can be unset. For migrations and database readiness ch
 mise run risk-service:dev
 ```
 
-Local infrastructure:
+Database: the remote Postgres is already migrated to head — with `backend/.env` in place no
+export is needed. Two operational notes for the remote:
+
+- **RLS hides everything without the tenant GUC.** Ad-hoc `psql` against the remote shows zero
+  rows on tenant tables (`FORCE ROW LEVEL SECURITY`); set
+  `SELECT set_config('app.organization_id', '<org-uuid>', false);` first when inspecting.
+- **The single remote role has no BYPASSRLS**, so the cross-tenant background worker cannot
+  claim queued jobs there yet — request a BYPASSRLS-granted role from the DB host and set it as
+  `WORKER_DATABASE_URL` before running the worker against the remote.
+
+Fully-local alternative (offline work):
 
 ```bash
 docker compose up -d
@@ -223,15 +237,20 @@ for that scenario without altering acknowledged or dismissed history.
 mise run risk-service:test
 ```
 
-The default test run uses isolated SQLite databases. To run the same tests
-against Postgres, start local infrastructure and provide `TEST_DATABASE_URL`.
-The test fixtures create a temporary schema per fixture and drop it afterward,
-so the configured database is not reset:
+The default test run uses isolated SQLite databases and never touches Postgres —
+the suite explicitly neutralizes any `DATABASE_URL` from `.env` (empty env value =
+unconfigured), so a configured remote database cannot leak into tests implicitly.
+To run the Postgres-gated tests (migrations, RLS), provide `TEST_DATABASE_URL`;
+fixtures create a `risk_service_test_<hex>` schema per run and drop it afterward,
+so the shared remote database is safe:
 
 ```bash
-docker compose up -d risk-postgres
-mise run risk-service:test-postgres
+TEST_DATABASE_URL=postgresql+psycopg://<user>:<password>@pg.cedynhq.com:5433/aequoros_db \
+  mise run risk-service:test-postgres
 ```
+
+(Local alternative: `docker compose up -d risk-postgres` and point
+`TEST_DATABASE_URL` at it.)
 
 ## Lint And Type Check
 
@@ -275,8 +294,8 @@ APP_NAME=risk-service
 CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 LOG_LEVEL=INFO
 
-# Required for migrations and database-backed readiness checks.
-# DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service
+# Primary database (shared remote; real credentials only in the untracked .env).
+# DATABASE_URL=postgresql+psycopg://<user>:<password>@pg.cedynhq.com:5433/aequoros_db
 
 RISK_STORAGE_BACKEND=s3
 RISK_S3_BUCKET=risk-local

@@ -44,7 +44,8 @@ data-engine ingestion/canonical rows) before re-inserting, so it re-runs cleanly
 | Risk service (FastAPI) | `backend` | 8003 | Regulatory calc engines + in-process LSTM cash-flow model (`app/ml`), DB, S3 |
 | Product UI (Next.js) | `dashboard` | 3001 | Bank Treasurer console |
 | Generated API client | `packages/risk-service-api` | — | Typed contract shared by UI |
-| Postgres + MinIO | docker-compose | 15432 / 9000 | Data + object storage |
+| Postgres | remote `pg.cedynhq.com:5433/aequoros_db` (via `backend/.env`) | 5433 | Primary data store (local docker on 15432 remains the offline fallback) |
+| MinIO | `s3.cedynhq.com` (via `backend/.env`; local docker fallback :9000) | — | Object storage |
 
 The prior case-based **Risk Console** (`apps/aequoros-web`) is untouched and still
 works; it also received an ALM mode in an earlier slice. The canonical MVP demo
@@ -59,18 +60,18 @@ surface is **`dashboard`**.
 export PATH="$HOME/.nvm/versions/node/v24.18.0/bin:$PATH"
 
 # 1. Infra (Postgres + MinIO) — already provisioned; start if down
-cd backend && docker compose up -d
+cd backend   # DATABASE_URL comes from backend/.env (remote Postgres)
 
-# 2. Migrate to head (run as the migration role, then re-grant the app role)
-DATABASE_URL=postgresql+psycopg://risk_service_migrator:risk_service_migrator@localhost:15432/risk_service \
-  .venv/bin/alembic upgrade head
+# 2. Migrate to head (no-op when the remote is already at head)
+.venv/bin/alembic upgrade head
 
 # 3. Backend (tenant CORS for the demo origin) — one service; the LSTM cash-flow
 #    module runs in-process (lazy-trains on the first forecast call, or reuses
 #    backend/artifacts/cashflow/ if already trained)
-DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service \
-  CORS_ORIGINS=http://localhost:3001 \
+CORS_ORIGINS=http://localhost:3001 \
   .venv/bin/fastapi run app/main.py --port 8003 &
+# (offline fallback: docker compose up -d, then export the localhost:15432
+#  migration/app role URLs as before)
 
 # 4. Seed Sample Bank Ltd (idempotent; only needed if GET /banks is empty)
 #    Either: cd backend && .venv/bin/python scripts/seed_sample_bank.py
@@ -163,10 +164,14 @@ id; every new table has Postgres RLS enable/force + isolation policy.
 
 ## Known follow-ups (non-blocking)
 
-- Migrations must run as `risk_service_migrator` then re-grant `risk_service_app`
-  (the data-engine slice added owner-only DDL). `scripts/bootstrap_db.sh` does both.
-- `backend/.env` (local, untracked) points `DATABASE_URL` at a Homebrew
-  Postgres on 5432; unset it or align it to the Docker instance on 15432.
+- On the LOCAL docker fallback, migrations must run as `risk_service_migrator`
+  then re-grant `risk_service_app` (owner-only DDL); `scripts/bootstrap_db.sh`
+  does both. The remote database uses a single role that owns the schema.
+- The remote role has **no BYPASSRLS** — the cross-tenant background worker
+  needs a BYPASSRLS role (`WORKER_DATABASE_URL`) before running against the
+  remote; ad-hoc `psql` inspection needs
+  `SELECT set_config('app.organization_id','<org-uuid>',false)` or every
+  tenant table reads as empty.
 - The demo's `lint` script is `next lint`, which prompts for ESLint setup (never
   configured). Real gates are `typecheck` + `build`. Configure ESLint or drop the script.
 - Full end-to-end e2e (Playwright) for the ALM flows is not yet written.

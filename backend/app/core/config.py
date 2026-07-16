@@ -29,6 +29,20 @@ class DatabaseSettings(BaseSettings):
 
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        """DATABASE_URL="" means unconfigured.
+
+        Environment variables take priority over the .env file in
+        pydantic-settings, so setting the variable to an empty string is the
+        only way a caller (notably the test suite) can neutralize a developer's
+        .env database without editing the file.
+        """
+        if value is not None and not value.strip():
+            return None
+        return value
+
 
 class CorsSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
@@ -43,14 +57,17 @@ class CorsSettings(BaseSettings):
 class StorageSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
-    backend: StorageBackend = Field(default="s3", alias="RISK_STORAGE_BACKEND")
-    bucket: str = Field(default="risk-local", alias="RISK_S3_BUCKET")
-    region: str = Field(default="us-east-1", alias="RISK_S3_REGION")
-    endpoint_url: str | None = Field(default="http://localhost:9000", alias="RISK_S3_ENDPOINT_URL")
-    access_key_id: str | None = Field(default="minioadmin", alias="RISK_S3_ACCESS_KEY_ID")
-    secret_access_key: str | None = Field(default="minioadmin", alias="RISK_S3_SECRET_ACCESS_KEY")
-    force_path_style: bool = Field(default=True, alias="RISK_S3_FORCE_PATH_STYLE")
-    presign_expires_seconds: int = Field(default=900, alias="RISK_S3_PRESIGN_EXPIRES_SECONDS")
+    # Consolidated onto the single MinIO credential set (S3_* / STORAGE_*): the
+    # document-upload, presigned-URL, and storage-health paths share the same
+    # object store as the Data Engine. There is no separate RISK_S3_* set.
+    backend: StorageBackend = Field(default="s3")
+    bucket: str = Field(default="aequoros", alias="S3_BUCKET")
+    region: str = Field(default="us-east-1", alias="S3_REGION")
+    endpoint_url: str | None = Field(default=None, alias="S3_ENDPOINT")
+    access_key_id: str | None = Field(default=None, alias="S3_ACCESS_KEY")
+    secret_access_key: str | None = Field(default=None, alias="S3_SECRET_KEY")
+    force_path_style: bool = Field(default=True, alias="S3_FORCE_PATH_STYLE")
+    presign_expires_seconds: int = Field(default=900, alias="STORAGE_PRESIGN_EXPIRES_SECONDS")
     max_upload_bytes: int = Field(default=25_000_000, alias="RISK_MAX_UPLOAD_BYTES")
 
     @property
@@ -124,6 +141,20 @@ class MarketDataSettings(BaseSettings):
     market_data_pull_enabled: bool = Field(default=False, alias="MARKET_DATA_PULL_ENABLED")
 
 
+class TemenosSettings(BaseSettings):
+    """Temenos T24 core-banking adapter settings (docs/temenos_adapter.md).
+
+    Reuses the market-data ``CREDENTIAL_VAULT_MASTER_KEY`` for the encrypted
+    credential vault. ``TEMENOS_PULL_ENABLED`` gates scheduled EOD/COB pulls
+    (off by default — MVP ships fixture-tested adapters + a portal-gated live
+    transport, so no environment auto-connects to a bank's core).
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    temenos_pull_enabled: bool = Field(default=False, alias="TEMENOS_PULL_ENABLED")
+
+
 class WorkerSettings(BaseSettings):
     """Live-engine background worker and scheduler settings.
 
@@ -147,6 +178,15 @@ class WorkerSettings(BaseSettings):
     # deployment whose main role already bypasses RLS).
     worker_database_url: str | None = Field(default=None, alias="WORKER_DATABASE_URL")
 
+    @field_validator("worker_database_url", mode="before")
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        """WORKER_DATABASE_URL="" falls back to DATABASE_URL (same rule as
+        DatabaseSettings: empty env values neutralize .env without edits)."""
+        if value is not None and not value.strip():
+            return None
+        return value
+
 
 class Settings(BaseSettings):
     model_config = SETTINGS_CONFIG
@@ -159,6 +199,7 @@ class Settings(BaseSettings):
     cashflow: CashflowSettings = Field(default_factory=CashflowSettings)
     behavioral: BehavioralSettings = Field(default_factory=BehavioralSettings)
     market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
+    temenos: TemenosSettings = Field(default_factory=TemenosSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
 
     @property

@@ -105,11 +105,10 @@ def test_ready_health_requires_storage_when_database_is_configured(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("RISK_S3_BUCKET", raising=False)
-    monkeypatch.delenv("RISK_S3_REGION", raising=False)
-    monkeypatch.setenv("RISK_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("RISK_S3_BUCKET", "")
-    monkeypatch.setenv("RISK_S3_REGION", "")
+    # Storage credentials are the shared MinIO set (S3_*); emptying the bucket
+    # and region makes StorageSettings.configured False.
+    monkeypatch.setenv("S3_BUCKET", "")
+    monkeypatch.setenv("S3_REGION", "")
     get_settings.cache_clear()
 
     response = db_client.get("/api/health/ready", headers={"X-Request-ID": "ready-request"})

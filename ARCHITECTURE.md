@@ -16,7 +16,8 @@ Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
 | Generated API client | `packages/risk-service-api` | typescript-fetch output of openapi-generator 7.13 | Generated from the risk-service OpenAPI schema. Source-consumed (`main: ./src/index.ts`), never hand-edited. |
 | Marketing site | `frontend` | Next.js 14 | Static marketing site. **Out of scope for this build. Do not touch.** |
 | Static prototype | `dashboard` | Next.js 14, recharts, hardcoded data | Pre-MVP demo prototype. **Out of scope for this build. Do not touch.** |
-| Local infra | `backend/docker-compose.yml` | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local` | Started with `docker compose up -d` from `backend`. |
+| Database | remote Postgres `pg.cedynhq.com:5433/aequoros_db` (managed, TimescaleDB-enabled) | Primary DB for dev, tests (via `TEST_DATABASE_URL`, disposable per-run schemas), and deployment; credentials only in untracked `backend/.env` | Schema kept at alembic head. Single role, **no BYPASSRLS** — the cross-tenant worker needs a BYPASSRLS role (`WORKER_DATABASE_URL`) before running against it. |
+| Local infra (offline fallback) | `backend/docker-compose.yml` | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local` | Started with `docker compose up -d` from `backend`. |
 
 Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `backend/mise.toml`),
 `uv` for Python deps, `pnpm` workspaces (`pnpm-workspace.yaml` includes `apps/*`, `packages/*`,
@@ -26,8 +27,9 @@ Commits enforcement, and a pre-push hook that runs `mise run risk-service:api-fr
 
 Local DB bootstrap: `mise run risk-service:bootstrap-db` creates a migration role (may bypass RLS)
 and an app runtime role created with `NOBYPASSRLS`, runs migrations, and seeds two demo tenants.
-App connection string:
-`postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service`.
+App connection string comes from `backend/.env` (remote:
+`postgresql+psycopg://<user>:<password>@pg.cedynhq.com:5433/aequoros_db`; local fallback:
+`postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service`).
 
 ---
 

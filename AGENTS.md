@@ -54,6 +54,13 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - The background worker claims jobs **across tenants**, so on RLS-forced Postgres it must run with
   a BYPASSRLS role — set `WORKER_DATABASE_URL` (the tenant-scoped app role sees zero queued rows).
   Falls back to `DATABASE_URL` for SQLite tests.
+- The primary database is the **remote Postgres** (`pg.cedynhq.com:5433/aequoros_db`, credentials
+  only in untracked `backend/.env`). Postgres-gated tests run against it via `TEST_DATABASE_URL`
+  (each run creates and drops a `risk_service_test_<hex>` schema — the shared DB is safe). The
+  default suite is hermetic: conftest sets `DATABASE_URL=""` (empty = unconfigured via a settings
+  validator) so a developer's `.env` can never leak into tests. Remote gotchas: the single role
+  has no BYPASSRLS (worker needs a granted role before running remotely), and ad-hoc `psql` must
+  set the `app.organization_id` GUC or FORCE-RLS tables read as empty.
 - Regulatory `input_hash` must stay **value-based**: the snapshot `facts` list excludes `fact.id`
   and is sorted by canonical JSON (`INPUT_SCHEMA_VERSION = "bank-facts-v2"`). The live engine
   re-derives facts (new UUIDs) on every refresh, so an id- or order-dependent hash would break
