@@ -169,6 +169,30 @@ class CanonicalPositionListRead(BaseModel):
     bank_id: UUID
     as_of_date: date | None
     positions: list[CanonicalPositionRead]
+    # Server pagination over the filtered set: `total` counts every row that
+    # matches the request's filters, while `positions` carries one page.
+    total: int
+    limit: int
+    offset: int
+
+
+class PositionFacetValueRead(BaseModel):
+    """One filterable value and how many current-generation rows carry it."""
+
+    value: str
+    count: int
+
+
+class CanonicalPositionFacetsRead(BaseModel):
+    """Distinct position types and currencies over the current generation.
+
+    Powers the blotter's filter dropdowns and KPIs without paging the book.
+    """
+
+    bank_id: UUID
+    total: int
+    position_types: list[PositionFacetValueRead]
+    currencies: list[PositionFacetValueRead]
 
 
 OverridableSnapshotField = Literal[

@@ -12,6 +12,7 @@
 
 import * as runtime from "../runtime";
 import type {
+  CanonicalPositionFacetsRead,
   CanonicalPositionListRead,
   DataActivationCreate,
   DataActivationListRead,
@@ -35,6 +36,8 @@ import type {
   TranslationFailureListRead,
 } from "../models/index";
 import {
+  CanonicalPositionFacetsReadFromJSON,
+  CanonicalPositionFacetsReadToJSON,
   CanonicalPositionListReadFromJSON,
   CanonicalPositionListReadToJSON,
   DataActivationCreateFromJSON,
@@ -127,10 +130,21 @@ export interface ListBankDataActivationsRequest {
   xUserId?: string | null;
 }
 
+export interface ListCanonicalPositionFacetsRequest {
+  bankId: string;
+  xOrgId: string;
+  xUserId?: string | null;
+}
+
 export interface ListCanonicalPositionsRequest {
   bankId: string;
   xOrgId: string;
   asOfDate?: Date | null;
+  limit?: number;
+  offset?: number;
+  positionType?: string | null;
+  currency?: string | null;
+  q?: string | null;
   xUserId?: string | null;
 }
 
@@ -746,6 +760,74 @@ export class IngestionApi extends runtime.BaseAPI {
   }
 
   /**
+   * Distinct position types/currencies with counts — filter dropdowns + KPIs.
+   * List Canonical Position Facets
+   */
+  async listCanonicalPositionFacetsRaw(
+    requestParameters: ListCanonicalPositionFacetsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<CanonicalPositionFacetsRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listCanonicalPositionFacets().',
+      );
+    }
+
+    if (requestParameters["xOrgId"] == null) {
+      throw new runtime.RequiredError(
+        "xOrgId",
+        'Required parameter "xOrgId" was null or undefined when calling listCanonicalPositionFacets().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (requestParameters["xOrgId"] != null) {
+      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
+    }
+
+    if (requestParameters["xUserId"] != null) {
+      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/canonical-positions/facets`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      CanonicalPositionFacetsReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Distinct position types/currencies with counts — filter dropdowns + KPIs.
+   * List Canonical Position Facets
+   */
+  async listCanonicalPositionFacets(
+    requestParameters: ListCanonicalPositionFacetsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<CanonicalPositionFacetsRead> {
+    const response = await this.listCanonicalPositionFacetsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * One page of the current-generation position book (server pagination).
    * List Canonical Positions
    */
   async listCanonicalPositionsRaw(
@@ -772,6 +854,26 @@ export class IngestionApi extends runtime.BaseAPI {
       queryParameters["as_of_date"] = (requestParameters["asOfDate"] as any)
         .toISOString()
         .substring(0, 10);
+    }
+
+    if (requestParameters["limit"] != null) {
+      queryParameters["limit"] = requestParameters["limit"];
+    }
+
+    if (requestParameters["offset"] != null) {
+      queryParameters["offset"] = requestParameters["offset"];
+    }
+
+    if (requestParameters["positionType"] != null) {
+      queryParameters["position_type"] = requestParameters["positionType"];
+    }
+
+    if (requestParameters["currency"] != null) {
+      queryParameters["currency"] = requestParameters["currency"];
+    }
+
+    if (requestParameters["q"] != null) {
+      queryParameters["q"] = requestParameters["q"];
     }
 
     const headerParameters: runtime.HTTPHeaders = {};
@@ -803,6 +905,7 @@ export class IngestionApi extends runtime.BaseAPI {
   }
 
   /**
+   * One page of the current-generation position book (server pagination).
    * List Canonical Positions
    */
   async listCanonicalPositions(

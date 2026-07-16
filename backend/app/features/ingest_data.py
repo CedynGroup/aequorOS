@@ -14,6 +14,7 @@ from app.schemas.data_activation import (
     DataActivationRead,
 )
 from app.schemas.ingestion import (
+    CanonicalPositionFacetsRead,
     CanonicalPositionListRead,
     IngestionBatchCreate,
     IngestionBatchListRead,
@@ -167,13 +168,41 @@ def list_translation_failures(
     response_model=CanonicalPositionListRead,
     operation_id="listCanonicalPositions",
 )
-def list_canonical_positions(
+def list_canonical_positions(  # noqa: PLR0913 - one query param per blotter control
     bank_id: UUID,
     db: DbSession,
     ctx: Tenant,
     as_of_date: date | None = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    position_type: Annotated[str | None, Query(max_length=64)] = None,
+    currency: Annotated[str | None, Query(min_length=3, max_length=3)] = None,
+    q: Annotated[str | None, Query(max_length=80)] = None,
 ) -> CanonicalPositionListRead:
-    return ingestion.list_positions(db, ctx, bank_id, as_of_date)
+    """One page of the current-generation position book (server pagination)."""
+    return ingestion.list_positions(
+        db,
+        ctx,
+        bank_id,
+        as_of_date,
+        limit=limit,
+        offset=offset,
+        position_type=position_type,
+        currency=currency,
+        q=q,
+    )
+
+
+@router.get(
+    "/banks/{bank_id}/canonical-positions/facets",
+    response_model=CanonicalPositionFacetsRead,
+    operation_id="listCanonicalPositionFacets",
+)
+def list_canonical_position_facets(
+    bank_id: UUID, db: DbSession, ctx: Tenant
+) -> CanonicalPositionFacetsRead:
+    """Distinct position types/currencies with counts — filter dropdowns + KPIs."""
+    return ingestion.list_position_facets(db, ctx, bank_id)
 
 
 @router.post(

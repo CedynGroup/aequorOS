@@ -243,6 +243,31 @@ class CanonicalPosition(CanonicalMetadataMixin, Base):
             "source_system",
             "source_reference",
         ),
+        # Blotter hot paths over the current generation: ordered server
+        # pagination (source_reference, id) without a 400k-row sort, and
+        # type/currency filter counts + facets as index-only scans. The
+        # INCLUDE payload lets type/currency-filtered ordered page scans
+        # evaluate their filters in-index instead of heap-fetching every
+        # candidate row (Postgres only; SQLite builds the plain index).
+        Index(
+            "ix_canonical_positions_current_org_bank_ref",
+            "organization_id",
+            "bank_id",
+            "source_reference",
+            "id",
+            postgresql_include=("position_type", "currency"),
+            postgresql_where=sql_text("superseded_by IS NULL"),
+            sqlite_where=sql_text("superseded_by IS NULL"),
+        ),
+        Index(
+            "ix_canonical_positions_current_org_bank_type",
+            "organization_id",
+            "bank_id",
+            "position_type",
+            "currency",
+            postgresql_where=sql_text("superseded_by IS NULL"),
+            sqlite_where=sql_text("superseded_by IS NULL"),
+        ),
         *canonical_constraints("canonical_positions"),
     )
 

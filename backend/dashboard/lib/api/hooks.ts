@@ -11,6 +11,7 @@
  */
 
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -24,6 +25,9 @@ import type {
   MarketDataConnectionUpdate,
   RegulatoryModule,
   RegulatoryScenarioCode,
+  TemenosBackfillRequest,
+  TemenosConnectionCreate,
+  TemenosConnectionUpdate,
   WhatIfShockCode,
 } from '@aequoros/risk-service-api';
 import {
@@ -42,6 +46,7 @@ import {
   regulatoryFxApi,
   regulatoryIrrApi,
   regulatoryLiquidityApi,
+  temenosApi,
   tenant,
 } from './client';
 import { ingestionApi } from './ingestion';
@@ -1085,60 +1090,67 @@ export function useMarketDataViews(bankId: string | undefined, asOf?: string) {
   });
 }
 
+/** Server-side filters + window for one page of the canonical position book. */
+export type CanonicalPositionsPageParams = {
+  limit: number;
+  offset: number;
+  positionType?: string;
+  currency?: string;
+  q?: string;
+};
+
 /**
- * Canonical positions for the /positions blotter, with a bounded wait.
- *
- * The canonical-positions endpoint has no server pagination and serializes
- * the entire current-generation book; on history-loaded banks (400k+
- * positions) that read never completes. This hook aborts after `timeoutMs`
- * and surfaces a typed `position_read_timeout` ApiError so the page can
- * explain the scale limitation instead of showing an infinite skeleton.
+ * One server-paginated page of the /positions blotter. The endpoint filters
+ * and counts server-side (`total` spans the filtered set), so this scales to
+ * six-figure books. `keepPreviousData` keeps the current page on screen
+ * while the next one loads — page turns swap data without a layout collapse.
  */
-export function useCanonicalPositionsBlotter(
+export function useCanonicalPositionsPage(
   bankId: string | undefined,
-  timeoutMs = 30_000
+  { limit, offset, positionType, currency, q }: CanonicalPositionsPageParams
 ) {
   return useQuery({
-    queryKey: ['positions-blotter', bankId],
-    queryFn: async ({ signal }) => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      const onOuterAbort = () => controller.abort();
-      signal.addEventListener('abort', onOuterAbort);
-      try {
-        return await apiCall(() =>
-          ingestionApi.listCanonicalPositions(
-            { ...t, bankId: bankId! },
-            { signal: controller.signal }
-          )
-        );
-      } catch (error) {
-        if (controller.signal.aborted && !signal.aborted) {
-          throw new ApiError({
-            message:
-              'The canonical-positions read timed out — the endpoint has no ' +
-              'server pagination, and this bank’s position book is too ' +
-              'large to serialize in one response.',
-            status: null,
-            code: 'position_read_timeout',
-            errorCode: null,
-          });
-        }
-        throw error;
-      } finally {
-        clearTimeout(timer);
-        signal.removeEventListener('abort', onOuterAbort);
-      }
-    },
+    queryKey: [
+      'positions-page',
+      bankId,
+      limit,
+      offset,
+      positionType ?? null,
+      currency ?? null,
+      q ?? null,
+    ],
+    queryFn: () =>
+      apiCall(() =>
+        ingestionApi.listCanonicalPositions({
+          ...t,
+          bankId: bankId!,
+          limit,
+          offset,
+          positionType: positionType || undefined,
+          currency: currency || undefined,
+          q: q || undefined,
+        })
+      ),
     enabled: Boolean(bankId),
-    retry: false,
-    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
 }
 
-/** Whether an error is the positions blotter's bounded-read timeout. */
-export function isPositionReadTimeout(error: unknown): boolean {
-  return isApiError(error) && error.code === 'position_read_timeout';
+/**
+ * Distinct position types and currencies with current-generation counts —
+ * feeds the blotter's filter dropdowns and KPIs without paging the book.
+ */
+export function useCanonicalPositionFacets(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['positions-facets', bankId],
+    queryFn: () =>
+      apiCall(() =>
+        ingestionApi.listCanonicalPositionFacets({ ...t, bankId: bankId! })
+      ),
+    enabled: Boolean(bankId),
+    staleTime: 5 * 60_000,
+  });
 }
 
 /** Run an uploaded template file as a manual market data pull (§8.3). */
@@ -1162,5 +1174,192 @@ export function useUploadMarketData(bankId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: ['de-batches', bankId] });
       void queryClient.invalidateQueries({ queryKey: ['de-summary', bankId] });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Temenos T24 core-banking connections (docs/temenos_adapter.md)
+// ---------------------------------------------------------------------------
+
+const temenosInvalidatePrefixes = ['t24-connections'];
+
+export function useTemenosConnections(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['t24-connections', bankId],
+    queryFn: () =>
+      apiCall(() => temenosApi.listTemenosConnections({ ...t, bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+/** The core-banking domain catalog for a connection mode: category, canonical
+ * entity type, default cadence, and whether the mode catalog supports it. */
+export function useTemenosDomains(bankId: string | undefined, mode: string) {
+  return useQuery({
+    queryKey: ['t24-domains', bankId, mode],
+    queryFn: () =>
+      apiCall(() => temenosApi.listTemenosDomains({ ...t, bankId: bankId!, mode })),
+    enabled: Boolean(bankId),
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useCreateTemenosConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: TemenosConnectionCreate) =>
+      apiCall(() =>
+        temenosApi.createTemenosConnection({
+          ...t,
+          bankId: bankId!,
+          temenosConnectionCreate: payload,
+        })
+      ),
+    onSuccess: () => {
+      temenosInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+export function useValidateTemenosConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      apiCall(() =>
+        temenosApi.validateTemenosConnection({ ...t, bankId: bankId!, connectionId })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
+    },
+  });
+}
+
+/** Signs on and reports the pull plan; a live pull runs once the transport is
+ * enabled. Never mutates state. */
+export function useTestTemenosConnection(bankId: string | undefined) {
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      apiCall(() =>
+        temenosApi.testTemenosConnection({ ...t, bankId: bankId!, connectionId })
+      ),
+  });
+}
+
+/** Config edits and credential rotation (validated first; 422 with a
+ * bank-facing message on failure, nothing changed). */
+export function useUpdateTemenosConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      connectionId,
+      payload,
+    }: {
+      connectionId: string;
+      payload: TemenosConnectionUpdate;
+    }) =>
+      apiCall(() =>
+        temenosApi.updateTemenosConnection({
+          ...t,
+          bankId: bankId!,
+          connectionId,
+          temenosConnectionUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
+    },
+  });
+}
+
+export function useDisableTemenosConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      apiCall(() =>
+        temenosApi.disableTemenosConnection({ ...t, bankId: bankId!, connectionId })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
+    },
+  });
+}
+
+export function useEnableTemenosConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      apiCall(() =>
+        temenosApi.enableTemenosConnection({ ...t, bankId: bankId!, connectionId })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
+    },
+  });
+}
+
+export function useRevokeTemenosConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      apiCall(() =>
+        temenosApi.revokeTemenosConnection({ ...t, bankId: bankId!, connectionId })
+      ),
+    onSuccess: () => {
+      temenosInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/** On-demand pull for one as-of date (defaults to today). Enqueues a coalesced
+ * temenos_pull job. */
+export function useTriggerTemenosPull(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      connectionId,
+      asOfDate,
+    }: {
+      connectionId: string;
+      asOfDate?: string;
+    }) =>
+      apiCall(() =>
+        temenosApi.triggerTemenosPull({
+          ...t,
+          bankId: bankId!,
+          connectionId,
+          // The generated client types this nullable date as an ISO string.
+          temenosPullTriggerRequest: {
+            asOfDate: asOfDate ? `${asOfDate}T00:00:00Z` : undefined,
+          },
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
+    },
+  });
+}
+
+/** Historical backfill: one pull job per as-of date across an inclusive range. */
+export function useTriggerTemenosBackfill(bankId: string | undefined) {
+  return useMutation({
+    mutationFn: ({
+      connectionId,
+      payload,
+    }: {
+      connectionId: string;
+      payload: TemenosBackfillRequest;
+    }) =>
+      apiCall(() =>
+        temenosApi.triggerTemenosBackfill({
+          ...t,
+          bankId: bankId!,
+          connectionId,
+          temenosBackfillRequest: payload,
+        })
+      ),
   });
 }

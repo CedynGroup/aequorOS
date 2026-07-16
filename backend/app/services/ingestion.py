@@ -67,6 +67,7 @@ from app.models import (
 from app.models.canonical import CanonicalMetadataMixin
 from app.schemas.ingestion import (
     CanonicalCountsRead,
+    CanonicalPositionFacetsRead,
     CanonicalPositionListRead,
     CanonicalPositionRead,
     IngestionBatchCreate,
@@ -81,6 +82,7 @@ from app.schemas.ingestion import (
     MappingConfigCreate,
     MappingConfigListRead,
     MappingConfigRead,
+    PositionFacetValueRead,
     PositionSnapshotOverrideCreate,
     PositionSnapshotRead,
     TranslationFailureListRead,
@@ -580,33 +582,130 @@ def list_translation_failures(
     )
 
 
-def list_positions(
-    db: Session, ctx: TenantContext, bank_id: UUID, as_of_date: date | None
-) -> CanonicalPositionListRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
-    snapshot_query = select(CanonicalPositionSnapshot).where(
-        CanonicalPositionSnapshot.organization_id == ctx.organization_id,
-        CanonicalPositionSnapshot.bank_id == bank.id,
-        CanonicalPositionSnapshot.superseded_by.is_(None),
-    )
-    if as_of_date is not None:
-        snapshot_query = snapshot_query.where(CanonicalPositionSnapshot.as_of_date == as_of_date)
-    snapshots = {snapshot.position_id: snapshot for snapshot in db.scalars(snapshot_query)}
+def _escape_like(value: str) -> str:
+    """Escape LIKE metacharacters so ``value`` matches literally."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
-    positions = db.scalars(
-        select(CanonicalPosition)
-        .where(
-            CanonicalPosition.organization_id == ctx.organization_id,
-            CanonicalPosition.bank_id == bank.id,
-            CanonicalPosition.superseded_by.is_(None),
+
+def list_positions(  # noqa: PLR0913 - one keyword-only filter per blotter control
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    as_of_date: date | None,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+    position_type: str | None = None,
+    currency: str | None = None,
+    q: str | None = None,
+) -> CanonicalPositionListRead:
+    """One page of the current-generation position book, with the filtered total.
+
+    Filters compose over current-generation identities: ``position_type`` and
+    ``currency`` match exactly (currency is uppercase-normalized), ``q`` is a
+    case-insensitive substring match on ``source_reference``, and
+    ``as_of_date`` keeps the historical semantics — only positions whose
+    current snapshot carries that business date. Ordering is deterministic
+    (``source_reference``, then id) so pages are stable and disjoint.
+    """
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    filters = [
+        CanonicalPosition.organization_id == ctx.organization_id,
+        CanonicalPosition.bank_id == bank.id,
+        CanonicalPosition.superseded_by.is_(None),
+    ]
+    if position_type is not None:
+        filters.append(CanonicalPosition.position_type == position_type)
+    if currency is not None:
+        filters.append(CanonicalPosition.currency == currency.upper())
+    if q:
+        filters.append(
+            CanonicalPosition.source_reference.ilike(f"%{_escape_like(q)}%", escape="\\")
         )
-        .order_by(CanonicalPosition.source_reference)
+    if as_of_date is not None:
+        filters.append(
+            select(CanonicalPositionSnapshot.id)
+            .where(
+                CanonicalPositionSnapshot.position_id == CanonicalPosition.id,
+                CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+                CanonicalPositionSnapshot.superseded_by.is_(None),
+                CanonicalPositionSnapshot.as_of_date == as_of_date,
+            )
+            .exists()
+        )
+
+    total = int(
+        db.scalar(select(func.count()).select_from(CanonicalPosition).where(*filters)) or 0
     )
+    # Two-phase page fetch: resolve the page's ids first so the ordered,
+    # filtered walk stays an index-only scan (type/currency/reference live in
+    # the blotter index), then fetch just those ~100 full rows by id. A
+    # single full-row query would heap-fetch every filtered-out candidate.
+    page_ids = list(
+        db.scalars(
+            select(CanonicalPosition.id)
+            .where(*filters)
+            .order_by(CanonicalPosition.source_reference, CanonicalPosition.id)
+            .limit(limit)
+            .offset(offset)
+        )
+    )
+    positions = (
+        list(
+            db.scalars(
+                select(CanonicalPosition)
+                .where(
+                    CanonicalPosition.organization_id == ctx.organization_id,
+                    CanonicalPosition.id.in_(page_ids),
+                )
+                .order_by(CanonicalPosition.source_reference, CanonicalPosition.id)
+            )
+        )
+        if page_ids
+        else []
+    )
+
+    snapshots: dict[UUID, CanonicalPositionSnapshot] = {}
+    if positions:
+        # A position carries one current snapshot per business date (long-lived
+        # accounts hold a hundred-plus), and the blotter shows the latest.
+        # Resolve (position, max as-of) first — an index-only walk of the
+        # current-snapshot unique index — then fetch just those ~page-size
+        # rows, instead of hydrating every date's snapshot for the page.
+        latest_filters = [
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.position_id.in_([position.id for position in positions]),
+        ]
+        if as_of_date is not None:
+            latest_filters.append(CanonicalPositionSnapshot.as_of_date == as_of_date)
+        latest = (
+            select(
+                CanonicalPositionSnapshot.position_id.label("position_id"),
+                func.max(CanonicalPositionSnapshot.as_of_date).label("as_of"),
+            )
+            .where(*latest_filters)
+            .group_by(CanonicalPositionSnapshot.position_id)
+            .subquery()
+        )
+        snapshot_query = (
+            select(CanonicalPositionSnapshot)
+            .join(
+                latest,
+                (CanonicalPositionSnapshot.position_id == latest.c.position_id)
+                & (CanonicalPositionSnapshot.as_of_date == latest.c.as_of),
+            )
+            .where(
+                CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+                CanonicalPositionSnapshot.bank_id == bank.id,
+                CanonicalPositionSnapshot.superseded_by.is_(None),
+            )
+        )
+        snapshots = {snapshot.position_id: snapshot for snapshot in db.scalars(snapshot_query)}
+
     items: list[CanonicalPositionRead] = []
     for position in positions:
         snapshot = snapshots.get(position.id)
-        if as_of_date is not None and snapshot is None:
-            continue
         items.append(
             CanonicalPositionRead(
                 id=position.id,
@@ -626,7 +725,45 @@ def list_positions(
                 lineage_id=snapshot.lineage_id if snapshot else position.lineage_id,
             )
         )
-    return CanonicalPositionListRead(bank_id=bank.id, as_of_date=as_of_date, positions=items)
+    return CanonicalPositionListRead(
+        bank_id=bank.id,
+        as_of_date=as_of_date,
+        positions=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def list_position_facets(
+    db: Session, ctx: TenantContext, bank_id: UUID
+) -> CanonicalPositionFacetsRead:
+    """Distinct position types and currencies with current-generation counts."""
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    current = (
+        CanonicalPosition.organization_id == ctx.organization_id,
+        CanonicalPosition.bank_id == bank.id,
+        CanonicalPosition.superseded_by.is_(None),
+    )
+
+    def _facet(column: Any) -> list[PositionFacetValueRead]:
+        rows = db.execute(
+            select(column, func.count())
+            .where(*current)
+            .group_by(column)
+            .order_by(func.count().desc(), column)
+        ).all()
+        return [PositionFacetValueRead(value=value, count=int(count)) for value, count in rows]
+
+    total = int(
+        db.scalar(select(func.count()).select_from(CanonicalPosition).where(*current)) or 0
+    )
+    return CanonicalPositionFacetsRead(
+        bank_id=bank.id,
+        total=total,
+        position_types=_facet(CanonicalPosition.position_type),
+        currencies=_facet(CanonicalPosition.currency),
+    )
 
 
 _OVERRIDE_COERCIONS: dict[str, Any] = {

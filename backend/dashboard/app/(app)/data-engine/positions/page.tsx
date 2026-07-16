@@ -59,7 +59,8 @@ function LineageChain({ lineageId }: { lineageId: string }) {
 
 export default function CanonicalPositionsPage() {
   const { bank } = useBankContext();
-  const positionsQuery = useCanonicalPositions(bank?.id);
+  const [offset, setOffset] = useState(0);
+  const positionsQuery = useCanonicalPositions(bank?.id, offset);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   return (
@@ -87,38 +88,73 @@ export default function CanonicalPositionsPage() {
               description="Ingest a positions file from the Excel & CSV tab (or push via the API) to populate the canonical model."
             />
           ) : (
-            <div className="card overflow-hidden">
-              <table className="w-full text-body border-collapse">
-                <thead>
-                  <tr className="border-b border-border bg-surface">
-                    {['', 'Reference', 'Type', 'Ccy', 'Balance', 'Rate', 'Maturity', 'As of', 'Status'].map(
-                      (header, index) => (
-                        <th
-                          key={index}
-                          className={`py-2 px-4 text-micro font-medium uppercase tracking-wider text-slate ${
-                            header === 'Balance' || header === 'Rate' ? 'text-right' : 'text-left'
-                          }`}
-                        >
-                          {header}
-                        </th>
-                      ),
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {positionsQuery.data.positions.map((position: CanonicalPositionRead) => (
-                    <PositionRow
-                      key={position.id}
-                      position={position}
-                      expanded={expanded === position.id}
-                      onToggle={() =>
-                        setExpanded(expanded === position.id ? null : position.id)
-                      }
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="card overflow-hidden">
+                <table className="w-full text-body border-collapse">
+                  <thead>
+                    <tr className="border-b border-border bg-surface">
+                      {['', 'Reference', 'Type', 'Ccy', 'Balance', 'Rate', 'Maturity', 'As of', 'Status'].map(
+                        (header, index) => (
+                          <th
+                            key={index}
+                            className={`py-2 px-4 text-micro font-medium uppercase tracking-wider text-slate ${
+                              header === 'Balance' || header === 'Rate' ? 'text-right' : 'text-left'
+                            }`}
+                          >
+                            {header}
+                          </th>
+                        ),
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {positionsQuery.data.positions.map((position: CanonicalPositionRead) => (
+                      <PositionRow
+                        key={position.id}
+                        position={position}
+                        expanded={expanded === position.id}
+                        onToggle={() =>
+                          setExpanded(expanded === position.id ? null : position.id)
+                        }
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <p className="text-caption text-slate">
+                  Showing {(positionsQuery.data.offset + 1).toLocaleString('en-US')}–
+                  {(
+                    positionsQuery.data.offset + positionsQuery.data.positions.length
+                  ).toLocaleString('en-US')}{' '}
+                  of {positionsQuery.data.total.toLocaleString('en-US')} canonical
+                  positions
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOffset(Math.max(0, offset - positionsQuery.data.limit))
+                    }
+                    disabled={positionsQuery.data.offset === 0}
+                    className="px-2.5 py-1.5 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOffset(offset + positionsQuery.data.limit)}
+                    disabled={
+                      positionsQuery.data.offset + positionsQuery.data.limit >=
+                      positionsQuery.data.total
+                    }
+                    className="px-2.5 py-1.5 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
           ))}
       </div>
     </>

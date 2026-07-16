@@ -22,3 +22,4 @@ export * from "./RegulatoryIrrApi";
 export * from "./RegulatoryLiquidityApi";
 export * from "./ScenariosApi";
 export * from "./TaxonomyApi";
+export * from "./TemenosApi";

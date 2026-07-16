@@ -39,10 +39,28 @@ export interface CanonicalPositionListRead {
   bankId: string;
   /**
    *
+   * @type {number}
+   * @memberof CanonicalPositionListRead
+   */
+  limit: number;
+  /**
+   *
+   * @type {number}
+   * @memberof CanonicalPositionListRead
+   */
+  offset: number;
+  /**
+   *
    * @type {Array<CanonicalPositionRead>}
    * @memberof CanonicalPositionListRead
    */
   positions: Array<CanonicalPositionRead>;
+  /**
+   *
+   * @type {number}
+   * @memberof CanonicalPositionListRead
+   */
+  total: number;
 }
 
 /**
@@ -53,7 +71,10 @@ export function instanceOfCanonicalPositionListRead(
 ): value is CanonicalPositionListRead {
   if (!("asOfDate" in value) || value["asOfDate"] === undefined) return false;
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
+  if (!("limit" in value) || value["limit"] === undefined) return false;
+  if (!("offset" in value) || value["offset"] === undefined) return false;
   if (!("positions" in value) || value["positions"] === undefined) return false;
+  if (!("total" in value) || value["total"] === undefined) return false;
   return true;
 }
 
@@ -73,9 +94,12 @@ export function CanonicalPositionListReadFromJSONTyped(
   return {
     asOfDate: json["as_of_date"] == null ? null : new Date(json["as_of_date"]),
     bankId: json["bank_id"],
+    limit: json["limit"],
+    offset: json["offset"],
     positions: (json["positions"] as Array<any>).map(
       CanonicalPositionReadFromJSON,
     ),
+    total: json["total"],
   };
 }
 
@@ -99,8 +123,11 @@ export function CanonicalPositionListReadToJSONTyped(
         ? null
         : (value["asOfDate"] as any).toISOString().substring(0, 10),
     bank_id: value["bankId"],
+    limit: value["limit"],
+    offset: value["offset"],
     positions: (value["positions"] as Array<any>).map(
       CanonicalPositionReadToJSON,
     ),
+    total: value["total"],
   };
 }

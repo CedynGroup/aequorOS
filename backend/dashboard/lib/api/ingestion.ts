@@ -9,7 +9,12 @@
  * not contend with the regulatory modules' files.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import {
   Configuration,
   IngestionApi,
@@ -404,12 +409,19 @@ export function useTranslationFailures(
   });
 }
 
-export function useCanonicalPositions(bankId: string | undefined) {
+/**
+ * One page of canonical positions (server pagination, 100 rows per window).
+ * The response carries `total`/`limit`/`offset` so callers can page.
+ */
+export function useCanonicalPositions(bankId: string | undefined, offset = 0) {
   return useQuery({
-    queryKey: ['de-positions', bankId],
+    queryKey: ['de-positions', bankId, offset],
     queryFn: () =>
-      apiCall(() => ingestionApi.listCanonicalPositions({ ...t, bankId: bankId! })),
+      apiCall(() =>
+        ingestionApi.listCanonicalPositions({ ...t, bankId: bankId!, offset }),
+      ),
     enabled: Boolean(bankId),
+    placeholderData: keepPreviousData,
   });
 }
 
