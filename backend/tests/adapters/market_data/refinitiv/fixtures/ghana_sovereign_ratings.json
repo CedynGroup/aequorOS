@@ -1,0 +1,13 @@
+{
+  "universe": ["GH="],
+  "fields": ["TR.MoodysIssuerRating", "TR.SPIssuerRating", "TR.FitchIssuerRating"],
+  "data": [
+    ["GH=", "TR.MoodysIssuerRating", "Caa1", "stable", "2026-03-27"],
+    ["GH=", "TR.SPIssuerRating", "CCC+", "positive", "2026-05-15"],
+    ["GH=", "TR.FitchIssuerRating", "CCC", "stable", "2026-06-10"]
+  ],
+  "vendor_internal": {
+    "debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE",
+    "http_status": 200
+  }
+}

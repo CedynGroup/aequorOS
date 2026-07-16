@@ -43,6 +43,7 @@ from app.adapters.market_data.errors import MarketDataError
 from app.adapters.market_data.quota_tracker import record_consumption
 from app.adapters.market_data.scope_taxonomy import DataScope
 from app.core.config import get_settings
+from app.core.ids import new_uuid7
 from app.db.base import utc_now
 from app.models import (
     Bank,
@@ -593,9 +594,12 @@ def _supersede(  # noqa: PLR0913 - natural-key supersession needs full scope
     """Idempotent re-pull semantics per §4.3: supersede, never duplicate.
 
     Prior current-generation rows for the same natural key are marked
-    ``superseded_by`` the new row (whose UUIDv7 id exists pre-flush). The old
-    rows are flushed out of the partial unique index before the new row is
-    inserted, so re-running the same pull yields exactly one current record.
+    ``superseded_by`` the new row. Column defaults (``new_uuid7``) fire at
+    flush time, so the new row's id is minted eagerly here — stamping the
+    olds with a ``None`` id would leave them in the partial unique index and
+    the insert would collide. The old rows are flushed out of the index
+    before the new row is inserted, so re-running the same pull yields
+    exactly one current record.
     """
     olds = list(
         db.scalars(
@@ -608,6 +612,8 @@ def _supersede(  # noqa: PLR0913 - natural-key supersession needs full scope
             )
         )
     )
+    if olds and new_row.id is None:
+        new_row.id = new_uuid7()
     for old in olds:
         old.superseded_by = new_row.id
     if olds:

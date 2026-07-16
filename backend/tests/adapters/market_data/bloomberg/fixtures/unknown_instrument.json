@@ -1,0 +1,18 @@
+{
+  "responseType": "ReferenceDataResponse",
+  "requestId": "rec-2026-07-15-unknown-instrument-0001",
+  "securityData": [
+    {
+      "security": "GHGGB1M Index",
+      "sequenceNumber": 0,
+      "securityError": {
+        "source": "3920::bbdbd6",
+        "category": "BAD_SEC",
+        "subcategory": "INVALID_SECURITY",
+        "code": 15,
+        "message": "Unknown/Invalid Security [nid:3920] X-VENDOR-INTERNAL-DO-NOT-SURFACE"
+      }
+    }
+  ],
+  "vendor_internal": {"debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE"}
+}

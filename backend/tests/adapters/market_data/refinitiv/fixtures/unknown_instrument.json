@@ -1,0 +1,13 @@
+{
+  "universe": ["GH1M="],
+  "fields": ["TR.MidYield"],
+  "error": {
+    "code": "instrument_not_found",
+    "http_status": 404,
+    "message": "The record could not be found for one or more universe members. X-VENDOR-INTERNAL-DO-NOT-SURFACE"
+  },
+  "vendor_internal": {
+    "debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE",
+    "http_status": 404
+  }
+}

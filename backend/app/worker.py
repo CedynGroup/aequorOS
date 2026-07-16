@@ -23,7 +23,7 @@ from app.core.logging import configure_logging
 from app.db.base import utc_now
 from app.db.session import get_worker_sessionmaker
 from app.models import Job
-from app.services import job_queue, pipeline, scheduler
+from app.services import job_queue, market_data_jobs, pipeline, scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ HANDLERS: dict[str, Handler] = {
     "pipeline_refresh": pipeline.run_refresh,
     "official_run": pipeline.run_official,
     "scheduled_tick": scheduler.run_tick,
+    "market_data_pull": market_data_jobs.run_market_data_pull,
 }
 
 

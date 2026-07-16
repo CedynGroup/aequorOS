@@ -1,0 +1,129 @@
+# Refinitiv (LSEG) RIC catalog (market_data_adapter.md §7.2).
+#
+# Maps DataScope values to Refinitiv Instrument Codes (RICs) and data field
+# references. This catalog is ground truth for what the adapter pulls: the
+# bank sees "Ghana yield curve" in the UI; the adapter pulls whatever is
+# documented here. Only the entries documented in spec §7.2 are supported.
+# Every other DataScope is listed with `supported: false` per §16.9 — the
+# framework never fakes support and never invents RICs (§16.4). Adding
+# coverage requires vendor-verified RICs signed off by Dela or Eric.
+#
+# Note: the spec catalog for the GHS curve intentionally omits the 36- and
+# 84-month standard tenors (§5.2); do not add them without a documented RIC.
+
+YIELD_CURVE_GHS:
+  rics:
+    - ric: "GH1M="
+      field: "TR.MidYield"
+      tenor_months: 1
+    - ric: "GH3M="
+      field: "TR.MidYield"
+      tenor_months: 3
+    - ric: "GH6M="
+      field: "TR.MidYield"
+      tenor_months: 6
+    - ric: "GH1Y="
+      field: "TR.MidYield"
+      tenor_months: 12
+    - ric: "GH2Y="
+      field: "TR.MidYield"
+      tenor_months: 24
+    - ric: "GH5Y="
+      field: "TR.MidYield"
+      tenor_months: 60
+    - ric: "GH10Y="
+      field: "TR.MidYield"
+      tenor_months: 120
+  quota_units_per_pull: 7
+  supported: true
+
+FX_SPOT_USD_GHS:
+  ric: "USDGHS=R"
+  field: "TR.MidPrice"
+  quota_units_per_pull: 1
+  supported: true
+
+CREDIT_RATING_GHANA_SOVEREIGN:
+  ric: "GH="
+  fields:
+    - "TR.MoodysIssuerRating"
+    - "TR.SPIssuerRating"
+    - "TR.FitchIssuerRating"
+  quota_units_per_pull: 3
+  supported: true
+
+# RIC not documented — do not invent (spec §16.4)
+YIELD_CURVE_USD:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+YIELD_CURVE_EUR:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+YIELD_CURVE_GBP:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+YIELD_CURVE_NGN:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+YIELD_CURVE_KES:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+YIELD_CURVE_ZAR:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+FX_SPOT_EUR_GHS:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+FX_SPOT_GBP_GHS:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+FX_SPOT_USD_NGN:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+FX_FORWARD_USD_GHS_1M:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+FX_FORWARD_USD_GHS_3M:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+FX_FORWARD_USD_GHS_6M:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+FX_FORWARD_USD_GHS_12M:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+SECURITY_MASTER_GOG_BONDS:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+SECURITY_MASTER_GOG_TBILLS:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+CREDIT_RATING_NIGERIA_SOVEREIGN:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+MACRO_GHANA_GDP_FORECAST:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+MACRO_GHANA_INFLATION_FORECAST:
+  supported: false
+
+# RIC not documented — do not invent (spec §16.4)
+MACRO_GHANA_POLICY_RATE_PATH:
+  supported: false

@@ -201,6 +201,13 @@ from app.models import (
     CanonicalProduct,
     CanonicalReferenceRow,
 )
+from app.services.market_data import (
+    CurveView,
+    get_fx_spot,
+    get_fx_spot_history,
+    get_yield_curve,
+    list_fx_base_currencies,
+)
 
 MONEY = Decimal("0.0001")
 RATE = Decimal("0.0001")
@@ -218,6 +225,11 @@ _BILL_MAX_REMAINING_DAYS = 397
 _LCR_WINDOW_DAYS = 30
 _LCR_FALLBACK_FRACTION = Decimal("0.02")
 _FX_RETURN_WINDOW = 250
+# A canonical FX spot history replaces the legacy reference-row history for a
+# currency only when it is deep enough to feed a meaningful VaR return series.
+_MARKET_FX_HISTORY_MIN_OBSERVATIONS = 30
+# The base currency all module FX facts are expressed against.
+_BASE_CURRENCY = "GHS"
 _DEFAULT_CCF_PCT = Decimal("50")
 _DEFAULT_NMD_CORE_PCT = Decimal("50")
 _DEFAULT_NMD_DURATION_MONTHS = Decimal("12")
@@ -355,6 +367,13 @@ class _Canonical:
     positions: list[_PositionRow]
     gl_accounts: list[CanonicalGlAccount]
     refs: dict[str, list[dict[str, Any]]]
+    # Canonical market data (vendor-blind, via app.services.market_data).
+    # When present it wins over the legacy reference-row datasets; the
+    # reference rows remain the fallback so uploads without market data
+    # connections keep deriving exactly as before.
+    market_curve: CurveView | None = None
+    market_spots: dict[str, Decimal] = field(default_factory=dict)
+    market_fx_history: dict[str, list[tuple[date, Decimal]]] = field(default_factory=dict)
 
     def by_type(self, *position_types: str) -> list[_PositionRow]:
         return [row for row in self.positions if row.position_type in position_types]
@@ -555,12 +574,43 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         ).all()
         refs[kind] = list(payloads)
 
+    market_curve, market_spots, market_fx_history = _load_market_data(db, ctx, bank, as_of)
     return _Canonical(
         as_of=as_of,
         positions=positions,
         gl_accounts=sorted(latest_by_code.values(), key=lambda account: account.account_code),
         refs=refs,
+        market_curve=market_curve,
+        market_spots=market_spots,
+        market_fx_history=market_fx_history,
     )
+
+
+def _load_market_data(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> tuple[CurveView | None, dict[str, Decimal], dict[str, list[tuple[date, Decimal]]]]:
+    """Canonical market data by business scope (vendor-blind, §15 arbitration).
+
+    The GHS curve feeds FTP; per-currency GHS spots overlay the legacy
+    ``fx_rates_current`` dataset; spot histories deep enough for a VaR return
+    series replace ``fx_rates_historical`` per currency. Everything absent
+    falls back to the legacy reference rows.
+    """
+    market_curve = get_yield_curve(db, ctx.organization_id, bank.id, _BASE_CURRENCY, as_of)
+    market_spots: dict[str, Decimal] = {}
+    market_fx_history: dict[str, list[tuple[date, Decimal]]] = {}
+    for currency in list_fx_base_currencies(
+        db, ctx.organization_id, bank.id, _BASE_CURRENCY, as_of
+    ):
+        spot = get_fx_spot(db, ctx.organization_id, bank.id, currency, _BASE_CURRENCY, as_of)
+        if spot is not None:
+            market_spots[currency] = spot.rate
+        history = get_fx_spot_history(
+            db, ctx.organization_id, bank.id, currency, _BASE_CURRENCY, as_of
+        )
+        if len(history) >= _MARKET_FX_HISTORY_MIN_OBSERVATIONS:
+            market_fx_history[currency] = history
+    return market_curve, market_spots, market_fx_history
 
 
 def _position_row(
@@ -806,6 +856,31 @@ def _nmd_duration_months(canonical: _Canonical) -> dict[str, Decimal]:
         if product_code and value is not None:
             durations[product_code] = value
     return durations
+
+
+def _prepayment_rate_by_product(canonical: _Canonical) -> dict[str, Decimal]:
+    """Annual CPR per loan product from the behavioral_assumptions dataset.
+
+    Populated by the loan-prepayment ML model (assumption_type PREPAYMENT_RATE);
+    empty until a model batch is applied, in which case prepayment inflows are 0.
+    """
+    rates: dict[str, Decimal] = {}
+    for payload in canonical.refs.get("behavioral_assumptions", ()):
+        if str(payload.get("assumption_type", "")).upper() != "PREPAYMENT_RATE":
+            continue
+        product_code = str(payload.get("product_code", "")).strip()
+        value = _dec_or_none(payload.get("value"))
+        if product_code and value is not None:
+            rates[product_code] = value
+    return rates
+
+
+def _expected_prepaid_30d(balance_ghs: Decimal, annual_cpr: Decimal) -> Decimal:
+    """30-day expected prepaid principal from an annual CPR (SMM_30 x balance)."""
+    if annual_cpr <= _ZERO:
+        return _ZERO
+    smm_30 = Decimal(str(1.0 - (1.0 - float(annual_cpr)) ** (30.0 / 365.0)))
+    return balance_ghs * smm_30
 
 
 def _split_deposits(canonical: _Canonical, warnings: list[str]) -> _DepositSplit:
@@ -1109,7 +1184,7 @@ def _derive_off_balance(canonical: _Canonical, groups: list[GroupResult]) -> lis
     return specs
 
 
-def _derive_lcr_inflows(
+def _derive_lcr_inflows(  # noqa: PLR0912
     canonical: _Canonical, loan_rows: list[_LoanRow], groups: list[GroupResult]
 ) -> list[_FactSpec]:
     warnings: list[str] = []
@@ -1142,6 +1217,28 @@ def _derive_lcr_inflows(
             "No loan positions carry contractual maturities; 30-day loan repayment "
             f"inflows use the documented {_LCR_FALLBACK_FRACTION * _HUNDRED}% fallback."
         )
+
+    # Expected 30-day prepaid principal (loan-prepayment ML model). Folded into
+    # the existing repayment categories so it flows through both the live LCR and
+    # the 5-year forecast (which scales lcr inflows by loan growth) with no new
+    # category or engine change. Empty until a PREPAYMENT_RATE batch is applied.
+    prepay_rates = _prepayment_rate_by_product(canonical)
+    prepaid_total = _ZERO
+    if prepay_rates:
+        for loan in loan_rows:
+            cpr = prepay_rates.get(loan.row.product_code or "")
+            if cpr is None:
+                continue
+            expected = _expected_prepaid_30d(loan.row.balance_ghs, cpr)
+            prepaid_total += expected
+            if loan.category in _RETAIL_LOAN_CATEGORIES:
+                retail += expected
+            else:
+                corporate += expected
+        if prepaid_total > _ZERO:
+            derived_from += (
+                f"; +{money(prepaid_total)} GHS expected 30-day prepayment (PREPAYMENT_RATE model)"
+            )
 
     interbank = sum(
         (
@@ -1195,15 +1292,18 @@ def _spot_rates(canonical: _Canonical) -> dict[str, Decimal]:
         rate = _dec_or_none(payload.get("spot_rate"))
         if currency and rate is not None:
             spots[currency] = rate
+    # Canonical market data wins per currency; reference rows fill the rest.
+    spots.update(canonical.market_spots)
     return spots
 
 
 def _historical_currencies(canonical: _Canonical) -> set[str]:
-    return {
+    legacy = {
         str(payload.get("currency", "")).strip().upper()
         for payload in canonical.refs.get("fx_rates_historical", ())
         if payload.get("currency")
     }
+    return legacy | set(canonical.market_fx_history)
 
 
 def _fx_hedge_deltas(canonical: _Canonical, warnings: list[str]) -> dict[str, Decimal]:
@@ -1369,6 +1469,10 @@ def _derive_fx_returns(
         day = str(payload.get("date", ""))
         if currency and rate is not None and rate > _ZERO and day:
             series.setdefault(currency, []).append((day, rate))
+    # A canonical spot history deep enough for VaR replaces the legacy
+    # reference-row history for that currency (persisted spot pulls, §5.2).
+    for currency, history in canonical.market_fx_history.items():
+        series[currency] = [(day.isoformat(), rate) for day, rate in history if rate > _ZERO]
 
     del currencies  # histories derive for every currency; the engine ignores extras
     specs: list[_FactSpec] = []
@@ -1380,13 +1484,18 @@ def _derive_fx_returns(
         returns = returns[-_FX_RETURN_WINDOW:]
         if not returns:
             continue
+        source_dataset = (
+            "canonical market data spot history"
+            if currency in canonical.market_fx_history
+            else "fx_rates_historical"
+        )
         specs.append(
             _FactSpec(
                 fact_group="fx_return_history",
                 category=currency,
                 amount=Decimal(len(returns)),
                 derived_from="daily simple returns S_t/S_(t-1) − 1 from "
-                "fx_rates_historical (most recent 250)",
+                f"{source_dataset} (most recent 250)",
                 attributes={"currency": currency, "returns": returns},
             )
         )
@@ -1877,6 +1986,9 @@ def _derive_irr_swaps(canonical: _Canonical, groups: list[GroupResult]) -> list[
 
 
 def _long_curve_rate(canonical: _Canonical) -> Decimal:
+    if canonical.market_curve is not None and canonical.market_curve.points:
+        # Points are sorted by tenor; the longest tenor's rate anchors the leg.
+        return canonical.market_curve.points[-1][1] * _HUNDRED
     best_months = _ZERO
     best_rate = _ZERO
     for payload in canonical.refs.get("yield_curve", ()):
@@ -1916,16 +2028,35 @@ def _derive_ftp_curve(
     canonical: _Canonical, groups: list[GroupResult]
 ) -> tuple[list[_FactSpec], CurveResult | None]:
     by_months: dict[Decimal, Decimal] = {}
-    for payload in canonical.refs.get("yield_curve", ()):
-        currency = str(payload.get("currency", "")).strip().upper()
-        curve_name = str(payload.get("curve_name", "")).upper()
-        if currency != "GHS" and "GHS" not in curve_name:
-            continue
-        months = _dec_or_none(payload.get("tenor_months"))
-        rate = _dec_or_none(payload.get("rate"))
-        if months is None or rate is None or months <= _ZERO:
-            continue
-        by_months[months] = rate * _HUNDRED  # last row wins on duplicate tenors
+    curve_warnings: list[str] = []
+    market_curve = canonical.market_curve
+    if market_curve is not None and market_curve.points:
+        # Canonical market data wins over the legacy yield_curve reference rows.
+        for tenor_months, rate in market_curve.points:
+            by_months[Decimal(tenor_months)] = rate * _HUNDRED
+        base_source = (
+            f"canonical GHS market yield curve {market_curve.curve_name} "
+            f"({market_curve.attribution.source_system})"
+        )
+        if market_curve.attribution.stale:
+            # Stale data is usable but never silent (§15): attribute it.
+            curve_warnings.append(
+                "The canonical GHS yield curve is stale "
+                f"(ingested {market_curve.attribution.ingested_at.isoformat()}); "
+                "FTP curve points were derived from stale market data."
+            )
+    else:
+        base_source = "ingested GHS yield curve"
+        for payload in canonical.refs.get("yield_curve", ()):
+            currency = str(payload.get("currency", "")).strip().upper()
+            curve_name = str(payload.get("curve_name", "")).upper()
+            if currency != "GHS" and "GHS" not in curve_name:
+                continue
+            months = _dec_or_none(payload.get("tenor_months"))
+            rate = _dec_or_none(payload.get("rate"))
+            if months is None or rate is None or months <= _ZERO:
+                continue
+            by_months[months] = rate * _HUNDRED  # last row wins on duplicate tenors
     points = sorted(by_months.items())
     if not points:
         groups.append(
@@ -1966,7 +2097,7 @@ def _derive_ftp_curve(
                 fact_group="ftp_curve_point",
                 category=label,
                 amount=ftp_rate,
-                derived_from="ingested GHS yield curve + documented liquidity-premium "
+                derived_from=f"{base_source} + documented liquidity-premium "
                 "and funding-spread schedules",
                 attributes={
                     "tenor_label": label,
@@ -1979,7 +2110,14 @@ def _derive_ftp_curve(
             )
         )
     curve = build_curve(curve_points)
-    groups.append(GroupResult(group="ftp_curve_point", status="derived", rows=len(specs)))
+    groups.append(
+        GroupResult(
+            group="ftp_curve_point",
+            status="derived",
+            rows=len(specs),
+            warnings=curve_warnings,
+        )
+    )
     return specs, curve
 
 

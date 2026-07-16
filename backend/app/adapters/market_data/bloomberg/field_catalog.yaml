@@ -1,0 +1,131 @@
+# Bloomberg field catalog (market_data_adapter.md §6.2).
+#
+# Ground truth for what the Bloomberg adapter will pull: the bank sees
+# "Ghana yield curve" in the UI; the adapter pulls exactly the securities and
+# field mnemonics listed here. Every DataScope is present so coverage is
+# explicit; scopes whose Bloomberg references are not documented in the spec
+# are marked `supported: false` (§16.9) — the UI will not offer them and the
+# adapter refuses to pull them. Do NOT populate them with guessed mnemonics
+# (§16.4); defer to Dela or Eric for verification.
+#
+# This catalog is versioned with the adapter. When Bloomberg deprecates a
+# security or introduces a better data source, update here; downstream
+# canonical records remain unchanged in shape.
+
+YIELD_CURVE_GHS:
+  data_source: BVAL
+  fields:
+    - security: "GHGGB1M Index"
+      field: "PX_LAST"
+      tenor_months: 1
+    - security: "GHGGB3M Index"
+      field: "PX_LAST"
+      tenor_months: 3
+    - security: "GHGGB6M Index"
+      field: "PX_LAST"
+      tenor_months: 6
+    - security: "GHGGB12M Index"
+      field: "PX_LAST"
+      tenor_months: 12
+    - security: "GHGGB2Y Index"
+      field: "PX_LAST"
+      tenor_months: 24
+    - security: "GHGGB5Y Index"
+      field: "PX_LAST"
+      tenor_months: 60
+    - security: "GHGGB10Y Index"
+      field: "PX_LAST"
+      tenor_months: 120
+  quota_units_per_pull: 7
+  supported: true
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+YIELD_CURVE_USD:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+YIELD_CURVE_EUR:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+YIELD_CURVE_GBP:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+YIELD_CURVE_NGN:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+YIELD_CURVE_KES:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+YIELD_CURVE_ZAR:
+  supported: false
+
+FX_SPOT_USD_GHS:
+  security: "GHSUSD Curncy"
+  field: "PX_LAST"
+  quota_units_per_pull: 1
+  supported: true
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+FX_SPOT_EUR_GHS:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+FX_SPOT_GBP_GHS:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+FX_SPOT_USD_NGN:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+FX_FORWARD_USD_GHS_1M:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+FX_FORWARD_USD_GHS_3M:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+FX_FORWARD_USD_GHS_6M:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+FX_FORWARD_USD_GHS_12M:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+SECURITY_MASTER_GOG_BONDS:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+SECURITY_MASTER_GOG_TBILLS:
+  supported: false
+
+CREDIT_RATING_GHANA_SOVEREIGN:
+  security: "GHANA Govt"
+  fields:
+    - "RTG_MDY_LT_LC_ISSUER_CREDIT"
+    - "RTG_SP_LT_LC_ISSUER_CREDIT"
+    - "RTG_FITCH_LT_LC_ISSUER_CREDIT"
+  quota_units_per_pull: 3
+  supported: true
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+CREDIT_RATING_NIGERIA_SOVEREIGN:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+MACRO_GHANA_GDP_FORECAST:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+MACRO_GHANA_INFLATION_FORECAST:
+  supported: false
+
+# Bloomberg reference not documented — do not invent (spec §16.4)
+MACRO_GHANA_POLICY_RATE_PATH:
+  supported: false

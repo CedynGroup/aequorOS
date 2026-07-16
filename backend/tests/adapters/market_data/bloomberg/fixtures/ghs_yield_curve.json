@@ -1,0 +1,14 @@
+{
+  "responseType": "ReferenceDataResponse",
+  "requestId": "rec-2026-07-15-ghs-curve-0001",
+  "securityData": [
+    {"security": "GHGGB1M Index", "sequenceNumber": 0, "fieldData": {"PX_LAST": 15.8}},
+    {"security": "GHGGB3M Index", "sequenceNumber": 1, "fieldData": {"PX_LAST": 16.25}},
+    {"security": "GHGGB6M Index", "sequenceNumber": 2, "fieldData": {"PX_LAST": 17.1}},
+    {"security": "GHGGB12M Index", "sequenceNumber": 3, "fieldData": {"PX_LAST": 18.45}},
+    {"security": "GHGGB2Y Index", "sequenceNumber": 4, "fieldData": {"PX_LAST": 19.3}},
+    {"security": "GHGGB5Y Index", "sequenceNumber": 5, "fieldData": {"PX_LAST": 20.15}},
+    {"security": "GHGGB10Y Index", "sequenceNumber": 6, "fieldData": {"PX_LAST": 21.4}}
+  ],
+  "vendor_internal": {"debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE"}
+}

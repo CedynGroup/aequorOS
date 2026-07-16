@@ -1,0 +1,11 @@
+{
+  "universe": ["USDGHS=R"],
+  "fields": ["TR.MidPrice"],
+  "data": [
+    ["USDGHS=R", "TR.MidPrice", 12.85]
+  ],
+  "vendor_internal": {
+    "debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE",
+    "http_status": 200
+  }
+}

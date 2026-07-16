@@ -1,0 +1,16 @@
+{
+  "responseType": "ReferenceDataResponse",
+  "requestId": "rec-2026-07-15-ghana-ratings-0001",
+  "securityData": [
+    {
+      "security": "GHANA Govt",
+      "sequenceNumber": 0,
+      "fieldData": {
+        "RTG_MDY_LT_LC_ISSUER_CREDIT": "Caa1",
+        "RTG_SP_LT_LC_ISSUER_CREDIT": "CCC+",
+        "RTG_FITCH_LT_LC_ISSUER_CREDIT": "CCC"
+      }
+    }
+  ],
+  "vendor_internal": {"debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE"}
+}

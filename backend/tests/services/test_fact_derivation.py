@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import BankFinancialFact, BankReportingPeriod
+from app.models import (
+    BankFinancialFact,
+    BankReportingPeriod,
+    CanonicalFxRate,
+    CanonicalYieldCurve,
+    CanonicalYieldCurvePoint,
+    IngestionBatch,
+    LineageRecord,
+)
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
 from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
 from app.services.fact_derivation import DerivationError, DerivationResult, derive_facts
@@ -410,3 +419,153 @@ def test_derivation_requires_canonical_data(db_session: Session) -> None:
     with pytest.raises(DerivationError) as excinfo:
         derive_facts(db_session, _ctx(), SAMPLE_BANK_ID, date(2031, 1, 31))
     assert excinfo.value.code == "no_canonical_data"
+
+
+# ---------------------------------------------------------------------------
+# Canonical market data overrides (vendor-blind consumption, §15)
+# ---------------------------------------------------------------------------
+
+# Canonical curve rates deliberately shifted +1% off the reference fixture's
+# curve (12m: 0.195 vs 0.185) so the winning source is observable.
+_MARKET_CURVE_RATES: dict[int, str] = {
+    1: "0.15",
+    3: "0.165",
+    6: "0.18",
+    12: "0.195",
+    24: "0.205",
+    36: "0.215",
+    60: "0.23",
+    120: "0.25",
+}
+_MARKET_FX_DAYS = 40  # >= the 30-observation floor for replacing the history
+
+
+def _market_meta(db_session: Session) -> dict[str, Any]:
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        source_system="BLOOMBERG",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=FIXTURE_AS_OF,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="market-data-test-fixture",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    return {
+        "organization_id": ORG_1,
+        "bank_id": SAMPLE_BANK_ID,
+        "as_of_date": FIXTURE_AS_OF,
+        "ingested_at": datetime(2026, 6, 30, 18, 0, tzinfo=UTC),
+        "source_system": "BLOOMBERG",
+        "ingestion_batch_id": batch.id,
+        "lineage_id": lineage.id,
+        "validation_status": "accepted",
+    }
+
+
+def _seed_market_curve(db_session: Session) -> None:
+    meta = _market_meta(db_session)
+    curve = CanonicalYieldCurve(
+        **meta,
+        source_reference="BLOOMBERG/GHS_SOVEREIGN_BVAL",
+        currency="GHS",
+        curve_name="GHS_SOVEREIGN_BVAL",
+        curve_type="sovereign",
+    )
+    db_session.add(curve)
+    db_session.flush()
+    for tenor_months, rate in _MARKET_CURVE_RATES.items():
+        db_session.add(
+            CanonicalYieldCurvePoint(
+                **meta,
+                source_reference=f"BLOOMBERG/GHS_SOVEREIGN_BVAL/{tenor_months}m",
+                yield_curve_id=curve.id,
+                tenor_months=tenor_months,
+                rate=Decimal(rate),
+            )
+        )
+    db_session.flush()
+
+
+def _seed_market_fx_spots(db_session: Session) -> None:
+    """40 daily USD/GHS canonical spots ending at 13.10 on the as-of date."""
+    meta = _market_meta(db_session)
+    for offset in range(_MARKET_FX_DAYS):
+        day = FIXTURE_AS_OF - timedelta(days=_MARKET_FX_DAYS - 1 - offset)
+        rate = Decimal("12.71") + Decimal(offset) / 100
+        db_session.add(
+            CanonicalFxRate(
+                **{**meta, "as_of_date": day},
+                source_reference=f"BLOOMBERG/USDGHS/{day.isoformat()}",
+                base_currency="USD",
+                quote_currency="GHS",
+                rate_type="spot",
+                tenor_months=None,
+                rate=rate,
+            )
+        )
+    db_session.flush()
+
+
+def test_canonical_market_curve_overrides_reference_curve(db_session: Session) -> None:
+    seed_sample_bank(db_session)
+    db_session.flush()
+    seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    _seed_market_curve(db_session)
+
+    result = derive_facts(db_session, _ctx(), SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+
+    grouped = _by_group(_facts(db_session, result))
+    curve = grouped["ftp_curve_point"]
+    assert len(curve) == 8
+    one_year = curve["1y"]
+    # Canonical 0.195 wins over the reference row's 0.185, with attribution.
+    assert Decimal(str(one_year.attributes["base_yield_pct"])) == Decimal("19.5")
+    assert one_year.attributes["derived_from"].startswith(
+        "canonical GHS market yield curve GHS_SOVEREIGN_BVAL (BLOOMBERG)"
+    )
+    ten_year = curve["10y"]
+    assert Decimal(str(ten_year.attributes["base_yield_pct"])) == Decimal("25")
+
+
+def test_canonical_fx_spot_and_history_override_reference(db_session: Session) -> None:
+    seed_sample_bank(db_session)
+    db_session.flush()
+    seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    _seed_market_fx_spots(db_session)
+
+    result = derive_facts(db_session, _ctx(), SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+
+    grouped = _by_group(_facts(db_session, result))
+    usd = grouped["fx_position"]["USD"]
+    # The canonical as-of spot (13.10) wins over the reference row's 12.85.
+    assert Decimal(str(usd.attributes["spot_ghs"])) == Decimal("13.1")
+    history = grouped["fx_return_history"]["USD"]
+    # 40 canonical observations replace the 150-row legacy reference history.
+    assert len(history.attributes["returns"]) == _MARKET_FX_DAYS - 1
+    assert "canonical market data spot history" in history.attributes["derived_from"]
+
+
+def test_legacy_reference_path_without_canonical_market_data(db_session: Session) -> None:
+    result = _prepare(db_session)
+
+    grouped = _by_group(_facts(db_session, result))
+    one_year = grouped["ftp_curve_point"]["1y"]
+    assert Decimal(str(one_year.attributes["base_yield_pct"])) == Decimal("18.5")
+    assert one_year.attributes["derived_from"].startswith("ingested GHS yield curve")
+    assert Decimal(str(grouped["fx_position"]["USD"].attributes["spot_ghs"])) == Decimal("12.85")
+    history = grouped["fx_return_history"]["USD"]
+    assert "fx_rates_historical" in history.attributes["derived_from"]
+    assert len(history.attributes["returns"]) == 149

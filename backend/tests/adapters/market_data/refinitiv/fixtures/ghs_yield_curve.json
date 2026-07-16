@@ -1,0 +1,17 @@
+{
+  "universe": ["GH1M=", "GH3M=", "GH6M=", "GH1Y=", "GH2Y=", "GH5Y=", "GH10Y="],
+  "fields": ["TR.MidYield"],
+  "data": [
+    ["GH1M=", "TR.MidYield", 15.1],
+    ["GH3M=", "TR.MidYield", 15.8],
+    ["GH6M=", "TR.MidYield", 17.25],
+    ["GH1Y=", "TR.MidYield", 19.1],
+    ["GH2Y=", "TR.MidYield", 21.4],
+    ["GH5Y=", "TR.MidYield", 22.75],
+    ["GH10Y=", "TR.MidYield", 23.6]
+  ],
+  "vendor_internal": {
+    "debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE",
+    "http_status": 200
+  }
+}
