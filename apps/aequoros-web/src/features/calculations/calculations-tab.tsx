@@ -221,16 +221,22 @@ export function CalculationsTab({
             </div>
             <div>
               <Label>Annual periods</Label>
-              <Input
-                aria-label="Forecast periods"
-                type="number"
-                min={1}
-                max={12}
-                step={1}
-                value={forecastPeriods}
-                disabled={mutationDisabled}
-                onChange={(event) => setForecastPeriods(event.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  className="pr-12"
+                  aria-label="Forecast periods"
+                  type="number"
+                  min={1}
+                  max={12}
+                  step={1}
+                  value={forecastPeriods}
+                  disabled={mutationDisabled}
+                  onChange={(event) => setForecastPeriods(event.target.value)}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs font-medium text-[rgb(var(--muted-foreground))]">
+                  years
+                </span>
+              </div>
             </div>
             <Button
               disabled={

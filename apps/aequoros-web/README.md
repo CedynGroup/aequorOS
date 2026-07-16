@@ -14,6 +14,20 @@ The app defaults to `http://127.0.0.1:8003/api/v1`. Override with:
 VITE_RISK_API_BASE_URL=http://127.0.0.1:8003/api/v1 pnpm --filter @aequoros/aequoros-web dev
 ```
 
+The organization selector defaults to the seeded demo tenants. Deployments can
+supply their current tenant directory as a JSON array of `name`, `orgId`, and
+`userId` values through `VITE_RISK_TENANTS`:
+
+```bash
+VITE_RISK_TENANTS='[{"name":"Configured Bank","orgId":"33333333-3333-4333-8333-333333333333","userId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc"}]' \
+  pnpm --filter @aequoros/aequoros-web dev
+```
+
+The configured list replaces the demo defaults. It must be non-empty, every
+entry must have a non-empty name and valid UUIDs, and organization UUIDs must be
+unique. Invalid configuration blocks the console with a configuration error.
+This boundary can be replaced by an authenticated tenant directory after MVP.
+
 ## Demo Data
 
 Restore the four-case narrative portfolio, including reviewed scenarios,
@@ -36,6 +50,22 @@ read-only presenter workspace. In that mode, document, financial, scenario,
 forecast, liquidity, capital, finding, and decision mutations are disabled.
 Archived cases are likewise read-only. Document download links remain
 available because they do not mutate case data.
+
+## Console Navigation And Scenario Review
+
+The top bar provides named demo organization and case selectors. Selecting an
+organization also selects its seeded user context, clears the current case, and
+returns to the case queue. The queue can be hidden so the selected case uses the
+full workspace width; case detail routes start with it hidden, including at
+mobile widths.
+
+Scenario assumptions are presented in a compact table with label, type, value,
+unit, review status, and actions. Ratio assumptions are entered as percentages
+with a `%` suffix while the API continues to store decimal ratios; for example,
+entering `5` persists `0.05`. Other recognized units appear as input suffixes.
+Forecast horizons show a `years` suffix. Capital ratios and liquidity ratio
+metrics use percentage formatting with up to two decimal places, except minimum
+sources coverage, which remains a multiple such as `1.20x`.
 
 ## Financial Review
 
@@ -205,6 +235,8 @@ The web app uses a feature-based split so each operational surface owns its UI a
 Vitest tests are colocated with the module they protect:
 
 - `src/lib/api.test.ts`: headers, error envelopes, API route/payload serialization
+- `src/lib/constants.test.ts`: tenant-directory defaults, validation, normalization, and selection
+- `src/lib/money.test.ts`: localized percentage separators, digits, and rounding
 - `src/features/documents/documents-tab.test.tsx`: document controls, upload request payloads, lifecycle actions
 - `src/features/findings/findings-tab.test.tsx`: finding create/update controls and payloads
 - `src/features/financial/financial-client.test.ts`: generated client routing, headers, serialization, and mutation decoding
@@ -221,10 +253,12 @@ Vitest tests are colocated with the module they protect:
 
 Browser-mode Vitest tests use Playwright for DOM-heavy component interactions:
 
-- `src/features/risk-console/risk-console.browser.test.tsx`: Radix select portal behavior and dialog rendering in Chromium
+- `src/features/risk-console/risk-console.browser.test.tsx`: Radix organization and case select portal behavior, mobile top-bar overflow and queue-toggle accessibility, and dialog rendering in Chromium
 
 The Playwright E2E suite includes `e2e/financial-review.spec.ts` for source
 drilldown and the upload, map, validate, correct, retry, revalidate, cash-flow
 entry, and covenant-entry journeys. `e2e/capital-projection.spec.ts` covers the
 deterministic capital projection, comparison, finding-evidence, failure, and
-tenant-isolation workflow.
+tenant-isolation workflow. `e2e/risk-console.spec.ts` also verifies the compact
+scenario table and that the console has no horizontal overflow at 1440x1000 and
+1280x800 viewports.

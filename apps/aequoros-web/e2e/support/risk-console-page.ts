@@ -27,10 +27,6 @@ export class RiskConsolePage {
     );
   }
 
-  async openConnectionSettings() {
-    await this.page.getByText("Connection settings", { exact: true }).click();
-  }
-
   async expectQueueLoaded() {
     await expect(
       this.page.getByRole("heading", { name: "Case Queue" }),
@@ -76,6 +72,17 @@ export class RiskConsolePage {
     await this.page.setViewportSize({ width: 390, height: 844 });
     await this.page.reload();
 
+    await expect(
+      this.page.getByRole("button", { name: "Show case queue" }),
+    ).toBeVisible();
+    const evidenceDir = process.env.NO_MISTAKES_EVIDENCE_DIR;
+    if (evidenceDir) {
+      await this.page.screenshot({
+        path: `${evidenceDir}/mobile-top-bar-queue-toggle-overlap.png`,
+        fullPage: true,
+      });
+    }
+    await this.page.getByRole("button", { name: "Show case queue" }).click();
     await expect(
       this.page.getByRole("heading", { name: "Case Queue" }),
     ).toBeVisible();

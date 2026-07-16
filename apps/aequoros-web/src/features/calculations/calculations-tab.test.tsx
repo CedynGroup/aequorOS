@@ -361,7 +361,7 @@ describe("CalculationsTab", () => {
 
     renderWithQuery(<CalculationsTab tenant={tenant} caseId={caseId} />);
     await user.click(
-      await screen.findByRole("button", { name: /30000000\.\.\.0002/ }),
+      await screen.findByRole("button", { name: /Archived downside/ }),
     );
 
     expect(
@@ -372,8 +372,8 @@ describe("CalculationsTab", () => {
     ).toBeInTheDocument();
     expect(riskApi.scenarios).toHaveBeenCalledWith(tenant, caseId, true);
     expect(
-      screen.queryByRole("button", { name: "Run forecast" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Run forecast" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Rerun current inputs" }),
     ).not.toBeInTheDocument();

@@ -1,15 +1,18 @@
 import { CaseSort } from "@aequoros/risk-service-api";
 import { useMatch, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
   DEFAULT_ORG_ID,
   DEFAULT_USER_ID,
+  activeTenantOption,
   type ConsoleTab,
   type ReportMode,
+  type TenantDirectory,
   isConsoleTab,
+  tenantConfiguration,
 } from "../../lib/constants";
 import { riskApi, type TenantHeaders } from "../../lib/api";
 import { usePersistentState } from "../../lib/persistent-state";
@@ -21,6 +24,29 @@ import { pageSize } from "./types";
 import type { SearchState } from "../../routes/search";
 
 export function RiskConsoleRoute() {
+  const configuration = useMemo(tenantConfiguration, []);
+
+  if (configuration.status === "error") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[rgb(var(--background))] p-6">
+        <section
+          role="alert"
+          className="w-full max-w-xl rounded-lg border border-red-300 bg-[rgb(var(--surface))] p-6 shadow-sm"
+        >
+          <h1 className="text-lg font-semibold">Tenant configuration error</h1>
+          <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">
+            {configuration.error} Correct the deployment configuration and
+            reload the console.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  return <RiskConsole tenants={configuration.tenants} />;
+}
+
+function RiskConsole({ tenants }: { tenants: TenantDirectory }) {
   const router = useRouter();
   const navigate = useNavigate();
   const match = useMatch({ strict: false });
@@ -28,19 +54,26 @@ export function RiskConsoleRoute() {
   const search = match.search as SearchState;
   const [orgId, setOrgId] = usePersistentState(
     "aequoros.orgId",
-    DEFAULT_ORG_ID,
+    tenants[0]?.orgId ?? DEFAULT_ORG_ID,
   );
   const [userId, setUserId] = usePersistentState(
     "aequoros.userId",
-    DEFAULT_USER_ID,
+    tenants[0]?.userId ?? DEFAULT_USER_ID,
   );
   const [lastCaseId, setLastCaseId] = usePersistentState("aequoros.caseId", "");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [mockWorkspace, setMockWorkspace] = useState(false);
+  const [queueVisible, setQueueVisible] = useState(() => !params.caseId);
+  const activeTenant = activeTenantOption(tenants, orgId);
   const tenant = useMemo<TenantHeaders>(
-    () => ({ orgId, userId }),
-    [orgId, userId],
+    () => ({ orgId: activeTenant.orgId, userId: activeTenant.userId }),
+    [activeTenant.orgId, activeTenant.userId],
   );
+
+  useEffect(() => {
+    if (orgId !== activeTenant.orgId) setOrgId(activeTenant.orgId);
+    if (userId !== activeTenant.userId) setUserId(activeTenant.userId);
+  }, [activeTenant, orgId, setOrgId, setUserId, userId]);
 
   const activeTab: ConsoleTab =
     search.tab && isConsoleTab(search.tab) ? search.tab : "overview";
@@ -106,6 +139,18 @@ export function RiskConsoleRoute() {
     });
   };
 
+  const chooseTenant = (nextOrgId: string) => {
+    const nextTenant = tenants.find((item) => item.orgId === nextOrgId);
+    if (!nextTenant) return;
+    setOrgId(nextTenant.orgId);
+    setUserId(nextTenant.userId);
+    setLastCaseId("");
+    setSelected({});
+    setMockWorkspace(false);
+    setQueueVisible(true);
+    void navigate({ to: "/cases", search: { ...search, page: 1 } });
+  };
+
   const refresh = () => {
     void router.invalidate();
     toast.info("Refreshing risk console data");
@@ -120,34 +165,44 @@ export function RiskConsoleRoute() {
       <Sidebar activeTab={activeTab} onTab={(tab) => updateSearch({ tab })} />
       <main className="min-w-0 flex-1">
         <TopBar
-          orgId={orgId}
-          userId={userId}
-          setOrgId={setOrgId}
-          setUserId={setUserId}
+          orgId={tenant.orgId}
+          tenants={tenants}
+          chooseTenant={chooseTenant}
           cases={demoList?.items ?? casesQuery.data?.items ?? []}
           caseId={workspaceCaseId}
           chooseCase={chooseCase}
+          queueVisible={queueVisible}
+          toggleQueue={() => setQueueVisible((visible) => !visible)}
           refresh={refresh}
           seed={() => {
             setMockWorkspace(true);
             toast.success("Frontend mock financial workspace enabled");
           }}
         />
-        <div className="grid min-h-[calc(100vh-56px)] grid-cols-[minmax(420px,0.95fr)_minmax(440px,1.05fr)] gap-3 p-3 max-xl:grid-cols-1">
-          <CaseQueuePanel
-            query={casesQuery}
-            taxonomy={taxonomyQuery.data}
-            filters={filters}
-            page={page}
-            selected={selected}
-            setSelected={setSelected}
-            chooseCase={chooseCase}
-            activeCaseId={workspaceCaseId}
-            selectedIds={selectedIds}
-            tenant={tenant}
-            updateSearch={updateSearch}
-            mockList={demoList}
-          />
+        <div
+          data-testid="risk-console-master-detail"
+          className={`grid min-h-[calc(100vh-56px)] gap-3 p-3 ${
+            queueVisible
+              ? "grid-cols-[minmax(360px,0.72fr)_minmax(0,1.28fr)] max-xl:grid-cols-1"
+              : "grid-cols-1"
+          }`}
+        >
+          {queueVisible ? (
+            <CaseQueuePanel
+              query={casesQuery}
+              taxonomy={taxonomyQuery.data}
+              filters={filters}
+              page={page}
+              selected={selected}
+              setSelected={setSelected}
+              chooseCase={chooseCase}
+              activeCaseId={workspaceCaseId}
+              selectedIds={selectedIds}
+              tenant={tenant}
+              updateSearch={updateSearch}
+              mockList={demoList}
+            />
+          ) : null}
           <CaseWorkspace
             tenant={tenant}
             caseId={workspaceCaseId}

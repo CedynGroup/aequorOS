@@ -286,7 +286,7 @@ describe("CapitalTab", () => {
     expect(
       await screen.findByText("Projected capital indicators"),
     ).toBeInTheDocument();
-    expect(screen.getByText("5.3%")).toBeInTheDocument();
+    expect(screen.getByText("5.26%")).toBeInTheDocument();
     expect(
       screen.getByText("Projected capital buffer is thin"),
     ).toBeInTheDocument();

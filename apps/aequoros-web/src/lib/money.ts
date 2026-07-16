@@ -29,21 +29,67 @@ export function formatDecimal(value: string, fractionDigits: number) {
   );
 }
 
+export function formatPercent(
+  value: string | number,
+  maximumFractionDigits = 2,
+  locales?: Intl.LocalesArgument,
+) {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(value));
+  if (!match) return String(value);
+  const scaledMatch = /^(-?)(\d+)(?:\.(\d+))?$/.exec(
+    multiplyDecimalBy100(match),
+  );
+  if (!scaledMatch) return String(value);
+  return formatDecimalParts(
+    scaledMatch,
+    new Intl.NumberFormat(locales, {
+      style: "percent",
+      maximumFractionDigits,
+    }),
+    true,
+  );
+}
+
+function multiplyDecimalBy100(match: RegExpExecArray) {
+  const integer = match[2];
+  const fraction = match[3] ?? "";
+  const digits = `${integer}${fraction.padEnd(2, "0")}`;
+  const decimalIndex = integer.length + 2;
+  const scaledInteger = digits.slice(0, decimalIndex).replace(/^0+(?=\d)/, "");
+  const scaledFraction = digits.slice(decimalIndex).replace(/0+$/, "");
+  return `${match[1]}${scaledInteger}${scaledFraction ? `.${scaledFraction}` : ""}`;
+}
+
 function formatDecimalParts(
   match: RegExpExecArray,
   formatter: Intl.NumberFormat,
+  trimTrailingZeros = false,
 ) {
   const resolvedOptions = formatter.resolvedOptions();
   const minimumFractionDigits = resolvedOptions.minimumFractionDigits ?? 0;
   const maximumFractionDigits = resolvedOptions.maximumFractionDigits ?? 2;
   const rounded = roundDecimal(match[2], match[3] ?? "", maximumFractionDigits);
-  const groupedInteger = new Intl.NumberFormat(undefined, {
+  const decimalFormatter = new Intl.NumberFormat(resolvedOptions.locale, {
+    minimumFractionDigits: 1,
+    numberingSystem: resolvedOptions.numberingSystem,
+  });
+  const groupedInteger = new Intl.NumberFormat(resolvedOptions.locale, {
     maximumFractionDigits: 0,
+    numberingSystem: resolvedOptions.numberingSystem,
   }).format(BigInt(rounded.integer));
+  const digitFormatter = new Intl.NumberFormat(resolvedOptions.locale, {
+    maximumFractionDigits: 0,
+    numberingSystem: resolvedOptions.numberingSystem,
+    useGrouping: false,
+  });
   const decimalSeparator =
-    formatter.formatToParts(0.1).find((part) => part.type === "decimal")
+    decimalFormatter.formatToParts(0.1).find((part) => part.type === "decimal")
       ?.value ?? ".";
-  const fraction = rounded.fraction.padEnd(minimumFractionDigits, "0");
+  const fraction = (
+    trimTrailingZeros ? rounded.fraction.replace(/0+$/, "") : rounded.fraction
+  )
+    .padEnd(minimumFractionDigits, "0")
+    .replace(/\d/g, (digit) => digitFormatter.format(Number(digit)));
   const formattedNumber = `${groupedInteger}${fraction ? decimalSeparator + fraction : ""}`;
   const parts = formatter.formatToParts(match[1] ? -0 : 0);
   let insertedNumber = false;

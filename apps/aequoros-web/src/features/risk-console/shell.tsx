@@ -5,6 +5,8 @@ import {
   History,
   LayoutDashboard,
   ListChecks,
+  PanelLeftClose,
+  PanelLeftOpen,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -12,14 +14,8 @@ import {
   WalletCards,
 } from "lucide-react";
 
-import {
-  Button,
-  Input,
-  Select,
-  SelectItem,
-  Tooltip,
-} from "../../components/ui";
-import type { ConsoleTab } from "../../lib/constants";
+import { Button, Select, SelectItem, Tooltip } from "../../components/ui";
+import type { ConsoleTab, TenantOption } from "../../lib/constants";
 import { cn } from "../../lib/utils";
 
 export function Sidebar({
@@ -86,51 +82,66 @@ export function Sidebar({
 
 export function TopBar({
   orgId,
-  userId,
-  setOrgId,
-  setUserId,
+  tenants,
+  chooseTenant,
   cases,
   caseId,
   chooseCase,
+  queueVisible,
+  toggleQueue,
   refresh,
   seed,
 }: {
   orgId: string;
-  userId: string;
-  setOrgId: (value: string) => void;
-  setUserId: (value: string) => void;
+  tenants: readonly TenantOption[];
+  chooseTenant: (orgId: string) => void;
   cases: CaseQueueItemRead[];
   caseId?: string;
   chooseCase: (caseId: string) => void;
+  queueVisible: boolean;
+  toggleQueue: () => void;
   refresh: () => void;
   seed: () => void;
 }) {
   return (
-    <div className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-3">
+    <div
+      data-testid="risk-console-top-bar"
+      className="sticky top-0 z-20 flex min-h-14 min-w-0 items-center gap-2 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface))] px-3"
+    >
+      <Tooltip label={queueVisible ? "Hide case queue" : "Show case queue"}>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={toggleQueue}
+          aria-label={queueVisible ? "Hide case queue" : "Show case queue"}
+        >
+          {queueVisible ? (
+            <PanelLeftClose className="size-4" />
+          ) : (
+            <PanelLeftOpen className="size-4" />
+          )}
+        </Button>
+      </Tooltip>
       <div className="hidden text-sm font-semibold md:block">
         Risk operations
       </div>
-      <div className="ml-auto flex min-w-0 items-center gap-2">
-        <details className="group relative hidden md:block">
-          <summary className="cursor-pointer list-none rounded-md border border-[rgb(var(--border))] px-2.5 py-1.5 text-sm font-medium">
-            Connection settings
-          </summary>
-          <div className="absolute right-0 top-10 z-30 grid w-80 gap-2 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface))] p-3 shadow-lg">
-            <Input
-              value={orgId}
-              onChange={(event) => setOrgId(event.target.value)}
-              aria-label="Tenant org id"
-            />
-            <Input
-              value={userId}
-              onChange={(event) => setUserId(event.target.value)}
-              aria-label="User id"
-            />
-          </div>
-        </details>
+      <div className="ml-auto flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+        <Select
+          ariaLabel="Organization"
+          className="min-w-0 w-44 max-w-[28vw] sm:w-60"
+          value={orgId}
+          onValueChange={chooseTenant}
+          placeholder="Organization"
+        >
+          {tenants.map((tenant) => (
+            <SelectItem key={tenant.orgId} value={tenant.orgId}>
+              {tenant.name}
+            </SelectItem>
+          ))}
+        </Select>
         <Select
           ariaLabel="Current case"
-          className="w-44 max-w-[32vw] sm:w-56"
+          className="min-w-0 w-44 max-w-[32vw] sm:w-56"
           value={caseId ?? ""}
           onValueChange={chooseCase}
           placeholder="Current case"
@@ -146,9 +157,15 @@ export function TopBar({
             <RefreshCw className="size-4" />
           </Button>
         </Tooltip>
-        <Button variant="outline" size="sm" onClick={seed}>
+        <Button
+          className="shrink-0 whitespace-nowrap"
+          variant="outline"
+          size="sm"
+          onClick={seed}
+          aria-label="Demo seed data"
+        >
           <Sparkles className="size-3.5" />
-          Demo seed data
+          <span className="hidden sm:inline">Demo seed data</span>
         </Button>
       </div>
     </div>
