@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any
 
 NULLABLE_UNION_MODELS = {
+    "BehavioralAccuracyRead",
+    "BehavioralApplyProduct",
+    "BehavioralModelRead",
+    "BehavioralProductEstimate",
     "CalculationRerunCreate",
     "CalculationRunCreate",
     "CalculationRunRead",
@@ -15,6 +19,11 @@ NULLABLE_UNION_MODELS = {
     "CapitalProjectionRead",
     "CapitalProjectionSummaryRead",
     "CapitalSummaryRead",
+    "MarketDataConnectionCreate",
+    "MarketDataConnectionRead",
+    "MarketDataConnectionUpdate",
+    "QuotaSummaryRead",
+    "TestPullRead",
 }
 
 

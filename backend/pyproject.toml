@@ -12,9 +12,12 @@ dependencies = [
   "loguru",
   "numpy",
   "openpyxl",
+  "pandas",
   "psycopg[binary]",
+  "pyarrow",
   "pydantic-settings",
   "pyyaml",
+  "scikit-learn",
   "sqlalchemy",
   "torch",
 ]

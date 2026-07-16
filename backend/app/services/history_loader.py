@@ -23,7 +23,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pandas as pd
-from sqlalchemy import insert
+from sqlalchemy import insert, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -255,6 +255,12 @@ def load_history(  # noqa: PLR0913, PLR0912, PLR0915
         if identity_rows:
             summary.positions += _bulk_insert(session, CanonicalPosition, identity_rows, batch_size)
         summary.snapshots += _bulk_insert(session, CanonicalPositionSnapshot, snap_rows, batch_size)
+        # record the batch's accepted-record tally so the push console shows counts,
+        # not 0 (this bulk path bypasses the pipeline that normally increments these).
+        session.execute(
+            update(IngestionBatch).where(IngestionBatch.id == bid).values(
+                records_extracted=len(snap_rows), records_translated=len(snap_rows),
+                records_accepted=len(snap_rows)))
 
         summary.reference_rows += _load_reference_rows(
             session, m, bid, lid, org_id, bank_id,

@@ -43,13 +43,17 @@ DEMO_ORG_ID = UUID("11111111-1111-4111-8111-111111111111")
 SAMPLE_BANK_ID = UUID("77000000-0000-4000-8000-000000000001")
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("--panels-dir", default="data/history/panels")
     ap.add_argument("--months", type=int, default=None)
     ap.add_argument("--reset", action="store_true")
+    ap.add_argument(
+        "--additive", action="store_true",
+        help="load only months not already present; never reset/delete existing data",
+    )
     ap.add_argument("--skip-derive", action="store_true")
     ap.add_argument("--only-derive", action="store_true")
     ap.add_argument("--database-url", default=os.environ.get("DATABASE_URL"))
@@ -72,6 +76,22 @@ def main() -> None:
     months = _months_from_panels(panels_dir)
     if args.months:
         months = months[: args.months]
+
+    if args.additive:
+        # Load only months not already present; leave existing data + periods untouched.
+        present = {
+            r[0] for r in session.execute(
+                text("select distinct as_of_date from canonical_position_snapshots "
+                     "where organization_id=:o and bank_id=:b"),
+                {"o": org_id, "b": bank_id}).all()
+        }
+        skipped = [m for m in months if m in present]
+        months = [m for m in months if m not in present]
+        print(f"Additive mode: {len(present)} months already present, "
+              f"skipping {len(skipped)}; loading {len(months)} new months.")
+        if not months:
+            sys.exit("Nothing to load — every panel month already exists for this bank.")
+
     print(f"Target DB: {args.database_url.split('@')[-1]}  bank={bank_id}")
     print(f"Panels: {panels_dir}  months: {months[0]}..{months[-1]} ({len(months)})")
 
@@ -85,9 +105,9 @@ def main() -> None:
     existing = session.execute(
         text("select count(*) from canonical_positions where organization_id=:o and bank_id=:b"),
         {"o": org_id, "b": bank_id}).scalar()
-    if existing and not args.only_derive:
+    if existing and not args.only_derive and not args.additive:
         sys.exit(f"Refusing to load: {existing} canonical positions already exist for this bank. "
-                 f"Re-run with --reset, or clear the bank first.")
+                 f"Re-run with --reset, --additive, or clear the bank first.")
 
     t0 = time.time()
     if not args.only_derive:
