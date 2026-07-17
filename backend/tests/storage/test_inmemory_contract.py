@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from typing import cast
 from uuid import uuid4
 
 import pytest
 
 from app.storage.access_log import HashChainedAccessLog
+from app.storage.client import StorageClient
 from tests.storage.contract import StorageContractSuite
 from tests.storage.inmemory import InMemoryStorageClient
 
@@ -29,5 +31,5 @@ class TestInMemoryStorageContract(StorageContractSuite):
     def expected_kms_key(self) -> str | None:
         return "aequoros-key"
 
-    def read_audit_segment(self, client: InMemoryStorageClient, segment_path: str) -> str:
-        return client.audit_segments[-1]
+    def read_audit_segment(self, client: StorageClient, segment_path: str) -> str:
+        return cast("InMemoryStorageClient", client).audit_segments[-1]

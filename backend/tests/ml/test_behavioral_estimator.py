@@ -7,6 +7,8 @@ crashing training, and a generic prior for a product with no labels.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -16,7 +18,9 @@ from app.ml.behavioral.estimator import estimate
 _CFG = BehavioralTrainingConfig(min_months=3, min_samples=6, cv_folds=2)
 
 
-def _panel(n_products: int, n_months: int, n_features: int = 4, *, seed: int = 0):
+def _panel(
+    n_products: int, n_months: int, n_features: int = 4, *, seed: int = 0
+) -> dict[str, Any]:
     rng = np.random.default_rng(seed)
     x, products, y, months, latest = [], [], [], [], {}
     for p in range(n_products):
