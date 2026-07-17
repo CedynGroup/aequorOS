@@ -3,7 +3,7 @@
 Single source of truth for agents building new modules. Every claim below was verified against
 the code on 2026-07-14. When this document and the code disagree, the code wins — fix this file.
 
-Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
+Companion document: [CODEBASE_CONVENTIONS.md](../CODEBASE_CONVENTIONS.md).
 
 ---
 
