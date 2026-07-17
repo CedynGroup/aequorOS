@@ -238,8 +238,7 @@ How `app/services/liquidity.py` publishes findings (the template for new engines
 3. Workflow findings are protected from the generic `PATCH /api/v1/findings/{finding_id}`
    endpoint (`allow_liquidity_workflow` flag); reviews go through the dedicated
    `/liquidity/findings/{finding_id}/review` route.
-4. The web renders any of these through the shared `FindingReviewCard`
-   (`apps/aequoros-web/src/features/findings/finding-review-card.tsx`).
+4. The dashboard UI renders these findings (see `backend/dashboard` for current implementation).
 
 ---
 
