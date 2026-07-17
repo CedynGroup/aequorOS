@@ -13,7 +13,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   formatting; generated files must contain no inline suppressions, while type-checking,
   package tests, and freshness checks remain required. Client regeneration intentionally
   bypasses the formatting exclusion to normalize deterministic output.
-- Financial review UI code lives under `apps/aequoros-web (REMOVED — see ARCHITECTURE.md)/src/features/financial` and must call
+- Financial review UI code lives under the removed `aequoros-web` SPA (see git history) and must call
   `FinancialDataApi` from `packages/risk-service-api`; do not duplicate OpenAPI payloads or
   hand-roll financial workspace requests.
 - Canonical institution, account, reporting-period, balance, cash-flow, obligation, and covenant
@@ -54,7 +54,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - The background worker claims jobs **across tenants**, so on RLS-forced Postgres it must run with
   a BYPASSRLS role — set `WORKER_DATABASE_URL` (the tenant-scoped app role sees zero queued rows).
   Falls back to `DATABASE_URL` for SQLite tests.
-- The primary database is the **remote Postgres** (`pg.cedynhq.com:5433/aequoros_db`, credentials
+- The primary database is the **remote Postgres** (`<postgres-host>:<port>/<database>`, credentials
   only in untracked `backend/.env`). Postgres-gated tests run against it via `TEST_DATABASE_URL`
   (each run creates and drops a `risk_service_test_<hex>` schema — the shared DB is safe). The
   default suite is hermetic: conftest sets `DATABASE_URL=""` (empty = unconfigured via a settings

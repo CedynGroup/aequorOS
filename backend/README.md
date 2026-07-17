@@ -63,7 +63,7 @@ Install the repo hooks after syncing dependencies:
 mise run risk-service:hooks
 ```
 
-The service runs against the **shared remote Postgres** (`pg.cedynhq.com:5433/aequoros_db`) —
+The service runs against the **shared remote Postgres** (`<postgres-host>:<port>/<database>`) —
 `DATABASE_URL` comes from `backend/.env` (untracked; see `.env.example` for the shape). The
 default test run needs no database at all (isolated SQLite); Postgres-gated tests opt in via
 `TEST_DATABASE_URL` and run in disposable per-run schemas, so the remote database is safe to
@@ -245,7 +245,7 @@ fixtures create a `risk_service_test_<hex>` schema per run and drop it afterward
 so the shared remote database is safe:
 
 ```bash
-TEST_DATABASE_URL=postgresql+psycopg://<user>:<password>@pg.cedynhq.com:5433/aequoros_db \
+TEST_DATABASE_URL=postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database> \
   mise run risk-service:test-postgres
 ```
 
@@ -295,7 +295,7 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 LOG_LEVEL=INFO
 
 # Primary database (shared remote; real credentials only in the untracked .env).
-# DATABASE_URL=postgresql+psycopg://<user>:<password>@pg.cedynhq.com:5433/aequoros_db
+# DATABASE_URL=postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database>
 
 RISK_STORAGE_BACKEND=s3
 RISK_S3_BUCKET=risk-local

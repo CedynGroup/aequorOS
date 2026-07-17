@@ -44,12 +44,10 @@ data-engine ingestion/canonical rows) before re-inserting, so it re-runs cleanly
 | Risk service (FastAPI) | `backend` | 8003 | Regulatory calc engines + in-process LSTM cash-flow model (`app/ml`), DB, S3 |
 | Product UI (Next.js) | `dashboard` | 3001 | Bank Treasurer console |
 | Generated API client | `packages/risk-service-api` | — | Typed contract shared by UI |
-| Postgres | remote `pg.cedynhq.com:5433/aequoros_db` (via `backend/.env`) | 5433 | Primary data store (local docker on 15432 remains the offline fallback) |
-| MinIO | `s3.cedynhq.com` (via `backend/.env`; local docker fallback :9000) | — | Object storage |
+| Postgres | remote `<postgres-host>:<port>/<database>` (via `backend/.env`) | 5433 | Primary data store (local docker on 15432 remains the offline fallback) |
+| MinIO | `<s3-endpoint-host>` (via `backend/.env`; local docker fallback :9000) | — | Object storage |
 
-The prior case-based **Risk Console** (`apps/aequoros-web`) is untouched and still
-works; it also received an ALM mode in an earlier slice. The canonical MVP demo
-surface is **`dashboard`**.
+The canonical MVP demo surface is **`dashboard`** (the prior case-based SPA was removed; see git history).
 
 ---
 
@@ -148,7 +146,7 @@ id; every new table has Postgres RLS enable/force + isolation policy.
 
 ---
 
-## Honest scoping (say this to investors, verbatim-safe)
+## Honest scoping
 
 - **Synthetic data only.** One provisioned bank ("Sample Bank Ltd"), no core-banking
   integration. The architecture is multi-tenant and RLS-isolated so real banks slot in.

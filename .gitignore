@@ -16,3 +16,20 @@ data/
 
 # Next.js build output (any app)
 .next/
+
+# --- public-repo hygiene backstop (2026-07) ---
+.claude/
+*.pem
+*.key
+*.p12
+*.pfx
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+.idea/
+.vscode/
+coverage/
+.turbo/
+.vercel
+docs/*.docx

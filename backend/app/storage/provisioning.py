@@ -52,7 +52,7 @@ def provision_institution(
             existing.append(bucket)
         else:
             # MinIO requires an explicit LocationConstraint even for regions
-            # where AWS S3 would reject one (probed against cedynhq MinIO).
+            # where AWS S3 would reject one (probed against the managed MinIO deployment).
             s3_client.create_bucket(
                 Bucket=bucket,
                 CreateBucketConfiguration={"LocationConstraint": settings.region},

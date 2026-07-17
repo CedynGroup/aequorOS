@@ -3,6 +3,7 @@ name = "risk-service"
 version = "0.1.0"
 description = "FastAPI backend foundation for the AequorOS financial risk MVP."
 readme = "README.md"
+license = { file = "../LICENSE" }
 requires-python = ">=3.13,<3.14"
 dependencies = [
   "alembic",

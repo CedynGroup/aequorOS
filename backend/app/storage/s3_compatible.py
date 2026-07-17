@@ -350,7 +350,7 @@ class S3CompatibleStorageClient(StorageClient):
         pass. HEAD is tried first (correct everywhere, and the only path used
         on AWS/plain MinIO); on a 403 the client falls back to a plain GET and
         closes the stream as soon as the headers arrive. Remove the fallback
-        once the Cloudflare rule for s3.cedynhq.com is fixed.
+        once the WAF rule on the managed S3 endpoint is fixed.
         """
         kwargs: dict[str, Any] = {"Bucket": bucket, "Key": key}
         if version_id is not None:

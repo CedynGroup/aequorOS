@@ -2,7 +2,7 @@
 
 Provisions a throwaway institution on the configured MinIO, runs the shared
 suite, and deprovisions on teardown. Runs whenever S3_* credentials are
-configured (locally via apps/risk-service/.env, per the everything-on-cedynhq
+configured (locally via apps/risk-service/.env, per the everything-on-managed-MinIO
 decision) and skips cleanly without credentials, so CI stays hermetic.
 """
 
