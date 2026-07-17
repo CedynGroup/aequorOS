@@ -1,0 +1,17 @@
+{
+  "records": [
+    {
+      "id": "AA26001",
+      "customer": "C1001",
+      "product": "TERM.DEP.1",
+      "currency": "GHS",
+      "amount": "2000000",
+      "startDate": "20260101",
+      "maturityDate": "20270101",
+      "interestRate": "0.18",
+      "intType": "F",
+      "coCode": "GH0010001",
+      "lcyAmount": "2000000"
+    }
+  ]
+}

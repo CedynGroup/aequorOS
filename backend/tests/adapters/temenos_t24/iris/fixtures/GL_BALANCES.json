@@ -1,0 +1,32 @@
+{
+  "records": [
+    {
+      "id": "1001",
+      "description": "Cash on Hand",
+      "category": "ASSET",
+      "currency": "GHS",
+      "lcyBalance": "5000000"
+    },
+    {
+      "id": "1201",
+      "description": "Loans and Advances",
+      "category": "ASSET",
+      "currency": "GHS",
+      "lcyBalance": "60000000"
+    },
+    {
+      "id": "2001",
+      "description": "Customer Deposits",
+      "category": "LIABILITY",
+      "currency": "GHS",
+      "lcyBalance": "80000000"
+    },
+    {
+      "id": "3001",
+      "description": "Stated Capital",
+      "category": "EQUITY",
+      "currency": "GHS",
+      "lcyBalance": "45000000"
+    }
+  ]
+}

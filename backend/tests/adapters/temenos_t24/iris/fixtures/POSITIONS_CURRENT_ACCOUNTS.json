@@ -1,0 +1,14 @@
+{
+  "records": [
+    {
+      "id": "100200300",
+      "customer": "C1002",
+      "category": "1001",
+      "currency": "GHS",
+      "workingBalance": "450000",
+      "openingDate": "20200310",
+      "coCode": "GH0010001",
+      "onlineActualBalLcy": "450000"
+    }
+  ]
+}

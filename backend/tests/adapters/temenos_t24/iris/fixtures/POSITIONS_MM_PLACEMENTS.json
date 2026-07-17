@@ -1,0 +1,15 @@
+{
+  "records": [
+    {
+      "id": "MM50001",
+      "customer": "BANK.GCB",
+      "currency": "GHS",
+      "principal": "8000000",
+      "valueDate": "20260601",
+      "maturityDate": "20260901",
+      "interestRate": "0.26",
+      "coCode": "GH0010001",
+      "lcyPrincipal": "8000000"
+    }
+  ]
+}

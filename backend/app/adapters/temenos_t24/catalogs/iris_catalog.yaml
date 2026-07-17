@@ -1,0 +1,398 @@
+# Temenos T24 — IRIS REST connection-mode catalog.
+#
+# Derived from the OFS catalog: identical canonical output, REST source
+# field names (camelCase, a documented Temenos convention) and IRIS provider
+# endpoints. Endpoint + field names are DEFAULTS overridable per bank via
+# connection catalog_overrides — the IRIS JSON schema is installation-specific.
+# A domain stays supported:false until its IRIS field schema is confirmed.
+
+GL_BALANCES:
+  supported: true
+  endpoint: iris/v1/general-ledger/balances
+  id_field: glCode
+  selection:
+    coCode: '{company}'
+  page_size: 1000
+  field_map:
+    glCode: account_code
+    description: name
+    category: account_class
+    currency: currency
+    lcyBalance: balance
+  attribute_keys:
+  - balance_ghs
+  lcy_fields:
+    balance_ghs: lcyBalance
+  enum_mappings:
+    account_class:
+      ASSET: ASSET
+      LIABILITY: LIABILITY
+      EQUITY: EQUITY
+      INCOME: INCOME
+      EXPENSE: EXPENSE
+      CONTINGENT: OFF_BALANCE
+POSITIONS_LOANS:
+  supported: true
+  endpoint: iris/v1/arrangements/lending
+  id_field: arrangementId
+  selection:
+    arrProductLine: LENDING
+    coCode: '{company}'
+  page_size: 500
+  field_map:
+    arrangementId: source_reference
+    customer: counterparty_reference
+    product: product_code
+    currency: currency
+    amount: balance
+    startDate: origination_date
+    maturityDate: contractual_maturity
+    nextRepriceDate: next_repricing_date
+    interestRate: interest_rate
+    intType: rate_type
+    indexRate: rate_index
+    marginRate: rate_spread
+    ifrs9Stage: ifrs9_stage
+    coCode: branch_id
+    arrStatus: arrears_status
+  attribute_keys:
+  - balance_ghs
+  - ecl_provision_ghs
+  - branch_id
+  - arrears_status
+  lcy_fields:
+    balance_ghs: lcyAmount
+    ecl_provision_ghs: lcyProvisionAmt
+  enum_mappings:
+    rate_type:
+      F: FIXED
+      V: FLOATING
+      FIXED: FIXED
+      FLOATING: FLOATING
+    ifrs9_stage:
+      '1': '1'
+      '2': '2'
+      '3': '3'
+      STAGE1: '1'
+      STAGE2: '2'
+      STAGE3: '3'
+  constants:
+    position_type: LOAN
+POSITIONS_DEPOSITS:
+  supported: true
+  endpoint: iris/v1/arrangements/deposits
+  id_field: arrangementId
+  selection:
+    arrProductLine: DEPOSITS
+    coCode: '{company}'
+  page_size: 500
+  field_map:
+    arrangementId: source_reference
+    customer: counterparty_reference
+    product: product_code
+    currency: currency
+    amount: balance
+    startDate: origination_date
+    maturityDate: contractual_maturity
+    nextRepriceDate: next_repricing_date
+    interestRate: interest_rate
+    intType: rate_type
+    coCode: branch_id
+  attribute_keys:
+  - balance_ghs
+  - branch_id
+  lcy_fields:
+    balance_ghs: lcyAmount
+  enum_mappings:
+    rate_type:
+      F: FIXED
+      V: FLOATING
+      FIXED: FIXED
+      FLOATING: FLOATING
+  constants:
+    position_type: DEPOSIT
+POSITIONS_CURRENT_ACCOUNTS:
+  supported: true
+  endpoint: iris/v1/accounts/balances
+  id_field: accountNumber
+  selection:
+    coCode: '{company}'
+  page_size: 1000
+  field_map:
+    accountNumber: source_reference
+    customer: counterparty_reference
+    category: product_code
+    currency: currency
+    workingBalance: balance
+    openingDate: origination_date
+    coCode: branch_id
+  attribute_keys:
+  - balance_ghs
+  - branch_id
+  lcy_fields:
+    balance_ghs: onlineActualBalLcy
+  constants:
+    position_type: DEPOSIT
+COUNTERPARTY_MASTER:
+  supported: true
+  endpoint: iris/v1/parties/customers
+  id_field: customerCode
+  selection:
+    coCode: '{company}'
+  page_size: 1000
+  field_map:
+    customerCode: source_reference
+    name1: name
+    sector: counterparty_type
+    country: country_code
+    lCuRating: rating
+    target: group_reference
+    coCode: branch_id
+    industry: industry_code
+  attribute_keys:
+  - branch_id
+  - industry_code
+  enum_mappings:
+    counterparty_type:
+      '1000': RETAIL_INDIVIDUAL
+      '1001': RETAIL_INDIVIDUAL
+      '2000': SME
+      '3000': CORPORATE
+      '4000': BANK_OECD
+      '4100': BANK_NON_OECD
+      '5000': CENTRAL_BANK
+      '6000': SOVEREIGN
+      '6100': GOVERNMENT_ENTITY
+      '7000': NBFI
+  constants:
+    rating_source: T24_INTERNAL
+PRODUCT_MASTER:
+  supported: true
+  endpoint: iris/v1/product-catalog/products
+  id_field: productId
+  page_size: 1000
+  field_map:
+    productId: product_code
+    description: name
+    productLine: regulatory_category
+    riskWeightBand: risk_weight_code
+    productGroup: product_group
+  attribute_keys:
+  - product_group
+BUSINESS_UNITS:
+  supported: true
+  endpoint: iris/v1/reference/companies
+  id_field: companyCode
+  page_size: 500
+  field_map: {}
+  dataset_key: business_units
+INSTITUTION:
+  supported: true
+  endpoint: iris/v1/reference/institution
+  id_field: companyCode
+  selection:
+    companyCode: '{company}'
+  page_size: 100
+  field_map: {}
+  dataset_key: institution
+POSITIONS_MM_PLACEMENTS:
+  supported: true
+  endpoint: iris/v1/money-market/placements
+  id_field: mmId
+  selection:
+    dealType: PLACEMENT
+    coCode: '{company}'
+  field_map:
+    mmId: source_reference
+    customer: counterparty_reference
+    currency: currency
+    principal: balance
+    valueDate: origination_date
+    maturityDate: contractual_maturity
+    interestRate: interest_rate
+  attribute_keys:
+  - balance_ghs
+  lcy_fields:
+    balance_ghs: lcyPrincipal
+  constants:
+    position_type: INTERBANK_PLACEMENT
+POSITIONS_MM_BORROWINGS:
+  supported: true
+  endpoint: iris/v1/money-market/borrowings
+  id_field: mmId
+  selection:
+    dealType: BORROWING
+    coCode: '{company}'
+  field_map:
+    mmId: source_reference
+    customer: counterparty_reference
+    currency: currency
+    principal: balance
+    valueDate: origination_date
+    maturityDate: contractual_maturity
+    interestRate: interest_rate
+  attribute_keys:
+  - balance_ghs
+  lcy_fields:
+    balance_ghs: lcyPrincipal
+  constants:
+    position_type: INTERBANK_BORROWING
+POSITIONS_FX_DEALS:
+  supported: true
+  endpoint: iris/v1/forex/deals
+  id_field: fxId
+  selection:
+    coCode: '{company}'
+  field_map:
+    counterparty: counterparty_reference
+    currencySold: currency
+    amountSold: balance
+    valueDateFwd: contractual_maturity
+    currencyBought: buy_currency
+    dealRate: contract_rate
+    dealType: instrument
+    hedgeRef: hedge_id
+  attribute_keys:
+  - notional_ghs
+  - buy_currency
+  - contract_rate
+  - instrument
+  - hedge_id
+  - mtm_ghs
+  lcy_fields:
+    notional_ghs: lcyAmountSold
+    mtm_ghs: lcyMtm
+  constants:
+    position_type: FX_HEDGE
+POSITIONS_SWAPS:
+  supported: true
+  endpoint: iris/v1/swaps/agreements
+  id_field: swapId
+  selection:
+    coCode: '{company}'
+  field_map:
+    swapId: swap_id
+    counterparty: counterparty_reference
+    currency: currency
+    principal: balance
+    startDate: origination_date
+    maturityDate: contractual_maturity
+    payReceiveType: direction
+    payRate: pay_rate_pct
+    receiveIndex: receive_index
+    tenorYears: tenor_years
+  attribute_keys:
+  - notional_ghs
+  - swap_id
+  - direction
+  - pay_rate_pct
+  - receive_index
+  - tenor_years
+  lcy_fields:
+    notional_ghs: lcyPrincipal
+  constants:
+    position_type: INTEREST_RATE_SWAP
+SECURITIES_HOLDINGS:
+  supported: true
+  endpoint: iris/v1/securities/positions
+  id_field: positionId
+  selection:
+    coCode: '{company}'
+  field_map:
+    positionId: source_reference
+    securityNo: product_code
+    currency: currency
+    nominal: balance
+    maturityDate: contractual_maturity
+    couponRate: interest_rate
+  attribute_keys:
+  - balance_ghs
+  lcy_fields:
+    balance_ghs: lcyMarketValue
+  constants:
+    position_type: SECURITY_HOLDING
+OFF_BALANCE_LC:
+  supported: true
+  endpoint: iris/v1/trade-finance/letters-of-credit
+  id_field: lcId
+  selection:
+    coCode: '{company}'
+  field_map:
+    lcId: source_reference
+    customer: counterparty_reference
+    currency: currency
+    lcAmount: balance
+    expiryDate: contractual_maturity
+  attribute_keys:
+  - notional_ghs
+  - credit_conversion_factor
+  lcy_fields:
+    notional_ghs: lcyLcAmount
+  constants:
+    position_type: LC_GUARANTEE
+    credit_conversion_factor: '1.0'
+OFF_BALANCE_GUARANTEES:
+  supported: true
+  endpoint: iris/v1/trade-finance/guarantees
+  id_field: lcId
+  selection:
+    lcType: GUARANTEE
+    coCode: '{company}'
+  field_map:
+    lcId: source_reference
+    customer: counterparty_reference
+    currency: currency
+    lcAmount: balance
+    expiryDate: contractual_maturity
+  attribute_keys:
+  - notional_ghs
+  - credit_conversion_factor
+  lcy_fields:
+    notional_ghs: lcyLcAmount
+  constants:
+    position_type: LC_GUARANTEE
+    credit_conversion_factor: '1.0'
+OFF_BALANCE_COMMITMENTS:
+  supported: true
+  endpoint: iris/v1/arrangements/commitments
+  id_field: arrangementId
+  selection:
+    coCode: '{company}'
+  field_map:
+    arrangementId: source_reference
+    customer: counterparty_reference
+    currency: currency
+    undrawnAmount: balance
+    maturityDate: contractual_maturity
+  attribute_keys:
+  - notional_ghs
+  - credit_conversion_factor
+  lcy_fields:
+    notional_ghs: lcyUndrawnAmount
+  constants:
+    position_type: COMMITMENT_UNDRAWN
+    credit_conversion_factor: '0.5'
+LIMITS:
+  supported: false
+  endpoint: iris/v1/limits/utilisation
+  id_field: limitId
+  selection:
+    coCode: '{company}'
+  field_map: {}
+  dataset_key: limits
+CASHFLOWS_SCHEDULED:
+  supported: false
+  endpoint: iris/v1/arrangements/payment-schedules
+  id_field: arrangementId
+  selection:
+    coCode: '{company}'
+  field_map: {}
+  dataset_key: historical_cashflows
+HISTORICAL_BALANCES:
+  supported: false
+  endpoint: iris/v1/general-ledger/balance-history
+  id_field: glCode
+  selection:
+    coCode: '{company}'
+  field_map: {}
+  dataset_key: historical_financials

@@ -235,3 +235,34 @@ RatingAgency = Literal["moodys", "sp", "fitch", "internal"]
 
 RATING_WATCH_STATUSES: tuple[str, ...] = ("positive", "negative", "stable", "developing")
 RatingWatchStatus = Literal["positive", "negative", "stable", "developing"]
+
+# Temenos T24 core-banking adapter (docs/temenos_adapter.md): the connection
+# modes (transport channels), the core systems a connection can target, and the
+# credential-lifecycle statuses the operational connection table enforces.
+# These mirror the market-data connection lifecycle vocabulary.
+TEMENOS_CONNECTION_MODES: tuple[str, ...] = ("OFS", "IRIS", "OPEN_API")
+TemenosConnectionMode = Literal["OFS", "IRIS", "OPEN_API"]
+
+TEMENOS_CORE_SYSTEMS: tuple[str, ...] = ("T24", "FINACLE", "FLEXCUBE")
+TemenosCoreSystem = Literal["T24", "FINACLE", "FLEXCUBE"]
+
+TEMENOS_CONNECTION_STATUSES: tuple[str, ...] = (
+    "TESTING",
+    "ACTIVE",
+    "EXPIRING_SOON",
+    "EXPIRED",
+    "REVOKED",
+    "INVALID",
+    "REPLACED_PENDING_DELETION",
+    "DISABLED",
+)
+TemenosConnectionStatus = Literal[
+    "TESTING",
+    "ACTIVE",
+    "EXPIRING_SOON",
+    "EXPIRED",
+    "REVOKED",
+    "INVALID",
+    "REPLACED_PENDING_DELETION",
+    "DISABLED",
+]

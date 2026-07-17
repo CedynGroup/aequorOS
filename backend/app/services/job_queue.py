@@ -33,7 +33,13 @@ def _as_aware(value: datetime | None) -> datetime | None:
 
 
 # Live-engine job types (jobs.job_type has no DB CHECK — validate in code).
-JOB_TYPES = ("pipeline_refresh", "official_run", "scheduled_tick", "market_data_pull")
+JOB_TYPES = (
+    "pipeline_refresh",
+    "official_run",
+    "scheduled_tick",
+    "market_data_pull",
+    "temenos_pull",
+)
 
 # Retry backoff is 2**attempts * base seconds (10s, 20s, 40s at base=5).
 _BACKOFF_BASE_SECONDS = 5

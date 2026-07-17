@@ -36,7 +36,8 @@ def run_tick(session: Session, job: Job) -> None:
     settings = get_settings()
     official_enabled = settings.worker.official_run_enabled
     market_data_enabled = settings.market_data.market_data_pull_enabled
-    if not official_enabled and not market_data_enabled:
+    temenos_enabled = settings.temenos.temenos_pull_enabled
+    if not official_enabled and not market_data_enabled and not temenos_enabled:
         job.progress = {"status": "inert", "reason": "official_run_disabled"}
         return
 
@@ -54,6 +55,13 @@ def run_tick(session: Session, job: Job) -> None:
 
         market_data_pulls = len(enqueue_due_market_data_pulls(session, org_id, now=now))
 
+    temenos_pulls = 0
+    if temenos_enabled:
+        # Lazy import: temenos_jobs pulls in the ingestion module tree.
+        from app.services.temenos_jobs import enqueue_due_temenos_pulls  # noqa: PLC0415
+
+        temenos_pulls = len(enqueue_due_temenos_pulls(session, org_id, now=now))
+
     job_queue.enqueue(
         session,
         org_id,
@@ -65,6 +73,7 @@ def run_tick(session: Session, job: Job) -> None:
     job.progress = {
         "official_runs_enqueued": enqueued,
         "market_data_pulls_enqueued": market_data_pulls,
+        "temenos_pulls_enqueued": temenos_pulls,
     }
 
 

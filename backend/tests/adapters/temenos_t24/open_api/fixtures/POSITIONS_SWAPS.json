@@ -1,0 +1,17 @@
+{
+  "records": [
+    {
+      "id": "IRS40001",
+      "counterparty": "BANK.STANBIC",
+      "currency": "GHS",
+      "principal": "10000000",
+      "startDate": "20250101",
+      "maturityDate": "20300101",
+      "payReceiveType": "pay_fixed",
+      "payRate": "0.24",
+      "receiveIndex": "91d_tbill",
+      "tenorYears": "5",
+      "lcyPrincipal": "10000000"
+    }
+  ]
+}

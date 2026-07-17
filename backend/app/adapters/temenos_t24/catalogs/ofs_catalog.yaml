@@ -1,0 +1,487 @@
+# Temenos T24 — OFS connection-mode catalog.
+#
+# Maps each CoreBankingDomain to its OFS request coordinates (T24 application +
+# ENQUIRY.SELECT enquiry) and to the canonical output schema the OFS extractors
+# emit. `field_map` renames raw T24 fields to canonical keys; `attribute_keys`
+# marks canonical keys copied into the position/account `attributes` payload
+# (and each MUST be sourced from a field_map target, an lcy_field, or a
+# constant); `lcy_fields` binds a canonical attribute to the T24 local-currency-
+# equivalent field; `enum_mappings`/`constants` finish canonicalization.
+#
+# HONESTY RAILS:
+#   * A domain without `supported: true` is NOT offered (never fake support).
+#   * Enquiry names below are AequorOS-convention DEFAULTS. T24 enquiries are
+#     installation-specific — a bank overrides them via connection
+#     `catalog_overrides` without a code change. The loader validates structure,
+#     not that a given enquiry exists in a particular core.
+#   * Application/field names stay within documented, standard T24 vocabulary
+#     (KNOWN_TABLES in adapter.py); nothing here invents a T24 endpoint.
+
+# ---------------------------------------------------------------------------
+# Priority domains — the pilotable core (supported now).
+# ---------------------------------------------------------------------------
+
+GL_BALANCES:
+  supported: true
+  application: GENERAL.LEDGER
+  enquiry: AEQ.NOFILE.GL.BALANCES
+  id_field: GL.CODE
+  page_size: 1000
+  selection:
+    CO.CODE: "{company}"
+  field_map:
+    GL.CODE: account_code
+    DESCRIPTION: name
+    CATEGORY: account_class
+    CURRENCY: currency
+    LCY.BALANCE: balance
+  attribute_keys:
+    - balance_ghs
+  lcy_fields:
+    balance_ghs: LCY.BALANCE
+  enum_mappings:
+    account_class:
+      ASSET: ASSET
+      LIABILITY: LIABILITY
+      EQUITY: EQUITY
+      INCOME: INCOME
+      EXPENSE: EXPENSE
+      CONTINGENT: OFF_BALANCE
+  constants: {}
+
+POSITIONS_LOANS:
+  supported: true
+  application: AA.ARRANGEMENT
+  enquiry: AEQ.AA.LENDING.POSITIONS
+  id_field: ARRANGEMENT.ID
+  page_size: 500
+  selection:
+    ARR.PRODUCT.LINE: LENDING
+    CO.CODE: "{company}"
+  field_map:
+    ARRANGEMENT.ID: source_reference
+    CUSTOMER: counterparty_reference
+    PRODUCT: product_code
+    CURRENCY: currency
+    AMOUNT: balance
+    START.DATE: origination_date
+    MATURITY.DATE: contractual_maturity
+    NEXT.REPRICE.DATE: next_repricing_date
+    INTEREST.RATE: interest_rate
+    INT.TYPE: rate_type
+    INDEX.RATE: rate_index
+    MARGIN.RATE: rate_spread
+    IFRS9.STAGE: ifrs9_stage
+    CO.CODE: branch_id
+    ARR.STATUS: arrears_status
+  attribute_keys:
+    - balance_ghs
+    - ecl_provision_ghs
+    - branch_id
+    - arrears_status
+  lcy_fields:
+    balance_ghs: LCY.AMOUNT
+    ecl_provision_ghs: LCY.PROVISION.AMT
+  enum_mappings:
+    rate_type:
+      F: FIXED
+      V: FLOATING
+      FIXED: FIXED
+      FLOATING: FLOATING
+    ifrs9_stage:
+      "1": "1"
+      "2": "2"
+      "3": "3"
+      STAGE1: "1"
+      STAGE2: "2"
+      STAGE3: "3"
+  constants:
+    position_type: LOAN
+
+POSITIONS_DEPOSITS:
+  supported: true
+  application: AA.ARRANGEMENT
+  enquiry: AEQ.AA.DEPOSIT.POSITIONS
+  id_field: ARRANGEMENT.ID
+  page_size: 500
+  selection:
+    ARR.PRODUCT.LINE: DEPOSITS
+    CO.CODE: "{company}"
+  field_map:
+    ARRANGEMENT.ID: source_reference
+    CUSTOMER: counterparty_reference
+    PRODUCT: product_code
+    CURRENCY: currency
+    AMOUNT: balance
+    START.DATE: origination_date
+    MATURITY.DATE: contractual_maturity
+    NEXT.REPRICE.DATE: next_repricing_date
+    INTEREST.RATE: interest_rate
+    INT.TYPE: rate_type
+    CO.CODE: branch_id
+  attribute_keys:
+    - balance_ghs
+    - branch_id
+  lcy_fields:
+    balance_ghs: LCY.AMOUNT
+  enum_mappings:
+    rate_type:
+      F: FIXED
+      V: FLOATING
+      FIXED: FIXED
+      FLOATING: FLOATING
+  constants:
+    position_type: DEPOSIT
+
+POSITIONS_CURRENT_ACCOUNTS:
+  supported: true
+  application: ACCOUNT
+  enquiry: AEQ.ACCOUNT.CASA.BALANCES
+  id_field: ACCOUNT.NUMBER
+  page_size: 1000
+  selection:
+    CO.CODE: "{company}"
+  field_map:
+    ACCOUNT.NUMBER: source_reference
+    CUSTOMER: counterparty_reference
+    CATEGORY: product_code
+    CURRENCY: currency
+    WORKING.BALANCE: balance
+    OPENING.DATE: origination_date
+    CO.CODE: branch_id
+  attribute_keys:
+    - balance_ghs
+    - branch_id
+  lcy_fields:
+    balance_ghs: ONLINE.ACTUAL.BAL.LCY
+  enum_mappings: {}
+  constants:
+    position_type: DEPOSIT
+
+COUNTERPARTY_MASTER:
+  supported: true
+  application: CUSTOMER
+  enquiry: AEQ.CUSTOMER.MASTER
+  id_field: CUSTOMER.CODE
+  page_size: 1000
+  selection:
+    CO.CODE: "{company}"
+  field_map:
+    CUSTOMER.CODE: source_reference
+    NAME.1: name
+    SECTOR: counterparty_type
+    COUNTRY: country_code
+    L.CU.RATING: rating
+    TARGET: group_reference
+    CO.CODE: branch_id
+    INDUSTRY: industry_code
+  attribute_keys:
+    - branch_id
+    - industry_code
+  lcy_fields: {}
+  enum_mappings:
+    counterparty_type:
+      "1000": RETAIL_INDIVIDUAL
+      "1001": RETAIL_INDIVIDUAL
+      "2000": SME
+      "3000": CORPORATE
+      "4000": BANK_OECD
+      "4100": BANK_NON_OECD
+      "5000": CENTRAL_BANK
+      "6000": SOVEREIGN
+      "6100": GOVERNMENT_ENTITY
+      "7000": NBFI
+  constants:
+    rating_source: T24_INTERNAL
+
+PRODUCT_MASTER:
+  supported: true
+  application: AA.PRODUCT
+  enquiry: AEQ.AA.PRODUCT.CATALOG
+  id_field: PRODUCT.ID
+  page_size: 1000
+  selection: {}
+  field_map:
+    PRODUCT.ID: product_code
+    DESCRIPTION: name
+    PRODUCT.LINE: regulatory_category
+    RISK.WEIGHT.BAND: risk_weight_code
+    PRODUCT.GROUP: product_group
+  attribute_keys:
+    - product_group
+  lcy_fields: {}
+  enum_mappings: {}
+  constants: {}
+
+# ---------------------------------------------------------------------------
+# Reference domains — supported now (preserved as reference-dataset rows).
+# ---------------------------------------------------------------------------
+
+BUSINESS_UNITS:
+  supported: true
+  application: COMPANY
+  enquiry: AEQ.COMPANY.BRANCHES
+  id_field: COMPANY.CODE
+  page_size: 500
+  selection: {}
+  dataset_key: business_units
+  field_map: {}
+  attribute_keys: []
+  lcy_fields: {}
+  enum_mappings: {}
+  constants: {}
+
+INSTITUTION:
+  supported: true
+  application: COMPANY
+  enquiry: AEQ.COMPANY.INSTITUTION
+  id_field: COMPANY.CODE
+  page_size: 100
+  selection:
+    COMPANY.CODE: "{company}"
+  dataset_key: institution
+  field_map: {}
+  attribute_keys: []
+  lcy_fields: {}
+  enum_mappings: {}
+  constants: {}
+
+# ---------------------------------------------------------------------------
+# Treasury, securities, and off-balance position domains (supported now).
+# ---------------------------------------------------------------------------
+
+POSITIONS_MM_PLACEMENTS:
+  supported: true
+  application: MM.MONEY.MARKET
+  enquiry: AEQ.MM.PLACEMENTS
+  id_field: MM.ID
+  selection:
+    DEAL.TYPE: PLACEMENT
+    CO.CODE: "{company}"
+  field_map:
+    MM.ID: source_reference
+    CUSTOMER: counterparty_reference
+    CURRENCY: currency
+    PRINCIPAL: balance
+    VALUE.DATE: origination_date
+    MATURITY.DATE: contractual_maturity
+    INTEREST.RATE: interest_rate
+  attribute_keys:
+    - balance_ghs
+  lcy_fields:
+    balance_ghs: LCY.PRINCIPAL
+  constants:
+    position_type: INTERBANK_PLACEMENT
+
+POSITIONS_MM_BORROWINGS:
+  supported: true
+  application: MM.MONEY.MARKET
+  enquiry: AEQ.MM.BORROWINGS
+  id_field: MM.ID
+  selection:
+    DEAL.TYPE: BORROWING
+    CO.CODE: "{company}"
+  field_map:
+    MM.ID: source_reference
+    CUSTOMER: counterparty_reference
+    CURRENCY: currency
+    PRINCIPAL: balance
+    VALUE.DATE: origination_date
+    MATURITY.DATE: contractual_maturity
+    INTEREST.RATE: interest_rate
+  attribute_keys:
+    - balance_ghs
+  lcy_fields:
+    balance_ghs: LCY.PRINCIPAL
+  constants:
+    position_type: INTERBANK_BORROWING
+
+# FX deal semantics match fact_derivation's hedge reader: `currency` is the
+# SOLD (short) leg, `buy_currency` the bought leg (defaults GHS when absent),
+# `contract_rate` converts the sell notional to the buy leg, `mtm_ghs` is the
+# LCY mark-to-market. `hedge_id`/`instrument` are optional grouping/vocab.
+POSITIONS_FX_DEALS:
+  supported: true
+  application: FOREX
+  enquiry: AEQ.FOREX.DEALS
+  id_field: FX.ID
+  selection:
+    CO.CODE: "{company}"
+  field_map:
+    COUNTERPARTY: counterparty_reference
+    CURRENCY.SOLD: currency
+    AMOUNT.SOLD: balance
+    VALUE.DATE.FWD: contractual_maturity
+    CURRENCY.BOUGHT: buy_currency
+    DEAL.RATE: contract_rate
+    DEAL.TYPE: instrument
+    HEDGE.REF: hedge_id
+  attribute_keys:
+    - notional_ghs
+    - buy_currency
+    - contract_rate
+    - instrument
+    - hedge_id
+    - mtm_ghs
+  lcy_fields:
+    notional_ghs: LCY.AMOUNT.SOLD
+    mtm_ghs: LCY.MTM
+  constants:
+    position_type: FX_HEDGE
+
+# IRS semantics match fact_derivation's swap reader: `direction` is
+# pay_fixed|receive_fixed (lowercased), `pay_rate_pct` the fixed leg, and
+# `receive_index` the floating index whose name encodes the reset tenor.
+POSITIONS_SWAPS:
+  supported: true
+  application: SWAP.AGREEMENT
+  enquiry: AEQ.SWAP.IRS
+  id_field: SWAP.ID
+  selection:
+    CO.CODE: "{company}"
+  field_map:
+    SWAP.ID: swap_id
+    COUNTERPARTY: counterparty_reference
+    CURRENCY: currency
+    PRINCIPAL: balance
+    START.DATE: origination_date
+    MATURITY.DATE: contractual_maturity
+    PAY.RECEIVE.TYPE: direction
+    PAY.RATE: pay_rate_pct
+    RECEIVE.INDEX: receive_index
+    TENOR.YEARS: tenor_years
+  attribute_keys:
+    - notional_ghs
+    - swap_id
+    - direction
+    - pay_rate_pct
+    - receive_index
+    - tenor_years
+  lcy_fields:
+    notional_ghs: LCY.PRINCIPAL
+  constants:
+    position_type: INTEREST_RATE_SWAP
+
+SECURITIES_HOLDINGS:
+  supported: true
+  application: SECURITY.POSITION
+  enquiry: AEQ.SECURITY.HOLDINGS
+  id_field: POSITION.ID
+  selection:
+    CO.CODE: "{company}"
+  field_map:
+    POSITION.ID: source_reference
+    SECURITY.NO: product_code
+    CURRENCY: currency
+    NOMINAL: balance
+    MATURITY.DATE: contractual_maturity
+    COUPON.RATE: interest_rate
+  attribute_keys:
+    - balance_ghs
+  lcy_fields:
+    balance_ghs: LCY.MARKET.VALUE
+  constants:
+    position_type: SECURITY_HOLDING
+
+OFF_BALANCE_LC:
+  supported: true
+  application: LETTER.OF.CREDIT
+  enquiry: AEQ.LC.OUTSTANDING
+  id_field: LC.ID
+  selection:
+    CO.CODE: "{company}"
+  field_map:
+    LC.ID: source_reference
+    CUSTOMER: counterparty_reference
+    CURRENCY: currency
+    LC.AMOUNT: balance
+    EXPIRY.DATE: contractual_maturity
+  attribute_keys:
+    - notional_ghs
+    - credit_conversion_factor
+  lcy_fields:
+    notional_ghs: LCY.LC.AMOUNT
+  constants:
+    position_type: LC_GUARANTEE
+    credit_conversion_factor: "1.0"
+
+OFF_BALANCE_GUARANTEES:
+  supported: true
+  application: LETTER.OF.CREDIT
+  enquiry: AEQ.GUARANTEE.OUTSTANDING
+  id_field: LC.ID
+  selection:
+    LC.TYPE: GUARANTEE
+    CO.CODE: "{company}"
+  field_map:
+    LC.ID: source_reference
+    CUSTOMER: counterparty_reference
+    CURRENCY: currency
+    LC.AMOUNT: balance
+    EXPIRY.DATE: contractual_maturity
+  attribute_keys:
+    - notional_ghs
+    - credit_conversion_factor
+  lcy_fields:
+    notional_ghs: LCY.LC.AMOUNT
+  constants:
+    position_type: LC_GUARANTEE
+    credit_conversion_factor: "1.0"
+
+OFF_BALANCE_COMMITMENTS:
+  supported: true
+  application: AA.ARRANGEMENT
+  enquiry: AEQ.AA.UNDRAWN.COMMITMENTS
+  id_field: ARRANGEMENT.ID
+  selection:
+    CO.CODE: "{company}"
+  field_map:
+    ARRANGEMENT.ID: source_reference
+    CUSTOMER: counterparty_reference
+    CURRENCY: currency
+    UNDRAWN.AMOUNT: balance
+    MATURITY.DATE: contractual_maturity
+  attribute_keys:
+    - notional_ghs
+    - credit_conversion_factor
+  lcy_fields:
+    notional_ghs: LCY.UNDRAWN.AMOUNT
+  constants:
+    position_type: COMMITMENT_UNDRAWN
+    credit_conversion_factor: "0.5"
+
+# ---------------------------------------------------------------------------
+# Reference/other domains still staged: LIMITS has no module consumer yet, and
+# the historical/cashflow reference kinds await their extractor shaping. Kept
+# supported:false so the adapter never claims data it cannot yet extract.
+# ---------------------------------------------------------------------------
+
+LIMITS:
+  supported: false
+  application: LIMIT.REFERENCE
+  enquiry: AEQ.LIMIT.UTILISATION
+  id_field: LIMIT.ID
+  selection:
+    CO.CODE: "{company}"
+  dataset_key: limits
+  field_map: {}
+
+CASHFLOWS_SCHEDULED:
+  supported: false
+  application: AA.ARRANGEMENT
+  enquiry: AEQ.AA.PAYMENT.SCHEDULE
+  id_field: ARRANGEMENT.ID
+  selection:
+    CO.CODE: "{company}"
+  dataset_key: historical_cashflows
+  field_map: {}
+
+HISTORICAL_BALANCES:
+  supported: false
+  application: GENERAL.LEDGER
+  enquiry: AEQ.GL.BALANCE.HISTORY
+  id_field: GL.CODE
+  selection:
+    CO.CODE: "{company}"
+  dataset_key: historical_financials
+  field_map: {}

@@ -529,7 +529,10 @@ class TestManualOverride:
 
 
 class TestT24ThroughTheApi:
-    def test_t24_ingestion_fails_honestly_while_skeleton(self, db_client: TestClient) -> None:
+    def test_t24_ingestion_requires_a_staged_bundle(self, db_client: TestClient) -> None:
+        # T24 ingests through the stage-then-ingest path: a pull stages a bundle
+        # to the temp tier and passes its temp:// location. A raw non-bundle
+        # location fails connection honestly rather than crashing.
         bank_id = seed_bank(db_client)
         response = db_client.post(
             f"/api/v1/banks/{bank_id}/mapping-configs",
@@ -539,7 +542,7 @@ class TestT24ThroughTheApi:
                 "name": "T24 placeholder mapping",
                 "config": {},
                 "activate": True,
-                "reason": "Prepare for portal access.",
+                "reason": "Prepare for onboarding.",
             },
         )
         assert response.status_code == 200
@@ -550,14 +553,14 @@ class TestT24ThroughTheApi:
                 "source_system": "T24",
                 "as_of_date": AS_OF,
                 "location": "tafj://bank-t24.internal",
-                "reason": "Attempt native T24 pull.",
+                "reason": "Attempt direct T24 ingestion.",
             },
         )
         assert started.status_code == 201
         batch = started.json()["batch"]
         assert batch["status"] == "failed"
         assert batch["error_code"] == "connection_failed"
-        assert "pending Temenos" in batch["error_message"]
+        assert "bundle" in batch["error_message"].lower()
 
 
 class TestMappingConfigVersioning:

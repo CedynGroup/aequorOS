@@ -1,0 +1,36 @@
+{
+  "records": [
+    {
+      "id": "AA25001",
+      "customer": "C1001",
+      "product": "MORTGAGE.1",
+      "currency": "GHS",
+      "amount": "1200000",
+      "startDate": "20240115",
+      "maturityDate": "20440115",
+      "interestRate": "0.245",
+      "intType": "V",
+      "ifrs9Stage": "1",
+      "coCode": "GH0010001",
+      "arrStatus": "CURRENT",
+      "lcyAmount": "1200000",
+      "lcyProvisionAmt": "12000"
+    },
+    {
+      "id": "AA25002",
+      "customer": "C1002",
+      "product": "SME.TERM.1",
+      "currency": "GHS",
+      "amount": "3500000",
+      "startDate": "20250601",
+      "maturityDate": "20300601",
+      "interestRate": "0.31",
+      "intType": "F",
+      "ifrs9Stage": "2",
+      "coCode": "GH0010001",
+      "arrStatus": "CURRENT",
+      "lcyAmount": "3500000",
+      "lcyProvisionAmt": "210000"
+    }
+  ]
+}

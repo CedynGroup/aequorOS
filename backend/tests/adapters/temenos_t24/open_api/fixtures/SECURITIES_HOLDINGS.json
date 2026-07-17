@@ -1,0 +1,24 @@
+{
+  "records": [
+    {
+      "id": "SEC70001",
+      "securityNo": "GOG.BILL.91",
+      "currency": "GHS",
+      "nominal": "15000000",
+      "maturityDate": "20260930",
+      "couponRate": "0.0",
+      "coCode": "GH0010001",
+      "lcyMarketValue": "14800000"
+    },
+    {
+      "id": "SEC70002",
+      "securityNo": "GOG.BOND.5Y",
+      "currency": "GHS",
+      "nominal": "20000000",
+      "maturityDate": "20300815",
+      "couponRate": "0.21",
+      "coCode": "GH0010001",
+      "lcyMarketValue": "20200000"
+    }
+  ]
+}
