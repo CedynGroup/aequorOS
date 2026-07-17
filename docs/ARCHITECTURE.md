@@ -324,7 +324,7 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 | risk-service (all) | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check` |
 | risk-service vs Postgres | `docker compose up -d risk-postgres` then `mise run risk-service:test-postgres` (sets `TEST_DATABASE_URL`) |
 | risk-service migrations | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"` |
-| web | `pnpm --filter @aequoros/aequoros-web typecheck` · `lint` · `test` · `build` (e2e: `e2e`, deterministic journeys in `apps/aequoros-web/e2e/*.spec.ts`) |
+| web | `pnpm --filter @aequoros/dashboard typecheck` · `pnpm --filter @aequoros/dashboard lint` · `pnpm --filter @aequoros/dashboard build` · `pnpm --filter @aequoros/frontend lint` · `pnpm --filter @aequoros/frontend build` |
 | generated client | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`) |
 | client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean) |
 
