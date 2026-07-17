@@ -342,10 +342,10 @@ as the in-process `app/ml` module. Moving a Python/uv/alembic service inside a N
 would break the workspace, migrations, RLS, the OpenAPI client-gen pipeline, and the test
 suite. The monorepo was kept intact; nothing was moved or deleted.
 
-**`dashboard` is the primary product surface** — the Bank Treasurer console, wired
+**`backend/dashboard` is the primary product surface** — the Bank Treasurer console, wired
 end-to-end to the risk-service via the generated `@aequoros/risk-service-api` client, with
-zero hardcoded financial data. `apps/aequoros-web` (case-based risk console) and
-`frontend` (marketing) remain independent, working deliverables.
+zero hardcoded financial data. `frontend` (marketing) remains an independent deliverable.
+The legacy `aequoros-web` SPA is not present in the current repo tree (see git history).
 
 ### Six regulatory modules (all live, DB-driven, tenant-scoped)
 
