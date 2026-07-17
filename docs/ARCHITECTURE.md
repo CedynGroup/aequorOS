@@ -19,7 +19,7 @@ Companion document: [CODEBASE_CONVENTIONS.md](../CODEBASE_CONVENTIONS.md).
 | Local infra (offline fallback) | `backend/docker-compose.yml` | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local` | Started with `docker compose up -d` from `backend`. |
 
 Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `backend/mise.toml`),
-`uv` for Python deps, `pnpm` workspaces (`pnpm-workspace.yaml` includes `packages/*`, `frontend`, `dashboard`). Pre-commit config is at the repo root
+`uv` for Python deps, `pnpm` workspaces (`pnpm-workspace.yaml` includes `packages/*`, `frontend`, `backend/dashboard`). Pre-commit config is at the repo root
 (`.pre-commit-config.yaml`): ruff check/format scoped to `^backend/`, Conventional
 Commits enforcement, and a pre-push hook that runs `mise run risk-service:api-fresh`.
 
