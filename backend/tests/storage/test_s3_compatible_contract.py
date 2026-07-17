@@ -9,12 +9,13 @@ decision) and skips cleanly without credentials, so CI stays hermetic.
 from __future__ import annotations
 
 import io as io_module
+from typing import cast
 from uuid import uuid4
 
 import pytest
 
 from app.storage.access_log import HashChainedAccessLog
-from app.storage.client import StorageLocation
+from app.storage.client import StorageClient, StorageLocation
 from app.storage.config import StorageEngineSettings
 from app.storage.provisioning import deprovision_institution, provision_institution
 from app.storage.s3_compatible import S3CompatibleStorageClient
@@ -57,9 +58,10 @@ class TestS3CompatibleStorageContract(StorageContractSuite):
     def expected_kms_key(self) -> str | None:
         return StorageEngineSettings().kms_key_id
 
-    def read_audit_segment(self, client, segment_path: str) -> str:
+    def read_audit_segment(self, client: StorageClient, segment_path: str) -> str:
         bucket, _, key = segment_path.partition("/")
-        response = client._s3.get_object(Bucket=bucket, Key=key)  # noqa: SLF001
+        s3 = cast("S3CompatibleStorageClient", client)._s3  # noqa: SLF001
+        response = s3.get_object(Bucket=bucket, Key=key)
         return response["Body"].read().decode()
 
     def test_objects_are_sse_kms_encrypted_at_rest(self, client, slug) -> None:

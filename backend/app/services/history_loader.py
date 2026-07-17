@@ -18,8 +18,10 @@ in the canonical vocabulary).
 from __future__ import annotations
 
 import datetime
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, cast
 from uuid import UUID
 
 import pandas as pd
@@ -88,7 +90,8 @@ def _clean(v):
     if pd.api.types.is_scalar(v) and pd.isna(v):
         return None
     if hasattr(v, "item"):
-        return v.item()
+        # numpy scalars carry ``.item()`` (float narrowing is a false positive here).
+        return v.item()  # pyright: ignore[reportAttributeAccessIssue]
     return v
 
 
@@ -162,7 +165,7 @@ def load_history(  # noqa: PLR0913, PLR0912, PLR0915
     cp = pd.read_parquet(panels_dir / "dim_counterparties" / "part.parquet")
     cp_id: dict[str, UUID] = {}
     cp_rows = []
-    for r in cp.itertuples(index=False):
+    for r in cast("Iterable[Any]", cp.itertuples(index=False)):
         cid = new_uuid7()
         cp_id[r.counterparty_id] = cid
         cp_rows.append(dict(id=cid, as_of_date=first, source_reference=r.counterparty_id,
@@ -173,7 +176,7 @@ def load_history(  # noqa: PLR0913, PLR0912, PLR0915
     prod = pd.read_parquet(panels_dir / "dim_products" / "part.parquet")
     prod_id: dict[str, UUID] = {}
     prod_rows = []
-    for r in prod.itertuples(index=False):
+    for r in cast("Iterable[Any]", prod.itertuples(index=False)):
         pid = new_uuid7()
         prod_id[r.product_code] = pid
         prod_rows.append(dict(id=pid, as_of_date=first, source_reference=r.product_code,
@@ -208,7 +211,7 @@ def load_history(  # noqa: PLR0913, PLR0912, PLR0915
         gl = pd.read_parquet(panels_dir / "gl_accounts" / f"month={m.isoformat()}" / "part.parquet")
         gl_id: dict[str, UUID] = {}
         gl_rows = []
-        for r in gl.itertuples(index=False):
+        for r in cast("Iterable[Any]", gl.itertuples(index=False)):
             gid = new_uuid7()
             gl_id[r.gl_code] = gid
             gl_rows.append(dict(id=gid, as_of_date=m, source_reference=r.gl_code,
