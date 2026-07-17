@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -28,6 +29,11 @@ from app.ml.behavioral.config import (
 )
 from app.ml.behavioral.features import clamp, compute_confidence, timeseries_cv_rmse
 
+if TYPE_CHECKING:
+    # Type-only import: sklearn is imported lazily at runtime (see ``_make_gbm``)
+    # so a missing/broken install degrades to the baseline instead of failing.
+    from sklearn.ensemble import HistGradientBoostingRegressor
+
 _TARGET_N = 60        # product-month samples for full data-sufficiency
 _TARGET_MONTHS = 24   # month coverage for full data-sufficiency
 
@@ -36,7 +42,7 @@ _TARGET_MONTHS = 24   # month coverage for full data-sufficiency
 class Predictor:
     """Handle to the fitted GBM so callers can do extra grid predictions."""
 
-    model: object
+    model: HistGradientBoostingRegressor
     code_to_idx: dict[str, int]
 
     def predict_num(self, x_num_rows: np.ndarray, product_code: str) -> np.ndarray:
@@ -57,7 +63,9 @@ def _make_gbm(cfg: BehavioralTrainingConfig, cat_index: list[int]):
         max_iter=cfg.max_iter,
         learning_rate=cfg.learning_rate,
         random_state=cfg.random_state,
-        categorical_features=cat_index,
+        # sklearn accepts an array-like of feature indices here; its param type is
+        # inferred as ``str`` from the ``"from_dtype"`` default (sklearn ships no stubs).
+        categorical_features=cat_index,  # pyright: ignore[reportArgumentType]
     )
 
 

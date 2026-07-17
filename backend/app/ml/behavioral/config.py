@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from app.core.config import BehavioralSettings
+
+# Behavioral estimation method. Mirrors ``BehavioralMethod`` in
+# ``app.schemas.behavioral_models`` (kept in sync here so the ml layer stays
+# decoupled from the API schema layer); values flow straight into the read
+# contract, which expects this exact literal.
+type BehavioralMethod = Literal["ml", "baseline"]
 
 # Model slugs (also the API path segment) -> persisted model version.
 MODEL_VERSIONS: dict[str, str] = {
@@ -59,7 +66,7 @@ class ProductEstimate:
     value: float
     unit: str
     confidence: float
-    method: str  # "ml" | "baseline"
+    method: BehavioralMethod
     extra: dict = field(default_factory=dict)  # e.g. {"corePct": .8} or {"incentiveCurve": [...]}
 
 
@@ -69,14 +76,14 @@ class Accuracy:
     cv_mae: float | None
     sample_count: int
     month_coverage: int
-    method: str
+    method: BehavioralMethod
 
 
 @dataclass(frozen=True, slots=True)
 class ModelResult:
     model_id: str
     model_version: str
-    method: str
+    method: BehavioralMethod
     as_of_date: str | None
     accuracy: Accuracy
     products: list[ProductEstimate]
