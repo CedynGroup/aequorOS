@@ -58,7 +58,7 @@ Verified in `backend/app/api/deps.py`, `app/db/session.py`, and migration
    columns and declare composite `ForeignKeyConstraint`s to the parent's
    `UniqueConstraint("id", "organization_id", ...)`, so a child row can never reference a parent
    in another tenant. Exact example in
-   [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern), taken from
+   [CODEBASE_CONVENTIONS.md](../CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern), taken from
    `app/models/calculation.py`.
 
 ---
