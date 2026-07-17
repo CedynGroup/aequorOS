@@ -1,6 +1,6 @@
 # gitleaks config for AequorOS. Extends the default ruleset and allowlists the
-# repo's deliberate test canaries and example files so the required secret-scan
-# check flags only real secrets.
+# repo's deliberate test canaries, example files, and non-secret example tokens
+# so the required secret-scan check flags only real secrets.
 
 title = "AequorOS gitleaks config"
 
@@ -8,17 +8,22 @@ title = "AequorOS gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "Test fixtures, leak canaries, and example env files"
+description = "Test fixtures, example files, canaries, and non-secret example tokens"
+# regexes below are matched against the whole line (not just the detected match).
+regexTarget = "line"
 paths = [
   '''backend/tests/.*''',
   '''.*\.env\.example$''',
   '''.*/fixtures/.*''',
 ]
 regexes = [
-  # Deliberate leak-assertion canaries used by the market-data credential tests.
+  # Deliberate leak-assertion canaries in the market-data credential tests.
   '''s3cr?et-value-that-must-never-leak''',
   '''not-a-real-secret''',
   '''super-sensitive-secret-value''',
   '''X-VENDOR-INTERNAL-DO-NOT-SURFACE''',
   '''TESTFIXTURE''',
+  # Idempotency keys are client-generated request-dedup tokens, not secrets —
+  # they appear as examples in API docs and the dashboard API reference.
+  '''idempotency_key''',
 ]
