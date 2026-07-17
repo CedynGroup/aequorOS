@@ -1,0 +1,24 @@
+# gitleaks config for AequorOS. Extends the default ruleset and allowlists the
+# repo's deliberate test canaries and example files so the required secret-scan
+# check flags only real secrets.
+
+title = "AequorOS gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures, leak canaries, and example env files"
+paths = [
+  '''backend/tests/.*''',
+  '''.*\.env\.example$''',
+  '''.*/fixtures/.*''',
+]
+regexes = [
+  # Deliberate leak-assertion canaries used by the market-data credential tests.
+  '''s3cr?et-value-that-must-never-leak''',
+  '''not-a-real-secret''',
+  '''super-sensitive-secret-value''',
+  '''X-VENDOR-INTERNAL-DO-NOT-SURFACE''',
+  '''TESTFIXTURE''',
+]
