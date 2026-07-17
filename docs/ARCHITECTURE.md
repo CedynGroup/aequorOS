@@ -14,7 +14,7 @@ Companion document: [CODEBASE_CONVENTIONS.md](../CODEBASE_CONVENTIONS.md).
 | Risk service | `backend` | FastAPI, Python 3.13, uv, SQLAlchemy 2.0, Alembic, Pydantic v2, Loguru, boto3 | The backend. Owns all persistence, calculation engines, findings, audit, and the OpenAPI contract. |
 | Generated API client | `packages/risk-service-api` | typescript-fetch output of openapi-generator 7.13 | Generated from the risk-service OpenAPI schema. Source-consumed (`main: ./src/index.ts`), never hand-edited. |
 | Marketing site | `frontend` | Next.js 14 | Static marketing site. **Out of scope for this build. Do not touch.** |
-| Product UI | `dashboard` | Next.js 14, Tailwind (token design system), TanStack Query, recharts | The Treasury Workbench — consumes the risk service exclusively through `packages/risk-service-api`. |
+| Product UI | `backend/dashboard` | Next.js 14, Tailwind (token design system), TanStack Query, recharts | The Treasury Workbench — consumes the risk service exclusively through `packages/risk-service-api`. |
 | Database | remote Postgres `<postgres-host>:<port>/<database>` (managed, TimescaleDB-enabled) | Primary DB for dev, tests (via `TEST_DATABASE_URL`, disposable per-run schemas), and deployment; credentials only in untracked `backend/.env` | Schema kept at alembic head. Single role, **no BYPASSRLS** — the cross-tenant worker needs a BYPASSRLS role (`WORKER_DATABASE_URL`) before running against it. |
 | Local infra (offline fallback) | `backend/docker-compose.yml` | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local` | Started with `docker compose up -d` from `backend`. |
 
