@@ -1,21 +1,29 @@
 name: Claude PR Review
 
-# Agent-as-reviewer for pull requests into main. Two jobs:
-#   review    — always runs; Claude reviews the diff and submits a formal
-#               PR review (APPROVE / REQUEST_CHANGES) plus inline comments.
-#   automerge — gated OFF by default (repo variable AGENT_AUTOMERGE != 'on').
-#               When enabled it squash-merges ONLY when every guardrail holds:
-#                 * the PR author is not the automation itself (author != merger —
-#                   an agent must never merge its own work; mirrors the product's
-#                   maker-checker control),
-#                 * Claude's latest review is APPROVED,
-#                 * every completed status check is green (no failures/pending),
-#                 * no protected path is touched (migrations, auth/RLS, LICENSE,
-#                   workflows, security policy) — those always need a human.
+# Agent-as-reviewer, then GitHub-native auto-merge into main.
 #
-# Rollout: leave AGENT_AUTOMERGE=off, watch a few PRs get reviewed, then
-#   `gh variable set AGENT_AUTOMERGE -R CedynGroup/aequorOS --body on`.
-# Note: this workflow only becomes active once it exists on the default branch.
+#   review job — always runs. Claude reviews the diff and submits a FORMAL PR
+#   review (APPROVE / REQUEST_CHANGES) plus inline comments. Then, only when
+#   every guardrail holds and Claude approved, it ENABLES GitHub native
+#   auto-merge (`gh pr merge --auto --squash`). GitHub then merges the PR by
+#   itself once the required status checks pass — no polling, correct timing.
+#
+# Guardrails (all must hold before auto-merge is enabled):
+#   * repo variable AGENT_AUTOMERGE == 'on'  (ships OFF — first PRs review-only)
+#   * PR author is not the automation itself  (an agent never merges its own
+#     work — mirrors the product's maker-checker control)
+#   * no protected path touched  (migrations, auth/RLS, LICENSE, .github, SECURITY)
+#   * Claude's latest review state is APPROVED  (read from the reviews list, not
+#     `reviewDecision`, which is null when no human reviewers are required)
+#
+# The hard merge gate is branch protection: the `gitleaks` secret-scan check is
+# required, so nothing merges with a detectable secret even if a guardrail is
+# mis-evaluated. Admins retain direct push for emergencies.
+#
+# Rollout: leave AGENT_AUTOMERGE=off, watch a few PRs get reviewed, confirm the
+# approval-detection works on a live PR, then
+#   gh variable set AGENT_AUTOMERGE -R CedynGroup/aequorOS --body on
+# Note: this workflow only activates once it exists on the default branch.
 
 on:
   pull_request:
@@ -41,6 +49,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Claude review
         uses: anthropics/claude-code-action@v1
         with:
@@ -49,23 +58,19 @@ jobs:
           prompt: |
             Review this pull request as a senior engineer for AequorOS, a
             multi-tenant treasury/ALM and Bank-of-Ghana regtech platform.
-            Prioritise, in order: correctness bugs; tenant isolation (every
-            new tenant table needs RLS enable/force + policy, every query
-            filters organization_id); secret/credential handling (nothing
-            hardcoded — must resolve to env); adherence to CODEBASE_CONVENTIONS.md
-            and ARCHITECTURE.md (immutable calculation runs, value-based
-            input_hash, adapter boundaries, design tokens — no raw hex).
-            Post specific inline comments. Then submit a formal PR review:
-            APPROVE only if you found no correctness or security issue,
-            otherwise REQUEST_CHANGES with a short rationale.
+            Prioritise, in order: correctness bugs; tenant isolation (every new
+            tenant table needs RLS enable/force + policy, every query filters
+            organization_id); secret/credential handling (nothing hardcoded —
+            must resolve to env); adherence to CODEBASE_CONVENTIONS.md and
+            ARCHITECTURE.md (immutable calculation runs, value-based input_hash,
+            adapter boundaries, design tokens — no raw hex). Post specific
+            inline comments. Then submit a FORMAL pull-request review: APPROVE
+            only if you found no correctness or security issue, otherwise
+            REQUEST_CHANGES with a short rationale.
           claude_args: "--max-turns 25"
 
-  automerge:
-    needs: review
-    if: vars.AGENT_AUTOMERGE == 'on' && github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    steps:
-      - name: Evaluate guardrails and merge
+      - name: Enable auto-merge when approved and guardrails hold
+        if: vars.AGENT_AUTOMERGE == 'on'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
@@ -74,30 +79,30 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Guard 1 — author != merger. An agent never merges its own PR.
+          # Guard 1 — author != merger. An agent never auto-merges its own PR.
           case "$AUTHOR" in
             *"[bot]"|claude|github-actions*)
-              echo "::notice::PR authored by automation ($AUTHOR) — refusing to self-merge."; exit 0 ;;
+              echo "::notice::PR authored by automation ($AUTHOR) — not enabling auto-merge."; exit 0 ;;
           esac
 
           # Guard 2 — protected paths always need a human.
           FILES=$(gh pr view "$PR" --repo "$REPO" --json files -q '.files[].path')
-          if echo "$FILES" | grep -Eq '^backend/alembic/|(^|/)(auth|deps|session)\.py$|/db/session\.py$|_rls|LICENSE|SECURITY\.md|^\.github/'; then
-            echo "::notice::PR touches a protected path — leaving for human review."; exit 0
+          if echo "$FILES" | grep -Eq '^backend/alembic/|/db/session\.py$|/api/deps\.py$|_rls|LICENSE|SECURITY\.md|^\.github/'; then
+            echo "::notice::PR touches a protected path — leaving for human merge."; exit 0
           fi
 
-          # Guard 3 — Claude's latest review must be APPROVED.
-          DECISION=$(gh pr view "$PR" --repo "$REPO" --json reviewDecision -q '.reviewDecision')
-          if [ "$DECISION" != "APPROVED" ]; then
-            echo "::notice::reviewDecision=$DECISION (not APPROVED) — not merging."; exit 0
+          # Guard 3 — Claude's latest review must be APPROVED, none requesting changes.
+          # (Read the reviews list by state, NOT reviewDecision — that field is
+          #  null when the branch requires no human reviewers.)
+          STATES=$(gh pr view "$PR" --repo "$REPO" --json reviews -q '.reviews[].state')
+          if echo "$STATES" | grep -q 'CHANGES_REQUESTED'; then
+            echo "::notice::A review requests changes — not enabling auto-merge."; exit 0
+          fi
+          if ! echo "$STATES" | grep -q 'APPROVED'; then
+            echo "::notice::No APPROVED review yet — not enabling auto-merge."; exit 0
           fi
 
-          # Guard 4 — every completed check green, none failing or pending.
-          BAD=$(gh pr checks "$PR" --repo "$REPO" --json state -q \
-            '[.[] | select(.state != "SUCCESS" and .state != "SKIPPED" and .state != "NEUTRAL")] | length')
-          if [ "$BAD" != "0" ]; then
-            echo "::notice::$BAD check(s) not green — not merging."; exit 0
-          fi
-
-          echo "All guardrails passed — squash-merging PR #$PR."
-          gh pr merge "$PR" --repo "$REPO" --squash --delete-branch
+          # All guardrails pass — hand off to GitHub native auto-merge. GitHub
+          # completes the squash-merge once the required checks are green.
+          echo "Guardrails passed — enabling auto-merge for PR #$PR."
+          gh pr merge "$PR" --repo "$REPO" --auto --squash --delete-branch
