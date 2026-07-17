@@ -1,0 +1,39 @@
+name: Dashboard CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/dashboard/**"
+      - "packages/risk-service-api/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/dashboard.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/dashboard/**"
+      - "packages/risk-service-api/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/dashboard.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck generated API client
+        run: pnpm --filter @aequoros/risk-service-api exec tsc --noEmit
+      - name: Typecheck dashboard
+        run: pnpm --filter dashboard exec tsc --noEmit
+      - name: Build dashboard
+        run: pnpm --filter dashboard build
