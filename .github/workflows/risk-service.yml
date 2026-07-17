@@ -32,7 +32,7 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v4
         with:
           install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
       - name: Install risk service dependencies
