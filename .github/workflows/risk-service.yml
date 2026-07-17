@@ -31,7 +31,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v3
         with:
           install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
