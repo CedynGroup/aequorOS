@@ -1,0 +1,8 @@
+{
+  "responseType": "ReferenceDataResponse",
+  "requestId": "rec-2026-07-15-gh-gdp-fcst-0001",
+  "securityData": [
+    {"security": "GH_GDP_FCST Index", "sequenceNumber": 0, "fieldData": {"ECO_FORECAST": 4.2}}
+  ],
+  "vendor_internal": {"debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE"}
+}

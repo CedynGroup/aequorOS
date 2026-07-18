@@ -1,0 +1,5 @@
+[
+  {"CUST_ID": "C1001", "CUST_NAME": "Ama Serwaa Enterprises", "CUST_TYPE": "COR", "COUNTRY": "GH", "TIN": "C0001234567"},
+  {"CUST_ID": "C1002", "CUST_NAME": "Kwabena Osei", "CUST_TYPE": "RET", "COUNTRY": "GH", "TIN": null},
+  {"CUST_ID": "C1003", "CUST_NAME": "Volta Agro Processing Ltd", "CUST_TYPE": "COR", "COUNTRY": "GH", "TIN": "C0007654321"}
+]

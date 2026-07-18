@@ -1,8 +1,8 @@
 {
   "responseType": "ReferenceDataResponse",
-  "requestId": "rec-2026-07-15-ghsusd-spot-0001",
+  "requestId": "rec-2026-07-15-usdghs-spot-0001",
   "securityData": [
-    {"security": "GHSUSD Curncy", "sequenceNumber": 0, "fieldData": {"PX_LAST": 12.85}}
+    {"security": "USDGHS Curncy", "sequenceNumber": 0, "fieldData": {"PX_LAST": 12.85}}
   ],
   "vendor_internal": {"debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE"}
 }

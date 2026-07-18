@@ -1,0 +1,61 @@
+{
+  "database": "COREBANK",
+  "tables": [
+    {
+      "schema": "COREBANK",
+      "name": "GL_ACCOUNTS",
+      "columns": [
+        {"name": "ACCT_CODE", "type": "VARCHAR2", "nullable": false},
+        {"name": "ACCT_NAME", "type": "NVARCHAR2", "nullable": false},
+        {"name": "ACCT_CLASS", "type": "CHAR", "nullable": false},
+        {"name": "CCY", "type": "CHAR", "nullable": true},
+        {"name": "BAL", "type": "NUMBER", "nullable": true}
+      ]
+    },
+    {
+      "schema": "COREBANK",
+      "name": "CUSTOMERS",
+      "columns": [
+        {"name": "CUST_ID", "type": "VARCHAR2", "nullable": false},
+        {"name": "CUST_NAME", "type": "NVARCHAR2", "nullable": false},
+        {"name": "CUST_TYPE", "type": "CHAR", "nullable": false},
+        {"name": "COUNTRY", "type": "CHAR", "nullable": true},
+        {"name": "TIN", "type": "VARCHAR2", "nullable": true}
+      ]
+    },
+    {
+      "schema": "COREBANK",
+      "name": "PRODUCTS",
+      "columns": [
+        {"name": "PROD_CODE", "type": "VARCHAR2", "nullable": false},
+        {"name": "PROD_NAME", "type": "NVARCHAR2", "nullable": false}
+      ]
+    },
+    {
+      "schema": "COREBANK",
+      "name": "POSITIONS",
+      "columns": [
+        {"name": "POS_ID", "type": "VARCHAR2", "nullable": false},
+        {"name": "POS_TYPE", "type": "CHAR", "nullable": false},
+        {"name": "CCY", "type": "CHAR", "nullable": false},
+        {"name": "BAL", "type": "NUMBER", "nullable": false},
+        {"name": "CUST_ID", "type": "VARCHAR2", "nullable": true},
+        {"name": "PROD_CODE", "type": "VARCHAR2", "nullable": true},
+        {"name": "MATURITY", "type": "VARCHAR2", "nullable": true},
+        {"name": "RATE", "type": "NUMBER", "nullable": true},
+        {"name": "RATE_TYPE", "type": "CHAR", "nullable": true},
+        {"name": "ECL_PROVISION", "type": "NUMBER", "nullable": true},
+        {"name": "UPDATED_AT", "type": "VARCHAR2", "nullable": false}
+      ]
+    },
+    {
+      "schema": "COREBANK",
+      "name": "FX_RATES",
+      "columns": [
+        {"name": "CCY_PAIR", "type": "CHAR", "nullable": false},
+        {"name": "MID_RATE", "type": "NUMBER", "nullable": false},
+        {"name": "AS_OF", "type": "VARCHAR2", "nullable": false}
+      ]
+    }
+  ]
+}

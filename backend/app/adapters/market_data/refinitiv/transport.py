@@ -39,10 +39,20 @@ from app.adapters.market_data.errors import (
     MarketDataError,
     render_bank_facing,
 )
+from app.adapters.market_data.refinitiv.resilience import (
+    ConnectionPoolConfig,
+    RetryPolicy,
+    TokenBucketRateLimiter,
+)
 from app.adapters.market_data.scope_taxonomy import DataScope
 
 VENDOR_NAME = "refinitiv"
 VENDOR_LABEL = "Refinitiv (LSEG)"
+
+# Single RDP data-service endpoint key for per-endpoint rate limiting. RDP
+# meters the data-access API (``/data/...``) distinctly from the token
+# endpoint; the token endpoint is rate-limited inside the auth layer.
+_DATA_ENDPOINT = "rdp-data"
 
 # Bank-facing templates reference the last successful pull; the adapter layer
 # has no cache lookup in scope here, so the placeholder stays honest.
@@ -108,16 +118,15 @@ def raise_for_vendor_error(payload: dict[str, Any], scope_label: str) -> None:
     code = _ERROR_CODE_CLASSIFICATION.get(str(error.get("code", "")))
     if code is None:
         http_status = error.get("http_status")
-        code = _HTTP_STATUS_CLASSIFICATION.get(http_status) if isinstance(
-            http_status, int
-        ) else None
+        code = (
+            _HTTP_STATUS_CLASSIFICATION.get(http_status) if isinstance(http_status, int) else None
+        )
     if code is None:
         code = BankFacingErrorCode.VENDOR_UNAVAILABLE
     raise MarketDataError(
         bank_facing_for(code, scope_label),
         internal_detail=(
-            f"raw RDP error for {scope_label}: "
-            f"{json.dumps(error, sort_keys=True, default=str)}"
+            f"raw RDP error for {scope_label}: {json.dumps(error, sort_keys=True, default=str)}"
         ),
     )
 
@@ -182,6 +191,44 @@ class UnconfiguredTransport:
         raise MarketDataError(
             bank_facing_for(BankFacingErrorCode.VENDOR_UNAVAILABLE, scope_label),
             internal_detail="live RDP transport not configured (Phase 2)",
+        )
+
+
+class LiveRdpTransport:
+    """Phase 2 seam for the live RDP data transport (§7.3 / §14.2).
+
+    Composes the session-management hardening the live loop needs: a
+    :class:`TokenBucketRateLimiter` acquired before every request (per-endpoint
+    quota), a :class:`RetryPolicy` for :func:`retry_with_backoff` around the
+    HTTP call, and a :class:`ConnectionPoolConfig` for the keep-alive ``httpx``
+    client. Until real credentials are wired (questions/Q03), ``fetch`` acquires
+    the rate-limit token (proving the wiring) and then classifies as
+    ``VENDOR_UNAVAILABLE`` — it never touches the network.
+    """
+
+    def __init__(
+        self,
+        *,
+        rate_limiter: TokenBucketRateLimiter | None = None,
+        retry_policy: RetryPolicy | None = None,
+        pool_config: ConnectionPoolConfig | None = None,
+    ) -> None:
+        self.rate_limiter = rate_limiter or TokenBucketRateLimiter(
+            capacity=20, refill_per_second=10
+        )
+        self.retry_policy = retry_policy or RetryPolicy()
+        self.pool_config = pool_config or ConnectionPoolConfig()
+
+    def fetch(self, session_token: str, request_spec: dict[str, Any]) -> dict[str, Any]:
+        self.rate_limiter.acquire(_DATA_ENDPOINT)
+        _ = session_token  # the live client authenticates with this per request
+        scope_label = str(request_spec.get("scope", "")) or _DEFAULT_SCOPE_LABEL
+        raise MarketDataError(
+            bank_facing_for(BankFacingErrorCode.VENDOR_UNAVAILABLE, scope_label),
+            internal_detail=(
+                "live RDP transport is fenced (Phase 2); request for scope "
+                f"{scope_label!r} not dispatched"
+            ),
         )
 
 

@@ -41,7 +41,7 @@ FIXTURES_DIR = Path(__file__).with_name("fixtures")
 # "<SCOPE>.json" for anything not listed here).
 FIXTURE_FILENAMES: dict[str, str] = {
     "YIELD_CURVE_GHS": "ghs_yield_curve.json",
-    "FX_SPOT_USD_GHS": "ghsusd_spot.json",
+    "FX_SPOT_USD_GHS": "usdghs_spot.json",
     "CREDIT_RATING_GHANA_SOVEREIGN": "ghana_sovereign_ratings.json",
 }
 

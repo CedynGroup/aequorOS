@@ -18,6 +18,7 @@ from app.models.canonical import (
     CanonicalYieldCurvePoint,
 )
 from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
+from app.models.database_connection import DatabaseDirectConnection
 from app.models.financial import (
     FinancialAccount,
     FinancialBalance,
@@ -123,6 +124,7 @@ __all__ = [
     "LiveFinding",
     "LiveMetric",
     "MappingConfigRecord",
+    "DatabaseDirectConnection",
     "MarketDataConnection",
     "MarketDataQuotaUsage",
     "Organization",

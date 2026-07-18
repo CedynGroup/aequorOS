@@ -1,0 +1,5 @@
+[
+  {"PROD_CODE": "LN.CORP.5Y", "PROD_NAME": "Corporate term loan 5Y"},
+  {"PROD_CODE": "LN.RETAIL.MORT", "PROD_NAME": "Residential mortgage"},
+  {"PROD_CODE": "DEP.CASA", "PROD_NAME": "Current and savings account"}
+]

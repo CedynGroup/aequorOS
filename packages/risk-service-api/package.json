@@ -26,6 +26,5 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     }
-  },
-  "license": "SEE LICENSE IN LICENSE"
+  }
 }

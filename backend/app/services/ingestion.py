@@ -50,6 +50,7 @@ from app.domain.ingestion.validation import (
     default_validation_config,
     run_validation,
 )
+from app.etl import EtlConfig, etl_summary, run_etl
 from app.models import (
     AuditEvent,
     Bank,
@@ -99,6 +100,11 @@ from app.storage.client import (
 )
 
 _MAX_LINEAGE_DEPTH = 50
+# Above this extraction size the inline ML-ETL dedup + anomaly passes (pairwise /
+# model-scored) are skipped so a core-banking-scale sync completes; deterministic
+# per-record preprocessing still runs and the full cleaned canonical data persists.
+# Entity-resolution at scale belongs in an out-of-band pass (follow-up).
+_ETL_INLINE_DEDUP_MAX_RECORDS = 5000
 
 
 def create_mapping_config(
@@ -183,6 +189,36 @@ class _BatchFailure(Exception):
         self.response = response
 
 
+def build_adapter_config(
+    location: str, mapping: MappingConfig, *, extra_options: dict[str, Any] | None = None
+) -> AdapterConfig:
+    """Adapter config for one extraction: the source location plus the table
+    resolution options derived from the mapping (entity + reference tables).
+
+    The out-of-band ETL dedup job rebuilds the identical config from a batch's
+    stored mapping so its re-extraction reproduces the original ingestion pass.
+    """
+    entity_tables = {
+        entity_type: [entity_mapping.source_table, *entity_mapping.source_table_aliases]
+        for entity_type, entity_mapping in mapping.field_mappings.items()
+    }
+    reference_tables = {
+        name: {
+            "tables": [reference.source_table, *reference.source_table_aliases],
+            "dataset_kind": reference.dataset_kind,
+        }
+        for name, reference in mapping.reference_mappings.items()
+    }
+    return AdapterConfig(
+        location=location,
+        options={
+            "entity_tables": entity_tables,
+            "reference_tables": reference_tables,
+            **(extra_options or {}),
+        },
+    )
+
+
 def _prepare_extraction(
     db: Session,
     ctx: TenantContext,
@@ -209,24 +245,8 @@ def _prepare_extraction(
     except StorageError as exc:
         raise fail("storage_error", str(exc)) from exc
 
-    entity_tables = {
-        entity_type: [entity_mapping.source_table, *entity_mapping.source_table_aliases]
-        for entity_type, entity_mapping in mapping.field_mappings.items()
-    }
-    reference_tables = {
-        name: {
-            "tables": [reference.source_table, *reference.source_table_aliases],
-            "dataset_kind": reference.dataset_kind,
-        }
-        for name, reference in mapping.reference_mappings.items()
-    }
-    adapter_config = AdapterConfig(
-        location=source_path,
-        options={
-            "entity_tables": entity_tables,
-            "reference_tables": reference_tables,
-            **payload.adapter_options,
-        },
+    adapter_config = build_adapter_config(
+        source_path, mapping, extra_options=payload.adapter_options
     )
 
     connection = adapter.validate_connection(adapter_config)
@@ -241,7 +261,7 @@ def _prepare_extraction(
     return adapter, mapping_record, mapping, source_path, extraction
 
 
-def start_ingestion(
+def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orchestration
     db: Session,
     ctx: TenantContext,
     bank_id: UUID,
@@ -293,6 +313,65 @@ def start_ingestion(
     if storage_failure is not None:
         return storage_failure
 
+    # -- ML-ETL (Data Engine layer between adapters and the canonical model): resolve
+    # source fields to canonical concepts, apply audit-sanctioned preprocessing (which
+    # FLAGS, never silently modifies, regulatory-critical values) and deduplicate
+    # entities across sources/time. run_etl is a pure pass; this layer owns the ETL's
+    # lineage + audit persistence and feeds the cleaned extraction to translation.
+    #
+    # Preprocessing is O(n) per record and always runs inline. Dedup + anomaly are
+    # pairwise / model passes that would block a core-banking-scale sync (100k+ rows);
+    # since they emit linkage/flag METADATA (never canonical values), above a bound we
+    # skip them inline and defer entity-resolution to an out-of-band pass. The cleaned,
+    # preprocessed canonical data still persists in full either way.
+    etl_inline_dedup = len(extraction.records) <= _ETL_INLINE_DEDUP_MAX_RECORDS
+    etl_result = run_etl(
+        extraction,
+        mapping,
+        config=EtlConfig(deduplicate=etl_inline_dedup, detect_anomalies=etl_inline_dedup),
+    )
+    extraction = etl_result.cleaned
+    # dedup_status lets every reader tell an out-of-band-pending report ("deferred")
+    # from a complete one ("completed") without inferring it from zeroed linkage
+    # counts; the etl_dedup job flips a deferred report to "completed".
+    batch.etl_report = {
+        **etl_summary(etl_result),
+        "dedup_status": "completed" if etl_inline_dedup else "deferred",
+    }
+    preprocess_node = _lineage(
+        db,
+        ctx,
+        batch,
+        operation_type="ML_ETL_PREPROCESS",
+        operation_ref="ml_etl/preprocess",
+        inputs=(extract_node.id,),
+        details={
+            "operations": len(etl_result.operations),
+            "flags": len(etl_result.flags),
+            "sanctioned": etl_result.sanctioned_count,
+        },
+    )
+    dedup_node = _lineage(
+        db,
+        ctx,
+        batch,
+        operation_type="ML_ETL_DEDUP",
+        operation_ref="ml_etl/dedup",
+        inputs=(preprocess_node.id,),
+        # When deferred, no linkage/anomaly pass ran inline; the count is a
+        # placeholder, not a genuine "found zero". The out-of-band etl_dedup job
+        # appends its own ML_ETL_DEDUP node with the real counts.
+        details={"linkages": len(etl_result.linkages), "deferred": not etl_inline_dedup},
+    )
+    record_event(
+        db,
+        ctx,
+        event_type="ml_etl.completed",
+        entity_type="ingestion_batch",
+        entity_id=batch.id,
+        details=batch.etl_report,
+    )
+
     batch.status = "translating"
     records = adapter.translate(extraction, mapping)
     batch.records_translated = records.record_count
@@ -302,7 +381,7 @@ def start_ingestion(
         batch,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref=f"mapping_config/v{mapping_record.version}",
-        inputs=(extract_node.id,),
+        inputs=(dedup_node.id,),
         details={"translated": records.record_count, "failures": len(records.failures)},
     )
     for failure in records.failures:
@@ -375,6 +454,8 @@ def start_ingestion(
     storage.flush_access_log()
     _record_batch_event(db, ctx, batch, payload.reason)
     _enqueue_live_refresh(db, ctx, bank, payload, batch)
+    if not etl_inline_dedup:
+        _enqueue_etl_dedup(db, ctx, bank, batch)
     db.commit()
     return IngestionBatchStartRead(
         batch=IngestionBatchRead.model_validate(batch, from_attributes=True), reused=False
@@ -409,6 +490,36 @@ def _enqueue_live_refresh(
         payload=job_payload,
         run_after=utc_now() + timedelta(seconds=debounce),
         coalesce_key=f"refresh:{bank.id}:{payload.as_of_date.isoformat()}",
+    )
+
+
+def _enqueue_etl_dedup(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    batch: IngestionBatch,
+) -> None:
+    """Enqueue the out-of-band ML-ETL dedup pass for a large accepted batch.
+
+    Called only when inline dedup was skipped for size. The pass re-derives the
+    entity-resolution linkage + anomaly metadata (never canonical values) that
+    would have gone in ``etl_report`` inline, so the sync request is not blocked
+    by the pairwise/model passes. Gated on an accepted status like
+    :func:`_enqueue_live_refresh`: a rejected batch persists no canonical data,
+    so there is nothing to link. Coalesced per batch so a retry of the same
+    ingestion does not stack duplicate jobs.
+    """
+    if batch.status not in BATCH_ACCEPTED_STATUSES:
+        return
+    job_queue.enqueue(
+        db,
+        ctx.organization_id,
+        "etl_dedup",
+        bank_id=bank.id,
+        payload={"batch_id": str(batch.id)},
+        coalesce_key=f"etl_dedup:{batch.id}",
+        entity_type="ingestion_batch",
+        entity_id=batch.id,
     )
 
 

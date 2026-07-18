@@ -197,6 +197,8 @@ class TestPushHappyPath:
         assert [node["operation_type"] for node in walk["nodes"]] == [
             "VALIDATION",
             "ADAPTER_TRANSLATE",
+            "ML_ETL_DEDUP",
+            "ML_ETL_PREPROCESS",
             "ADAPTER_EXTRACT",
         ]
 
@@ -384,8 +386,10 @@ class TestPushValidation:
                             "source_reference": "LN-BAD",
                             "position_type": "LOAN",
                             "currency": "GHS",
-                            "balance": "GHS 1,500,000.50",  # spreadsheet chaos: not allowed here
-                            "contractual_maturity": "15/03/2031",  # not ISO
+                            # currency-prefixed: ETL won't guess a critical value
+                            "balance": "GHS 1,500,000.50",
+                            # non-ISO: the ML-ETL layer normalizes to 2031-03-15
+                            "contractual_maturity": "15/03/2031",
                         },
                         POSITIONS[0],
                     ]
@@ -402,8 +406,11 @@ class TestPushValidation:
         ).json()["failures"]
         assert len(failures) == 1
         assert failures[0]["error_code"] == "coercion_error"
+        # The ML-ETL layer normalized the non-ISO date before translation, so only the
+        # currency-prefixed regulatory-critical balance (which the ETL never guesses)
+        # remains for the strict translator to reject and preserve for review.
         assert "balance" in failures[0]["error_message"]
-        assert "contractual_maturity" in failures[0]["error_message"]
+        assert "contractual_maturity" not in failures[0]["error_message"]
         assert failures[0]["raw_record"]["source_reference"] == "LN-BAD"
 
 

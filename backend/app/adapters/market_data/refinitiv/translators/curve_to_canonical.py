@@ -33,9 +33,7 @@ def tenor_label(tenor_months: int) -> str:
     return f"{tenor_months}M"
 
 
-def curve_to_bundle(
-    scope: DataScope, observations: Sequence[CurveObservation]
-) -> MarketDataBundle:
+def curve_to_bundle(scope: DataScope, observations: Sequence[CurveObservation]) -> MarketDataBundle:
     """Translate one curve scope's observations into a persistable bundle.
 
     The curve header's ``source_reference`` joins every contributing RIC so
@@ -50,9 +48,7 @@ def curve_to_bundle(
         curve_type="sovereign",
         source_reference=",".join(item.ric for item in ordered),
         points=tuple(
-            CurvePoint(
-                tenor_months=item.tenor_months, rate=percent_to_fraction(item.value_percent)
-            )
+            CurvePoint(tenor_months=item.tenor_months, rate=percent_to_fraction(item.value_percent))
             for item in ordered
         ),
     )

@@ -19,6 +19,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 from app.adapters.market_data.bloomberg.auth import VENDOR_DISPLAY_NAME
+from app.adapters.market_data.bloomberg.resilience import (
+    ConnectionPoolConfig,
+    RetryPolicy,
+    TokenBucketRateLimiter,
+)
 from app.adapters.market_data.errors import (
     BankFacingErrorCode,
     MarketDataError,
@@ -33,6 +38,10 @@ if TYPE_CHECKING:
 # The transport seam pre-dates a real cache lookup; the notification layer
 # owns rendering the actual last-successful-pull timestamp (§12.4).
 _NO_CACHE_TIMESTAMP = "not available"
+
+# The reference-data service endpoint key used for per-endpoint rate limiting
+# when a request spec carries no explicit ``data_source`` (e.g. FX, ratings).
+_DEFAULT_ENDPOINT = "refdata"
 
 
 class BlpTransport(Protocol):
@@ -60,6 +69,52 @@ class UnavailableTransport:
                 timestamp=_NO_CACHE_TIMESTAMP,
             ),
             internal_detail="live Bloomberg transport not configured (Phase 2)",
+        )
+
+
+class LiveBlpTransport:
+    """Phase 2 seam for the live B-PIPE / Data License transport (§6.3 / §14.2).
+
+    Composes the session-management hardening the live loop needs: a
+    :class:`TokenBucketRateLimiter` acquired before every request (per-endpoint
+    quota, §11.2), a :class:`RetryPolicy` for :func:`retry_with_backoff` around
+    the vendor call, and a :class:`ConnectionPoolConfig` for the reused
+    authenticated session. Until real credentials are wired (questions/Q03),
+    ``request`` acquires the rate-limit token (proving the wiring) and then
+    classifies as ``VENDOR_UNAVAILABLE`` — it never touches the network. The
+    rate limiter runs first so that even the fenced path exercises quota
+    accounting deterministically under test.
+    """
+
+    def __init__(
+        self,
+        *,
+        rate_limiter: TokenBucketRateLimiter | None = None,
+        retry_policy: RetryPolicy | None = None,
+        pool_config: ConnectionPoolConfig | None = None,
+    ) -> None:
+        # Default bucket: a conservative 10 req/s steady with a 20-request
+        # burst, sized well below any real subscription's ceiling.
+        self.rate_limiter = rate_limiter or TokenBucketRateLimiter(
+            capacity=20, refill_per_second=10
+        )
+        self.retry_policy = retry_policy or RetryPolicy()
+        self.pool_config = pool_config or ConnectionPoolConfig()
+
+    def request(self, session: BloombergSession, request_spec: dict[str, Any]) -> dict[str, Any]:
+        endpoint = str(request_spec.get("data_source") or _DEFAULT_ENDPOINT)
+        self.rate_limiter.acquire(endpoint)
+        _ = session  # the live handshake belongs to the Phase 2 session provider
+        raise MarketDataError(
+            render_bank_facing(
+                BankFacingErrorCode.VENDOR_UNAVAILABLE,
+                vendor=VENDOR_DISPLAY_NAME,
+                timestamp=_NO_CACHE_TIMESTAMP,
+            ),
+            internal_detail=(
+                "live Bloomberg transport is fenced (Phase 2); request for scope "
+                f"{request_spec.get('scope')!r} on endpoint {endpoint!r} not dispatched"
+            ),
         )
 
 

@@ -57,9 +57,7 @@ VALID_CREDENTIALS_DICT: dict[str, Any] = {
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
     client = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.adapters.market_data.pull_runner.get_storage_client", lambda: client
-    )
+    monkeypatch.setattr("app.adapters.market_data.pull_runner.get_storage_client", lambda: client)
     monkeypatch.setattr("app.adapters.market_data.cache.get_storage_client", lambda: client)
     return client
 
@@ -74,9 +72,7 @@ def bank(db_session: Session) -> Bank:
 
 
 @pytest.fixture
-def adapter(
-    db_session: Session, bank: Bank, storage: InMemoryStorageClient
-) -> RefinitivAdapter:
+def adapter(db_session: Session, bank: Bank, storage: InMemoryStorageClient) -> RefinitivAdapter:
     slug = resolve_bank_slug(db_session, bank)
     db_session.commit()
     return RefinitivAdapter(
@@ -169,9 +165,7 @@ def count_current_records(db_session: Session):
             points = list(
                 db_session.scalars(
                     select(CanonicalYieldCurvePoint).where(
-                        CanonicalYieldCurvePoint.yield_curve_id.in_(
-                            [curve.id for curve in curves]
-                        )
+                        CanonicalYieldCurvePoint.yield_curve_id.in_([curve.id for curve in curves])
                     )
                 )
             )

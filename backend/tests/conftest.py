@@ -40,6 +40,12 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("WORKER_DATABASE_URL", "")
     monkeypatch.setenv("CORS_ORIGINS", "")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
+    # Same .env-leak guard: a developer's local CREDENTIAL_VAULT_MASTER_KEY must
+    # not leak in, or tests asserting the "vault unconfigured" path (credential
+    # material refused) would wrongly see a configured vault. "" reads as
+    # unconfigured; tests that need a key set it themselves via monkeypatch. CI
+    # has no .env, so the key is already absent there.
+    monkeypatch.setenv("CREDENTIAL_VAULT_MASTER_KEY", "")
     get_settings.cache_clear()
     get_engine.cache_clear()
     yield
