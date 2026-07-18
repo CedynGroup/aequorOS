@@ -19,6 +19,7 @@ export const Backend = {
   Sqlserver: "sqlserver",
   Jdbc: "jdbc",
   Odbc: "odbc",
+  Snowflake: "snowflake",
 } as const;
 export type Backend = (typeof Backend)[keyof typeof Backend];
 

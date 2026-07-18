@@ -52,6 +52,12 @@ export interface MappingConfigRead {
    * @type {string}
    * @memberof MappingConfigRead
    */
+  sourceRef: string;
+  /**
+   *
+   * @type {string}
+   * @memberof MappingConfigRead
+   */
   sourceSystem: MappingConfigReadSourceSystemEnum;
   /**
    *
@@ -109,6 +115,7 @@ export function instanceOfMappingConfigRead(
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
   if (!("id" in value) || value["id"] === undefined) return false;
   if (!("name" in value) || value["name"] === undefined) return false;
+  if (!("sourceRef" in value) || value["sourceRef"] === undefined) return false;
   if (!("sourceSystem" in value) || value["sourceSystem"] === undefined)
     return false;
   if (!("status" in value) || value["status"] === undefined) return false;
@@ -133,6 +140,7 @@ export function MappingConfigReadFromJSONTyped(
     createdAt: new Date(json["created_at"]),
     id: json["id"],
     name: json["name"],
+    sourceRef: json["source_ref"],
     sourceSystem: json["source_system"],
     status: json["status"],
     version: json["version"],
@@ -157,6 +165,7 @@ export function MappingConfigReadToJSONTyped(
     created_at: value["createdAt"].toISOString(),
     id: value["id"],
     name: value["name"],
+    source_ref: value["sourceRef"],
     source_system: value["sourceSystem"],
     status: value["status"],
     version: value["version"],

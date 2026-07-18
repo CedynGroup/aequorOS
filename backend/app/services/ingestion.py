@@ -111,12 +111,15 @@ def create_mapping_config(
     db: Session, ctx: TenantContext, bank_id: UUID, payload: MappingConfigCreate
 ) -> MappingConfigRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    # Versions and the single-active guarantee are scoped per (bank, source_system,
+    # source_ref) so each data source of a bank has its own independent mapping.
     next_version = (
         db.scalar(
             select(func.coalesce(func.max(MappingConfigRecord.version), 0)).where(
                 MappingConfigRecord.organization_id == ctx.organization_id,
                 MappingConfigRecord.bank_id == bank.id,
                 MappingConfigRecord.source_system == payload.source_system,
+                MappingConfigRecord.source_ref == payload.source_ref,
             )
         )
         or 0
@@ -128,6 +131,7 @@ def create_mapping_config(
                 MappingConfigRecord.organization_id == ctx.organization_id,
                 MappingConfigRecord.bank_id == bank.id,
                 MappingConfigRecord.source_system == payload.source_system,
+                MappingConfigRecord.source_ref == payload.source_ref,
                 MappingConfigRecord.status == "active",
             )
         )
@@ -139,6 +143,7 @@ def create_mapping_config(
         organization_id=ctx.organization_id,
         bank_id=bank.id,
         source_system=payload.source_system,
+        source_ref=payload.source_ref,
         version=next_version,
         status="active" if payload.activate else "draft",
         name=payload.name,
@@ -1085,21 +1090,34 @@ def _resolve_mapping_config(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Mapping config not found."
             )
         return record
-    record = db.scalar(
-        select(MappingConfigRecord).where(
-            MappingConfigRecord.organization_id == ctx.organization_id,
-            MappingConfigRecord.bank_id == bank.id,
-            MappingConfigRecord.source_system == payload.source_system,
-            MappingConfigRecord.status == "active",
+
+    # Resolve the active mapping for this specific data source, preferring one
+    # scoped to the batch's source_ref (e.g. a database-direct connection) and
+    # falling back to the source-system-wide mapping (source_ref='') for
+    # single-source adapters. This keeps two DB_DIRECT sources at one bank apart.
+    def _active(source_ref: str) -> MappingConfigRecord | None:
+        return db.scalar(
+            select(MappingConfigRecord).where(
+                MappingConfigRecord.organization_id == ctx.organization_id,
+                MappingConfigRecord.bank_id == bank.id,
+                MappingConfigRecord.source_system == payload.source_system,
+                MappingConfigRecord.source_ref == source_ref,
+                MappingConfigRecord.status == "active",
+            )
         )
-    )
+
+    record = _active(payload.source_ref)
+    if record is None and payload.source_ref != "":
+        record = _active("")
     if record is None:
+        scope = (
+            f"source {payload.source_ref!r} of {payload.source_system!r}"
+            if payload.source_ref
+            else f"source system {payload.source_system!r}"
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=(
-                f"No active mapping config for source system {payload.source_system!r}; "
-                "create and activate one first."
-            ),
+            detail=f"No active mapping config for {scope}; create and activate one first.",
         )
     return record
 

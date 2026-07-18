@@ -25,6 +25,8 @@ from datetime import UTC, datetime
 from typing import Any, BinaryIO, Literal
 
 import boto3
+from boto3.exceptions import S3UploadFailedError
+from boto3.s3.transfer import TransferConfig
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
 
@@ -51,6 +53,22 @@ logger = logging.getLogger(__name__)
 
 _ACCESS_DENIED_CODES = {"AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "403"}
 _NOT_FOUND_CODES = {"NoSuchKey", "NoSuchBucket", "NoSuchVersion", "404", "NotFound"}
+
+# A staged bundle from a core-banking-scale pull (hundreds of thousands of rows
+# serialized into one object) can be hundreds of MB — larger than the single
+# request body a backend/proxy accepts (MinIO behind Cloudflare 413s a >100 MB
+# PutObject). Above the threshold, boto3's managed transfer switches to a
+# multipart upload, sending parts each well under that limit; MinIO requires
+# every part except the last to be >= 5 MiB, so the chunk size stays comfortably
+# above that. This makes writes size-independent — the correct fix, not a cap on
+# how much data a bank can load.
+_MULTIPART_THRESHOLD_BYTES = 16 * 1024 * 1024
+_MULTIPART_CHUNKSIZE_BYTES = 16 * 1024 * 1024
+_UPLOAD_TRANSFER_CONFIG = TransferConfig(
+    multipart_threshold=_MULTIPART_THRESHOLD_BYTES,
+    multipart_chunksize=_MULTIPART_CHUNKSIZE_BYTES,
+    use_threads=True,
+)
 
 
 class S3CompatibleStorageClient(StorageClient):
@@ -105,25 +123,38 @@ class S3CompatibleStorageClient(StorageClient):
         effective_key = metadata.kms_key_id or self._settings.kms_key_id
         if effective_key is not None and metadata.kms_key_id is None:
             metadata = replace(metadata, kms_key_id=effective_key)
-        put_kwargs: dict[str, Any] = {
-            "Bucket": bucket,
-            "Key": location.object_path,
-            "Body": data,
+        extra_args: dict[str, Any] = {
             "ContentType": content_type,
             "Metadata": metadata.to_object_metadata(),
         }
         if effective_key is not None:
-            put_kwargs["ServerSideEncryption"] = "aws:kms"
-            put_kwargs["SSEKMSKeyId"] = effective_key
-        response = self._call("write", location, lambda: self._s3.put_object(**put_kwargs))
+            extra_args["ServerSideEncryption"] = "aws:kms"
+            extra_args["SSEKMSKeyId"] = effective_key
+        # upload_fileobj auto-switches to a multipart upload above the threshold,
+        # so a large staged bundle is sent in parts each under the backend/proxy
+        # request-size limit; a single put_object would 413 on a >100 MB object.
+        # The managed transfer returns no response body, so the version id comes
+        # from the follow-up stat (the write we just made is the latest version).
+        self._call(
+            "write",
+            location,
+            lambda: self._s3.upload_fileobj(
+                data,
+                bucket,
+                location.object_path,
+                ExtraArgs=extra_args,
+                Config=_UPLOAD_TRANSFER_CONFIG,
+            ),
+        )
         stat = self._call(
             "write.stat",
             location,
             lambda: self._stat_object(bucket, location.object_path),
             log=False,
         )
-        self._log("write", location, version_id=response.get("VersionId"))
-        return self._to_storage_object(location, stat, version_id=response.get("VersionId"))
+        version_id = stat.get("VersionId")
+        self._log("write", location, version_id=version_id)
+        return self._to_storage_object(location, stat, version_id=version_id)
 
     def read(
         self,
@@ -378,7 +409,9 @@ class S3CompatibleStorageClient(StorageClient):
             if log:
                 self._log(operation, location, result=exc.response["Error"].get("Code", "error"))
             raise self._translate(exc) from exc
-        except BotoCoreError as exc:
+        except (BotoCoreError, S3UploadFailedError) as exc:
+            # BotoCoreError covers transport/config failures; S3UploadFailedError
+            # wraps a failed managed (multipart) upload — both are backend errors.
             if log:
                 self._log(operation, location, result="backend_error")
             raise StorageBackendError(str(exc)) from exc

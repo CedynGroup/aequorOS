@@ -48,6 +48,10 @@ _BACKEND_PARAMSTYLE: dict[Backend, ParamStyle] = {
     "sqlserver": ParamStyle.QMARK,
     "jdbc": ParamStyle.QMARK,
     "odbc": ParamStyle.QMARK,
+    # Snowflake uses ANSI double-quote identifier quoting (handled by the default
+    # branch in _quote_part) and binds with '?' when the connector's paramstyle is
+    # set to 'qmark'; FETCH FIRST n ROWS ONLY is supported.
+    "snowflake": ParamStyle.QMARK,
 }
 
 

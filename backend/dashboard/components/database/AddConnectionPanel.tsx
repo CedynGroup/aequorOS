@@ -44,16 +44,24 @@ export default function AddConnectionPanel({
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
+  const isSnowflake = form.backend === 'snowflake';
   const nameTaken =
     form.displayName.trim().length > 0 &&
     existingNames.includes(form.displayName.trim());
-  const credentialsIncomplete =
-    !form.cred.username?.trim() || !form.cred.password?.trim();
+  // Snowflake uses key-pair auth (service user + private key), not a password.
+  const credentialsIncomplete = isSnowflake
+    ? !form.cred.username?.trim() || !form.cred.snowflake_private_key?.trim()
+    : !form.cred.username?.trim() || !form.cred.password?.trim();
+  // Snowflake connects by account + warehouse (both required) instead of host.
+  const snowflakeConfigIncomplete =
+    isSnowflake &&
+    (!form.snowflake.account.trim() || !form.snowflake.warehouse.trim());
   const extraInvalid = !extraIsValid(form.cred.extra ?? '');
   const canSubmit =
     Boolean(form.displayName.trim()) &&
     !nameTaken &&
     !credentialsIncomplete &&
+    !snowflakeConfigIncomplete &&
     !extraInvalid &&
     !running;
 
@@ -128,9 +136,11 @@ export default function AddConnectionPanel({
               )}
               Create, validate &amp; test connection
             </button>
-            {credentialsIncomplete && (
+            {(credentialsIncomplete || snowflakeConfigIncomplete) && (
               <span className="text-caption text-slate">
-                A service user and password are required to create the connection.
+                {isSnowflake
+                  ? 'A service user, private key, account, and warehouse are required to create the connection.'
+                  : 'A service user and password are required to create the connection.'}
               </span>
             )}
           </div>

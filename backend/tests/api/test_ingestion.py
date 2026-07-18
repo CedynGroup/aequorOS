@@ -134,6 +134,92 @@ def start_batch(client: TestClient, bank_id: str, location: Path) -> dict[str, A
     return response.json()
 
 
+def create_scoped_mapping(
+    client: TestClient,
+    bank_id: str,
+    *,
+    source_ref: str,
+    name: str,
+    mapping: MappingConfig = FULL_MAPPING,
+) -> dict[str, Any]:
+    response = client.post(
+        f"/api/v1/banks/{bank_id}/mapping-configs",
+        headers=headers(),
+        json={
+            "source_system": "DB_DIRECT",
+            "source_ref": source_ref,
+            "name": name,
+            "config": mapping.model_dump(mode="json"),
+            "activate": True,
+            "reason": "Per-source onboarding mapping.",
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+class TestSourceRefSeparation:
+    """Two sources of one source_system at one bank each keep their own mapping.
+
+    A Merchant Bank running an Oracle FLEXCUBE core and a Snowflake warehouse —
+    both ``DB_DIRECT`` — must not have one connection's mapping clobber the other's.
+    """
+
+    def test_two_db_direct_sources_stay_independently_active(
+        self, db_client: TestClient
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        oracle = create_scoped_mapping(
+            db_client, bank_id, source_ref="conn-oracle", name="Oracle FLEXCUBE"
+        )
+        snowflake = create_scoped_mapping(
+            db_client, bank_id, source_ref="conn-snowflake", name="Snowflake warehouse"
+        )
+
+        # Activating the second source must NOT retire the first: the single-active
+        # constraint keys on (bank, source_system, source_ref), so both stay active.
+        assert oracle["source_ref"] == "conn-oracle"
+        assert oracle["status"] == "active"
+        assert snowflake["source_ref"] == "conn-snowflake"
+        assert snowflake["status"] == "active"
+
+        listed = db_client.get(
+            f"/api/v1/banks/{bank_id}/mapping-configs", headers=headers()
+        ).json()["configs"]
+        active_refs = {
+            config["source_ref"]
+            for config in listed
+            if config["status"] == "active" and config["source_system"] == "DB_DIRECT"
+        }
+        assert active_refs == {"conn-oracle", "conn-snowflake"}
+
+    def test_reactivating_one_source_leaves_the_other_untouched(
+        self, db_client: TestClient
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        create_scoped_mapping(db_client, bank_id, source_ref="conn-oracle", name="Oracle v1")
+        snow_v1 = create_scoped_mapping(
+            db_client, bank_id, source_ref="conn-snowflake", name="Snowflake v1"
+        )
+        snow_v2 = create_scoped_mapping(
+            db_client, bank_id, source_ref="conn-snowflake", name="Snowflake v2"
+        )
+
+        # Re-activating Snowflake bumps ITS version within ITS scope; Oracle's active
+        # mapping is versioned independently and is unaffected.
+        assert snow_v2["version"] == snow_v1["version"] + 1
+        listed = db_client.get(
+            f"/api/v1/banks/{bank_id}/mapping-configs", headers=headers()
+        ).json()["configs"]
+        active = {
+            config["source_ref"]: config
+            for config in listed
+            if config["status"] == "active" and config["source_system"] == "DB_DIRECT"
+        }
+        assert set(active) == {"conn-oracle", "conn-snowflake"}
+        assert active["conn-snowflake"]["id"] == snow_v2["id"]
+
+
 class TestHappyPath:
     def test_workbook_to_accepted_canonical_state(
         self, db_client: TestClient, tmp_path: Path

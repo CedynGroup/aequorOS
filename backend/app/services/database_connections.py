@@ -479,6 +479,9 @@ def sync_now(  # noqa: PLR0913 - a sync binds bank, connection, storage, and req
     )
     batch_payload = IngestionBatchCreate(
         source_system="DB_DIRECT",
+        # Each connection is its own data source: scope the mapping to this
+        # connection so two DB_DIRECT sources at one bank stay separate.
+        source_ref=str(connection.id),
         as_of_date=as_of,
         location=upload.location,
         reason=payload.reason,
@@ -809,11 +812,11 @@ def _connection_to_config_dict(connection: DatabaseDirectConnection) -> dict[str
 
 
 def _backend_option_blocks(options: dict[str, Any] | None) -> dict[str, Any]:
-    """Pull the JDBC/ODBC blocks (and any TLS ca_cert_path) out of the stored
+    """Pull the backend-specific blocks (JDBC/ODBC/Snowflake) out of the stored
     connection options so they merge into the runtime ConnectionConfig."""
     opts = dict(options or {})
     blocks: dict[str, Any] = {}
-    for key in ("jdbc", "odbc"):
+    for key in ("jdbc", "odbc", "snowflake"):
         if opts.get(key) is not None:
             blocks[key] = opts[key]
     return blocks
