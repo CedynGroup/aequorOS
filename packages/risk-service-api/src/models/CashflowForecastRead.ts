@@ -32,6 +32,13 @@ import {
   CashflowForecastAccuracyReadToJSON,
   CashflowForecastAccuracyReadToJSONTyped,
 } from "./CashflowForecastAccuracyRead";
+import type { CashflowForecastModelScope } from "./CashflowForecastModelScope";
+import {
+  CashflowForecastModelScopeFromJSON,
+  CashflowForecastModelScopeFromJSONTyped,
+  CashflowForecastModelScopeToJSON,
+  CashflowForecastModelScopeToJSONTyped,
+} from "./CashflowForecastModelScope";
 
 /**
  *
@@ -65,6 +72,12 @@ export interface CashflowForecastRead {
   mode: CashflowForecastMode;
   /**
    *
+   * @type {CashflowForecastModelScope}
+   * @memberof CashflowForecastRead
+   */
+  modelScope: CashflowForecastModelScope;
+  /**
+   *
    * @type {string}
    * @memberof CashflowForecastRead
    */
@@ -87,6 +100,8 @@ export function instanceOfCashflowForecastRead(
   if (!("asOfDate" in value) || value["asOfDate"] === undefined) return false;
   if (!("horizon" in value) || value["horizon"] === undefined) return false;
   if (!("mode" in value) || value["mode"] === undefined) return false;
+  if (!("modelScope" in value) || value["modelScope"] === undefined)
+    return false;
   if (!("modelVersion" in value) || value["modelVersion"] === undefined)
     return false;
   if (!("points" in value) || value["points"] === undefined) return false;
@@ -110,6 +125,7 @@ export function CashflowForecastReadFromJSONTyped(
     asOfDate: new Date(json["asOfDate"]),
     horizon: json["horizon"],
     mode: CashflowForecastModeFromJSON(json["mode"]),
+    modelScope: CashflowForecastModelScopeFromJSON(json["modelScope"]),
     modelVersion: json["modelVersion"],
     points: (json["points"] as Array<any>).map(
       CashflowForecastPointReadFromJSON,
@@ -134,6 +150,7 @@ export function CashflowForecastReadToJSONTyped(
     asOfDate: value["asOfDate"].toISOString().substring(0, 10),
     horizon: value["horizon"],
     mode: CashflowForecastModeToJSON(value["mode"]),
+    modelScope: CashflowForecastModelScopeToJSON(value["modelScope"]),
     modelVersion: value["modelVersion"],
     points: (value["points"] as Array<any>).map(
       CashflowForecastPointReadToJSON,

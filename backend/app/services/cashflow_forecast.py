@@ -1,17 +1,19 @@
-"""Tenant-scoped, in-process cash-flow forecasting (LSTM + static baseline).
+"""Per-tenant cash-flow forecasting (LSTM + static baseline), no spillover.
 
-Formerly a proxy to the standalone cashflow-ml sidecar; the ML code now lives
-in ``app.ml`` and runs inside this service. This module still owns tenant
-authorization (bank ownership) and shapes the ML outputs into the typed
-contracts in ``app.schemas.cashflow_forecast`` consumed by the generated
-OpenAPI client — the HTTP contract is unchanged.
+Keyed by ``(org, bank)`` like the behavioral models: each bank gets its own
+forecast service, trained on its OWN ingested daily cash-flow history
+(``historical_cashflows``) and persisted to a per-tenant artifact dir. A bank's
+data never trains or serves another bank's model.
 
-The torch-backed model module is imported lazily on first forecast so app
-startup and non-forecast requests never pay for the ML runtime. If that
-import fails (broken torch install, missing native libraries) the forecast
-endpoints degrade to the same 503 the old proxy returned when the sidecar was
-down, instead of taking the whole service down. History needs only the
-synthetic series and works without torch.
+Cold start (ai_engine.md §12): a bank without enough daily history to train an
+LSTM (``< TrainingConfig.total_days`` days) is served the shared **generic**
+model — trained on the synthetic / Sample-Bank bootstrap series, never on another
+real bank's data — and the response is labelled ``model_scope="generic"`` so it is
+never mistaken for a bank-specific one. Once the bank has enough history, its
+service trains ``model_scope="bank_specific"`` on its own series.
+
+The torch-backed model module is imported lazily on first forecast; a broken ML
+runtime degrades to a 503 rather than taking the service down.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from __future__ import annotations
 import datetime
 import math
 import threading
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
@@ -29,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.config import CashflowSettings, get_settings
 from app.ml.baseline import forecast_static
+from app.ml.cashflow_history import load_bank_daily_series
 from app.ml.config import TrainingConfig
 from app.ml.real_series import load_real_daily_series
 from app.ml.synthetic import DailyFlow, generate_daily_series
@@ -36,26 +40,12 @@ from app.models import Bank
 from app.schemas.cashflow_forecast import (
     CashflowForecastAccuracyRead,
     CashflowForecastMode,
+    CashflowForecastModelScope,
     CashflowForecastPointRead,
     CashflowForecastRead,
     CashflowHistoryPointRead,
     CashflowHistoryRead,
 )
-
-
-def _load_series(config: TrainingConfig) -> list[DailyFlow]:
-    """Serving series: the real 10-year panel when enabled, else synthetic.
-
-    Falls back to the synthetic series if the real panel is missing so the
-    forecast endpoint never fails to construct just because the parquet is
-    absent (a missing ML runtime already degrades to a 503 elsewhere).
-    """
-    if config.use_real_series:
-        try:
-            return load_real_daily_series()
-        except FileNotFoundError:
-            pass
-    return generate_daily_series(days=config.total_days)
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -69,18 +59,32 @@ BAND_WIDENING_BASE_DAYS = 7.0
 BAND_WIDENING_CAP = 2.5
 
 
+def _generic_series(config: TrainingConfig) -> list[DailyFlow]:
+    """The generic bootstrap series: the real 10-year panel when enabled, else synthetic.
+
+    Used only for banks without enough of their own history. Falls back to synthetic
+    if the panel is absent so serving never fails just because the parquet is missing.
+    """
+    if config.use_real_series:
+        try:
+            return load_real_daily_series()
+        except FileNotFoundError:
+            pass
+    return generate_daily_series(days=config.total_days)
+
+
 def get_forecast(
     db: Session, ctx: TenantContext, bank_id: UUID, *, horizon: int, mode: CashflowForecastMode
 ) -> CashflowForecastRead:
     _get_bank_or_404(db, ctx, bank_id)
-    return _get_service().forecast(horizon=horizon, mode=mode)
+    return _get_service(db, ctx, bank_id).forecast(horizon=horizon, mode=mode)
 
 
 def get_history(
     db: Session, ctx: TenantContext, bank_id: UUID, *, days: int
 ) -> CashflowHistoryRead:
     _get_bank_or_404(db, ctx, bank_id)
-    return _get_service().history(days)
+    return _get_service(db, ctx, bank_id).history(days)
 
 
 def _import_ml_model() -> ModuleType:
@@ -107,12 +111,22 @@ def _band_half_width(day: int, residual_std: float) -> float:
 
 
 class ForecastService:
-    """Lazily trains/loads the LSTM and serves forecast and history responses."""
+    """Lazily trains/loads one bank's LSTM and serves its forecast and history."""
 
-    def __init__(self, settings: CashflowSettings) -> None:
+    def __init__(
+        self,
+        settings: CashflowSettings,
+        config: TrainingConfig,
+        *,
+        series: list[DailyFlow],
+        scope: CashflowForecastModelScope,
+        artifacts_dir: Path,
+    ) -> None:
         self._settings = settings
-        self._config = TrainingConfig.from_settings(settings)
-        self._series = _load_series(self._config)
+        self._config = config
+        self._series = series
+        self._scope: CashflowForecastModelScope = scope
+        self._artifacts_dir = artifacts_dir
         self._model: CashFlowLSTM | None = None
         self._scaler: dict[str, float | int | str] | None = None
         self._metrics: dict[str, float | str] | None = None
@@ -126,12 +140,14 @@ class ForecastService:
         with self._lock:
             model, scaler, metrics = self._model, self._scaler, self._metrics
             if model is None or scaler is None or metrics is None:
-                loaded = ml.load_artifacts(self._settings.artifacts_dir)
+                loaded = ml.load_artifacts(self._artifacts_dir)
                 if loaded is None:
                     ml.train_and_save(
-                        config=self._config, artifacts_dir=self._settings.artifacts_dir
+                        config=self._config,
+                        artifacts_dir=self._artifacts_dir,
+                        series=self._series,
                     )
-                    loaded = ml.load_artifacts(self._settings.artifacts_dir)
+                    loaded = ml.load_artifacts(self._artifacts_dir)
                 if loaded is None:  # pragma: no cover - artifacts were just written
                     raise RuntimeError("training completed but artifacts could not be loaded")
                 model, scaler, metrics = loaded
@@ -181,6 +197,7 @@ class ForecastService:
             horizon=horizon,
             as_of_date=as_of,
             model_version=str(metrics["model_version"]),
+            model_scope=self._scope,
             accuracy=accuracy,
             points=points,
         )
@@ -195,24 +212,74 @@ class ForecastService:
         )
 
 
-_service: ForecastService | None = None
-_service_lock = threading.Lock()
+# Per-tenant service cache: one warm model per (org, bank), no process-wide sharing.
+_services: dict[tuple[UUID, UUID], ForecastService] = {}
+_services_lock = threading.Lock()
+_key_locks: dict[tuple[UUID, UUID], threading.Lock] = {}
 
 
-def _get_service() -> ForecastService:
-    """Process-wide singleton keeps the loaded model warm across requests."""
-    global _service  # noqa: PLW0603 - deliberate module-level cache
-    with _service_lock:
-        if _service is None:
-            _service = ForecastService(get_settings().cashflow)
-        return _service
+def _key_lock(key: tuple[UUID, UUID]) -> threading.Lock:
+    with _services_lock:
+        return _key_locks.setdefault(key, threading.Lock())
+
+
+def _bank_artifacts_dir(settings: CashflowSettings, key: tuple[UUID, UUID]) -> Path:
+    org_id, bank_id = key
+    return Path(settings.artifacts_dir) / str(org_id) / str(bank_id)
+
+
+def _generic_artifacts_dir(settings: CashflowSettings) -> Path:
+    return Path(settings.artifacts_dir) / "generic"
+
+
+def _build_service(db: Session, ctx: TenantContext, bank_id: UUID) -> ForecastService:
+    """Bank-specific service when the bank has enough own history, else generic."""
+    settings = get_settings().cashflow
+    config = TrainingConfig.from_settings(settings)
+    key = (ctx.organization_id, bank_id)
+
+    bank_series = load_bank_daily_series(db, ctx, bank_id)
+    if len(bank_series) >= config.total_days:
+        # Train on the most recent window of the bank's OWN daily history.
+        return ForecastService(
+            settings,
+            config,
+            series=bank_series[-config.total_days :],
+            scope="bank_specific",
+            artifacts_dir=_bank_artifacts_dir(settings, key),
+        )
+    return ForecastService(
+        settings,
+        config,
+        series=_generic_series(config),
+        scope="generic",
+        artifacts_dir=_generic_artifacts_dir(settings),
+    )
+
+
+def _get_service(db: Session, ctx: TenantContext, bank_id: UUID) -> ForecastService:
+    """One warm ForecastService per (org, bank); built once, then cached."""
+    key = (ctx.organization_id, bank_id)
+    with _services_lock:
+        service = _services.get(key)
+    if service is not None:
+        return service
+    with _key_lock(key):
+        with _services_lock:
+            service = _services.get(key)
+        if service is not None:
+            return service
+        service = _build_service(db, ctx, bank_id)
+        with _services_lock:
+            _services[key] = service
+        return service
 
 
 def reset_forecast_service() -> None:
-    """Testing hook: drop the cached service so fresh settings take effect."""
-    global _service  # noqa: PLW0603 - deliberate module-level cache
-    with _service_lock:
-        _service = None
+    """Testing hook: drop cached per-tenant services so fresh state takes effect."""
+    with _services_lock:
+        _services.clear()
+        _key_locks.clear()
 
 
 def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:

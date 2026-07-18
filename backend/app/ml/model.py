@@ -164,20 +164,26 @@ def _fit(
 def train_and_save(
     config: TrainingConfig | None = None,
     artifacts_dir: Path | str | None = None,
+    *,
+    series: list[DailyFlow] | None = None,
 ) -> dict[str, float | str]:
-    """Train the LSTM on the synthetic series, save artifacts, return holdout metrics.
+    """Train the LSTM on ``series``, save artifacts, return holdout metrics.
 
-    Deterministic for a given config (fixed data seed + ``torch.manual_seed``),
+    ``series`` is the training data: pass a bank's own daily cash-flow history to
+    train a *bank-specific* model (per-tenant), or omit it to build the generic
+    series from the config (the shared real panel or the synthetic bootstrap).
+    Deterministic for a given (series, config): fixed data seed + ``torch.manual_seed``,
     so retraining is idempotent.
     """
     settings = get_settings().cashflow
     cfg = config or TrainingConfig.from_settings(settings)
     out_dir = Path(artifacts_dir) if artifacts_dir is not None else settings.artifacts_dir
 
-    series = (
-        load_real_daily_series() if cfg.use_real_series
-        else generate_daily_series(days=cfg.total_days)
-    )
+    if series is None:
+        series = (
+            load_real_daily_series() if cfg.use_real_series
+            else generate_daily_series(days=cfg.total_days)
+        )
     dates = [flow.date for flow in series]
     nets = np.array([flow.net for flow in series], dtype=np.float64)
 

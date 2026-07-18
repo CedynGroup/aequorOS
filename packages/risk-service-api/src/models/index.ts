@@ -133,6 +133,7 @@ export * from "./CaseUpdate";
 export * from "./CashFlowDate";
 export * from "./CashflowForecastAccuracyRead";
 export * from "./CashflowForecastMode";
+export * from "./CashflowForecastModelScope";
 export * from "./CashflowForecastPointRead";
 export * from "./CashflowForecastRead";
 export * from "./CashflowHistoryPointRead";

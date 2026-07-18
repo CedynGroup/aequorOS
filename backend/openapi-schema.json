@@ -4741,6 +4741,13 @@
         ],
         "type": "string"
       },
+      "CashflowForecastModelScope": {
+        "enum": [
+          "bank_specific",
+          "generic"
+        ],
+        "type": "string"
+      },
       "CashflowForecastPointRead": {
         "additionalProperties": false,
         "properties": {
@@ -4794,6 +4801,9 @@
           "mode": {
             "$ref": "#/components/schemas/CashflowForecastMode"
           },
+          "modelScope": {
+            "$ref": "#/components/schemas/CashflowForecastModelScope"
+          },
           "modelVersion": {
             "title": "Modelversion",
             "type": "string"
@@ -4811,6 +4821,7 @@
           "horizon",
           "asOfDate",
           "modelVersion",
+          "modelScope",
           "accuracy",
           "points"
         ],

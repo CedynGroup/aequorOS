@@ -19,9 +19,13 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.deps import TenantContext
+from app.core.config import get_settings
+from app.ml.config import TrainingConfig
+from app.ml.synthetic import generate_daily_series
 from app.services import cashflow_forecast
 from app.services.sample_bank_seed import SAMPLE_BANK_ID
-from tests.api.helpers import ORG_2, headers
+from tests.api.helpers import ORG_1, ORG_2, headers
 
 AS_OF = datetime.date(2026, 3, 31)
 
@@ -146,6 +150,9 @@ def test_forecast_lstm_lazy_trains_and_returns_bands(
     assert body["horizon"] == 30
     assert body["asOfDate"] == AS_OF.isoformat()
     assert body["modelVersion"] == "lstm-v1.0.0"
+    # The seed bank has no ingested historical_cashflows, so it is served the
+    # generic bootstrap model — honestly labelled, never passed off as bank-specific.
+    assert body["modelScope"] == "generic"
     accuracy = body["accuracy"]
     assert accuracy["lstmMape"] < accuracy["staticMape"]
     assert accuracy["improvementPct"] > 0
@@ -160,8 +167,42 @@ def test_forecast_lstm_lazy_trains_and_returns_bands(
     last_width = points[-1]["upper"] - points[-1]["lower"]
     assert last_width > first_width > 0
 
+    # Generic-scope artifacts persist under the generic/ subdir (per-tenant models
+    # live under {org}/{bank}/); lazy training wrote all three.
     for name in ("model.pt", "scaler.json", "metrics.json"):
-        assert (ml_artifacts_dir / name).exists()  # lazy training persisted artifacts
+        assert (ml_artifacts_dir / "generic" / name).exists()
+
+
+def test_build_service_routes_bank_specific_vs_generic_with_isolated_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bank with enough of its own history trains a bank-specific model in a
+    per-tenant artifact dir; a bank without falls back to the shared generic model.
+    Proves the no-spillover routing without paying for LSTM training."""
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=None)
+    total = TrainingConfig.from_settings(get_settings().cashflow).total_days
+
+    bank_specific = uuid4()
+    long_series = generate_daily_series(days=total + 30)  # enough own history
+    monkeypatch.setattr(
+        cashflow_forecast, "load_bank_daily_series", lambda _db, _ctx, _bid: long_series
+    )
+    service = cashflow_forecast._build_service(None, ctx, bank_specific)  # type: ignore[arg-type]
+    assert service._scope == "bank_specific"
+    assert service._series is not long_series  # trains on the recent window slice
+    assert len(service._series) == total
+    artifacts = str(service._artifacts_dir)
+    assert str(ORG_1) in artifacts and str(bank_specific) in artifacts  # per-tenant path
+
+    generic_bank = uuid4()
+    monkeypatch.setattr(
+        cashflow_forecast, "load_bank_daily_series", lambda _db, _ctx, _bid: long_series[:5]
+    )
+    generic = cashflow_forecast._build_service(None, ctx, generic_bank)  # type: ignore[arg-type]
+    assert generic._scope == "generic"
+    assert generic._artifacts_dir.name == "generic"
+    # A generic bank's model dir carries neither tenant id — no spillover either way.
+    assert str(generic_bank) not in str(generic._artifacts_dir)
 
 
 def test_forecast_static_has_degenerate_bands(db_client: TestClient) -> None:
