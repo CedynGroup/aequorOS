@@ -1,0 +1,6 @@
+[
+  {"ACCT_CODE": "1000", "ACCT_NAME": "Cash and balances with central bank", "ACCT_CLASS": "A", "CCY": "GHS", "BAL": "48.500.000,00"},
+  {"ACCT_CODE": "1200", "ACCT_NAME": "Loans and advances to customers", "ACCT_CLASS": "A", "CCY": "GHS", "BAL": "312.750.000,50"},
+  {"ACCT_CODE": "2000", "ACCT_NAME": "Customer deposits", "ACCT_CLASS": "L", "CCY": "GHS", "BAL": "402.100.000,00"},
+  {"ACCT_CODE": "3000", "ACCT_NAME": "Share capital", "ACCT_CLASS": "E", "CCY": "GHS", "BAL": "60.000.000,00"}
+]

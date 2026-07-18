@@ -13,6 +13,9 @@ pnpm-debug.log*
 
 # Local data-engine sample inputs (37MB xlsx/csv) — regenerable, not source.
 data/
+# ...but committed test fixtures live in a data/ dir too; keep them tracked.
+!backend/tests/adapters/database_direct/fixtures_oracle/data/
+!backend/tests/adapters/database_direct/fixtures_sqlserver/data/
 
 # Next.js build output (any app)
 .next/
