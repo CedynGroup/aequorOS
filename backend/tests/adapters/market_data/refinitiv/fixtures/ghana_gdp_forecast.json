@@ -1,0 +1,11 @@
+{
+  "universe": ["GHGDP=ECI"],
+  "fields": ["TR.EconForecast"],
+  "data": [
+    ["GHGDP=ECI", "TR.EconForecast", 4.2]
+  ],
+  "vendor_internal": {
+    "debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE",
+    "http_status": 200
+  }
+}

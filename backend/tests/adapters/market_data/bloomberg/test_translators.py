@@ -83,7 +83,7 @@ def test_tenor_labels(tenor_months: int, label: str) -> None:
 
 
 def test_fx_spot_bundle_is_quote_per_base_without_percent_conversion() -> None:
-    observation = FxObservation(security="GHSUSD Curncy", field="PX_LAST", value=Decimal("12.85"))
+    observation = FxObservation(security="USDGHS Curncy", field="PX_LAST", value=Decimal("12.85"))
     bundle = fx_spot_bundle(DataScope.FX_SPOT_USD_GHS, observation)
     assert len(bundle.fx_rates) == 1
     fx = bundle.fx_rates[0]
@@ -93,12 +93,12 @@ def test_fx_spot_bundle_is_quote_per_base_without_percent_conversion() -> None:
     assert fx.tenor_months is None
     # A price, not a percent: ~12.85 GHS per USD, never divided by 100.
     assert fx.rate == Decimal("12.85000000")
-    assert fx.source_reference == "GHSUSD Curncy"
+    assert fx.source_reference == "USDGHS Curncy"
     assert bundle.sample_values == {"USD/GHS spot": "12.8500"}
 
 
 def test_fx_spot_bundle_rejects_non_spot_scopes() -> None:
-    observation = FxObservation(security="GHSUSD Curncy", field="PX_LAST", value=Decimal("12.85"))
+    observation = FxObservation(security="USDGHS Curncy", field="PX_LAST", value=Decimal("12.85"))
     with pytest.raises(ValueError, match="not an FX spot scope"):
         fx_spot_bundle(DataScope.YIELD_CURVE_GHS, observation)
 
@@ -140,7 +140,7 @@ def test_bundle_record_counts() -> None:
     assert curve.record_count == 2  # header + one point
     fx = fx_spot_bundle(
         DataScope.FX_SPOT_USD_GHS,
-        FxObservation(security="GHSUSD Curncy", field="PX_LAST", value=Decimal("12.85")),
+        FxObservation(security="USDGHS Curncy", field="PX_LAST", value=Decimal("12.85")),
     )
     assert fx.record_count == 1
     ratings = rating_bundle(

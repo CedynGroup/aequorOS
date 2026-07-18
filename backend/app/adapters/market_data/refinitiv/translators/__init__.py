@@ -12,14 +12,22 @@ from app.adapters.market_data.refinitiv.translators.curve_to_canonical import (
     percent_to_fraction,
     tenor_label,
 )
-from app.adapters.market_data.refinitiv.translators.fx_to_canonical import fx_to_bundle
+from app.adapters.market_data.refinitiv.translators.fx_to_canonical import (
+    fx_forward_to_bundle,
+    fx_to_bundle,
+)
+from app.adapters.market_data.refinitiv.translators.macro_to_canonical import (
+    macro_to_bundle,
+)
 from app.adapters.market_data.refinitiv.translators.rating_to_canonical import (
     ratings_to_bundle,
 )
 
 __all__ = [
     "curve_to_bundle",
+    "fx_forward_to_bundle",
     "fx_to_bundle",
+    "macro_to_bundle",
     "percent_to_fraction",
     "ratings_to_bundle",
     "tenor_label",

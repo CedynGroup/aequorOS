@@ -3,13 +3,35 @@
 # Maps DataScope values to Refinitiv Instrument Codes (RICs) and data field
 # references. This catalog is ground truth for what the adapter pulls: the
 # bank sees "Ghana yield curve" in the UI; the adapter pulls whatever is
-# documented here. Only the entries documented in spec §7.2 are supported.
-# Every other DataScope is listed with `supported: false` per §16.9 — the
-# framework never fakes support and never invents RICs (§16.4). Adding
-# coverage requires vendor-verified RICs signed off by Dela or Eric.
+# documented here. Every DataScope in the taxonomy has an entry.
+#
+# THREE enablement states:
+#   supported: true                       -> live-offered; catalog carries the
+#                                            verified RICs + fields.
+#   supported: false, verification_required: true
+#                                         -> the STRUCTURE is fully specified in
+#                                            the `verification:` block (tenors,
+#                                            fields, quota, and the exact vendor
+#                                            doc to consult), but the concrete
+#                                            RICs are NOT yet confirmed. No RIC is
+#                                            invented (§16.4): enabling a scope is
+#                                            a DATA update (fill the verified RICs
+#                                            into a supported entry, set quota,
+#                                            flip the flag) — never a code change,
+#                                            because the adapter already
+#                                            dispatches every scope category.
+#                                            Security master is the one exception
+#                                            (needs a canonical entity — see its
+#                                            note).
+#
+# The `field` references named below (TR.MidYield, TR.MidPrice, the
+# TR.*IssuerRating codes) are the same fields already confirmed in the supported
+# entries; only the per-scope RICs require verification.
 #
 # Note: the spec catalog for the GHS curve intentionally omits the 36- and
-# 84-month standard tenors (§5.2); do not add them without a documented RIC.
+# 84-month standard tenors (§5.2); the supported entry preserves that exactly.
+
+# --- Supported: verified against spec §7.2 -----------------------------------
 
 YIELD_CURVE_GHS:
   rics:
@@ -52,78 +74,218 @@ CREDIT_RATING_GHANA_SOVEREIGN:
   quota_units_per_pull: 3
   supported: true
 
-# RIC not documented — do not invent (spec §16.4)
+# --- Verification required: structure complete, RICs unconfirmed --------------
+
 YIELD_CURVE_USD:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the U.S. Treasury constant-maturity benchmark RICs in the LSEG
+      Data Platform (Search / Yield Curve app, e.g. the US<tenor>YT=RR chain)
+      and the TR.MidYield field before enabling.
+    field: "TR.MidYield"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
 
-# RIC not documented — do not invent (spec §16.4)
 YIELD_CURVE_EUR:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the euro-area benchmark (German Bund / EUR swap) RICs in the LSEG
+      Data Platform Yield Curve app and the TR.MidYield field.
+    field: "TR.MidYield"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
 
-# RIC not documented — do not invent (spec §16.4)
 YIELD_CURVE_GBP:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the UK Gilt benchmark RICs in the LSEG Data Platform Yield Curve
+      app and the TR.MidYield field.
+    field: "TR.MidYield"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
 
-# RIC not documented — do not invent (spec §16.4)
 YIELD_CURVE_NGN:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the Nigeria FGN sovereign benchmark RICs in the LSEG Data
+      Platform and the TR.MidYield field.
+    field: "TR.MidYield"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
 
-# RIC not documented — do not invent (spec §16.4)
 YIELD_CURVE_KES:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the Kenya sovereign benchmark RICs in the LSEG Data Platform and
+      the TR.MidYield field.
+    field: "TR.MidYield"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
 
-# RIC not documented — do not invent (spec §16.4)
 YIELD_CURVE_ZAR:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the South Africa RSA sovereign benchmark RICs in the LSEG Data
+      Platform and the TR.MidYield field.
+    field: "TR.MidYield"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
 
-# RIC not documented — do not invent (spec §16.4)
 FX_SPOT_EUR_GHS:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the EUR/GHS spot RIC in the LSEG Data Platform (the "<pair>=R"
+      convention, matching FX_SPOT_USD_GHS's USDGHS=R) and the TR.MidPrice
+      field.
+    field: "TR.MidPrice"
+    quota_units_per_pull: 1
 
-# RIC not documented — do not invent (spec §16.4)
 FX_SPOT_GBP_GHS:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the GBP/GHS spot RIC in the LSEG Data Platform and the
+      TR.MidPrice field.
+    field: "TR.MidPrice"
+    quota_units_per_pull: 1
 
-# RIC not documented — do not invent (spec §16.4)
 FX_SPOT_USD_NGN:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/NGN spot RIC in the LSEG Data Platform and the
+      TR.MidPrice field.
+    field: "TR.MidPrice"
+    quota_units_per_pull: 1
 
-# RIC not documented — do not invent (spec §16.4)
 FX_FORWARD_USD_GHS_1M:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/GHS 1-month forward-outright RIC in the LSEG Data Platform
+      (FX Forwards; record outright vs. points) and the TR.MidPrice field.
+    field: "TR.MidPrice"
+    tenor: "1M"
+    quota_units_per_pull: 1
 
-# RIC not documented — do not invent (spec §16.4)
 FX_FORWARD_USD_GHS_3M:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/GHS 3-month forward-outright RIC in the LSEG Data Platform
+      (outright vs. points) and the TR.MidPrice field.
+    field: "TR.MidPrice"
+    tenor: "3M"
+    quota_units_per_pull: 1
 
-# RIC not documented — do not invent (spec §16.4)
 FX_FORWARD_USD_GHS_6M:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/GHS 6-month forward-outright RIC in the LSEG Data Platform
+      (outright vs. points) and the TR.MidPrice field.
+    field: "TR.MidPrice"
+    tenor: "6M"
+    quota_units_per_pull: 1
 
-# RIC not documented — do not invent (spec §16.4)
 FX_FORWARD_USD_GHS_12M:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/GHS 12-month forward-outright RIC in the LSEG Data
+      Platform (outright vs. points) and the TR.MidPrice field.
+    field: "TR.MidPrice"
+    tenor: "12M"
+    quota_units_per_pull: 1
 
-# RIC not documented — do not invent (spec §16.4)
 SECURITY_MASTER_GOG_BONDS:
   supported: false
+  verification_required: true
+  verification:
+    # Canonical persistence for security master also requires a canonical
+    # reference entity + a MarketDataBundle slot (see needsIntegration); this
+    # scope stays code-blocked, not only data-blocked, until that lands.
+    doc: >-
+      Confirm the Government of Ghana bond universe RICs and the LSEG reference
+      field for each attribute (identifiers, issuer, maturity, coupon,
+      day-count, callable) before enabling.
+    attributes: [isin, cusip, issuer, maturity, coupon, day_count, callable]
 
-# RIC not documented — do not invent (spec §16.4)
 SECURITY_MASTER_GOG_TBILLS:
   supported: false
+  verification_required: true
+  verification:
+    # Requires the security-master canonical entity (see needsIntegration).
+    doc: >-
+      Confirm the Government of Ghana Treasury-bill universe RICs and the LSEG
+      reference fields for each attribute before enabling.
+    attributes: [isin, cusip, issuer, maturity, discount_rate, day_count]
 
-# RIC not documented — do not invent (spec §16.4)
 CREDIT_RATING_NIGERIA_SOVEREIGN:
   supported: false
+  verification_required: true
+  verification:
+    # The rating field references are the same confirmed issuer-rating fields as
+    # CREDIT_RATING_GHANA_SOVEREIGN; only the issuer RIC needs confirming.
+    doc: >-
+      Confirm the Nigeria sovereign issuer RIC in the LSEG Data Platform (the
+      "NG=" convention, matching Ghana's "GH=") before enabling.
+    fields:
+      - "TR.MoodysIssuerRating"
+      - "TR.SPIssuerRating"
+      - "TR.FitchIssuerRating"
+    quota_units_per_pull: 3
 
-# RIC not documented — do not invent (spec §16.4)
 MACRO_GHANA_GDP_FORECAST:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the LSEG economic-forecast RIC and field for Ghana real GDP growth
+      (Economic Indicators / Poll app), and the scenario/horizon each series
+      represents, before enabling.
+    scenario: base
+    horizon_months: 12
+    quota_units_per_pull: 1
 
-# RIC not documented — do not invent (spec §16.4)
 MACRO_GHANA_INFLATION_FORECAST:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the LSEG economic-forecast RIC and field for Ghana CPI inflation
+      (Economic Indicators / Poll app), and the scenario/horizon.
+    scenario: base
+    horizon_months: 12
+    quota_units_per_pull: 1
 
-# RIC not documented — do not invent (spec §16.4)
 MACRO_GHANA_POLICY_RATE_PATH:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the LSEG forecast RIC and field for the Bank of Ghana policy-rate
+      path (Economic Indicators / Poll app), and the horizon set.
+    scenario: base
+    horizon_months: 12
+    quota_units_per_pull: 1

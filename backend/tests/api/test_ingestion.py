@@ -227,7 +227,13 @@ class TestHappyPath:
         ).json()["positions"][0]
         walk = db_client.get(f"/api/v1/lineage/{position['lineage_id']}", headers=headers()).json()
         operations = [node["operation_type"] for node in walk["nodes"]]
-        assert operations == ["VALIDATION", "ADAPTER_TRANSLATE", "ADAPTER_EXTRACT"]
+        assert operations == [
+            "VALIDATION",
+            "ADAPTER_TRANSLATE",
+            "ML_ETL_DEDUP",
+            "ML_ETL_PREPROCESS",
+            "ADAPTER_EXTRACT",
+        ]
         assert walk["nodes"][-1]["input_lineage_ids"] == []
 
 
@@ -494,6 +500,8 @@ class TestManualOverride:
             "HUMAN_OVERRIDE",
             "VALIDATION",
             "ADAPTER_TRANSLATE",
+            "ML_ETL_DEDUP",
+            "ML_ETL_PREPROCESS",
             "ADAPTER_EXTRACT",
         ]
 

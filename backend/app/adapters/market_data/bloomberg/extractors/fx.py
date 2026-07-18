@@ -1,4 +1,10 @@
-"""FX-spot extractor: one catalog security -> one price observation (§6.3)."""
+"""FX extractor: one catalog security -> one price observation (§6.3).
+
+Serves both FX spot and FX forward scopes: each maps to exactly one Bloomberg
+currency security (the outright/forward-points ticker), so a single fetch path
+covers both. The FX translator decides spot-vs-forward semantics from the
+scope; the extractor only produces the typed price observation.
+"""
 
 from __future__ import annotations
 
@@ -53,6 +59,30 @@ def extract_fx_spot(
     requests: list[dict[str, Any]],
 ) -> FxExtraction:
     """Pull the single catalog security for one FX-spot scope."""
+    return _extract_single_fx(session, transport, scope, requests)
+
+
+def extract_fx_forward(
+    session: BloombergSession,
+    transport: BlpTransport,
+    scope: DataScope,
+    requests: list[dict[str, Any]],
+) -> FxExtraction:
+    """Pull the single catalog security for one FX-forward scope.
+
+    Identical fetch to spot — one forward-points/outright ticker per scope —
+    with the tenor carried by the scope name and applied in the translator.
+    """
+    return _extract_single_fx(session, transport, scope, requests)
+
+
+def _extract_single_fx(
+    session: BloombergSession,
+    transport: BlpTransport,
+    scope: DataScope,
+    requests: list[dict[str, Any]],
+) -> FxExtraction:
+    """Pull the single catalog security backing one FX scope (spot or forward)."""
     ensure_scope_permitted(session, scope)
     if len(requests) != 1:
         # A malformed catalog entry, not a vendor fault; classified generically

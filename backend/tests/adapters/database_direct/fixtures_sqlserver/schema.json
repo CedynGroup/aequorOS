@@ -1,0 +1,61 @@
+{
+  "database": "COREBANK",
+  "tables": [
+    {
+      "schema": "DBO",
+      "name": "GL_ACCOUNTS",
+      "columns": [
+        {"name": "ACCT_CODE", "type": "varchar", "nullable": false},
+        {"name": "ACCT_NAME", "type": "nvarchar", "nullable": false},
+        {"name": "ACCT_CLASS", "type": "char", "nullable": false},
+        {"name": "CCY", "type": "char", "nullable": true},
+        {"name": "BAL", "type": "decimal", "nullable": true}
+      ]
+    },
+    {
+      "schema": "DBO",
+      "name": "CUSTOMERS",
+      "columns": [
+        {"name": "CUST_ID", "type": "varchar", "nullable": false},
+        {"name": "CUST_NAME", "type": "nvarchar", "nullable": false},
+        {"name": "CUST_TYPE", "type": "char", "nullable": false},
+        {"name": "COUNTRY", "type": "char", "nullable": true},
+        {"name": "TIN", "type": "varchar", "nullable": true}
+      ]
+    },
+    {
+      "schema": "DBO",
+      "name": "PRODUCTS",
+      "columns": [
+        {"name": "PROD_CODE", "type": "varchar", "nullable": false},
+        {"name": "PROD_NAME", "type": "nvarchar", "nullable": false}
+      ]
+    },
+    {
+      "schema": "DBO",
+      "name": "POSITIONS",
+      "columns": [
+        {"name": "POS_ID", "type": "varchar", "nullable": false},
+        {"name": "POS_TYPE", "type": "char", "nullable": false},
+        {"name": "CCY", "type": "char", "nullable": false},
+        {"name": "BAL", "type": "decimal", "nullable": false},
+        {"name": "CUST_ID", "type": "varchar", "nullable": true},
+        {"name": "PROD_CODE", "type": "varchar", "nullable": true},
+        {"name": "MATURITY", "type": "date", "nullable": true},
+        {"name": "RATE", "type": "decimal", "nullable": true},
+        {"name": "RATE_TYPE", "type": "char", "nullable": true},
+        {"name": "ECL_PROVISION", "type": "decimal", "nullable": true},
+        {"name": "UPDATED_AT", "type": "datetime2", "nullable": false}
+      ]
+    },
+    {
+      "schema": "DBO",
+      "name": "FX_RATES",
+      "columns": [
+        {"name": "CCY_PAIR", "type": "char", "nullable": false},
+        {"name": "MID_RATE", "type": "decimal", "nullable": false},
+        {"name": "AS_OF", "type": "date", "nullable": false}
+      ]
+    }
+  ]
+}

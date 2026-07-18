@@ -41,11 +41,14 @@ from app.adapters.market_data.refinitiv.auth import (
 from app.adapters.market_data.refinitiv.extractors import (
     extract_curve,
     extract_fx,
+    extract_macro,
     extract_ratings,
 )
 from app.adapters.market_data.refinitiv.translators import (
     curve_to_bundle,
+    fx_forward_to_bundle,
     fx_to_bundle,
+    macro_to_bundle,
     ratings_to_bundle,
 )
 from app.adapters.market_data.refinitiv.transport import (
@@ -261,12 +264,21 @@ class RefinitivAdapter(MarketDataAdapter):
             bundle = curve_to_bundle(scope, curve_observations)
         elif category in _FX_CATEGORIES:
             raw_payload, fx_observations = extract_fx(self._transport, session_token, scope, specs)
-            bundle = fx_to_bundle(scope, fx_observations)
+            bundle = (
+                fx_to_bundle(scope, fx_observations)
+                if category is ScopeCategory.FX_SPOT
+                else fx_forward_to_bundle(scope, fx_observations)
+            )
         elif category is ScopeCategory.CREDIT_RATING:
             raw_payload, rating_observations = extract_ratings(
                 self._transport, session_token, scope, specs
             )
             bundle = ratings_to_bundle(scope, rating_observations, default_rating_date)
+        elif category is ScopeCategory.MACRO_FORECAST:
+            raw_payload, macro_observations = extract_macro(
+                self._transport, session_token, scope, specs
+            )
+            bundle = macro_to_bundle(scope, macro_observations)
         else:
             raise MarketDataError(
                 bank_facing_for(BankFacingErrorCode.SCOPE_NOT_PERMITTED, scope.value),

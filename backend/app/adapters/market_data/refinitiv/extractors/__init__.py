@@ -16,12 +16,18 @@ from app.adapters.market_data.refinitiv.extractors.curves import (
     extract_curve,
 )
 from app.adapters.market_data.refinitiv.extractors.fx import FxObservation, extract_fx
+from app.adapters.market_data.refinitiv.extractors.macro_series import (
+    MacroObservation,
+    extract_macro,
+)
 
 __all__ = [
     "CurveObservation",
     "FxObservation",
+    "MacroObservation",
     "RatingObservation",
     "extract_curve",
     "extract_fx",
+    "extract_macro",
     "extract_ratings",
 ]

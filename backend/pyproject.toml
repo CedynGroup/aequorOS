@@ -10,18 +10,33 @@ dependencies = [
   "boto3",
   "cryptography",
   "fastapi[standard]",
+  "jellyfish",
   "loguru",
+  "metaphone",
   "numpy",
   "openpyxl",
+  "oracledb",
   "pandas",
   "psycopg[binary]",
   "pyarrow",
   "pydantic-settings",
   "pyyaml",
+  "rapidfuzz",
   "reportlab",
   "scikit-learn",
   "sqlalchemy",
   "torch",
+]
+
+# Driver-heavy database-direct backends. Lazily imported by
+# app/adapters/database_direct, so the default environment stays installable and
+# fixture tests run without them. Install when wiring a live source database:
+#   uv sync --extra db-direct
+[project.optional-dependencies]
+db-direct = [
+  "pyodbc",     # ODBC + SQL Server (needs unixODBC / a system ODBC driver)
+  "jaydebeapi", # generic JDBC via a bank-supplied JDBC driver jar
+  "JPype1",     # JVM bridge for jaydebeapi
 ]
 
 [dependency-groups]

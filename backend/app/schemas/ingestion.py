@@ -82,6 +82,7 @@ class IngestionBatchRead(BaseModel):
     records_error: int
     records_blocked: int
     validation_report: dict[str, Any]
+    etl_report: dict[str, Any] | None = None
     started_at: datetime | None
     completed_at: datetime | None
     error_code: str | None

@@ -2,15 +2,38 @@
 #
 # Ground truth for what the Bloomberg adapter will pull: the bank sees
 # "Ghana yield curve" in the UI; the adapter pulls exactly the securities and
-# field mnemonics listed here. Every DataScope is present so coverage is
-# explicit; scopes whose Bloomberg references are not documented in the spec
-# are marked `supported: false` (§16.9) — the UI will not offer them and the
-# adapter refuses to pull them. Do NOT populate them with guessed mnemonics
-# (§16.4); defer to Dela or Eric for verification.
+# field mnemonics listed here. Every DataScope in the taxonomy has an entry so
+# coverage is explicit and complete.
+#
+# THREE enablement states:
+#   supported: true                       -> live-offered; catalog carries the
+#                                            verified securities + fields.
+#   supported: false, verification_required: true
+#                                         -> the STRUCTURE is fully specified in
+#                                            the `verification:` block (tenors,
+#                                            fields, quota, and the exact vendor
+#                                            doc to consult), but the concrete
+#                                            Bloomberg security identifiers are
+#                                            NOT yet confirmed. No mnemonic is
+#                                            invented (§16.4): enabling the scope
+#                                            is a DATA update (fill the verified
+#                                            securities into a supported entry,
+#                                            set quota, flip the flag) — never a
+#                                            code change, because the adapter
+#                                            already dispatches every scope
+#                                            category. Security-master persistence
+#                                            is the one exception (needs a
+#                                            canonical entity — see its note).
+#
+# The `field` mnemonics that ARE named below (PX_LAST, RTG_* issuer-rating
+# codes) are the same vendor-agnostic-per-issuer fields already confirmed in the
+# supported entries; only the per-scope SECURITY tickers require verification.
 #
 # This catalog is versioned with the adapter. When Bloomberg deprecates a
-# security or introduces a better data source, update here; downstream
-# canonical records remain unchanged in shape.
+# security or introduces a better data source, update here; downstream canonical
+# records remain unchanged in shape.
+
+# --- Supported: verified against spec §6.2 -----------------------------------
 
 YIELD_CURVE_GHS:
   data_source: BVAL
@@ -39,71 +62,11 @@ YIELD_CURVE_GHS:
   quota_units_per_pull: 7
   supported: true
 
-# Bloomberg reference not documented — do not invent (spec §16.4)
-YIELD_CURVE_USD:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-YIELD_CURVE_EUR:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-YIELD_CURVE_GBP:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-YIELD_CURVE_NGN:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-YIELD_CURVE_KES:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-YIELD_CURVE_ZAR:
-  supported: false
-
 FX_SPOT_USD_GHS:
-  security: "GHSUSD Curncy"
+  security: "USDGHS Curncy"
   field: "PX_LAST"
   quota_units_per_pull: 1
   supported: true
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-FX_SPOT_EUR_GHS:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-FX_SPOT_GBP_GHS:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-FX_SPOT_USD_NGN:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-FX_FORWARD_USD_GHS_1M:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-FX_FORWARD_USD_GHS_3M:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-FX_FORWARD_USD_GHS_6M:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-FX_FORWARD_USD_GHS_12M:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-SECURITY_MASTER_GOG_BONDS:
-  supported: false
-
-# Bloomberg reference not documented — do not invent (spec §16.4)
-SECURITY_MASTER_GOG_TBILLS:
-  supported: false
 
 CREDIT_RATING_GHANA_SOVEREIGN:
   security: "GHANA Govt"
@@ -114,18 +77,225 @@ CREDIT_RATING_GHANA_SOVEREIGN:
   quota_units_per_pull: 3
   supported: true
 
-# Bloomberg reference not documented — do not invent (spec §16.4)
+# --- Verification required: structure complete, securities unconfirmed --------
+
+YIELD_CURVE_USD:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the U.S. Treasury constant-maturity generic-yield securities in
+      Bloomberg GOVY <GO> / FLDS <GO> (the USGG<tenor> Index family, e.g.
+      "USGG10YR Index") and the PX_LAST field before enabling.
+    data_source: BVAL
+    field: "PX_LAST"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
+
+YIELD_CURVE_EUR:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the euro-area benchmark (German Bund / EUR swap) generic-yield
+      securities in Bloomberg GOVY <GO> / SWDF <GO> and the PX_LAST field.
+    data_source: BVAL
+    field: "PX_LAST"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
+
+YIELD_CURVE_GBP:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the UK Gilt generic-yield securities in Bloomberg GOVY <GO> and
+      the PX_LAST field.
+    data_source: BVAL
+    field: "PX_LAST"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
+
+YIELD_CURVE_NGN:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the Nigeria FGN sovereign generic-yield securities in Bloomberg
+      GOVY <GO> (the NGGB<tenor> Index family) and the PX_LAST field.
+    data_source: BVAL
+    field: "PX_LAST"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
+
+YIELD_CURVE_KES:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the Kenya sovereign generic-yield securities in Bloomberg
+      GOVY <GO> and the PX_LAST field.
+    data_source: BVAL
+    field: "PX_LAST"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
+
+YIELD_CURVE_ZAR:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the South Africa RSA sovereign generic-yield securities in
+      Bloomberg GOVY <GO> and the PX_LAST field.
+    data_source: BVAL
+    field: "PX_LAST"
+    tenor_months: [1, 3, 6, 12, 24, 36, 60, 84, 120]
+    quota_units_per_pull: 9
+
+FX_SPOT_EUR_GHS:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the EUR/GHS spot currency security in Bloomberg FX / WCRS <GO>
+      (the "<pair> Curncy" convention, matching FX_SPOT_USD_GHS's USDGHS Curncy)
+      and the PX_LAST field.
+    field: "PX_LAST"
+    quota_units_per_pull: 1
+
+FX_SPOT_GBP_GHS:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the GBP/GHS spot currency security in Bloomberg FX / WCRS <GO>
+      and the PX_LAST field.
+    field: "PX_LAST"
+    quota_units_per_pull: 1
+
+FX_SPOT_USD_NGN:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/NGN spot currency security in Bloomberg FX / WCRS <GO>
+      and the PX_LAST field.
+    field: "PX_LAST"
+    quota_units_per_pull: 1
+
+FX_FORWARD_USD_GHS_1M:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/GHS 1-month forward security in Bloomberg FRD <GO>
+      (forward outright vs. forward points — record which, so the translator
+      handles points correctly) and the PX_LAST field.
+    field: "PX_LAST"
+    tenor: "1M"
+    quota_units_per_pull: 1
+
+FX_FORWARD_USD_GHS_3M:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/GHS 3-month forward security in Bloomberg FRD <GO>
+      (outright vs. points) and the PX_LAST field.
+    field: "PX_LAST"
+    tenor: "3M"
+    quota_units_per_pull: 1
+
+FX_FORWARD_USD_GHS_6M:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/GHS 6-month forward security in Bloomberg FRD <GO>
+      (outright vs. points) and the PX_LAST field.
+    field: "PX_LAST"
+    tenor: "6M"
+    quota_units_per_pull: 1
+
+FX_FORWARD_USD_GHS_12M:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/GHS 12-month forward security in Bloomberg FRD <GO>
+      (outright vs. points) and the PX_LAST field.
+    field: "PX_LAST"
+    tenor: "12M"
+    quota_units_per_pull: 1
+
+SECURITY_MASTER_GOG_BONDS:
+  supported: false
+  verification_required: true
+  verification:
+    # Canonical persistence for security master also requires a canonical
+    # reference entity + a MarketDataBundle slot (see needsIntegration); this
+    # scope stays code-blocked, not only data-blocked, until that lands.
+    doc: >-
+      Confirm the Government of Ghana bond universe and the Bloomberg reference
+      fields for each attribute in FLDS <GO> (identifiers, issuer, maturity,
+      coupon, day-count, callable flag) before enabling.
+    attributes: [isin, cusip, issuer, maturity, coupon, day_count, callable]
+
+SECURITY_MASTER_GOG_TBILLS:
+  supported: false
+  verification_required: true
+  verification:
+    # Requires the security-master canonical entity (see needsIntegration).
+    doc: >-
+      Confirm the Government of Ghana Treasury-bill universe and the Bloomberg
+      reference fields for each attribute in FLDS <GO> before enabling.
+    attributes: [isin, cusip, issuer, maturity, discount_rate, day_count]
+
 CREDIT_RATING_NIGERIA_SOVEREIGN:
   supported: false
+  verification_required: true
+  verification:
+    # The rating field mnemonics are the same confirmed issuer-rating codes as
+    # CREDIT_RATING_GHANA_SOVEREIGN; only the issuer security needs confirming.
+    doc: >-
+      Confirm the Nigeria sovereign issuer security in Bloomberg (the "NIGERIA
+      Govt" convention, matching "GHANA Govt") before enabling.
+    fields:
+      - "RTG_MDY_LT_LC_ISSUER_CREDIT"
+      - "RTG_SP_LT_LC_ISSUER_CREDIT"
+      - "RTG_FITCH_LT_LC_ISSUER_CREDIT"
+    quota_units_per_pull: 3
 
-# Bloomberg reference not documented — do not invent (spec §16.4)
 MACRO_GHANA_GDP_FORECAST:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the Bloomberg economic-forecast security and field for Ghana real
+      GDP growth in ECFC <GO> / ECOF <GO> (Bloomberg consensus economic
+      forecasts), and the scenario/horizon each series represents.
+    scenario: base
+    horizon_months: 12
+    quota_units_per_pull: 1
 
-# Bloomberg reference not documented — do not invent (spec §16.4)
 MACRO_GHANA_INFLATION_FORECAST:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the Bloomberg economic-forecast security and field for Ghana CPI
+      inflation in ECFC <GO> / ECOF <GO>, and the scenario/horizon.
+    scenario: base
+    horizon_months: 12
+    quota_units_per_pull: 1
 
-# Bloomberg reference not documented — do not invent (spec §16.4)
 MACRO_GHANA_POLICY_RATE_PATH:
   supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the Bloomberg forecast security and field for the Bank of Ghana
+      policy-rate path in ECFC <GO> / ECOF <GO>, and the horizon set.
+    scenario: base
+    horizon_months: 12
+    quota_units_per_pull: 1

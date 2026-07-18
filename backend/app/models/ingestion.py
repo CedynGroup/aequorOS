@@ -123,6 +123,10 @@ class IngestionBatch(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     validation_report: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
+    # Compact ML-ETL summary (preprocess op/flag counts, dedup linkage counts, samples)
+    # produced by app.etl.run_etl between extraction and translation. Null for batches
+    # ingested before the ETL layer, or that failed before the ETL pass.
+    etl_report: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)

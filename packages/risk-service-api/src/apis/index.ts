@@ -5,6 +5,7 @@ export * from "./CalculationsApi";
 export * from "./CapitalApi";
 export * from "./CasesApi";
 export * from "./CashflowForecastApi";
+export * from "./DatabaseDirectApi";
 export * from "./DocumentsApi";
 export * from "./FinancialDataApi";
 export * from "./FindingsApi";

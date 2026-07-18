@@ -12,13 +12,22 @@ from app.adapters.market_data.refinitiv.adapter import (
     RefinitivAdapter,
 )
 from app.adapters.market_data.refinitiv.auth import (
+    CachingTokenProvider,
+    RdpTokenProvider,
     SimulatedTokenProvider,
     TokenProvider,
+)
+from app.adapters.market_data.refinitiv.resilience import (
+    ConnectionPoolConfig,
+    RetryPolicy,
+    TokenBucketRateLimiter,
+    retry_with_backoff,
 )
 from app.adapters.market_data.refinitiv.transport import (
     VENDOR_LABEL,
     VENDOR_NAME,
     FixtureTransport,
+    LiveRdpTransport,
     RdpTransport,
     UnconfiguredTransport,
 )
@@ -27,10 +36,17 @@ __all__ = [
     "ADAPTER_VERSION",
     "VENDOR_LABEL",
     "VENDOR_NAME",
+    "CachingTokenProvider",
+    "ConnectionPoolConfig",
     "FixtureTransport",
+    "LiveRdpTransport",
+    "RdpTokenProvider",
     "RdpTransport",
     "RefinitivAdapter",
+    "RetryPolicy",
     "SimulatedTokenProvider",
+    "TokenBucketRateLimiter",
     "TokenProvider",
     "UnconfiguredTransport",
+    "retry_with_backoff",
 ]

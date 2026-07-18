@@ -73,7 +73,7 @@ def test_yield_curve_ghs_matches_spec_exactly() -> None:
 def test_fx_spot_usd_ghs_matches_spec_exactly() -> None:
     catalog = load_catalog(CATALOG_PATH)
     requests = requests_for(catalog, DataScope.FX_SPOT_USD_GHS)
-    assert requests == [{"security": "GHSUSD Curncy", "field": "PX_LAST"}]
+    assert requests == [{"security": "USDGHS Curncy", "field": "PX_LAST"}]
     assert quota_units(catalog, [DataScope.FX_SPOT_USD_GHS]) == 1
 
 

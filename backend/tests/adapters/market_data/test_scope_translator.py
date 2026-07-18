@@ -27,7 +27,7 @@ YIELD_CURVE_GHS:
   supported: true
 
 FX_SPOT_USD_GHS:
-  security: "GHSUSD Curncy"
+  security: "USDGHS Curncy"
   field: "PX_LAST"
   quota_units_per_pull: 1
   supported: true
@@ -111,7 +111,7 @@ def test_requests_for_single_instrument_shape(catalog_path: Path) -> None:
     catalog = load_catalog(catalog_path)
     requests = requests_for(catalog, DataScope.FX_SPOT_USD_GHS)
     assert len(requests) == 1
-    assert requests[0]["security"] == "GHSUSD Curncy"
+    assert requests[0]["security"] == "USDGHS Curncy"
     assert requests[0]["field"] == "PX_LAST"
 
 

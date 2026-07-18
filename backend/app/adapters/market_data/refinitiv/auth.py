@@ -20,6 +20,7 @@ values are never echoed anywhere, including internal detail.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 from uuid import uuid4
@@ -43,6 +44,10 @@ REQUIRED_CREDENTIAL_KEYS: tuple[str, ...] = ("client_id", "client_secret")
 
 # §7.1: RDP OAuth tokens are short-lived (typically 4 hours).
 TOKEN_LIFETIME = timedelta(hours=4)
+
+# Refresh a cached session token this long before it actually expires, so a
+# multi-scope pull never fires a request with a token about to lapse mid-call.
+TOKEN_REFRESH_SKEW = timedelta(minutes=5)
 
 # Testing/fixture hook: a credentials dict carrying {"simulate": <state>}
 # makes the simulated provider reproduce that vendor-side failure.
@@ -140,3 +145,74 @@ def authenticate_credentials(provider: TokenProvider, credentials: CredentialSet
         error_code=None,
         error_message=None,
     )
+
+
+class CachingTokenProvider:
+    """Refreshes and caches RDP session tokens (§7.1 token refresh).
+
+    Wraps any :class:`TokenProvider` and reuses its token across the requests
+    of a pull cycle, re-acquiring only when the cached token is within
+    :data:`TOKEN_REFRESH_SKEW` of expiry (or absent). This is the "adapter
+    refreshes tokens as needed within a pull cycle" behavior the spec calls
+    for; the cache is keyed by ``client_id`` so distinct applications never
+    share a token. ``clock`` is injectable for deterministic expiry tests.
+    """
+
+    def __init__(
+        self,
+        inner: TokenProvider,
+        *,
+        refresh_skew: timedelta = TOKEN_REFRESH_SKEW,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._inner = inner
+        self._refresh_skew = refresh_skew
+        self._clock = clock or (lambda: datetime.now(UTC))
+        self._cache: dict[str, tuple[str, datetime]] = {}
+
+    def acquire(self, credentials: dict[str, Any]) -> tuple[str, datetime]:
+        key = str(credentials.get("client_id", ""))
+        cached = self._cache.get(key)
+        now = self._clock()
+        if cached is not None:
+            token, expires_at = cached
+            if expires_at - self._refresh_skew > now:
+                return token, expires_at
+        token, expires_at = self._inner.acquire(credentials)
+        self._cache[key] = (token, expires_at)
+        return token, expires_at
+
+    def invalidate(self, credentials: dict[str, Any]) -> None:
+        """Drop the cached token (e.g. after a 401 forces re-authentication)."""
+        self._cache.pop(str(credentials.get("client_id", "")), None)
+
+
+class RdpTokenProvider:
+    """Phase 2 seam for the live RDP OAuth 2.0 client-credentials flow (§7.1).
+
+    Fenced until real credentials are wired (questions/Q03): acquiring a token
+    lazily imports ``httpx`` (torch lazy-import pattern) and, because the live
+    transport is not configured in MVP, classifies as ``VENDOR_UNAVAILABLE``
+    before any network call. When Phase 2 lands, this posts
+    ``grant_type=client_credentials`` (with ``refresh_token`` when present) to
+    ``token_endpoint`` and returns ``(access_token, expires_at)`` derived from
+    the response's ``expires_in``; nothing else in the adapter changes.
+    """
+
+    def acquire(self, credentials: dict[str, Any]) -> tuple[str, datetime]:
+        try:
+            import httpx  # type: ignore[import-not-found]  # noqa: F401, PLC0415
+        except ImportError as exc:
+            raise MarketDataError(
+                bank_facing_for(BankFacingErrorCode.VENDOR_UNAVAILABLE),
+                internal_detail=(
+                    "live RDP token provider requires httpx, which is not installed (Phase 2)"
+                ),
+            ) from exc
+        raise MarketDataError(
+            bank_facing_for(BankFacingErrorCode.VENDOR_UNAVAILABLE),
+            internal_detail=(
+                "live RDP OAuth token acquisition is fenced (Phase 2) for client_id="
+                f"{credentials.get('client_id')!r}"
+            ),
+        )

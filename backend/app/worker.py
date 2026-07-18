@@ -23,7 +23,14 @@ from app.core.logging import configure_logging
 from app.db.base import utc_now
 from app.db.session import get_worker_sessionmaker
 from app.models import Job
-from app.services import job_queue, market_data_jobs, pipeline, scheduler, temenos_jobs
+from app.services import (
+    etl_dedup_jobs,
+    job_queue,
+    market_data_jobs,
+    pipeline,
+    scheduler,
+    temenos_jobs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +42,7 @@ HANDLERS: dict[str, Handler] = {
     "scheduled_tick": scheduler.run_tick,
     "market_data_pull": market_data_jobs.run_market_data_pull,
     "temenos_pull": temenos_jobs.run_temenos_pull,
+    "etl_dedup": etl_dedup_jobs.run_etl_dedup,
 }
 
 

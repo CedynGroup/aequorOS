@@ -1,0 +1,11 @@
+{
+  "universe": ["USDGHS3M="],
+  "fields": ["TR.MidPrice"],
+  "data": [
+    ["USDGHS3M=", "TR.MidPrice", 13.42]
+  ],
+  "vendor_internal": {
+    "debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE",
+    "http_status": 200
+  }
+}

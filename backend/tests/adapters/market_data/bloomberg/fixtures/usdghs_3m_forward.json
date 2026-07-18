@@ -1,0 +1,8 @@
+{
+  "responseType": "ReferenceDataResponse",
+  "requestId": "rec-2026-07-15-usdghs-3m-fwd-0001",
+  "securityData": [
+    {"security": "USDGHS3M FWD Curncy", "sequenceNumber": 0, "fieldData": {"PX_LAST": 13.42}}
+  ],
+  "vendor_internal": {"debug": "X-VENDOR-INTERNAL-DO-NOT-SURFACE"}
+}

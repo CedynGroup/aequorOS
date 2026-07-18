@@ -172,6 +172,8 @@ ReferenceDatasetKind = Literal[
 
 LINEAGE_OPERATION_TYPES: tuple[str, ...] = (
     "ADAPTER_EXTRACT",
+    "ML_ETL_PREPROCESS",
+    "ML_ETL_DEDUP",
     "ADAPTER_TRANSLATE",
     "VALIDATION",
     "ENRICHMENT",
@@ -182,6 +184,8 @@ LINEAGE_OPERATION_TYPES: tuple[str, ...] = (
 )
 LineageOperationType = Literal[
     "ADAPTER_EXTRACT",
+    "ML_ETL_PREPROCESS",
+    "ML_ETL_DEDUP",
     "ADAPTER_TRANSLATE",
     "VALIDATION",
     "ENRICHMENT",

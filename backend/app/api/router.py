@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.health import router as health_router
+from app.api.v1.database_connections import router as database_direct_connections_router
 from app.features.bulk_update_cases import router as bulk_update_cases_router
 from app.features.generate_case_reports import router as case_reports_router
 from app.features.ingest_data import router as ingestion_router
@@ -43,6 +44,7 @@ v1_router = APIRouter(prefix="/v1")
 v1_router.include_router(banks_router)
 v1_router.include_router(ingestion_router)
 v1_router.include_router(push_router)
+v1_router.include_router(database_direct_connections_router)
 v1_router.include_router(regulatory_liquidity_router)
 v1_router.include_router(regulatory_capital_router)
 v1_router.include_router(regulatory_irr_router)

@@ -59,7 +59,7 @@ def test_extract_fx_spot_returns_single_price(
 ) -> None:
     scope = DataScope.FX_SPOT_USD_GHS
     extraction = extract_fx_spot(session, transport, scope, requests_for(CATALOG, scope))
-    assert extraction.observation.security == "GHSUSD Curncy"
+    assert extraction.observation.security == "USDGHS Curncy"
     assert extraction.observation.value == Decimal("12.85")
 
 
@@ -145,7 +145,7 @@ def test_malformed_response_classifies_as_vendor_unavailable(
 
 def test_missing_field_classifies_as_unknown_instrument(session: BloombergSession) -> None:
     scope = DataScope.FX_SPOT_USD_GHS
-    response = {"securityData": [{"security": "GHSUSD Curncy", "fieldData": {}}]}
+    response = {"securityData": [{"security": "USDGHS Curncy", "fieldData": {}}]}
     with pytest.raises(MarketDataError) as excinfo:
         extract_fx_spot(session, _StubTransport(response), scope, requests_for(CATALOG, scope))
     assert excinfo.value.bank_facing.code is BankFacingErrorCode.UNKNOWN_INSTRUMENT
@@ -155,7 +155,7 @@ def test_non_numeric_value_classifies_as_unknown_instrument(
     session: BloombergSession,
 ) -> None:
     scope = DataScope.FX_SPOT_USD_GHS
-    response = {"securityData": [{"security": "GHSUSD Curncy", "fieldData": {"PX_LAST": "N.A."}}]}
+    response = {"securityData": [{"security": "USDGHS Curncy", "fieldData": {"PX_LAST": "N.A."}}]}
     with pytest.raises(MarketDataError) as excinfo:
         extract_fx_spot(session, _StubTransport(response), scope, requests_for(CATALOG, scope))
     assert excinfo.value.bank_facing.code is BankFacingErrorCode.UNKNOWN_INSTRUMENT

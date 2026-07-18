@@ -134,8 +134,8 @@ class MarketDataBundle:
     @property
     def record_count(self) -> int:
         points = sum(len(curve.points) for curve in self.curves)
-        return len(self.curves) + points + len(self.fx_rates) + len(self.indices) + len(
-            self.ratings
+        return (
+            len(self.curves) + points + len(self.fx_rates) + len(self.indices) + len(self.ratings)
         )
 
 
@@ -497,8 +497,7 @@ def _persist_bundle(  # noqa: PLR0913 - full persistence scope in one call
         problems = _validate_fx(fx)
         if problems:
             rejected.extend(
-                {"scope": scope.value, "record": fx.source_reference, "detail": p}
-                for p in problems
+                {"scope": scope.value, "record": fx.source_reference, "detail": p} for p in problems
             )
             continue
         row = CanonicalFxRate(

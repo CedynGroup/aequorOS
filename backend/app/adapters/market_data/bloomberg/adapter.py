@@ -28,9 +28,14 @@ from app.adapters.market_data.bloomberg.auth import (
 )
 from app.adapters.market_data.bloomberg.extractors.credit_data import extract_ratings
 from app.adapters.market_data.bloomberg.extractors.curves import extract_curve
-from app.adapters.market_data.bloomberg.extractors.fx import extract_fx_spot
+from app.adapters.market_data.bloomberg.extractors.fx import extract_fx_forward, extract_fx_spot
+from app.adapters.market_data.bloomberg.extractors.macro_series import extract_macro
 from app.adapters.market_data.bloomberg.translators.curve_to_canonical import curve_bundle
-from app.adapters.market_data.bloomberg.translators.fx_to_canonical import fx_spot_bundle
+from app.adapters.market_data.bloomberg.translators.fx_to_canonical import (
+    fx_forward_bundle,
+    fx_spot_bundle,
+)
+from app.adapters.market_data.bloomberg.translators.macro_to_canonical import macro_bundle
 from app.adapters.market_data.bloomberg.translators.rating_to_canonical import rating_bundle
 from app.adapters.market_data.bloomberg.transport import UnavailableTransport
 from app.adapters.market_data.errors import (
@@ -300,6 +305,18 @@ class BloombergAdapter(MarketDataAdapter):
             return ScopeExtraction(
                 raw_payload=fx.raw_response,
                 bundle=fx_spot_bundle(scope, fx.observation),
+            )
+        if category is ScopeCategory.FX_FORWARD:
+            forward = extract_fx_forward(session, self._transport, scope, requests)
+            return ScopeExtraction(
+                raw_payload=forward.raw_response,
+                bundle=fx_forward_bundle(scope, forward.observation),
+            )
+        if category is ScopeCategory.MACRO_FORECAST:
+            raw_macro, macro_observations = extract_macro(session, self._transport, scope, requests)
+            return ScopeExtraction(
+                raw_payload=raw_macro,
+                bundle=macro_bundle(scope, macro_observations),
             )
         if category is ScopeCategory.CREDIT_RATING:
             ratings = extract_ratings(session, self._transport, scope, requests)

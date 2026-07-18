@@ -67,6 +67,12 @@ export interface IngestionBatchRead {
   errorMessage: string | null;
   /**
    *
+   * @type {{ [key: string]: any; }}
+   * @memberof IngestionBatchRead
+   */
+  etlReport?: { [key: string]: any } | null;
+  /**
+   *
    * @type {string}
    * @memberof IngestionBatchRead
    */
@@ -278,6 +284,7 @@ export function IngestionBatchReadFromJSONTyped(
     createdAt: new Date(json["created_at"]),
     errorCode: json["error_code"],
     errorMessage: json["error_message"],
+    etlReport: json["etl_report"] == null ? undefined : json["etl_report"],
     extractionMode: json["extraction_mode"],
     id: json["id"],
     mappingConfigId: json["mapping_config_id"],
@@ -320,6 +327,7 @@ export function IngestionBatchReadToJSONTyped(
     created_at: value["createdAt"].toISOString(),
     error_code: value["errorCode"],
     error_message: value["errorMessage"],
+    etl_report: value["etlReport"],
     extraction_mode: value["extractionMode"],
     id: value["id"],
     mapping_config_id: value["mappingConfigId"],

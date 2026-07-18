@@ -9,7 +9,13 @@ Importing this package registers every shipped adapter with the registry.
 """
 
 from app.adapters.api_push.adapter import ApiPushAdapter
+from app.adapters.database_direct.adapter import DatabaseDirectAdapter
 from app.adapters.excel_csv.adapter import ExcelCsvAdapter
 from app.adapters.temenos_t24.adapter import TemenosT24Adapter
 
-__all__ = ["ApiPushAdapter", "ExcelCsvAdapter", "TemenosT24Adapter"]
+__all__ = [
+    "ApiPushAdapter",
+    "DatabaseDirectAdapter",
+    "ExcelCsvAdapter",
+    "TemenosT24Adapter",
+]
