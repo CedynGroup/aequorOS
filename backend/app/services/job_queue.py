@@ -179,3 +179,45 @@ def fail_with_retry(db: Session, job: Job, error: str, *, now: datetime | None =
         job.completed_at = now
     db.commit()
     return job
+
+
+def reclaim_stale(db: Session, now: datetime, *, stale_after: timedelta) -> int:
+    """Reclaim jobs stuck in ``running`` past ``stale_after`` and return the count.
+
+    ``claim_next`` commits ``status='running'`` before the handler runs, and only
+    ``complete``/``fail_with_retry`` move a job out of ``running``. A worker that
+    dies *between* those points — SIGKILL/SIGTERM mid-handler, OOM, or a severed
+    DB connection — leaves the row ``running`` forever, because a raising handler
+    is the only failure the poll loop catches. Nothing else resets it.
+
+    This reaper treats such a row as a used attempt (so a job that reliably kills
+    its worker eventually lands in ``failed`` for investigation instead of being
+    reclaimed forever) and otherwise requeues it for immediate re-dispatch.
+    ``stale_after`` must exceed the longest legitimate handler runtime, or a
+    slow-but-alive job will be reclaimed and run twice.
+    """
+    cutoff = now - stale_after
+    running = db.scalars(
+        select(Job).where(Job.status == "running", Job.completed_at.is_(None))
+    ).all()
+    reclaimed = 0
+    for job in running:
+        started = _as_aware(job.started_at)
+        if started is None or started >= cutoff:
+            continue
+        job.error = (
+            f"reclaimed: running since {started.isoformat()} exceeded {stale_after} "
+            "without completing (worker presumed dead)"
+        )
+        if job.attempts < job.max_attempts:
+            job.attempts += 1
+            job.status = "queued"
+            job.started_at = None
+            job.run_after = now
+        else:
+            job.status = "failed"
+            job.completed_at = now
+        reclaimed += 1
+    if reclaimed:
+        db.commit()
+    return reclaimed
