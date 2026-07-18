@@ -7,29 +7,29 @@ import { team } from '@/lib/team';
 export const metadata: Metadata = {
   title: 'Company — AequorOS',
   description:
-    'AequorOS is a pre-seed fintech building Treasury and ALM infrastructure for African banks. Founded in 2025, headquartered virtually between Winchester, VA and Accra, Ghana.',
+    'AequorOS builds Treasury and ALM infrastructure for African banks. Founded in 2025 with a live MVP, headquartered virtually between Winchester, VA and Accra, Ghana.',
 };
 
 const statusCards = [
   {
-    title: 'Market Validation',
-    status: 'IN PROGRESS',
-    body: 'Running structured research interviews with Ghana banks across all three tiers. Engaging with Bank of Ghana to understand certification pathways.',
+    title: 'Platform (MVP)',
+    status: 'LIVE',
+    body: 'The core platform is built and running end to end — the source-agnostic data engine, automated liquidity, capital, and balance-sheet calculations, and Bank of Ghana reporting.',
   },
   {
-    title: 'Product Specification',
-    status: 'COMPLETE',
-    body: 'Full technical specification across six modules. Regulatory reporting templates drafted for Bank of Ghana, Central Bank of Nigeria, and South African Reserve Bank.',
+    title: 'Core-banking integration',
+    status: 'PROVEN',
+    body: 'Validated live against an Oracle/FLEXCUBE core — roughly 167k records pulled, normalized, and calculated in a single run. Temenos T24 and Finacle are on the roadmap.',
   },
   {
-    title: 'MVP Development',
-    status: 'POST-FUNDING',
-    body: 'Core platform build begins upon closing seed round. Initial release covers Interest Rate Risk, Liquidity Risk, and Regulatory Capital modules.',
+    title: 'Pilot banks',
+    status: 'ONBOARDING',
+    body: 'Onboarding a first cohort of design-partner banks. Engaging with the Bank of Ghana on certification pathways.',
   },
   {
-    title: 'Seed Round',
+    title: 'Seed round',
     status: 'ACTIVELY RAISING',
-    body: '$1.25M seed round to validate, build MVP, and land first 5 pilot banks over 18 months.',
+    body: '$1.25M to take the live MVP into its first five pilot banks over 18 months.',
   },
 ];
 
@@ -47,8 +47,9 @@ export default function CompanyPage() {
             </h1>
             <p className="mt-8 text-text-muted text-lg leading-relaxed max-w-[720px]">
               Founded in 2025, headquartered virtually between Winchester,
-              Virginia and Accra, Ghana. Currently in stealth, building, and
-              talking to banks.
+              Virginia and Accra, Ghana. The platform is live, proven on a live
+              Oracle/FLEXCUBE core, and we&apos;re onboarding our first pilot
+              banks.
             </p>
           </div>
         </div>
@@ -123,7 +124,7 @@ export default function CompanyPage() {
           <div className="max-w-3xl">
             <SectionLabel>WHERE WE ARE</SectionLabel>
             <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              Currently in stealth. Building. Talking to banks.
+              MVP live. Onboarding pilots. Raising our seed.
             </h2>
           </div>
 

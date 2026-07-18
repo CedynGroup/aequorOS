@@ -25,16 +25,18 @@ export const metadata: Metadata = {
     'Cloud-native balance sheet management, regulatory capital reporting, and risk modeling for mid-tier banks across sub-Saharan Africa.',
   metadataBase: new URL('https://aequoros.com'),
   openGraph: {
-    title: 'AequorOS',
-    description: 'Treasury and ALM infrastructure for African banks.',
+    title: 'AequorOS — Treasury and ALM infrastructure for African banks',
+    description:
+      'A working, cloud-native Treasury and ALM platform for mid-tier African banks — connected to the core, auditable end to end. MVP live; onboarding pilot banks.',
     type: 'website',
     url: 'https://aequoros.com',
-    images: ['/images/og-image.png'],
+    siteName: 'AequorOS',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AequorOS',
-    description: 'Treasury and ALM infrastructure for African banks.',
+    title: 'AequorOS — Treasury and ALM infrastructure for African banks',
+    description:
+      'A working, cloud-native Treasury and ALM platform for mid-tier African banks. MVP live; onboarding pilot banks.',
   },
 };
 
