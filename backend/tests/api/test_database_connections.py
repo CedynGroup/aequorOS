@@ -20,7 +20,12 @@ from app.adapters.database_direct.config import ExtractionSpec
 from app.adapters.database_direct.drivers.base import ColumnSchema, TableSchema
 from app.adapters.database_direct.extraction import StagedBundle, StagedTable
 from app.adapters.database_direct.fixtures import Dump, OfflineDumpDriver
-from app.api.v1.database_connections import router as database_connections_router
+from app.api.v1.database_connections import (
+    get_database_direct_storage,
+)
+from app.api.v1.database_connections import (
+    router as database_connections_router,
+)
 from app.core.config import get_settings
 
 # Importing the model registers its table on Base.metadata so db_client's
@@ -29,6 +34,7 @@ from app.models.database_connection import DatabaseDirectConnection  # noqa: F40
 from app.services import database_connections as database_connections_service
 from app.services.database_connections import _reconcile_as_of
 from tests.api.helpers import ORG_2, USER_2, headers
+from tests.storage.inmemory import InMemoryStorageClient
 
 MASTER_KEY = "db-direct-api-test-master-key"
 SECRET = "svc-db-password-that-must-never-leak"
@@ -42,13 +48,21 @@ def vault_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def dd_client(db_client: TestClient) -> TestClient:
-    """The shared db_client with the (not-yet-wired) router mounted at /api/v1."""
+def dd_client(db_client: TestClient, storage_engine: InMemoryStorageClient) -> TestClient:
+    """The shared db_client with the (not-yet-wired) router mounted at /api/v1.
+
+    The db-direct router resolves storage through its own
+    ``get_database_direct_storage`` dependency (the app.storage factory), which
+    ``db_client`` does not override — so point it at the same in-memory engine the
+    ingestion path uses, or a sync would hit the real storage client (503 without
+    STORAGE_RETIRE_AFTER, e.g. in CI).
+    """
     app = db_client.app
     assert isinstance(app, FastAPI)
     already = any(getattr(r, "name", "") == "list_database_connections" for r in app.routes)
     if not already:
         app.include_router(database_connections_router, prefix="/api/v1")
+    app.dependency_overrides[get_database_direct_storage] = lambda: storage_engine
     return db_client
 
 
