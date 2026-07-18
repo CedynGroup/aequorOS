@@ -386,8 +386,10 @@ class TestPushValidation:
                             "source_reference": "LN-BAD",
                             "position_type": "LOAN",
                             "currency": "GHS",
-                            "balance": "GHS 1,500,000.50",  # currency-prefixed: ETL won't guess a critical value
-                            "contractual_maturity": "15/03/2031",  # non-ISO: the ML-ETL layer normalizes to 2031-03-15
+                            # currency-prefixed: ETL won't guess a critical value
+                            "balance": "GHS 1,500,000.50",
+                            # non-ISO: the ML-ETL layer normalizes to 2031-03-15
+                            "contractual_maturity": "15/03/2031",
                         },
                         POSITIONS[0],
                     ]

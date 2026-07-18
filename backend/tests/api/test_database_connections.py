@@ -255,7 +255,7 @@ class TestAsOfReconciliation:
             as_of_date="2026-06-30",
             source_database="CORE",
             extraction_mode="full",
-            tables=(
+            tables=[
                 StagedTable(
                     name="CORE.IFTB_DEPOSIT",
                     record_kind="position",
@@ -264,7 +264,7 @@ class TestAsOfReconciliation:
                     rows=[{"SOURCE_REFERENCE": "D1", "AS_OF_DATE": as_of_value}],
                     extraction_mode="full",
                 ),
-            ),
+            ],
             warnings=[],
             incremental_cursors={},
         )
