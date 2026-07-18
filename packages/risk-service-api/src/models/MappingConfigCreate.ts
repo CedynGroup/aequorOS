@@ -54,6 +54,12 @@ export interface MappingConfigCreate {
    * @type {string}
    * @memberof MappingConfigCreate
    */
+  sourceRef?: string;
+  /**
+   *
+   * @type {string}
+   * @memberof MappingConfigCreate
+   */
   sourceSystem: MappingConfigCreateSourceSystemEnum;
 }
 
@@ -107,6 +113,7 @@ export function MappingConfigCreateFromJSONTyped(
     config: MappingConfigFromJSON(json["config"]),
     name: json["name"],
     reason: json["reason"],
+    sourceRef: json["source_ref"] == null ? undefined : json["source_ref"],
     sourceSystem: json["source_system"],
   };
 }
@@ -128,6 +135,7 @@ export function MappingConfigCreateToJSONTyped(
     config: MappingConfigToJSON(value["config"]),
     name: value["name"],
     reason: value["reason"],
+    source_ref: value["sourceRef"],
     source_system: value["sourceSystem"],
   };
 }

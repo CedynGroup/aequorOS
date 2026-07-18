@@ -37,6 +37,8 @@ db-direct = [
   "pyodbc",     # ODBC + SQL Server (needs unixODBC / a system ODBC driver)
   "jaydebeapi", # generic JDBC via a bank-supplied JDBC driver jar
   "JPype1",     # JVM bridge for jaydebeapi
+  "snowflake-connector-python", # Snowflake warehouse (key-pair auth, Streams CDC)
+  "cryptography",               # loads the RSA private key for Snowflake key-pair auth
 ]
 
 [dependency-groups]

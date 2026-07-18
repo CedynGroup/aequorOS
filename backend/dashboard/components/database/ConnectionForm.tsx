@@ -15,13 +15,30 @@ import type {
 } from '@aequoros/risk-service-api';
 import CredentialFields from './CredentialFields';
 import OracleWalletFields from './OracleWalletFields';
+import SnowflakeFields from './SnowflakeFields';
 import {
   BACKENDS,
   type BackendKey,
+  CREDENTIAL_FIELDS,
+  SNOWFLAKE_CREDENTIAL_FIELDS,
   backendMeta,
   parseExtra,
   splitList,
 } from './shared';
+
+/** Snowflake warehouse config — the non-secret block serialized into
+ * `connection_options.snowflake`. Key-pair material lives in `cred`, not here. */
+export type SnowflakeConfig = {
+  account: string;
+  warehouse: string;
+  role: string;
+  defaultSchema: string;
+  useStreams: boolean;
+};
+
+export function emptySnowflakeConfig(): SnowflakeConfig {
+  return { account: '', warehouse: '', role: '', defaultSchema: '', useStreams: false };
+}
 
 export type DbFormState = {
   backend: BackendKey;
@@ -36,6 +53,7 @@ export type DbFormState = {
   preferReadReplica: boolean;
   readReplicas: string;
   queryTimeoutSeconds: string;
+  snowflake: SnowflakeConfig;
   cred: Record<string, string>;
 };
 
@@ -54,6 +72,7 @@ export function emptyFormState(backend: BackendKey = 'oracle'): DbFormState {
     preferReadReplica: false,
     readReplicas: '',
     queryTimeoutSeconds: '',
+    snowflake: emptySnowflakeConfig(),
     cred: {},
   };
 }
@@ -79,7 +98,28 @@ export function formStateFromConnection(
       connection.queryTimeoutSeconds != null
         ? String(connection.queryTimeoutSeconds)
         : '',
+    // Non-secret Snowflake config round-trips through connection_options; the
+    // key pair is write-only, so cred always starts empty (rotation only).
+    snowflake: snowflakeConfigFromOptions(connection.connectionOptions),
     cred: {},
+  };
+}
+
+/** Read the `snowflake` block from a connection's `connection_options`,
+ * tolerating missing/foreign shapes (returns an empty config). */
+function snowflakeConfigFromOptions(
+  options: { [key: string]: unknown } | null | undefined,
+): SnowflakeConfig {
+  const raw = options?.snowflake;
+  if (!raw || typeof raw !== 'object') return emptySnowflakeConfig();
+  const snow = raw as Record<string, unknown>;
+  const str = (value: unknown) => (typeof value === 'string' ? value : '');
+  return {
+    account: str(snow.account),
+    warehouse: str(snow.warehouse),
+    role: str(snow.role),
+    defaultSchema: str(snow.default_schema),
+    useStreams: snow.use_streams === true,
   };
 }
 
@@ -108,7 +148,7 @@ export function collectCredentials(
   if (username) out.username = username;
   if (password) out.password = password;
   // Start from the power-user "extra JSON" escape hatch, then let the friendly
-  // Oracle wallet control merge its mTLS material into the same object.
+  // backend controls merge their secret material into the same object.
   const extra: Record<string, unknown> = { ...(parseExtra(cred.extra ?? '') ?? {}) };
   if (backend === 'oracle') {
     const wallet = cred.oracle_wallet?.trim();
@@ -116,13 +156,45 @@ export function collectCredentials(
     if (wallet) extra.oracle_wallet = wallet;
     if (walletPassword) extra.wallet_password = walletPassword;
   }
+  if (backend === 'snowflake') {
+    // Key-pair auth: the PKCS#8 PEM and its optional passphrase are the secret
+    // material — Snowflake never uses a password.
+    const privateKey = cred.snowflake_private_key?.trim();
+    const passphrase = cred.private_key_passphrase?.trim();
+    if (privateKey) extra.snowflake_private_key = privateKey;
+    if (passphrase) extra.private_key_passphrase = passphrase;
+  }
   if (Object.keys(extra).length > 0) out.extra = extra;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/** Build `connection_options` for the backends that need it. Snowflake carries
+ * its warehouse config under a `snowflake` block with snake_case keys the
+ * backend adapter expects; optional strings are dropped when blank. Returns
+ * undefined for backends that do not use connection options. */
+export function collectConnectionOptions(
+  form: DbFormState,
+): { [key: string]: unknown } | undefined {
+  if (form.backend !== 'snowflake') return undefined;
+  const s = form.snowflake;
+  const snowflake: Record<string, unknown> = {
+    account: s.account.trim(),
+    warehouse: s.warehouse.trim(),
+    use_streams: s.useStreams,
+  };
+  const role = s.role.trim();
+  const defaultSchema = s.defaultSchema.trim();
+  if (role) snowflake.role = role;
+  if (defaultSchema) snowflake.default_schema = defaultSchema;
+  return { snowflake };
+}
+
 export function buildCreatePayload(form: DbFormState): DatabaseConnectionCreate {
   return {
-    backend: form.backend,
+    // `backend` is widened locally to include "snowflake"; the generated enum
+    // does not carry it yet (see shared.tsx). Cast keeps the payload typed while
+    // sending the value verbatim.
+    backend: form.backend as DatabaseConnectionCreate['backend'],
     displayName: form.displayName.trim(),
     host: form.host.trim() || undefined,
     port: parsePort(form.port),
@@ -134,6 +206,7 @@ export function buildCreatePayload(form: DbFormState): DatabaseConnectionCreate 
     preferReadReplica: form.preferReadReplica,
     readReplicas: splitList(form.readReplicas),
     queryTimeoutSeconds: parseTimeout(form.queryTimeoutSeconds),
+    connectionOptions: collectConnectionOptions(form),
     credentials: collectCredentials(form.cred, form.backend),
   };
 }
@@ -151,6 +224,8 @@ export function buildUpdatePayload(form: DbFormState): DatabaseConnectionUpdate 
     preferReadReplica: form.preferReadReplica,
     readReplicas: splitList(form.readReplicas),
     queryTimeoutSeconds: parseTimeout(form.queryTimeoutSeconds) ?? null,
+    // Backend is locked on edit; only Snowflake carries connection options.
+    connectionOptions: collectConnectionOptions(form),
     // Only send credentials when the operator entered a new set (rotation).
     credentials: collectCredentials(form.cred, form.backend),
   };
@@ -180,6 +255,9 @@ export default function ConnectionForm({
 
   const setCred = (key: string, value: string) =>
     onChange({ cred: { ...form.cred, [key]: value } });
+
+  const setSnowflake = (patch: Partial<SnowflakeConfig>) =>
+    onChange({ snowflake: { ...form.snowflake, ...patch } });
 
   const chooseBackend = (backend: BackendKey) => {
     const next = backendMeta(backend);
@@ -253,32 +331,36 @@ export default function ConnectionForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-3xl">
-        <div className="lg:col-span-2">
-          <label htmlFor={`${idPrefix}-host`} className={labelClass}>
-            Host
-          </label>
-          <input
-            id={`${idPrefix}-host`}
-            type="text"
-            value={form.host}
-            onChange={(event) => onChange({ host: event.target.value })}
-            placeholder="reporting-replica.bank.internal"
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label htmlFor={`${idPrefix}-port`} className={labelClass}>
-            Port
-          </label>
-          <input
-            id={`${idPrefix}-port`}
-            type="number"
-            min={0}
-            value={form.port}
-            onChange={(event) => onChange({ port: event.target.value })}
-            className={inputClass}
-          />
-        </div>
+        {meta?.usesHostPort !== false && (
+          <>
+            <div className="lg:col-span-2">
+              <label htmlFor={`${idPrefix}-host`} className={labelClass}>
+                Host
+              </label>
+              <input
+                id={`${idPrefix}-host`}
+                type="text"
+                value={form.host}
+                onChange={(event) => onChange({ host: event.target.value })}
+                placeholder="reporting-replica.bank.internal"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor={`${idPrefix}-port`} className={labelClass}>
+                Port
+              </label>
+              <input
+                id={`${idPrefix}-port`}
+                type="number"
+                min={0}
+                value={form.port}
+                onChange={(event) => onChange({ port: event.target.value })}
+                className={inputClass}
+              />
+            </div>
+          </>
+        )}
         <div>
           <label htmlFor={`${idPrefix}-database`} className={labelClass}>
             {meta?.databaseLabel ?? 'Database'}
@@ -402,12 +484,29 @@ export default function ConnectionForm({
             ? 'Credentials for the read-only service user. Validated on submission and stored encrypted; only the fingerprint is shown afterwards.'
             : 'Enter a new credential set to rotate it. Leave blank to keep the stored set. A new set is validated first; only on success is it swapped.'}
         </p>
-        <CredentialFields values={form.cred} onChange={setCred} idPrefix={`${idPrefix}-cred`} />
+        <CredentialFields
+          values={form.cred}
+          onChange={setCred}
+          idPrefix={`${idPrefix}-cred`}
+          fields={
+            form.backend === 'snowflake' ? SNOWFLAKE_CREDENTIAL_FIELDS : CREDENTIAL_FIELDS
+          }
+        />
         {form.backend === 'oracle' && (
           <OracleWalletFields
             values={form.cred}
             onChange={setCred}
             idPrefix={`${idPrefix}-wallet`}
+            mode={credentialsMode}
+          />
+        )}
+        {form.backend === 'snowflake' && (
+          <SnowflakeFields
+            config={form.snowflake}
+            onConfigChange={setSnowflake}
+            values={form.cred}
+            onCredChange={setCred}
+            idPrefix={`${idPrefix}-snowflake`}
             mode={credentialsMode}
           />
         )}

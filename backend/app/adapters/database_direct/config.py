@@ -27,11 +27,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.domain.ingestion.constants import ReferenceDatasetKind
 from app.domain.ingestion.contracts import ENTITY_TYPES, ExtractionMode, RecordKind
 
-# The four backends this adapter's driver abstraction supports. ``jdbc`` and
-# ``odbc`` are generic bridges (any JDBC/ODBC-reachable core), while ``oracle``
-# and ``sqlserver`` are native drivers with backend-specific dialect handling.
-Backend = Literal["oracle", "sqlserver", "jdbc", "odbc"]
-BACKENDS: tuple[Backend, ...] = ("oracle", "sqlserver", "jdbc", "odbc")
+# The backends this adapter's driver abstraction supports. ``jdbc`` and ``odbc``
+# are generic bridges (any JDBC/ODBC-reachable core); ``oracle``, ``sqlserver``
+# and ``snowflake`` are native drivers with backend-specific dialect handling.
+# Snowflake is a cloud data warehouse (key-pair auth, warehouse compute, Streams
+# CDC) that banks with mature analytics practices run alongside their operational
+# core (see data_engine.md §11.3).
+Backend = Literal["oracle", "sqlserver", "jdbc", "odbc", "snowflake"]
+BACKENDS: tuple[Backend, ...] = ("oracle", "sqlserver", "jdbc", "odbc", "snowflake")
 
 
 class TlsConfig(BaseModel):
@@ -85,6 +88,37 @@ class OdbcConfig(BaseModel):
     extra_keywords: dict[str, str] = Field(default_factory=dict)
 
 
+class SnowflakeConfig(BaseModel):
+    """Snowflake-warehouse specifics (``snowflake-connector-python``, key-pair auth).
+
+    Snowflake separates storage from compute: every query runs against a
+    ``warehouse`` (a sized, per-second-billed compute cluster the bank owns and
+    pays for). ``account`` is the Snowflake account locator/identifier; the
+    private key that authenticates the AequorOS service user lives only in the
+    vault (never here). ``role`` scopes what the service user may read. Auth is
+    key-pair only — username/password is not sanctioned for Snowflake (see
+    data_engine.md §11.3). ``use_streams`` opts a table's incremental pull into
+    Snowflake Streams CDC where the bank permits stream creation; otherwise a
+    timestamp cursor or full refresh is used.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    # Snowflake account identifier / locator, e.g. "ab12345.eu-west-1" or an
+    # org-account name "myorg-myaccount". Supplied at onboarding; never guessed.
+    account: str
+    # The compute warehouse this institution's pulls run on (bank chooses + pays;
+    # typically X-Small/Small for ETL). Auto-suspend warm-up is tolerated.
+    warehouse: str
+    # The role the read-only service user assumes for every query.
+    role: str | None = None
+    # Default database/schema for unqualified names; tables may still be qualified.
+    default_schema: str | None = None
+    # Opt-in to Snowflake Streams CDC for incremental extraction (preferred where
+    # the bank permits stream creation); off = timestamp cursor / full refresh.
+    use_streams: bool = False
+
+
 class ConnectionConfig(BaseModel):
     """Where and how to reach a bank's core database (secrets excluded).
 
@@ -115,6 +149,7 @@ class ConnectionConfig(BaseModel):
     query_timeout_seconds: int = 300
     jdbc: JdbcConfig | None = None
     odbc: OdbcConfig | None = None
+    snowflake: SnowflakeConfig | None = None
 
     @model_validator(mode="after")
     def _require_backend_specifics(self) -> ConnectionConfig:
@@ -123,6 +158,9 @@ class ConnectionConfig(BaseModel):
             raise ValueError(msg)
         if self.backend == "odbc" and self.odbc is None:
             msg = "backend 'odbc' requires an 'odbc' configuration block."
+            raise ValueError(msg)
+        if self.backend == "snowflake" and self.snowflake is None:
+            msg = "backend 'snowflake' requires a 'snowflake' configuration block."
             raise ValueError(msg)
         return self
 

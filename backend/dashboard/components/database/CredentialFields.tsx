@@ -7,20 +7,24 @@
  * the only stored representation shown anywhere is the SHA-256 fingerprint.
  */
 
-import { CREDENTIAL_FIELDS, extraIsValid } from './shared';
+import { CREDENTIAL_FIELDS, type CredentialField, extraIsValid } from './shared';
 
 export default function CredentialFields({
   values,
   onChange,
   idPrefix,
+  fields = CREDENTIAL_FIELDS,
 }: {
   values: Record<string, string>;
   onChange: (key: string, value: string) => void;
   idPrefix: string;
+  /** The credential fields to render. Defaults to the full password-auth set;
+   * key-pair backends (Snowflake) pass a service-user-only subset. */
+  fields?: CredentialField[];
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      {CREDENTIAL_FIELDS.map((field) => {
+      {fields.map((field) => {
         const id = `${idPrefix}-${field.key}`;
         const value = values[field.key] ?? '';
         const extraInvalid = field.key === 'extra' && !extraIsValid(value);

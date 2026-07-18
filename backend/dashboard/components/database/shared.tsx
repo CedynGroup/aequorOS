@@ -13,7 +13,14 @@
 import type { Backend } from '@aequoros/risk-service-api';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 
-export type BackendKey = Backend;
+/**
+ * The generated `Backend` enum does not yet include `snowflake` — the backend
+ * OpenAPI schema needs regeneration (`mise run risk-service:openapi-client`).
+ * Until then we widen the key locally so the Snowflake backend is selectable;
+ * the create/update payloads still send `backend: "snowflake"` verbatim.
+ * TODO: drop this union once the generated client carries `Backend.Snowflake`.
+ */
+export type BackendKey = Backend | 'snowflake';
 
 export const BACKENDS: {
   key: BackendKey;
@@ -22,6 +29,8 @@ export const BACKENDS: {
   defaultPort: number;
   /** Oracle addresses a database by service name; the others by database. */
   usesServiceName: boolean;
+  /** Snowflake connects by account + warehouse, so it hides host/port. */
+  usesHostPort: boolean;
   databaseLabel: string;
   databaseHint: string;
 }[] = [
@@ -32,6 +41,7 @@ export const BACKENDS: {
       'Native Oracle driver (thin). Addresses the instance by service name — the standard for FLEXCUBE and most Oracle-hosted cores.',
     defaultPort: 1521,
     usesServiceName: true,
+    usesHostPort: true,
     databaseLabel: 'Database (SID, optional)',
     databaseHint: 'Leave blank when connecting by service name.',
   },
@@ -42,6 +52,7 @@ export const BACKENDS: {
       'Native SQL Server driver. Addresses a named database on the instance — common for Finacle and .NET-hosted reporting replicas.',
     defaultPort: 1433,
     usesServiceName: false,
+    usesHostPort: true,
     databaseLabel: 'Database',
     databaseHint: 'The reporting database to read from.',
   },
@@ -52,6 +63,7 @@ export const BACKENDS: {
       'Any JDBC-compliant core without a native driver. The driver-specific connection string is carried in connection options.',
     defaultPort: 0,
     usesServiceName: false,
+    usesHostPort: true,
     databaseLabel: 'Database',
     databaseHint: 'The catalog / database exposed to the service user.',
   },
@@ -62,8 +74,20 @@ export const BACKENDS: {
       'Any ODBC-registered source (DSN-less). The driver and DSN attributes are carried in connection options.',
     defaultPort: 0,
     usesServiceName: false,
+    usesHostPort: true,
     databaseLabel: 'Database',
     databaseHint: 'The catalog / database exposed to the service user.',
+  },
+  {
+    key: 'snowflake',
+    name: 'Snowflake (warehouse)',
+    blurb:
+      'Snowflake cloud data warehouse. Connects by account + warehouse with key-pair auth — no host, port, or password.',
+    defaultPort: 0,
+    usesServiceName: false,
+    usesHostPort: false,
+    databaseLabel: 'Database',
+    databaseHint: 'The Snowflake database used for INFORMATION_SCHEMA context.',
   },
 ];
 
@@ -106,6 +130,20 @@ export const CREDENTIAL_FIELDS: CredentialField[] = [
     optional: true,
     placeholder: '{"wallet": "..."}',
     hint: 'Backend-specific secret material as JSON — e.g. an Oracle wallet handle or a driver property blob.',
+  },
+];
+
+/**
+ * Snowflake authenticates with a key pair, not a password. Only the service
+ * user is a plain credential field here — the private key + passphrase are
+ * collected by SnowflakeFields and sealed into the credential `extra` object,
+ * and the raw `extra` JSON escape hatch is hidden to avoid conflicting entries.
+ */
+export const SNOWFLAKE_CREDENTIAL_FIELDS: CredentialField[] = [
+  {
+    key: 'username',
+    label: 'Service user',
+    hint: 'The dedicated read-only Snowflake user provisioned for AequorOS.',
   },
 ];
 

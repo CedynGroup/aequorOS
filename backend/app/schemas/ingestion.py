@@ -21,6 +21,9 @@ from app.domain.ingestion.contracts import MappingConfig
 
 class MappingConfigCreate(BaseModel):
     source_system: SourceSystem
+    # Specific source instance this mapping serves (e.g. a database-direct
+    # connection id). Empty = source-system-wide (single-source adapters).
+    source_ref: str = Field(default="", max_length=255)
     name: str = Field(min_length=1, max_length=255)
     config: MappingConfig
     activate: bool = False
@@ -31,6 +34,7 @@ class MappingConfigRead(BaseModel):
     id: UUID
     bank_id: UUID
     source_system: SourceSystem
+    source_ref: str
     version: int
     status: MappingConfigStatus
     name: str
@@ -56,6 +60,9 @@ class IngestionUploadRead(BaseModel):
 
 class IngestionBatchCreate(BaseModel):
     source_system: SourceSystem
+    # Specific source instance (e.g. a database-direct connection id); selects the
+    # per-source mapping. Empty = the source-system-wide mapping.
+    source_ref: str = Field(default="", max_length=255)
     as_of_date: date
     # Source location: a server file path, or "temp://{object_path}" for a
     # file previously staged via the upload endpoint.

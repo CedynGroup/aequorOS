@@ -44,7 +44,13 @@ from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin
 # ``app.adapters.database_direct.config.BACKENDS``). Kept here as a local
 # constant so this operational model does not depend on shared ingestion
 # constants — the adapter package owns the authoritative literal.
-DATABASE_DIRECT_BACKENDS: tuple[str, ...] = ("oracle", "sqlserver", "jdbc", "odbc")
+DATABASE_DIRECT_BACKENDS: tuple[str, ...] = (
+    "oracle",
+    "sqlserver",
+    "jdbc",
+    "odbc",
+    "snowflake",
+)
 
 # Credential lifecycle states, identical to the market-data / Temenos state
 # machine: connections start in TESTING and move through ACTIVE / EXPIRING_SOON /

@@ -36,3 +36,6 @@ coverage/
 .turbo/
 .vercel
 docs/*.docx
+
+# Local Snowflake seed CSVs (25MB) loaded into the warehouse — regenerable, not source.
+data_snowflake/

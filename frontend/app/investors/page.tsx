@@ -5,7 +5,7 @@ import { LinkButton } from '@/components/Button';
 export const metadata: Metadata = {
   title: 'Investor Materials — AequorOS',
   description:
-    'Access the AequorOS pitch deck and financial model. We are raising a $1.25M seed round to build Treasury and ALM infrastructure for African banks.',
+    'Access the AequorOS pitch deck and financial model. We are raising a $1.25M seed round to take our live MVP into its first pilot banks — Treasury and ALM infrastructure for African banks.',
 };
 
 const materials = [
@@ -39,9 +39,11 @@ export default function InvestorsPage() {
               We are raising a $1.25M seed round.
             </h1>
             <p className="mt-8 text-ice-blue text-lg md:text-xl leading-relaxed max-w-[600px]">
-              AequorOS is building cloud-native Treasury and ALM infrastructure
-              for mid-tier African banks. Our seed round funds product
-              validation, MVP development, and our first five pilot banks.
+              AequorOS builds cloud-native Treasury and ALM infrastructure for
+              mid-tier African banks. The MVP is live and proven end-to-end
+              against a live Oracle/FLEXCUBE core banking database. Our seed
+              round takes it from working product into its first cohort of pilot
+              banks.
             </p>
           </div>
         </div>
@@ -117,7 +119,7 @@ export default function InvestorsPage() {
             {[
               { stat: '$1.25M', label: 'Seed round target' },
               { stat: '18 months', label: 'Runway to first 5 pilot banks' },
-              { stat: 'Pre-seed', label: 'Current stage' },
+              { stat: 'MVP live', label: 'Current stage · onboarding pilots' },
             ].map(({ stat, label }) => (
               <div
                 key={label}

@@ -62,6 +62,20 @@ class StorageContractSuite:
         assert descriptor.metadata.lineage_node_id == "lin-contract-test"
         assert descriptor.metadata.written_by == "contract-suite"
 
+    def test_large_object_round_trips(self, client: StorageClient, slug: str) -> None:
+        # A staged bundle from a core-banking-scale pull can exceed the single-
+        # request body limit a backend/proxy accepts (MinIO behind Cloudflare 413s
+        # a >100 MB PutObject), so the write chunks it via multipart. ~20 MiB
+        # crosses the 16 MiB multipart threshold and must round-trip byte-for-byte
+        # with its checksum intact. Against live MinIO this exercises the real
+        # multipart path; in-memory it validates the write/read API for large content.
+        content = b"x" * (20 * 1024 * 1024)
+        location = StorageLocation(slug, "temp", "large/staged-bundle.json")
+        written = client.write(location, io.BytesIO(content), metadata_for(slug, "temp", content))
+        assert written.metadata.checksum_sha256 == sha256(content).hexdigest()
+        _descriptor, stream = client.read(location)
+        assert stream.read() == content
+
     def test_missing_object_raises_not_found(self, client: StorageClient, slug: str) -> None:
         with pytest.raises(StorageNotFoundError):
             client.read(StorageLocation(slug, "canonical", "does/not/exist"))

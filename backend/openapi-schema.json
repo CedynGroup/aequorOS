@@ -583,7 +583,8 @@
           "oracle",
           "sqlserver",
           "jdbc",
-          "odbc"
+          "odbc",
+          "snowflake"
         ],
         "type": "string"
       },
@@ -11762,6 +11763,12 @@
             "title": "Reason",
             "type": "string"
           },
+          "source_ref": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Source Ref",
+            "type": "string"
+          },
           "source_system": {
             "enum": [
               "EXCEL_CSV",
@@ -13766,6 +13773,12 @@
             "title": "Reason",
             "type": "string"
           },
+          "source_ref": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Source Ref",
+            "type": "string"
+          },
           "source_system": {
             "enum": [
               "EXCEL_CSV",
@@ -13842,6 +13855,10 @@
             "title": "Name",
             "type": "string"
           },
+          "source_ref": {
+            "title": "Source Ref",
+            "type": "string"
+          },
           "source_system": {
             "enum": [
               "EXCEL_CSV",
@@ -13878,6 +13895,7 @@
           "id",
           "bank_id",
           "source_system",
+          "source_ref",
           "version",
           "status",
           "name",
