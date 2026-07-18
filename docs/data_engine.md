@@ -778,9 +778,32 @@ Oracle's core banking product. Similar Oracle-backed database structure. Same sc
 
 ### 11.3 Database-Direct Adapter
 
-A generic adapter for banks that expose a read-only replicated view of their core banking database directly to AequorOS. Supports PostgreSQL, Oracle, SQL Server, and MySQL/MariaDB. Configuration specifies which tables map to which canonical entities.
+An adapter family for banks that expose a read-only view (replica, dedicated schema, or federated query) of a database to AequorOS. The adapter family supports Oracle Database, Microsoft SQL Server, Snowflake, PostgreSQL, MySQL/MariaDB, and generic JDBC/ODBC endpoints.
 
-This is a common integration pattern for smaller banks and rural banks whose core systems are less API-mature.
+Database-direct is not one adapter. It is one framework with backend-specific concrete implementations, each honoring the same `SourceAdapter` interface (per section 5) and producing identical canonical output. Backend-specific concerns (authentication, dialect, CDC primitive, cost model) live inside concrete implementations; nothing about which backend is in use leaks upward.
+
+**Sanctioned backends and their purposes:**
+
+- **Oracle Database** — dominant at pan-African banks running Oracle FLEXCUBE, at older T24 deployments backed by Oracle, and at large-bank operational systems generally. Authentication via wallet-based TLS (Autonomous) or connection string with TLS (on-prem). CDC via LogMiner or GoldenGate where available; timestamp-based fallback otherwise. This is the first backend AequorOS builds because Oracle penetration in target African markets is highest.
+
+- **Microsoft SQL Server** — present at some Finacle deployments (Infosys supports SQL Server as a backing store option), at banks running proprietary Microsoft-shop core systems, and increasingly at fintech-adjacent banks. Authentication via SQL auth (with credentials in Vault per storage.md) or integrated Kerberos where the bank permits. CDC via SQL Server Change Data Capture or timestamp-based extraction.
+
+- **Snowflake** — present at banks with mature data warehousing practices, particularly at Tier 2 South African banks, data-forward Kenyan banks, and increasingly at Nigerian banks investing in analytics infrastructure. Snowflake is typically used differently than Oracle in bank environments: Oracle hosts operational core banking, Snowflake hosts the warehouse where historical position data, market data feeds, and analytical datasets are landed. AequorOS reads point-in-time positions from Oracle and historical time series or pre-aggregated feeds from Snowflake at banks that run both. Where a bank runs Snowflake as their primary bank data platform (rare but emerging), Snowflake becomes the primary source. Backend specifics:
+  - **Authentication:** key-pair authentication. AequorOS generates an RSA key pair per institution, the bank uploads the public key to Snowflake for the AequorOS service user, and the private key lives in Vault per storage.md section 7. Username/password authentication is not sanctioned for Snowflake because key-pair is Snowflake's own recommended pattern and materially stronger.
+  - **Warehouse selection:** Snowflake separates storage from compute. Every query runs against a **warehouse**, which is a sized compute cluster with per-second credit billing. The adapter's configuration specifies which warehouse to use per institution (typically X-Small or Small for ETL workloads; the bank chooses and pays). The adapter respects Snowflake's auto-suspend semantics and tolerates the 1-2 second warm-up on the first query after suspension.
+  - **Change data capture:** Snowflake **Streams** are the CDC primitive. A stream on a table tracks change records (INSERT, UPDATE, DELETE) since the stream was last consumed. Consumption is transactional: reading the stream inside a committed transaction advances the stream cursor. Streams are meaningfully cleaner than LogMiner-style CDC and are the preferred incremental extraction path where the bank permits stream creation.
+  - **Cost tracking:** every pull tracks credit consumption per institution, surfaced to the bank the same way Bloomberg quota consumption is surfaced (per market_data_adapter.md section 11). Cost transparency is important because Snowflake credits are the bank's cost and can be significant at scale.
+  - **Dialect specifics:** Snowflake SQL is close to but not identical to standard SQL. Snowflake-specific translators handle timestamp type variants (`TIMESTAMP_LTZ`, `TIMESTAMP_NTZ`, `TIMESTAMP_TZ`), variant/JSON columns, and Snowflake's flavor of MERGE. These live inside the Snowflake concrete adapter and do not leak upward.
+
+- **PostgreSQL** — present at newer neobanks, credit unions, and at some rural bank deployments running open-source cores. Authentication via SCRAM-SHA-256 with credentials in Vault. Standard PostgreSQL logical replication or timestamp-based CDC.
+
+- **MySQL / MariaDB** — present at smaller institutions and at some ARB Apex rural bank cores. Similar patterns to PostgreSQL.
+
+- **Generic JDBC and ODBC** — fallback paths for banks whose systems expose a driver-based database endpoint that does not fit the above sanctioned backends. Configuration-driven: connection string, driver location, and mapping YAML define behavior; the adapter reads config and executes. Generic JDBC/ODBC does not benefit from CDC or backend-specific optimizations, so extraction is timestamp-based or full-refresh only.
+
+Every backend passes the same contract test suite. A test that passes on Oracle but fails on Snowflake indicates the abstraction is leaking backend semantics; fix the abstraction, not the test. This is the same discipline applied to storage backends in storage.md section 4.5 and market data adapters in market_data_adapter.md section 4.3.
+
+**Configuration-driven mapping.** For every backend, the bank-specific mapping (which source table maps to which canonical entity, which columns map to which canonical fields, which product codes translate to which regulatory categories) is captured in the `MappingConfig` per section 5.2. Adding a new bank on any sanctioned backend is a configuration exercise, not a code exercise. This is the property that lets AequorOS deliver on 4-8 week onboarding rather than 6-18 months.
 
 ### 11.4 SFTP File-Drop Adapter
 
@@ -980,13 +1003,16 @@ For banks with international operations, SWIFT message feeds provide interbank p
 
 ### 15.3 Phase 3: Adapter Portfolio Expansion (Months 15-24)
 
-**Goal:** Cover the majority of mid-tier African bank core systems.
+**Goal:** Cover the majority of mid-tier African bank core systems and the analytical stack banks are adopting.
 
-- Finacle adapter
-- FlexCube adapter
-- Database-direct adapter for banks on less mainstream systems
+- Finacle adapter (in addition to the SQL Server backing store already covered through database-direct)
+- FlexCube adapter (in addition to the Oracle backing store already covered through database-direct)
+- Database-direct adapter matured across Oracle, SQL Server, Snowflake, PostgreSQL, MySQL/MariaDB, and generic JDBC/ODBC per section 11.3
+- Snowflake specifically prioritized in this phase because it aligns with the South African Tier 2 and data-forward Kenyan bank expansion, where Snowflake presence is highest; Snowflake integration includes key-pair authentication, warehouse-aware pull scheduling, credit consumption tracking, and CDC via Snowflake Streams
 - SFTP file-drop adapter mature
 - Schema mapping assistance ML-enabled
+
+Snowflake is pulled forward from a Phase 4 default if a specific pilot bank customer requires it earlier. Otherwise it lands in this phase with the rest of the database-direct portfolio expansion.
 
 ### 15.4 Phase 4: Intelligence Layer Maturity (Months 24+)
 

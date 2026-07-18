@@ -182,8 +182,13 @@ class MappingConfigRecord(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     """Versioned per-institution source-to-canonical mapping configuration.
 
     The config payload is the onboarding deliverable: field mappings, enum
-    mappings, and product mappings for one source system at one bank. Versions
-    are monotonic per (bank, source system); at most one version is active.
+    mappings, and product mappings for one *data source* at one bank. ``source_ref``
+    scopes the mapping to a specific source instance (e.g. one database-direct
+    connection id) so two sources of the same ``source_system`` at the same bank —
+    an Oracle FLEXCUBE core and a Snowflake warehouse, both ``DB_DIRECT`` — each
+    carry their own mapping. ``''`` means source-system-wide (the default for
+    single-source adapters like file upload / push API). Versions are monotonic
+    per (bank, source system, source_ref); at most one version is active per scope.
     """
 
     __tablename__ = "mapping_configs"
@@ -206,6 +211,7 @@ class MappingConfigRecord(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "organization_id",
             "bank_id",
             "source_system",
+            "source_ref",
             "version",
             name="uq_mapping_configs_scope_version",
         ),
@@ -214,6 +220,7 @@ class MappingConfigRecord(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "organization_id",
             "bank_id",
             "source_system",
+            "source_ref",
             unique=True,
             postgresql_where=sql_text("status = 'active'"),
             sqlite_where=sql_text("status = 'active'"),
@@ -223,6 +230,12 @@ class MappingConfigRecord(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     source_system: Mapped[str] = mapped_column(String(40), nullable=False)
+    # Specific source instance this mapping serves (e.g. a database-direct
+    # connection id). Empty string = the whole source_system (single-source
+    # adapters). Keeps two DB_DIRECT sources at one bank cleanly separated.
+    source_ref: Mapped[str] = mapped_column(
+        String(255), nullable=False, server_default=sql_text("''"), default=""
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)

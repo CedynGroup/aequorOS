@@ -23,6 +23,7 @@ from app.adapters.database_direct.drivers.base import (
 from app.adapters.database_direct.drivers.jdbc import JdbcDriver
 from app.adapters.database_direct.drivers.odbc import OdbcDriver
 from app.adapters.database_direct.drivers.oracle import OracleDriver
+from app.adapters.database_direct.drivers.snowflake import SnowflakeDriver
 from app.adapters.database_direct.drivers.sqlserver import SqlServerDriver
 
 if TYPE_CHECKING:
@@ -38,6 +39,7 @@ __all__ = [
     "OdbcDriver",
     "OracleDriver",
     "QueryResult",
+    "SnowflakeDriver",
     "SqlServerDriver",
     "TableSchema",
     "driver_for",
@@ -48,6 +50,7 @@ _DRIVERS: dict[str, type[DatabaseDriver]] = {
     "sqlserver": SqlServerDriver,
     "jdbc": JdbcDriver,
     "odbc": OdbcDriver,
+    "snowflake": SnowflakeDriver,
 }
 
 

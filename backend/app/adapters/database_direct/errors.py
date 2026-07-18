@@ -45,6 +45,7 @@ class DbDirectErrorCode(Enum):
     NO_DATA_RETURNED = "NO_DATA_RETURNED"
     DRIVER_UNAVAILABLE = "DRIVER_UNAVAILABLE"
     CONFIGURATION_ERROR = "CONFIGURATION_ERROR"
+    WAREHOUSE_UNAVAILABLE = "WAREHOUSE_UNAVAILABLE"
 
 
 @dataclass(frozen=True)
@@ -243,6 +244,17 @@ MESSAGE_TEMPLATES: dict[DbDirectErrorCode, MessageTemplate] = {
         actions=("Contact AequorOS support", "View last successful pull"),
         severity="warning",
     ),
+    DbDirectErrorCode.WAREHOUSE_UNAVAILABLE: MessageTemplate(
+        message=(
+            f"AequorOS connected to your {_DB} data warehouse, but the compute warehouse it was "
+            "asked to run on could not be started (it may be suspended, resized, or the service "
+            "role may lack permission to resume it). No pull was completed. Please confirm the "
+            "warehouse name and that the AequorOS service role can use it. Your existing data is "
+            "unaffected."
+        ),
+        actions=("Confirm the warehouse and role", "Contact your data platform team"),
+        severity="warning",
+    ),
 }
 
 _DEFAULT_DATABASE_LABEL = "your core banking system"
@@ -370,6 +382,14 @@ def _classify_by_text(text: str) -> DbDirectErrorCode:  # noqa: PLR0911 - one br
         return DbDirectErrorCode.CREDENTIAL_INVALID
     if any(s in text for s in ("permission", "privilege", "not authorized", "access denied")):
         return DbDirectErrorCode.INSUFFICIENT_PRIVILEGE
+    # Snowflake compute-warehouse problems, checked before the generic
+    # "does not exist" table rule so a suspended/missing warehouse is not
+    # mistaken for a missing table.
+    if "warehouse" in text and any(
+        s in text
+        for s in ("no active warehouse", "cannot be resumed", "suspended", "does not exist")
+    ):
+        return DbDirectErrorCode.WAREHOUSE_UNAVAILABLE
     if any(s in text for s in ("does not exist", "not found", "unknown table", "invalid object")):
         return DbDirectErrorCode.TABLE_NOT_FOUND
     if "timeout" in text or "timed out" in text:

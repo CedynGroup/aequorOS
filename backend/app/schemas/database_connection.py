@@ -21,7 +21,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-type Backend = Literal["oracle", "sqlserver", "jdbc", "odbc"]
+type Backend = Literal["oracle", "sqlserver", "jdbc", "odbc", "snowflake"]
 
 
 class ClosedModel(BaseModel):

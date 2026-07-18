@@ -52,6 +52,12 @@ export interface IngestionBatchCreate {
    * @type {string}
    * @memberof IngestionBatchCreate
    */
+  sourceRef?: string;
+  /**
+   *
+   * @type {string}
+   * @memberof IngestionBatchCreate
+   */
   sourceSystem: IngestionBatchCreateSourceSystemEnum;
 }
 
@@ -108,6 +114,7 @@ export function IngestionBatchCreateFromJSONTyped(
     mappingConfigId:
       json["mapping_config_id"] == null ? undefined : json["mapping_config_id"],
     reason: json["reason"],
+    sourceRef: json["source_ref"] == null ? undefined : json["source_ref"],
     sourceSystem: json["source_system"],
   };
 }
@@ -130,6 +137,7 @@ export function IngestionBatchCreateToJSONTyped(
     location: value["location"],
     mapping_config_id: value["mappingConfigId"],
     reason: value["reason"],
+    source_ref: value["sourceRef"],
     source_system: value["sourceSystem"],
   };
 }
