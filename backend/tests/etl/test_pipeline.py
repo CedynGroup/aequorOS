@@ -31,6 +31,8 @@ from app.etl.contracts import (
     ETLOperationType,
     MatchType,
 )
+from app.etl.deduplication.counterparty_matcher.signals import compute_signals
+from app.etl.models.counterparty_matching_model.model import CounterpartyMatchingModel
 from app.etl.pipeline import EtlConfig, etl_summary
 from app.etl.resolve import resolve_concept
 
@@ -221,6 +223,41 @@ def test_config_toggles_disable_stages() -> None:
 
 def test_dedup_on_by_default() -> None:
     assert EtlConfig().deduplicate is True
+
+
+def test_injected_trained_model_runs_through_the_pipeline() -> None:
+    """Loop closure: a trained model injected via EtlConfig is what run_etl uses.
+
+    With a fitted RandomForest the cross-source linkage is produced by the *model*
+    (provenance carries the governed model id); with no model injected (default
+    config) run_etl falls back to the deterministic blend and stamps no model id.
+    This proves the wiring from EtlConfig → CounterpartyMatcher, so a persisted
+    artifact loaded by app.etl.model_loading actually reaches the matcher.
+    """
+    batch = _sample_bank_batch()
+    acme_a, acme_b, distinct = batch.records[0], batch.records[1], batch.records[2]
+    model = CounterpartyMatchingModel().fit(
+        [
+            compute_signals(acme_a, acme_b),
+            compute_signals(acme_b, acme_a),
+            compute_signals(acme_a, distinct),
+            compute_signals(acme_b, distinct),
+        ],
+        [1, 1, 0, 0],
+    )
+
+    trained = run_etl(batch, _mapping(), config=EtlConfig(counterparty_model=model))
+    trained_link = next(
+        lk for lk in trained.linkages if lk.match_type is MatchType.CROSS_SOURCE
+    )
+    assert trained_link.provenance.model_id == "counterparty_matching_model"
+    assert trained_link.provenance.model_version == "1.0.0"
+
+    heuristic = run_etl(batch, _mapping())  # default config: no model injected
+    heuristic_link = next(
+        lk for lk in heuristic.linkages if lk.match_type is MatchType.CROSS_SOURCE
+    )
+    assert heuristic_link.provenance.model_id is None
 
 
 # -- summary -------------------------------------------------------------------------

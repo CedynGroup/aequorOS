@@ -53,6 +53,21 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_engine.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def hermetic_etl_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the suite off developer-local trained ML-ETL artifacts.
+
+    Ingestion / dedup load persisted RandomForest / IsolationForest artifacts from
+    the untracked ``artifacts/etl_models`` tree when present, so a batch's dedup /
+    anomaly output would otherwise depend on whether someone ran
+    ``python -m app.etl.models.train`` locally (absent in CI). Force the
+    deterministic path here; a test that exercises a trained model injects it
+    explicitly via ``EtlConfig`` (see ``tests/etl/test_pipeline.py``).
+    """
+    monkeypatch.setattr("app.etl.model_loading.load_counterparty_model", lambda: None)
+    monkeypatch.setattr("app.etl.model_loading.load_anomaly_model", lambda: None)
+
+
 @pytest.fixture
 def client() -> TestClient:
     return TestClient(create_app(), raise_server_exceptions=False)

@@ -47,6 +47,8 @@ from app.etl.resolve import resolve_concept
 if TYPE_CHECKING:
     from app.domain.ingestion.contracts import ExtractionResult, MappingConfig, RawRecord
     from app.etl.contracts import ETLOperation, LinkageRecord, Preprocessor
+    from app.etl.models.anomaly_detection_model.model import AnomalyDetectionModel
+    from app.etl.models.counterparty_matching_model.model import CounterpartyMatchingModel
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,11 @@ class EtlConfig:
     anomaly_score_threshold: float = 0.75
     # How many example rows ``etl_summary`` embeds per collection.
     summary_sample_limit: int = 5
+    # Trained ML-ETL models, injected by the caller (keeps run_etl pure/no-I/O). When
+    # None, the matcher/detector use their deterministic fallback. Production callers
+    # load these via app.etl.model_loading; ingestion falls back cleanly when absent.
+    counterparty_model: CounterpartyMatchingModel | None = None
+    anomaly_model: AnomalyDetectionModel | None = None
 
 
 def run_etl(
@@ -90,6 +97,7 @@ def run_etl(
     if cfg.deduplicate:
         linkages.extend(
             CounterpartyMatcher(
+                model=cfg.counterparty_model,
                 auto_confirm_threshold=cfg.auto_confirm_threshold,
                 review_floor=cfg.review_floor,
             ).link(cleaned_records)
@@ -98,7 +106,9 @@ def run_etl(
 
     if cfg.detect_anomalies:
         operations.extend(
-            FingerprintAnomalyDetector(score_threshold=cfg.anomaly_score_threshold).score(
+            FingerprintAnomalyDetector(
+                cfg.anomaly_model, score_threshold=cfg.anomaly_score_threshold
+            ).score(
                 cleaned_records
             )
         )

@@ -33,7 +33,7 @@ import app.adapters  # noqa: F401 - importing registers every shipped source ada
 from app.api.deps import TenantContext
 from app.domain.ingestion.adapter import get_adapter_class
 from app.domain.ingestion.contracts import ENTITY_TYPES, MappingConfig
-from app.etl import EtlConfig, ETLResult, etl_summary, run_etl
+from app.etl import EtlConfig, ETLResult, etl_summary, model_loading, run_etl
 from app.etl.contracts import ETLOperationType
 from app.models import Bank, IngestionBatch, Job, LineageRecord, MappingConfigRecord
 from app.services.audit import record_event
@@ -72,7 +72,12 @@ def run_etl_dedup(session: Session, job: Job) -> None:
     result = run_etl(
         extraction,
         mapping,
-        config=EtlConfig(deduplicate=True, detect_anomalies=True),
+        config=EtlConfig(
+            deduplicate=True,
+            detect_anomalies=True,
+            counterparty_model=model_loading.load_counterparty_model(),
+            anomaly_model=model_loading.load_anomaly_model(),
+        ),
     )
 
     overlay = _dedup_anomaly_overlay(result)
