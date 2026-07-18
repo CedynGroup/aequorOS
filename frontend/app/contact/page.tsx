@@ -22,9 +22,9 @@ const options = [
   },
   {
     Icon: Calendar,
-    title: 'Book a conversation',
+    title: 'Book a demo',
     content:
-      '30 minutes, no agenda other than learning about your situation and sharing what we\u2019re building.',
+      '30 minutes to understand your situation and walk you through the live platform.',
     linkLabel: 'See available times \u2193',
     href: '#schedule',
     external: false,
@@ -50,10 +50,10 @@ export default function ContactPage() {
               Let&apos;s talk.
             </h1>
             <p className="mt-8 text-text-muted text-lg leading-relaxed max-w-[600px]">
-              Whether you&apos;re a bank executive curious about our approach,
-              an investor evaluating the opportunity, a potential advisor, or
-              an engineer interested in joining the team — we&apos;d like to
-              hear from you.
+              Whether you&apos;re a Treasury or Risk leader considering a pilot,
+              an investor evaluating the opportunity, a potential advisor, or an
+              engineer interested in joining the team — we&apos;d like to hear
+              from you.
             </p>
           </div>
         </div>
@@ -108,8 +108,8 @@ export default function ContactPage() {
                 Pick a time that works for you.
               </h2>
               <p className="mt-3 text-text-muted text-lg leading-relaxed">
-                30 minutes, video call. No agenda other than learning about your
-                situation and sharing what we&apos;re building.
+                30 minutes, video call. We&apos;ll learn about your situation and
+                walk you through the live platform.
               </p>
             </div>
             <div className="border border-border-light border-l-4 border-l-accent rounded-lg overflow-hidden bg-white">
