@@ -129,3 +129,58 @@ def test_unknown_job_type_is_rejected(db_session: Session) -> None:
         job_queue.enqueue(db_session, ORG_1, "not_a_real_type")
     with pytest.raises(job_queue.UnknownJobTypeError):
         job_queue.claim_next(db_session, utc_now(), ("not_a_real_type",))
+
+
+def test_reclaim_stale_requeues_orphaned_running_job(db_session: Session) -> None:
+    job_queue.enqueue(db_session, ORG_1, "pipeline_refresh")
+    db_session.commit()
+    claimed = job_queue.claim_next(db_session, utc_now(), ("pipeline_refresh",))
+    assert claimed is not None and claimed.status == "running"
+    # Simulate a worker that claimed the job then died mid-handler: it has been
+    # running far longer than any real handler and never reached a terminal state.
+    claimed.started_at = utc_now() - timedelta(minutes=30)
+    db_session.commit()
+
+    reclaimed = job_queue.reclaim_stale(
+        db_session, utc_now(), stale_after=timedelta(minutes=15)
+    )
+    assert reclaimed == 1
+    db_session.refresh(claimed)
+    assert claimed.status == "queued"
+    assert claimed.started_at is None
+    assert claimed.attempts == 1
+    assert claimed.run_after is not None
+    assert claimed.error is not None and "worker presumed dead" in claimed.error
+
+
+def test_reclaim_stale_leaves_a_recently_started_job(db_session: Session) -> None:
+    job_queue.enqueue(db_session, ORG_1, "pipeline_refresh")
+    db_session.commit()
+    claimed = job_queue.claim_next(db_session, utc_now(), ("pipeline_refresh",))
+    assert claimed is not None
+
+    # Started just now (by claim_next) — a slow-but-alive job must not be reclaimed.
+    reclaimed = job_queue.reclaim_stale(
+        db_session, utc_now(), stale_after=timedelta(minutes=15)
+    )
+    assert reclaimed == 0
+    assert claimed.status == "running"
+
+
+def test_reclaim_stale_fails_a_job_past_max_attempts(db_session: Session) -> None:
+    job_queue.enqueue(db_session, ORG_1, "pipeline_refresh", max_attempts=1)
+    db_session.commit()
+    claimed = job_queue.claim_next(db_session, utc_now(), ("pipeline_refresh",))
+    assert claimed is not None
+    # Already used its one attempt, and now orphaned again — must fail, not loop.
+    claimed.attempts = 1
+    claimed.started_at = utc_now() - timedelta(minutes=30)
+    db_session.commit()
+
+    reclaimed = job_queue.reclaim_stale(
+        db_session, utc_now(), stale_after=timedelta(minutes=15)
+    )
+    assert reclaimed == 1
+    db_session.refresh(claimed)
+    assert claimed.status == "failed"
+    assert claimed.completed_at is not None

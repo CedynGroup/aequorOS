@@ -15,6 +15,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
@@ -77,16 +78,34 @@ def run_once(job_types: tuple[str, ...] | None = None) -> bool:
     return True
 
 
+def _reap_stale(stale_after: timedelta) -> None:
+    """Requeue jobs orphaned in ``running`` by a dead worker. Never raises."""
+    try:
+        with _new_session() as session:
+            reclaimed = job_queue.reclaim_stale(session, utc_now(), stale_after=stale_after)
+        if reclaimed:
+            logger.warning("Reclaimed %d stale running job(s)", reclaimed)
+    except Exception:  # noqa: BLE001 - the reaper must never kill the loop
+        logger.exception("Stale-job reaper failed")
+
+
 def run_worker(
     poll_interval: float | None = None,
     job_types: tuple[str, ...] | None = None,
     stop_event: threading.Event | None = None,
 ) -> None:
-    """Poll loop: process due jobs, sleeping ``poll_interval`` when idle."""
+    """Poll loop: process due jobs, sleeping ``poll_interval`` when idle.
+
+    On startup and then periodically, reclaims jobs left ``running`` by a crashed
+    worker (this process's own prior instance, or any peer) so a mid-handler death
+    doesn't strand a job forever.
+    """
     settings = get_settings()
     poll_interval = (
         poll_interval if poll_interval is not None else settings.worker.worker_poll_seconds
     )
+    stale_after = timedelta(seconds=settings.worker.worker_stale_job_seconds)
+    reap_interval = max(stale_after.total_seconds() / 2, poll_interval)
     job_types = job_types or tuple(HANDLERS)
     if settings.worker.official_run_enabled:
         try:
@@ -94,13 +113,22 @@ def run_worker(
                 scheduler.seed_ticks(session)
         except Exception:  # noqa: BLE001 - seeding is best-effort at startup
             logger.exception("Failed to seed scheduler ticks")
-    logger.info("Live-engine worker started (job_types=%s)", job_types)
+    _reap_stale(stale_after)  # clear orphans left by a prior crashed worker
+    next_reap = time.monotonic() + reap_interval
+    logger.info(
+        "Live-engine worker started (job_types=%s, stale_after=%ss)",
+        job_types,
+        stale_after.total_seconds(),
+    )
     while stop_event is None or not stop_event.is_set():
         try:
             worked = run_once(job_types)
         except Exception:  # noqa: BLE001 - a claim failure must not kill the loop
             logger.exception("Worker poll iteration failed")
             worked = False
+        if time.monotonic() >= next_reap:
+            _reap_stale(stale_after)
+            next_reap = time.monotonic() + reap_interval
         if not worked:
             time.sleep(poll_interval)
 

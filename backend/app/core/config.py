@@ -169,6 +169,11 @@ class WorkerSettings(BaseSettings):
     run_inprocess_worker: bool = Field(default=False, alias="RUN_INPROCESS_WORKER")
     pipeline_debounce_seconds: int = Field(default=15, alias="PIPELINE_DEBOUNCE_SECONDS")
     worker_poll_seconds: float = Field(default=2.0, alias="WORKER_POLL_SECONDS")
+    # A job stuck in ``running`` longer than this is treated as orphaned by a
+    # dead worker and reclaimed (see job_queue.reclaim_stale). Must exceed the
+    # slowest handler's real runtime (etl_dedup / pipeline_refresh over a full
+    # book run in minutes) so a slow-but-alive job is never reclaimed twice.
+    worker_stale_job_seconds: float = Field(default=900.0, alias="WORKER_STALE_JOB_SECONDS")
     official_run_hour: int = Field(default=2, alias="OFFICIAL_RUN_HOUR")
     official_run_enabled: bool = Field(default=False, alias="OFFICIAL_RUN_ENABLED")
     # The worker claims and processes jobs across every tenant, so its DB
