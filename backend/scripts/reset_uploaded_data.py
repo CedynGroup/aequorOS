@@ -22,11 +22,16 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 from uuid import UUID
 
 import boto3
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/ on path
+
+from app.core.config import get_settings  # noqa: E402
 
 DEMO_ORG_ID = UUID("11111111-1111-4111-8111-111111111111")
 SAMPLE_BANK_ID = UUID("77000000-0000-4000-8000-000000000001")
@@ -158,8 +163,15 @@ def main() -> int:
     parser.add_argument("--yes", action="store_true", help="Skip confirmation.")
     args = parser.parse_args()
 
+    # Fall back to the app's configured URL (env or backend/.env) — same source
+    # the running service uses. No hard-coded local default.
     if not args.database_url:
-        print("DATABASE_URL is required (env or --database-url).", file=sys.stderr)
+        args.database_url = get_settings().database.database_url
+    if not args.database_url:
+        print(
+            "DATABASE_URL is required (env, backend/.env, or --database-url).",
+            file=sys.stderr,
+        )
         return 2
     if not args.yes:
         print("Refusing to delete without --yes.", file=sys.stderr)
