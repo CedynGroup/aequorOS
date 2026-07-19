@@ -34,32 +34,24 @@ import {
 export interface GetCalculationRunRequest {
   caseId: string;
   runId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListCalculationRunsRequest {
   caseId: string;
-  xOrgId: string;
   scenarioId?: string | null;
   activeScenariosOnly?: boolean;
   limit?: number;
   offset?: number;
-  xUserId?: string | null;
 }
 
 export interface RerunCalculationRequest {
   caseId: string;
   runId: string;
-  xOrgId: string;
-  xUserId: string;
   calculationRerunCreate: CalculationRerunCreate;
 }
 
 export interface StartCalculationRunRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId: string;
   calculationRunCreate: CalculationRunCreate;
 }
 
@@ -88,25 +80,18 @@ export class CalculationsApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getCalculationRun().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/calculation-runs/{run_id}`
@@ -158,13 +143,6 @@ export class CalculationsApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listCalculationRuns().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["scenarioId"] != null) {
@@ -186,14 +164,14 @@ export class CalculationsApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/calculation-runs`.replace(
@@ -247,20 +225,6 @@ export class CalculationsApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling rerunCalculation().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling rerunCalculation().',
-      );
-    }
-
     if (requestParameters["calculationRerunCreate"] == null) {
       throw new runtime.RequiredError(
         "calculationRerunCreate",
@@ -274,14 +238,14 @@ export class CalculationsApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/calculation-runs/{run_id}/rerun`
@@ -336,20 +300,6 @@ export class CalculationsApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling startCalculationRun().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling startCalculationRun().',
-      );
-    }
-
     if (requestParameters["calculationRunCreate"] == null) {
       throw new runtime.RequiredError(
         "calculationRunCreate",
@@ -363,14 +313,14 @@ export class CalculationsApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/calculation-runs`.replace(

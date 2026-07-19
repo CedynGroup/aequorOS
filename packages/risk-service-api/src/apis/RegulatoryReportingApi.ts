@@ -66,124 +66,89 @@ import {
 
 export interface CreateRegulatoryPackageRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   regulatoryPackageCreate: RegulatoryPackageCreate;
 }
 
 export interface DecidePackageApprovalRequest {
   bankId: string;
   packageId: string;
-  xOrgId: string;
-  xUserId: string;
   packageApprovalDecisionCreate: PackageApprovalDecisionCreate;
 }
 
 export interface DownloadRegulatoryArtifactRequest {
   bankId: string;
   artifactId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ExportRegulatoryPackageRequest {
   bankId: string;
   packageId: string;
   kind: ExportRegulatoryPackageKindEnum;
-  xOrgId: string;
-  xUserId: string;
 }
 
 export interface GetChannelConfigRequest {
   bankId: string;
   channel: GetChannelConfigChannelEnum;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface GetEmailFallbackInstructionsRequest {
   bankId: string;
   packageId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface GetRegulatoryPackageRequest {
   bankId: string;
   packageId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListRegulatoryPackagesRequest {
   bankId: string;
-  xOrgId: string;
   returnCode?: string | null;
   reportingDate?: Date | null;
   status?: PackageStatusFilter | null;
   includeSuperseded?: boolean;
   limit?: number;
   offset?: number;
-  xUserId?: string | null;
 }
 
 export interface ListReportingObligationsRequest {
   bankId: string;
-  xOrgId: string;
   horizonMonths?: number;
-  xUserId?: string | null;
-}
-
-export interface ListReturnTemplatesRequest {
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListSubmissionEventsRequest {
   bankId: string;
   packageId: string;
-  xOrgId: string;
   limit?: number;
   offset?: number;
-  xUserId?: string | null;
 }
 
 export interface PollRegulatorySubmissionRequest {
   bankId: string;
   packageId: string;
-  xOrgId: string;
-  xUserId: string;
 }
 
 export interface PutChannelConfigRequest {
   bankId: string;
   channel: PutChannelConfigChannelEnum;
-  xOrgId: string;
-  xUserId: string;
   channelConfigPut: ChannelConfigPut;
 }
 
 export interface RequestPackageApprovalRequest {
   bankId: string;
   packageId: string;
-  xOrgId: string;
-  xUserId: string;
   packageApprovalRequestCreate: PackageApprovalRequestCreate;
 }
 
 export interface SubmitRegulatoryPackageRequest {
   bankId: string;
   packageId: string;
-  xOrgId: string;
-  xUserId: string;
   packageSubmitCreate: PackageSubmitCreate;
 }
 
 export interface ValidateRegulatoryPackageRequest {
   bankId: string;
   packageId: string;
-  xOrgId: string;
-  xUserId: string;
 }
 
 /**
@@ -204,20 +169,6 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createRegulatoryPackage().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createRegulatoryPackage().',
-      );
-    }
-
     if (requestParameters["regulatoryPackageCreate"] == null) {
       throw new runtime.RequiredError(
         "regulatoryPackageCreate",
@@ -231,14 +182,14 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-packages`.replace(
@@ -295,20 +246,6 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling decidePackageApproval().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling decidePackageApproval().',
-      );
-    }
-
     if (requestParameters["packageApprovalDecisionCreate"] == null) {
       throw new runtime.RequiredError(
         "packageApprovalDecisionCreate",
@@ -322,14 +259,14 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/decide-approval`
@@ -392,25 +329,18 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling downloadRegulatoryArtifact().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-artifacts/{artifact_id}/download`
@@ -471,20 +401,6 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling exportRegulatoryPackage().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling exportRegulatoryPackage().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["kind"] != null) {
@@ -493,14 +409,14 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/export`
@@ -559,25 +475,18 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getChannelConfig().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-reporting/channel-configs/{channel}`
@@ -637,25 +546,18 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getEmailFallbackInstructions().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/email-fallback-instructions`
@@ -715,25 +617,18 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getRegulatoryPackage().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}`
@@ -785,13 +680,6 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listRegulatoryPackages().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["returnCode"] != null) {
@@ -825,14 +713,14 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-packages`.replace(
@@ -879,13 +767,6 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listReportingObligations().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["horizonMonths"] != null) {
@@ -894,14 +775,14 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/reporting-obligations`.replace(
@@ -938,28 +819,20 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
    * List Return Templates
    */
   async listReturnTemplatesRaw(
-    requestParameters: ListReturnTemplatesRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<runtime.ApiResponse<ReturnTemplateListRead>> {
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listReturnTemplates().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/regulatory-reporting/templates`,
@@ -979,13 +852,9 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
    * List Return Templates
    */
   async listReturnTemplates(
-    requestParameters: ListReturnTemplatesRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<ReturnTemplateListRead> {
-    const response = await this.listReturnTemplatesRaw(
-      requestParameters,
-      initOverrides,
-    );
+    const response = await this.listReturnTemplatesRaw(initOverrides);
     return await response.value();
   }
 
@@ -1010,13 +879,6 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listSubmissionEvents().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["limit"] != null) {
@@ -1029,14 +891,14 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/submission-events`
@@ -1096,32 +958,18 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling pollRegulatorySubmission().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling pollRegulatorySubmission().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/poll`
@@ -1181,20 +1029,6 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling putChannelConfig().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling putChannelConfig().',
-      );
-    }
-
     if (requestParameters["channelConfigPut"] == null) {
       throw new runtime.RequiredError(
         "channelConfigPut",
@@ -1208,14 +1042,14 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-reporting/channel-configs/{channel}`
@@ -1275,20 +1109,6 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling requestPackageApproval().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling requestPackageApproval().',
-      );
-    }
-
     if (requestParameters["packageApprovalRequestCreate"] == null) {
       throw new runtime.RequiredError(
         "packageApprovalRequestCreate",
@@ -1302,14 +1122,14 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/request-approval`
@@ -1372,20 +1192,6 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling submitRegulatoryPackage().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling submitRegulatoryPackage().',
-      );
-    }
-
     if (requestParameters["packageSubmitCreate"] == null) {
       throw new runtime.RequiredError(
         "packageSubmitCreate",
@@ -1399,14 +1205,14 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/submit`
@@ -1469,32 +1275,18 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling validateRegulatoryPackage().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling validateRegulatoryPackage().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/validate`

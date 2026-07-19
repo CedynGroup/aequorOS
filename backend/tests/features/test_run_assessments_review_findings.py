@@ -109,11 +109,10 @@ def test_finding_review_requires_authenticated_actor(db_client: TestClient) -> N
 
     response = db_client.patch(
         f"/api/v1/findings/{finding_id}",
-        headers={"X-Org-Id": headers()["X-Org-Id"]},
-        json={"status": "acknowledged"},
+        json={"status": "acknowledged"},  # no bearer token → unauthenticated
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 401
     persisted = db_client.get(f"/api/v1/findings/{finding_id}", headers=headers())
     assert persisted.status_code == 200
     assert persisted.json()["status"] == "open"

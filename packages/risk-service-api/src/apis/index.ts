@@ -1,4 +1,5 @@
 export * from "./AssessmentsApi";
+export * from "./AuthApi";
 export * from "./BanksApi";
 export * from "./BehavioralModelsApi";
 export * from "./CalculationsApi";

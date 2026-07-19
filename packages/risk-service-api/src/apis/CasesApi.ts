@@ -69,68 +69,44 @@ import {
 
 export interface ArchiveCaseRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface AssignCaseRequest {
   caseId: string;
-  xOrgId: string;
   caseAssign: CaseAssign;
-  xUserId?: string | null;
 }
 
 export interface BulkCaseActionsRequest {
-  xOrgId: string;
   payload: Payload;
-  xUserId?: string | null;
 }
 
 export interface CaseReportRequest {
   caseId: string;
-  xOrgId: string;
   accept?: string | null;
-  xUserId?: string | null;
-}
-
-export interface CaseSummaryRequest {
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface CreateCaseRequest {
-  xOrgId: string;
   caseCreate: CaseCreate;
-  xUserId?: string | null;
 }
 
 export interface CreateCaseDecisionRequest {
   caseId: string;
-  xOrgId: string;
   caseDecisionCreate: CaseDecisionCreate;
-  xUserId?: string | null;
 }
 
 export interface GetCaseRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListCaseDecisionsRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListCaseScoresRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListCasesRequest {
-  xOrgId: string;
   includeArchived?: boolean;
   status?: CaseStatus | null;
   assignedToUserId?: string | null;
@@ -140,14 +116,11 @@ export interface ListCasesRequest {
   sort?: CaseSort;
   limit?: number;
   offset?: number;
-  xUserId?: string | null;
 }
 
 export interface UpdateCaseRequest {
   caseId: string;
-  xOrgId: string;
   caseUpdate: CaseUpdate;
-  xUserId?: string | null;
 }
 
 /**
@@ -168,25 +141,18 @@ export class CasesApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling archiveCase().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/archive`.replace(
@@ -233,13 +199,6 @@ export class CasesApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling assignCase().',
-      );
-    }
-
     if (requestParameters["caseAssign"] == null) {
       throw new runtime.RequiredError(
         "caseAssign",
@@ -253,14 +212,14 @@ export class CasesApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/assign`.replace(
@@ -298,13 +257,6 @@ export class CasesApi extends runtime.BaseAPI {
     requestParameters: BulkCaseActionsRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<runtime.ApiResponse<CaseBulkActionRead>> {
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling bulkCaseActions().',
-      );
-    }
-
     if (requestParameters["payload"] == null) {
       throw new runtime.RequiredError(
         "payload",
@@ -318,14 +270,14 @@ export class CasesApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/bulk-actions`,
@@ -370,13 +322,6 @@ export class CasesApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling caseReport().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
@@ -385,14 +330,14 @@ export class CasesApi extends runtime.BaseAPI {
       headerParameters["Accept"] = String(requestParameters["accept"]);
     }
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/report`.replace(
@@ -426,28 +371,20 @@ export class CasesApi extends runtime.BaseAPI {
    * Case Summary
    */
   async caseSummaryRaw(
-    requestParameters: CaseSummaryRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<runtime.ApiResponse<CaseSummaryRead>> {
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling caseSummary().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/summary`,
@@ -467,13 +404,9 @@ export class CasesApi extends runtime.BaseAPI {
    * Case Summary
    */
   async caseSummary(
-    requestParameters: CaseSummaryRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<CaseSummaryRead> {
-    const response = await this.caseSummaryRaw(
-      requestParameters,
-      initOverrides,
-    );
+    const response = await this.caseSummaryRaw(initOverrides);
     return await response.value();
   }
 
@@ -484,13 +417,6 @@ export class CasesApi extends runtime.BaseAPI {
     requestParameters: CreateCaseRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<runtime.ApiResponse<CaseRead>> {
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createCase().',
-      );
-    }
-
     if (requestParameters["caseCreate"] == null) {
       throw new runtime.RequiredError(
         "caseCreate",
@@ -504,14 +430,14 @@ export class CasesApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases`,
@@ -553,13 +479,6 @@ export class CasesApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createCaseDecision().',
-      );
-    }
-
     if (requestParameters["caseDecisionCreate"] == null) {
       throw new runtime.RequiredError(
         "caseDecisionCreate",
@@ -573,14 +492,14 @@ export class CasesApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/decisions`.replace(
@@ -628,25 +547,18 @@ export class CasesApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getCase().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}`.replace(
@@ -690,25 +602,18 @@ export class CasesApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listCaseDecisions().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/decisions`.replace(
@@ -755,25 +660,18 @@ export class CasesApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listCaseScores().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scores`.replace(
@@ -813,13 +711,6 @@ export class CasesApi extends runtime.BaseAPI {
     requestParameters: ListCasesRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<runtime.ApiResponse<CaseListRead>> {
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listCases().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["includeArchived"] != null) {
@@ -862,14 +753,14 @@ export class CasesApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases`,
@@ -889,7 +780,7 @@ export class CasesApi extends runtime.BaseAPI {
    * List Cases
    */
   async listCases(
-    requestParameters: ListCasesRequest,
+    requestParameters: ListCasesRequest = {},
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<CaseListRead> {
     const response = await this.listCasesRaw(requestParameters, initOverrides);
@@ -910,13 +801,6 @@ export class CasesApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling updateCase().',
-      );
-    }
-
     if (requestParameters["caseUpdate"] == null) {
       throw new runtime.RequiredError(
         "caseUpdate",
@@ -930,14 +814,14 @@ export class CasesApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}`.replace(

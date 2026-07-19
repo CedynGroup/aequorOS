@@ -30,17 +30,13 @@ import {
 
 export interface GetLiquiditySummaryRequest {
   caseId: string;
-  xOrgId: string;
   scenarioId?: string | null;
   runId?: string | null;
-  xUserId?: string | null;
 }
 
 export interface ReviewLiquidityFindingRequest {
   caseId: string;
   findingId: string;
-  xOrgId: string;
-  xUserId: string;
   liquidityFindingReview: LiquidityFindingReview;
 }
 
@@ -62,13 +58,6 @@ export class LiquidityApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getLiquiditySummary().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["scenarioId"] != null) {
@@ -81,14 +70,14 @@ export class LiquidityApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/liquidity/summary`.replace(
@@ -142,20 +131,6 @@ export class LiquidityApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling reviewLiquidityFinding().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling reviewLiquidityFinding().',
-      );
-    }
-
     if (requestParameters["liquidityFindingReview"] == null) {
       throw new runtime.RequiredError(
         "liquidityFindingReview",
@@ -169,14 +144,14 @@ export class LiquidityApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/liquidity/findings/{finding_id}/review`

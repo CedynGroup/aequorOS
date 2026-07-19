@@ -4741,6 +4741,13 @@
         ],
         "type": "string"
       },
+      "CashflowForecastModelScope": {
+        "enum": [
+          "bank_specific",
+          "generic"
+        ],
+        "type": "string"
+      },
       "CashflowForecastPointRead": {
         "additionalProperties": false,
         "properties": {
@@ -4794,6 +4801,9 @@
           "mode": {
             "$ref": "#/components/schemas/CashflowForecastMode"
           },
+          "modelScope": {
+            "$ref": "#/components/schemas/CashflowForecastModelScope"
+          },
           "modelVersion": {
             "title": "Modelversion",
             "type": "string"
@@ -4811,6 +4821,7 @@
           "horizon",
           "asOfDate",
           "modelVersion",
+          "modelScope",
           "accuracy",
           "points"
         ],
@@ -13701,6 +13712,40 @@
         "title": "LiveSummaryRead",
         "type": "object"
       },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "organization_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Id"
+          },
+          "password": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
       "MappingConfig": {
         "description": "Per-institution source-to-canonical translation rules.\n\nThis is the onboarding deliverable. It is stored versioned in\n``mapping_configs`` and passed to ``SourceAdapter.translate`` verbatim, so\nevery translation is reproducible from the config version recorded on the\nbatch.",
         "properties": {
@@ -14390,6 +14435,48 @@
           "indices"
         ],
         "title": "MarketDataViewsRead",
+        "type": "object"
+      },
+      "MeResponse": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "title": "Organization Id",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "organization_id",
+          "email",
+          "display_name",
+          "role"
+        ],
+        "title": "MeResponse",
         "type": "object"
       },
       "ObligationRag": {
@@ -17999,6 +18086,32 @@
         "title": "ScoreRead",
         "type": "object"
       },
+      "SsoLoginRequest": {
+        "properties": {
+          "id_token": {
+            "minLength": 1,
+            "title": "Id Token",
+            "type": "string"
+          },
+          "organization_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Id"
+          }
+        },
+        "required": [
+          "id_token"
+        ],
+        "title": "SsoLoginRequest",
+        "type": "object"
+      },
       "SubmissionEventListRead": {
         "additionalProperties": false,
         "properties": {
@@ -18729,6 +18842,48 @@
         "title": "TestPullRead",
         "type": "object"
       },
+      "TokenRefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "minLength": 1,
+            "title": "Refresh Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ],
+        "title": "TokenRefreshRequest",
+        "type": "object"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "refresh_token": {
+            "title": "Refresh Token",
+            "type": "string"
+          },
+          "token_type": {
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "refresh_token",
+          "expires_in"
+        ],
+        "title": "TokenResponse",
+        "type": "object"
+      },
       "TranslationFailureListRead": {
         "properties": {
           "batch_id": {
@@ -19274,6 +19429,13 @@
         "maxLength": 120,
         "type": "string"
       }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "description": "App JWT access token",
+        "scheme": "bearer",
+        "type": "http"
+      }
     }
   },
   "info": {
@@ -19457,31 +19619,6 @@
               "title": "Run Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
           }
         ],
         "responses": {
@@ -19556,6 +19693,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Assessment Run",
         "tags": [
           "assessments"
@@ -19663,31 +19805,6 @@
               ],
               "title": "Case Id"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
           }
         ],
         "responses": {
@@ -19766,6 +19883,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Assessments",
         "tags": [
           "assessments"
@@ -19773,33 +19895,6 @@
       },
       "post": {
         "operationId": "createAssessment",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -19882,6 +19977,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Assessment",
         "tags": [
           "assessments"
@@ -19900,31 +20000,6 @@
               "format": "uuid",
               "title": "Assessment Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -20000,6 +20075,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Assessment",
         "tags": [
           "assessments"
@@ -20018,31 +20098,6 @@
               "format": "uuid",
               "title": "Assessment Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -20122,6 +20177,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Assessment Findings",
         "tags": [
           "findings"
@@ -20140,31 +20200,6 @@
               "format": "uuid",
               "title": "Assessment Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -20240,6 +20275,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Run Assessment",
         "tags": [
           "assessments"
@@ -20258,31 +20298,6 @@
               "format": "uuid",
               "title": "Assessment Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -20362,42 +20377,380 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Assessment Runs",
         "tags": [
           "assessments"
         ]
       }
     },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "authLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "operationId": "authMe",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "authRefresh",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Refresh",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/sso": {
+      "post": {
+        "description": "Exchange a verified Auth0 id_token for AequorOS app tokens.",
+        "operationId": "authSso",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SsoLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Sso Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/banks": {
       "get": {
         "operationId": "listBanks",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -20470,6 +20823,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Banks",
         "tags": [
           "banks"
@@ -20479,26 +20837,6 @@
     "/api/v1/banks/seed-demo": {
       "post": {
         "operationId": "seedDemoBank",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
-              "type": "string"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -20571,6 +20909,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Seed Demo Bank",
         "tags": [
           "banks"
@@ -20589,31 +20932,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -20689,6 +21007,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Bank",
         "tags": [
           "banks"
@@ -20719,31 +21042,6 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -20819,6 +21117,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Bank Alerts",
         "tags": [
           "live-engine"
@@ -20849,31 +21152,6 @@
               ],
               "title": "Model",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -20949,6 +21227,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Behavioral Model",
         "tags": [
           "behavioral-models"
@@ -20978,24 +21261,6 @@
                 "deposit-stability"
               ],
               "title": "Model",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -21082,6 +21347,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Apply Behavioral Model",
         "tags": [
           "behavioral-models"
@@ -21111,24 +21381,6 @@
                 "deposit-stability"
               ],
               "title": "Model",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -21205,6 +21457,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Train Behavioral Model",
         "tags": [
           "behavioral-models"
@@ -21317,31 +21574,6 @@
               ],
               "title": "Q"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
           }
         ],
         "responses": {
@@ -21416,6 +21648,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Canonical Positions",
         "tags": [
           "ingestion"
@@ -21435,31 +21672,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -21535,6 +21747,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Canonical Position Facets",
         "tags": [
           "ingestion"
@@ -21570,31 +21787,6 @@
                 }
               ],
               "title": "Reporting Period Id"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -21670,6 +21862,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Capital Dashboard",
         "tags": [
           "regulatory-capital"
@@ -21687,24 +21884,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -21791,6 +21970,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Run All Capital Scenarios",
         "tags": [
           "regulatory-capital"
@@ -21826,31 +22010,6 @@
                 }
               ],
               "title": "Reporting Period Id"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -21926,6 +22085,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Rwa Breakdown",
         "tags": [
           "regulatory-capital"
@@ -21961,31 +22125,6 @@
                 }
               ],
               "title": "Reporting Period Id"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -22061,6 +22200,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Capital Structure",
         "tags": [
           "regulatory-capital"
@@ -22097,31 +22241,6 @@
             "schema": {
               "$ref": "#/components/schemas/CashflowForecastMode",
               "default": "lstm"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -22197,6 +22316,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Cashflow Forecast",
         "tags": [
           "cashflow-forecast"
@@ -22227,31 +22351,6 @@
               "minimum": 30,
               "title": "Days",
               "type": "integer"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -22327,6 +22426,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Cashflow History",
         "tags": [
           "cashflow-forecast"
@@ -22357,31 +22461,6 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -22457,6 +22536,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Bank Data Activations",
         "tags": [
           "ingestion"
@@ -22473,24 +22557,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -22577,6 +22643,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Activate Bank Data",
         "tags": [
           "ingestion"
@@ -22595,31 +22666,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -22695,6 +22741,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Database Connections",
         "tags": [
           "database-direct"
@@ -22710,24 +22761,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -22814,6 +22847,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Database Connection",
         "tags": [
           "database-direct"
@@ -22843,24 +22881,6 @@
               "title": "Connection Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -22935,6 +22955,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Revoke Database Connection",
         "tags": [
           "database-direct"
@@ -22962,31 +22987,6 @@
               "title": "Connection Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
           }
         ],
         "responses": {
@@ -23061,6 +23061,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Database Connection",
         "tags": [
           "database-direct"
@@ -23086,24 +23091,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -23190,6 +23177,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Database Connection",
         "tags": [
           "database-direct"
@@ -23219,24 +23211,6 @@
               "title": "Connection Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -23311,6 +23285,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Disable Database Connection",
         "tags": [
           "database-direct"
@@ -23340,24 +23319,6 @@
               "title": "Connection Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -23432,6 +23393,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Enable Database Connection",
         "tags": [
           "database-direct"
@@ -23459,24 +23425,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -23553,6 +23501,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Discover Database Schema",
         "tags": [
           "database-direct"
@@ -23580,24 +23533,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -23684,6 +23619,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Sync Database Connection",
         "tags": [
           "database-direct"
@@ -23711,24 +23651,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -23805,6 +23727,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Test Database Connection",
         "tags": [
           "database-direct"
@@ -23822,24 +23749,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -23926,6 +23835,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Run Strategic Optimizer",
         "tags": [
           "forecasting"
@@ -23967,31 +23881,6 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -24067,6 +23956,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Forecast Runs",
         "tags": [
           "forecasting"
@@ -24082,24 +23976,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -24186,6 +24062,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Forecast Run",
         "tags": [
           "forecasting"
@@ -24214,31 +24095,6 @@
               "format": "uuid",
               "title": "Run Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -24314,6 +24170,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Forecast Run",
         "tags": [
           "forecasting"
@@ -24332,31 +24193,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -24432,6 +24268,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Forecast Scenarios",
         "tags": [
           "forecasting"
@@ -24449,24 +24290,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -24553,6 +24376,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Run Whatif Analysis",
         "tags": [
           "forecasting"
@@ -24588,31 +24416,6 @@
                 }
               ],
               "title": "Reporting Period Id"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -24688,6 +24491,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Bank Freshness",
         "tags": [
           "live-engine"
@@ -24723,31 +24531,6 @@
                 }
               ],
               "title": "Reporting Period Id"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -24823,6 +24606,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Ftp Dashboard",
         "tags": [
           "regulatory-ftp"
@@ -24840,24 +24628,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -24944,6 +24714,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Run All Ftp Scenarios",
         "tags": [
           "regulatory-ftp"
@@ -24979,31 +24754,6 @@
                 }
               ],
               "title": "Reporting Period Id"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -25079,6 +24829,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Fx Dashboard",
         "tags": [
           "regulatory-fx"
@@ -25096,24 +24851,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -25200,6 +24937,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Run All Fx Scenarios",
         "tags": [
           "regulatory-fx"
@@ -25248,31 +24990,6 @@
                 }
               ],
               "title": "Source System"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -25348,6 +25065,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Ingestion Batches",
         "tags": [
           "ingestion"
@@ -25363,24 +25085,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -25467,6 +25171,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Start Ingestion Batch",
         "tags": [
           "ingestion"
@@ -25495,31 +25204,6 @@
               "format": "uuid",
               "title": "Batch Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -25595,6 +25279,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Ingestion Batch",
         "tags": [
           "ingestion"
@@ -25623,31 +25312,6 @@
               "format": "uuid",
               "title": "Batch Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -25723,6 +25387,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Translation Failures",
         "tags": [
           "ingestion"
@@ -25742,31 +25411,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -25842,6 +25486,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Ingestion Summary",
         "tags": [
           "ingestion"
@@ -25859,24 +25508,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -25963,6 +25594,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Upload Ingestion Source",
         "tags": [
           "ingestion"
@@ -25998,31 +25634,6 @@
                 }
               ],
               "title": "Reporting Period Id"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -26098,6 +25709,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Irr Dashboard",
         "tags": [
           "regulatory-irr"
@@ -26115,24 +25731,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -26219,6 +25817,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Run All Irr Scenarios",
         "tags": [
           "regulatory-irr"
@@ -26254,31 +25857,6 @@
                 }
               ],
               "title": "Reporting Period Id"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -26354,6 +25932,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Liquidity Dashboard",
         "tags": [
           "regulatory-liquidity"
@@ -26371,24 +25954,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -26475,6 +26040,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Run All Liquidity Scenarios",
         "tags": [
           "regulatory-liquidity"
@@ -26493,31 +26063,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -26593,6 +26138,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Live Summary",
         "tags": [
           "live-engine"
@@ -26611,31 +26161,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -26711,6 +26236,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Mapping Configs",
         "tags": [
           "ingestion"
@@ -26726,24 +26256,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -26830,6 +26342,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Mapping Config",
         "tags": [
           "ingestion"
@@ -26848,31 +26365,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -26948,6 +26440,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Market Data Connections",
         "tags": [
           "market-data"
@@ -26963,24 +26460,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -27067,6 +26546,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Market Data Connection",
         "tags": [
           "market-data"
@@ -27094,24 +26578,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -27188,6 +26654,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Revoke Market Data Connection",
         "tags": [
           "market-data"
@@ -27213,24 +26684,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -27317,6 +26770,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Market Data Connection",
         "tags": [
           "market-data"
@@ -27346,24 +26804,6 @@
               "title": "Connection Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -27438,6 +26878,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Disable Market Data Connection",
         "tags": [
           "market-data"
@@ -27467,24 +26912,6 @@
               "title": "Connection Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -27559,6 +26986,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Enable Market Data Connection",
         "tags": [
           "market-data"
@@ -27586,24 +27018,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -27680,6 +27094,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Test Market Data Connection",
         "tags": [
           "market-data"
@@ -27707,24 +27126,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -27801,6 +27202,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Validate Market Data Connection",
         "tags": [
           "market-data"
@@ -27819,31 +27225,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -27919,6 +27300,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Market Data Quota",
         "tags": [
           "market-data"
@@ -27937,31 +27323,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -28037,6 +27398,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Market Data Scopes",
         "tags": [
           "market-data"
@@ -28055,24 +27421,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -28159,6 +27507,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Upload Market Data",
         "tags": [
           "market-data"
@@ -28194,31 +27547,6 @@
                 }
               ],
               "title": "As Of"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -28294,6 +27622,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Market Data Views",
         "tags": [
           "market-data"
@@ -28311,24 +27644,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -28415,6 +27730,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Mint Official Run",
         "tags": [
           "live-engine"
@@ -28442,24 +27762,6 @@
             "schema": {
               "format": "uuid",
               "title": "Snapshot Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -28546,6 +27848,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Override Position Snapshot",
         "tags": [
           "ingestion"
@@ -28563,24 +27870,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -28667,6 +27956,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Open Push Batch",
         "tags": [
           "ingestion"
@@ -28695,31 +27989,6 @@
               "format": "uuid",
               "title": "Push Batch Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -28795,6 +28064,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Push Batch",
         "tags": [
           "ingestion"
@@ -28822,24 +28096,6 @@
             "schema": {
               "format": "uuid",
               "title": "Push Batch Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -28916,6 +28172,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Commit Push Batch",
         "tags": [
           "ingestion"
@@ -28943,24 +28204,6 @@
             "schema": {
               "format": "uuid",
               "title": "Push Batch Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -29047,6 +28290,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Stage Push Batch Records",
         "tags": [
           "ingestion"
@@ -29064,24 +28312,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -29168,6 +28398,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Refresh Bank Data",
         "tags": [
           "live-engine"
@@ -29197,31 +28432,6 @@
               "format": "uuid",
               "title": "Artifact Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -29290,6 +28500,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Download Regulatory Artifact",
         "tags": [
           "regulatory-reporting"
@@ -29392,31 +28607,6 @@
               "title": "Offset",
               "type": "integer"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
           }
         ],
         "responses": {
@@ -29491,6 +28681,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Regulatory Packages",
         "tags": [
           "regulatory-reporting"
@@ -29506,24 +28701,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -29610,6 +28787,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Regulatory Package",
         "tags": [
           "regulatory-reporting"
@@ -29638,31 +28820,6 @@
               "format": "uuid",
               "title": "Package Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -29738,6 +28895,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Regulatory Package",
         "tags": [
           "regulatory-reporting"
@@ -29765,24 +28927,6 @@
             "schema": {
               "format": "uuid",
               "title": "Package Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -29869,6 +29013,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Decide Package Approval",
         "tags": [
           "regulatory-reporting"
@@ -29898,31 +29047,6 @@
               "format": "uuid",
               "title": "Package Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -29998,6 +29122,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Email Fallback Instructions",
         "tags": [
           "regulatory-reporting"
@@ -30039,24 +29168,6 @@
                 "pdf"
               ],
               "title": "Kind",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -30133,6 +29244,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Export Regulatory Package",
         "tags": [
           "regulatory-reporting"
@@ -30161,24 +29277,6 @@
             "schema": {
               "format": "uuid",
               "title": "Package Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -30255,6 +29353,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Poll Regulatory Submission",
         "tags": [
           "regulatory-reporting"
@@ -30282,24 +29385,6 @@
             "schema": {
               "format": "uuid",
               "title": "Package Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -30386,6 +29471,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Request Package Approval",
         "tags": [
           "regulatory-reporting"
@@ -30437,31 +29527,6 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -30537,6 +29602,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Submission Events",
         "tags": [
           "regulatory-reporting"
@@ -30565,24 +29635,6 @@
             "schema": {
               "format": "uuid",
               "title": "Package Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -30669,6 +29721,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Submit Regulatory Package",
         "tags": [
           "regulatory-reporting"
@@ -30696,24 +29753,6 @@
             "schema": {
               "format": "uuid",
               "title": "Package Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -30790,6 +29829,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Validate Regulatory Package",
         "tags": [
           "regulatory-reporting"
@@ -30822,31 +29866,6 @@
               ],
               "title": "Channel",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -30922,6 +29941,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Channel Config",
         "tags": [
           "regulatory-reporting"
@@ -30951,24 +29975,6 @@
                 "manual"
               ],
               "title": "Channel",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -31055,6 +30061,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Put Channel Config",
         "tags": [
           "regulatory-reporting"
@@ -31157,31 +30168,6 @@
               "title": "Offset",
               "type": "integer"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
           }
         ],
         "responses": {
@@ -31256,6 +30242,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Regulatory Runs",
         "tags": [
           "regulatory-liquidity"
@@ -31271,24 +30262,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -31375,6 +30348,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Regulatory Run",
         "tags": [
           "regulatory-liquidity"
@@ -31403,31 +30381,6 @@
               "format": "uuid",
               "title": "Run Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -31503,6 +30456,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Regulatory Run",
         "tags": [
           "regulatory-liquidity"
@@ -31533,31 +30491,6 @@
               "minimum": 1,
               "title": "Horizon Months",
               "type": "integer"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -31633,6 +30566,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Reporting Obligations",
         "tags": [
           "regulatory-reporting"
@@ -31651,31 +30589,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -31751,6 +30664,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Bank Reporting Periods",
         "tags": [
           "banks"
@@ -31779,31 +30697,6 @@
               "format": "uuid",
               "title": "Period Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -31879,6 +30772,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Bank Period Facts",
         "tags": [
           "banks"
@@ -31907,31 +30805,6 @@
               "format": "uuid",
               "title": "Reporting Period Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -32007,6 +30880,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Bsd2 Preview",
         "tags": [
           "regulatory-capital"
@@ -32035,31 +30913,6 @@
               "format": "uuid",
               "title": "Reporting Period Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -32135,6 +30988,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Bsd3 Preview",
         "tags": [
           "regulatory-liquidity"
@@ -32153,31 +31011,6 @@
               "format": "uuid",
               "title": "Bank Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -32253,6 +31086,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Temenos Connections",
         "tags": [
           "temenos"
@@ -32268,24 +31106,6 @@
             "schema": {
               "format": "uuid",
               "title": "Bank Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -32372,6 +31192,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Temenos Connection",
         "tags": [
           "temenos"
@@ -32399,24 +31224,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -32493,6 +31300,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Revoke Temenos Connection",
         "tags": [
           "temenos"
@@ -32518,24 +31330,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -32622,6 +31416,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Temenos Connection",
         "tags": [
           "temenos"
@@ -32649,24 +31448,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -32753,6 +31534,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Trigger Temenos Backfill",
         "tags": [
           "temenos"
@@ -32782,24 +31568,6 @@
               "title": "Connection Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -32874,6 +31642,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Disable Temenos Connection",
         "tags": [
           "temenos"
@@ -32903,24 +31676,6 @@
               "title": "Connection Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -32995,6 +31750,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Enable Temenos Connection",
         "tags": [
           "temenos"
@@ -33022,24 +31782,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -33126,6 +31868,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Trigger Temenos Pull",
         "tags": [
           "temenos"
@@ -33153,24 +31900,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -33247,6 +31976,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Test Temenos Connection",
         "tags": [
           "temenos"
@@ -33274,24 +32008,6 @@
             "schema": {
               "format": "uuid",
               "title": "Connection Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -33368,6 +32084,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Validate Temenos Connection",
         "tags": [
           "temenos"
@@ -33396,31 +32117,6 @@
               "default": "OFS",
               "title": "Mode",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -33496,6 +32192,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Temenos Domains",
         "tags": [
           "temenos"
@@ -33644,31 +32345,6 @@
               "title": "Offset",
               "type": "integer"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
           }
         ],
         "responses": {
@@ -33743,6 +32419,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Cases",
         "tags": [
           "cases"
@@ -33750,33 +32431,6 @@
       },
       "post": {
         "operationId": "createCase",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -33859,6 +32513,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Case",
         "tags": [
           "cases"
@@ -33868,33 +32527,6 @@
     "/api/v1/cases/bulk-actions": {
       "post": {
         "operationId": "bulkCaseActions",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -34000,6 +32632,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Bulk Case Actions",
         "tags": [
           "cases"
@@ -34009,33 +32646,6 @@
     "/api/v1/cases/summary": {
       "get": {
         "operationId": "caseSummary",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -34108,6 +32718,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Case Summary",
         "tags": [
           "cases"
@@ -34126,31 +32741,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -34226,6 +32816,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Case",
         "tags": [
           "cases"
@@ -34242,31 +32837,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -34352,6 +32922,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Case",
         "tags": [
           "cases"
@@ -34370,31 +32945,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -34470,6 +33020,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Archive Case",
         "tags": [
           "cases"
@@ -34488,31 +33043,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -34598,6 +33128,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Assign Case",
         "tags": [
           "cases"
@@ -34666,31 +33201,6 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -34766,6 +33276,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Calculation Runs",
         "tags": [
           "calculations"
@@ -34781,24 +33296,6 @@
             "schema": {
               "format": "uuid",
               "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -34885,6 +33382,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Start Calculation Run",
         "tags": [
           "calculations"
@@ -34913,31 +33415,6 @@
               "format": "uuid",
               "title": "Run Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -35013,6 +33490,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Calculation Run",
         "tags": [
           "calculations"
@@ -35040,24 +33522,6 @@
             "schema": {
               "format": "uuid",
               "title": "Run Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -35144,6 +33608,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Rerun Calculation",
         "tags": [
           "calculations"
@@ -35162,31 +33631,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -35262,6 +33706,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Capital Comparison",
         "tags": [
           "capital"
@@ -35303,31 +33752,6 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -35403,6 +33827,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Capital Projections",
         "tags": [
           "capital"
@@ -35418,24 +33847,6 @@
             "schema": {
               "format": "uuid",
               "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -35522,6 +33933,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Capital Projection",
         "tags": [
           "capital"
@@ -35550,31 +33966,6 @@
               "format": "uuid",
               "title": "Projection Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -35650,6 +34041,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Capital Projection",
         "tags": [
           "capital"
@@ -35685,31 +34081,6 @@
                 }
               ],
               "title": "Scenario Id"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -35785,6 +34156,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Capital Summary",
         "tags": [
           "capital"
@@ -35803,31 +34179,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -35907,6 +34258,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Case Decisions",
         "tags": [
           "cases"
@@ -35923,31 +34279,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -36033,6 +34364,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Case Decision",
         "tags": [
           "cases"
@@ -36051,31 +34387,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -36155,6 +34466,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Case Documents",
         "tags": [
           "documents"
@@ -36173,31 +34489,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -36273,6 +34564,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Validate Case Financial Data",
         "tags": [
           "financial-data"
@@ -36323,31 +34619,6 @@
                 }
               ],
               "title": "Entity Type"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -36427,6 +34698,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Case Financial Validation Issues",
         "tags": [
           "financial-data"
@@ -36445,31 +34721,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -36545,6 +34796,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Case Financial Workspace",
         "tags": [
           "financial-data"
@@ -36563,24 +34819,6 @@
             "schema": {
               "format": "uuid",
               "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -36667,6 +34905,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Case Financial Account",
         "tags": [
           "financial-data"
@@ -36695,24 +34938,6 @@
             "schema": {
               "format": "uuid",
               "title": "Account Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -36799,6 +35024,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Case Financial Account",
         "tags": [
           "financial-data"
@@ -36817,24 +35047,6 @@
             "schema": {
               "format": "uuid",
               "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -36921,6 +35133,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Case Financial Balance",
         "tags": [
           "financial-data"
@@ -36949,24 +35166,6 @@
             "schema": {
               "format": "uuid",
               "title": "Balance Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -37053,6 +35252,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Case Financial Balance",
         "tags": [
           "financial-data"
@@ -37071,24 +35275,6 @@
             "schema": {
               "format": "uuid",
               "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -37175,6 +35361,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Case Financial Cash Flow",
         "tags": [
           "financial-data"
@@ -37203,24 +35394,6 @@
             "schema": {
               "format": "uuid",
               "title": "Cash Flow Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -37307,6 +35480,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Case Financial Cash Flow",
         "tags": [
           "financial-data"
@@ -37325,24 +35503,6 @@
             "schema": {
               "format": "uuid",
               "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -37429,6 +35589,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Case Financial Covenant",
         "tags": [
           "financial-data"
@@ -37457,24 +35622,6 @@
             "schema": {
               "format": "uuid",
               "title": "Covenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -37561,6 +35708,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Case Financial Covenant",
         "tags": [
           "financial-data"
@@ -37579,24 +35731,6 @@
             "schema": {
               "format": "uuid",
               "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -37683,6 +35817,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Case Financial Institution",
         "tags": [
           "financial-data"
@@ -37711,24 +35850,6 @@
             "schema": {
               "format": "uuid",
               "title": "Institution Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -37815,6 +35936,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Case Financial Institution",
         "tags": [
           "financial-data"
@@ -37833,31 +35959,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -37943,6 +36044,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Map Case Financial Workspace",
         "tags": [
           "financial-data"
@@ -37961,24 +36067,6 @@
             "schema": {
               "format": "uuid",
               "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -38065,6 +36153,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Case Financial Obligation",
         "tags": [
           "financial-data"
@@ -38093,24 +36186,6 @@
             "schema": {
               "format": "uuid",
               "title": "Obligation Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -38197,6 +36272,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Case Financial Obligation",
         "tags": [
           "financial-data"
@@ -38215,24 +36295,6 @@
             "schema": {
               "format": "uuid",
               "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -38319,6 +36381,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Case Financial Reporting Period",
         "tags": [
           "financial-data"
@@ -38347,24 +36414,6 @@
             "schema": {
               "format": "uuid",
               "title": "Reporting Period Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -38451,6 +36500,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Case Financial Reporting Period",
         "tags": [
           "financial-data"
@@ -38469,31 +36523,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -38573,6 +36602,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Case Findings",
         "tags": [
           "findings"
@@ -38589,31 +36623,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -38699,6 +36708,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Case Finding",
         "tags": [
           "findings"
@@ -38726,24 +36740,6 @@
             "schema": {
               "format": "uuid",
               "title": "Finding Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -38830,6 +36826,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Review Liquidity Finding",
         "tags": [
           "liquidity"
@@ -38882,31 +36883,6 @@
                 }
               ],
               "title": "Run Id"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -38982,6 +36958,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Liquidity Summary",
         "tags": [
           "liquidity"
@@ -39016,31 +36997,6 @@
                 }
               ],
               "title": "Accept"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -39121,6 +37077,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Case Report",
         "tags": [
           "cases"
@@ -39149,31 +37110,6 @@
               "default": false,
               "title": "Include Archived",
               "type": "boolean"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -39249,6 +37185,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Case Scenarios",
         "tags": [
           "scenarios"
@@ -39264,24 +37205,6 @@
             "schema": {
               "format": "uuid",
               "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -39368,6 +37291,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Case Scenario",
         "tags": [
           "scenarios"
@@ -39385,24 +37313,6 @@
             "schema": {
               "format": "uuid",
               "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -39489,6 +37399,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Initialize Case Scenarios",
         "tags": [
           "scenarios"
@@ -39507,31 +37422,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -39607,6 +37497,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Case Scenario Readiness",
         "tags": [
           "scenarios"
@@ -39635,31 +37530,6 @@
               "format": "uuid",
               "title": "Scenario Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -39735,6 +37605,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Case Scenario",
         "tags": [
           "scenarios"
@@ -39760,24 +37635,6 @@
             "schema": {
               "format": "uuid",
               "title": "Scenario Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -39864,6 +37721,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Case Scenario",
         "tags": [
           "scenarios"
@@ -39891,24 +37753,6 @@
             "schema": {
               "format": "uuid",
               "title": "Scenario Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -39995,6 +37839,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Archive Case Scenario",
         "tags": [
           "scenarios"
@@ -40022,24 +37871,6 @@
             "schema": {
               "format": "uuid",
               "title": "Scenario Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -40126,6 +37957,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Create Scenario Assumption",
         "tags": [
           "scenarios"
@@ -40163,24 +37999,6 @@
             "schema": {
               "format": "uuid",
               "title": "Assumption Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -40267,6 +38085,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Scenario Assumption",
         "tags": [
           "scenarios"
@@ -40304,24 +38127,6 @@
             "schema": {
               "format": "uuid",
               "title": "Assumption Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -40408,6 +38213,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Review Scenario Assumption",
         "tags": [
           "scenarios"
@@ -40435,24 +38245,6 @@
             "schema": {
               "format": "uuid",
               "title": "Scenario Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -40539,6 +38331,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Copy Case Scenario",
         "tags": [
           "scenarios"
@@ -40567,31 +38364,6 @@
               "format": "uuid",
               "title": "Scenario Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -40667,6 +38439,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Validate Case Scenario",
         "tags": [
           "scenarios"
@@ -40685,31 +38462,6 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -40789,6 +38541,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Case Scores",
         "tags": [
           "cases"
@@ -40798,33 +38555,6 @@
     "/api/v1/documents/upload-request": {
       "post": {
         "operationId": "requestUpload",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -40907,6 +38637,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Request Upload",
         "tags": [
           "documents"
@@ -40926,31 +38661,6 @@
               "title": "Document Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
           }
         ],
         "responses": {
@@ -41025,6 +38735,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Delete Document",
         "tags": [
           "documents"
@@ -41042,31 +38757,6 @@
               "title": "Document Id",
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
           }
         ],
         "responses": {
@@ -41141,6 +38831,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Document",
         "tags": [
           "documents"
@@ -41159,31 +38854,6 @@
               "format": "uuid",
               "title": "Document Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -41259,6 +38929,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Complete Upload",
         "tags": [
           "documents"
@@ -41277,31 +38952,6 @@
               "format": "uuid",
               "title": "Document Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -41377,6 +39027,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Download Url",
         "tags": [
           "documents"
@@ -41395,31 +39050,6 @@
               "format": "uuid",
               "title": "Document Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -41495,6 +39125,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Parse Document",
         "tags": [
           "documents"
@@ -41513,31 +39148,6 @@
               "format": "uuid",
               "title": "Document Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -41613,6 +39223,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Parse Status",
         "tags": [
           "documents"
@@ -41704,31 +39319,6 @@
               ],
               "title": "Risk Type"
             }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
           }
         ],
         "responses": {
@@ -41807,6 +39397,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Findings",
         "tags": [
           "findings"
@@ -41825,31 +39420,6 @@
               "format": "uuid",
               "title": "Finding Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -41925,6 +39495,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Finding",
         "tags": [
           "findings"
@@ -41940,24 +39515,6 @@
             "schema": {
               "format": "uuid",
               "title": "Finding Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": true,
-            "schema": {
-              "title": "X-User-Id",
               "type": "string"
             }
           }
@@ -42044,6 +39601,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Update Finding",
         "tags": [
           "findings"
@@ -42062,31 +39624,6 @@
               "format": "uuid",
               "title": "Finding Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -42166,6 +39703,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Finding Evidence",
         "tags": [
           "findings"
@@ -42184,31 +39726,6 @@
               "format": "uuid",
               "title": "Job Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -42284,6 +39801,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Job",
         "tags": [
           "jobs"
@@ -42302,31 +39824,6 @@
               "format": "uuid",
               "title": "Lineage Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -42402,6 +39899,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Walk Lineage",
         "tags": [
           "ingestion"
@@ -42426,31 +39928,6 @@
               ],
               "title": "Kind",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
             }
           }
         ],
@@ -42519,6 +39996,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Market Data Template",
         "tags": [
           "market-data"
@@ -42528,33 +40010,6 @@
     "/api/v1/regulatory-reporting/templates": {
       "get": {
         "operationId": "listReturnTemplates",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Org-Id",
-            "required": true,
-            "schema": {
-              "title": "X-Org-Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User-Id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User-Id"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -42627,6 +40082,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Return Templates",
         "tags": [
           "regulatory-reporting"

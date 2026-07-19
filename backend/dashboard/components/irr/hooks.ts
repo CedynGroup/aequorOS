@@ -6,9 +6,8 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { apiCall, regulatoryLiquidityApi, tenant } from '@/lib/api/client';
+import { apiCall, regulatoryLiquidityApi } from '@/lib/api/client';
 
-const t = { xOrgId: tenant.orgId, xUserId: tenant.userId } as const;
 
 /**
  * Official (immutable) IRR regulatory runs for a bank, newest first.
@@ -25,7 +24,6 @@ export function useIrrRuns(
     queryFn: () =>
       apiCall(() =>
         regulatoryLiquidityApi.listRegulatoryRuns({
-          ...t,
           bankId: bankId!,
           module: 'irr',
           reportingPeriodId,

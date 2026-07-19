@@ -50,17 +50,15 @@ def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient
     case_parameters = {
         parameter["name"]: parameter for parameter in case_list_operation["parameters"]
     }
-    assert case_parameters["X-Org-Id"]["required"] is True
+    # Auth is a bearer (JWT) security scheme, not tenant headers.
+    assert schema["components"]["securitySchemes"]["HTTPBearer"]["scheme"] == "bearer"
+    assert case_list_operation["security"] == [{"HTTPBearer": []}]
     assert case_parameters["sort"]["schema"]["$ref"] == "#/components/schemas/CaseSort"
     assert case_parameters["limit"]["schema"]["minimum"] == 1
     assert case_parameters["limit"]["schema"]["maximum"] == 200
     assert case_parameters["offset"]["schema"]["minimum"] == 0
 
-    finding_update_parameters = {
-        parameter["name"]: parameter
-        for parameter in paths["/api/v1/findings/{finding_id}"]["patch"]["parameters"]
-    }
-    assert finding_update_parameters["X-User-Id"]["required"] is True
+    assert paths["/api/v1/findings/{finding_id}"]["patch"]["security"] == [{"HTTPBearer": []}]
 
     error_ref = case_list_operation["responses"]["422"]["content"]["application/json"]["schema"][
         "$ref"
@@ -196,11 +194,7 @@ def test_canonical_mutation_contracts_use_resource_specific_allowlisted_paths(
             ]
             == f"#/components/schemas/{model_name}Create"
         )
-        parameters = {
-            parameter["name"]: parameter
-            for parameter in paths[collection_path]["post"]["parameters"]
-        }
-        assert parameters["X-User-Id"]["required"] is True
+        assert paths[collection_path]["post"]["security"] == [{"HTTPBearer": []}]
         response_ref = paths[item_path]["patch"]["responses"]["200"]["content"]["application/json"][
             "schema"
         ]["$ref"]

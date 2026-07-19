@@ -9,7 +9,7 @@
 
 import { Download, ShieldAlert, Webhook } from 'lucide-react';
 import CopyButton from '@/components/ui/CopyButton';
-import { apiOrigin, tenant } from '@/lib/api/client';
+import { apiOrigin } from '@/lib/api/client';
 import { downloadTextFile } from '@/lib/download';
 import {
   ENTITY_SPECS,
@@ -66,14 +66,9 @@ export function ConnectionCard() {
         <div className="space-y-3">
           <ConnectionField label="Base URL" value={`${apiOrigin}/api/v1`} />
           <ConnectionField
-            label="X-Org-Id"
-            value={tenant.orgId}
-            hint="Your organization UUID — send on every request."
-          />
-          <ConnectionField
-            label="X-User-Id"
-            value={tenant.userId}
-            hint="The service-account user acting for your middleware."
+            label="Authorization"
+            value="Bearer <access token>"
+            hint="A signed access token from POST /api/v1/auth/login — send on every request."
           />
         </div>
         <div className="rounded border border-warning/30 bg-warning-light/40 p-4">
@@ -81,7 +76,7 @@ export function ConnectionCard() {
             <ShieldAlert size={13} aria-hidden /> Production note
           </p>
           <p className="mt-1 text-body text-navy/80 leading-relaxed">
-            The headers identify the tenant inside a trusted perimeter. Production
+            The access token identifies + authorizes the tenant (verified server-side). Production
             deployments put OAuth2 client-credentials or mTLS in front of these
             endpoints; the resource design does not change. Do not build against the
             headers as a security mechanism.

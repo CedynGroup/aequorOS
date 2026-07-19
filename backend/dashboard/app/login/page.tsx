@@ -1,7 +1,7 @@
-import Link from 'next/link';
-import { ArrowRight, Shield } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import Logo from '@/components/shell/Logo';
 import PrototypeBanner from '@/components/shell/PrototypeBanner';
+import LoginForm from './LoginForm';
 
 export default function LoginPage() {
   return (
@@ -67,47 +67,15 @@ export default function LoginPage() {
           </div>
 
           <p className="text-micro font-medium uppercase tracking-wider text-action">
-            Demo access
+            Secure sign-in
           </p>
           <h2 className="mt-3 text-h1 text-navy">Sign in to AequorOS</h2>
           <p className="mt-2 text-body text-slate leading-relaxed">
-            This is a click-through prototype using synthetic Bank of Ghana
-            licensee data for Sample Bank Limited. No credentials required.
+            Use your AequorOS credentials, or single sign-on if your institution
+            has it configured.
           </p>
 
-          <form className="mt-8 space-y-4">
-            <label className="block">
-              <span className="block text-caption font-medium text-navy mb-1.5">
-                Email
-              </span>
-              <input
-                type="email"
-                defaultValue="akua.mensah@samplebank.com.gh"
-                readOnly
-                className="w-full px-3 py-2.5 border border-border rounded-md bg-surface text-body text-navy"
-              />
-            </label>
-
-            <label className="block">
-              <span className="block text-caption font-medium text-navy mb-1.5">
-                Password
-              </span>
-              <input
-                type="password"
-                defaultValue="••••••••••••"
-                readOnly
-                className="w-full px-3 py-2.5 border border-border rounded-md bg-surface text-body text-navy"
-              />
-            </label>
-
-            <Link
-              href="/"
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 btn-primary font-medium transition-colors"
-            >
-              Enter platform
-              <ArrowRight size={16} aria-hidden />
-            </Link>
-          </form>
+          <LoginForm />
 
           <div className="mt-8 pt-6 border-t border-border-light flex items-start gap-3 text-caption text-slate">
             <Shield size={16} className="text-success shrink-0 mt-0.5" aria-hidden />

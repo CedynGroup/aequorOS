@@ -23,7 +23,7 @@ import {
   type ListIngestionBatchesSourceSystemEnum,
   type MappingConfig,
 } from '@aequoros/risk-service-api';
-import { apiCall, apiOrigin, tenant } from './client';
+import { apiCall, apiOrigin } from './client';
 
 export type IngestionSourceSystem = ListIngestionBatchesSourceSystemEnum;
 
@@ -31,7 +31,6 @@ export const ingestionApi = new IngestionApi(
   new Configuration({ basePath: apiOrigin }),
 );
 
-const t = { xOrgId: tenant.orgId, xUserId: tenant.userId } as const;
 
 // ---------------------------------------------------------------------------
 // Starter mapping template for the Sample Bank demo dataset.
@@ -348,7 +347,7 @@ export function useMappingConfigs(bankId: string | undefined) {
   return useQuery({
     queryKey: ['de-mapping-configs', bankId],
     queryFn: () =>
-      apiCall(() => ingestionApi.listMappingConfigs({ ...t, bankId: bankId! })),
+      apiCall(() => ingestionApi.listMappingConfigs({ bankId: bankId! })),
     enabled: Boolean(bankId),
   });
 }
@@ -361,7 +360,7 @@ export function useIngestionBatches(
     queryKey: ['de-batches', bankId, sourceSystem ?? 'all'],
     queryFn: () =>
       apiCall(() =>
-        ingestionApi.listIngestionBatches({ ...t, bankId: bankId!, sourceSystem }),
+        ingestionApi.listIngestionBatches({ bankId: bankId!, sourceSystem }),
       ),
     enabled: Boolean(bankId),
   });
@@ -372,7 +371,7 @@ export function useIngestionSummary(bankId: string | undefined) {
   return useQuery({
     queryKey: ['de-summary', bankId],
     queryFn: () =>
-      apiCall(() => ingestionApi.getIngestionSummary({ ...t, bankId: bankId! })),
+      apiCall(() => ingestionApi.getIngestionSummary({ bankId: bankId! })),
     enabled: Boolean(bankId),
   });
 }
@@ -385,7 +384,7 @@ export function useIngestionBatch(
     queryKey: ['de-batch', bankId, batchId],
     queryFn: () =>
       apiCall(() =>
-        ingestionApi.getIngestionBatch({ ...t, bankId: bankId!, batchId: batchId! }),
+        ingestionApi.getIngestionBatch({ bankId: bankId!, batchId: batchId! }),
       ),
     enabled: Boolean(bankId && batchId),
   });
@@ -400,7 +399,6 @@ export function useTranslationFailures(
     queryFn: () =>
       apiCall(() =>
         ingestionApi.listTranslationFailures({
-          ...t,
           bankId: bankId!,
           batchId: batchId!,
         }),
@@ -418,7 +416,7 @@ export function useCanonicalPositions(bankId: string | undefined, offset = 0) {
     queryKey: ['de-positions', bankId, offset],
     queryFn: () =>
       apiCall(() =>
-        ingestionApi.listCanonicalPositions({ ...t, bankId: bankId!, offset }),
+        ingestionApi.listCanonicalPositions({ bankId: bankId!, offset }),
       ),
     enabled: Boolean(bankId),
     placeholderData: keepPreviousData,
@@ -429,7 +427,7 @@ export function useLineageWalk(lineageId: string | undefined) {
   return useQuery({
     queryKey: ['de-lineage', lineageId],
     queryFn: () =>
-      apiCall(() => ingestionApi.walkLineage({ ...t, lineageId: lineageId! })),
+      apiCall(() => ingestionApi.walkLineage({ lineageId: lineageId! })),
     enabled: Boolean(lineageId),
   });
 }
@@ -440,7 +438,6 @@ export function useActivateTemplate(bankId: string | undefined) {
     mutationFn: (template: StarterTemplate) =>
       apiCall(() =>
         ingestionApi.createMappingConfig({
-          ...t,
           bankId: bankId!,
           mappingConfigCreate: {
             sourceSystem: 'EXCEL_CSV',
@@ -473,7 +470,6 @@ export function useActivateBankData(bankId: string | undefined) {
     mutationFn: ({ asOfDate, runCalculations }) =>
       apiCall(() =>
         ingestionApi.activateBankData({
-          ...t,
           bankId: bankId!,
           dataActivationCreate: {
             asOfDate: new Date(`${asOfDate}T00:00:00Z`),
@@ -512,7 +508,7 @@ export function useDataActivations(bankId: string | undefined) {
   return useQuery({
     queryKey: ['de-activations', bankId],
     queryFn: () =>
-      apiCall(() => ingestionApi.listBankDataActivations({ ...t, bankId: bankId! })),
+      apiCall(() => ingestionApi.listBankDataActivations({ bankId: bankId! })),
     enabled: Boolean(bankId),
   });
 }
@@ -522,7 +518,7 @@ export function useUploadAndIngest(bankId: string | undefined) {
   return useMutation({
     mutationFn: async ({ file, asOfDate }: { file: File; asOfDate: string }) => {
       const staged = await apiCall(() =>
-        ingestionApi.uploadIngestionSource({ ...t, bankId: bankId!, file }),
+        ingestionApi.uploadIngestionSource({ bankId: bankId!, file }),
       );
       const ingestionBatchCreate: IngestionBatchCreate = {
         sourceSystem: 'EXCEL_CSV',
@@ -531,7 +527,7 @@ export function useUploadAndIngest(bankId: string | undefined) {
         reason: `Uploaded ${staged.filename} via the Data Engine console.`,
       };
       const started = await apiCall(() =>
-        ingestionApi.startIngestionBatch({ ...t, bankId: bankId!, ingestionBatchCreate }),
+        ingestionApi.startIngestionBatch({ bankId: bankId!, ingestionBatchCreate }),
       );
       return { staged, started };
     },

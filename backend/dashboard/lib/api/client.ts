@@ -24,10 +24,9 @@ import {
   ResponseError,
   TemenosApi,
 } from '@aequoros/risk-service-api';
+import { getAccessToken } from './token';
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8003/api/v1';
-const DEFAULT_ORG_ID = '11111111-1111-4111-8111-111111111111';
-const DEFAULT_USER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 const baseUrl =
   process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? DEFAULT_BASE_URL;
@@ -42,13 +41,13 @@ export const apiBaseUrl = baseUrl;
  */
 export const apiOrigin = baseUrl.replace(/\/api\/v1\/?$/, '');
 
-/** Demo tenant identity, injected as X-Org-Id / X-User-Id on every call. */
-export const tenant = {
-  orgId: process.env.NEXT_PUBLIC_DEMO_ORG_ID ?? DEFAULT_ORG_ID,
-  userId: process.env.NEXT_PUBLIC_DEMO_USER_ID ?? DEFAULT_USER_ID,
-} as const;
-
-const configuration = new Configuration({ basePath: apiOrigin });
+// Every request carries the signed backend access token as `Authorization:
+// Bearer`; the tenant (org/user/roles) comes from the *verified* token, not headers.
+// The token is kept current by a SessionProvider effect (see providers.tsx).
+const configuration = new Configuration({
+  basePath: apiOrigin,
+  accessToken: async () => getAccessToken() ?? '',
+});
 
 export const banksApi = new BanksApi(configuration);
 export const behavioralModelsApi = new BehavioralModelsApi(configuration);

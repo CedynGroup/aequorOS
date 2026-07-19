@@ -48,81 +48,59 @@ import {
 
 export interface CreateTemenosConnectionRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   temenosConnectionCreate: TemenosConnectionCreate;
 }
 
 export interface DisableTemenosConnectionRequest {
   bankId: string;
   connectionId: string;
-  xOrgId: string;
-  xUserId: string;
 }
 
 export interface EnableTemenosConnectionRequest {
   bankId: string;
   connectionId: string;
-  xOrgId: string;
-  xUserId: string;
 }
 
 export interface ListTemenosConnectionsRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListTemenosDomainsRequest {
   bankId: string;
-  xOrgId: string;
   mode?: string;
-  xUserId?: string | null;
 }
 
 export interface RevokeTemenosConnectionRequest {
   bankId: string;
   connectionId: string;
-  xOrgId: string;
-  xUserId: string;
 }
 
 export interface TestTemenosConnectionRequest {
   bankId: string;
   connectionId: string;
-  xOrgId: string;
-  xUserId: string;
 }
 
 export interface TriggerTemenosBackfillRequest {
   bankId: string;
   connectionId: string;
-  xOrgId: string;
-  xUserId: string;
   temenosBackfillRequest: TemenosBackfillRequest;
 }
 
 export interface TriggerTemenosPullRequest {
   bankId: string;
   connectionId: string;
-  xOrgId: string;
-  xUserId: string;
   temenosPullTriggerRequest: TemenosPullTriggerRequest;
 }
 
 export interface UpdateTemenosConnectionRequest {
   bankId: string;
   connectionId: string;
-  xOrgId: string;
-  xUserId: string;
   temenosConnectionUpdate: TemenosConnectionUpdate;
 }
 
 export interface ValidateTemenosConnectionRequest {
   bankId: string;
   connectionId: string;
-  xOrgId: string;
-  xUserId: string;
 }
 
 /**
@@ -143,20 +121,6 @@ export class TemenosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createTemenosConnection().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createTemenosConnection().',
-      );
-    }
-
     if (requestParameters["temenosConnectionCreate"] == null) {
       throw new runtime.RequiredError(
         "temenosConnectionCreate",
@@ -170,14 +134,14 @@ export class TemenosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/temenos/connections`.replace(
@@ -234,32 +198,18 @@ export class TemenosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling disableTemenosConnection().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling disableTemenosConnection().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/disable`
@@ -318,32 +268,18 @@ export class TemenosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling enableTemenosConnection().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling enableTemenosConnection().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/enable`
@@ -395,25 +331,18 @@ export class TemenosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listTemenosConnections().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/temenos/connections`.replace(
@@ -460,13 +389,6 @@ export class TemenosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listTemenosDomains().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["mode"] != null) {
@@ -475,14 +397,14 @@ export class TemenosApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/temenos/domains`.replace(
@@ -536,32 +458,18 @@ export class TemenosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling revokeTemenosConnection().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling revokeTemenosConnection().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/temenos/connections/{connection_id}`
@@ -620,32 +528,18 @@ export class TemenosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling testTemenosConnection().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling testTemenosConnection().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/test`
@@ -704,20 +598,6 @@ export class TemenosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling triggerTemenosBackfill().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling triggerTemenosBackfill().',
-      );
-    }
-
     if (requestParameters["temenosBackfillRequest"] == null) {
       throw new runtime.RequiredError(
         "temenosBackfillRequest",
@@ -731,14 +611,14 @@ export class TemenosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/backfill`
@@ -800,20 +680,6 @@ export class TemenosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling triggerTemenosPull().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling triggerTemenosPull().',
-      );
-    }
-
     if (requestParameters["temenosPullTriggerRequest"] == null) {
       throw new runtime.RequiredError(
         "temenosPullTriggerRequest",
@@ -827,14 +693,14 @@ export class TemenosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/pull`
@@ -896,20 +762,6 @@ export class TemenosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling updateTemenosConnection().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling updateTemenosConnection().',
-      );
-    }
-
     if (requestParameters["temenosConnectionUpdate"] == null) {
       throw new runtime.RequiredError(
         "temenosConnectionUpdate",
@@ -923,14 +775,14 @@ export class TemenosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/temenos/connections/{connection_id}`
@@ -992,32 +844,18 @@ export class TemenosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling validateTemenosConnection().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling validateTemenosConnection().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/validate`

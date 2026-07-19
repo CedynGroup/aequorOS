@@ -16,6 +16,11 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
 type CashflowForecastMode = Literal["lstm", "static"]
+# Whether the serving model was trained on this bank's own ingested cash-flow
+# history ("bank_specific") or is the shared generic bootstrap model served while
+# the bank lacks enough daily history ("generic"). Surfaced so a generic model is
+# never mistaken for a bank-specific one (ai_engine.md §12.1).
+type CashflowForecastModelScope = Literal["bank_specific", "generic"]
 
 
 class CashflowHorizon(IntEnum):
@@ -54,6 +59,7 @@ class CashflowForecastRead(CamelClosedModel):
     horizon: int
     as_of_date: date
     model_version: str
+    model_scope: CashflowForecastModelScope
     accuracy: CashflowForecastAccuracyRead
     points: list[CashflowForecastPointRead]
 

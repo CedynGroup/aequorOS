@@ -36,6 +36,8 @@ coverage/
 .turbo/
 .vercel
 docs/*.docx
+# Guiding AI/ML infra spec — kept local, not tracked in the repo.
+docs/ai_engine.md
 
 # Local Snowflake seed CSVs (25MB) loaded into the warehouse — regenerable, not source.
 data_snowflake/

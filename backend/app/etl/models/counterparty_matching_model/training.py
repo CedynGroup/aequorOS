@@ -128,14 +128,21 @@ def build_labeled_pairs(
     return signals, labels
 
 
-def train_and_validate(
+def train_and_validate(  # noqa: PLR0913 - training entrypoint with tuning knobs
     csv_path: Path | None = None,
     *,
+    rows: Sequence[dict[str, str]] | None = None,
+    training_data_ref: str | None = None,
     seed: int = 20260521,
     max_positives: int = 400,
     test_fraction: float = 0.25,
 ) -> TrainingReport:
-    """Train on real counterparty data with a held-out validation split."""
+    """Train on counterparty data with a held-out validation split.
+
+    ``rows`` is the source roster (a list of ``{counterparty_id, counterparty_name,
+    counterparty_type, country}`` dicts): pass a bank's OWN canonical counterparties
+    to train a per-tenant model, or omit it to read the offline CSV roster.
+    """
     try:
         from sklearn.metrics import precision_score, recall_score, roc_auc_score  # noqa: PLC0415
         from sklearn.model_selection import train_test_split  # noqa: PLC0415
@@ -143,8 +150,11 @@ def train_and_validate(
         msg = "scikit-learn is required to train/validate the counterparty matching model."
         raise ImportError(msg) from exc
 
-    path = csv_path or DEFAULT_COUNTERPARTY_CSV
-    rows = _load_counterparties(path, limit=None)
+    if rows is None:
+        path = csv_path or DEFAULT_COUNTERPARTY_CSV
+        rows = _load_counterparties(path, limit=None)
+        training_data_ref = training_data_ref or str(path)
+    data_ref = training_data_ref or "canonical_counterparties"
     signals, labels = build_labeled_pairs(rows, seed=seed, max_positives=max_positives)
 
     split = train_test_split(
@@ -154,7 +164,7 @@ def train_and_validate(
     x_test: list[dict[str, float]] = list(split[1])
     y_train: list[int] = [int(v) for v in split[2]]
     y_test: list[int] = [int(v) for v in split[3]]
-    model = CounterpartyMatchingModel().fit(x_train, y_train, training_data_ref=str(path))
+    model = CounterpartyMatchingModel().fit(x_train, y_train, training_data_ref=data_ref)
     probs = [model.predict(row).probability for row in x_test]
     preds = [1 if p >= 0.5 else 0 for p in probs]
     metrics = {

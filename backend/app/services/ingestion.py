@@ -50,7 +50,7 @@ from app.domain.ingestion.validation import (
     default_validation_config,
     run_validation,
 )
-from app.etl import EtlConfig, etl_summary, run_etl
+from app.etl import EtlConfig, etl_summary, model_loading, run_etl
 from app.models import (
     AuditEvent,
     Bank,
@@ -333,7 +333,14 @@ def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orches
     etl_result = run_etl(
         extraction,
         mapping,
-        config=EtlConfig(deduplicate=etl_inline_dedup, detect_anomalies=etl_inline_dedup),
+        config=EtlConfig(
+            deduplicate=etl_inline_dedup,
+            detect_anomalies=etl_inline_dedup,
+            counterparty_model=model_loading.load_counterparty_model(
+                ctx.organization_id, bank_id
+            ),
+            anomaly_model=model_loading.load_anomaly_model(ctx.organization_id, bank_id),
+        ),
     )
     extraction = etl_result.cleaned
     # dedup_status lets every reader tell an out-of-band-pending report ("deferred")

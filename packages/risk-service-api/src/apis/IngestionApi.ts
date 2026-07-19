@@ -84,131 +84,95 @@ import {
 
 export interface ActivateBankDataRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   dataActivationCreate: DataActivationCreate;
 }
 
 export interface CommitPushBatchRequest {
   bankId: string;
   pushBatchId: string;
-  xOrgId: string;
-  xUserId: string;
 }
 
 export interface CreateMappingConfigRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   mappingConfigCreate: MappingConfigCreate;
 }
 
 export interface GetIngestionBatchRequest {
   bankId: string;
   batchId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface GetIngestionSummaryRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface GetPushBatchRequest {
   bankId: string;
   pushBatchId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListBankDataActivationsRequest {
   bankId: string;
-  xOrgId: string;
   limit?: number;
-  xUserId?: string | null;
 }
 
 export interface ListCanonicalPositionFacetsRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListCanonicalPositionsRequest {
   bankId: string;
-  xOrgId: string;
   asOfDate?: Date | null;
   limit?: number;
   offset?: number;
   positionType?: string | null;
   currency?: string | null;
   q?: string | null;
-  xUserId?: string | null;
 }
 
 export interface ListIngestionBatchesRequest {
   bankId: string;
-  xOrgId: string;
   sourceSystem?: ListIngestionBatchesSourceSystemEnum;
-  xUserId?: string | null;
 }
 
 export interface ListMappingConfigsRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListTranslationFailuresRequest {
   bankId: string;
   batchId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface OpenPushBatchRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   pushBatchOpen: PushBatchOpen;
 }
 
 export interface OverridePositionSnapshotRequest {
   bankId: string;
   snapshotId: string;
-  xOrgId: string;
-  xUserId: string;
   positionSnapshotOverrideCreate: PositionSnapshotOverrideCreate;
 }
 
 export interface StagePushBatchRecordsRequest {
   bankId: string;
   pushBatchId: string;
-  xOrgId: string;
-  xUserId: string;
   pushRecordsPage: PushRecordsPage;
 }
 
 export interface StartIngestionBatchRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   ingestionBatchCreate: IngestionBatchCreate;
 }
 
 export interface UploadIngestionSourceRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   file: Blob;
 }
 
 export interface WalkLineageRequest {
   lineageId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 /**
@@ -230,20 +194,6 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling activateBankData().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling activateBankData().',
-      );
-    }
-
     if (requestParameters["dataActivationCreate"] == null) {
       throw new runtime.RequiredError(
         "dataActivationCreate",
@@ -257,14 +207,14 @@ export class IngestionApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/data-activations`.replace(
@@ -322,32 +272,18 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling commitPushBatch().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling commitPushBatch().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/commit`
@@ -399,20 +335,6 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createMappingConfig().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createMappingConfig().',
-      );
-    }
-
     if (requestParameters["mappingConfigCreate"] == null) {
       throw new runtime.RequiredError(
         "mappingConfigCreate",
@@ -426,14 +348,14 @@ export class IngestionApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/mapping-configs`.replace(
@@ -490,25 +412,18 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getIngestionBatch().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/ingestion-batches/{batch_id}`
@@ -561,25 +476,18 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getIngestionSummary().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/ingestion-summary`.replace(
@@ -634,25 +542,18 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getPushBatch().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/push-batches/{push_batch_id}`
@@ -704,13 +605,6 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listBankDataActivations().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["limit"] != null) {
@@ -719,14 +613,14 @@ export class IngestionApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/data-activations`.replace(
@@ -774,25 +668,18 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listCanonicalPositionFacets().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/canonical-positions/facets`.replace(
@@ -841,13 +728,6 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listCanonicalPositions().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["asOfDate"] != null) {
@@ -878,14 +758,14 @@ export class IngestionApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/canonical-positions`.replace(
@@ -933,13 +813,6 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listIngestionBatches().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["sourceSystem"] != null) {
@@ -948,14 +821,14 @@ export class IngestionApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/ingestion-batches`.replace(
@@ -1002,25 +875,18 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listMappingConfigs().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/mapping-configs`.replace(
@@ -1074,25 +940,18 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listTranslationFailures().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/ingestion-batches/{batch_id}/translation-failures`
@@ -1144,20 +1003,6 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling openPushBatch().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling openPushBatch().',
-      );
-    }
-
     if (requestParameters["pushBatchOpen"] == null) {
       throw new runtime.RequiredError(
         "pushBatchOpen",
@@ -1171,14 +1016,14 @@ export class IngestionApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/push-batches`.replace(
@@ -1233,20 +1078,6 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling overridePositionSnapshot().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling overridePositionSnapshot().',
-      );
-    }
-
     if (requestParameters["positionSnapshotOverrideCreate"] == null) {
       throw new runtime.RequiredError(
         "positionSnapshotOverrideCreate",
@@ -1260,14 +1091,14 @@ export class IngestionApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/position-snapshots/{snapshot_id}/override`
@@ -1329,20 +1160,6 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling stagePushBatchRecords().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling stagePushBatchRecords().',
-      );
-    }
-
     if (requestParameters["pushRecordsPage"] == null) {
       throw new runtime.RequiredError(
         "pushRecordsPage",
@@ -1356,14 +1173,14 @@ export class IngestionApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/records`
@@ -1416,20 +1233,6 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling startIngestionBatch().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling startIngestionBatch().',
-      );
-    }
-
     if (requestParameters["ingestionBatchCreate"] == null) {
       throw new runtime.RequiredError(
         "ingestionBatchCreate",
@@ -1443,14 +1246,14 @@ export class IngestionApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/ingestion-batches`.replace(
@@ -1500,20 +1303,6 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling uploadIngestionSource().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling uploadIngestionSource().',
-      );
-    }
-
     if (requestParameters["file"] == null) {
       throw new runtime.RequiredError(
         "file",
@@ -1525,14 +1314,14 @@ export class IngestionApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const consumes: runtime.Consume[] = [
       { contentType: "multipart/form-data" },
     ];
@@ -1600,25 +1389,18 @@ export class IngestionApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling walkLineage().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/lineage/{lineage_id}`.replace(

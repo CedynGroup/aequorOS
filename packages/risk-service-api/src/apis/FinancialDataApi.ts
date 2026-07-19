@@ -105,134 +105,98 @@ import {
 
 export interface CreateCaseFinancialAccountRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId: string;
   financialAccountCreate: FinancialAccountCreate;
 }
 
 export interface CreateCaseFinancialBalanceRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId: string;
   financialBalanceCreate: FinancialBalanceCreate;
 }
 
 export interface CreateCaseFinancialCashFlowRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId: string;
   financialCashFlowCreate: FinancialCashFlowCreate;
 }
 
 export interface CreateCaseFinancialCovenantRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId: string;
   financialCovenantCreate: FinancialCovenantCreate;
 }
 
 export interface CreateCaseFinancialInstitutionRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId: string;
   financialInstitutionCreate: FinancialInstitutionCreate;
 }
 
 export interface CreateCaseFinancialObligationRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId: string;
   financialObligationCreate: FinancialObligationCreate;
 }
 
 export interface CreateCaseFinancialReportingPeriodRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId: string;
   financialReportingPeriodCreate: FinancialReportingPeriodCreate;
 }
 
 export interface GetCaseFinancialWorkspaceRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListCaseFinancialValidationIssuesRequest {
   caseId: string;
-  xOrgId: string;
   severity?: FinancialValidationSeverity | null;
   entityType?: FinancialValidationEntityType | null;
-  xUserId?: string | null;
 }
 
 export interface MapCaseFinancialWorkspaceRequest {
   caseId: string;
-  xOrgId: string;
   financialWorkspaceMapRequest: FinancialWorkspaceMapRequest;
-  xUserId?: string | null;
 }
 
 export interface UpdateCaseFinancialAccountRequest {
   caseId: string;
   accountId: string;
-  xOrgId: string;
-  xUserId: string;
   financialAccountUpdate: FinancialAccountUpdate;
 }
 
 export interface UpdateCaseFinancialBalanceRequest {
   caseId: string;
   balanceId: string;
-  xOrgId: string;
-  xUserId: string;
   financialBalanceUpdate: FinancialBalanceUpdate;
 }
 
 export interface UpdateCaseFinancialCashFlowRequest {
   caseId: string;
   cashFlowId: string;
-  xOrgId: string;
-  xUserId: string;
   financialCashFlowUpdate: FinancialCashFlowUpdate;
 }
 
 export interface UpdateCaseFinancialCovenantRequest {
   caseId: string;
   covenantId: string;
-  xOrgId: string;
-  xUserId: string;
   financialCovenantUpdate: FinancialCovenantUpdate;
 }
 
 export interface UpdateCaseFinancialInstitutionRequest {
   caseId: string;
   institutionId: string;
-  xOrgId: string;
-  xUserId: string;
   financialInstitutionUpdate: FinancialInstitutionUpdate;
 }
 
 export interface UpdateCaseFinancialObligationRequest {
   caseId: string;
   obligationId: string;
-  xOrgId: string;
-  xUserId: string;
   financialObligationUpdate: FinancialObligationUpdate;
 }
 
 export interface UpdateCaseFinancialReportingPeriodRequest {
   caseId: string;
   reportingPeriodId: string;
-  xOrgId: string;
-  xUserId: string;
   financialReportingPeriodUpdate: FinancialReportingPeriodUpdate;
 }
 
 export interface ValidateCaseFinancialDataRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 /**
@@ -254,20 +218,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialAccount().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialAccount().',
-      );
-    }
-
     if (requestParameters["financialAccountCreate"] == null) {
       throw new runtime.RequiredError(
         "financialAccountCreate",
@@ -281,14 +231,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/accounts`.replace(
@@ -340,20 +290,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialBalance().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialBalance().',
-      );
-    }
-
     if (requestParameters["financialBalanceCreate"] == null) {
       throw new runtime.RequiredError(
         "financialBalanceCreate",
@@ -367,14 +303,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/balances`.replace(
@@ -426,20 +362,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialCashFlow().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialCashFlow().',
-      );
-    }
-
     if (requestParameters["financialCashFlowCreate"] == null) {
       throw new runtime.RequiredError(
         "financialCashFlowCreate",
@@ -453,14 +375,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/cash-flows`.replace(
@@ -512,20 +434,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialCovenant().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialCovenant().',
-      );
-    }
-
     if (requestParameters["financialCovenantCreate"] == null) {
       throw new runtime.RequiredError(
         "financialCovenantCreate",
@@ -539,14 +447,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/covenants`.replace(
@@ -598,20 +506,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialInstitution().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialInstitution().',
-      );
-    }
-
     if (requestParameters["financialInstitutionCreate"] == null) {
       throw new runtime.RequiredError(
         "financialInstitutionCreate",
@@ -625,14 +519,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/institutions`.replace(
@@ -684,20 +578,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialObligation().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialObligation().',
-      );
-    }
-
     if (requestParameters["financialObligationCreate"] == null) {
       throw new runtime.RequiredError(
         "financialObligationCreate",
@@ -711,14 +591,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/obligations`.replace(
@@ -770,20 +650,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createCaseFinancialReportingPeriod().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createCaseFinancialReportingPeriod().',
-      );
-    }
-
     if (requestParameters["financialReportingPeriodCreate"] == null) {
       throw new runtime.RequiredError(
         "financialReportingPeriodCreate",
@@ -797,14 +663,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/reporting-periods`.replace(
@@ -855,25 +721,18 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getCaseFinancialWorkspace().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace`.replace(
@@ -920,13 +779,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listCaseFinancialValidationIssues().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["severity"] != null) {
@@ -939,14 +791,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-data/validation-issues`.replace(
@@ -993,13 +845,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling mapCaseFinancialWorkspace().',
-      );
-    }
-
     if (requestParameters["financialWorkspaceMapRequest"] == null) {
       throw new runtime.RequiredError(
         "financialWorkspaceMapRequest",
@@ -1013,14 +858,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/map`.replace(
@@ -1078,20 +923,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialAccount().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialAccount().',
-      );
-    }
-
     if (requestParameters["financialAccountUpdate"] == null) {
       throw new runtime.RequiredError(
         "financialAccountUpdate",
@@ -1105,14 +936,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/accounts/{account_id}`
@@ -1176,20 +1007,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialBalance().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialBalance().',
-      );
-    }
-
     if (requestParameters["financialBalanceUpdate"] == null) {
       throw new runtime.RequiredError(
         "financialBalanceUpdate",
@@ -1203,14 +1020,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/balances/{balance_id}`
@@ -1274,20 +1091,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialCashFlow().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialCashFlow().',
-      );
-    }
-
     if (requestParameters["financialCashFlowUpdate"] == null) {
       throw new runtime.RequiredError(
         "financialCashFlowUpdate",
@@ -1301,14 +1104,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/cash-flows/{cash_flow_id}`
@@ -1372,20 +1175,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialCovenant().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialCovenant().',
-      );
-    }
-
     if (requestParameters["financialCovenantUpdate"] == null) {
       throw new runtime.RequiredError(
         "financialCovenantUpdate",
@@ -1399,14 +1188,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/covenants/{covenant_id}`
@@ -1470,20 +1259,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialInstitution().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialInstitution().',
-      );
-    }
-
     if (requestParameters["financialInstitutionUpdate"] == null) {
       throw new runtime.RequiredError(
         "financialInstitutionUpdate",
@@ -1497,14 +1272,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/institutions/{institution_id}`
@@ -1568,20 +1343,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialObligation().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialObligation().',
-      );
-    }
-
     if (requestParameters["financialObligationUpdate"] == null) {
       throw new runtime.RequiredError(
         "financialObligationUpdate",
@@ -1595,14 +1356,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/obligations/{obligation_id}`
@@ -1666,20 +1427,6 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling updateCaseFinancialReportingPeriod().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling updateCaseFinancialReportingPeriod().',
-      );
-    }
-
     if (requestParameters["financialReportingPeriodUpdate"] == null) {
       throw new runtime.RequiredError(
         "financialReportingPeriodUpdate",
@@ -1693,14 +1440,14 @@ export class FinancialDataApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-workspace/reporting-periods/{reporting_period_id}`
@@ -1756,25 +1503,18 @@ export class FinancialDataApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling validateCaseFinancialData().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/financial-data/validate`.replace(

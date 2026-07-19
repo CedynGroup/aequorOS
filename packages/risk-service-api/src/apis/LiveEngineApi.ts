@@ -39,35 +39,25 @@ import {
 
 export interface GetBankAlertsRequest {
   bankId: string;
-  xOrgId: string;
   limit?: number;
-  xUserId?: string | null;
 }
 
 export interface GetBankFreshnessRequest {
   bankId: string;
-  xOrgId: string;
   reportingPeriodId?: string | null;
-  xUserId?: string | null;
 }
 
 export interface GetLiveSummaryRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface MintOfficialRunRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   officialRunRequest: OfficialRunRequest;
 }
 
 export interface RefreshBankDataRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   refreshRequest: RefreshRequest;
 }
 
@@ -89,13 +79,6 @@ export class LiveEngineApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getBankAlerts().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["limit"] != null) {
@@ -104,14 +87,14 @@ export class LiveEngineApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/alerts`.replace(
@@ -158,13 +141,6 @@ export class LiveEngineApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getBankFreshness().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["reportingPeriodId"] != null) {
@@ -174,14 +150,14 @@ export class LiveEngineApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/freshness`.replace(
@@ -228,25 +204,18 @@ export class LiveEngineApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getLiveSummary().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/live-summary`.replace(
@@ -293,20 +262,6 @@ export class LiveEngineApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling mintOfficialRun().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling mintOfficialRun().',
-      );
-    }
-
     if (requestParameters["officialRunRequest"] == null) {
       throw new runtime.RequiredError(
         "officialRunRequest",
@@ -320,14 +275,14 @@ export class LiveEngineApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/official-runs`.replace(
@@ -375,20 +330,6 @@ export class LiveEngineApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling refreshBankData().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling refreshBankData().',
-      );
-    }
-
     if (requestParameters["refreshRequest"] == null) {
       throw new runtime.RequiredError(
         "refreshRequest",
@@ -402,14 +343,14 @@ export class LiveEngineApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/refresh`.replace(

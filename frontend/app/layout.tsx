@@ -38,6 +38,15 @@ export const metadata: Metadata = {
     description:
       'A working, cloud-native Treasury and ALM platform for mid-tier African banks. MVP live; onboarding pilot banks.',
   },
+  // Explicit order so the crisp SVG is the primary favicon (Next's file
+  // convention otherwise links only the PNG). PNG stays as a raster fallback.
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon.png', type: 'image/png', sizes: '1024x1024' },
+    ],
+    apple: { url: '/apple-icon.png', sizes: '180x180' },
+  },
 };
 
 export default function RootLayout({

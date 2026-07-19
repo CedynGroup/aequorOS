@@ -51,9 +51,7 @@ def test_liquidity_openapi_contracts(client: TestClient) -> None:
     assert review["requestBody"]["content"]["application/json"]["schema"]["$ref"] == (
         "#/components/schemas/LiquidityFindingReview"
     )
-    parameters = {item["name"]: item for item in review["parameters"]}
-    assert parameters["X-Org-Id"]["required"] is True
-    assert parameters["X-User-Id"]["required"] is True
+    assert review["security"] == [{"HTTPBearer": []}]
     components = schema["components"]["schemas"]
     for name in (
         "LiquiditySummaryRead",

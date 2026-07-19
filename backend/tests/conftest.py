@@ -46,11 +46,28 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # unconfigured; tests that need a key set it themselves via monkeypatch. CI
     # has no .env, so the key is already absent there.
     monkeypatch.setenv("CREDENTIAL_VAULT_MASTER_KEY", "")
+    # A signing secret so the auth layer is exercised in tests (prod sets its own).
+    monkeypatch.setenv("AUTH_JWT_SECRET", "test-jwt-signing-secret-not-for-production-00")
     get_settings.cache_clear()
     get_engine.cache_clear()
     yield
     get_settings.cache_clear()
     get_engine.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def hermetic_etl_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the suite off developer-local trained ML-ETL artifacts.
+
+    Ingestion / dedup load a bank's per-tenant RandomForest / IsolationForest from
+    the untracked ``artifacts/etl_models/{org}/{bank}`` tree when present, so a
+    batch's dedup / anomaly output would otherwise depend on whether a developer had
+    trained that bank's models locally (absent in CI). Force the deterministic path
+    here; a test that exercises a trained model injects it explicitly via
+    ``EtlConfig`` (see ``tests/etl/test_pipeline.py``).
+    """
+    monkeypatch.setattr("app.etl.model_loading.load_counterparty_model", lambda *a, **k: None)
+    monkeypatch.setattr("app.etl.model_loading.load_anomaly_model", lambda *a, **k: None)
 
 
 @pytest.fixture
