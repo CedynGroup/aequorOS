@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { Shield } from 'lucide-react';
 import Logo from '@/components/shell/Logo';
 import PrototypeBanner from '@/components/shell/PrototypeBanner';
@@ -75,7 +76,11 @@ export default function LoginPage() {
             has it configured.
           </p>
 
-          <LoginForm />
+          {/* LoginForm reads ?callbackUrl via useSearchParams, which requires a
+              Suspense boundary so /login can be prerendered at build time. */}
+          <Suspense fallback={<div className="mt-8 h-64" aria-busy="true" />}>
+            <LoginForm />
+          </Suspense>
 
           <div className="mt-8 pt-6 border-t border-border-light flex items-start gap-3 text-caption text-slate">
             <Shield size={16} className="text-success shrink-0 mt-0.5" aria-hidden />

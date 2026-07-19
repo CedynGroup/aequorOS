@@ -20,7 +20,14 @@ from app.core.security import (
 )
 from app.db.base import utc_now
 
-_SETTINGS = AuthSettings(jwt_secret="unit-test-signing-secret-please-rotate-000")
+def _auth(secret: str | None) -> AuthSettings:
+    # `populate_by_name` lets us construct by field name, but some type-checkers
+    # only see the alias (AUTH_JWT_SECRET) in the generated __init__ — silence
+    # that false positive here rather than scatter ignores across call sites.
+    return AuthSettings(jwt_secret=secret)  # pyright: ignore[reportCallIssue]
+
+
+_SETTINGS = _auth("unit-test-signing-secret-please-rotate-000")
 
 
 def _org_user() -> tuple:
@@ -89,7 +96,7 @@ def test_tampered_token_is_rejected() -> None:
 
 def test_token_signed_with_another_secret_is_rejected() -> None:
     org, user = _org_user()
-    other = AuthSettings(jwt_secret="a-different-secret-entirely-1234567890")
+    other = _auth("a-different-secret-entirely-1234567890")
     token = create_token(
         subject=user, organization_id=org, roles=["viewer"], token_type="access",
         settings=other,
@@ -100,7 +107,7 @@ def test_token_signed_with_another_secret_is_rejected() -> None:
 
 def test_unconfigured_secret_fails_closed() -> None:
     org, user = _org_user()
-    unconfigured = AuthSettings(jwt_secret=None)
+    unconfigured = _auth(None)
     with pytest.raises(AuthConfigError):
         create_token(
             subject=user, organization_id=org, roles=["viewer"], token_type="access",
