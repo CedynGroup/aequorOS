@@ -7,29 +7,29 @@ import { team } from '@/lib/team';
 export const metadata: Metadata = {
   title: 'Company — AequorOS',
   description:
-    'AequorOS builds Treasury and ALM infrastructure for African banks. Founded in 2025 with a live MVP, headquartered virtually between Winchester, VA and Accra, Ghana.',
+    'AequorOS builds Treasury and ALM infrastructure for African banks. Founded in 2025 with a live MVP, working across Winchester, VA and Accra, Ghana.',
 };
 
 const statusCards = [
   {
     title: 'Platform (MVP)',
     status: 'LIVE',
-    body: 'The core platform is built and running end to end — the source-agnostic data engine, automated liquidity, capital, and balance-sheet calculations, and Bank of Ghana reporting.',
+    body: 'The core platform is built and running end to end — the source-agnostic data engine, automated liquidity, capital, and balance-sheet calculations, and regulatory reporting.',
   },
   {
-    title: 'Core-banking integration',
-    status: 'PROVEN',
-    body: 'Validated live against an Oracle/FLEXCUBE core — roughly 167k records pulled, normalized, and calculated in a single run. Temenos T24 and Finacle are on the roadmap.',
+    title: 'Data Engine',
+    status: 'LIVE',
+    body: 'Connects to Oracle/FLEXCUBE, Snowflake, Temenos T24, a direct API, or a file upload, and maps each institution’s data to an auditable canonical model. Finacle is on the roadmap.',
+  },
+  {
+    title: 'Regulatory reporting',
+    status: 'LIVE',
+    body: 'Bank of Ghana BSD prudential returns generated from the platform, export-ready to Excel, CSV, and PDF. Nigeria (CBN) and South Africa (SARB) run on the same engine and are on the roadmap.',
   },
   {
     title: 'Pilot banks',
     status: 'ONBOARDING',
     body: 'Onboarding a first cohort of design-partner banks. Engaging with the Bank of Ghana on certification pathways.',
-  },
-  {
-    title: 'Seed round',
-    status: 'ACTIVELY RAISING',
-    body: '$1.25M to take the live MVP into its first five pilot banks over 18 months.',
   },
 ];
 
@@ -42,14 +42,13 @@ export default function CompanyPage() {
           <div className="max-w-4xl">
             <SectionLabel>OUR COMPANY</SectionLabel>
             <h1 className="mt-6 font-serif font-bold text-navy text-4xl md:text-5xl lg:text-6xl leading-[1.1]">
-              AequorOS is building the financial infrastructure Africa
-              deserves.
+              Treasury and risk infrastructure, built for African banks.
             </h1>
             <p className="mt-8 text-text-muted text-lg leading-relaxed max-w-[720px]">
-              Founded in 2025, headquartered virtually between Winchester,
-              Virginia and Accra, Ghana. The platform is live, proven on a live
-              Oracle/FLEXCUBE core, and we&apos;re onboarding our first pilot
-              banks.
+              Founded in 2025, working across Winchester, Virginia and Accra,
+              Ghana. The platform is live, connects to the core-banking systems
+              African banks already run, and we&apos;re onboarding our first
+              pilot banks.
             </p>
           </div>
         </div>
@@ -74,29 +73,26 @@ export default function CompanyPage() {
                   frameworks.
                 </p>
                 <p>
-                  African banks need something different. Tools that are
-                  affordable. Rapidly deployable. Built for volatile
-                  currencies, rapidly-evolving regulations, and the
-                  locally-dominant core banking systems that actually run
-                  African finance.
+                  African banks need something different: tools that are
+                  affordable, deployable in weeks, and built for volatile
+                  currencies, fast-moving regulation, and the core banking
+                  systems that actually run finance on the continent.
                 </p>
                 <p>
-                  We believe that if mid-tier African banks get access to
-                  world-class risk management infrastructure at a price they
-                  can afford, they&apos;ll extend more credit, serve more
-                  customers, and weather macroeconomic shocks better. That,
-                  ultimately, is how the continent&apos;s financial system gets
-                  stronger.
+                  When a mid-tier African bank can manage liquidity, capital,
+                  and risk with infrastructure it can afford, it can extend more
+                  credit, serve more customers, and hold up better through a
+                  shock. That is how the financial system gets stronger.
                 </p>
               </div>
             </div>
 
             <aside className="bg-navy-deep text-white rounded-lg p-8 md:p-10 border-l-4 border-accent lg:sticky lg:top-24">
               <p className="font-serif italic text-white text-xl md:text-2xl leading-relaxed">
-                &ldquo;What we&apos;re building is prosaic but important: the
-                computational backbone that determines whether African banks
-                can safely, efficiently, and profitably serve the growing
-                capital needs of their economies.&rdquo;
+                &ldquo;African banks are being asked for Tier 1 rigor with
+                spreadsheet tools. We build the computational backbone that lets
+                them manage liquidity, capital, and risk safely — at a price a
+                mid-tier bank can actually afford.&rdquo;
               </p>
               <p className="mt-6 text-ice-blue text-sm">
                 Eric Inkoom Danso, Founder
@@ -124,7 +120,7 @@ export default function CompanyPage() {
           <div className="max-w-3xl">
             <SectionLabel>WHERE WE ARE</SectionLabel>
             <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              MVP live. Onboarding pilots. Raising our seed.
+              MVP live. Connected to real cores. Onboarding pilots.
             </h2>
           </div>
 
@@ -150,8 +146,8 @@ export default function CompanyPage() {
           </div>
 
           <div className="mt-10">
-            <LinkButton href="/investors" variant="primary">
-              View investor materials
+            <LinkButton href="/contact" variant="primary">
+              Get in touch
             </LinkButton>
           </div>
         </div>
