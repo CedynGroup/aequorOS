@@ -76,3 +76,16 @@ reportUnknownMemberType = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
 reportUnknownLambdaType = false
+
+# --- torch: CPU-only wheels on Linux -----------------------------------------
+# On Linux the default PyPI torch wheel drags the full NVIDIA CUDA stack
+# (~2.5GB download / ~8GB installed: cublas, cudnn, cufft, nccl, triton, ...).
+# Production runs on CPU-only servers and the cash-flow LSTM is CPU-sized, so
+# pin Linux to the official CPU index. macOS keeps the default (small) wheel.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
