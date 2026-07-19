@@ -11,6 +11,13 @@ const links = [
   { href: '/contact', label: 'Contact' },
 ];
 
+// The dashboard is a separate app (its own origin). "Client Login" hands off to
+// its sign-in page, which drops the user into the dashboard on success. Configure
+// the origin per environment; defaults to the local dashboard dev server on :3001.
+const dashboardLoginUrl = `${(
+  process.env.NEXT_PUBLIC_DASHBOARD_URL ?? 'http://localhost:3001'
+).replace(/\/$/, '')}/login`;
+
 export default function Navigation() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -46,18 +53,26 @@ export default function Navigation() {
           AequorOS
         </Link>
 
-        <ul className="hidden md:flex items-center gap-10">
-          {links.map((link) => (
-            <li key={link.href}>
-              <Link
-                href={link.href}
-                className="relative text-sm font-medium text-text-primary hover:text-navy transition-colors after:content-[''] after:absolute after:left-0 after:-bottom-1 after:h-[2px] after:w-0 after:bg-accent after:transition-all hover:after:w-full"
-              >
-                {link.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="hidden md:flex items-center gap-10">
+          <ul className="flex items-center gap-10">
+            {links.map((link) => (
+              <li key={link.href}>
+                <Link
+                  href={link.href}
+                  className="relative text-sm font-medium text-text-primary hover:text-navy transition-colors after:content-[''] after:absolute after:left-0 after:-bottom-1 after:h-[2px] after:w-0 after:bg-accent after:transition-all hover:after:w-full"
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <a
+            href={dashboardLoginUrl}
+            className="inline-flex items-center justify-center rounded-md bg-navy px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          >
+            Client Login
+          </a>
+        </div>
 
         <button
           type="button"
@@ -85,6 +100,15 @@ export default function Navigation() {
               </li>
             ))}
           </ul>
+          <div className="px-6 pb-8">
+            <a
+              href={dashboardLoginUrl}
+              onClick={() => setOpen(false)}
+              className="inline-flex w-full items-center justify-center rounded-md bg-navy px-5 py-3 text-base font-semibold text-white transition-colors hover:bg-navy-deep"
+            >
+              Client Login
+            </a>
+          </div>
         </div>
       )}
     </header>
