@@ -49,11 +49,18 @@ async function refreshAccessToken(token: import('next-auth/jwt').JWT) {
   if (!token.refreshToken) return { ...token, error: 'RefreshTokenError' as const };
   const tokens = await backendTokens('refresh', { refresh_token: token.refreshToken });
   if (!tokens) return { ...token, error: 'RefreshTokenError' as const };
+  // Re-read identity claims from the fresh token so name/role/email stay current
+  // (and pre-existing sessions pick up newly-added claims like `name`).
+  const claims = decodeJwt(tokens.access_token);
   return {
     ...token,
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     accessTokenExpires: accessTokenExpiryMs(tokens.access_token),
+    name: claims.name ? String(claims.name) : token.name,
+    email: claims.email ? String(claims.email) : token.email,
+    roles: (claims.roles as string[]) ?? token.roles,
+    organizationId: claims.org ? String(claims.org) : token.organizationId,
     error: undefined,
   };
 }
@@ -83,6 +90,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return {
           id: String(claims.sub),
           email: String(claims.email ?? ''),
+          name: claims.name ? String(claims.name) : undefined,
           organizationId: String(claims.org),
           roles: (claims.roles as string[]) ?? [],
           accessToken: tokens.access_token,
@@ -111,6 +119,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.accessTokenExpires = accessTokenExpiryMs(user.accessToken as string);
         token.organizationId = user.organizationId as string;
         token.roles = user.roles as string[];
+        token.name = (user.name as string | undefined) ?? token.name;
+        token.email = (user.email as string | undefined) ?? token.email;
         return token;
       }
       // Auth0: exchange the id_token for backend app tokens on first sign-in.
@@ -124,6 +134,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.organizationId = String(claims.org);
         token.roles = (claims.roles as string[]) ?? [];
         token.sub = String(claims.sub);
+        token.name = claims.name ? String(claims.name) : token.name;
+        token.email = claims.email ? String(claims.email) : token.email;
         return token;
       }
       // Subsequent calls: hand back the current token while it is still valid,
@@ -140,6 +152,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.accessToken = token.accessToken as string | undefined;
       session.error = token.error;
       if (session.user) {
+        session.user.name = (token.name as string | undefined) ?? session.user.name;
+        session.user.email = (token.email as string | undefined) ?? session.user.email;
         session.user.organizationId = token.organizationId as string | undefined;
         session.user.roles = (token.roles as string[]) ?? [];
       }
