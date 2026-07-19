@@ -46,6 +46,11 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # unconfigured; tests that need a key set it themselves via monkeypatch. CI
     # has no .env, so the key is already absent there.
     monkeypatch.setenv("CREDENTIAL_VAULT_MASTER_KEY", "")
+    # Same guard for the in-process worker: a developer's RUN_INPROCESS_WORKER=1
+    # would make every TestClient startup spawn a real poll thread against the
+    # blanked database — hundreds of "Worker poll iteration failed" logs and
+    # cross-test flakiness. Tests exercise worker handlers directly instead.
+    monkeypatch.setenv("RUN_INPROCESS_WORKER", "0")
     # A signing secret so the auth layer is exercised in tests (prod sets its own).
     monkeypatch.setenv("AUTH_JWT_SECRET", "test-jwt-signing-secret-not-for-production-00")
     get_settings.cache_clear()
