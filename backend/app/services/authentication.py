@@ -42,6 +42,7 @@ def issue_tokens(user: User, settings: AuthSettings | None = None) -> IssuedToke
         "organization_id": user.organization_id,
         "roles": [user.role],
         "email": user.email,
+        "name": user.display_name,
         "now": now,
         "settings": settings,
     }

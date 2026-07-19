@@ -13,6 +13,28 @@ from app.core.config import get_settings
 
 @lru_cache
 def get_engine(database_url: str) -> Engine:
+    # The primary database is remote (~40ms away), so connection handling — not
+    # query cost — dominates latency. Without TCP keepalives a firewall/NAT silently
+    # drops idle pooled connections, forcing a full TLS+auth reconnect (~200ms) on the
+    # next request; a small default pool also starves under the API + in-process worker
+    # sharing it. Keep connections warm, size the pool for both, and recycle before any
+    # server-side idle timeout.
+    if database_url.startswith("postgresql"):
+        return create_engine(
+            database_url,
+            pool_pre_ping=True,
+            pool_size=10,
+            max_overflow=20,
+            pool_timeout=30,
+            pool_recycle=1800,
+            connect_args={
+                "keepalives": 1,
+                "keepalives_idle": 30,
+                "keepalives_interval": 10,
+                "keepalives_count": 5,
+            },
+        )
+    # SQLite (tests): keepalives/pool sizing don't apply.
     return create_engine(database_url, pool_pre_ping=True)
 
 

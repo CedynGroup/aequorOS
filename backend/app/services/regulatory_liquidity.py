@@ -795,11 +795,18 @@ def _stored_validations(db: Session, run: RegulatoryRun) -> list[RegulatoryValid
     )
 
 
+# Dashboard trends show a trailing window, not the bank's full period history. With
+# 10 years of monthly history (~120 periods) and few stored runs, recomputing every
+# period inline on each load cost ~600 queries / ~25s; a trailing year is both fast
+# and a readable sparkline. Tune here if a longer horizon is wanted.
+_TREND_MAX_POINTS = 13
+
+
 def _build_trend(
     db: Session, ctx: TenantContext, bank: Bank, periods: list[BankReportingPeriod]
 ) -> list[LiquidityTrendPointRead]:
     points: list[LiquidityTrendPointRead] = []
-    for period in periods:
+    for period in periods[-_TREND_MAX_POINTS:]:
         run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
         if run is not None:
             metrics = {key: Decimal(str(value)) for key, value in run.metrics.items()}

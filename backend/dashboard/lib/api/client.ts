@@ -24,7 +24,8 @@ import {
   ResponseError,
   TemenosApi,
 } from '@aequoros/risk-service-api';
-import { getAccessToken } from './token';
+import { getSession } from 'next-auth/react';
+import { getAccessToken, setAccessToken } from './token';
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8003/api/v1';
 
@@ -44,9 +45,19 @@ export const apiOrigin = baseUrl.replace(/\/api\/v1\/?$/, '');
 // Every request carries the signed backend access token as `Authorization:
 // Bearer`; the tenant (org/user/roles) comes from the *verified* token, not headers.
 // The token is kept current by a SessionProvider effect (see providers.tsx).
-const configuration = new Configuration({
+// Bearer token per request. Prefer the cached token (kept warm by TokenSync), but
+// fall back to reading it from the NextAuth session so a query that fires before the
+// first TokenSync effect still authenticates (no 401 race on initial load).
+export const configuration = new Configuration({
   basePath: apiOrigin,
-  accessToken: async () => getAccessToken() ?? '',
+  accessToken: async () => {
+    const cached = getAccessToken();
+    if (cached) return cached;
+    const session = await getSession();
+    const token = session?.accessToken ?? '';
+    if (token) setAccessToken(token);
+    return token;
+  },
 });
 
 export const banksApi = new BanksApi(configuration);

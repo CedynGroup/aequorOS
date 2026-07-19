@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/ on path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # backend/scripts on path
 
+from app.core.config import get_settings  # noqa: E402
 from app.services.history_loader import (  # noqa: E402
     _months_from_panels,
     derive_all_periods,
@@ -62,8 +63,12 @@ def main() -> None:  # noqa: PLR0915
     ap.add_argument("--yes", action="store_true", help="confirm the run")
     args = ap.parse_args()
 
+    # Fall back to the app's configured URL (env or backend/.env) — same source
+    # the running service uses. No hard-coded local default.
     if not args.database_url:
-        ap.error("DATABASE_URL (env or --database-url) is required")
+        args.database_url = get_settings().database.database_url
+    if not args.database_url:
+        ap.error("DATABASE_URL (env, backend/.env, or --database-url) is required")
     if not args.yes:
         ap.error("Pass --yes to confirm. This writes millions of rows to the target DB.")
 

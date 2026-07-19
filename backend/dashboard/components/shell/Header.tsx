@@ -14,19 +14,14 @@ import {
   LogOut,
   UserRound,
 } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
 import { useBankContext } from './BankContext';
 import { useTheme } from './ThemeProvider';
 import { fmtDateUTC, fmtRelative } from '@/lib/api/values';
+import { initialsFrom, roleLabel } from '@/lib/api/identity';
 import { useBankFreshness } from '@/lib/api/hooks';
 import CommandPalette from './CommandPalette';
 import AlertsBell from '@/components/live/AlertsBell';
-
-// Static UI persona for the demo shell — chrome, not financial data.
-const treasurer = {
-  name: 'Akua Mensah',
-  role: 'Head of Treasury & ALM',
-  initials: 'AM',
-};
 
 export default function Header({
   onMobileMenu,
@@ -167,10 +162,17 @@ function ThemeToggle() {
   );
 }
 
-/** Static demo-user avatar menu. */
+/** Signed-in user avatar menu, backed by the NextAuth session. */
 function UserMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const { data: session } = useSession();
+
+  const email = session?.user?.email ?? '';
+  const name = session?.user?.name || email || 'Signed in';
+  const roles = session?.user?.roles ?? [];
+  const role = roles.length ? roleLabel(roles[0]) : 'Signed in';
+  const initials = initialsFrom(name);
 
   useEffect(() => {
     if (!open) return;
@@ -200,14 +202,14 @@ function UserMenu() {
         className="inline-flex items-center gap-2 ml-2 px-2 py-1.5 rounded hover:bg-surface"
       >
         <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal text-white text-caption font-semibold shrink-0">
-          {treasurer.initials}
+          {initials}
         </span>
         <span className="hidden lg:block text-left">
-          <span className="block text-caption font-medium text-navy leading-tight">
-            {treasurer.name}
+          <span className="block text-caption font-medium text-navy leading-tight max-w-[12rem] truncate">
+            {name}
           </span>
           <span className="block text-[10px] text-slate leading-tight">
-            {treasurer.role}
+            {role}
           </span>
         </span>
         <ChevronDown size={12} className="hidden lg:block text-slate" aria-hidden />
@@ -220,8 +222,10 @@ function UserMenu() {
           className="absolute right-0 mt-1.5 w-60 bg-surface-raised border border-border-light rounded-md shadow-pop z-40 overflow-hidden"
         >
           <div className="px-4 py-3 border-b border-border-light">
-            <p className="text-body font-medium text-navy">{treasurer.name}</p>
-            <p className="text-caption text-slate">{treasurer.role}</p>
+            <p className="text-body font-medium text-navy truncate">{name}</p>
+            <p className="text-caption text-slate truncate">
+              {email ? `${email} · ${role}` : role}
+            </p>
           </div>
           <div className="py-1">
             <a
@@ -231,17 +235,19 @@ function UserMenu() {
               onClick={() => setOpen(false)}
             >
               <UserRound size={14} className="text-slate" aria-hidden />
-              Profile & preferences
+              Profile &amp; preferences
             </a>
             <button
               type="button"
               role="menuitem"
-              disabled
-              title="Demo environment — sign-out is disabled"
-              className="w-full flex items-center gap-2.5 px-4 py-2 text-body text-slate/70 cursor-not-allowed"
+              onClick={() => {
+                setOpen(false);
+                void signOut({ redirectTo: '/login' });
+              }}
+              className="w-full flex items-center gap-2.5 px-4 py-2 text-body text-navy/85 hover:bg-surface"
             >
-              <LogOut size={14} aria-hidden />
-              Sign out (demo)
+              <LogOut size={14} className="text-slate" aria-hidden />
+              Sign out
             </button>
           </div>
         </div>

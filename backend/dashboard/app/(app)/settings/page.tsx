@@ -11,6 +11,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
 import { Moon, Sun } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -28,6 +29,7 @@ import {
   useMarketDataConnections,
 } from '@/lib/api/hooks';
 import { fmtRelative, labelize } from '@/lib/api/values';
+import { initialsFrom, roleLabel } from '@/lib/api/identity';
 
 /** A copyable UUID row for the identity grid. */
 function IdField({ label, value }: { label: string; value: string | undefined }) {
@@ -64,14 +66,6 @@ function useRiskServiceHealth() {
     refetchInterval: 60_000,
   });
 }
-
-// Static demo roster — illustrative accounts only, never authentication.
-const DEMO_ROSTER: { name: string; title: string; chip: string }[] = [
-  { name: 'Akua Mensah', title: 'Head of Treasury & ALM', chip: 'Treasurer' },
-  { name: 'Kojo Aboagye', title: 'Assets & Liabilities Desk', chip: 'ALM Manager' },
-  { name: 'Yaa Adjei', title: 'Enterprise Risk', chip: 'Risk Officer' },
-  { name: 'Eric Inkoom Danso', title: 'Executive Office', chip: 'CFO' },
-];
 
 export default function SettingsPage() {
   const { bank, periods } = useBankContext();
@@ -224,36 +218,41 @@ function AppearancePanel() {
 }
 
 function UsersRolesPanel() {
+  const { data: session } = useSession();
+  const email = session?.user?.email ?? '';
+  const name = session?.user?.name || email || 'Signed in';
+  const roles = session?.user?.roles ?? [];
+  const role = roles.length ? roleLabel(roles[0]) : 'Signed in';
+
   return (
     <Card>
       <CardHeader
         title="Users & roles"
-        subtitle="Demo roster — illustrative accounts for the walkthrough, not authentication"
-        action={<StatusPill tone="slate">Demo roster</StatusPill>}
+        subtitle="Your signed-in account and access level"
+        action={<StatusPill tone="success">You</StatusPill>}
       />
       <CardBody className="p-0">
         <ul className="divide-y divide-border-light">
-          {DEMO_ROSTER.map((user) => (
-            <li key={user.name} className="px-5 py-3 flex items-center gap-4">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal text-white text-caption font-semibold shrink-0">
-                {user.name
-                  .split(' ')
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join('')}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-body text-navy font-medium truncate">
-                  {user.name}
-                </p>
-                <p className="text-caption text-slate truncate">{user.title}</p>
-              </div>
-              <StatusPill tone="action" className="shrink-0">
-                {user.chip}
-              </StatusPill>
-            </li>
-          ))}
+          <li className="px-5 py-3 flex items-center gap-4">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal text-white text-caption font-semibold shrink-0">
+              {initialsFrom(name)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-body text-navy font-medium truncate">{name}</p>
+              {email && (
+                <p className="text-caption text-slate truncate">{email}</p>
+              )}
+            </div>
+            <StatusPill tone="action" className="shrink-0">
+              {role}
+            </StatusPill>
+          </li>
         </ul>
+        <p className="px-5 py-3 border-t border-border-light text-caption text-slate leading-relaxed">
+          Roles are enforced server-side (admin · approver · analyst · viewer);
+          viewer accounts are read-only. Team management for the institution is
+          administered outside this workspace.
+        </p>
       </CardBody>
     </Card>
   );

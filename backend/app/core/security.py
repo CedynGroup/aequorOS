@@ -96,6 +96,7 @@ def create_token(  # noqa: PLR0913 - a token carries the full identity envelope
     roles: list[str],
     token_type: TokenType,
     email: str | None = None,
+    name: str | None = None,
     now: dt.datetime | None = None,
     settings: AuthSettings | None = None,
 ) -> str:
@@ -119,6 +120,8 @@ def create_token(  # noqa: PLR0913 - a token carries the full identity envelope
     }
     if email is not None:
         payload["email"] = email
+    if name is not None:
+        payload["name"] = name
     return jwt.encode(payload, _secret(settings), algorithm=settings.jwt_algorithm)
 
 
