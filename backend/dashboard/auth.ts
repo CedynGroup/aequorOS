@@ -111,6 +111,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: 'jwt' },
   pages: { signIn: '/login' },
   callbacks: {
+    // Middleware gate (see middleware.ts matcher, which already excludes /login
+    // and /api/auth): every other route requires an authenticated session, so an
+    // unauthenticated visitor is redirected to /login instead of landing on an
+    // app page that then 401s against the backend.
+    authorized({ auth }) {
+      return !!auth?.user;
+    },
     async jwt({ token, user, account }) {
       // Credentials: the authorize() result already carries backend tokens.
       if (user && 'accessToken' in user) {

@@ -18,24 +18,10 @@ import { useSession, signOut } from 'next-auth/react';
 import { useBankContext } from './BankContext';
 import { useTheme } from './ThemeProvider';
 import { fmtDateUTC, fmtRelative } from '@/lib/api/values';
+import { initialsFrom, roleLabel } from '@/lib/api/identity';
 import { useBankFreshness } from '@/lib/api/hooks';
 import CommandPalette from './CommandPalette';
 import AlertsBell from '@/components/live/AlertsBell';
-
-/** Initials from a display name (or the email local-part as a fallback). */
-function initialsFrom(nameOrEmail: string): string {
-  const base = nameOrEmail.includes('@') ? nameOrEmail.split('@')[0] : nameOrEmail;
-  const parts = base.split(/[\s._-]+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return base.slice(0, 2).toUpperCase();
-}
-
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Administrator',
-  approver: 'Approver',
-  analyst: 'Analyst',
-  viewer: 'Viewer',
-};
 
 export default function Header({
   onMobileMenu,
@@ -185,9 +171,7 @@ function UserMenu() {
   const email = session?.user?.email ?? '';
   const name = session?.user?.name || email || 'Signed in';
   const roles = session?.user?.roles ?? [];
-  const roleLabel = roles.length
-    ? (ROLE_LABELS[roles[0]] ?? capitalize(roles[0]))
-    : 'Signed in';
+  const role = roles.length ? roleLabel(roles[0]) : 'Signed in';
   const initials = initialsFrom(name);
 
   useEffect(() => {
@@ -225,7 +209,7 @@ function UserMenu() {
             {name}
           </span>
           <span className="block text-[10px] text-slate leading-tight">
-            {roleLabel}
+            {role}
           </span>
         </span>
         <ChevronDown size={12} className="hidden lg:block text-slate" aria-hidden />
@@ -240,7 +224,7 @@ function UserMenu() {
           <div className="px-4 py-3 border-b border-border-light">
             <p className="text-body font-medium text-navy truncate">{name}</p>
             <p className="text-caption text-slate truncate">
-              {email ? `${email} · ${roleLabel}` : roleLabel}
+              {email ? `${email} · ${role}` : role}
             </p>
           </div>
           <div className="py-1">
