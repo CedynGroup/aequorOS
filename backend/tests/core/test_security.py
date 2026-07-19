@@ -20,6 +20,7 @@ from app.core.security import (
 )
 from app.db.base import utc_now
 
+
 def _auth(secret: str | None) -> AuthSettings:
     # `populate_by_name` lets us construct by field name, but some type-checkers
     # only see the alias (AUTH_JWT_SECRET) in the generated __init__ — silence
@@ -48,8 +49,12 @@ def test_password_hash_roundtrip_and_rejects_wrong() -> None:
 def test_access_token_roundtrips_with_identity_claims() -> None:
     org, user = _org_user()
     token = create_token(
-        subject=user, organization_id=org, roles=["analyst"], token_type="access",
-        email="a@bank.example", settings=_SETTINGS,
+        subject=user,
+        organization_id=org,
+        roles=["analyst"],
+        token_type="access",
+        email="a@bank.example",
+        settings=_SETTINGS,
     )
     claims = decode_token(token, expected_type="access", settings=_SETTINGS)
     assert claims["sub"] == str(user)
@@ -62,7 +67,10 @@ def test_access_token_roundtrips_with_identity_claims() -> None:
 def test_refresh_token_type_is_enforced() -> None:
     org, user = _org_user()
     refresh = create_token(
-        subject=user, organization_id=org, roles=["viewer"], token_type="refresh",
+        subject=user,
+        organization_id=org,
+        roles=["viewer"],
+        token_type="refresh",
         settings=_SETTINGS,
     )
     assert decode_token(refresh, expected_type="refresh", settings=_SETTINGS)["type"] == "refresh"
@@ -75,8 +83,12 @@ def test_expired_token_is_rejected() -> None:
     org, user = _org_user()
     past = utc_now() - dt.timedelta(hours=1)  # exp = past + 15m < now → expired
     token = create_token(
-        subject=user, organization_id=org, roles=["viewer"], token_type="access",
-        now=past, settings=_SETTINGS,
+        subject=user,
+        organization_id=org,
+        roles=["viewer"],
+        token_type="access",
+        now=past,
+        settings=_SETTINGS,
     )
     with pytest.raises(TokenInvalidError):
         decode_token(token, settings=_SETTINGS)
@@ -85,7 +97,10 @@ def test_expired_token_is_rejected() -> None:
 def test_tampered_token_is_rejected() -> None:
     org, user = _org_user()
     token = create_token(
-        subject=user, organization_id=org, roles=["admin"], token_type="access",
+        subject=user,
+        organization_id=org,
+        roles=["admin"],
+        token_type="access",
         settings=_SETTINGS,
     )
     header, payload, signature = token.split(".")
@@ -98,7 +113,10 @@ def test_token_signed_with_another_secret_is_rejected() -> None:
     org, user = _org_user()
     other = _auth("a-different-secret-entirely-1234567890")
     token = create_token(
-        subject=user, organization_id=org, roles=["viewer"], token_type="access",
+        subject=user,
+        organization_id=org,
+        roles=["viewer"],
+        token_type="access",
         settings=other,
     )
     with pytest.raises(TokenInvalidError):
@@ -110,7 +128,10 @@ def test_unconfigured_secret_fails_closed() -> None:
     unconfigured = _auth(None)
     with pytest.raises(AuthConfigError):
         create_token(
-            subject=user, organization_id=org, roles=["viewer"], token_type="access",
+            subject=user,
+            organization_id=org,
+            roles=["viewer"],
+            token_type="access",
             settings=unconfigured,
         )
 
