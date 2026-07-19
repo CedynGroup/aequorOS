@@ -16,20 +16,19 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import {
-  Configuration,
   IngestionApi,
   type DataActivationRead,
   type IngestionBatchCreate,
   type ListIngestionBatchesSourceSystemEnum,
   type MappingConfig,
 } from '@aequoros/risk-service-api';
-import { apiCall, apiOrigin } from './client';
+import { apiCall, configuration } from './client';
 
 export type IngestionSourceSystem = ListIngestionBatchesSourceSystemEnum;
 
-export const ingestionApi = new IngestionApi(
-  new Configuration({ basePath: apiOrigin }),
-);
+// Reuse the shared, token-bearing Configuration so Data Engine calls authenticate
+// with the same backend JWT as every other module (no separate unauthenticated client).
+export const ingestionApi = new IngestionApi(configuration);
 
 
 // ---------------------------------------------------------------------------

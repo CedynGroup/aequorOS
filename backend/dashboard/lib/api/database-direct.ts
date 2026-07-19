@@ -16,17 +16,16 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Configuration,
   DatabaseDirectApi,
   type DatabaseConnectionCreate,
   type DatabaseConnectionSyncRequest,
   type DatabaseConnectionUpdate,
 } from '@aequoros/risk-service-api';
-import { apiCall, apiOrigin } from './client';
+import { apiCall, configuration } from './client';
 
-export const databaseDirectApi = new DatabaseDirectApi(
-  new Configuration({ basePath: apiOrigin }),
-);
+// Reuse the shared, token-bearing Configuration so direct-connection calls
+// authenticate with the same backend JWT as every other module.
+export const databaseDirectApi = new DatabaseDirectApi(configuration);
 
 
 /** Query keys touched by every connection mutation, invalidated on success. */

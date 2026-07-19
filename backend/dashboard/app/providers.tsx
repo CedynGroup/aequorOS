@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { SessionProvider, useSession } from 'next-auth/react';
+import { SessionProvider, signOut, useSession } from 'next-auth/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { setAccessToken } from '@/lib/api/token';
@@ -10,8 +10,15 @@ import { setAccessToken } from '@/lib/api/token';
 function TokenSync() {
   const { data: session } = useSession();
   useEffect(() => {
+    // A failed silent refresh means the session can no longer authenticate; send
+    // the user back to sign in rather than looping on 401s with a dead token.
+    if (session?.error === 'RefreshTokenError') {
+      setAccessToken(null);
+      void signOut({ redirectTo: '/login' });
+      return;
+    }
     setAccessToken(session?.accessToken ?? null);
-  }, [session?.accessToken]);
+  }, [session?.accessToken, session?.error]);
   return null;
 }
 
@@ -30,7 +37,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <SessionProvider>
+    // Re-pull the session periodically (and on window focus) so the rotated
+    // access token propagates to the client cache before it expires.
+    <SessionProvider refetchInterval={10 * 60} refetchOnWindowFocus>
       <TokenSync />
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </SessionProvider>

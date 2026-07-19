@@ -32,6 +32,36 @@ async function backendTokens(path: string, body: unknown) {
   return (await res.json()) as { access_token: string; refresh_token: string };
 }
 
+/** Epoch ms at which a freshly issued access token expires (from its `exp` claim). */
+function accessTokenExpiryMs(accessToken: string): number {
+  const exp = decodeJwt(accessToken).exp;
+  return typeof exp === 'number' ? exp * 1000 : 0;
+}
+
+/**
+ * Exchange the stored refresh token for a fresh access token (rotation). The
+ * backend access token is short-lived (~15 min) while the NextAuth session lives
+ * far longer, so without this every dashboard call 401s once the token expires.
+ * On failure (refresh expired/revoked) the caller flags the token so the UI
+ * re-authenticates rather than looping on 401s.
+ */
+async function refreshAccessToken(token: import('next-auth/jwt').JWT) {
+  if (!token.refreshToken) return { ...token, error: 'RefreshTokenError' as const };
+  const tokens = await backendTokens('refresh', { refresh_token: token.refreshToken });
+  if (!tokens) return { ...token, error: 'RefreshTokenError' as const };
+  return {
+    ...token,
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token,
+    accessTokenExpires: accessTokenExpiryMs(tokens.access_token),
+    error: undefined,
+  };
+}
+
+// Refresh a little before the token actually expires so an in-flight request never
+// races the boundary.
+const REFRESH_SKEW_MS = 60_000;
+
 // Only register the Auth0 provider when it is fully configured — otherwise an
 // undefined issuer/clientId throws a NextAuth "server configuration" error and
 // takes down credentials login too.
@@ -78,8 +108,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user && 'accessToken' in user) {
         token.accessToken = user.accessToken as string;
         token.refreshToken = user.refreshToken as string;
+        token.accessTokenExpires = accessTokenExpiryMs(user.accessToken as string);
         token.organizationId = user.organizationId as string;
         token.roles = user.roles as string[];
+        return token;
       }
       // Auth0: exchange the id_token for backend app tokens on first sign-in.
       if (account?.provider === 'auth0' && account.id_token) {
@@ -88,14 +120,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const claims = decodeJwt(tokens.access_token);
         token.accessToken = tokens.access_token;
         token.refreshToken = tokens.refresh_token;
+        token.accessTokenExpires = accessTokenExpiryMs(tokens.access_token);
         token.organizationId = String(claims.org);
         token.roles = (claims.roles as string[]) ?? [];
         token.sub = String(claims.sub);
+        return token;
       }
-      return token;
+      // Subsequent calls: hand back the current token while it is still valid,
+      // otherwise rotate it via the backend refresh endpoint.
+      if (
+        token.accessTokenExpires &&
+        Date.now() < token.accessTokenExpires - REFRESH_SKEW_MS
+      ) {
+        return token;
+      }
+      return refreshAccessToken(token);
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string | undefined;
+      session.error = token.error;
       if (session.user) {
         session.user.organizationId = token.organizationId as string | undefined;
         session.user.roles = (token.roles as string[]) ?? [];
