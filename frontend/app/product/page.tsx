@@ -7,7 +7,7 @@ import { LinkButton } from '@/components/Button';
 export const metadata: Metadata = {
   title: 'Product — AequorOS',
   description:
-    'A working Treasury and ALM platform for African banks: a source-agnostic Data Engine connected to the core, automated liquidity, capital, and balance-sheet calculations, and Bank of Ghana regulatory reporting — auditable end to end.',
+    'A working Treasury and ALM platform for African banks: a source-agnostic Data Engine that connects to Oracle/FLEXCUBE, Snowflake, Temenos T24, an API, or file upload, automated liquidity, capital, and balance-sheet calculations, and regulatory reporting — auditable end to end.',
 };
 
 const modules = [
@@ -16,13 +16,13 @@ const modules = [
     name: 'Liquidity Risk',
     description:
       'LCR, NSFR, and cash-flow forecasting at the portfolio and institution level, recalculated automatically as new data lands.',
-    ai: 'LSTM-based cash-flow forecasting and per-institution behavioral models for non-maturity deposits and prepayment.',
+    ai: 'LSTM cash-flow forecasting and per-institution behavioral models for non-maturity deposits and prepayment, trained on each bank’s own history.',
   },
   {
     number: '02',
     name: 'Regulatory Capital',
     description:
-      'RWA calculations under Basel III standardized approach, capital pressure indicators, and pre-built Bank of Ghana BSD prudential returns.',
+      'RWA calculations under the Basel III standardized approach, capital pressure indicators, and pre-built Bank of Ghana BSD prudential returns.',
     ai: 'Automated validation against regulatory thresholds and submission-ready report generation.',
   },
   {
@@ -30,27 +30,27 @@ const modules = [
     name: 'Balance Sheet Forecasting',
     description:
       'Multi-year balance-sheet projection and scenario planning against macro assumptions, run as immutable, reproducible snapshots.',
-    ai: 'ML-assisted forecasting on 10-year training data; strategic capital-allocation optimization on the roadmap.',
+    ai: 'Deterministic and fully reproducible — projections are re-derived from reviewed scenario assumptions and canonical inputs. Strategic capital-allocation optimization is on the roadmap.',
   },
   {
     number: '04',
     name: 'Interest Rate Risk',
     description:
-      'Gap analysis, duration analysis, and economic value of equity (EVE) for interest-rate exposure — deterministic and fully auditable.',
+      'Repricing-gap and duration analysis, economic value of equity (EVE), and Earnings-at-Risk across the full Basel IRRBB scenario set, with interest-rate-swap decomposition — deterministic and fully auditable.',
     ai: 'Hedging optimization under volatile rate environments is on the roadmap.',
   },
   {
     number: '05',
     name: 'Funds Transfer Pricing',
     description:
-      'Transfer-pricing curves, non-maturity-deposit behavioral modeling, and product-level profitability analysis.',
+      'Transfer-pricing curves, non-maturity-deposit behavioral modeling, and product- and branch-level profitability analysis.',
     ai: 'Behavioral-model calibration from historical transaction data, per institution.',
   },
   {
     number: '06',
     name: 'FX Risk',
     description:
-      'Currency-exposure measurement and hedging analysis for emerging-market currency pairs (cedi, naira, and regional).',
+      'Net-open-position monitoring against limits, historical-simulation and stressed VaR, and IFRS 9 hedge-effectiveness testing for regional currency pairs (cedi, naira, and more).',
     ai: 'Machine-learning currency models for regional pairs are on the roadmap.',
   },
 ];
@@ -59,7 +59,7 @@ const steps = [
   {
     n: '1',
     title: 'Connect',
-    body: 'A source-agnostic Data Engine connects directly to your core over a secure, read-only link — proven live against an Oracle/FLEXCUBE core. Temenos T24 and Finacle are on the roadmap, and file upload or API push work today for any source.',
+    body: 'A source-agnostic Data Engine connects directly to the systems you already run — Oracle/FLEXCUBE, Snowflake, Temenos T24, a direct API, or a file upload. Each institution’s data is mapped to the canonical model, so an unusual source is configured for your bank, not hard-coded into the product.',
   },
   {
     n: '2',
@@ -69,24 +69,24 @@ const steps = [
   {
     n: '3',
     title: 'Report',
-    body: 'ALCO reports, calculation outputs, and Bank of Ghana BSD returns are generated in the formats your bank and your central bank require — every figure traceable back to the source input that produced it.',
+    body: 'ALCO reports, calculation outputs, and Bank of Ghana BSD returns are generated in the return formats your bank and central bank use, export-ready to Excel, CSV, and PDF — every figure traceable back to the source input that produced it.',
   },
 ];
 
 const infrastructure = [
   'Cloud-native; Python/FastAPI backend, TypeScript front end',
   'PostgreSQL canonical store with row-level tenant isolation',
-  'Per-institution object storage (MinIO for MVP → GCS/S3 for production)',
+  'Per-institution, cloud-based object storage',
   'Immutable, versioned snapshots with full data lineage',
   'SOC 2 readiness on the roadmap ahead of production banking data',
 ];
 
 const security = [
-  'Encryption at rest and in transit',
+  'Encryption in transit and at rest',
   'Role-based access control (RBAC)',
-  'Full audit trail and data lineage on every record',
+  'Immutable lineage on every canonical record; audit trail on every review and mutation',
   'Value-based reproducibility for point-in-time regulatory submissions',
-  'Per-institution data residency options',
+  'Per-tenant isolation enforced at the database (row-level security)',
 ];
 
 export default function ProductPage() {
@@ -117,33 +117,37 @@ export default function ProductPage() {
             <div>
               <SectionLabel>THE DATA ENGINE</SectionLabel>
               <h2 className="mt-6 font-serif font-bold text-white text-3xl md:text-4xl leading-tight">
-                The hard part, already working.
+                Connect any source. Normalize everything.
               </h2>
               <div className="mt-6 space-y-5 text-ice-blue text-base md:text-lg leading-relaxed">
                 <p>
-                  Most of the work in bank ALM is getting messy core-banking data
-                  into a clean, trustworthy shape. AequorOS does this with a
-                  source-agnostic Data Engine that pulls from the core,
-                  normalizes it, resolves duplicates, and lands it in an
-                  auditable canonical model — automatically triggering the
-                  downstream calculations.
+                  Most of the work in bank ALM is getting messy core-banking
+                  data into a clean, trustworthy shape. AequorOS does this with a
+                  source-agnostic Data Engine: it connects to a bank’s own
+                  systems, normalizes and de-duplicates the data, resolves
+                  references, and lands everything in an auditable canonical
+                  model — then triggers the downstream calculations
+                  automatically.
                 </p>
                 <p>
-                  It is proven, not theoretical: a single validated run pulled
-                  roughly 167,000 records from a live Oracle/FLEXCUBE core over a
-                  secure connection and carried them all the way through to
-                  canonical positions and calculated metrics.
+                  Banks connect the sources they already have — a core-banking
+                  database, a data warehouse, an API, or a file drop — and the
+                  engine maps each institution’s data to the canonical model.
+                  Where a source is unusual, the mapping is configured for that
+                  bank; it is never hard-coded into the product.
                 </p>
               </div>
             </div>
             <div className="rounded-lg bg-white/5 border border-white/10 p-8">
               <ul className="space-y-5">
                 {[
-                  'Direct core-banking pull (Oracle/FLEXCUBE proven; T24 & Finacle on the roadmap)',
-                  'File upload and API push for any source, today',
+                  'Direct database pull from Oracle/FLEXCUBE, Snowflake, SQL Server, or generic JDBC/ODBC',
+                  'Temenos T24 adapter today; Finacle on the roadmap',
+                  'File upload and API push for any source',
+                  'Per-institution mapping — customizable to a bank’s own data, no custom code in the product',
                   'Normalization, deduplication, and reference resolution',
                   'Immutable canonical model with end-to-end lineage',
-                  'Auto-calculation on every accepted data load',
+                  'Automatic recalculation on every accepted data load',
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-3">
                     <Check size={20} className="text-accent shrink-0 mt-0.5" aria-hidden />
@@ -165,9 +169,9 @@ export default function ProductPage() {
               The Treasury and Risk workflows, on one spine.
             </h2>
             <p className="mt-5 text-text-muted text-lg leading-relaxed">
-              Liquidity, capital, and balance-sheet forecasting run today on the
-              live pipeline; interest-rate risk, FTP, and FX round out the
-              platform. Everything shares the same auditable canonical data.
+              Liquidity, capital, balance-sheet forecasting, interest-rate risk,
+              FTP, and FX all run on the same live pipeline today, sharing one
+              auditable canonical data model.
             </p>
           </div>
           <div className="mt-12 grid gap-6 md:gap-8 md:grid-cols-2">
@@ -212,7 +216,7 @@ export default function ProductPage() {
           <div className="max-w-3xl">
             <SectionLabel>TECHNICAL FOUNDATION</SectionLabel>
             <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              Built to survive a bank IT review.
+              Built for a bank IT review.
             </h2>
           </div>
 
@@ -258,10 +262,11 @@ export default function ProductPage() {
                 Walk through the working platform.
               </h2>
               <p className="mt-4 text-text-primary text-base md:text-lg leading-relaxed max-w-2xl">
-                A guided demo of the data engine, ALM calculations, and Bank of
-                Ghana reporting, running on a Bank of Ghana–licensed mid-tier
-                universal bank profile with synthetic data. Built for Treasury
-                and Risk teams evaluating workflow, reporting, and auditability.
+                A guided demo of the data engine, ALM calculations, and
+                regulatory reporting, running on a mid-tier African universal
+                bank profile (Ghana pilot) with synthetic data. Built for
+                Treasury and Risk teams evaluating workflow, reporting, and
+                auditability.
               </p>
             </div>
             <div className="flex lg:justify-end">

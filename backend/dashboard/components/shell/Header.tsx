@@ -19,6 +19,7 @@ import { useBankContext } from './BankContext';
 import { useTheme } from './ThemeProvider';
 import { fmtDateUTC, fmtRelative } from '@/lib/api/values';
 import { initialsFrom, roleLabel } from '@/lib/api/identity';
+import { LOGIN_URL } from '@/lib/loginUrl';
 import { useBankFreshness } from '@/lib/api/hooks';
 import CommandPalette from './CommandPalette';
 import AlertsBell from '@/components/live/AlertsBell';
@@ -242,7 +243,7 @@ function UserMenu() {
               role="menuitem"
               onClick={() => {
                 setOpen(false);
-                void signOut({ redirectTo: '/login' });
+                void signOut({ redirectTo: LOGIN_URL });
               }}
               className="w-full flex items-center gap-2.5 px-4 py-2 text-body text-navy/85 hover:bg-surface"
             >

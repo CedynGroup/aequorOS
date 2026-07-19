@@ -40,10 +40,11 @@ export default function InvestorsPage() {
             </h1>
             <p className="mt-8 text-ice-blue text-lg md:text-xl leading-relaxed max-w-[600px]">
               AequorOS builds cloud-native Treasury and ALM infrastructure for
-              mid-tier African banks. The MVP is live and proven end-to-end
-              against a live Oracle/FLEXCUBE core banking database. Our seed
-              round takes it from working product into its first cohort of pilot
-              banks.
+              mid-tier African banks. The MVP is live: a source-agnostic data
+              engine that connects to Oracle/FLEXCUBE, Snowflake, Temenos T24, an
+              API, or a file upload, with automated liquidity, capital, and
+              regulatory reporting end to end. Our seed round takes it from
+              working product into its first cohort of pilot banks.
             </p>
           </div>
         </div>

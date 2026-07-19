@@ -10,6 +10,7 @@ const DEFAULT_TO = 'eric@aequoros.com';
 type Body = {
   name?: unknown;
   email?: unknown;
+  organization?: unknown;
   role?: unknown;
   message?: unknown;
   _gotcha?: unknown;
@@ -54,12 +55,13 @@ export async function POST(request: Request) {
 
   const name = str(body.name, 100);
   const email = str(body.email, 200);
+  const organization = str(body.organization, 150);
   const role = str(body.role, 50);
   const message = str(body.message, 5000);
 
-  if (!name || !email || !role || !message) {
+  if (!name || !email || !role) {
     return NextResponse.json(
-      { error: 'All fields are required.' },
+      { error: 'Name, email, and role are required.' },
       { status: 400 }
     );
   }
@@ -75,25 +77,36 @@ export async function POST(request: Request) {
 
   const from = process.env.RESEND_FROM_EMAIL || DEFAULT_FROM;
   const to = process.env.RESEND_TO_EMAIL || DEFAULT_TO;
-  const subject = `New inquiry from aequoros.com — ${role}`;
+  const subject = `New demo request from aequoros.com — ${role}`;
 
   const text = [
     `Name: ${name}`,
     `Email: ${email}`,
+    organization ? `Organization: ${organization}` : null,
     `Role: ${role}`,
     '',
-    message,
-  ].join('\n');
+    message || '(no message provided)',
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
+
+  const orgRow = organization
+    ? `<tr><td style="padding: 4px 12px 4px 0; color: #64748B;">Organization</td><td style="padding: 4px 0;">${escapeHtml(organization)}</td></tr>`
+    : '';
+  const messageBlock = message
+    ? `<div style="border-left: 4px solid #4FC3F7; padding: 8px 16px; background: #F8FAFC; white-space: pre-wrap;">${escapeHtml(message)}</div>`
+    : `<div style="color: #64748B; font-style: italic;">No message provided.</div>`;
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; color: #1A202C; line-height: 1.6;">
-      <h2 style="color: #1E2761; font-family: Georgia, serif; margin-bottom: 16px;">New inquiry from aequoros.com</h2>
+      <h2 style="color: #1E2761; font-family: Georgia, serif; margin-bottom: 16px;">New demo request from aequoros.com</h2>
       <table style="border-collapse: collapse; margin-bottom: 16px;">
         <tr><td style="padding: 4px 12px 4px 0; color: #64748B;">Name</td><td style="padding: 4px 0;"><strong>${escapeHtml(name)}</strong></td></tr>
         <tr><td style="padding: 4px 12px 4px 0; color: #64748B;">Email</td><td style="padding: 4px 0;"><a href="mailto:${escapeHtml(email)}" style="color: #4FC3F7; text-decoration: none;">${escapeHtml(email)}</a></td></tr>
+        ${orgRow}
         <tr><td style="padding: 4px 12px 4px 0; color: #64748B;">Role</td><td style="padding: 4px 0;">${escapeHtml(role)}</td></tr>
       </table>
-      <div style="border-left: 4px solid #4FC3F7; padding: 8px 16px; background: #F8FAFC; white-space: pre-wrap;">${escapeHtml(message)}</div>
+      ${messageBlock}
     </div>
   `.trim();
 

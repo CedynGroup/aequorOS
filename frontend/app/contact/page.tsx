@@ -1,124 +1,117 @@
 import type { Metadata } from 'next';
-import { Mail, Calendar, Linkedin, MapPin } from 'lucide-react';
+import { Mail, Linkedin, MapPin, Check } from 'lucide-react';
 import SectionLabel from '@/components/SectionLabel';
 import ContactForm from '@/components/ContactForm';
 import CalendlyInline from '@/components/CalendlyInline';
 
 export const metadata: Metadata = {
-  title: 'Contact — AequorOS',
+  title: 'Request a demo — AequorOS',
   description:
-    'Get in touch with AequorOS — for bank executives, investors, advisors, and engineers interested in Treasury and ALM infrastructure for African banks.',
+    'Book a 30-minute walkthrough of AequorOS — the data engine, ALM calculations, and regulatory reporting — for Treasury and Risk teams at African banks.',
 };
 
-const options = [
-  {
-    Icon: Mail,
-    title: 'Direct email',
-    content:
-      'For introductions, investor conversations, and partnership discussions.',
-    linkLabel: 'eric@aequoros.com',
-    href: 'mailto:eric@aequoros.com',
-    external: false,
-  },
-  {
-    Icon: Calendar,
-    title: 'Book a demo',
-    content:
-      '30 minutes to understand your situation and walk you through the live platform.',
-    linkLabel: 'See available times \u2193',
-    href: '#schedule',
-    external: false,
-  },
-  {
-    Icon: Linkedin,
-    title: 'Connect on LinkedIn',
-    content: 'Follow along as we build, or reach out directly.',
-    linkLabel: 'linkedin.com/in/eidanso',
-    href: 'https://linkedin.com/in/eidanso',
-    external: true,
-  },
+const expectations = [
+  'A live walkthrough of the platform: connect → normalize → calculate → report.',
+  'Focused on your priorities — liquidity, capital, interest-rate risk, FX, FTP, or regulatory reporting.',
+  'Straight answers on core-banking integration, security, and pricing. No obligation.',
 ];
 
 export default function ContactPage() {
   return (
     <>
-      {/* 4.1 Contact Hero */}
-      <section className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-24 lg:py-28">
-          <div className="max-w-3xl">
-            <h1 className="font-serif font-bold text-navy text-4xl md:text-5xl lg:text-6xl leading-[1.1]">
-              Let&apos;s talk.
-            </h1>
-            <p className="mt-8 text-text-muted text-lg leading-relaxed max-w-[600px]">
-              Whether you&apos;re a Treasury or Risk leader considering a pilot,
-              an investor evaluating the opportunity, a potential advisor, or an
-              engineer interested in joining the team — we&apos;d like to hear
-              from you.
-            </p>
+      {/* 4.1 Request a demo — hero + form */}
+      <section className="relative overflow-hidden bg-navy-deep text-white">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-24 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl"
+        />
+        <div className="relative max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-24">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
+            {/* Left — value proposition */}
+            <div className="lg:pt-4">
+              <SectionLabel>REQUEST A DEMO</SectionLabel>
+              <h1 className="mt-6 font-serif font-bold text-white text-4xl md:text-5xl lg:text-6xl leading-[1.05] tracking-tight">
+                See AequorOS on a bank like yours.
+              </h1>
+              <p className="mt-6 text-ice-blue text-lg leading-relaxed max-w-[540px]">
+                A 30-minute walkthrough of the data engine, ALM calculations, and
+                regulatory reporting — built around the workflows and core system
+                your bank actually runs.
+              </p>
+
+              <ul className="mt-10 space-y-4 max-w-[540px]">
+                {expectations.map((item) => (
+                  <li key={item} className="flex items-start gap-3">
+                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15">
+                      <Check size={15} className="text-accent" aria-hidden />
+                    </span>
+                    <span className="text-white/90 leading-relaxed">{item}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-10 pt-8 border-t border-white/10">
+                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-ice-blue/70">
+                  Prefer to reach out directly?
+                </p>
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
+                  <a
+                    href="mailto:eric@aequoros.com"
+                    className="inline-flex items-center gap-2 text-white hover:text-accent transition-colors"
+                  >
+                    <Mail size={18} className="text-accent" aria-hidden />
+                    eric@aequoros.com
+                  </a>
+                  <a
+                    href="https://linkedin.com/in/eidanso"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 text-white hover:text-accent transition-colors"
+                  >
+                    <Linkedin size={18} className="text-accent" aria-hidden />
+                    LinkedIn
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Right — request form */}
+            <div>
+              <h2 className="font-serif font-bold text-white text-2xl">
+                Request your walkthrough
+              </h2>
+              <p className="mt-2 text-ice-blue/80 text-sm">
+                Takes under a minute — we&apos;ll follow up to schedule.
+              </p>
+              <div className="mt-6">
+                <ContactForm />
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* 4.2 Contact Options */}
+      {/* 4.2 Instant scheduler */}
       <section className="bg-soft-bg">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pb-16 md:pb-20 lg:pb-24 pt-16 md:pt-20">
-          <div className="grid gap-10 lg:grid-cols-2 items-start">
-            <div className="space-y-6">
-              <SectionLabel>WAYS TO REACH US</SectionLabel>
-              {options.map(
-                ({ Icon, title, content, linkLabel, href, external }) => (
-                  <article
-                    key={title}
-                    className="bg-white border border-border-light border-l-4 border-l-accent rounded-lg p-7"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-md bg-navy-deep flex items-center justify-center shrink-0">
-                        <Icon size={18} className="text-accent" aria-hidden />
-                      </div>
-                      <div>
-                        <h3 className="font-serif font-bold text-navy text-xl">
-                          {title}
-                        </h3>
-                        <p className="mt-2 text-text-primary leading-relaxed">
-                          {content}
-                        </p>
-                        <a
-                          href={href}
-                          target={external ? '_blank' : undefined}
-                          rel={external ? 'noreferrer' : undefined}
-                          className="mt-3 inline-block text-accent hover:text-navy font-medium transition-colors"
-                        >
-                          {linkLabel}
-                        </a>
-                      </div>
-                    </div>
-                  </article>
-                )
-              )}
-            </div>
-
-            <ContactForm />
+        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
+          <div
+            id="schedule"
+            className="scroll-mt-24 max-w-3xl mb-8"
+          >
+            <SectionLabel>OR GRAB A TIME NOW</SectionLabel>
+            <h2 className="mt-4 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
+              Pick a slot that works for you.
+            </h2>
+            <p className="mt-3 text-text-muted text-lg leading-relaxed">
+              30 minutes, video call. We&apos;ll learn about your bank and walk
+              you through the live platform.
+            </p>
+          </div>
+          <div className="border border-border-light border-l-4 border-l-accent rounded-lg overflow-hidden bg-white shadow-sm">
+            <CalendlyInline />
           </div>
 
-          {/* 4.3 Inline scheduler */}
-          <div id="schedule" className="mt-20 pt-12 border-t border-border-light scroll-mt-24">
-            <div className="max-w-3xl mb-8">
-              <SectionLabel>BOOK A MEETING</SectionLabel>
-              <h2 className="mt-4 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-                Pick a time that works for you.
-              </h2>
-              <p className="mt-3 text-text-muted text-lg leading-relaxed">
-                30 minutes, video call. We&apos;ll learn about your situation and
-                walk you through the live platform.
-              </p>
-            </div>
-            <div className="border border-border-light border-l-4 border-l-accent rounded-lg overflow-hidden bg-white">
-              <CalendlyInline />
-            </div>
-          </div>
-
-          {/* 4.4 Location Info */}
-          <div className="mt-16 pt-8 border-t border-border-light flex items-center justify-center gap-3 text-text-muted">
+          <div className="mt-12 pt-8 border-t border-border-light flex items-center justify-center gap-3 text-text-muted">
             <MapPin size={16} className="text-accent" aria-hidden />
             <span className="text-sm">Winchester, VA · Accra, Ghana</span>
           </div>

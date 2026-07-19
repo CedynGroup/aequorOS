@@ -5,11 +5,12 @@ import { CheckCircle2, AlertCircle } from 'lucide-react';
 import Button from './Button';
 
 const roles = [
-  'Bank executive',
-  'Investor',
-  'Potential advisor',
-  'Engineer or candidate',
-  'Journalist',
+  'Treasury / ALM',
+  'Risk',
+  'Finance / CFO office',
+  'IT / Data',
+  'Executive / C-suite',
+  'Advisor or partner',
   'Other',
 ];
 
@@ -32,6 +33,7 @@ export default function ContactForm() {
     const payload = {
       name: data.get('name'),
       email: data.get('email'),
+      organization: data.get('organization'),
       role: data.get('role'),
       message: data.get('message'),
       _gotcha: data.get('_gotcha'),
@@ -70,7 +72,7 @@ export default function ContactForm() {
       <div
         role="status"
         aria-live="polite"
-        className="bg-white border border-border-light border-l-4 border-l-accent rounded-lg p-8"
+        className="bg-white border border-border-light border-l-4 border-l-accent rounded-lg p-8 shadow-sm"
       >
         <div className="flex items-start gap-3">
           <CheckCircle2
@@ -80,11 +82,11 @@ export default function ContactForm() {
           />
           <div>
             <h3 className="font-serif font-bold text-navy text-xl">
-              Message received.
+              Request received.
             </h3>
             <p className="mt-3 text-text-primary leading-relaxed">
-              Thanks for reaching out. We typically respond within 24-48 hours.
-              All inquiries kept confidential.
+              Thanks — we&apos;ll be in touch within 24-48 hours to schedule your
+              walkthrough. Every inquiry is kept confidential.
             </p>
           </div>
         </div>
@@ -97,7 +99,7 @@ export default function ContactForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="bg-white border border-border-light border-l-4 border-l-accent rounded-lg p-8 space-y-5"
+      className="bg-white border border-border-light rounded-xl p-8 space-y-5 shadow-sm"
     >
       <input
         type="text"
@@ -108,70 +110,94 @@ export default function ContactForm() {
         aria-hidden
       />
 
-      <div>
-        <label
-          htmlFor="name"
-          className="block text-sm font-medium text-text-primary mb-2"
-        >
-          Name
-        </label>
-        <input
-          id="name"
-          name="name"
-          type="text"
-          required
-          autoComplete="name"
-          maxLength={100}
-          className={inputClasses}
-          placeholder="Your full name"
-          disabled={submitting}
-        />
+      <div className="grid sm:grid-cols-2 gap-5">
+        <div>
+          <label
+            htmlFor="name"
+            className="block text-sm font-medium text-text-primary mb-2"
+          >
+            Name
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            required
+            autoComplete="name"
+            maxLength={100}
+            className={inputClasses}
+            placeholder="Your full name"
+            disabled={submitting}
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="email"
+            className="block text-sm font-medium text-text-primary mb-2"
+          >
+            Work email
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            maxLength={200}
+            className={inputClasses}
+            placeholder="you@yourbank.com"
+            disabled={submitting}
+          />
+        </div>
       </div>
 
-      <div>
-        <label
-          htmlFor="email"
-          className="block text-sm font-medium text-text-primary mb-2"
-        >
-          Email
-        </label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          required
-          autoComplete="email"
-          maxLength={200}
-          className={inputClasses}
-          placeholder="you@example.com"
-          disabled={submitting}
-        />
-      </div>
+      <div className="grid sm:grid-cols-2 gap-5">
+        <div>
+          <label
+            htmlFor="organization"
+            className="block text-sm font-medium text-text-primary mb-2"
+          >
+            Bank / organization{' '}
+            <span className="text-text-muted font-normal">(optional)</span>
+          </label>
+          <input
+            id="organization"
+            name="organization"
+            type="text"
+            autoComplete="organization"
+            maxLength={150}
+            className={inputClasses}
+            placeholder="Your institution"
+            disabled={submitting}
+          />
+        </div>
 
-      <div>
-        <label
-          htmlFor="role"
-          className="block text-sm font-medium text-text-primary mb-2"
-        >
-          Role
-        </label>
-        <select
-          id="role"
-          name="role"
-          className={inputClasses}
-          defaultValue=""
-          disabled={submitting}
-          required
-        >
-          <option value="" disabled>
-            Select one
-          </option>
-          {roles.map((r) => (
-            <option key={r} value={r}>
-              {r}
+        <div>
+          <label
+            htmlFor="role"
+            className="block text-sm font-medium text-text-primary mb-2"
+          >
+            Your role
+          </label>
+          <select
+            id="role"
+            name="role"
+            className={inputClasses}
+            defaultValue=""
+            disabled={submitting}
+            required
+          >
+            <option value="" disabled>
+              Select one
             </option>
-          ))}
-        </select>
+            {roles.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div>
@@ -179,16 +205,16 @@ export default function ContactForm() {
           htmlFor="message"
           className="block text-sm font-medium text-text-primary mb-2"
         >
-          Message
+          What would you like to see?{' '}
+          <span className="text-text-muted font-normal">(optional)</span>
         </label>
         <textarea
           id="message"
           name="message"
-          rows={5}
-          required
+          rows={4}
           maxLength={5000}
           className={`${inputClasses} resize-y`}
-          placeholder="What would you like to discuss?"
+          placeholder="Which workflows matter most to your bank — liquidity, capital, regulatory reporting? Which core system do you run?"
           disabled={submitting}
         />
       </div>
@@ -203,12 +229,13 @@ export default function ContactForm() {
         </div>
       )}
 
-      <Button type="submit" disabled={submitting}>
-        {submitting ? 'Sending…' : 'Send message'}
+      <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
+        {submitting ? 'Sending…' : 'Request demo'}
       </Button>
 
-      <p className="text-xs text-text-muted pt-2">
-        Responses typically within 24-48 hours. All inquiries kept confidential.
+      <p className="text-xs text-text-muted pt-1">
+        We respond within 24-48 hours. No obligation, and every inquiry is kept
+        confidential.
       </p>
     </form>
   );

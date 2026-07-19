@@ -52,6 +52,14 @@ export default function Footer() {
               </Link>
             </li>
             <li>
+              <Link
+                href="/investors"
+                className="hover:text-accent transition-colors"
+              >
+                Investors
+              </Link>
+            </li>
+            <li>
               <a
                 href="https://demo.aequoros.com"
                 target="_blank"
