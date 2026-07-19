@@ -10,10 +10,10 @@ const links = [
   { href: '/contact', label: 'Contact' },
 ];
 
-// "Client Login" sends users to the sign-in page. In production that is the
-// root-level https://aequoros.com/login (NEXT_PUBLIC_LOGIN_URL — served via the
-// /login rewrite in next.config.js, which proxies the dashboard's login page);
-// in dev it falls back to the local dashboard dev server directly.
+// "Client Login" sends users to the dashboard's sign-in page. In production the
+// dashboard is a separate app on its own subdomain, so this is the absolute
+// https://app.aequoros.com/login (NEXT_PUBLIC_LOGIN_URL). In dev it falls back to
+// the local dashboard dev server (http://localhost:3001/login).
 const dashboardLoginUrl =
   process.env.NEXT_PUBLIC_LOGIN_URL ??
   `${(process.env.NEXT_PUBLIC_DASHBOARD_URL ?? 'http://localhost:3001').replace(/\/$/, '')}/login`;
