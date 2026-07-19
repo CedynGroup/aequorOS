@@ -5,6 +5,7 @@ import { SessionProvider, signOut, useSession } from 'next-auth/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { setAccessToken } from '@/lib/api/token';
+import { LOGIN_URL } from '@/lib/loginUrl';
 
 /** Keeps the API client's bearer token in sync with the NextAuth session. */
 function TokenSync() {
@@ -14,7 +15,7 @@ function TokenSync() {
     // the user back to sign in rather than looping on 401s with a dead token.
     if (session?.error === 'RefreshTokenError') {
       setAccessToken(null);
-      void signOut({ redirectTo: '/login' });
+      void signOut({ redirectTo: LOGIN_URL });
       return;
     }
     setAccessToken(session?.accessToken ?? null);

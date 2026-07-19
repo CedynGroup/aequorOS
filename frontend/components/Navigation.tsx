@@ -7,16 +7,16 @@ import { Menu, X } from 'lucide-react';
 const links = [
   { href: '/product', label: 'Product' },
   { href: '/company', label: 'Company' },
-  { href: '/investors', label: 'Investors' },
   { href: '/contact', label: 'Contact' },
 ];
 
-// The dashboard is a separate app (its own origin). "Client Login" hands off to
-// its sign-in page, which drops the user into the dashboard on success. Configure
-// the origin per environment; defaults to the local dashboard dev server on :3001.
-const dashboardLoginUrl = `${(
-  process.env.NEXT_PUBLIC_DASHBOARD_URL ?? 'http://localhost:3001'
-).replace(/\/$/, '')}/login`;
+// "Client Login" sends users to the sign-in page. In production that is the
+// root-level https://aequoros.com/login (NEXT_PUBLIC_LOGIN_URL — served via the
+// /login rewrite in next.config.js, which proxies the dashboard's login page);
+// in dev it falls back to the local dashboard dev server directly.
+const dashboardLoginUrl =
+  process.env.NEXT_PUBLIC_LOGIN_URL ??
+  `${(process.env.NEXT_PUBLIC_DASHBOARD_URL ?? 'http://localhost:3001').replace(/\/$/, '')}/login`;
 
 export default function Navigation() {
   const [scrolled, setScrolled] = useState(false);
@@ -53,8 +53,8 @@ export default function Navigation() {
           AequorOS
         </Link>
 
-        <div className="hidden md:flex items-center gap-10">
-          <ul className="flex items-center gap-10">
+        <div className="hidden md:flex items-center gap-8">
+          <ul className="flex items-center gap-8">
             {links.map((link) => (
               <li key={link.href}>
                 <Link
@@ -66,9 +66,15 @@ export default function Navigation() {
               </li>
             ))}
           </ul>
+          <Link
+            href="/contact"
+            className="inline-flex items-center justify-center rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-navy-deep transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          >
+            Request a demo
+          </Link>
           <a
             href={dashboardLoginUrl}
-            className="inline-flex items-center justify-center rounded-md bg-navy px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+            className="text-sm font-medium text-text-primary hover:text-navy transition-colors"
           >
             Client Login
           </a>
@@ -100,11 +106,18 @@ export default function Navigation() {
               </li>
             ))}
           </ul>
-          <div className="px-6 pb-8">
+          <div className="px-6 pb-8 space-y-3">
+            <Link
+              href="/contact"
+              onClick={() => setOpen(false)}
+              className="inline-flex w-full items-center justify-center rounded-md bg-accent px-5 py-3 text-base font-semibold text-navy-deep transition-colors hover:bg-accent/90"
+            >
+              Request a demo
+            </Link>
             <a
               href={dashboardLoginUrl}
               onClick={() => setOpen(false)}
-              className="inline-flex w-full items-center justify-center rounded-md bg-navy px-5 py-3 text-base font-semibold text-white transition-colors hover:bg-navy-deep"
+              className="inline-flex w-full items-center justify-center rounded-md border border-border-light px-5 py-3 text-base font-semibold text-navy transition-colors hover:bg-soft-bg"
             >
               Client Login
             </a>
