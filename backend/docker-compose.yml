@@ -9,6 +9,11 @@ services:
       - "15432:5432"
     volumes:
       - risk-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d risk_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   risk-minio:
     image: minio/minio
@@ -33,6 +38,52 @@ services:
       mc anonymous set none local/risk-local
       "
 
+  # One-shot: bring the schema to head before the API and worker start, so
+  # neither races an unmigrated database. Exits after `alembic upgrade head`.
+  risk-migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      risk-postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@risk-postgres:5432/risk_service
+    restart: "no"
+
+  # The risk service HTTP API (FastAPI). Serves on :8000 — the SAME port as
+  # `mise run risk-service:dev` and the Dockerfile — so the dashboard's
+  # NEXT_PUBLIC_RISK_API_BASE_URL (http://127.0.0.1:8000/api/v1) works against
+  # either the containerized API or the local dev server.
+  risk-api:
+    build: .
+    depends_on:
+      risk-postgres:
+        condition: service_healthy
+      risk-minio-init:
+        condition: service_completed_successfully
+      risk-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: local
+      WEB_CONCURRENCY: "1"
+      # Local-only dev signing secret — NEVER a production value. Auth fails
+      # closed (503) if unset; a readable string keeps it out of secret scanners.
+      # Inject a real AUTH_JWT_SECRET from your secrets manager in production.
+      AUTH_JWT_SECRET: local-dev-jwt-signing-secret-not-for-production
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@risk-postgres:5432/risk_service
+      WORKER_DATABASE_URL: postgresql+psycopg://postgres:postgres@risk-postgres:5432/risk_service
+      RISK_S3_ENDPOINT_URL: http://risk-minio:9000
+      RISK_S3_BUCKET: risk-local
+      RISK_S3_ACCESS_KEY_ID: minioadmin
+      RISK_S3_SECRET_ACCESS_KEY: minioadmin
+      CORS_ORIGINS: http://localhost:3001
+      # The worker runs as its own service below — don't spawn an in-process poller.
+      RUN_INPROCESS_WORKER: "0"
+      # Optional: set CREDENTIAL_VAULT_MASTER_KEY (AES-256-GCM) to use market-data
+      # vendor connections locally; unset is fine for everything else.
+
   # The live-engine background worker: same image and env as the API, but its
   # command is the poll loop instead of the HTTP server. Runs one worker; scale
   # with `docker compose up --scale risk-worker=N` (claims use SKIP LOCKED).
@@ -40,11 +91,14 @@ services:
     build: .
     command: ["python", "-m", "app.worker"]
     depends_on:
-      - risk-postgres
-      - risk-minio
+      risk-postgres:
+        condition: service_healthy
+      risk-migrate:
+        condition: service_completed_successfully
     environment:
       APP_ENV: local
       DATABASE_URL: postgresql+psycopg://postgres:postgres@risk-postgres:5432/risk_service
+      WORKER_DATABASE_URL: postgresql+psycopg://postgres:postgres@risk-postgres:5432/risk_service
       RISK_S3_ENDPOINT_URL: http://risk-minio:9000
       RISK_S3_BUCKET: risk-local
       RISK_S3_ACCESS_KEY_ID: minioadmin

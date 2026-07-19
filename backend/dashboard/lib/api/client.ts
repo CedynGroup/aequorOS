@@ -27,7 +27,7 @@ import {
 import { getSession } from 'next-auth/react';
 import { getAccessToken, setAccessToken } from './token';
 
-const DEFAULT_BASE_URL = 'http://127.0.0.1:8003/api/v1';
+const DEFAULT_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
 const baseUrl =
   process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? DEFAULT_BASE_URL;
