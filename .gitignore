@@ -4,9 +4,12 @@ pnpm-debug.log*
 *.tsbuildinfo
 
 # Never commit credentials or local environment files.
+# Ignore every .env* variant (incl. .env.production) but keep the committed
+# .env.example templates.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
 
 # Local Claude Code worktrees.
 .claude/worktrees/
