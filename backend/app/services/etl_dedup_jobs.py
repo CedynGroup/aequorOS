@@ -75,8 +75,10 @@ def run_etl_dedup(session: Session, job: Job) -> None:
         config=EtlConfig(
             deduplicate=True,
             detect_anomalies=True,
-            counterparty_model=model_loading.load_counterparty_model(),
-            anomaly_model=model_loading.load_anomaly_model(),
+            counterparty_model=model_loading.load_counterparty_model(
+                ctx.organization_id, bank.id
+            ),
+            anomaly_model=model_loading.load_anomaly_model(ctx.organization_id, bank.id),
         ),
     )
 

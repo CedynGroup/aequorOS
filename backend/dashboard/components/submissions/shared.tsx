@@ -17,7 +17,8 @@ import type {
   PackageStatus,
 } from '@aequoros/risk-service-api';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import { apiBaseUrl, tenant } from '@/lib/api/client';
+import { apiBaseUrl } from '@/lib/api/client';
+import { getAccessToken } from '@/lib/api/token';
 
 // ---------------------------------------------------------------------------
 // Labels + tones
@@ -235,7 +236,6 @@ export const DEMO_OFFICERS: DemoOfficer[] = [
 export function officerName(userId: string): string {
   const officer = DEMO_OFFICERS.find((entry) => entry.id === userId);
   if (officer) return `${officer.name} (${officer.role})`;
-  if (userId === tenant.userId) return 'Session user';
   return userId.slice(0, 8);
 }
 
@@ -250,7 +250,7 @@ export async function downloadArtifact(
 ): Promise<void> {
   const response = await fetch(
     `${apiBaseUrl}/banks/${bankId}/regulatory-artifacts/${artifact.id}/download`,
-    { headers: { 'X-Org-Id': tenant.orgId, 'X-User-Id': tenant.userId } }
+    { headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` } }
   );
   if (!response.ok) {
     throw new Error(`Artifact download failed (${response.status}).`);

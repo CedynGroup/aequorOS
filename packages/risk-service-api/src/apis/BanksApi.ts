@@ -36,31 +36,15 @@ import {
 
 export interface GetBankRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface GetBankPeriodFactsRequest {
   bankId: string;
   periodId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListBankReportingPeriodsRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId?: string | null;
-}
-
-export interface ListBanksRequest {
-  xOrgId: string;
-  xUserId?: string | null;
-}
-
-export interface SeedDemoBankRequest {
-  xOrgId: string;
-  xUserId: string;
 }
 
 /**
@@ -81,25 +65,18 @@ export class BanksApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getBank().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}`.replace(
@@ -150,25 +127,18 @@ export class BanksApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getBankPeriodFacts().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/reporting-periods/{period_id}/facts`
@@ -220,25 +190,18 @@ export class BanksApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listBankReportingPeriods().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/reporting-periods`.replace(
@@ -275,28 +238,20 @@ export class BanksApi extends runtime.BaseAPI {
    * List Banks
    */
   async listBanksRaw(
-    requestParameters: ListBanksRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<runtime.ApiResponse<BankListRead>> {
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listBanks().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks`,
@@ -316,10 +271,9 @@ export class BanksApi extends runtime.BaseAPI {
    * List Banks
    */
   async listBanks(
-    requestParameters: ListBanksRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BankListRead> {
-    const response = await this.listBanksRaw(requestParameters, initOverrides);
+    const response = await this.listBanksRaw(initOverrides);
     return await response.value();
   }
 
@@ -327,35 +281,20 @@ export class BanksApi extends runtime.BaseAPI {
    * Seed Demo Bank
    */
   async seedDemoBankRaw(
-    requestParameters: SeedDemoBankRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<runtime.ApiResponse<BankSeedSummaryRead>> {
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling seedDemoBank().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling seedDemoBank().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/seed-demo`,
@@ -375,13 +314,9 @@ export class BanksApi extends runtime.BaseAPI {
    * Seed Demo Bank
    */
   async seedDemoBank(
-    requestParameters: SeedDemoBankRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BankSeedSummaryRead> {
-    const response = await this.seedDemoBankRaw(
-      requestParameters,
-      initOverrides,
-    );
+    const response = await this.seedDemoBankRaw(initOverrides);
     return await response.value();
   }
 }

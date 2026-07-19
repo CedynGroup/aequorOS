@@ -15,7 +15,7 @@ from app.models import (
     FinancialManualEditHistory,
 )
 from tests.api.factories import CaseFactory
-from tests.api.helpers import ORG_1, ORG_2, headers
+from tests.api.helpers import ORG_2, headers
 
 
 def test_resource_specific_manual_entry_and_correction_refresh_validation_and_history(
@@ -410,8 +410,7 @@ def test_mutations_reject_unsupported_input_authorization_and_cross_tenant_acces
     )
     missing_actor = db_client.post(
         f"/api/v1/cases/{case.id}/financial-workspace/institutions",
-        headers={"X-Org-Id": str(ORG_1)},
-        json={"name": "Bank", "reason": "manual"},
+        json={"name": "Bank", "reason": "manual"},  # no bearer token
     )
     cross_tenant = db_client.post(
         f"/api/v1/cases/{case.id}/financial-workspace/institutions",
@@ -436,7 +435,7 @@ def test_mutations_reject_unsupported_input_authorization_and_cross_tenant_acces
     )
     assert unsupported_field.status_code == 422
     assert unsupported_field.json()["error"]["code"] == "validation_error"
-    assert missing_actor.status_code == 422
+    assert missing_actor.status_code == 401
     assert cross_tenant.status_code == 404
     assert cross_tenant_update.status_code == 404
 

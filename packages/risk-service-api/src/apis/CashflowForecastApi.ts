@@ -33,17 +33,13 @@ import {
 
 export interface GetCashflowForecastRequest {
   bankId: string;
-  xOrgId: string;
   horizon?: CashflowHorizon;
   mode?: CashflowForecastMode;
-  xUserId?: string | null;
 }
 
 export interface GetCashflowHistoryRequest {
   bankId: string;
-  xOrgId: string;
   days?: number;
-  xUserId?: string | null;
 }
 
 /**
@@ -64,13 +60,6 @@ export class CashflowForecastApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getCashflowForecast().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["horizon"] != null) {
@@ -83,14 +72,14 @@ export class CashflowForecastApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/cashflow-forecast`.replace(
@@ -137,13 +126,6 @@ export class CashflowForecastApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getCashflowHistory().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["days"] != null) {
@@ -152,14 +134,14 @@ export class CashflowForecastApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/cashflow-history`.replace(

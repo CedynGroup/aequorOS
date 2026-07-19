@@ -21,7 +21,7 @@ import { SkeletonLine } from '@/components/ui/Skeleton';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useTheme, type Theme } from '@/components/shell/ThemeProvider';
 import { MODULE_LABELS, useLatestRunsByModule } from '@/components/reports/hooks';
-import { apiBaseUrl, apiOrigin, tenant } from '@/lib/api/client';
+import { apiBaseUrl, apiOrigin } from '@/lib/api/client';
 import {
   useBank,
   useCashflowHistory,
@@ -167,9 +167,8 @@ function InstitutionProfile({
               {latestPeriodLabel && ` · latest ${latestPeriodLabel}`}
             </dd>
           </div>
-          <IdField label="Organization ID (X-Org-Id)" value={profile?.organizationId} />
+          <IdField label="Organization ID" value={profile?.organizationId} />
           <IdField label="Bank ID" value={profile?.id} />
-          <IdField label="Service-account User ID (X-User-Id)" value={tenant.userId} />
         </dl>
       </CardBody>
     </Card>

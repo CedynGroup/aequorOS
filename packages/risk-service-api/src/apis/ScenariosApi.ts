@@ -61,75 +61,55 @@ import {
 export interface ArchiveCaseScenarioRequest {
   caseId: string;
   scenarioId: string;
-  xOrgId: string;
-  xUserId: string;
   scenarioArchive: ScenarioArchive;
 }
 
 export interface CopyCaseScenarioRequest {
   caseId: string;
   scenarioId: string;
-  xOrgId: string;
-  xUserId: string;
   scenarioCopy: ScenarioCopy;
 }
 
 export interface CreateCaseScenarioRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId: string;
   scenarioCreate: ScenarioCreate;
 }
 
 export interface CreateScenarioAssumptionRequest {
   caseId: string;
   scenarioId: string;
-  xOrgId: string;
-  xUserId: string;
   assumptionCreate: AssumptionCreate;
 }
 
 export interface GetCaseScenarioRequest {
   caseId: string;
   scenarioId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface GetCaseScenarioReadinessRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface InitializeCaseScenariosRequest {
   caseId: string;
-  xOrgId: string;
-  xUserId: string;
   scenarioInitialize: ScenarioInitialize;
 }
 
 export interface ListCaseScenariosRequest {
   caseId: string;
-  xOrgId: string;
   includeArchived?: boolean;
-  xUserId?: string | null;
 }
 
 export interface ReviewScenarioAssumptionRequest {
   caseId: string;
   scenarioId: string;
   assumptionId: string;
-  xOrgId: string;
-  xUserId: string;
   assumptionReview: AssumptionReview;
 }
 
 export interface UpdateCaseScenarioRequest {
   caseId: string;
   scenarioId: string;
-  xOrgId: string;
-  xUserId: string;
   scenarioUpdate: ScenarioUpdate;
 }
 
@@ -137,16 +117,12 @@ export interface UpdateScenarioAssumptionRequest {
   caseId: string;
   scenarioId: string;
   assumptionId: string;
-  xOrgId: string;
-  xUserId: string;
   assumptionUpdate: AssumptionUpdate;
 }
 
 export interface ValidateCaseScenarioRequest {
   caseId: string;
   scenarioId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 /**
@@ -174,20 +150,6 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling archiveCaseScenario().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling archiveCaseScenario().',
-      );
-    }
-
     if (requestParameters["scenarioArchive"] == null) {
       throw new runtime.RequiredError(
         "scenarioArchive",
@@ -201,14 +163,14 @@ export class ScenariosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios/{scenario_id}/archive`
@@ -268,20 +230,6 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling copyCaseScenario().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling copyCaseScenario().',
-      );
-    }
-
     if (requestParameters["scenarioCopy"] == null) {
       throw new runtime.RequiredError(
         "scenarioCopy",
@@ -295,14 +243,14 @@ export class ScenariosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios/{scenario_id}/copy`
@@ -355,20 +303,6 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createCaseScenario().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createCaseScenario().',
-      );
-    }
-
     if (requestParameters["scenarioCreate"] == null) {
       throw new runtime.RequiredError(
         "scenarioCreate",
@@ -382,14 +316,14 @@ export class ScenariosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios`.replace(
@@ -444,20 +378,6 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createScenarioAssumption().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createScenarioAssumption().',
-      );
-    }
-
     if (requestParameters["assumptionCreate"] == null) {
       throw new runtime.RequiredError(
         "assumptionCreate",
@@ -471,14 +391,14 @@ export class ScenariosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios/{scenario_id}/assumptions`
@@ -538,25 +458,18 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getCaseScenario().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios/{scenario_id}`
@@ -608,25 +521,18 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getCaseScenarioReadiness().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios/readiness`.replace(
@@ -673,20 +579,6 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling initializeCaseScenarios().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling initializeCaseScenarios().',
-      );
-    }
-
     if (requestParameters["scenarioInitialize"] == null) {
       throw new runtime.RequiredError(
         "scenarioInitialize",
@@ -700,14 +592,14 @@ export class ScenariosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios/initialize`.replace(
@@ -755,13 +647,6 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listCaseScenarios().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["includeArchived"] != null) {
@@ -771,14 +656,14 @@ export class ScenariosApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios`.replace(
@@ -839,20 +724,6 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling reviewScenarioAssumption().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling reviewScenarioAssumption().',
-      );
-    }
-
     if (requestParameters["assumptionReview"] == null) {
       throw new runtime.RequiredError(
         "assumptionReview",
@@ -866,14 +737,14 @@ export class ScenariosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios/{scenario_id}/assumptions/{assumption_id}/review`
@@ -937,20 +808,6 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling updateCaseScenario().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling updateCaseScenario().',
-      );
-    }
-
     if (requestParameters["scenarioUpdate"] == null) {
       throw new runtime.RequiredError(
         "scenarioUpdate",
@@ -964,14 +821,14 @@ export class ScenariosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios/{scenario_id}`
@@ -1038,20 +895,6 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling updateScenarioAssumption().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling updateScenarioAssumption().',
-      );
-    }
-
     if (requestParameters["assumptionUpdate"] == null) {
       throw new runtime.RequiredError(
         "assumptionUpdate",
@@ -1065,14 +908,14 @@ export class ScenariosApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios/{scenario_id}/assumptions/{assumption_id}`
@@ -1136,25 +979,18 @@ export class ScenariosApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling validateCaseScenario().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/cases/{case_id}/scenarios/{scenario_id}/validation`

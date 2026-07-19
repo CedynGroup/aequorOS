@@ -22,13 +22,12 @@ import {
   type DatabaseConnectionSyncRequest,
   type DatabaseConnectionUpdate,
 } from '@aequoros/risk-service-api';
-import { apiCall, apiOrigin, tenant } from './client';
+import { apiCall, apiOrigin } from './client';
 
 export const databaseDirectApi = new DatabaseDirectApi(
   new Configuration({ basePath: apiOrigin }),
 );
 
-const t = { xOrgId: tenant.orgId, xUserId: tenant.userId } as const;
 
 /** Query keys touched by every connection mutation, invalidated on success. */
 const invalidatePrefixes = ['db-direct-connections'];
@@ -38,7 +37,7 @@ export function useDatabaseConnections(bankId: string | undefined) {
     queryKey: ['db-direct-connections', bankId],
     queryFn: () =>
       apiCall(() =>
-        databaseDirectApi.listDatabaseDirectConnections({ ...t, bankId: bankId! }),
+        databaseDirectApi.listDatabaseDirectConnections({ bankId: bankId! }),
       ),
     enabled: Boolean(bankId),
   });
@@ -53,7 +52,6 @@ export function useDatabaseConnection(
     queryFn: () =>
       apiCall(() =>
         databaseDirectApi.getDatabaseDirectConnection({
-          ...t,
           bankId: bankId!,
           connectionId: connectionId!,
         }),
@@ -68,7 +66,6 @@ export function useCreateDatabaseConnection(bankId: string | undefined) {
     mutationFn: (payload: DatabaseConnectionCreate) =>
       apiCall(() =>
         databaseDirectApi.createDatabaseDirectConnection({
-          ...t,
           bankId: bankId!,
           databaseConnectionCreate: payload,
         }),
@@ -98,7 +95,6 @@ export function useUpdateDatabaseConnection(bankId: string | undefined) {
     }) =>
       apiCall(() =>
         databaseDirectApi.updateDatabaseDirectConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
           databaseConnectionUpdate: payload,
@@ -117,7 +113,6 @@ export function useTestDatabaseConnection(bankId: string | undefined) {
     mutationFn: (connectionId: string) =>
       apiCall(() =>
         databaseDirectApi.testDatabaseDirectConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
         }),
@@ -132,7 +127,6 @@ export function useDiscoverDatabaseSchema(bankId: string | undefined) {
     mutationFn: (connectionId: string) =>
       apiCall(() =>
         databaseDirectApi.discoverDatabaseDirectSchema({
-          ...t,
           bankId: bankId!,
           connectionId,
         }),
@@ -162,7 +156,6 @@ export function useSyncDatabaseConnection(bankId: string | undefined) {
       };
       return apiCall(() =>
         databaseDirectApi.syncDatabaseDirectConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
           databaseConnectionSyncRequest: request,
@@ -185,7 +178,6 @@ export function useDisableDatabaseConnection(bankId: string | undefined) {
     mutationFn: (connectionId: string) =>
       apiCall(() =>
         databaseDirectApi.disableDatabaseDirectConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
         }),
@@ -202,7 +194,6 @@ export function useEnableDatabaseConnection(bankId: string | undefined) {
     mutationFn: (connectionId: string) =>
       apiCall(() =>
         databaseDirectApi.enableDatabaseDirectConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
         }),
@@ -219,7 +210,6 @@ export function useRevokeDatabaseConnection(bankId: string | undefined) {
     mutationFn: (connectionId: string) =>
       apiCall(() =>
         databaseDirectApi.revokeDatabaseDirectConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
         }),

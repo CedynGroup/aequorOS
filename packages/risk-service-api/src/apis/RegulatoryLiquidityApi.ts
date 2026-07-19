@@ -42,47 +42,35 @@ import {
 
 export interface CreateRegulatoryRunRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   regulatoryRunCreate: RegulatoryRunCreate;
 }
 
 export interface GetBsd3PreviewRequest {
   bankId: string;
   reportingPeriodId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface GetLiquidityDashboardRequest {
   bankId: string;
-  xOrgId: string;
   reportingPeriodId?: string | null;
-  xUserId?: string | null;
 }
 
 export interface GetRegulatoryRunRequest {
   bankId: string;
   runId: string;
-  xOrgId: string;
-  xUserId?: string | null;
 }
 
 export interface ListRegulatoryRunsRequest {
   bankId: string;
-  xOrgId: string;
   module?: ListRegulatoryRunsModuleEnum;
   reportingPeriodId?: string | null;
   scenarioCode?: string | null;
   limit?: number;
   offset?: number;
-  xUserId?: string | null;
 }
 
 export interface RunAllLiquidityScenariosRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   liquidityScenarioBatchCreate: LiquidityScenarioBatchCreate;
 }
 
@@ -104,20 +92,6 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling createRegulatoryRun().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling createRegulatoryRun().',
-      );
-    }
-
     if (requestParameters["regulatoryRunCreate"] == null) {
       throw new runtime.RequiredError(
         "regulatoryRunCreate",
@@ -131,14 +105,14 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-runs`.replace(
@@ -195,13 +169,6 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getBsd3Preview().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["reportingPeriodId"] != null) {
@@ -211,14 +178,14 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/submissions/bsd3`.replace(
@@ -265,13 +232,6 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getLiquidityDashboard().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["reportingPeriodId"] != null) {
@@ -281,14 +241,14 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/liquidity/dashboard`.replace(
@@ -342,25 +302,18 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getRegulatoryRun().',
-      );
-    }
-
     const queryParameters: any = {};
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-runs/{run_id}`
@@ -412,13 +365,6 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling listRegulatoryRuns().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["module"] != null) {
@@ -444,14 +390,14 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/regulatory-runs`.replace(
@@ -498,20 +444,6 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling runAllLiquidityScenarios().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling runAllLiquidityScenarios().',
-      );
-    }
-
     if (requestParameters["liquidityScenarioBatchCreate"] == null) {
       throw new runtime.RequiredError(
         "liquidityScenarioBatchCreate",
@@ -525,14 +457,14 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/liquidity/run-all-scenarios`.replace(

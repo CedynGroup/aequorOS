@@ -53,11 +53,9 @@ import {
   regulatoryLiquidityApi,
   regulatoryReportingApi,
   temenosApi,
-  tenant,
 } from './client';
 import { ingestionApi } from './ingestion';
 
-const t = { xOrgId: tenant.orgId, xUserId: tenant.userId } as const;
 
 /**
  * Polling cadence for the always-on "live" reads (live-summary, freshness,
@@ -71,14 +69,14 @@ const DASHBOARD_REFETCH_MS = 30_000;
 export function useBanks() {
   return useQuery({
     queryKey: ['banks'],
-    queryFn: () => apiCall(() => banksApi.listBanks({ ...t })),
+    queryFn: () => apiCall(() => banksApi.listBanks({})),
   });
 }
 
 export function useBank(bankId: string | undefined) {
   return useQuery({
     queryKey: ['bank', bankId],
-    queryFn: () => apiCall(() => banksApi.getBank({ ...t, bankId: bankId! })),
+    queryFn: () => apiCall(() => banksApi.getBank({ bankId: bankId! })),
     enabled: Boolean(bankId),
   });
 }
@@ -87,7 +85,7 @@ export function useReportingPeriods(bankId: string | undefined) {
   return useQuery({
     queryKey: ['periods', bankId],
     queryFn: () =>
-      apiCall(() => banksApi.listBankReportingPeriods({ ...t, bankId: bankId! })),
+      apiCall(() => banksApi.listBankReportingPeriods({ bankId: bankId! })),
     enabled: Boolean(bankId),
   });
 }
@@ -101,7 +99,6 @@ export function useBankPeriodFacts(
     queryFn: () =>
       apiCall(() =>
         banksApi.getBankPeriodFacts({
-          ...t,
           bankId: bankId!,
           periodId: periodId!,
         })
@@ -113,7 +110,7 @@ export function useBankPeriodFacts(
 export function useSeedDemoBank() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiCall(() => banksApi.seedDemoBank({ ...t })),
+    mutationFn: () => apiCall(() => banksApi.seedDemoBank({})),
     onSuccess: () => {
       void queryClient.invalidateQueries();
     },
@@ -129,7 +126,6 @@ export function useLiquidityDashboard(
     queryFn: () =>
       apiCall(() =>
         regulatoryLiquidityApi.getLiquidityDashboard({
-          ...t,
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
@@ -148,7 +144,6 @@ export function useCapitalDashboard(
     queryFn: () =>
       apiCall(() =>
         regulatoryCapitalApi.getCapitalDashboard({
-          ...t,
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
@@ -181,7 +176,6 @@ export function useRegulatoryRuns(
     queryFn: () =>
       apiCall(() =>
         regulatoryLiquidityApi.listRegulatoryRuns({
-          ...t,
           bankId: bankId!,
           module: filters.module,
           reportingPeriodId: filters.reportingPeriodId,
@@ -203,7 +197,6 @@ export function useRegulatoryRun(
     queryFn: () =>
       apiCall(() =>
         regulatoryLiquidityApi.getRegulatoryRun({
-          ...t,
           bankId: bankId!,
           runId: runId!,
         })
@@ -238,7 +231,6 @@ export function useCreateRegulatoryRun(bankId: string | undefined) {
     }) =>
       apiCall(() =>
         regulatoryLiquidityApi.createRegulatoryRun({
-          ...t,
           bankId: bankId!,
           regulatoryRunCreate: payload,
         })
@@ -261,7 +253,6 @@ export function useRunAllLiquidityScenarios(bankId: string | undefined) {
     mutationFn: (payload: { reportingPeriodId: string }) =>
       apiCall(() =>
         regulatoryLiquidityApi.runAllLiquidityScenarios({
-          ...t,
           bankId: bankId!,
           liquidityScenarioBatchCreate: payload,
         })
@@ -280,7 +271,6 @@ export function useRunAllCapitalScenarios(bankId: string | undefined) {
     mutationFn: (payload: { reportingPeriodId: string }) =>
       apiCall(() =>
         regulatoryCapitalApi.runAllCapitalScenarios({
-          ...t,
           bankId: bankId!,
           capitalScenarioBatchCreate: payload,
         })
@@ -310,7 +300,6 @@ export function useIrrDashboard(
     queryFn: () =>
       apiCall(() =>
         regulatoryIrrApi.getIrrDashboard({
-          ...t,
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
@@ -326,7 +315,6 @@ export function useRunAllIrrScenarios(bankId: string | undefined) {
     mutationFn: (payload: { reportingPeriodId: string }) =>
       apiCall(() =>
         regulatoryIrrApi.runAllIrrScenarios({
-          ...t,
           bankId: bankId!,
           irrScenarioBatchCreate: payload,
         })
@@ -348,7 +336,6 @@ export function useFxDashboard(
     queryFn: () =>
       apiCall(() =>
         regulatoryFxApi.getFxDashboard({
-          ...t,
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
@@ -364,7 +351,6 @@ export function useRunAllFxScenarios(bankId: string | undefined) {
     mutationFn: (payload: { reportingPeriodId: string }) =>
       apiCall(() =>
         regulatoryFxApi.runAllFxScenarios({
-          ...t,
           bankId: bankId!,
           fxScenarioBatchCreate: payload,
         })
@@ -386,7 +372,6 @@ export function useFtpDashboard(
     queryFn: () =>
       apiCall(() =>
         regulatoryFtpApi.getFtpDashboard({
-          ...t,
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
@@ -402,7 +387,6 @@ export function useRunAllFtpScenarios(bankId: string | undefined) {
     mutationFn: (payload: { reportingPeriodId: string }) =>
       apiCall(() =>
         regulatoryFtpApi.runAllFtpScenarios({
-          ...t,
           bankId: bankId!,
           ftpScenarioBatchCreate: payload,
         })
@@ -429,7 +413,6 @@ export function useRwaBreakdown(
     queryFn: () =>
       apiCall(() =>
         regulatoryCapitalApi.getRwaBreakdown({
-          ...t,
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
@@ -449,7 +432,6 @@ export function useCapitalStructure(
     queryFn: () =>
       apiCall(() =>
         regulatoryCapitalApi.getCapitalStructure({
-          ...t,
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
@@ -469,7 +451,6 @@ export function useBsd3Preview(
     queryFn: () =>
       apiCall(() =>
         regulatoryLiquidityApi.getBsd3Preview({
-          ...t,
           bankId: bankId!,
           reportingPeriodId: periodId!,
         })
@@ -489,7 +470,6 @@ export function useBsd2Preview(
     queryFn: () =>
       apiCall(() =>
         regulatoryCapitalApi.getBsd2Preview({
-          ...t,
           bankId: bankId!,
           reportingPeriodId: periodId!,
         })
@@ -507,7 +487,7 @@ export function useForecastScenarios(bankId: string | undefined) {
     queryKey: ['forecast-scenarios', bankId],
     queryFn: () =>
       apiCall(() =>
-        forecastingApi.listForecastScenarios({ ...t, bankId: bankId! })
+        forecastingApi.listForecastScenarios({ bankId: bankId! })
       ),
     enabled: Boolean(bankId),
   });
@@ -527,7 +507,6 @@ export function useForecastRuns(
     queryFn: () =>
       apiCall(() =>
         forecastingApi.listForecastRuns({
-          ...t,
           bankId: bankId!,
           limit: filters.limit,
           offset: filters.offset,
@@ -546,7 +525,6 @@ export function useForecastRun(
     queryFn: () =>
       apiCall(() =>
         forecastingApi.getForecastRun({
-          ...t,
           bankId: bankId!,
           runId: runId!,
         })
@@ -561,7 +539,6 @@ export function useCreateForecastRun(bankId: string | undefined) {
     mutationFn: (payload: ForecastRunCreate) =>
       apiCall(() =>
         forecastingApi.createForecastRun({
-          ...t,
           bankId: bankId!,
           forecastRunCreate: payload,
         })
@@ -580,7 +557,6 @@ export function useRunOptimizer(bankId: string | undefined) {
     mutationFn: (payload: { reportingPeriodId: string }) =>
       apiCall(() =>
         forecastingApi.runStrategicOptimizer({
-          ...t,
           bankId: bankId!,
           optimizerRunCreate: payload,
         })
@@ -601,7 +577,6 @@ export function useRunWhatIf(bankId: string | undefined) {
     }) =>
       apiCall(() =>
         forecastingApi.runWhatIfAnalysis({
-          ...t,
           bankId: bankId!,
           whatIfRunCreate: payload,
         })
@@ -628,7 +603,6 @@ export function useCashflowForecast(
     queryFn: () =>
       apiCall(() =>
         cashflowForecastApi.getCashflowForecast({
-          ...t,
           bankId: bankId!,
           horizon,
           mode,
@@ -647,7 +621,6 @@ export function useCashflowHistory(bankId: string | undefined, days: number) {
     queryFn: () =>
       apiCall(() =>
         cashflowForecastApi.getCashflowHistory({
-          ...t,
           bankId: bankId!,
           days,
         })
@@ -676,7 +649,7 @@ export function useBehavioralModel(
     queryKey: ['behavioral-model', bankId, model],
     queryFn: () =>
       apiCall(() =>
-        behavioralModelsApi.getBehavioralModel({ ...t, bankId: bankId!, model })
+        behavioralModelsApi.getBehavioralModel({ bankId: bankId!, model })
       ),
     enabled: Boolean(bankId),
     retry: false,
@@ -694,7 +667,7 @@ export function useTrainBehavioralModel(
   return useMutation({
     mutationFn: () =>
       apiCall(() =>
-        behavioralModelsApi.trainBehavioralModel({ ...t, bankId: bankId!, model })
+        behavioralModelsApi.trainBehavioralModel({ bankId: bankId!, model })
       ),
     onSuccess: (result) => {
       queryClient.setQueryData(['behavioral-model', bankId, model], result);
@@ -712,7 +685,6 @@ export function useApplyBehavioralModel(
     mutationFn: (products: BehavioralApplyProduct[]) =>
       apiCall(() =>
         behavioralModelsApi.applyBehavioralModel({
-          ...t,
           bankId: bankId!,
           model,
           behavioralApplyRequest: { products },
@@ -749,7 +721,7 @@ export function useLiveSummary(bankId: string | undefined) {
   return useQuery({
     queryKey: ['live-summary', bankId],
     queryFn: () =>
-      apiCall(() => liveEngineApi.getLiveSummary({ ...t, bankId: bankId! })),
+      apiCall(() => liveEngineApi.getLiveSummary({ bankId: bankId! })),
     enabled: Boolean(bankId),
     refetchInterval: LIVE_REFETCH_MS,
   });
@@ -765,7 +737,6 @@ export function useBankFreshness(
     queryFn: () =>
       apiCall(() =>
         liveEngineApi.getBankFreshness({
-          ...t,
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
@@ -781,7 +752,7 @@ export function useBankAlerts(bankId: string | undefined, limit = 20) {
     queryKey: ['alerts', bankId, limit],
     queryFn: () =>
       apiCall(() =>
-        liveEngineApi.getBankAlerts({ ...t, bankId: bankId!, limit })
+        liveEngineApi.getBankAlerts({ bankId: bankId!, limit })
       ),
     enabled: Boolean(bankId),
     refetchInterval: LIVE_REFETCH_MS,
@@ -823,7 +794,7 @@ async function pollJobToCompletion(
 ) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const job = await apiCall(() => jobsApi.getJob({ ...t, jobId }));
+    const job = await apiCall(() => jobsApi.getJob({ jobId }));
     if (job.status === 'succeeded') return job;
     if (job.status === 'failed') {
       throw new ApiError({
@@ -850,7 +821,6 @@ export function useRefreshBankData(bankId: string | undefined) {
     mutationFn: async ({ asOfDate, reason }: PipelineActionInput) => {
       const enqueued = await apiCall(() =>
         liveEngineApi.refreshBankData({
-          ...t,
           bankId: bankId!,
           refreshRequest: {
             asOfDate: new Date(`${asOfDate}T00:00:00Z`),
@@ -879,7 +849,6 @@ export function useMintOfficialRun(bankId: string | undefined) {
     mutationFn: async ({ asOfDate, reason }: PipelineActionInput) => {
       const enqueued = await apiCall(() =>
         liveEngineApi.mintOfficialRun({
-          ...t,
           bankId: bankId!,
           officialRunRequest: {
             asOfDate: new Date(`${asOfDate}T00:00:00Z`),
@@ -914,7 +883,7 @@ export function useMarketDataConnections(bankId: string | undefined) {
     queryKey: ['md-connections', bankId],
     queryFn: () =>
       apiCall(() =>
-        marketDataApi.listMarketDataConnections({ ...t, bankId: bankId! })
+        marketDataApi.listMarketDataConnections({ bankId: bankId! })
       ),
     enabled: Boolean(bankId),
   });
@@ -926,7 +895,7 @@ export function useMarketDataScopes(bankId: string | undefined) {
   return useQuery({
     queryKey: ['md-scopes', bankId],
     queryFn: () =>
-      apiCall(() => marketDataApi.listMarketDataScopes({ ...t, bankId: bankId! })),
+      apiCall(() => marketDataApi.listMarketDataScopes({ bankId: bankId! })),
     enabled: Boolean(bankId),
     // The scope catalog is static per deployment — no need to refetch.
     staleTime: 10 * 60_000,
@@ -937,7 +906,7 @@ export function useMarketDataQuota(bankId: string | undefined) {
   return useQuery({
     queryKey: ['md-quota', bankId],
     queryFn: () =>
-      apiCall(() => marketDataApi.getMarketDataQuota({ ...t, bankId: bankId! })),
+      apiCall(() => marketDataApi.getMarketDataQuota({ bankId: bankId! })),
     enabled: Boolean(bankId),
   });
 }
@@ -948,7 +917,6 @@ export function useCreateMarketDataConnection(bankId: string | undefined) {
     mutationFn: (payload: MarketDataConnectionCreate) =>
       apiCall(() =>
         marketDataApi.createMarketDataConnection({
-          ...t,
           bankId: bankId!,
           marketDataConnectionCreate: payload,
         })
@@ -967,7 +935,6 @@ export function useValidateMarketDataConnection(bankId: string | undefined) {
     mutationFn: (connectionId: string) =>
       apiCall(() =>
         marketDataApi.validateMarketDataConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
         })
@@ -985,7 +952,6 @@ export function useTestMarketDataConnection(bankId: string | undefined) {
     mutationFn: (connectionId: string) =>
       apiCall(() =>
         marketDataApi.testMarketDataConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
         })
@@ -1008,7 +974,6 @@ export function useUpdateMarketDataConnection(bankId: string | undefined) {
     }) =>
       apiCall(() =>
         marketDataApi.updateMarketDataConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
           marketDataConnectionUpdate: payload,
@@ -1026,7 +991,6 @@ export function useDisableMarketDataConnection(bankId: string | undefined) {
     mutationFn: (connectionId: string) =>
       apiCall(() =>
         marketDataApi.disableMarketDataConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
         })
@@ -1043,7 +1007,6 @@ export function useEnableMarketDataConnection(bankId: string | undefined) {
     mutationFn: (connectionId: string) =>
       apiCall(() =>
         marketDataApi.enableMarketDataConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
         })
@@ -1061,7 +1024,6 @@ export function useRevokeMarketDataConnection(bankId: string | undefined) {
     mutationFn: (connectionId: string) =>
       apiCall(() =>
         marketDataApi.revokeMarketDataConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
         })
@@ -1086,7 +1048,6 @@ export function useMarketDataViews(bankId: string | undefined, asOf?: string) {
     queryFn: () =>
       apiCall(() =>
         marketDataApi.getMarketDataViews({
-          ...t,
           bankId: bankId!,
           asOf: asOf ? new Date(`${asOf}T00:00:00Z`) : undefined,
         })
@@ -1128,7 +1089,6 @@ export function useCanonicalPositionsPage(
     queryFn: () =>
       apiCall(() =>
         ingestionApi.listCanonicalPositions({
-          ...t,
           bankId: bankId!,
           limit,
           offset,
@@ -1152,7 +1112,7 @@ export function useCanonicalPositionFacets(bankId: string | undefined) {
     queryKey: ['positions-facets', bankId],
     queryFn: () =>
       apiCall(() =>
-        ingestionApi.listCanonicalPositionFacets({ ...t, bankId: bankId! })
+        ingestionApi.listCanonicalPositionFacets({ bankId: bankId! })
       ),
     enabled: Boolean(bankId),
     staleTime: 5 * 60_000,
@@ -1166,7 +1126,6 @@ export function useUploadMarketData(bankId: string | undefined) {
     mutationFn: ({ file, asOfDate }: { file: File; asOfDate: string }) =>
       apiCall(() =>
         marketDataApi.uploadMarketData({
-          ...t,
           bankId: bankId!,
           file,
           asOfDate: new Date(`${asOfDate}T00:00:00Z`),
@@ -1193,7 +1152,7 @@ export function useTemenosConnections(bankId: string | undefined) {
   return useQuery({
     queryKey: ['t24-connections', bankId],
     queryFn: () =>
-      apiCall(() => temenosApi.listTemenosConnections({ ...t, bankId: bankId! })),
+      apiCall(() => temenosApi.listTemenosConnections({ bankId: bankId! })),
     enabled: Boolean(bankId),
   });
 }
@@ -1204,7 +1163,7 @@ export function useTemenosDomains(bankId: string | undefined, mode: string) {
   return useQuery({
     queryKey: ['t24-domains', bankId, mode],
     queryFn: () =>
-      apiCall(() => temenosApi.listTemenosDomains({ ...t, bankId: bankId!, mode })),
+      apiCall(() => temenosApi.listTemenosDomains({ bankId: bankId!, mode })),
     enabled: Boolean(bankId),
     staleTime: 10 * 60_000,
   });
@@ -1216,7 +1175,6 @@ export function useCreateTemenosConnection(bankId: string | undefined) {
     mutationFn: (payload: TemenosConnectionCreate) =>
       apiCall(() =>
         temenosApi.createTemenosConnection({
-          ...t,
           bankId: bankId!,
           temenosConnectionCreate: payload,
         })
@@ -1234,7 +1192,7 @@ export function useValidateTemenosConnection(bankId: string | undefined) {
   return useMutation({
     mutationFn: (connectionId: string) =>
       apiCall(() =>
-        temenosApi.validateTemenosConnection({ ...t, bankId: bankId!, connectionId })
+        temenosApi.validateTemenosConnection({ bankId: bankId!, connectionId })
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
@@ -1248,7 +1206,7 @@ export function useTestTemenosConnection(bankId: string | undefined) {
   return useMutation({
     mutationFn: (connectionId: string) =>
       apiCall(() =>
-        temenosApi.testTemenosConnection({ ...t, bankId: bankId!, connectionId })
+        temenosApi.testTemenosConnection({ bankId: bankId!, connectionId })
       ),
   });
 }
@@ -1267,7 +1225,6 @@ export function useUpdateTemenosConnection(bankId: string | undefined) {
     }) =>
       apiCall(() =>
         temenosApi.updateTemenosConnection({
-          ...t,
           bankId: bankId!,
           connectionId,
           temenosConnectionUpdate: payload,
@@ -1284,7 +1241,7 @@ export function useDisableTemenosConnection(bankId: string | undefined) {
   return useMutation({
     mutationFn: (connectionId: string) =>
       apiCall(() =>
-        temenosApi.disableTemenosConnection({ ...t, bankId: bankId!, connectionId })
+        temenosApi.disableTemenosConnection({ bankId: bankId!, connectionId })
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
@@ -1297,7 +1254,7 @@ export function useEnableTemenosConnection(bankId: string | undefined) {
   return useMutation({
     mutationFn: (connectionId: string) =>
       apiCall(() =>
-        temenosApi.enableTemenosConnection({ ...t, bankId: bankId!, connectionId })
+        temenosApi.enableTemenosConnection({ bankId: bankId!, connectionId })
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
@@ -1310,7 +1267,7 @@ export function useRevokeTemenosConnection(bankId: string | undefined) {
   return useMutation({
     mutationFn: (connectionId: string) =>
       apiCall(() =>
-        temenosApi.revokeTemenosConnection({ ...t, bankId: bankId!, connectionId })
+        temenosApi.revokeTemenosConnection({ bankId: bankId!, connectionId })
       ),
     onSuccess: () => {
       temenosInvalidatePrefixes.forEach((prefix) => {
@@ -1334,7 +1291,6 @@ export function useTriggerTemenosPull(bankId: string | undefined) {
     }) =>
       apiCall(() =>
         temenosApi.triggerTemenosPull({
-          ...t,
           bankId: bankId!,
           connectionId,
           // The generated client types this nullable date as an ISO string.
@@ -1361,7 +1317,6 @@ export function useTriggerTemenosBackfill(bankId: string | undefined) {
     }) =>
       apiCall(() =>
         temenosApi.triggerTemenosBackfill({
-          ...t,
           bankId: bankId!,
           connectionId,
           temenosBackfillRequest: payload,
@@ -1398,7 +1353,6 @@ export function useReportingObligations(
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.listReportingObligations({
-          ...t,
           bankId: bankId!,
           horizonMonths,
         })
@@ -1436,7 +1390,6 @@ export function useRegulatoryPackages(
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.listRegulatoryPackages({
-          ...t,
           bankId: bankId!,
           returnCode: filters.returnCode,
           reportingDate: filters.reportingDate
@@ -1461,7 +1414,6 @@ export function useRegulatoryPackage(
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.getRegulatoryPackage({
-          ...t,
           bankId: bankId!,
           packageId: packageId!,
         })
@@ -1482,7 +1434,6 @@ export function useGenerateRegulatoryPackage(bankId: string | undefined) {
     }) =>
       apiCall(() =>
         regulatoryReportingApi.createRegulatoryPackage({
-          ...t,
           bankId: bankId!,
           regulatoryPackageCreate: {
             returnCode: payload.returnCode,
@@ -1505,7 +1456,6 @@ export function useValidateRegulatoryPackage(bankId: string | undefined) {
     mutationFn: (packageId: string) =>
       apiCall(() =>
         regulatoryReportingApi.validateRegulatoryPackage({
-          ...t,
           bankId: bankId!,
           packageId,
         })
@@ -1524,7 +1474,6 @@ export function useRequestPackageApproval(bankId: string | undefined) {
     mutationFn: ({ packageId, reason }: { packageId: string; reason?: string }) =>
       apiCall(() =>
         regulatoryReportingApi.requestPackageApproval({
-          ...t,
           bankId: bankId!,
           packageId,
           packageApprovalRequestCreate: { reason: reason ?? null },
@@ -1558,10 +1507,11 @@ export function useDecidePackageApproval(bankId: string | undefined) {
       reason?: string;
       actingUserId?: string;
     }) =>
+      // The decision is attributed to the authenticated checker (from the verified
+      // token) — you cannot approve "as" another user. actingUserId is accepted for
+      // backward compatibility but no longer overrides the identity.
       apiCall(() =>
         regulatoryReportingApi.decidePackageApproval({
-          xOrgId: t.xOrgId,
-          xUserId: actingUserId ?? t.xUserId,
           bankId: bankId!,
           packageId,
           packageApprovalDecisionCreate: { action, reason: reason ?? null },
@@ -1600,7 +1550,6 @@ export function useExportRegulatoryPackage(bankId: string | undefined) {
     mutationFn: ({ packageId, kind }: { packageId: string; kind: ArtifactKind }) =>
       apiCall(() =>
         regulatoryReportingApi.exportRegulatoryPackage({
-          ...t,
           bankId: bankId!,
           packageId,
           kind,
@@ -1635,7 +1584,6 @@ export function useSubmitRegulatoryPackage(bankId: string | undefined) {
     }) =>
       apiCall(() =>
         regulatoryReportingApi.submitRegulatoryPackage({
-          ...t,
           bankId: bankId!,
           packageId,
           packageSubmitCreate: { channel: channel ?? null },
@@ -1657,7 +1605,6 @@ export function usePollRegulatorySubmission(bankId: string | undefined) {
     mutationFn: (packageId: string) =>
       apiCall(() =>
         regulatoryReportingApi.pollRegulatorySubmission({
-          ...t,
           bankId: bankId!,
           packageId,
         })
@@ -1681,7 +1628,6 @@ export function useSubmissionEvents(
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.listSubmissionEvents({
-          ...t,
           bankId: bankId!,
           packageId: packageId!,
           limit,
@@ -1702,7 +1648,6 @@ export function useEmailFallbackInstructions(
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.getEmailFallbackInstructions({
-          ...t,
           bankId: bankId!,
           packageId: packageId!,
         })
@@ -1715,7 +1660,7 @@ export function useEmailFallbackInstructions(
 export function useReturnTemplates() {
   return useQuery({
     queryKey: ['rr-templates'],
-    queryFn: () => apiCall(() => regulatoryReportingApi.listReturnTemplates({ ...t })),
+    queryFn: () => apiCall(() => regulatoryReportingApi.listReturnTemplates({})),
     staleTime: 10 * 60_000,
   });
 }
@@ -1734,7 +1679,6 @@ export function useChannelConfig(
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.getChannelConfig({
-          ...t,
           bankId: bankId!,
           channel,
         })
@@ -1759,7 +1703,6 @@ export function useSaveChannelConfig(bankId: string | undefined) {
     }) =>
       apiCall(() =>
         regulatoryReportingApi.putChannelConfig({
-          ...t,
           bankId: bankId!,
           channel,
           channelConfigPut: {

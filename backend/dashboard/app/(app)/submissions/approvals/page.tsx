@@ -19,7 +19,6 @@ import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
 import EmptyState from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { useBankContext } from '@/components/shell/BankContext';
-import { tenant } from '@/lib/api/client';
 import {
   useDecidePackageApproval,
   useRegulatoryPackage,
@@ -218,9 +217,6 @@ function DecidePanel({
                 {officer.name} — {officer.role}
               </option>
             ))}
-            <option value={tenant.userId}>
-              Session user (the maker — demonstrates the 409)
-            </option>
           </select>
           <p className="mt-1.5 text-caption text-slate leading-relaxed">
             Demo: acting as a second officer — production uses your login.

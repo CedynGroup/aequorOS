@@ -30,15 +30,11 @@ import {
 
 export interface GetFxDashboardRequest {
   bankId: string;
-  xOrgId: string;
   reportingPeriodId?: string | null;
-  xUserId?: string | null;
 }
 
 export interface RunAllFxScenariosRequest {
   bankId: string;
-  xOrgId: string;
-  xUserId: string;
   fxScenarioBatchCreate: FxScenarioBatchCreate;
 }
 
@@ -60,13 +56,6 @@ export class RegulatoryFxApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling getFxDashboard().',
-      );
-    }
-
     const queryParameters: any = {};
 
     if (requestParameters["reportingPeriodId"] != null) {
@@ -76,14 +65,14 @@ export class RegulatoryFxApi extends runtime.BaseAPI {
 
     const headerParameters: runtime.HTTPHeaders = {};
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/fx/dashboard`.replace(
@@ -130,20 +119,6 @@ export class RegulatoryFxApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["xOrgId"] == null) {
-      throw new runtime.RequiredError(
-        "xOrgId",
-        'Required parameter "xOrgId" was null or undefined when calling runAllFxScenarios().',
-      );
-    }
-
-    if (requestParameters["xUserId"] == null) {
-      throw new runtime.RequiredError(
-        "xUserId",
-        'Required parameter "xUserId" was null or undefined when calling runAllFxScenarios().',
-      );
-    }
-
     if (requestParameters["fxScenarioBatchCreate"] == null) {
       throw new runtime.RequiredError(
         "fxScenarioBatchCreate",
@@ -157,14 +132,14 @@ export class RegulatoryFxApi extends runtime.BaseAPI {
 
     headerParameters["Content-Type"] = "application/json";
 
-    if (requestParameters["xOrgId"] != null) {
-      headerParameters["X-Org-Id"] = String(requestParameters["xOrgId"]);
-    }
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
 
-    if (requestParameters["xUserId"] != null) {
-      headerParameters["X-User-Id"] = String(requestParameters["xUserId"]);
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
     }
-
     const response = await this.request(
       {
         path: `/api/v1/banks/{bank_id}/fx/run-all-scenarios`.replace(

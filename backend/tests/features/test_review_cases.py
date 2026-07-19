@@ -449,11 +449,13 @@ def test_archived_cases_reject_assignment_decisions_and_leave_summary_queue(
 
 
 def test_tenant_context_and_report_edges_use_error_envelope(db_client: TestClient) -> None:
-    missing_tenant = db_client.get("/api/v1/cases")
-    assert missing_tenant.status_code == 422
-    assert missing_tenant.json()["error"]["code"] == "validation_error"
+    missing_tenant = db_client.get("/api/v1/cases")  # no bearer token
+    assert missing_tenant.status_code == 401
+    assert missing_tenant.json()["error"]["code"] == "unauthorized"
 
-    invalid_tenant = db_client.get("/api/v1/cases", headers={"X-Org-Id": "not-a-uuid"})
+    invalid_tenant = db_client.get(
+        "/api/v1/cases", headers={"Authorization": "Bearer not.a.valid.jwt"}
+    )
     assert invalid_tenant.status_code == 401
     assert invalid_tenant.json()["error"]["code"] == "unauthorized"
 

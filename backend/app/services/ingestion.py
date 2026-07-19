@@ -336,8 +336,10 @@ def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orches
         config=EtlConfig(
             deduplicate=etl_inline_dedup,
             detect_anomalies=etl_inline_dedup,
-            counterparty_model=model_loading.load_counterparty_model(),
-            anomaly_model=model_loading.load_anomaly_model(),
+            counterparty_model=model_loading.load_counterparty_model(
+                ctx.organization_id, bank_id
+            ),
+            anomaly_model=model_loading.load_anomaly_model(ctx.organization_id, bank_id),
         ),
     )
     extraction = etl_result.cleaned

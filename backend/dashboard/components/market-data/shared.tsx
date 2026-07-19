@@ -12,7 +12,8 @@
  */
 
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import { apiBaseUrl, tenant } from '@/lib/api/client';
+import { apiBaseUrl } from '@/lib/api/client';
+import { getAccessToken } from '@/lib/api/token';
 
 export type VendorKey = 'bloomberg' | 'refinitiv' | 'manual_upload';
 
@@ -175,7 +176,7 @@ export const TEMPLATE_KINDS: { kind: string; label: string }[] = [
  */
 export async function downloadTemplate(kind: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/market-data/templates/${kind}`, {
-    headers: { 'X-Org-Id': tenant.orgId, 'X-User-Id': tenant.userId },
+    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   });
   if (!response.ok) {
     throw new Error(`Template download failed (${response.status}).`);

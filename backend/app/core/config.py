@@ -10,7 +10,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 AppEnv = Literal["local", "test", "staging", "production"]
 StorageBackend = Literal["s3"]
 
-SETTINGS_CONFIG = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+SETTINGS_CONFIG = SettingsConfigDict(
+    env_file=".env",
+    env_file_encoding="utf-8",
+    extra="ignore",
+    # Allow constructing settings by field name (e.g. AuthSettings(jwt_secret=...) in
+    # tests) in addition to the env alias; env loading still uses the alias.
+    populate_by_name=True,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CASHFLOW_ARTIFACTS_DIR = BACKEND_ROOT / "artifacts" / "cashflow"
@@ -193,11 +200,54 @@ class WorkerSettings(BaseSettings):
         return value
 
 
+class AuthSettings(BaseSettings):
+    """JWT + password/SSO auth.
+
+    ``jwt_secret`` signs and verifies the app access/refresh tokens (HS256; the
+    backend is both issuer and verifier). It MUST be set to a strong secret in any
+    real environment — a settings validator refuses to issue/verify tokens when it
+    is unset, so the header-trust fallback can never silently re-appear.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    jwt_secret: str | None = Field(default=None, alias="AUTH_JWT_SECRET")
+    jwt_algorithm: str = Field(default="HS256", alias="AUTH_JWT_ALGORITHM")
+    jwt_issuer: str = Field(default="aequoros", alias="AUTH_JWT_ISSUER")
+    jwt_audience: str = Field(default="aequoros-api", alias="AUTH_JWT_AUDIENCE")
+    access_token_ttl_seconds: int = Field(default=900, alias="AUTH_ACCESS_TOKEN_TTL")
+    refresh_token_ttl_seconds: int = Field(
+        default=60 * 60 * 24 * 14, alias="AUTH_REFRESH_TOKEN_TTL"
+    )
+    max_failed_logins: int = Field(default=5, alias="AUTH_MAX_FAILED_LOGINS")
+    lockout_seconds: int = Field(default=900, alias="AUTH_LOCKOUT_SECONDS")
+    # SSO via Auth0 (OIDC): the backend verifies the Auth0 id_token against Auth0's
+    # JWKS (zero-trust) — issuer https://{domain}/, audience = the client id — then
+    # mints its own app token. Unset domain/client_id disables the SSO endpoint.
+    auth0_domain: str | None = Field(default=None, alias="AUTH0_DOMAIN")
+    auth0_client_id: str | None = Field(default=None, alias="AUTH0_CLIENT_ID")
+
+    @field_validator("auth0_domain", mode="before")
+    @classmethod
+    def blank_domain_is_unset(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    @field_validator("jwt_secret", mode="before")
+    @classmethod
+    def blank_secret_is_unset(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            return None
+        return value
+
+
 class Settings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
     app: AppSettings = Field(default_factory=AppSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    auth: AuthSettings = Field(default_factory=AuthSettings)
     cors: CorsSettings = Field(default_factory=CorsSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)

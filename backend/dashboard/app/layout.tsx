@@ -35,6 +35,15 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+  // Explicit order so the crisp SVG is the primary favicon (Next's file
+  // convention otherwise links only the PNG). PNG stays as a raster fallback.
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon.png', type: 'image/png', sizes: '1024x1024' },
+    ],
+    apple: { url: '/apple-icon.png', sizes: '180x180' },
+  },
 };
 
 export default function RootLayout({

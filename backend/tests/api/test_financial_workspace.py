@@ -492,12 +492,11 @@ def test_financial_cash_flow_mutations_require_actor_and_non_empty_reason(
     )
     missing_actor = db_client.post(
         f"/api/v1/cases/{case.id}/financial-workspace/cash-flows",
-        headers={"X-Org-Id": str(ORG_1)},
-        json={**payload, "reason": "Manual entry"},
+        json={**payload, "reason": "Manual entry"},  # no bearer token
     )
 
     assert blank_reason.status_code == 422
-    assert missing_actor.status_code == 422
+    assert missing_actor.status_code == 401
 
 
 def seed_financial_workspace(*, case_id: UUID) -> None:

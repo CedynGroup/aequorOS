@@ -19,11 +19,10 @@ import type {
   BankFactsRead,
   BankReportingPeriodRead,
 } from '@aequoros/risk-service-api';
-import { apiCall, banksApi, tenant } from '@/lib/api/client';
+import { apiCall, banksApi } from '@/lib/api/client';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useBankPeriodFacts } from '@/lib/api/hooks';
 
-const t = { xOrgId: tenant.orgId, xUserId: tenant.userId } as const;
 
 /** How many older periods the fallback probe will inspect before giving up. */
 const FALLBACK_PROBE_LIMIT = 12;
@@ -96,7 +95,6 @@ export function useEffectivePeriod(): EffectivePeriodResult {
       for (const candidate of candidates) {
         const facts = await apiCall(() =>
           banksApi.getBankPeriodFacts({
-            ...t,
             bankId: bankId!,
             periodId: candidate.id,
           })

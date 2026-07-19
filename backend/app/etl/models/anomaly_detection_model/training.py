@@ -73,25 +73,36 @@ def _inject_corruption(record: RawRecord, rng: random.Random) -> RawRecord:
     )
 
 
-def train_and_validate(
+def train_and_validate(  # noqa: PLR0913 - training entrypoint with tuning knobs
     csv_path: Path | None = None,
     *,
+    records: Sequence[RawRecord] | None = None,
+    training_data_ref: str | None = None,
     seed: int = 20260521,
     train_limit: int = 2000,
     n_injected: int = 100,
     score_threshold: float = 0.75,
 ) -> AnomalyTrainingReport:
-    """Fit the IsolationForest on real positions; validate on injected corruptions."""
+    """Fit the IsolationForest on position records; validate on injected corruptions.
+
+    ``records`` is the clean tape: pass a bank's OWN position records to train a
+    per-tenant model, or omit it to read the offline CSV tape.
+    """
     rng = random.Random(seed)
-    path = csv_path or DEFAULT_LOANS_CSV
-    clean = _load_positions(path, limit=train_limit)
+    if records is not None:
+        clean = list(records)
+        data_ref = training_data_ref or "canonical_positions"
+    else:
+        path = csv_path or DEFAULT_LOANS_CSV
+        clean = _load_positions(path, limit=train_limit)
+        data_ref = training_data_ref or str(path)
     if len(clean) < 2:
-        msg = f"Not enough position rows to train on at {path}."
+        msg = f"Not enough position rows to train on (ref={data_ref})."
         raise ValueError(msg)
 
     train_matrix = np.vstack([fingerprint(r) for r in clean])
     model = AnomalyDetectionModel().fit(
-        train_matrix, feature_names=FINGERPRINT_FEATURES, training_data_ref=str(path)
+        train_matrix, feature_names=FINGERPRINT_FEATURES, training_data_ref=data_ref
     )
 
     injected = [_inject_corruption(rng.choice(clean), rng) for _ in range(n_injected)]
