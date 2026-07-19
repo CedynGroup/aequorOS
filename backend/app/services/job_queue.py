@@ -158,6 +158,10 @@ def claim_next(db: Session, now: datetime, job_types: tuple[str, ...]) -> Job | 
 
 def complete(db: Session, job: Job, progress: dict[str, Any] | None = None) -> Job:
     job.status = "succeeded"
+    # Clear any interim error (e.g. a reaper "reclaimed" note written while this
+    # slow-but-alive handler was still running) — a succeeded job must not read
+    # as failed in the queue history.
+    job.error = None
     job.completed_at = utc_now()
     if progress is not None:
         job.progress = progress

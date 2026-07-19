@@ -1,0 +1,102 @@
+# =============================================================================
+# AequorOS risk service — PRODUCTION compose (Coolify: Base Directory /backend,
+# Docker Compose Location /docker-compose.prod.yml).
+#
+# Production grade rules enforced here:
+#   · NO bundled database or object store — production uses the managed
+#     Postgres (DATABASE_URL) and the existing MinIO/S3 (S3_*). The bundled
+#     risk-postgres/risk-minio in docker-compose.yml are LOCAL DEV ONLY.
+#   · NO credentials in this file. Everything is fetched from the environment
+#     (Coolify → Environment Variables; compose interpolates them as its .env).
+#   · ${VAR:?} marks required secrets — a missing value FAILS the deploy
+#     instead of booting a misconfigured service.
+#
+# Coolify domains: attach api.aequoros.com to risk-api ONLY (container port
+# 8000). risk-migrate and risk-worker get no domain.
+# =============================================================================
+
+services:
+  # One-shot: bring the managed database schema to head before api/worker start.
+  risk-migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required (managed Postgres URL)}
+
+  risk-api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      risk-migrate:
+        condition: service_completed_successfully
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=4).status==200 else 1)\""]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 20s
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_NAME: ${APP_NAME:-risk-service}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+      # --- identity / auth (required) ---
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN:?AUTH0_DOMAIN is required}
+      AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID:?AUTH0_CLIENT_ID is required}
+      # --- data stores (required; managed services, never bundled) ---
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?WORKER_DATABASE_URL (BYPASSRLS role) is required}
+      CREDENTIAL_VAULT_MASTER_KEY: ${CREDENTIAL_VAULT_MASTER_KEY:?CREDENTIAL_VAULT_MASTER_KEY is required}
+      # --- object storage (required) ---
+      S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
+      STORAGE_ENV: ${STORAGE_ENV:-production}
+      STORAGE_KMS_KEY_ID: ${STORAGE_KMS_KEY_ID:-}
+      STORAGE_RETIRE_AFTER: ${STORAGE_RETIRE_AFTER:-}
+      # --- web ---
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required (dashboard origin)}
+      RISK_MAX_UPLOAD_BYTES: ${RISK_MAX_UPLOAD_BYTES:-25000000}
+      # --- workers run as a separate service; never in-process in prod ---
+      RUN_INPROCESS_WORKER: "0"
+
+  risk-worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    restart: unless-stopped
+    # Long handlers (etl_dedup runs >15 min): give SIGTERM time to finish the
+    # in-flight job before the reaper/retry machinery has to clean up.
+    stop_grace_period: 120s
+    depends_on:
+      risk-migrate:
+        condition: service_completed_successfully
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?WORKER_DATABASE_URL (BYPASSRLS role) is required}
+      CREDENTIAL_VAULT_MASTER_KEY: ${CREDENTIAL_VAULT_MASTER_KEY:?CREDENTIAL_VAULT_MASTER_KEY is required}
+      S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
+      STORAGE_ENV: ${STORAGE_ENV:-production}
+      WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-2.0}
+      # Must exceed the longest handler runtime (etl_dedup >15 min) or a
+      # slow-but-alive job is reclaimed and retried into failure.
+      WORKER_STALE_JOB_SECONDS: ${WORKER_STALE_JOB_SECONDS:-3600}
+      # Scheduled producers stay opt-in.
+      OFFICIAL_RUN_ENABLED: ${OFFICIAL_RUN_ENABLED:-false}
+      MARKET_DATA_PULL_ENABLED: ${MARKET_DATA_PULL_ENABLED:-false}
+      TEMENOS_PULL_ENABLED: ${TEMENOS_PULL_ENABLED:-false}
