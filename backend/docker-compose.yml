@@ -74,10 +74,10 @@ services:
       AUTH_JWT_SECRET: local-dev-jwt-signing-secret-not-for-production
       DATABASE_URL: postgresql+psycopg://postgres:postgres@risk-postgres:5432/risk_service
       WORKER_DATABASE_URL: postgresql+psycopg://postgres:postgres@risk-postgres:5432/risk_service
-      RISK_S3_ENDPOINT_URL: http://risk-minio:9000
-      RISK_S3_BUCKET: risk-local
-      RISK_S3_ACCESS_KEY_ID: minioadmin
-      RISK_S3_SECRET_ACCESS_KEY: minioadmin
+      S3_ENDPOINT: http://risk-minio:9000
+      S3_BUCKET: risk-local
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
       CORS_ORIGINS: http://localhost:3001
       # The worker runs as its own service below — don't spawn an in-process poller.
       RUN_INPROCESS_WORKER: "0"
@@ -99,10 +99,10 @@ services:
       APP_ENV: local
       DATABASE_URL: postgresql+psycopg://postgres:postgres@risk-postgres:5432/risk_service
       WORKER_DATABASE_URL: postgresql+psycopg://postgres:postgres@risk-postgres:5432/risk_service
-      RISK_S3_ENDPOINT_URL: http://risk-minio:9000
-      RISK_S3_BUCKET: risk-local
-      RISK_S3_ACCESS_KEY_ID: minioadmin
-      RISK_S3_SECRET_ACCESS_KEY: minioadmin
+      S3_ENDPOINT: http://risk-minio:9000
+      S3_BUCKET: risk-local
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
       WORKER_POLL_SECONDS: "2.0"
       OFFICIAL_RUN_ENABLED: "false"
 
