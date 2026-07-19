@@ -902,11 +902,18 @@ def _buffers_or_409(thresholds: dict[str, Decimal], current_car: Decimal) -> Cap
     )
 
 
+# Dashboard trends show a trailing window, not the bank's full period history. With
+# 10 years of monthly history (~120 periods) and few stored runs, recomputing every
+# period inline on each load cost ~500 queries / ~20s; a trailing year is both fast
+# and a readable sparkline. Tune here if a longer horizon is wanted.
+_TREND_MAX_POINTS = 13
+
+
 def _build_trend(
     db: Session, ctx: TenantContext, bank: Bank, periods: list[BankReportingPeriod]
 ) -> list[CapitalTrendPointRead]:
     points: list[CapitalTrendPointRead] = []
-    for period in periods:
+    for period in periods[-_TREND_MAX_POINTS:]:
         run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
         if run is not None:
             metrics = _decimal_metrics(run)
