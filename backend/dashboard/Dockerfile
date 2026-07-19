@@ -59,7 +59,6 @@ RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs nextjs
 # repo root), so the server entrypoint is backend/dashboard/server.js.
 COPY --from=build --chown=nextjs:nodejs /app/backend/dashboard/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/backend/dashboard/.next/static ./backend/dashboard/.next/static
-COPY --from=build --chown=nextjs:nodejs /app/backend/dashboard/public ./backend/dashboard/public
 
 USER nextjs
 EXPOSE 3000
