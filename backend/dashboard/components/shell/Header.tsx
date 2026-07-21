@@ -18,7 +18,8 @@ import { useSession, signOut } from 'next-auth/react';
 import { useBankContext } from './BankContext';
 import { useTheme } from './ThemeProvider';
 import { fmtDateUTC, fmtRelative } from '@/lib/api/values';
-import { initialsFrom, roleLabel } from '@/lib/api/identity';
+import { avatarColor, initialsFrom, roleLabel } from '@/lib/api/identity';
+import { useUserProfile } from '@/components/profile/ProfileProvider';
 import { LOGIN_URL } from '@/lib/loginUrl';
 import { useBankFreshness } from '@/lib/api/hooks';
 import CommandPalette from './CommandPalette';
@@ -145,16 +146,16 @@ function LiveFreshnessPill() {
 
 /** Dark / light theme switch. */
 function ThemeToggle() {
-  const { theme, toggle } = useTheme();
+  const { resolvedTheme, toggle } = useTheme();
   return (
     <button
       type="button"
       onClick={toggle}
-      aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-      title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+      aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} theme`}
+      title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} theme`}
       className="w-9 h-9 inline-flex items-center justify-center rounded text-slate hover:bg-surface hover:text-navy transition-colors"
     >
-      {theme === 'dark' ? (
+      {resolvedTheme === 'dark' ? (
         <Sun size={16} aria-hidden />
       ) : (
         <Moon size={16} aria-hidden />
@@ -168,12 +169,19 @@ function UserMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { data: session } = useSession();
+  const { profile } = useUserProfile();
 
-  const email = session?.user?.email ?? '';
-  const name = session?.user?.name || email || 'Signed in';
+  const email = profile?.email ?? session?.user?.email ?? '';
+  const name =
+    profile?.displayName || session?.user?.name || email || 'Signed in';
   const roles = session?.user?.roles ?? [];
-  const role = roles.length ? roleLabel(roles[0]) : 'Signed in';
+  const role = profile?.role
+    ? roleLabel(profile.role)
+    : roles.length
+      ? roleLabel(roles[0])
+      : 'Signed in';
   const initials = initialsFrom(name);
+  const avatarBackground = avatarColor(profile?.userId ?? email);
 
   useEffect(() => {
     if (!open) return;
@@ -202,7 +210,10 @@ function UserMenu() {
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-2 ml-2 px-2 py-1.5 rounded hover:bg-surface"
       >
-        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal text-white text-caption font-semibold shrink-0">
+        <span
+          className="inline-flex items-center justify-center w-8 h-8 rounded-full text-white text-caption font-semibold shrink-0"
+          style={{ backgroundColor: avatarBackground }}
+        >
           {initials}
         </span>
         <span className="hidden lg:block text-left">
@@ -230,7 +241,7 @@ function UserMenu() {
           </div>
           <div className="py-1">
             <a
-              href="/settings"
+              href="/settings/profile"
               role="menuitem"
               className="flex items-center gap-2.5 px-4 py-2 text-body text-navy/85 hover:bg-surface"
               onClick={() => setOpen(false)}

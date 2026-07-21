@@ -3,10 +3,9 @@
 /**
  * Theme provider for the dark-first token system.
  *
- * The actual `data-theme` attribute is set before paint by an inline script
- * in app/layout.tsx (reads localStorage('aeq-theme'), defaults to 'dark') so
- * there is no flash of the wrong theme. This provider mirrors that value into
- * React state and exposes `useTheme()` for the header toggle.
+ * The inline script in app/layout.tsx applies the last local preference before
+ * paint. Once authenticated, the user profile becomes the source of truth and
+ * this provider mirrors changes back through PATCH /auth/me.
  */
 
 import {
@@ -18,14 +17,17 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useUserProfile } from '@/components/profile/ProfileProvider';
 
-export type Theme = 'dark' | 'light';
+export type ThemePreference = 'dark' | 'light' | 'system';
+export type ResolvedTheme = 'dark' | 'light';
 
 export const THEME_STORAGE_KEY = 'aeq-theme';
 
 type ThemeContextValue = {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
+  theme: ThemePreference;
+  resolvedTheme: ResolvedTheme;
+  setTheme: (theme: ThemePreference) => void;
   toggle: () => void;
 };
 
@@ -39,37 +41,84 @@ export function useTheme(): ThemeContextValue {
   return value;
 }
 
-function readDocumentTheme(): Theme {
+function readDocumentTheme(): ResolvedTheme {
   if (typeof document === 'undefined') return 'dark';
   return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
 }
 
+function resolveTheme(preference: ThemePreference): ResolvedTheme {
+  if (preference !== 'system') return preference;
+  return window.matchMedia('(prefers-color-scheme: light)').matches
+    ? 'light'
+    : 'dark';
+}
+
+function readLocalPreference(): ThemePreference {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === 'dark' || stored === 'light' || stored === 'system') {
+      return stored;
+    }
+  } catch {
+    // Storage unavailable; use the OS preference.
+  }
+  return 'system';
+}
+
 export default function ThemeProvider({ children }: { children: ReactNode }) {
-  // SSR renders 'dark' (the default); the inline script has already stamped
-  // the real value on <html> before hydration, so sync it after mount.
-  const [theme, setThemeState] = useState<Theme>('dark');
+  const { profile, updateProfile } = useUserProfile();
+  const [theme, setThemeState] = useState<ThemePreference>('system');
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('dark');
 
-  useEffect(() => {
-    setThemeState(readDocumentTheme());
-  }, []);
-
-  const setTheme = useCallback((next: Theme) => {
-    setThemeState(next);
-    document.documentElement.dataset.theme = next;
+  const applyTheme = useCallback((preference: ThemePreference) => {
+    const resolved = resolveTheme(preference);
+    setThemeState(preference);
+    setResolvedTheme(resolved);
+    document.documentElement.dataset.theme = resolved;
     try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, next);
+      window.localStorage.setItem(THEME_STORAGE_KEY, preference);
     } catch {
       // Storage unavailable (private mode) — theme still applies this session.
     }
   }, []);
 
+  useEffect(() => {
+    const local = readLocalPreference();
+    setThemeState(local);
+    setResolvedTheme(readDocumentTheme());
+  }, []);
+
+  useEffect(() => {
+    if (profile?.theme) applyTheme(profile.theme);
+  }, [applyTheme, profile?.theme]);
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: light)');
+    const onChange = () => {
+      if (theme === 'system') applyTheme('system');
+    };
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, [applyTheme, theme]);
+
+  const setTheme = useCallback(
+    (next: ThemePreference) => {
+      applyTheme(next);
+      void updateProfile({ theme: next }).catch(() => {
+        // Keep the immediate local preference if persistence is temporarily
+        // unavailable; the next successful profile load remains authoritative.
+      });
+    },
+    [applyTheme, updateProfile],
+  );
+
   const toggle = useCallback(() => {
-    setTheme(readDocumentTheme() === 'dark' ? 'light' : 'dark');
-  }, [setTheme]);
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+  }, [resolvedTheme, setTheme]);
 
   const value = useMemo(
-    () => ({ theme, setTheme, toggle }),
-    [theme, setTheme, toggle]
+    () => ({ theme, resolvedTheme, setTheme, toggle }),
+    [theme, resolvedTheme, setTheme, toggle],
   );
 
   return (
