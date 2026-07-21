@@ -46,6 +46,9 @@ docs/product.md
 docs/rbac.md
 docs/data_engine.md
 docs/ARCHITECTURE.md
+# Client collateral + its brief (local-only)
+docs/demo_deck_brief.md
+docs/collateral/
 
 # Local Snowflake seed CSVs (25MB) loaded into the warehouse — regenerable, not source.
 data_snowflake/

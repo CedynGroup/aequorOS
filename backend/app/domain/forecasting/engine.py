@@ -42,13 +42,16 @@ Year ``t`` mechanics (t = 1..years, year 0 = as-of facts):
   secured_funding + capital_total_t)``. When the plug is negative the bank
   has surplus funding, so borrowings floor at zero and the BoG excess-reserve
   cash row (plus its HQLA mirror) absorbs the residual so that assets equal
-  liabilities plus equity Decimal-exactly. NOTE: the build brief described
-  this branch as "scale cash down by the shortfall"; a downward cash
-  adjustment cannot re-balance a funding surplus (assets must RISE to meet
-  the surplus), so cash absorbs the residual upward and the documented 5%
-  cash floor is kept as a guard that raises
-  ``ProjectionError('balance_sheet_infeasible')`` if the adjusted cash ever
-  falls below 5% of assets.
+  liabilities plus equity Decimal-exactly. The only hard infeasibility is a
+  NEGATIVE plug-cash row (a balance sheet that cannot exist).
+  NOTE (2026-07-21): the earlier hard "5%-of-assets cash floor" guard was
+  removed — it failed every projection for a bank whose *opening* cash sits
+  below 5% (the live ingested book runs ~3.6%) and mechanically failed any
+  bank whose loans outgrow deposits, even in surplus years where the plug
+  ADDS cash. Prudential liquidity is already measured properly by the
+  per-year LCR/NSFR this projection computes; a cash-ratio early-warning
+  indicator belongs to the Phase-2 EWI framework (product.md), not to a
+  projection-refusal guard.
 - Operational income roll-forward for the BIA charge: the gross-income
   history seeds from the as-of ``operational_income`` facts; each projected
   year appends ``GI_t = total_income_t`` and the capital engine consumes the
@@ -82,7 +85,6 @@ from app.domain.liquidity.engine import (
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
 PROJECTION_YEARS = 5
-CASH_FLOOR_PCT = Decimal("5")
 _HUNDRED = Decimal("100")
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
@@ -759,14 +761,10 @@ def _apply_funding_plug(state: _State) -> None:
     mirror = CASH_HQLA_MIRRORS.get(CASH_PLUG_CATEGORY)
     if mirror is not None and mirror in state.securities_group:
         state.securities_group[mirror] = state.securities_group[mirror] + adjustment
-    assets_total = state.assets_total()
-    if (
-        state.cash_total() < money(assets_total * CASH_FLOOR_PCT / _HUNDRED)
-        or state.cash[CASH_PLUG_CATEGORY] < _ZERO
-    ):
+    if state.cash[CASH_PLUG_CATEGORY] < _ZERO:
         raise ProjectionError(
             "balance_sheet_infeasible",
-            "The funding plug pushed cash below the 5%-of-assets floor.",
+            "The funding plug would require a negative excess-reserve cash balance.",
         )
 
 
