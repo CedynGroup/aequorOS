@@ -29,6 +29,11 @@ class AppSettings(BaseSettings):
 
     app_env: AppEnv = Field(default="local", alias="APP_ENV")
     app_name: str = Field(default="risk-service", alias="APP_NAME")
+    # Synthetic demo-bank seeding (POST /banks/seed-demo). Default OFF everywhere:
+    # per the 2026-07-21 order, all bank data flows through the Data Engine
+    # (uploads/adapters/API) — seeding exists only as the hermetic test fixture
+    # (tests/conftest.py enables it). Never enable against the primary database.
+    demo_seed_enabled: bool = Field(default=False, alias="DEMO_SEED_ENABLED")
 
 
 class DatabaseSettings(BaseSettings):

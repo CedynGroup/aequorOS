@@ -5,8 +5,8 @@
  *
  * Loads the tenant's banks (selecting the first) and its reporting periods
  * (selecting the latest — the API lists them period-end descending). When no
- * banks are provisioned it renders a full-screen empty state with a
- * one-click demo seed.
+ * banks are provisioned it renders a full-screen empty state routing to the
+ * Data Engine — a bank is created by its first ingestion, never seeded.
  */
 
 import {
@@ -18,13 +18,13 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Landmark, Loader2 } from 'lucide-react';
+import { Landmark } from 'lucide-react';
 import type {
   BankRead,
   BankReportingPeriodRead,
 } from '@aequoros/risk-service-api';
 import { isApiError } from '@/lib/api/client';
-import { useBanks, useReportingPeriods, useSeedDemoBank } from '@/lib/api/hooks';
+import { useBanks, useReportingPeriods } from '@/lib/api/hooks';
 import Logo from './Logo';
 
 type BankContextValue = {
@@ -138,32 +138,20 @@ function NoPeriodsPanel() {
 }
 
 function NoBanksPanel() {
-  const seed = useSeedDemoBank();
+  // No seeding path in the product: every data point flows through the Data
+  // Engine (uploads, core-banking adapters, API push). A bank is provisioned by
+  // its first ingestion.
   return (
     <FullScreenPanel
       title="No banks provisioned"
-      description="This organization has no banks in the risk service yet. Seed the synthetic Sample Bank Ltd dataset to explore the platform."
+      description="This organization has no banks yet. Connect a data source in the Data Engine — the bank is created by its first ingestion (Excel/CSV upload, core-banking connection, or API push)."
       action={
-        <div className="flex flex-col items-center gap-3">
-          <button
-            type="button"
-            disabled={seed.isPending}
-            onClick={() => seed.mutate()}
-            className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-          >
-            {seed.isPending && (
-              <Loader2 size={13} className="animate-spin" aria-hidden />
-            )}
-            Seed Sample Bank Ltd (demo)
-          </button>
-          {seed.error && (
-            <p className="text-caption text-critical">
-              {isApiError(seed.error)
-                ? seed.error.message
-                : 'Seeding failed — check the risk service.'}
-            </p>
-          )}
-        </div>
+        <Link
+          href="/data-engine"
+          className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary"
+        >
+          Open the Data Engine
+        </Link>
       }
     />
   );

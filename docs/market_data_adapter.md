@@ -8,6 +8,17 @@
 **Companion documents:** `data_engine.md`, `storage.md`
 **Purpose:** Define the Market Data Adapter framework that lives inside the AequorOS Data Engine, covering the unified market data abstraction, vendor-specific implementations for Bloomberg and Refinitiv (LSEG), the credential management model, the business-scope taxonomy, the plug-and-play authentication UI flow, quota management, caching and freshness, and integration with the canonical model.
 
+> **Vendor naming note (updated 2026-07-21):** Refinitiv is a retired brand. The
+> **Eikon** desktop was withdrawn 2025-06-30 and replaced by **LSEG Workspace**; the
+> platform REST APIs this framework integrates (formerly "Refinitiv Data Platform" /
+> RDP) are now the **LSEG Data Platform** (client libraries: LSEG Data Library; the
+> api.refinitiv.com base URL is retained by LSEG). Because the adapter targets the
+> platform APIs — never the desktop — the Eikon retirement does not affect the
+> integration design. The internal vendor identifier stays `refinitiv` for wire/DB
+> stability; every user-facing label reads "LSEG (formerly Refinitiv)". Mentions of
+> "Refinitiv" below are historical naming from when this spec was written.
+
+
 ---
 
 ## 1. Context and Scope

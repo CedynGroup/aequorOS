@@ -49,6 +49,9 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # Same guard for the SSO internal key: a developer's .env value would make
     # tests asserting the "SSO not configured" 404 path see a configured key.
     monkeypatch.setenv("SSO_INTERNAL_KEY", "")
+    # Demo seeding is disabled by default in the product (data flows through the
+    # Data Engine); tests opt in — the seed is the hermetic fixture they build on.
+    monkeypatch.setenv("DEMO_SEED_ENABLED", "1")
     # Same guard for the in-process worker: a developer's RUN_INPROCESS_WORKER=1
     # would make every TestClient startup spawn a real poll thread against the
     # blanked database — hundreds of "Worker poll iteration failed" logs and

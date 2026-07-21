@@ -24,7 +24,7 @@ Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `back
 Commits enforcement, and a pre-push hook that runs `mise run risk-service:api-fresh`.
 
 Local DB bootstrap: `mise run risk-service:bootstrap-db` creates a migration role (may bypass RLS)
-and an app runtime role created with `NOBYPASSRLS`, runs migrations, and seeds two demo tenants.
+and an app runtime role created with `NOBYPASSRLS`, and runs migrations. (Tenant data is never seeded — it enters through the Data Engine.)
 App connection string comes from `backend/.env` (remote:
 `postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database>`; local fallback:
 `postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service`).

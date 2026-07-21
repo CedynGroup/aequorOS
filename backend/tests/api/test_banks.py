@@ -4,8 +4,10 @@ from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.services.sample_bank_seed import SAMPLE_BANK_ID
 from tests.api.helpers import ORG_2, headers
 
@@ -18,6 +20,20 @@ def _seed_demo_bank(db_client: TestClient) -> dict[str, Any]:
 
 def _decimal(value: Any) -> Decimal:
     return Decimal(str(value))
+
+
+def test_seed_demo_is_refused_when_flag_off(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The product never seeds: data flows through the Data Engine. The endpoint
+    exists solely as the test fixture behind DEMO_SEED_ENABLED (conftest turns it
+    on for the suite); with the flag off — the default everywhere real — it must
+    refuse."""
+    monkeypatch.setenv("DEMO_SEED_ENABLED", "0")
+    get_settings.cache_clear()
+    r = db_client.post("/api/v1/banks/seed-demo", headers=headers())
+    assert r.status_code == 403
+    assert "data engine" in r.json()["error"]["message"].lower()
 
 
 def test_seed_demo_creates_sample_bank(db_client: TestClient) -> None:

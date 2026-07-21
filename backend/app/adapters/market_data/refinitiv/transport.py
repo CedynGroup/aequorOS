@@ -46,8 +46,14 @@ from app.adapters.market_data.refinitiv.resilience import (
 )
 from app.adapters.market_data.scope_taxonomy import DataScope
 
+# Wire/DB identity — STABLE on purpose (connection rows, registry, contracts).
+# The customer-facing brand is LSEG: Refinitiv was retired as a brand and the
+# Eikon desktop was withdrawn 2025-06-30 in favour of LSEG Workspace. This
+# adapter targets the platform REST APIs (formerly "Refinitiv Data Platform",
+# now under LSEG; base URL api.refinitiv.com is retained by LSEG), not the
+# desktop, so the Eikon retirement does not affect it.
 VENDOR_NAME = "refinitiv"
-VENDOR_LABEL = "Refinitiv (LSEG)"
+VENDOR_LABEL = "LSEG (formerly Refinitiv)"
 
 # Single RDP data-service endpoint key for per-endpoint rate limiting. RDP
 # meters the data-access API (``/data/...``) distinctly from the token

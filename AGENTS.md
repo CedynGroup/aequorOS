@@ -2,6 +2,14 @@
 
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
+- **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
+  the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
+  by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).
+  `POST /banks/seed-demo` exists ONLY as the hermetic test fixture behind
+  `DEMO_SEED_ENABLED` (default off; tests/conftest.py enables it) — never enable it
+  against the primary database, never add seeding paths to the UI, and never re-add
+  seed CLI scripts.
+
 - Scenario resources live under `/api/v1/cases/{case_id}/scenarios`. Calculation
   readiness requires every active scenario to contain growth, expenses,
   cash-flow timing, credit-usage, and repayment-behavior assumptions, with each
@@ -54,6 +62,14 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - The background worker claims jobs **across tenants**, so on RLS-forced Postgres it must run with
   a BYPASSRLS role — set `WORKER_DATABASE_URL` (the tenant-scoped app role sees zero queued rows).
   Falls back to `DATABASE_URL` for SQLite tests.
+- **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
+  ACTUAL primary database — provenance (every canonical row ingestion-traced; the
+  executable form of the no-seeding order), period-spine contiguity, fact coverage,
+  live-metrics presence, sign-in capability. Opt-in:
+  `LIVE_DATA_DATABASE_URL=<worker URL> uv run pytest tests/live_data` (BYPASSRLS worker
+  URL for visibility, or set `LIVE_DATA_ORG_ID`). The session is server-side read-only —
+  it cannot mutate what it certifies. Hermetic suite stays the home of mutation/logic
+  tests; never point mutating tests at the primary DB.
 - The primary database is the **remote Postgres** (`<postgres-host>:<port>/<database>`, credentials
   only in untracked `backend/.env`). Postgres-gated tests run against it via `TEST_DATABASE_URL`
   (each run creates and drops a `risk_service_test_<hex>` schema — the shared DB is safe). The
@@ -71,7 +87,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   Vendor catalogs carry only spec-documented identifiers (`supported: false` otherwise —
   never invent Bloomberg mnemonics or RICs), and raw vendor errors/fields must never reach
   bank-facing surfaces (classify via `errors.BankFacingErrorCode`; the contract suite's
-  leak canary enforces this).
+  leak canary enforces this). Vendor naming: the Refinitiv brand is retired (Eikon
+  withdrawn 2025-06-30 → LSEG Workspace; the platform APIs are the LSEG Data Platform,
+  formerly RDP) — internal vendor id stays `refinitiv` for wire/DB stability, user-facing
+  labels read "LSEG (formerly Refinitiv)".
 - Calculation modules consume market data ONLY via `app/services/market_data.py`
   (DataScope + as-of + institution, source attribution + staleness on every view);
   `fact_derivation` prefers canonical market-data entities and falls back to legacy

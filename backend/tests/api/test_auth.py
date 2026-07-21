@@ -118,6 +118,30 @@ def test_refresh_issues_new_tokens(db_client: TestClient) -> None:
     assert refreshed.json()["access_token"]
 
 
+def test_sso_linked_account_keeps_password_login(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: linking SSO must ADD a sign-in method, not revoke the password.
+
+    (An SSO sign-in flips auth_provider to 'oidc'; password login used to require
+    auth_provider == 'password' and locked the account's own fallback out.)
+    """
+    org_id, user_id = _seed_user(role="admin")
+    _seed_sso_connection(org_id)
+    _patch_verify(monkeypatch)
+    # SSO sign-in links the account (auth_provider becomes 'oidc').
+    assert db_client.post("/api/v1/auth/sso", json={"id_token": _id_token()}).status_code == 200
+
+    # Password login still works afterwards.
+    login = db_client.post("/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD})
+    assert login.status_code == 200, login.text
+    me = db_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+    assert me.json()["user_id"] == str(user_id)
+
+
 def test_wrong_password_is_rejected_then_locks_out(db_client: TestClient) -> None:
     _seed_user()
     for _ in range(5):  # AUTH_MAX_FAILED_LOGINS default

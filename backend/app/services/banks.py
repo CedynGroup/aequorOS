@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.config import get_settings
 from app.models import Bank, BankFinancialFact, BankReportingPeriod
 from app.schemas.banks import (
     BankFactRead,
@@ -113,6 +114,15 @@ def get_period_facts(
 
 
 def seed_demo(db: Session, ctx: TenantContext) -> BankSeedSummaryRead:
+    if not get_settings().app.demo_seed_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Demo seeding is disabled: bank data flows through the Data Engine "
+                "(uploads, core adapters, API). Set DEMO_SEED_ENABLED=1 only for "
+                "isolated test environments."
+            ),
+        )
     if ctx.organization_id != DEMO_ORG_ID:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

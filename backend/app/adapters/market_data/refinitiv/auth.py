@@ -1,4 +1,4 @@
-"""Refinitiv (LSEG) OAuth 2.0 client-credentials authentication (§7.1).
+"""LSEG Data Platform (formerly Refinitiv/RDP) OAuth 2.0 client-credentials auth (§7.1).
 
 The credential dict stored in Vault (per storage.md §7) carries:
 ``client_id``, ``client_secret``, ``scope``, ``subscription_type``,

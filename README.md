@@ -11,7 +11,7 @@ aequorOS/
 ├── backend/                  # ── THE PRODUCT ──
 │   ├── app/                  #   FastAPI service: all engines (IRR, Liquidity, FX,
 │   │                         #   Basel, FTP, Forecasting), app/ml LSTM, Data Engine,
-│   │                         #   Postgres + RLS tenancy, BoG submissions, seed
+│   │                         #   Postgres + RLS tenancy, BoG submissions
 │   ├── dashboard/            #   the product UI (Next.js) → app.aequoros.com
 │   ├── alembic/ tests/ scripts/ docker-compose.yml
 ├── frontend/                 # ── MARKETING SITE (Next.js) ── aequoros.com pages
@@ -41,7 +41,9 @@ Three deployables: `frontend` → Vercel (aequoros.com) · `backend/dashboard` �
 # database: the shared remote Postgres — DATABASE_URL comes from backend/.env
 # (untracked; shape in backend/.env.example). Schema is kept at alembic head:
 cd backend && .venv/bin/alembic upgrade head   # no-op when already at head
-.venv/bin/python scripts/seed_sample_bank.py   # idempotent demo seed
+# Data enters ONLY through the Data Engine (Excel/CSV upload, core-banking
+# adapters, API push) — there is no seed step; a bank is created by its
+# first ingestion.
 
 # backend API :8003 (one service — includes the LSTM cash-flow module, which
 # lazy-trains on the first forecast call or reuses artifacts/cashflow/)
