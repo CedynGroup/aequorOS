@@ -44,7 +44,7 @@ export default function MarketDataPage() {
           { label: 'Market Data' },
         ]}
         title="Market Data"
-        subtitle="Yield curves, FX rates, ratings, and macro forecasts from Bloomberg, Refinitiv, or manual upload — normalized into one canonical model with freshness and attribution."
+        subtitle="Yield curves, FX rates, ratings, and macro forecasts from Bloomberg, LSEG (formerly Refinitiv), or manual upload — normalized into one canonical model with freshness and attribution."
       />
       <div className="px-8 py-6 max-w-6xl space-y-8">
         <section className="space-y-4">
@@ -72,7 +72,7 @@ export default function MarketDataPage() {
                 No market data sources connected yet
               </p>
               <p className="text-caption text-slate">
-                Connect Bloomberg or Refinitiv, or use manual upload below —
+                Connect Bloomberg or LSEG, or use manual upload below —
                 calculations consume the same canonical scopes either way.
               </p>
             </div>

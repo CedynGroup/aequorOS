@@ -1,4 +1,9 @@
-"""Reset a bank to its seeded (synthetic) state by removing all uploaded data.
+"""Wipe a bank's ingested Data Engine artifacts for a clean reload.
+
+DESTRUCTIVE and user-gated (--yes): use only when deliberately clearing a bank
+before re-ingesting (e.g. a fresh history-simulator load). There is no seeded
+fallback state — after a wipe the bank is EMPTY until data flows back in
+through the Data Engine (uploads, core adapters, API push).
 
 Deletes, for one bank in one organization:
 - every Data Engine artifact: ingestion batches, lineage records, translation
@@ -9,8 +14,8 @@ Deletes, for one bank in one organization:
   period's facts and regulatory runs;
 - optionally (--purge-storage) every object in the configured S3/MinIO bucket.
 
-Seeded periods, facts, parameters, and their calculation runs are preserved.
-Audit events are never deleted (immutable log).
+Periods/facts not created by data activation (legacy rows, if any) are left
+untouched. Audit events are never deleted (immutable log).
 
 Usage:
     DATABASE_URL=postgresql+psycopg://... python scripts/reset_uploaded_data.py --yes

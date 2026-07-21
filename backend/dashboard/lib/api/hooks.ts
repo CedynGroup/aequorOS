@@ -107,16 +107,6 @@ export function useBankPeriodFacts(
   });
 }
 
-export function useSeedDemoBank() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => apiCall(() => banksApi.seedDemoBank({})),
-    onSuccess: () => {
-      void queryClient.invalidateQueries();
-    },
-  });
-}
-
 export function useLiquidityDashboard(
   bankId: string | undefined,
   periodId: string | undefined

@@ -257,7 +257,7 @@ export default function AddSourcePanel({
         <div className="space-y-4">
           <p className="text-body text-slate">
             {vendor === 'refinitiv'
-              ? 'Create an OAuth application in your Refinitiv Data Platform account, then enter its credentials. If you do not have them, contact your Refinitiv account administrator.'
+              ? 'Create an OAuth application in your LSEG Data Platform account (formerly Refinitiv Data Platform), then enter its credentials. If you do not have them, contact your LSEG account administrator.'
               : 'Contact your Bloomberg administrator to authorize AequorOS access to your subscription and provision an application identifier.'}
           </p>
           <CredentialFields

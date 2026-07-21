@@ -30,14 +30,14 @@ export const VENDORS: {
   },
   {
     key: 'refinitiv',
-    name: 'Refinitiv (LSEG)',
-    description: 'Connect your Refinitiv Data Platform subscription.',
+    name: 'LSEG (formerly Refinitiv)',
+    description: 'Connect your LSEG Data Platform subscription (the platform APIs behind LSEG Workspace).',
   },
   {
     key: 'manual_upload',
     name: 'Manual upload',
     description:
-      "Upload market data files directly. Use if you don't have Bloomberg or Refinitiv, or as a backup source.",
+      "Upload market data files directly. Use if you don't have Bloomberg or LSEG, or as a backup source.",
   },
 ];
 

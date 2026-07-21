@@ -75,8 +75,13 @@ def login_with_password(
     now = utc_now()
     user = _resolve_user(db, email, organization_id)
 
-    # Uniform failure for unknown user / no password / SSO-only account: never disclose which.
-    if user is None or user.auth_provider != "password" or not user.password_hash:
+    # Capability-based, not provider-labeled: anyone holding a password hash may
+    # password-login, INCLUDING accounts later linked to SSO (linking must add a
+    # sign-in method, never silently revoke the password — an SSO-linked admin
+    # who can no longer password-login is locked out of their own fallback).
+    # SSO-only accounts (JIT or provisioned without a password) have no hash and
+    # fail uniformly with unknown emails: never disclose which case it was.
+    if user is None or not user.password_hash:
         raise _INVALID
 
     if user.locked_until is not None and _as_aware(user.locked_until) > now:

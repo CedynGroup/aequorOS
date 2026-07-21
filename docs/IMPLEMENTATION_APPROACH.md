@@ -1,5 +1,10 @@
 # AequorOS MVP Implementation Approach
 
+> **HISTORICAL PLAN.** The build has since moved past this document. Note in
+> particular: the "seed one bank dataset" steps below are obsolete — as of
+> 2026-07-21 there is no seeding in the product; all bank data enters through
+> the Data Engine (uploads, core-banking adapters, API push).
+
 ## Purpose
 
 This document defines the implementation approach to move AequorOS from a static-data prototype to a database-driven, multi-tenant-ready MVP that can be tested with a live bank. It is written for engineering execution, with emphasis on calculation logic correctness, reproducibility, and regulatory traceability.

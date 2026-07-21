@@ -1,6 +1,13 @@
 # AequorOS MVP — Build Handoff
 
-**Status: BUILD COMPLETE — READY FOR TESTING**
+> **HISTORICAL SNAPSHOT — SUPERSEDED.** This handoff describes the build at the time it
+> was written; counts, run commands, and setup steps are outdated. Current truth lives in
+> `docs/ARCHITECTURE.md` + the repo CLAUDE.md. In particular: **there is no seed step** —
+> the former seed scripts were removed (2026-07-21) and all bank data flows through the
+> Data Engine (uploads, core-banking adapters, API push). `POST /banks/seed-demo` is a
+> test-only fixture behind `DEMO_SEED_ENABLED` (default off).
+
+**Status: BUILD COMPLETE — READY FOR TESTING** *(historical)*
 
 The **full six-module product** (Interest Rate Risk · Liquidity · FX · Basel Capital ·
 Funds Transfer Pricing · Balance Sheet Forecasting, plus the LSTM cash-flow service) is
@@ -30,10 +37,7 @@ All six modules run via `.../run-all-scenarios` + `.../dashboard`; tenant isolat
 (org2 → 404 on every module). Backend suite: **570 passed, 16 skipped** (incl. the in-process
 cash-flow ML tests, run with `CASHFLOW_FAST_TEST=1`); repo-wide `ruff` clean.
 
-### Seed is idempotent
-
-`scripts/seed_sample_bank.py` now clears all bank-scoped dependents (regulatory runs +
-data-engine ingestion/canonical rows) before re-inserting, so it re-runs cleanly on a live DB.
+### Seed is idempotent *(historical — script removed 2026-07-21; no seeding in the product)*
 
 ---
 
@@ -71,9 +75,8 @@ CORS_ORIGINS=http://localhost:3001 \
 # (offline fallback: docker compose up -d, then export the localhost:15432
 #  migration/app role URLs as before)
 
-# 4. Seed Sample Bank Ltd (idempotent; only needed if GET /banks is empty)
-#    Either: cd backend && .venv/bin/python scripts/seed_sample_bank.py
-#    Or POST /api/v1/banks/seed-demo with the demo tenant headers.
+# 4. (removed) There is no seed step — ingest data through the Data Engine
+#    (Excel/CSV upload, core-banking adapters, or API push).
 
 # 5. Demo UI
 cd .. && pnpm --filter @aequoros/dashboard dev   # http://localhost:3001
