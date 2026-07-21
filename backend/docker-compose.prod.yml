@@ -6,10 +6,19 @@
 #   · NO bundled database or object store — production uses the managed
 #     Postgres (DATABASE_URL) and the existing MinIO/S3 (S3_*). The bundled
 #     risk-postgres/risk-minio in docker-compose.yml are LOCAL DEV ONLY.
-#   · NO credentials in this file. Everything is fetched from the environment
-#     (Coolify → Environment Variables; compose interpolates them as its .env).
-#   · ${VAR:?} marks required secrets — a missing value FAILS the deploy
-#     instead of booting a misconfigured service.
+#   · NO credentials in this file, and NO variable interpolation either: every
+#     service loads `env_file: .env` — the file the platform (Coolify) writes
+#     from its Environment Variables UI into the project directory. SHARP EDGE
+#     (learned 2026-07-21): Coolify PARSES compose files — including comments —
+#     and auto-seeds a UI env row for every dollar-brace variable reference it
+#     finds; with required-with-message guards it even stored the message text
+#     as the value, and its duplicate handling re-injected junk rows on every
+#     deploy. Referencing no variables gives the parser nothing to seed. Do
+#     not reintroduce dollar-brace interpolation in this file, even in comments.
+#   · Fail-fast moved to the app layer: the backend refuses to start on missing
+#     critical config (empty DATABASE_URL → settings validator raises in
+#     risk-migrate; unset AUTH_JWT_SECRET → auth fails closed), so a bad value
+#     still stops the deploy at the migrate step.
 #
 # Coolify domains: attach api.aequoros.com to risk-api ONLY (container port
 # 8000). risk-migrate and risk-worker get no domain.
@@ -21,8 +30,8 @@ services:
     build: .
     command: ["alembic", "upgrade", "head"]
     restart: "no"
-    environment:
-      DATABASE_URL: ${DATABASE_URL:?}
+    env_file:
+      - .env
 
   risk-api:
     build: .
@@ -38,36 +47,11 @@ services:
       timeout: 6s
       retries: 3
       start_period: 20s
+    env_file:
+      - .env
     environment:
-      APP_ENV: ${APP_ENV:-production}
-      APP_NAME: ${APP_NAME:-risk-service}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
-      # --- identity / auth (required) ---
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?}
-      # Own-OIDC SSO: authenticates the dashboard server's internal fetch of the
-      # OIDC client config. Must equal the dashboard app's SSO_INTERNAL_KEY.
-      # Optional — unset just disables SSO sign-in.
-      SSO_INTERNAL_KEY: ${SSO_INTERNAL_KEY:-}
-      # --- data stores (required; managed services, never bundled) ---
-      DATABASE_URL: ${DATABASE_URL:?}
-      WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?}
-      CREDENTIAL_VAULT_MASTER_KEY: ${CREDENTIAL_VAULT_MASTER_KEY:?}
-      # --- object storage (required) ---
-      S3_ENDPOINT: ${S3_ENDPOINT:?}
-      S3_BUCKET: ${S3_BUCKET:?}
-      S3_REGION: ${S3_REGION:-us-east-1}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:?}
-      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
-      STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
-      STORAGE_ENV: ${STORAGE_ENV:-production}
-      STORAGE_KMS_KEY_ID: ${STORAGE_KMS_KEY_ID:-}
-      STORAGE_RETIRE_AFTER: ${STORAGE_RETIRE_AFTER:-}
-      # --- web ---
-      CORS_ORIGINS: ${CORS_ORIGINS:?}
-      RISK_MAX_UPLOAD_BYTES: ${RISK_MAX_UPLOAD_BYTES:-25000000}
-      # --- workers run as a separate service; never in-process in prod ---
+      # Literal pin (overrides env_file): workers run as a separate service;
+      # never in-process in prod.
       RUN_INPROCESS_WORKER: "0"
 
   risk-worker:
@@ -80,25 +64,5 @@ services:
     depends_on:
       risk-migrate:
         condition: service_completed_successfully
-    environment:
-      APP_ENV: ${APP_ENV:-production}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DATABASE_URL: ${DATABASE_URL:?}
-      WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?}
-      CREDENTIAL_VAULT_MASTER_KEY: ${CREDENTIAL_VAULT_MASTER_KEY:?}
-      S3_ENDPOINT: ${S3_ENDPOINT:?}
-      S3_BUCKET: ${S3_BUCKET:?}
-      S3_REGION: ${S3_REGION:-us-east-1}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:?}
-      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
-      STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
-      STORAGE_ENV: ${STORAGE_ENV:-production}
-      WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-2.0}
-      # Must exceed the longest handler runtime (etl_dedup >15 min) or a
-      # slow-but-alive job is reclaimed and retried into failure.
-      WORKER_STALE_JOB_SECONDS: ${WORKER_STALE_JOB_SECONDS:-3600}
-      # Scheduled producers stay opt-in.
-      OFFICIAL_RUN_ENABLED: ${OFFICIAL_RUN_ENABLED:-false}
-      MARKET_DATA_PULL_ENABLED: ${MARKET_DATA_PULL_ENABLED:-false}
-      TEMENOS_PULL_ENABLED: ${TEMENOS_PULL_ENABLED:-false}
+    env_file:
+      - .env

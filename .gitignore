@@ -41,6 +41,11 @@ coverage/
 docs/*.docx
 # Guiding AI/ML infra spec — kept local, not tracked in the repo.
 docs/ai_engine.md
+# Strategy/spec docs held back until shared with the dev team (local-only for now)
+docs/product.md
+docs/rbac.md
+docs/data_engine.md
+docs/ARCHITECTURE.md
 
 # Local Snowflake seed CSVs (25MB) loaded into the warehouse — regenerable, not source.
 data_snowflake/

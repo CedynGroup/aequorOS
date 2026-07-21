@@ -2,6 +2,20 @@
 
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
+- **`docs/product.md` is the master product roadmap** (source of truth for build
+  sequencing, Phase 0 as-built anchor → Phase 7 enterprise). Sub-docs (rbac.md,
+  data_engine.md, ai_engine.md, market_data_adapter.md, regulatory_reporting.md,
+  storage.md, temenos_adapter.md) govern domain detail; product.md governs order;
+  code wins over both. Phase numbers are per-document — cite `doc.md §N Phase X`,
+  never a bare "Phase 2".
+- **Coolify compose apps: never use dollar-brace variable interpolation in deploy compose
+  files** (2026-07-21 incident: Coolify parses compose text — comments included — and
+  auto-seeds a UI env row per reference; with required-with-message guards it stored the
+  message text as VALUES and duplicated rows every deploy, corrupting the backend app's
+  env store until the resource was recreated). Pattern: services load `env_file: .env`
+  (Coolify writes it from its UI); fail-fast lives in the app's settings validators.
+  Exception: build args (dashboard NEXT_PUBLIC_*) must stay interpolated — keep guards
+  bare `:?` with no message text.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).

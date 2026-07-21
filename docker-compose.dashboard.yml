@@ -13,9 +13,13 @@
 #   • Domain:                  https://app.aequoros.com → service `dashboard`
 #                              (container port 3000)
 #   • Env vars: NEXT_PUBLIC_* are BUILD-time (inlined into the client bundle;
-#     Coolify passes UI env vars as --build-arg for compose builds), AUTH_* are
-#     runtime. Bare ${VAR:?} on purpose — never put message text in guards,
-#     Coolify seeds variable values from it.
+#     Coolify passes UI env vars as --build-arg for compose builds) and MUST
+#     stay interpolated — build args cannot come from env_file. Runtime vars
+#     (AUTH_SECRET, AUTH_URL, SSO_INTERNAL_KEY) load via env_file: .env, the
+#     file Coolify writes from its UI — no runtime interpolation, so the
+#     compose parser has only the three build args to seed. Never put message
+#     text in guards: Coolify stores guard text as seeded variable VALUES
+#     (the 2026-07-21 backend incident).
 # =============================================================================
 
 services:
@@ -36,11 +40,7 @@ services:
       timeout: 6s
       retries: 3
       start_period: 15s
+    env_file:
+      - .env
     environment:
-      AUTH_SECRET: ${AUTH_SECRET:?}
-      AUTH_URL: ${AUTH_URL:?}
       AUTH_TRUST_HOST: "true"
-      # Own-OIDC SSO: gates this app's server-to-server fetch of the OIDC client
-      # config from the backend. Must equal the backend's SSO_INTERNAL_KEY.
-      # Unset = SSO button simply hidden; password login unaffected.
-      SSO_INTERNAL_KEY: ${SSO_INTERNAL_KEY:-}
