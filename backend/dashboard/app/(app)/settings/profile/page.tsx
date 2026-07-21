@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { Check, Monitor, Moon, Sun } from 'lucide-react';
 
 import { useUserProfile } from '@/components/profile/ProfileProvider';
@@ -20,6 +26,8 @@ type ProfileForm = {
   timezone: string;
   theme: ThemePreference;
 };
+
+type ProfileField = keyof ProfileForm;
 
 const EMPTY_FORM: ProfileForm = {
   displayName: '',
@@ -78,32 +86,88 @@ export default function ProfilePage() {
     useUserProfile();
   const { theme } = useTheme();
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM);
+  const dirtyFields = useRef(new Set<ProfileField>());
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
-    setForm({
+    const serverForm: ProfileForm = {
       displayName: profile.displayName ?? '',
       jobTitle: profile.jobTitle ?? '',
       locale: profile.locale ?? '',
       timezone: profile.timezone ?? '',
       theme: profile.theme ?? theme,
-    });
+    };
+    setForm((current) => ({
+      displayName: dirtyFields.current.has('displayName')
+        ? current.displayName
+        : serverForm.displayName,
+      jobTitle: dirtyFields.current.has('jobTitle')
+        ? current.jobTitle
+        : serverForm.jobTitle,
+      locale: dirtyFields.current.has('locale')
+        ? current.locale
+        : serverForm.locale,
+      timezone: dirtyFields.current.has('timezone')
+        ? current.timezone
+        : serverForm.timezone,
+      theme: dirtyFields.current.has('theme')
+        ? current.theme
+        : serverForm.theme,
+    }));
   }, [profile, theme]);
+
+  function updateField<Field extends ProfileField>(
+    field: Field,
+    value: ProfileForm[Field],
+  ) {
+    dirtyFields.current.add(field);
+    setSaved(false);
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function reconcileSavedForm(
+    submitted: ProfileForm,
+    savedProfile: Awaited<ReturnType<typeof updateProfile>>,
+  ) {
+    const savedForm: ProfileForm = {
+      displayName: savedProfile.displayName ?? '',
+      jobTitle: savedProfile.jobTitle ?? '',
+      locale: savedProfile.locale ?? '',
+      timezone: savedProfile.timezone ?? '',
+      theme: savedProfile.theme ?? theme,
+    };
+    setForm((current) => {
+      const reconciled = { ...current };
+      function reconcileField<Field extends ProfileField>(field: Field) {
+        if (current[field] === submitted[field]) {
+          reconciled[field] = savedForm[field];
+          dirtyFields.current.delete(field);
+        }
+      }
+      (Object.keys(submitted) as ProfileField[]).forEach(reconcileField);
+      return reconciled;
+    });
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaved(false);
     setSaveError(null);
+    const submitted = { ...form };
     try {
-      await updateProfile({
-        displayName: optional(form.displayName),
-        jobTitle: optional(form.jobTitle),
-        locale: optional(form.locale),
-        timezone: optional(form.timezone),
-        theme: form.theme,
+      const savedProfile = await updateProfile({
+        displayName: optional(submitted.displayName),
+        jobTitle: optional(submitted.jobTitle),
+        locale: optional(submitted.locale),
+        timezone: optional(submitted.timezone),
+        theme: submitted.theme,
       });
+      reconcileSavedForm(submitted, savedProfile);
       setSaved(true);
     } catch (updateError) {
       setSaveError(
@@ -188,10 +252,7 @@ export default function ProfilePage() {
                       maxLength={255}
                       autoComplete="name"
                       onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          displayName: event.target.value,
-                        }))
+                        updateField('displayName', event.target.value)
                       }
                       className={INPUT_CLASS}
                       placeholder="Jane Mensah"
@@ -204,10 +265,7 @@ export default function ProfilePage() {
                       maxLength={255}
                       autoComplete="organization-title"
                       onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          jobTitle: event.target.value,
-                        }))
+                        updateField('jobTitle', event.target.value)
                       }
                       className={INPUT_CLASS}
                       placeholder="Treasury Analyst"
@@ -238,10 +296,7 @@ export default function ProfilePage() {
                       list="profile-locales"
                       pattern="[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*"
                       onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          locale: event.target.value,
-                        }))
+                        updateField('locale', event.target.value)
                       }
                       className={INPUT_CLASS}
                       placeholder="en-GH"
@@ -263,10 +318,7 @@ export default function ProfilePage() {
                       maxLength={255}
                       list="profile-timezones"
                       onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          timezone: event.target.value,
-                        }))
+                        updateField('timezone', event.target.value)
                       }
                       className={INPUT_CLASS}
                       placeholder="Africa/Accra"
@@ -300,9 +352,7 @@ export default function ProfilePage() {
                         type="button"
                         role="radio"
                         aria-checked={selected}
-                        onClick={() =>
-                          setForm((current) => ({ ...current, theme: value }))
-                        }
+                        onClick={() => updateField('theme', value)}
                         className={`flex items-center gap-3 p-4 rounded-md border text-left transition-colors ${
                           selected
                             ? 'border-action bg-action-light text-navy'

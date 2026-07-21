@@ -1,6 +1,13 @@
 'use client';
 
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import type {
@@ -16,7 +23,7 @@ type ProfileContextValue = {
   error: Error | null;
   updateProfile: (updates: ProfileUpdateRequest) => Promise<MeResponse>;
   isSaving: boolean;
-  refetch: () => Promise<unknown>;
+  refetch: () => Promise<MeResponse | undefined>;
 };
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
@@ -32,6 +39,7 @@ export function useUserProfile(): ProfileContextValue {
 export default function ProfileProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
   const queryClient = useQueryClient();
+  const updateQueue = useRef<Promise<void>>(Promise.resolve());
   const profileQueryKey = useMemo(
     () => [
       'auth',
@@ -54,23 +62,40 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
       queryClient.setQueryData(profileQueryKey, profile);
     },
   });
+  const updateProfile = useCallback(
+    (updates: ProfileUpdateRequest) => {
+      const request = updateQueue.current.then(() =>
+        updateMutation.mutateAsync(updates),
+      );
+      updateQueue.current = request.then(
+        () => undefined,
+        () => undefined,
+      );
+      return request;
+    },
+    [updateMutation.mutateAsync],
+  );
+  const refetch = useCallback(
+    async () => (await profileQuery.refetch()).data,
+    [profileQuery.refetch],
+  );
 
   const value = useMemo<ProfileContextValue>(
     () => ({
       profile: profileQuery.data,
       isLoading: profileQuery.isLoading,
       error: profileQuery.error,
-      updateProfile: updateMutation.mutateAsync,
+      updateProfile,
       isSaving: updateMutation.isPending,
-      refetch: profileQuery.refetch,
+      refetch,
     }),
     [
       profileQuery.data,
       profileQuery.error,
       profileQuery.isLoading,
-      profileQuery.refetch,
+      refetch,
       updateMutation.isPending,
-      updateMutation.mutateAsync,
+      updateProfile,
     ],
   );
 

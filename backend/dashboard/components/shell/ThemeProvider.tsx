@@ -14,6 +14,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -66,9 +67,12 @@ function readLocalPreference(): ThemePreference {
 }
 
 export default function ThemeProvider({ children }: { children: ReactNode }) {
-  const { profile, updateProfile } = useUserProfile();
+  const { profile, updateProfile, refetch } = useUserProfile();
   const [theme, setThemeState] = useState<ThemePreference>('system');
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('dark');
+  const pendingTheme = useRef<ThemePreference | null>(null);
+  const isSyncing = useRef(false);
+  const confirmedTheme = useRef<ThemePreference>('system');
 
   const applyTheme = useCallback((preference: ThemePreference) => {
     const resolved = resolveTheme(preference);
@@ -84,12 +88,16 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const local = readLocalPreference();
+    confirmedTheme.current = local;
     setThemeState(local);
     setResolvedTheme(readDocumentTheme());
   }, []);
 
   useEffect(() => {
-    if (profile?.theme) applyTheme(profile.theme);
+    if (profile?.theme && !isSyncing.current) {
+      confirmedTheme.current = profile.theme;
+      applyTheme(profile.theme);
+    }
   }, [applyTheme, profile?.theme]);
 
   useEffect(() => {
@@ -101,15 +109,43 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
     return () => media.removeEventListener('change', onChange);
   }, [applyTheme, theme]);
 
+  const flushTheme = useCallback(async () => {
+    if (isSyncing.current) return;
+    isSyncing.current = true;
+
+    try {
+      while (pendingTheme.current) {
+        const next = pendingTheme.current;
+        pendingTheme.current = null;
+        try {
+          const savedProfile = await updateProfile({ theme: next });
+          if (!pendingTheme.current) {
+            const savedTheme = savedProfile.theme ?? next;
+            confirmedTheme.current = savedTheme;
+            applyTheme(savedTheme);
+          }
+        } catch {
+          const refreshedProfile = await refetch().catch(() => undefined);
+          if (!pendingTheme.current) {
+            const canonicalTheme =
+              refreshedProfile?.theme ?? confirmedTheme.current;
+            confirmedTheme.current = canonicalTheme;
+            applyTheme(canonicalTheme);
+          }
+        }
+      }
+    } finally {
+      isSyncing.current = false;
+    }
+  }, [applyTheme, refetch, updateProfile]);
+
   const setTheme = useCallback(
     (next: ThemePreference) => {
       applyTheme(next);
-      void updateProfile({ theme: next }).catch(() => {
-        // Keep the immediate local preference if persistence is temporarily
-        // unavailable; the next successful profile load remains authoritative.
-      });
+      pendingTheme.current = next;
+      void flushTheme();
     },
-    [applyTheme, updateProfile],
+    [applyTheme, flushTheme],
   );
 
   const toggle = useCallback(() => {
