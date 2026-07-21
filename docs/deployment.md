@@ -8,7 +8,8 @@ engine, calc modules, and auth are built; this is the operational shell.
 Backend:
 - `AUTH_JWT_SECRET` — signs/verifies app JWTs. Strong random (`openssl rand -base64 48`).
   **Auth fails closed if unset** (no header-trust fallback).
-- `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID` — SSO id_token verification (JWKS).
+- `SSO_INTERNAL_KEY` — authenticates the dashboard server's internal fetch of the OIDC
+  client config (own-OIDC SSO). Same value on backend and dashboard; unset = SSO off.
 - `DATABASE_URL` (app role, RLS-forced), `WORKER_DATABASE_URL` (**BYPASSRLS** role — the
   worker claims cross-tenant; login also resolves users cross-tenant through it).
 - `CREDENTIAL_VAULT_MASTER_KEY` (AES-256-GCM vendor-credential vault).
@@ -16,18 +17,22 @@ Backend:
 - `CORS_ORIGINS` — comma-separated; set to the dashboard origin(s) only (never `*`).
 
 Dashboard:
-- `AUTH_SECRET` (NextAuth session), `AUTH0_CLIENT_ID` / `AUTH0_CLIENT_SECRET` / `AUTH0_DOMAIN`.
+- `AUTH_SECRET` (NextAuth session), `SSO_INTERNAL_KEY` (same value as the backend's).
 - `NEXT_PUBLIC_RISK_API_BASE_URL` (the backend `/api/v1` origin).
 
-## 2. Auth0
-- App type: Regular Web Application.
-- **Allowed Callback URL**: `{dashboard origin}/api/auth/callback/auth0`.
-- **Allowed Logout URL**: `{dashboard origin}`.
+## 2. SSO (own OIDC relying party — no third-party broker)
+- The bank registers an OIDC app in **their** IdP (Google Workspace, Entra, Okta, …) with
+  redirect URI `{dashboard origin}/api/auth/callback/sso`, then an AequorOS org admin enters
+  issuer / client ID / client secret in **Settings → Authentication** (secret is write-only,
+  sealed with `CREDENTIAL_VAULT_MASTER_KEY`). Full runbook: `docs/sso-onboarding.md`.
+- The backend independently verifies every id_token against the connection issuer's JWKS
+  (zero-trust), enforces `email_verified` and the allowed-email-domain list.
 - Users are **pre-provisioned** in AequorOS (matched by email on first SSO login); an
   unknown identity is rejected — no auto-provisioning.
 
 ## 3. Database
-- `alembic upgrade head` (current head: `202607180013`, adds the user credential/RBAC fields).
+- `alembic upgrade head` (current head: `202607200015`, adds `sso_connections` + the generic
+  `oidc` auth provider).
 - **Seed the first admin** (else nobody can log in) — a user with `role='admin'`,
   `auth_provider='password'`, and an Argon2id `password_hash` (see `app.core.security.hash_password`).
 

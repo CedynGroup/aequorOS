@@ -46,6 +46,9 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # unconfigured; tests that need a key set it themselves via monkeypatch. CI
     # has no .env, so the key is already absent there.
     monkeypatch.setenv("CREDENTIAL_VAULT_MASTER_KEY", "")
+    # Same guard for the SSO internal key: a developer's .env value would make
+    # tests asserting the "SSO not configured" 404 path see a configured key.
+    monkeypatch.setenv("SSO_INTERNAL_KEY", "")
     # Same guard for the in-process worker: a developer's RUN_INPROCESS_WORKER=1
     # would make every TestClient startup spawn a real poll thread against the
     # blanked database — hundreds of "Worker poll iteration failed" logs and
@@ -58,6 +61,22 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     yield
     get_settings.cache_clear()
     get_engine.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def fresh_settings_cache() -> Iterator[None]:
+    """Kill order-dependent settings pollution across the suite.
+
+    ``get_settings()`` is lru_cached, and many fixtures monkeypatch env keys
+    (vault master key, SSO internal key, …) + ``cache_clear()`` at SETUP only —
+    after monkeypatch teardown the cache still holds their Settings, so the next
+    test on the same xdist worker inherits it (observed as random vault /
+    workflow failures that pass in isolation). Clear on both sides of every test
+    so each one reads the hermetic env fresh.
+    """
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture(autouse=True)

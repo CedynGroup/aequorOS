@@ -221,15 +221,17 @@ class AuthSettings(BaseSettings):
     )
     max_failed_logins: int = Field(default=5, alias="AUTH_MAX_FAILED_LOGINS")
     lockout_seconds: int = Field(default=900, alias="AUTH_LOCKOUT_SECONDS")
-    # SSO via Auth0 (OIDC): the backend verifies the Auth0 id_token against Auth0's
-    # JWKS (zero-trust) — issuer https://{domain}/, audience = the client id — then
-    # mints its own app token. Unset domain/client_id disables the SSO endpoint.
-    auth0_domain: str | None = Field(default=None, alias="AUTH0_DOMAIN")
-    auth0_client_id: str | None = Field(default=None, alias="AUTH0_CLIENT_ID")
+    # SSO (own OIDC relying party — no third-party broker): connections live in
+    # the sso_connections table (issuer/client_id per org, vaulted secret) and the
+    # backend verifies every id_token against the issuer's JWKS (zero-trust).
+    # SSO_INTERNAL_KEY authenticates the dashboard's server-to-server fetch of the
+    # OIDC client config (the only path that ever reads the secret back). Unset =
+    # that internal endpoint is disabled, so browser SSO cannot start.
+    sso_internal_key: str | None = Field(default=None, alias="SSO_INTERNAL_KEY")
 
-    @field_validator("auth0_domain", mode="before")
+    @field_validator("sso_internal_key", mode="before")
     @classmethod
-    def blank_domain_is_unset(cls, value: str | None) -> str | None:
+    def blank_internal_key_is_unset(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
             return None
         return value

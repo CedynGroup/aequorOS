@@ -41,7 +41,9 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 
 | Area | Current state | Where |
 |---|---|---|
-| Auth | Zero-trust JWT (HS256), Argon2id passwords, Auth0 SSO, refresh rotation | `app/core/security.py`, `dashboard/auth.ts` |
+| Auth | Zero-trust JWT (HS256), Argon2id passwords, **own-OIDC SSO** (no third-party broker; built 2026-07-20), refresh rotation | `app/core/security.py`, `dashboard/auth.ts` |
+| SSO self-service (single connection) | **BUILT.** Per-org `sso_connections` row: issuer + client id + AES-256-GCM-sealed secret (write-only), allowed email domains, enable toggle — managed by an `admin` in **Settings → Authentication**. Backend verifies id_tokens against the connection issuer's JWKS (discovery-based, RS256/ES256, `email_verified` + domain enforcement); dashboard NextAuth loads the client config through an `SSO_INTERNAL_KEY`-gated internal endpoint. Pre-provisioned users by default; **request-access JIT is BUILT as a per-connection opt-in** (`jit_enabled`): first sign-in from an allowed domain records a **deactivated** stub and returns 403 "awaiting administrator approval" — zero access until an admin approves it with an explicit role via `/auth/sso/access-requests` (list/approve/reject; Settings → Authentication card). Refused at config AND login time without a non-empty domain list. One connection per org / one enabled per deployment — Phase 2 lifts this. | `app/models/sso_connection.py`, `app/services/sso_config.py`, `app/services/authentication.py`, `app/api/v1/auth.py`, `dashboard/components/settings/AuthenticationPanel.tsx`, `docs/sso-onboarding.md` |
+| Connection health (bank-IT surface) | **BUILT** (read-only): Data Engine → Overview aggregates every configured source connection (DB-direct, T24, market-data) with live status, last sync, credential expiry, and plain-language remediation hints | `dashboard/components/data-engine/ConnectionHealthPanel.tsx` |
 | Roles | `admin > approver > analyst > viewer` (linear rank), single role per user | `app/core/security.py:ROLES`, `app/models/user.py:USER_ROLES` |
 | Enforcement | Only the **viewer↔analyst write boundary** is wired (`get_mutation_tenant_context` requires `analyst`+). `require_role(minimum)` factory exists but gates nothing else. | `app/api/deps.py` |
 | Tenancy | Postgres RLS forced on `app.organization_id`; cross-tenant work runs on the BYPASSRLS `WORKER_DATABASE_URL` role | `app/db/session.py`, CLAUDE.md |
@@ -56,7 +58,9 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 3. **`Organization` is bare** (`{id, name}`) — no domain, plan, SSO config, or settings.
 4. **One flat role per user**, no module/entity/desk scoping — a Liquidity Manager and a CFO get the same surface.
 5. **No SoD engine** beyond the one hand-rolled REG check; no generalized maker-checker on calculation/official runs.
-6. **No audit log**, no SSO/SCIM self-service, no impersonation, no seat/plan concept.
+6. **No audit log**, no SCIM, no impersonation, no seat/plan concept. (SSO
+   self-service exists in single-connection form — see §2 above; Phase 2 grows
+   it to multi-connection + home-realm discovery, it is NOT rebuilt.)
 
 ### Target model in one sentence
 
@@ -469,7 +473,9 @@ Settings
 │   ├─ Roles & permissions  view presets; who-has-what matrix; (later) custom roles
 │   └─ Billing & seats    plan, seat usage/limit, invoices   (Owner)
 ├─ Authentication
-│   ├─ Single sign-on     self-service SAML/OIDC per org
+│   ├─ Single sign-on     self-service OIDC per org — SEED BUILT (Settings →
+│   │                     Authentication card: issuer/client id/write-only
+│   │                     secret/domains/enable); grow in place, add SAML later
 │   ├─ Verified domains   DNS-TXT domain verification + capture
 │   └─ Provisioning       SCIM token, attribute/group→role mapping, sync status
 ├─ Security
@@ -539,15 +545,22 @@ impersonation-gated**, not full super-admin. Minimize standing super-admins.
 5. **Set credential / first login** → **consume token (single-use, delete after enrollment)** → state → **ACTIVE**.
 6. **Resend** reissues + invalidates the old token; **Revoke** invalidates → **REVOKED**.
 
-### 11.3 SSO (SAML / OIDC) — per organization
+### 11.3 SSO (OIDC, later SAML) — per organization
 
-Each bank brings its own IdP (Okta, Entra, ADFS, Ping). SSO is configured **per
-org, self-service** by the Org Admin — Auth0 is already wired at the app level;
-extend to per-org connections. SSO decides *who may sign in*.
+Each bank brings its own IdP (Google Workspace, Entra, Okta, Ping). **AequorOS
+is its own OIDC relying party — there is no third-party auth broker (Auth0 was
+removed 2026-07-20), and none should be reintroduced.** The single-connection
+version is BUILT (see §2): `sso_connections` + Settings → Authentication +
+zero-trust backend verification + the bank-IT runbook `docs/sso-onboarding.md`.
+Phase 2 **continues from that code**: many connections per org, email-first
+home-realm discovery on /login (type work email → route to that bank's IdP —
+NextAuth v5's per-request lazy config is the mechanism, already in use in
+`dashboard/auth.ts`), verified domains, and `sso_enforced` per org. SSO decides
+*who may sign in*; provisioning decides *who exists*.
 
 ### 11.4 JIT + SCIM + verified domains
 
-- **JIT** — create the account on first SAML/OIDC login from assertion attributes (name, email, group→role). Convenience only; **JIT does not deprovision** → orphaned accounts if used alone.
+- **JIT** — **BUILT in request-access form** (opt-in `jit_enabled` per connection): first OIDC login from an allowed email domain records a deactivated stub; an admin approves it with an explicit role before any access exists. Phase 2 adds group→role mapping (which can then safely auto-activate). **JIT does not deprovision** → SCIM below is the governance answer.
 - **SCIM 2.0** — the IdP syncs create/update/**deactivate** to AequorOS. **Mandatory for bank tenants** — SCIM-driven deprovisioning is the single most-probed enterprise security-questionnaire item. Key on a **stable IdP id (`externalId`/`sub`), never email**, or JIT+SCIM produce duplicate records.
 - **Verified domains** — a tenant verifies a domain via DNS TXT; then auto-suggest membership and/or **enforce SSO** for all users on that domain (domain capture stops shadow personal accounts).
 - **Rule:** JIT creates, SCIM governs, SSO authenticates, verified domains bound the population — all keyed on one stable identifier.
@@ -647,8 +660,13 @@ Keep `role` for back-compat but treat `user_roles` as the source of truth.
 `id, org_id, email, role_presets[], scope, token_hash, invited_by, expires_at,
 status (pending|accepted|expired|revoked), accepted_at`. Store **only the hash**.
 
-**`sso_connections`** *(new)*: `org_id, protocol (saml|oidc), idp_metadata,
-domains[], enforced (bool), jit_enabled, scim_token_hash, status`.
+**`sso_connections`** *(BUILT in single-connection form — extend, don't recreate)*:
+as-built columns: `organization_id (unique — Phase 2 drops the unique for
+multi-connection), issuer, client_id, client_secret_ciphertext +
+client_secret_fingerprint (AES-256-GCM via CREDENTIAL_VAULT_MASTER_KEY),
+allowed_email_domains (json), enabled, updated_by` + RLS (enabled/forced +
+tenant policy). Phase 2 adds: `protocol (saml|oidc), idp_metadata (SAML),
+domains[] (verified), enforced (bool), jit_enabled, scim_token_hash, status`.
 
 **`approvals`** *(new — generalize `RegulatoryPackageApproval`)*:
 `id, org_id, object_type, object_id, action (requested|reviewed|approved|rejected|signed_off|submitted),
@@ -701,7 +719,13 @@ GET   /orgs/{org}/roles                             roles:read
 POST  /orgs/{org}/roles                             roles:manage    (custom roles — later)
 
 # authentication config
-GET/PUT /orgs/{org}/sso                             sso:manage
+# BUILT (Phase-1 form, admin-role-gated; migrate to sso:manage when the
+# permission layer lands — same handlers, new dependency):
+#   GET  /auth/sso/status         public login-page probe {enabled}
+#   GET  /auth/sso/connection     admin — secret returned only as client_secret_set
+#   PUT  /auth/sso/connection     admin — upsert; client_secret write-only
+#   GET  /auth/sso/client-config  internal (SSO_INTERNAL_KEY header; not in OpenAPI)
+GET/PUT /orgs/{org}/sso                             sso:manage   (Phase 2: multi-connection)
 POST    /orgs/{org}/domains:verify                  sso:manage
 GET/PUT /orgs/{org}/scim                            scim:manage
 /scim/v2/Users, /scim/v2/Groups                     (SCIM 2.0, token-auth)
@@ -745,10 +769,41 @@ landings ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-wh
 assignment, seat limits, suspend/deactivate, `audit_log` (write path + view).
 Banks can now onboard their own people by email.
 
-**Phase 2 — enterprise auth.**
-Per-org SSO (SAML/OIDC) self-service, verified domains, JIT, SCIM
-provisioning/deprovisioning, session/MFA/step-up policy, token revocation on
-role change.
+**Phase 2 — enterprise auth + bank-safe administration (CONTINUE from the
+own-OIDC already built — do not rebuild it, and do not reintroduce a
+third-party auth broker).**
+
+Decided 2026-07-20 after the developer-portal evaluation: there is **no separate
+bank developer portal** — banks are operators, not API consumers, so the
+"portal" is the in-app Administration area (the Kyriba pattern), and a true
+developer portal is deferred until a partner actually wants to build against
+our API (commercial trigger, not pilot infrastructure).
+
+Foundation that already exists (Phase 1, shipped): `sso_connections` (encrypted
+secret, RLS), zero-trust OIDC verification with discovery/`email_verified`/
+domain allow-list, Settings → Authentication self-service card, the
+`SSO_INTERNAL_KEY` internal config fetch, NextAuth per-request lazy config, the
+Data Engine connection-health panel, and `docs/sso-onboarding.md` (Google
+Workspace + Entra runbooks — extend per IdP as banks onboard).
+
+Build in this phase:
+1. **Multi-connection SSO + home-realm discovery** — drop the one-per-org
+   unique, key linked identities on `(connection, subject)`, email-first /login
+   (work email → that bank's IdP), `sso_enforced` per org (passwords off).
+2. **Verified domains** (DNS-TXT) bounding which connections may claim which
+   email domains — closes the cross-org domain-squatting hole the Phase-1
+   allow-list only mitigates.
+3. **JIT + SCIM 2.0** provisioning/deprovisioning keyed on `external_id`
+   (mandatory for bank tenants; JIT never deprovisions).
+4. **Session/MFA/step-up policy + token revocation** on role change
+   (`session_epoch`).
+5. **Administration area consolidation** — grow Settings + the Data Engine
+   screens into the §10.2 org console behind Org Admin/`sso:manage`/`users:*`,
+   so bank IT self-serves connections and SSO without AequorOS staff. The
+   read-only connection-health panel becomes actionable here (test/rotate/
+   disable stay in the integration tabs, permission-gated).
+6. **SAML** as a second `sso_connections.protocol` for IdPs where the bank
+   refuses OIDC (some on-prem ADFS estates) — additive, same table.
 
 **Phase 3 — platform console + advanced governance.**
 Vendor super-admin app (tenants, provisioning, billing, feature flags, global

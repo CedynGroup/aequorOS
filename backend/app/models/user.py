@@ -21,7 +21,9 @@ from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 
 # Kept in sync with app.core.security.ROLES.
 USER_ROLES: tuple[str, ...] = ("admin", "approver", "analyst", "viewer")
-AUTH_PROVIDERS: tuple[str, ...] = ("password", "auth0")
+# "oidc" covers every external IdP (Google Workspace, Entra, Okta, …) — the
+# connection an identity came through lives in sso_connections, not here.
+AUTH_PROVIDERS: tuple[str, ...] = ("password", "oidc")
 
 
 def _values(values: tuple[str, ...]) -> str:

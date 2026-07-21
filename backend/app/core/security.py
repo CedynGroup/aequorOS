@@ -150,37 +150,69 @@ def decode_token(
     return claims
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=8)
 def _jwks_client(jwks_url: str) -> PyJWKClient:
     from jwt import PyJWKClient  # noqa: PLC0415 - lazy; only the SSO path needs it
 
     return PyJWKClient(jwks_url)  # caches fetched signing keys internally
 
 
-def verify_auth0_id_token(
-    id_token: str, *, settings: AuthSettings | None = None
-) -> dict[str, Any]:
-    """Verify an Auth0 OIDC id_token against Auth0's JWKS (RS256), return its claims.
+@lru_cache(maxsize=8)
+def _discover_jwks_uri(issuer: str) -> str:
+    """Resolve an issuer's JWKS URL via OIDC discovery.
 
-    Zero-trust SSO: the backend independently checks the signature, issuer
-    (``https://{domain}/``), and audience (the client id) — it never trusts that
-    the dashboard already validated the token.
+    The discovery document's location is fixed by the OIDC spec, so this works
+    for any compliant IdP (Google, Entra, Okta, Keycloak, …) without vendor
+    branches. Cached per issuer — the jwks_uri itself effectively never changes;
+    key *rotation* is handled inside PyJWKClient.
     """
-    settings = settings or get_settings().auth
-    if not settings.auth0_domain or not settings.auth0_client_id:
-        raise AuthConfigError("Auth0 SSO is not configured (AUTH0_DOMAIN/CLIENT_ID unset).")
-    issuer = f"https://{settings.auth0_domain}/"
+    import json  # noqa: PLC0415 - lazy; only the SSO path needs these
+    import urllib.request  # noqa: PLC0415
+
+    url = issuer.rstrip("/") + "/.well-known/openid-configuration"
+    if not url.startswith("https://"):
+        raise TokenInvalidError(f"OIDC issuer must be https, got {issuer!r}.")
     try:
-        signing_key = _jwks_client(f"{issuer}.well-known/jwks.json").get_signing_key_from_jwt(
-            id_token
-        )
+        with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310 - https enforced above
+            document = json.load(response)
+    except Exception as exc:
+        raise TokenInvalidError(f"OIDC discovery failed for {issuer!r}: {exc}") from exc
+    jwks_uri = document.get("jwks_uri")
+    if not isinstance(jwks_uri, str) or not jwks_uri.startswith("https://"):
+        raise TokenInvalidError(f"OIDC discovery for {issuer!r} returned no usable jwks_uri.")
+    return jwks_uri
+
+
+def unverified_claims(id_token: str) -> dict[str, Any]:
+    """Decode an id_token's payload WITHOUT verification.
+
+    Only for routing — picking which configured SSO connection (issuer/audience)
+    to verify against. Never trust these claims for identity; a forged `iss` can
+    only select a configured connection, whose JWKS the token must then survive.
+    """
+    try:
+        return jwt.decode(id_token, options={"verify_signature": False})
+    except jwt.PyJWTError as exc:
+        raise TokenInvalidError(f"Malformed id_token: {exc}") from exc
+
+
+def verify_oidc_id_token(id_token: str, *, issuer: str, audience: str) -> dict[str, Any]:
+    """Verify an OIDC id_token against its issuer's JWKS, return its claims.
+
+    Zero-trust SSO: the backend independently checks the signature (RS256/ES256
+    via the issuer's published keys), issuer, audience, and expiry — it never
+    trusts that the dashboard already validated the token. ``issuer``/``audience``
+    come from the stored SSO connection, not from the token.
+    """
+    try:
+        signing_key = _jwks_client(_discover_jwks_uri(issuer)).get_signing_key_from_jwt(id_token)
         return jwt.decode(
             id_token,
             signing_key.key,
-            algorithms=["RS256"],
-            audience=settings.auth0_client_id,
+            algorithms=["RS256", "ES256"],
+            audience=audience,
             issuer=issuer,
             options={"require": ["exp", "iat", "sub"]},
         )
     except jwt.PyJWTError as exc:
-        raise TokenInvalidError(f"Auth0 id_token verification failed: {exc}") from exc
+        raise TokenInvalidError(f"OIDC id_token verification failed: {exc}") from exc
