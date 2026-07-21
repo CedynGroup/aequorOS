@@ -119,7 +119,11 @@ function pointFromRead(p: ProjectionYearRead): PathPoint {
   };
 }
 
-function fromResult(result: WhatIfResultRead): WhatIfView {
+function fromResult(result: WhatIfResultRead): WhatIfView | null {
+  // Failed runs come back as data (status: failed, year5: null) — the caller
+  // surfaces result.error; there is nothing to project here.
+  if (!result.year5) return null;
+  const year5 = result.year5;
   const comparison = (c: { base: string; shocked: string; delta: string }) => ({
     base: num(c.base),
     shocked: num(c.shocked),
@@ -144,10 +148,10 @@ function fromResult(result: WhatIfResultRead): WhatIfView {
       netIncomeDelta: num(d.netIncomeDelta),
     })),
     year5: {
-      carPct: comparison(result.year5.carPct),
-      lcrPct: comparison(result.year5.lcrPct),
-      nsfrPct: comparison(result.year5.nsfrPct),
-      netIncome: comparison(result.year5.netIncome),
+      carPct: comparison(year5.carPct),
+      lcrPct: comparison(year5.lcrPct),
+      nsfrPct: comparison(year5.nsfrPct),
+      netIncome: comparison(year5.netIncome),
     },
     baseAssumptions: assumptionMap(
       result.baseAssumptions as unknown as Record<string, unknown>
@@ -327,12 +331,42 @@ export default function WhatIfLab() {
 
   const viewFor = (code: WhatIfShockCode): WhatIfView | null => {
     const fresh = freshResults[code];
-    if (fresh) return fromResult(fresh);
+    if (fresh) {
+      const view = fromResult(fresh);
+      if (view) return view;
+    }
     const stored = storedByShock[code];
     return stored ? fromStoredRun(stored) : null;
   };
 
+  /** The engine's diagnostic when the latest attempt for this shock FAILED —
+   * failures are data (e.g. balance_sheet_infeasible), never a blank screen. */
+  const failureFor = (code: WhatIfShockCode) => {
+    const fresh = freshResults[code];
+    if (fresh && fresh.status === 'failed') {
+      return {
+        code: fresh.error?.code ?? 'run_failed',
+        message:
+          fresh.error?.message ??
+          'The what-if projection failed. Review the run inputs and retry.',
+        runId: fresh.runId,
+      };
+    }
+    const stored = storedByShock[code];
+    if (stored && stored.status === 'failed') {
+      return {
+        code: stored.error?.code ?? 'run_failed',
+        message:
+          stored.error?.message ??
+          'The what-if projection failed. Review the run inputs and retry.',
+        runId: stored.id,
+      };
+    }
+    return null;
+  };
+
   const activeView = viewFor(activeShock);
+  const activeFailure = failureFor(activeShock);
   const activeMeta = SHOCKS.find((s) => s.code === activeShock)!;
 
   return (
@@ -356,6 +390,27 @@ export default function WhatIfLab() {
         <div className="px-8 py-6 space-y-6">
           {runWhatIf.error && (
             <ErrorPanel error={runWhatIf.error} title="What-if run failed" />
+          )}
+
+          {activeFailure && (
+            <div
+              role="alert"
+              className="card border-l-4 border-l-critical bg-critical-light/40 px-5 py-4"
+            >
+              <p className="text-body font-medium text-navy">
+                This shock could not be projected
+              </p>
+              <p className="mt-1 text-body text-slate leading-relaxed">
+                {activeFailure.message}
+              </p>
+              <p className="mt-2 text-caption text-slate">
+                Engine diagnostic <code className="font-mono">{activeFailure.code}</code>
+                {' · '}run <code className="font-mono">{activeFailure.runId.slice(0, 8)}</code>
+                {' — '}adjust the scenario assumptions in the Assumption Registry or
+                choose a milder shock, then run again.
+                {activeView ? ' The last successful projection is shown below.' : ''}
+              </p>
+            </div>
           )}
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">

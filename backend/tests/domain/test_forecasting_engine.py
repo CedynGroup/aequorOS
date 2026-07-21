@@ -18,6 +18,7 @@ import pytest
 from app.domain.capital.engine import CapitalParams, classify_capital_ratio
 from app.domain.capital.engine import MissingParameterError as CapitalMissingParameterError
 from app.domain.forecasting.engine import (
+    WHATIF_SHOCK_CODES,
     ForecastAssumptions,
     ForecastFact,
     ForecastParams,
@@ -393,6 +394,41 @@ def test_funding_surplus_floors_borrowings_at_zero_and_keeps_the_balance_tied() 
     # Cash grew beyond the deposit-scaled 290M x 1.2 = 348M baseline.
     assert year1.cash > Decimal("348000000")
     assert year1.total_assets == year1.deposits + SECURED_FUNDING + year1.equity
+
+
+def test_thin_opening_cash_projects_instead_of_failing() -> None:
+    """Regression (2026-07-21): a bank whose OPENING cash sits below 5% of
+    assets must still project — the live ingested FLEXCUBE book runs ~3.6%
+    cash, and the old hard cash-floor guard failed every base and what-if
+    projection for it (even in funding-surplus years where the plug ADDS
+    cash). Prudential liquidity is carried by the per-year LCR, not by a
+    projection-refusal floor."""
+    facts = tuple(
+        replace(f, amount=Decimal("15"))
+        if (f.fact_group, f.category) == ("balance_sheet", "cash_vault")
+        else replace(f, amount=Decimal("40"))
+        if (f.fact_group, f.category) == ("balance_sheet", "bog_required_reserves")
+        else replace(f, amount=Decimal("10"))
+        if (f.fact_group, f.category) == ("balance_sheet", "bog_excess_reserves")
+        else replace(f, amount=Decimal("15"))
+        if (f.fact_group, f.category) == ("securities", "cash_vault_hqla")
+        else replace(f, amount=Decimal("10"))
+        if (f.fact_group, f.category) == ("securities", "bog_excess_reserves_hqla")
+        else f
+        for f in sample_bank_latest_facts()
+    )
+    # Opening cash 65 on a ~2,200 balance sheet (~3%), loans outgrow deposits.
+    result = project(facts, bog_forecast_params(), BASE_ASSUMPTIONS)
+    assert len(result.years) == 6
+    for year in result.years[1:]:
+        assert (
+            year.total_assets
+            == year.deposits + SECURED_FUNDING + year.borrowings_plug + year.equity
+        )
+    # What-if shocks project too (they previously all failed on thin cash).
+    for code in WHATIF_SHOCK_CODES:
+        whatif = run_whatif(code, facts, bog_forecast_params(), BASE_ASSUMPTIONS)
+        assert len(whatif.shocked.years) == 6
 
 
 def test_optimizer_enumerates_108_candidates_and_ranks_by_avg_roe() -> None:
