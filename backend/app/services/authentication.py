@@ -20,7 +20,8 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import AuthSettings, get_settings
 from app.db.base import utc_now
-from app.models import User
+from app.models import SsoConnection, User
+from app.services import sso_config
 
 _INVALID = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password."
@@ -104,9 +105,9 @@ def login_with_password(
 def _resolve_sso_user(
     db: Session, subject: str, email: str | None, organization_id: UUID | None
 ) -> User | None:
-    # Already linked to this Auth0 subject?
+    # Already linked to this OIDC subject?
     linked_stmt = select(User).where(
-        User.auth_provider == "auth0",
+        User.auth_provider == "oidc",
         User.sso_subject == subject,
         User.is_active.is_(True),
     )
@@ -128,6 +129,48 @@ def _resolve_sso_user(
     return matches[0] if len(matches) == 1 else None
 
 
+_SSO_INVALID = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid SSO token.")
+
+
+_SSO_PENDING = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail=(
+        "Your access request has been recorded. An administrator must approve "
+        "your account before you can sign in."
+    ),
+)
+
+
+def _inactive_user_by_email(db: Session, organization_id: UUID, email: str) -> User | None:
+    return db.scalar(
+        select(User).where(
+            User.organization_id == organization_id,
+            User.email == email,
+            User.is_active.is_(False),
+        )
+    )
+
+
+def _record_sso_access_request(db: Session, *, connection: SsoConnection, claims: dict) -> None:
+    """JIT is a REQUEST, never access: the account is created deactivated and no
+    tokens are issued — an admin must approve it (with a role) before the first
+    real sign-in. Guarded twice: the connection must opt in AND carry a non-empty
+    domain allow-list (re-checked here so a hand-edited row can never open
+    public sign-up)."""
+    db.add(
+        User(
+            organization_id=connection.organization_id,
+            email=str(claims["email"]),
+            display_name=str(claims["name"]) if claims.get("name") else None,
+            role="viewer",
+            auth_provider="oidc",
+            sso_subject=str(claims["sub"]),
+            is_active=False,
+        )
+    )
+    db.commit()
+
+
 def login_with_sso(
     db: Session,
     *,
@@ -135,22 +178,69 @@ def login_with_sso(
     organization_id: UUID | None = None,
     settings: AuthSettings | None = None,
 ) -> IssuedTokens:
-    """Verify an Auth0 id_token, link it to a pre-provisioned user, issue app tokens."""
+    """Verify an OIDC id_token against its configured connection, link it to a
+    pre-provisioned user, and issue app tokens.
+
+    Routing is zero-trust: the token's unverified ``iss``/``aud`` only *select* a
+    stored, enabled connection — verification then runs against that connection's
+    issuer JWKS and client id, so a forged header buys nothing.
+    """
     settings = settings or get_settings().auth
     try:
-        claims = security.verify_auth0_id_token(id_token, settings=settings)
+        hints = security.unverified_claims(id_token)
     except security.AuthError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid SSO token."
-        ) from exc
+        raise _SSO_INVALID from exc
 
-    user = _resolve_sso_user(db, str(claims["sub"]), claims.get("email"), organization_id)
+    audience_hint = hints.get("aud", "")
+    if isinstance(audience_hint, list):  # OIDC allows a list; ours is a single RP
+        audience_hint = audience_hint[0] if audience_hint else ""
+    connection = sso_config.find_enabled_by_issuer_audience(
+        db, issuer=str(hints.get("iss", "")), audience=str(audience_hint)
+    )
+    if connection is None:
+        raise _SSO_INVALID
+
+    try:
+        claims = security.verify_oidc_id_token(
+            id_token, issuer=connection.issuer, audience=connection.client_id
+        )
+    except security.AuthError as exc:
+        raise _SSO_INVALID from exc
+
+    email = claims.get("email")
+    # An unverified email must never link to an account (Google always sends the
+    # flag; IdPs that omit it — e.g. Entra — pass, and the pre-provisioning gate
+    # below still applies).
+    if email is not None and claims.get("email_verified") is False:
+        raise _SSO_INVALID
+    if connection.allowed_email_domains:
+        domain = str(email or "").rsplit("@", 1)[-1].lower()
+        if domain not in connection.allowed_email_domains:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="This email domain is not allowed for SSO sign-in.",
+            )
+
+    resolved_org = organization_id if organization_id is not None else connection.organization_id
+    user = _resolve_sso_user(db, str(claims["sub"]), email, resolved_org)
+    if (
+        user is None
+        and connection.jit_enabled
+        and connection.allowed_email_domains
+        and email
+        and resolved_org == connection.organization_id
+    ):
+        # Access-request flow: record (or re-acknowledge) a deactivated stub and
+        # refuse the session — approval is an explicit admin act.
+        if _inactive_user_by_email(db, connection.organization_id, str(email)) is None:
+            _record_sso_access_request(db, connection=connection, claims=claims)
+        raise _SSO_PENDING
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="No AequorOS account is provisioned for this identity.",
         )
-    user.auth_provider = "auth0"
+    user.auth_provider = "oidc"
     user.sso_subject = str(claims["sub"])
     user.failed_login_attempts = 0
     user.locked_until = None
@@ -159,14 +249,60 @@ def login_with_sso(
     return issue_tokens(user, settings)
 
 
+# -- SSO access requests (JIT stubs awaiting admin approval) -------------------
+def _access_request_stmt(organization_id: UUID):  # noqa: ANN202 - sqlalchemy Select
+    """A pure JIT stub: deactivated, OIDC-linked, never logged in, no password.
+    Deliberately narrow so admin-deactivated (offboarded) accounts never show
+    up as approvable requests."""
+    return select(User).where(
+        User.organization_id == organization_id,
+        User.is_active.is_(False),
+        User.auth_provider == "oidc",
+        User.password_hash.is_(None),
+        User.last_login_at.is_(None),
+    )
+
+
+def list_sso_access_requests(db: Session, organization_id: UUID) -> list[User]:
+    return list(db.scalars(_access_request_stmt(organization_id).order_by(User.created_at)))
+
+
+def _get_access_request(db: Session, organization_id: UUID, user_id: UUID) -> User:
+    user = db.scalar(_access_request_stmt(organization_id).where(User.id == user_id))
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Access request not found."
+        )
+    return user
+
+
+def approve_sso_access_request(
+    db: Session, *, organization_id: UUID, user_id: UUID, role: str
+) -> User:
+    """The authorization act: an admin activates the requested account with an
+    explicitly chosen role."""
+    user = _get_access_request(db, organization_id, user_id)
+    user.role = role
+    user.is_active = True
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def reject_sso_access_request(db: Session, *, organization_id: UUID, user_id: UUID) -> None:
+    """Deletes the never-activated stub (safe: it has no history); the employee
+    can request again, which recreates it."""
+    user = _get_access_request(db, organization_id, user_id)
+    db.delete(user)
+    db.commit()
+
+
 def refresh_tokens(
     db: Session, *, refresh_token: str, settings: AuthSettings | None = None
 ) -> IssuedTokens:
     settings = settings or get_settings().auth
     try:
-        claims = security.decode_token(
-            refresh_token, expected_type="refresh", settings=settings
-        )
+        claims = security.decode_token(refresh_token, expected_type="refresh", settings=settings)
     except security.AuthError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token."

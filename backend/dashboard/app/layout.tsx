@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { Inter, IBM_Plex_Mono } from 'next/font/google';
-import { Analytics } from '@vercel/analytics/react';
 import Providers from './providers';
 import ThemeProvider from '@/components/shell/ThemeProvider';
 import './globals.css';
@@ -62,7 +61,6 @@ export default function RootLayout({
         <Providers>
           <ThemeProvider>{children}</ThemeProvider>
         </Providers>
-        <Analytics />
       </body>
     </html>
   );

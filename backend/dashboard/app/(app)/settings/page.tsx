@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { Moon, Sun } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import AuthenticationPanel from '@/components/settings/AuthenticationPanel';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import CopyButton from '@/components/ui/CopyButton';
 import RunBadge from '@/components/ui/RunBadge';
@@ -89,6 +90,7 @@ export default function SettingsPage() {
           <AppearancePanel />
           <UsersRolesPanel />
         </div>
+        <AuthenticationPanel />
         <DataComputePanel bankId={bank?.id} />
         <AboutPanel bankId={bank?.id} />
       </div>

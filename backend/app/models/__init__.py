@@ -79,6 +79,7 @@ from app.models.risk import (
     StoredObject,
 )
 from app.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
+from app.models.sso_connection import SsoConnection
 from app.models.temenos import TemenosConnection
 from app.models.user import User
 
@@ -154,6 +155,7 @@ __all__ = [
     "RiskScenario",
     "ScenarioAssumption",
     "ScenarioAssumptionHistory",
+    "SsoConnection",
     "StoredObject",
     "User",
 ]

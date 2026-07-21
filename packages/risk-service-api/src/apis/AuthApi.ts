@@ -15,7 +15,12 @@ import type {
   ErrorResponse,
   LoginRequest,
   MeResponse,
+  SsoAccessRequestApprove,
+  SsoAccessRequestRead,
+  SsoConnectionResponse,
+  SsoConnectionUpdateRequest,
   SsoLoginRequest,
+  SsoStatusResponse,
   TokenRefreshRequest,
   TokenResponse,
 } from "../models/index";
@@ -26,20 +31,43 @@ import {
   LoginRequestToJSON,
   MeResponseFromJSON,
   MeResponseToJSON,
+  SsoAccessRequestApproveFromJSON,
+  SsoAccessRequestApproveToJSON,
+  SsoAccessRequestReadFromJSON,
+  SsoAccessRequestReadToJSON,
+  SsoConnectionResponseFromJSON,
+  SsoConnectionResponseToJSON,
+  SsoConnectionUpdateRequestFromJSON,
+  SsoConnectionUpdateRequestToJSON,
   SsoLoginRequestFromJSON,
   SsoLoginRequestToJSON,
+  SsoStatusResponseFromJSON,
+  SsoStatusResponseToJSON,
   TokenRefreshRequestFromJSON,
   TokenRefreshRequestToJSON,
   TokenResponseFromJSON,
   TokenResponseToJSON,
 } from "../models/index";
 
+export interface AuthApproveSsoAccessRequestRequest {
+  userId: string;
+  ssoAccessRequestApprove: SsoAccessRequestApprove;
+}
+
 export interface AuthLoginRequest {
   loginRequest: LoginRequest;
 }
 
+export interface AuthPutSsoConnectionRequest {
+  ssoConnectionUpdateRequest: SsoConnectionUpdateRequest;
+}
+
 export interface AuthRefreshRequest {
   tokenRefreshRequest: TokenRefreshRequest;
+}
+
+export interface AuthRejectSsoAccessRequestRequest {
+  userId: string;
 }
 
 export interface AuthSsoRequest {
@@ -50,6 +78,168 @@ export interface AuthSsoRequest {
  *
  */
 export class AuthApi extends runtime.BaseAPI {
+  /**
+   * Activate a requested account with an explicitly chosen role (admin only).
+   * Approve Sso Access Request
+   */
+  async authApproveSsoAccessRequestRaw(
+    requestParameters: AuthApproveSsoAccessRequestRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<SsoAccessRequestRead>> {
+    if (requestParameters["userId"] == null) {
+      throw new runtime.RequiredError(
+        "userId",
+        'Required parameter "userId" was null or undefined when calling authApproveSsoAccessRequest().',
+      );
+    }
+
+    if (requestParameters["ssoAccessRequestApprove"] == null) {
+      throw new runtime.RequiredError(
+        "ssoAccessRequestApprove",
+        'Required parameter "ssoAccessRequestApprove" was null or undefined when calling authApproveSsoAccessRequest().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/auth/sso/access-requests/{user_id}/approve`.replace(
+          `{${"user_id"}}`,
+          encodeURIComponent(String(requestParameters["userId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: SsoAccessRequestApproveToJSON(
+          requestParameters["ssoAccessRequestApprove"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      SsoAccessRequestReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Activate a requested account with an explicitly chosen role (admin only).
+   * Approve Sso Access Request
+   */
+  async authApproveSsoAccessRequest(
+    requestParameters: AuthApproveSsoAccessRequestRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<SsoAccessRequestRead> {
+    const response = await this.authApproveSsoAccessRequestRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * The org\'s OIDC connection (admin). The secret is never returned — only whether one is set.
+   * Get Sso Connection
+   */
+  async authGetSsoConnectionRaw(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<SsoConnectionResponse>> {
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/auth/sso/connection`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      SsoConnectionResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The org\'s OIDC connection (admin). The secret is never returned — only whether one is set.
+   * Get Sso Connection
+   */
+  async authGetSsoConnection(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<SsoConnectionResponse> {
+    const response = await this.authGetSsoConnectionRaw(initOverrides);
+    return await response.value();
+  }
+
+  /**
+   * JIT sign-ins awaiting approval (deactivated stubs; admin only).
+   * List Sso Access Requests
+   */
+  async authListSsoAccessRequestsRaw(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<Array<SsoAccessRequestRead>>> {
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/auth/sso/access-requests`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      jsonValue.map(SsoAccessRequestReadFromJSON),
+    );
+  }
+
+  /**
+   * JIT sign-ins awaiting approval (deactivated stubs; admin only).
+   * List Sso Access Requests
+   */
+  async authListSsoAccessRequests(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<Array<SsoAccessRequestRead>> {
+    const response = await this.authListSsoAccessRequestsRaw(initOverrides);
+    return await response.value();
+  }
+
   /**
    * Login
    */
@@ -141,6 +331,68 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
+   * Create or update the org\'s OIDC connection (admin; secret write-only).
+   * Put Sso Connection
+   */
+  async authPutSsoConnectionRaw(
+    requestParameters: AuthPutSsoConnectionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<SsoConnectionResponse>> {
+    if (requestParameters["ssoConnectionUpdateRequest"] == null) {
+      throw new runtime.RequiredError(
+        "ssoConnectionUpdateRequest",
+        'Required parameter "ssoConnectionUpdateRequest" was null or undefined when calling authPutSsoConnection().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/auth/sso/connection`,
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: SsoConnectionUpdateRequestToJSON(
+          requestParameters["ssoConnectionUpdateRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      SsoConnectionResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Create or update the org\'s OIDC connection (admin; secret write-only).
+   * Put Sso Connection
+   */
+  async authPutSsoConnection(
+    requestParameters: AuthPutSsoConnectionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<SsoConnectionResponse> {
+    const response = await this.authPutSsoConnectionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Refresh
    */
   async authRefreshRaw(
@@ -193,7 +445,61 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * Exchange a verified Auth0 id_token for AequorOS app tokens.
+   * Delete a never-activated request stub (admin only).
+   * Reject Sso Access Request
+   */
+  async authRejectSsoAccessRequestRaw(
+    requestParameters: AuthRejectSsoAccessRequestRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<void>> {
+    if (requestParameters["userId"] == null) {
+      throw new runtime.RequiredError(
+        "userId",
+        'Required parameter "userId" was null or undefined when calling authRejectSsoAccessRequest().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/auth/sso/access-requests/{user_id}/reject`.replace(
+          `{${"user_id"}}`,
+          encodeURIComponent(String(requestParameters["userId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.VoidApiResponse(response);
+  }
+
+  /**
+   * Delete a never-activated request stub (admin only).
+   * Reject Sso Access Request
+   */
+  async authRejectSsoAccessRequest(
+    requestParameters: AuthRejectSsoAccessRequestRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<void> {
+    await this.authRejectSsoAccessRequestRaw(requestParameters, initOverrides);
+  }
+
+  /**
+   * Exchange a verified OIDC id_token for AequorOS app tokens.
    * Sso Login
    */
   async authSsoRaw(
@@ -230,7 +536,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * Exchange a verified Auth0 id_token for AequorOS app tokens.
+   * Exchange a verified OIDC id_token for AequorOS app tokens.
    * Sso Login
    */
   async authSso(
@@ -238,6 +544,43 @@ export class AuthApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<TokenResponse> {
     const response = await this.authSsoRaw(requestParameters, initOverrides);
+    return await response.value();
+  }
+
+  /**
+   * Public probe for the login page: is SSO sign-in available?  Runs on the system session because it is called before any tenant context exists; it discloses only a boolean.
+   * Sso Status
+   */
+  async authSsoStatusRaw(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<SsoStatusResponse>> {
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    const response = await this.request(
+      {
+        path: `/api/v1/auth/sso/status`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      SsoStatusResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Public probe for the login page: is SSO sign-in available?  Runs on the system session because it is called before any tenant context exists; it discloses only a boolean.
+   * Sso Status
+   */
+  async authSsoStatus(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<SsoStatusResponse> {
+    const response = await this.authSsoStatusRaw(initOverrides);
     return await response.value();
   }
 }

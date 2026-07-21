@@ -2,18 +2,60 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 
 from app.core.security import hash_password
 from app.db.session import get_sessionmaker
-from app.models import Organization, User
+from app.models import Organization, SsoConnection, User
 from tests.api.helpers import headers
 
 _EMAIL = "cfo@testbank.example"
 _PASSWORD = "S3cure-Passphrase!"
+
+_ISSUER = "https://accounts.google.com"
+_CLIENT_ID = "test-client-id.apps.googleusercontent.com"
+
+
+def _seed_sso_connection(
+    org_id: UUID,
+    *,
+    allowed_email_domains: list[str] | None = None,
+    jit_enabled: bool = False,
+) -> None:
+    session = get_sessionmaker()()
+    session.add(
+        SsoConnection(
+            organization_id=org_id,
+            issuer=_ISSUER,
+            client_id=_CLIENT_ID,
+            client_secret_ciphertext="sealed-opaque",
+            allowed_email_domains=allowed_email_domains or [],
+            enabled=True,
+            jit_enabled=jit_enabled,
+        )
+    )
+    session.commit()
+    session.close()
+
+
+def _id_token(**overrides: object) -> str:
+    """A structurally real (but unsigned-for-us) id_token; the verify step is
+    monkeypatched, only the unverified iss/aud routing reads this payload."""
+    claims: dict[str, object] = {
+        "iss": _ISSUER,
+        "aud": _CLIENT_ID,
+        "sub": "google-oauth2|abc123",
+        "email": _EMAIL,
+        "email_verified": True,
+        "iat": 1,
+        "exp": 4102444800,
+    }
+    claims.update(overrides)
+    return jwt.encode(claims, "not-the-real-idp-key-padded-to-32-bytes!", algorithm="HS256")
 
 
 def _seed_user(role: str = "analyst") -> tuple:
@@ -40,9 +82,7 @@ def _seed_user(role: str = "analyst") -> tuple:
 def test_password_login_then_me(db_client: TestClient) -> None:
     org_id, user_id = _seed_user(role="analyst")
 
-    login = db_client.post(
-        "/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD}
-    )
+    login = db_client.post("/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD})
     assert login.status_code == 200, login.text
     tokens = login.json()
     assert tokens["access_token"] and tokens["refresh_token"]
@@ -81,26 +121,31 @@ def test_refresh_issues_new_tokens(db_client: TestClient) -> None:
 def test_wrong_password_is_rejected_then_locks_out(db_client: TestClient) -> None:
     _seed_user()
     for _ in range(5):  # AUTH_MAX_FAILED_LOGINS default
-        r = db_client.post(
-            "/api/v1/auth/login", json={"email": _EMAIL, "password": "wrong"}
-        )
+        r = db_client.post("/api/v1/auth/login", json={"email": _EMAIL, "password": "wrong"})
         assert r.status_code == 401
     # Further attempts — even with the CORRECT password — are locked out.
-    locked = db_client.post(
-        "/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD}
-    )
+    locked = db_client.post("/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD})
     assert locked.status_code == 423
 
 
-def test_sso_login_links_auth0_identity_and_issues_app_tokens(
+def _patch_verify(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Skip the network JWKS verification; the token's own claims come back.
+    Routing (iss/aud → connection) and every policy check still run for real."""
+    monkeypatch.setattr(
+        "app.core.security.verify_oidc_id_token",
+        lambda id_token, *, issuer, audience: jwt.decode(
+            id_token, options={"verify_signature": False}
+        ),
+    )
+
+
+def test_sso_login_links_oidc_identity_and_issues_app_tokens(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     org_id, user_id = _seed_user(role="viewer")  # pre-provisioned by email
-    monkeypatch.setattr(
-        "app.core.security.verify_auth0_id_token",
-        lambda _id_token, settings=None: {"sub": "auth0|abc123", "email": _EMAIL},
-    )
-    login = db_client.post("/api/v1/auth/sso", json={"id_token": "auth0-opaque-token"})
+    _seed_sso_connection(org_id)
+    _patch_verify(monkeypatch)
+    login = db_client.post("/api/v1/auth/sso", json={"id_token": _id_token()})
     assert login.status_code == 200, login.text
     access = login.json()["access_token"]
 
@@ -111,29 +156,157 @@ def test_sso_login_links_auth0_identity_and_issues_app_tokens(
     session = get_sessionmaker()()
     session.info["organization_id"] = org_id
     user = session.get(User, user_id)
-    assert user.auth_provider == "auth0"
-    assert user.sso_subject == "auth0|abc123"
+    assert user.auth_provider == "oidc"
+    assert user.sso_subject == "google-oauth2|abc123"
     session.close()
 
 
 def test_sso_login_rejects_unprovisioned_identity(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        "app.core.security.verify_auth0_id_token",
-        lambda _id_token, settings=None: {"sub": "auth0|x", "email": "stranger@nowhere.example"},
+    org_id, _ = _seed_user(role="viewer")
+    _seed_sso_connection(org_id)
+    _patch_verify(monkeypatch)
+    r = db_client.post(
+        "/api/v1/auth/sso",
+        json={"id_token": _id_token(sub="google|x", email="stranger@nowhere.example")},
     )
-    r = db_client.post("/api/v1/auth/sso", json={"id_token": "opaque"})
     assert r.status_code == 401  # no AequorOS account provisioned for this identity
+
+
+def test_sso_login_without_a_configured_connection_is_rejected(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed_user(role="viewer")  # user exists, but no sso_connections row
+    _patch_verify(monkeypatch)
+    r = db_client.post("/api/v1/auth/sso", json={"id_token": _id_token()})
+    assert r.status_code == 401
+
+
+def test_sso_login_enforces_allowed_email_domains(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    org_id, _ = _seed_user(role="viewer")
+    _seed_sso_connection(org_id, allowed_email_domains=["otherbank.example"])
+    _patch_verify(monkeypatch)
+    r = db_client.post("/api/v1/auth/sso", json={"id_token": _id_token()})
+    assert r.status_code == 401
+    assert "domain" in r.json()["error"]["message"].lower()
+
+
+def test_sso_login_rejects_unverified_email(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    org_id, _ = _seed_user(role="viewer")
+    _seed_sso_connection(org_id)
+    _patch_verify(monkeypatch)
+    r = db_client.post("/api/v1/auth/sso", json={"id_token": _id_token(email_verified=False)})
+    assert r.status_code == 401
+
+
+def test_jit_records_a_request_and_admin_approval_is_the_gate(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Org + connection + an admin exist; the signing-in employee has NO account.
+    org_id, admin_id = _seed_user(role="admin")
+    _seed_sso_connection(org_id, allowed_email_domains=["newbank.example"], jit_enabled=True)
+    _patch_verify(monkeypatch)
+    admin = headers(org_id=org_id, user_id=admin_id, roles=("admin",))
+    token = _id_token(
+        sub="google|new-employee", email="analyst@newbank.example", name="New Analyst"
+    )
+
+    # First sign-in: NO session — an access request is recorded instead.
+    first = db_client.post("/api/v1/auth/sso", json={"id_token": token})
+    assert first.status_code == 403
+    assert "administrator must approve" in first.json()["error"]["message"].lower()
+
+    # Retrying doesn't get in either, and doesn't duplicate the request.
+    again = db_client.post("/api/v1/auth/sso", json={"id_token": token})
+    assert again.status_code == 403
+    pending = db_client.get("/api/v1/auth/sso/access-requests", headers=admin)
+    assert pending.status_code == 200, pending.text
+    assert [r["email"] for r in pending.json()] == ["analyst@newbank.example"]
+
+    # Approval — with an explicitly chosen role — is what grants access.
+    request_id = pending.json()[0]["user_id"]
+    approved = db_client.post(
+        f"/api/v1/auth/sso/access-requests/{request_id}/approve",
+        json={"role": "analyst"},
+        headers=admin,
+    )
+    assert approved.status_code == 200, approved.text
+
+    login = db_client.post("/api/v1/auth/sso", json={"id_token": token})
+    assert login.status_code == 200, login.text
+    me = db_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+    assert me.status_code == 200
+    body = me.json()
+    assert body["email"] == "analyst@newbank.example"
+    assert body["role"] == "analyst"  # exactly what the admin granted
+    assert body["organization_id"] == str(org_id)
+    # The request queue is empty once approved.
+    assert db_client.get("/api/v1/auth/sso/access-requests", headers=admin).json() == []
+
+
+def test_rejected_access_request_is_deleted_and_can_reapply(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    org_id, admin_id = _seed_user(role="admin")
+    _seed_sso_connection(org_id, allowed_email_domains=["newbank.example"], jit_enabled=True)
+    _patch_verify(monkeypatch)
+    admin = headers(org_id=org_id, user_id=admin_id, roles=("admin",))
+    token = _id_token(sub="google|temp", email="temp@newbank.example")
+
+    assert db_client.post("/api/v1/auth/sso", json={"id_token": token}).status_code == 403
+    request_id = db_client.get("/api/v1/auth/sso/access-requests", headers=admin).json()[0][
+        "user_id"
+    ]
+    rejected = db_client.post(
+        f"/api/v1/auth/sso/access-requests/{request_id}/reject", headers=admin
+    )
+    assert rejected.status_code == 204
+    assert db_client.get("/api/v1/auth/sso/access-requests", headers=admin).json() == []
+    # Still no access; a fresh sign-in just records a new request.
+    assert db_client.post("/api/v1/auth/sso", json={"id_token": token}).status_code == 403
+    assert len(db_client.get("/api/v1/auth/sso/access-requests", headers=admin).json()) == 1
+
+
+def test_jit_still_rejects_domains_outside_the_allow_list(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    org_id, _ = _seed_user(role="admin")
+    _seed_sso_connection(org_id, allowed_email_domains=["newbank.example"], jit_enabled=True)
+    _patch_verify(monkeypatch)
+    r = db_client.post(
+        "/api/v1/auth/sso",
+        json={"id_token": _id_token(sub="google|drifter", email="drifter@gmail.example")},
+    )
+    assert r.status_code == 401
+
+
+def test_jit_without_domain_list_never_creates_accounts(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A hand-edited row (jit on, no domains) must fail closed at login time.
+    org_id, _ = _seed_user(role="admin")
+    _seed_sso_connection(org_id, allowed_email_domains=[], jit_enabled=True)
+    _patch_verify(monkeypatch)
+    r = db_client.post(
+        "/api/v1/auth/sso",
+        json={"id_token": _id_token(sub="google|anyone", email="anyone@anywhere.example")},
+    )
+    assert r.status_code == 401
 
 
 def test_viewer_is_read_only_analyst_can_mutate(db_client: TestClient) -> None:
     # A viewer can read...
     assert db_client.get("/api/v1/banks", headers=headers(roles=("viewer",))).status_code == 200
     # ...but every mutation endpoint rejects them (403 — RBAC write gate).
-    viewer_mutate = db_client.post(
-        "/api/v1/banks/seed-demo", headers=headers(roles=("viewer",))
-    )
+    viewer_mutate = db_client.post("/api/v1/banks/seed-demo", headers=headers(roles=("viewer",)))
     assert viewer_mutate.status_code == 403
     # analyst (or higher) may mutate.
     assert (

@@ -7,6 +7,7 @@
  */
 
 import {
+  AuthApi,
   BanksApi,
   BehavioralModelsApi,
   CashflowForecastApi,
@@ -60,6 +61,7 @@ export const configuration = new Configuration({
   },
 });
 
+export const authApi = new AuthApi(configuration);
 export const banksApi = new BanksApi(configuration);
 export const behavioralModelsApi = new BehavioralModelsApi(configuration);
 export const regulatoryLiquidityApi = new RegulatoryLiquidityApi(configuration);

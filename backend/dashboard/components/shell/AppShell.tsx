@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import PrototypeBanner from './PrototypeBanner';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -27,7 +26,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <PrototypeBanner />
       <div className="flex min-h-screen">
       {/* Sidebar — always visible on lg+, drawer on smaller */}
       <div className="hidden lg:block">

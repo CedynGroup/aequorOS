@@ -82,3 +82,18 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `CREDENTIAL_VAULT_MASTER_KEY`), retrieved per pull cycle and discarded; connection APIs are
   write-only for credential material (responses expose only fingerprint/expiry/status).
   Scheduled pulls are gated on `MARKET_DATA_PULL_ENABLED` (default off).
+- SSO is AequorOS' **own OIDC relying party** — no third-party broker (Auth0 removed
+  2026-07-20; never reintroduce `AUTH0_*`). Per-org connection in `sso_connections`
+  (issuer, client_id, AES-256-GCM-sealed secret, allowed email domains; RLS-forced),
+  managed in dashboard Settings → Authentication (secret write-only). The backend verifies
+  every id_token via OIDC discovery + issuer JWKS (`verify_oidc_id_token`; RS256/ES256,
+  `email_verified`, domain allow-list) and links **pre-provisioned** users
+  (`auth_provider='oidc'`) — plus opt-in request-access JIT (`jit_enabled`): an
+  allowed-domain first sign-in records a DEACTIVATED stub + 403 "awaiting approval";
+  access exists only after an admin approves with an explicit role
+  (`/auth/sso/access-requests`). Never let JIT auto-activate accounts — that was
+  rejected 2026-07-20 as a data-leak path until RBAC group-mapping lands. The dashboard's NextAuth loads the client config through
+  `GET /auth/sso/client-config`, gated by `SSO_INTERNAL_KEY` (same value on backend and
+  dashboard; not in OpenAPI) — the single plaintext read path for the secret. Bank-IT
+  runbook: `docs/sso-onboarding.md`; roadmap: rbac.md §15 Phase 2 (multi-connection +
+  home-realm discovery — extend the existing code, don't rebuild).

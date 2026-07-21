@@ -40,6 +40,7 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?}
       AUTH_URL: ${AUTH_URL:?}
       AUTH_TRUST_HOST: "true"
-      AUTH0_DOMAIN: ${AUTH0_DOMAIN:-}
-      AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID:-}
-      AUTH0_CLIENT_SECRET: ${AUTH0_CLIENT_SECRET:-}
+      # Own-OIDC SSO: gates this app's server-to-server fetch of the OIDC client
+      # config from the backend. Must equal the backend's SSO_INTERNAL_KEY.
+      # Unset = SSO button simply hidden; password login unaffected.
+      SSO_INTERNAL_KEY: ${SSO_INTERNAL_KEY:-}
