@@ -64,22 +64,22 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
       queryClient.setQueryData(profileQueryKey, profile);
     },
   });
+  const { mutateAsync, isPending } = updateMutation;
+  const { refetch: refetchProfile } = profileQuery;
   const updateProfile = useCallback(
     (updates: ProfileUpdateRequest) => {
-      const request = updateQueue.current.then(() =>
-        updateMutation.mutateAsync(updates),
-      );
+      const request = updateQueue.current.then(() => mutateAsync(updates));
       updateQueue.current = request.then(
         () => undefined,
         () => undefined,
       );
       return request;
     },
-    [updateMutation.mutateAsync],
+    [mutateAsync],
   );
   const refetch = useCallback(
-    async () => (await profileQuery.refetch()).data,
-    [profileQuery.refetch],
+    async () => (await refetchProfile()).data,
+    [refetchProfile],
   );
 
   const value = useMemo<ProfileContextValue>(
@@ -88,7 +88,7 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
       isLoading: profileQuery.isLoading,
       error: profileQuery.error,
       updateProfile,
-      isSaving: updateMutation.isPending,
+      isSaving: isPending,
       refetch,
     }),
     [
@@ -96,7 +96,7 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
       profileQuery.error,
       profileQuery.isLoading,
       refetch,
-      updateMutation.isPending,
+      isPending,
       updateProfile,
     ],
   );
