@@ -56,6 +56,8 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
     staleTime: 5 * 60_000,
   });
   const updateMutation = useMutation({
+    onMutate: () =>
+      queryClient.cancelQueries({ queryKey: profileQueryKey, exact: true }),
     mutationFn: (updates: ProfileUpdateRequest) =>
       apiCall(() => authApi.authUpdateMe({ profileUpdateRequest: updates })),
     onSuccess: (profile) => {

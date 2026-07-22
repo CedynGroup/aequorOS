@@ -28,7 +28,7 @@ type ProfileForm = {
   theme: ThemePreference;
 };
 
-type ProfileField = keyof ProfileForm;
+type ProfileField = Exclude<keyof ProfileForm, 'theme'>;
 type SaveStatus = 'saved' | 'newer-edits' | null;
 
 const EMPTY_FORM: ProfileForm = {
@@ -102,9 +102,6 @@ function buildProfileUpdates(
       case 'timezone':
         updates.timezone = optional(form.timezone);
         break;
-      case 'theme':
-        updates.theme = form.theme;
-        break;
     }
   }
   return updates;
@@ -113,7 +110,7 @@ function buildProfileUpdates(
 export default function ProfilePage() {
   const { profile, isLoading, error, updateProfile, isSaving, refetch } =
     useUserProfile();
-  const { theme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM);
   const latestForm = useRef<ProfileForm>(EMPTY_FORM);
   const dirtyFields = useRef(new Set<ProfileField>());
@@ -143,9 +140,7 @@ export default function ProfilePage() {
         timezone: dirtyFields.current.has('timezone')
           ? current.timezone
           : serverForm.timezone,
-        theme: dirtyFields.current.has('theme')
-          ? current.theme
-          : serverForm.theme,
+        theme: serverForm.theme,
       };
       latestForm.current = next;
       return next;
@@ -391,7 +386,7 @@ export default function ProfilePage() {
                         type="button"
                         role="radio"
                         aria-checked={selected}
-                        onClick={() => updateField('theme', value)}
+                        onClick={() => setTheme(value)}
                         className={`flex items-center gap-3 p-4 rounded-md border text-left transition-colors ${
                           selected
                             ? 'border-action bg-action-light text-navy'
