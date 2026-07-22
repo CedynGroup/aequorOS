@@ -10,8 +10,9 @@ bank treasurer validation interviews.
 
 ## Scope — what's built
 
-All four phases of the original plan are now in. **35 routes**, all
-statically pre-rendered, all under 215 KB First Load JS.
+All four phases of the original plan are now in. The current App Router tree
+contains **61 page entries**, including authenticated, login, and dynamic-detail
+routes.
 
 ### Login + Overview
 - `/login` — branded sign-in screen with Equilibrium Mark, "Treasury Reimagined"
@@ -70,6 +71,8 @@ statically pre-rendered, all under 215 KB First Load JS.
 - `/reports` — 8 cross-module reports (ALCO, ICAAP, board pack, capital plan, RRP)
 - `/submissions` — BoG filing calendar with multi-regulator support
 - `/settings` — bank profile, integrations status, governance, users & roles
+- `/settings/profile` — signed-in user's display name, job title, locale, IANA
+  timezone, generated initials avatar, and light/dark/system preference
 
 ### Polish (Phase 4)
 - **Command palette (⌘K / Ctrl+K)** — opens from anywhere; arrow-key navigable;
@@ -81,6 +84,10 @@ statically pre-rendered, all under 215 KB First Load JS.
 - **Loading skeletons** — `SkeletonLine`, `SkeletonCard`, `SkeletonTable`,
   `SkeletonChart` ready for any async loading states
 - **Empty states** — reusable `EmptyState` component for zero-data views
+- **Fresh personal identity** — the header and profile page share the cached
+  `/auth/me` record, so edits appear immediately without waiting for JWT rotation
+- **Cross-browser appearance** — theme changes persist through `PATCH /auth/me`,
+  with local storage used for pre-paint boot and system preference as the fallback
 
 ---
 
@@ -89,7 +96,7 @@ statically pre-rendered, all under 215 KB First Load JS.
 - Next.js 14 (App Router) · TypeScript · Tailwind CSS
 - Recharts — all visualizations (LSTM forecast, gap analysis, donut, yield curve, FX rate, etc.)
 - Inter (UI) + IBM Plex Mono (numerical data) via `next/font/google`
-- All 35 routes statically pre-rendered
+- 61 App Router page entries
 
 ## Run locally
 
@@ -138,8 +145,12 @@ dashboard/
 │       ├── forecasting/            # Module 06 (4 screens)
 │       ├── reports/page.tsx
 │       ├── submissions/page.tsx
-│       └── settings/page.tsx
+│       └── settings/
+│           ├── page.tsx
+│           └── profile/page.tsx   # Personal profile & appearance preferences
 ├── components/
+│   ├── profile/
+│   │   └── ProfileProvider.tsx    # Cached /auth/me reads and serialized updates
 │   ├── shell/
 │   │   ├── AppShell.tsx            # Mobile-aware shell wrapper
 │   │   ├── Sidebar.tsx             # Persistent left navigation
