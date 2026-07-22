@@ -25,10 +25,9 @@ type ProfileForm = {
   jobTitle: string;
   locale: string;
   timezone: string;
-  theme: ThemePreference;
 };
 
-type ProfileField = Exclude<keyof ProfileForm, 'theme'>;
+type ProfileField = keyof ProfileForm;
 type SaveStatus = 'saved' | 'newer-edits' | null;
 
 const EMPTY_FORM: ProfileForm = {
@@ -36,7 +35,6 @@ const EMPTY_FORM: ProfileForm = {
   jobTitle: '',
   locale: '',
   timezone: '',
-  theme: 'system',
 };
 
 const THEME_OPTIONS: {
@@ -124,7 +122,6 @@ export default function ProfilePage() {
       jobTitle: profile.jobTitle ?? '',
       locale: profile.locale ?? '',
       timezone: profile.timezone ?? '',
-      theme: profile.theme ?? theme,
     };
     setForm((current) => {
       const next = {
@@ -140,12 +137,11 @@ export default function ProfilePage() {
         timezone: dirtyFields.current.has('timezone')
           ? current.timezone
           : serverForm.timezone,
-        theme: serverForm.theme,
       };
       latestForm.current = next;
       return next;
     });
-  }, [profile, theme]);
+  }, [profile]);
 
   function updateField<Field extends ProfileField>(
     field: Field,
@@ -171,7 +167,6 @@ export default function ProfilePage() {
       jobTitle: savedProfile.jobTitle ?? '',
       locale: savedProfile.locale ?? '',
       timezone: savedProfile.timezone ?? '',
-      theme: savedProfile.theme ?? theme,
     };
     const reconciled = { ...latestForm.current };
     function reconcileField<Field extends ProfileField>(field: Field) {
@@ -379,7 +374,7 @@ export default function ProfilePage() {
                   className="grid grid-cols-1 sm:grid-cols-3 gap-3"
                 >
                   {THEME_OPTIONS.map(({ value, label, description, Icon }) => {
-                    const selected = form.theme === value;
+                    const selected = theme === value;
                     return (
                       <button
                         key={value}
