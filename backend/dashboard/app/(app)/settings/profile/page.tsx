@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Check, Monitor, Moon, Sun } from 'lucide-react';
+import type { ProfileUpdateRequest } from '@aequoros/risk-service-api';
 
 import { useUserProfile } from '@/components/profile/ProfileProvider';
 import {
@@ -28,6 +29,7 @@ type ProfileForm = {
 };
 
 type ProfileField = keyof ProfileForm;
+type SaveStatus = 'saved' | 'newer-edits' | null;
 
 const EMPTY_FORM: ProfileForm = {
   displayName: '',
@@ -81,14 +83,42 @@ function optional(value: string): string | null {
   return value.trim() || null;
 }
 
+function buildProfileUpdates(
+  form: ProfileForm,
+  fields: readonly ProfileField[],
+): ProfileUpdateRequest {
+  const updates: ProfileUpdateRequest = {};
+  for (const field of fields) {
+    switch (field) {
+      case 'displayName':
+        updates.displayName = optional(form.displayName);
+        break;
+      case 'jobTitle':
+        updates.jobTitle = optional(form.jobTitle);
+        break;
+      case 'locale':
+        updates.locale = optional(form.locale);
+        break;
+      case 'timezone':
+        updates.timezone = optional(form.timezone);
+        break;
+      case 'theme':
+        updates.theme = form.theme;
+        break;
+    }
+  }
+  return updates;
+}
+
 export default function ProfilePage() {
   const { profile, isLoading, error, updateProfile, isSaving, refetch } =
     useUserProfile();
   const { theme } = useTheme();
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM);
+  const latestForm = useRef<ProfileForm>(EMPTY_FORM);
   const dirtyFields = useRef(new Set<ProfileField>());
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -99,23 +129,27 @@ export default function ProfilePage() {
       timezone: profile.timezone ?? '',
       theme: profile.theme ?? theme,
     };
-    setForm((current) => ({
-      displayName: dirtyFields.current.has('displayName')
-        ? current.displayName
-        : serverForm.displayName,
-      jobTitle: dirtyFields.current.has('jobTitle')
-        ? current.jobTitle
-        : serverForm.jobTitle,
-      locale: dirtyFields.current.has('locale')
-        ? current.locale
-        : serverForm.locale,
-      timezone: dirtyFields.current.has('timezone')
-        ? current.timezone
-        : serverForm.timezone,
-      theme: dirtyFields.current.has('theme')
-        ? current.theme
-        : serverForm.theme,
-    }));
+    setForm((current) => {
+      const next = {
+        displayName: dirtyFields.current.has('displayName')
+          ? current.displayName
+          : serverForm.displayName,
+        jobTitle: dirtyFields.current.has('jobTitle')
+          ? current.jobTitle
+          : serverForm.jobTitle,
+        locale: dirtyFields.current.has('locale')
+          ? current.locale
+          : serverForm.locale,
+        timezone: dirtyFields.current.has('timezone')
+          ? current.timezone
+          : serverForm.timezone,
+        theme: dirtyFields.current.has('theme')
+          ? current.theme
+          : serverForm.theme,
+      };
+      latestForm.current = next;
+      return next;
+    });
   }, [profile, theme]);
 
   function updateField<Field extends ProfileField>(
@@ -123,17 +157,20 @@ export default function ProfilePage() {
     value: ProfileForm[Field],
   ) {
     dirtyFields.current.add(field);
-    setSaved(false);
-    setForm((current) => ({
-      ...current,
+    setSaveStatus(null);
+    const next = {
+      ...latestForm.current,
       [field]: value,
-    }));
+    };
+    latestForm.current = next;
+    setForm(next);
   }
 
   function reconcileSavedForm(
     submitted: ProfileForm,
+    submittedFields: readonly ProfileField[],
     savedProfile: Awaited<ReturnType<typeof updateProfile>>,
-  ) {
+  ): boolean {
     const savedForm: ProfileForm = {
       displayName: savedProfile.displayName ?? '',
       jobTitle: savedProfile.jobTitle ?? '',
@@ -141,34 +178,36 @@ export default function ProfilePage() {
       timezone: savedProfile.timezone ?? '',
       theme: savedProfile.theme ?? theme,
     };
-    setForm((current) => {
-      const reconciled = { ...current };
-      function reconcileField<Field extends ProfileField>(field: Field) {
-        if (current[field] === submitted[field]) {
-          reconciled[field] = savedForm[field];
-          dirtyFields.current.delete(field);
-        }
+    const reconciled = { ...latestForm.current };
+    function reconcileField<Field extends ProfileField>(field: Field) {
+      if (latestForm.current[field] === submitted[field]) {
+        reconciled[field] = savedForm[field];
+        dirtyFields.current.delete(field);
       }
-      (Object.keys(submitted) as ProfileField[]).forEach(reconcileField);
-      return reconciled;
-    });
+    }
+    submittedFields.forEach(reconcileField);
+    latestForm.current = reconciled;
+    setForm(reconciled);
+    return dirtyFields.current.size > 0;
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaved(false);
+    setSaveStatus(null);
     setSaveError(null);
-    const submitted = { ...form };
+    const submitted = { ...latestForm.current };
+    const submittedFields = Array.from(dirtyFields.current);
+    if (submittedFields.length === 0) return;
     try {
-      const savedProfile = await updateProfile({
-        displayName: optional(submitted.displayName),
-        jobTitle: optional(submitted.jobTitle),
-        locale: optional(submitted.locale),
-        timezone: optional(submitted.timezone),
-        theme: submitted.theme,
-      });
-      reconcileSavedForm(submitted, savedProfile);
-      setSaved(true);
+      const savedProfile = await updateProfile(
+        buildProfileUpdates(submitted, submittedFields),
+      );
+      const hasNewerEdits = reconcileSavedForm(
+        submitted,
+        submittedFields,
+        savedProfile,
+      );
+      setSaveStatus(hasNewerEdits ? 'newer-edits' : 'saved');
     } catch (updateError) {
       setSaveError(
         updateError instanceof Error
@@ -392,9 +431,14 @@ export default function ProfilePage() {
                   {saveError}
                 </p>
               )}
-              {saved && !saveError && (
+              {saveStatus === 'saved' && !saveError && (
                 <p role="status" className="text-caption text-success">
                   Profile saved.
+                </p>
+              )}
+              {saveStatus === 'newer-edits' && !saveError && (
+                <p role="status" className="text-caption text-slate">
+                  Profile saved. Newer edits remain unsaved.
                 </p>
               )}
               <button
