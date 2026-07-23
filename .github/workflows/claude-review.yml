@@ -67,7 +67,10 @@ jobs:
             inline comments. Then submit a FORMAL pull-request review: APPROVE
             only if you found no correctness or security issue, otherwise
             REQUEST_CHANGES with a short rationale.
-          claude_args: "--max-turns 25"
+          # Profile and other cross-stack changes can span migrations, API
+          # contracts, generated clients, and dashboard code. Leave enough
+          # turns for Claude to inspect each layer and submit its formal review.
+          claude_args: "--max-turns 40"
 
       - name: Enable auto-merge when approved and guardrails hold
         if: vars.AGENT_AUTOMERGE == 'on'

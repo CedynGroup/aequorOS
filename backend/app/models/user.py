@@ -24,6 +24,7 @@ USER_ROLES: tuple[str, ...] = ("admin", "approver", "analyst", "viewer")
 # "oidc" covers every external IdP (Google Workspace, Entra, Okta, …) — the
 # connection an identity came through lives in sso_connections, not here.
 AUTH_PROVIDERS: tuple[str, ...] = ("password", "oidc")
+USER_THEMES: tuple[str, ...] = ("light", "dark", "system")
 
 
 def _values(values: tuple[str, ...]) -> str:
@@ -39,6 +40,7 @@ class User(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             f"auth_provider IN ({_values(AUTH_PROVIDERS)})", name="ck_users_auth_provider"
         ),
+        CheckConstraint(f"theme IN ({_values(USER_THEMES)})", name="ck_users_theme"),
         Index("ix_users_organization_id", "organization_id"),
         # SSO identity is unique per provider (an OAuth subject maps to one user).
         Index(
@@ -58,6 +60,10 @@ class User(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    job_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    locale: Mapped[str | None] = mapped_column(String(35), nullable=True)
+    timezone: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    theme: Mapped[str | None] = mapped_column(String(16), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Authorization: one role per user (see app.core.security.has_role hierarchy).
     role: Mapped[str] = mapped_column(

@@ -23,6 +23,7 @@ MODULES      IRRBB /irr                 Overview · EVE & NII · Gap Analysis ·
              Behavioral /behavioral     Overview · NMD Duration · Prepayment · Deposit Stability
 DATA         Data Engine /data-engine   Overview · Excel/CSV · API Push · Market Data · T24 · Adapters · Canonical
 GOVERNANCE   Reports /reports (+ /reports/board-pack) · Submissions /submissions · Settings /settings
+PERSONAL     Avatar menu → Profile & preferences /settings/profile
 ```
 
 Placement rules: market data **management** (connect/rotate/upload) lives in the Data Engine;
@@ -32,7 +33,11 @@ market data **consumption** (curves, rates, ratings analysis) lives in Markets.
 
 Semantic CSS variables under `:root[data-theme='dark']` (default) and `[data-theme='light']`,
 stored as RGB channel triplets so Tailwind opacity modifiers work (`text-navy/85`).
-Theme boot is FOUC-safe (inline pre-paint script reading `localStorage['aeq-theme']`).
+Theme boot is FOUC-safe: an inline pre-paint script reads the light/dark/system
+preference from `localStorage['aeq-theme']` and resolves system against the OS.
+After authentication, `/auth/me` is authoritative; changes are persisted to the
+user profile for cross-browser consistency and mirrored locally for the next
+pre-paint boot. System mode follows OS theme changes live.
 
 | Token (Tailwind name) | Role | Dark | Light |
 |---|---|---|---|
@@ -63,6 +68,10 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
 - **CommandPalette** (⌘K) — zero-dep, full route registry with keywords
 - **GuidedTour** (`components/tour/`) — zero-dep spotlight tour, 8 steps, `?tour=1` or
   first-visit pill
+- **ProfileProvider** (`components/profile/`) — cached `GET /auth/me`, serialized profile
+  updates, and immediate header/profile freshness independent of JWT claim rotation
+- **Profile & preferences** (`/settings/profile`) — personal details, generated initials
+  avatar with identity-stable color, and server-persisted light/dark/system preference
 - `lib/chartTheme.ts` — recharts theme: `CHART_SERIES`, grid/status colors, axis/tooltip props
 
 ## 4. Non-negotiables encoded in the pages

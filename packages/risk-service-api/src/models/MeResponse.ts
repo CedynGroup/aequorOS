@@ -34,6 +34,18 @@ export interface MeResponse {
    * @type {string}
    * @memberof MeResponse
    */
+  jobTitle: string | null;
+  /**
+   *
+   * @type {string}
+   * @memberof MeResponse
+   */
+  locale: string | null;
+  /**
+   *
+   * @type {string}
+   * @memberof MeResponse
+   */
   organizationId: string;
   /**
    *
@@ -46,8 +58,31 @@ export interface MeResponse {
    * @type {string}
    * @memberof MeResponse
    */
+  theme: MeResponseThemeEnum | null;
+  /**
+   *
+   * @type {string}
+   * @memberof MeResponse
+   */
+  timezone: string | null;
+  /**
+   *
+   * @type {string}
+   * @memberof MeResponse
+   */
   userId: string;
 }
+
+/**
+ * @export
+ */
+export const MeResponseThemeEnum = {
+  Light: "light",
+  Dark: "dark",
+  System: "system",
+} as const;
+export type MeResponseThemeEnum =
+  (typeof MeResponseThemeEnum)[keyof typeof MeResponseThemeEnum];
 
 /**
  * Check if a given object implements the MeResponse interface.
@@ -56,9 +91,13 @@ export function instanceOfMeResponse(value: object): value is MeResponse {
   if (!("displayName" in value) || value["displayName"] === undefined)
     return false;
   if (!("email" in value) || value["email"] === undefined) return false;
+  if (!("jobTitle" in value) || value["jobTitle"] === undefined) return false;
+  if (!("locale" in value) || value["locale"] === undefined) return false;
   if (!("organizationId" in value) || value["organizationId"] === undefined)
     return false;
   if (!("role" in value) || value["role"] === undefined) return false;
+  if (!("theme" in value) || value["theme"] === undefined) return false;
+  if (!("timezone" in value) || value["timezone"] === undefined) return false;
   if (!("userId" in value) || value["userId"] === undefined) return false;
   return true;
 }
@@ -77,8 +116,12 @@ export function MeResponseFromJSONTyped(
   return {
     displayName: json["display_name"],
     email: json["email"],
+    jobTitle: json["job_title"],
+    locale: json["locale"],
     organizationId: json["organization_id"],
     role: json["role"],
+    theme: json["theme"],
+    timezone: json["timezone"],
     userId: json["user_id"],
   };
 }
@@ -98,8 +141,12 @@ export function MeResponseToJSONTyped(
   return {
     display_name: value["displayName"],
     email: value["email"],
+    job_title: value["jobTitle"],
+    locale: value["locale"],
     organization_id: value["organizationId"],
     role: value["role"],
+    theme: value["theme"],
+    timezone: value["timezone"],
     user_id: value["userId"],
   };
 }

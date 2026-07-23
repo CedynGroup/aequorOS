@@ -98,6 +98,78 @@ def test_password_login_then_me(db_client: TestClient) -> None:
     assert body["organization_id"] == str(org_id)
     assert body["email"] == _EMAIL
     assert body["role"] == "analyst"
+    assert body["job_title"] is None
+    assert body["locale"] is None
+    assert body["timezone"] is None
+    assert body["theme"] is None
+
+
+def test_user_can_update_and_clear_own_profile(db_client: TestClient) -> None:
+    org_id, user_id = _seed_user(role="viewer")
+    token = db_client.post(
+        "/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD}
+    ).json()["access_token"]
+    authorization = {"Authorization": f"Bearer {token}"}
+
+    updated = db_client.patch(
+        "/api/v1/auth/me",
+        headers=authorization,
+        json={
+            "display_name": "  Jane Mensah  ",
+            "job_title": "  Treasury Analyst  ",
+            "locale": "en-GH",
+            "timezone": "Africa/Accra",
+            "theme": "system",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json() == {
+        "user_id": str(user_id),
+        "organization_id": str(org_id),
+        "email": _EMAIL,
+        "display_name": "Jane Mensah",
+        "job_title": "Treasury Analyst",
+        "locale": "en-GH",
+        "timezone": "Africa/Accra",
+        "theme": "system",
+        "role": "viewer",
+    }
+    assert db_client.get("/api/v1/auth/me", headers=authorization).json() == updated.json()
+
+    cleared = db_client.patch(
+        "/api/v1/auth/me",
+        headers=authorization,
+        json={"display_name": "", "job_title": None},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["display_name"] is None
+    assert cleared.json()["job_title"] is None
+    assert cleared.json()["locale"] == "en-GH"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"timezone": "Not/A_Real_Zone"},
+        {"locale": "definitely_not_a_locale"},
+        {"theme": "sepia"},
+        {"email": "new-address@example.com"},
+        {"role": "admin"},
+    ],
+)
+def test_profile_update_rejects_invalid_or_forbidden_fields(
+    db_client: TestClient, payload: dict[str, str]
+) -> None:
+    _org_id, _user_id = _seed_user(role="viewer")
+    token = db_client.post(
+        "/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD}
+    ).json()["access_token"]
+    response = db_client.patch(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+        json=payload,
+    )
+    assert response.status_code == 422
 
 
 def test_me_requires_a_valid_bearer_token(db_client: TestClient) -> None:

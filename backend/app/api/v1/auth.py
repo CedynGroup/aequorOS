@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hmac
 from collections.abc import Iterator
-from typing import Annotated
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -24,11 +24,12 @@ from app.api.deps import (
     require_role,
 )
 from app.core.config import get_settings
-from app.db.session import get_sessionmaker, get_worker_sessionmaker
+from app.db.session import get_worker_sessionmaker
 from app.models import User
 from app.schemas.auth import (
     LoginRequest,
     MeResponse,
+    ProfileUpdateRequest,
     SsoAccessRequestApprove,
     SsoAccessRequestRead,
     SsoClientConfigResponse,
@@ -62,6 +63,34 @@ def _tokens(issued: authentication.IssuedTokens) -> TokenResponse:
         refresh_token=issued.refresh_token,
         expires_in=issued.expires_in,
     )
+
+
+def _me_response(user: User) -> MeResponse:
+    return MeResponse(
+        user_id=user.id,
+        organization_id=user.organization_id,
+        email=user.email,
+        display_name=user.display_name,
+        job_title=user.job_title,
+        locale=user.locale,
+        timezone=user.timezone,
+        # The database CHECK constraint and update schema guarantee this set;
+        # SQLAlchemy exposes String columns as the wider `str` type.
+        theme=cast(Literal["light", "dark", "system"] | None, user.theme),
+        role=user.role,
+    )
+
+
+def _current_user(db: Session, ctx: TenantContext) -> User:
+    user = db.scalar(
+        select(User).where(
+            User.id == ctx.actor_user_id,
+            User.organization_id == ctx.organization_id,
+        )
+    )
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found.")
+    return user
 
 
 @router.post("/login", response_model=TokenResponse, operation_id="authLogin")
@@ -252,24 +281,22 @@ def refresh(payload: TokenRefreshRequest, db: SystemDb) -> TokenResponse:
 
 
 @router.get("/me", response_model=MeResponse, operation_id="authMe")
-def me(ctx: Annotated[TenantContext, Depends(get_current_principal)]) -> MeResponse:
-    session = get_sessionmaker()()
-    session.info["organization_id"] = ctx.organization_id
-    try:
-        user = session.scalar(
-            select(User).where(
-                User.id == ctx.actor_user_id,
-                User.organization_id == ctx.organization_id,
-            )
-        )
-        if user is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found.")
-        return MeResponse(
-            user_id=user.id,
-            organization_id=user.organization_id,
-            email=user.email,
-            display_name=user.display_name,
-            role=user.role,
-        )
-    finally:
-        session.close()
+def me(
+    ctx: Annotated[TenantContext, Depends(get_current_principal)],
+    db: Annotated[Session, Depends(get_tenant_db_session)],
+) -> MeResponse:
+    return _me_response(_current_user(db, ctx))
+
+
+@router.patch("/me", response_model=MeResponse, operation_id="authUpdateMe")
+def update_me(
+    payload: ProfileUpdateRequest,
+    ctx: Annotated[TenantContext, Depends(get_current_principal)],
+    db: Annotated[Session, Depends(get_tenant_db_session)],
+) -> MeResponse:
+    user = _current_user(db, ctx)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(user, field, value)
+    db.commit()
+    db.refresh(user)
+    return _me_response(user)

@@ -48,6 +48,37 @@ fails when regeneration changes committed generated files.
 
 ## Usage
 
+Current-user profile reads and updates use the generated `AuthApi`. Only
+display name, job title, locale, IANA timezone, and theme are accepted by the
+update contract:
+
+```ts
+import { AuthApi, Configuration } from "@aequoros/risk-service-api";
+
+const auth = new AuthApi(
+  new Configuration({
+    basePath: "http://127.0.0.1:8003",
+    accessToken: bearerToken,
+  }),
+);
+
+const profile = await auth.authMe();
+const updated = await auth.authUpdateMe({
+  profileUpdateRequest: {
+    displayName: profile.displayName,
+    jobTitle: "Treasury Analyst",
+    locale: "en-GH",
+    timezone: "Africa/Accra",
+    theme: "system",
+  },
+});
+```
+
+Profile fields are nullable; sending `null` clears a value. Email, role,
+organization, and security fields are read-only through this API.
+
+Calculation and analysis APIs follow the same generated-client pattern:
+
 ```ts
 import { CapitalApi, Configuration } from "@aequoros/risk-service-api";
 

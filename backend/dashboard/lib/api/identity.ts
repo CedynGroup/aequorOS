@@ -22,3 +22,22 @@ export function roleLabel(role: string | undefined | null): string {
   };
   return labels[role] ?? role.charAt(0).toUpperCase() + role.slice(1);
 }
+
+/** Stable, high-contrast initials background derived from immutable identity. */
+export function avatarColor(identity: string): string {
+  const palette = [
+    '#0f766e',
+    '#1d4ed8',
+    '#6d28d9',
+    '#a21caf',
+    '#be123c',
+    '#b45309',
+    '#047857',
+    '#334155',
+  ];
+  let hash = 0;
+  for (const character of identity) {
+    hash = (hash * 31 + character.charCodeAt(0)) | 0;
+  }
+  return palette[Math.abs(hash) % palette.length];
+}

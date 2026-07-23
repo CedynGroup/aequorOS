@@ -11,6 +11,7 @@ case scenario management, deterministic balance-sheet forecasts, and the first
 capital projection workflow:
 
 - Health and readiness endpoints under `/api/health`
+- Password/OIDC authentication and tenant-scoped current-user profile reads and updates
 - Centralized environment-based settings
 - Request ID propagation through `X-Request-ID`
 - Loguru JSON structured logging
@@ -28,7 +29,7 @@ capital projection workflow:
 - Liquidity finding evidence, acknowledge/dismiss review actions, and audit events
 - Audit events, per-field manual edit history, and source-record traceability
 
-Regulatory LCR/NSFR and Basel regulatory-capital scoring, full ingestion pipelines, auth,
+Regulatory LCR/NSFR and Basel regulatory-capital scoring, full ingestion pipelines,
 background workers, advanced forecast configuration, and report generation are
 intentionally not implemented yet.
 
@@ -112,6 +113,12 @@ Health endpoints:
 
 Business API endpoints use URL path major versioning under `/api/v1`. See
 `docs/architecture.md` for the API versioning policy.
+
+Authenticated users read their current identity and personal preferences with
+`GET /api/v1/auth/me` and update their own nullable `display_name`, `job_title`,
+BCP-47-like `locale`, IANA `timezone`, and `light` / `dark` / `system` `theme`
+with `PATCH /api/v1/auth/me`. The patch rejects extra fields, so email, role,
+organization, and security settings cannot be changed through this endpoint.
 
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
