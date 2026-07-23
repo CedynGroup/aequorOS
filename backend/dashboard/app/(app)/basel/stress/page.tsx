@@ -19,7 +19,7 @@ import {
   useRunAllCapitalScenarios,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, labelize, num } from '@/lib/api/values';
-import { fmtCurrency, fmtPct } from '@/lib/format';
+import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
 const STRESS_SCENARIOS = ['mild', 'moderate', 'severe'] as const;
 
@@ -27,7 +27,7 @@ const SCENARIO_LABELS: Record<string, string> = {
   baseline: 'Baseline',
   mild: 'Mild — Baseline path',
   moderate: 'Moderate — Slowdown',
-  severe: 'Severe — BoG ICAAP severe',
+  severe: 'Severe — supervisory ICAAP severe',
 };
 
 const SCENARIO_DESCRIPTIONS: Record<string, string> = {
@@ -35,7 +35,7 @@ const SCENARIO_DESCRIPTIONS: Record<string, string> = {
   moderate:
     'Growth slowdown with elevated credit losses and RWA drift over the four-quarter horizon.',
   severe:
-    'BoG ICAAP severe scenario — RWA inflation, income compression, and credit-loss spike applied concurrently.',
+    'Supervisory ICAAP severe scenario — RWA inflation, income compression, and credit-loss spike applied concurrently.',
 };
 
 /** Raw shapes carried in RegulatoryRunRead.metrics (snake_case dicts). */
@@ -163,7 +163,7 @@ export default function CapitalStress() {
           { label: 'Stress Testing' },
         ]}
         title="Capital Stress Testing"
-        subtitle="ICAAP-style stress · Four-quarter CAR projection · BoG severe scenario"
+        subtitle={`ICAAP-style stress · Four-quarter CAR projection · ${regShort()} severe scenario`}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={runAllButton}
       />
@@ -237,7 +237,7 @@ export default function CapitalStress() {
           {/* Methodology footer */}
           <SectionCard
             title="Methodology"
-            subtitle="ICAAP and BoG CRD stress alignment"
+            subtitle={`ICAAP and ${regShort()} CRD stress alignment`}
           >
             <div className="text-body text-navy/85 leading-relaxed space-y-3">
               <p>
@@ -245,7 +245,7 @@ export default function CapitalStress() {
                 as-of position: CET1 evolves by retained quarterly income net
                 of credit losses while RWAs grow at the stressed quarterly
                 rate. Ratios are re-derived each quarter and evaluated against
-                the BoG early-warning (10.5%), minimum (10%), and critical
+                the {regShort()} early-warning (10.5%), minimum (10%), and critical
                 (9%) CAR thresholds.
               </p>
               <p>
@@ -356,7 +356,7 @@ function ScenarioCard({
                 </p>
                 {end && (
                   <p className="text-caption text-slate">
-                    RWA {fmtCurrency(num(end.total_rwa), 'GHS')}
+                    RWA {fmtCurrency(num(end.total_rwa))}
                   </p>
                 )}
               </div>
@@ -521,7 +521,7 @@ function ComparisonTable({
       render: (r: ComparisonRow) => {
         const value = r.values[i];
         if (value === null) return '—';
-        if (r.unit === 'ghs') return fmtCurrency(value, 'GHS');
+        if (r.unit === 'ghs') return fmtCurrency(value);
         const breach = r.label === 'CAR' && value < carMin;
         return (
           <span className={breach ? 'text-critical font-medium' : undefined}>

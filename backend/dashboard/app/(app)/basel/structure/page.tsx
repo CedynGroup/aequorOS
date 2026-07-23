@@ -53,7 +53,7 @@ function TierBlock({
             <tr key={it.lineCode} className="border-b border-border-light">
               <td className="px-5 py-2.5 text-navy/85">{it.description}</td>
               <td className="px-5 py-2.5 num text-navy/90">
-                {fmtCurrencyFull(num(it.weightedAmount), 'GHS')}
+                {fmtCurrencyFull(num(it.weightedAmount))}
               </td>
             </tr>
           ))}
@@ -66,7 +66,7 @@ function TierBlock({
                 Less: {d.description}
               </td>
               <td className="px-5 py-2.5 num text-critical">
-                {fmtCurrencyFull(-Math.abs(num(d.weightedAmount)), 'GHS')}
+                {fmtCurrencyFull(-Math.abs(num(d.weightedAmount)))}
               </td>
             </tr>
           ))}
@@ -75,7 +75,7 @@ function TierBlock({
               {title} Total
             </td>
             <td className="px-5 py-3 num text-navy text-h3">
-              {fmtCurrencyFull(total, 'GHS')}
+              {fmtCurrencyFull(total)}
             </td>
           </tr>
         </tbody>
@@ -176,17 +176,17 @@ export default function CapitalStructurePage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <KpiStat
                   label="CET1"
-                  value={fmtCurrencyFull(cet1, 'GHS')}
+                  value={fmtCurrencyFull(cet1)}
                   hint={pctOfRwa(cet1)}
                 />
                 <KpiStat
                   label="Tier 1 (CET1 + AT1)"
-                  value={fmtCurrencyFull(num(data.tier1CapitalGhs), 'GHS')}
+                  value={fmtCurrencyFull(num(data.tier1CapitalGhs))}
                   hint={pctOfRwa(num(data.tier1CapitalGhs))}
                 />
                 <KpiStat
                   label="Total capital"
-                  value={fmtCurrencyFull(total, 'GHS')}
+                  value={fmtCurrencyFull(total)}
                   hint={`${pctOfRwa(total)} · CAR`}
                 />
               </div>
@@ -224,7 +224,7 @@ export default function CapitalStructurePage() {
                           width: `${total > 0 ? (s.value / total) * 100 : 0}%`,
                           background: s.color,
                         }}
-                        title={`${s.label} · ${fmtCurrencyFull(s.value, 'GHS')}`}
+                        title={`${s.label} · ${fmtCurrencyFull(s.value)}`}
                       />
                     ))}
                   </div>
@@ -238,7 +238,7 @@ export default function CapitalStructurePage() {
                         />
                         <span className="text-navy font-medium">{s.label}</span>
                         <span className="font-mono text-navy tnum">
-                          {fmtCurrencyFull(s.value, 'GHS')}
+                          {fmtCurrencyFull(s.value)}
                         </span>
                         <span className="font-mono text-slate tnum">
                           {total > 0

@@ -2,6 +2,7 @@
 
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { chartTooltipProps } from '@/lib/chartTheme';
+import { currencyCode } from '@/lib/format';
 
 export type DonutSlice = {
   name: string;
@@ -13,7 +14,7 @@ export type DonutSlice = {
 const formatters: Record<string, (v: number) => string> = {
   percent: (v) => `${v}%`,
   raw: (v) => v.toString(),
-  'ghs-m': (v) => `GHS ${v.toFixed(1)}M`,
+  'ccy-m': (v) => `${currencyCode()} ${v.toFixed(1)}M`,
 };
 
 export default function DonutChart({
@@ -27,7 +28,7 @@ export default function DonutChart({
   centerLabel?: string;
   centerValue?: string;
   height?: number;
-  format?: 'percent' | 'raw' | 'ghs-m';
+  format?: 'percent' | 'raw' | 'ccy-m';
 }) {
   const formatter = formatters[format] ?? formatters.raw;
   return (

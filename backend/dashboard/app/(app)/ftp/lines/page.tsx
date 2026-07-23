@@ -73,7 +73,7 @@ function LinesBody({ ctx }: { ctx: FtpFrameContext }) {
       key: 'balance',
       header: 'Balance',
       numeric: true,
-      render: (r) => fmtCurrency(r.balanceGhs, 'GHS'),
+      render: (r) => fmtCurrency(r.balanceGhs),
     },
     {
       key: 'margin',
@@ -85,7 +85,7 @@ function LinesBody({ ctx }: { ctx: FtpFrameContext }) {
       key: 'contribution',
       header: 'Net contribution',
       numeric: true,
-      render: (r) => fmtCurrencySigned(r.contributionGhs, 'GHS'),
+      render: (r) => fmtCurrencySigned(r.contributionGhs),
     },
     {
       key: 'floor',
@@ -105,7 +105,7 @@ function LinesBody({ ctx }: { ctx: FtpFrameContext }) {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiStat
           label="Total net contribution"
-          value={fmtCurrency(num(m.totalContributionGhs), 'GHS')}
+          value={fmtCurrency(num(m.totalContributionGhs))}
           hint="All product books, FTP-adjusted"
         />
         <KpiStat
@@ -115,7 +115,7 @@ function LinesBody({ ctx }: { ctx: FtpFrameContext }) {
         />
         <KpiStat
           label="Top contributor"
-          value={topLine ? fmtCurrency(topLine.contributionGhs, 'GHS') : '—'}
+          value={topLine ? fmtCurrency(topLine.contributionGhs) : '—'}
           hint={topLine?.label ?? 'No products'}
         />
         <KpiStat
@@ -188,7 +188,7 @@ function LinesBody({ ctx }: { ctx: FtpFrameContext }) {
                 key: 'balance',
                 header: 'Balance',
                 numeric: true,
-                render: (r) => fmtCurrency(num(r.balanceGhs), 'GHS'),
+                render: (r) => fmtCurrency(num(r.balanceGhs)),
               },
               {
                 key: 'margin',
@@ -200,7 +200,7 @@ function LinesBody({ ctx }: { ctx: FtpFrameContext }) {
                 key: 'contribution',
                 header: 'Contribution',
                 numeric: true,
-                render: (r) => fmtCurrencySigned(num(r.contributionGhs), 'GHS'),
+                render: (r) => fmtCurrencySigned(num(r.contributionGhs)),
               },
               {
                 key: 'floor',

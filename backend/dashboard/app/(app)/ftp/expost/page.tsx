@@ -118,7 +118,7 @@ function ExPostBody({ ctx }: { ctx: FtpFrameContext }) {
     {
       metric: 'Total contribution',
       key: 'total_contribution_ghs',
-      format: (v) => fmtCurrency(v, 'GHS'),
+      format: (v) => fmtCurrency(v),
     },
     {
       metric: 'Products below floor',

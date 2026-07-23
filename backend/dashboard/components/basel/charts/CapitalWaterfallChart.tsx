@@ -101,7 +101,7 @@ export default function CapitalWaterfallChart({
           axisLine={false}
           tickLine={false}
           tick={axisProps.tick}
-          tickFormatter={(v: number) => fmtCurrency(v, 'GHS', { decimals: 0 })}
+          tickFormatter={(v: number) => fmtCurrency(v, undefined, { decimals: 0 })}
           width={72}
         />
         <Tooltip
@@ -110,7 +110,7 @@ export default function CapitalWaterfallChart({
           formatter={(value: number, _name, item) => {
             const signed = (item?.payload as Step | undefined)?.signed ?? value;
             return [
-              `${signed < 0 ? '−' : ''}${fmtCurrency(Math.abs(signed), 'GHS')}`,
+              `${signed < 0 ? '−' : ''}${fmtCurrency(Math.abs(signed))}`,
               'Contribution',
             ];
           }}

@@ -81,9 +81,9 @@ export default function RepricingLadderChart({
           {...chartTooltipProps}
           cursor={{ fill: 'rgb(var(--surface-hover))' }}
           formatter={(v: number, name: string) => {
-            if (name === 'RSL') return [fmtCurrency(Math.abs(v), 'GHS'), name];
-            if (name === 'RSA') return [fmtCurrency(v, 'GHS'), name];
-            return [fmtCurrencySigned(v, 'GHS'), name];
+            if (name === 'RSL') return [fmtCurrency(Math.abs(v)), name];
+            if (name === 'RSA') return [fmtCurrency(v), name];
+            return [fmtCurrencySigned(v), name];
           }}
         />
         {!mini && <Legend {...chartLegendProps} />}

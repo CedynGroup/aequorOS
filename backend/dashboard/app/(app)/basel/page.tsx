@@ -25,7 +25,7 @@ import {
 } from '@/lib/api/hooks';
 import { fmtDateUTC, isoDate, num, statusTone } from '@/lib/api/values';
 import { seriesColor } from '@/lib/chartTheme';
-import { fmtCurrency, fmtPct } from '@/lib/format';
+import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
 function kpiStatus(status: 'green' | 'amber' | 'red' | string): KpiStatus {
   return status === 'red' ? 'crit' : status === 'amber' ? 'warn' : 'ok';
@@ -107,7 +107,7 @@ export default function BaselOverview() {
           { label: 'Overview' },
         ]}
         title="Basel Capital"
-        subtitle="Capital Adequacy Ratio · Tier 1 / Tier 2 · BoG CRD framework"
+        subtitle={`Capital Adequacy Ratio · Tier 1 / Tier 2 · ${regShort()} CRD framework`}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <div className="flex items-center gap-2">
@@ -175,7 +175,7 @@ export default function BaselOverview() {
                 status={kpiStatus(data.metrics.carStatus)}
                 delta={carDelta}
                 sparkline={<Sparkline data={carTrend} />}
-                hint={`BoG minimum ${carMin.toFixed(1)}%`}
+                hint={`${regShort()} minimum ${carMin.toFixed(1)}%`}
               />
               <KpiStat
                 label="Tier 1 ratio"
@@ -215,7 +215,7 @@ export default function BaselOverview() {
             {/* Regulatory floors — CAR & companions are floor limits */}
             <SectionCard
               title="Regulatory floors"
-              subtitle="BoG CRD minimums — compliant while each ratio stays above its floor"
+              subtitle={`${regShort()} CRD minimums — compliant while each ratio stays above its floor`}
               computedAt={computedAt}
               runBadge={run ? <RunBadge run={run} /> : undefined}
               footer={provenance}
@@ -228,7 +228,7 @@ export default function BaselOverview() {
                   warnAt={carEarlyWarning}
                   direction="above"
                   unit="%"
-                  limitLabel="BoG minimum"
+                  limitLabel={`${regShort()} minimum`}
                   warnLabel={data.buffers.carEarlyWarningLabel || 'Early warning'}
                   format={(v) => v.toFixed(1)}
                 />
@@ -304,7 +304,7 @@ export default function BaselOverview() {
                     stored: p.stored,
                   }))}
                   threshold={carMin}
-                  thresholdLabel="BoG min"
+                  thresholdLabel={`${regShort()} min`}
                   redFloor={carEarlyWarning}
                   redFloorLabel="Early warning"
                   primaryLabel="CAR"
@@ -316,14 +316,14 @@ export default function BaselOverview() {
 
               <SectionCard
                 title="RWA composition"
-                subtitle={`Total ${fmtCurrency(totalRwa, 'GHS')}`}
+                subtitle={`Total ${fmtCurrency(totalRwa)}`}
               >
                 <div className="space-y-4">
                   <DonutChart
                     data={rwaSlices}
                     centerLabel="Total RWA"
-                    centerValue={fmtCurrency(totalRwa, 'GHS')}
-                    format="ghs-m"
+                    centerValue={fmtCurrency(totalRwa)}
+                    format="ccy-m"
                   />
                   <ul className="space-y-2 text-caption pt-2 border-t border-border-light">
                     {rwaSlices.map((s) => (
@@ -335,7 +335,7 @@ export default function BaselOverview() {
                         />
                         <span className="text-navy/85 flex-1">{s.name}</span>
                         <span className="font-mono text-navy tnum">
-                          {fmtCurrency(s.value, 'GHS')}
+                          {fmtCurrency(s.value)}
                         </span>
                         <span className="font-mono text-slate w-12 text-right tnum">
                           {totalRwa > 0
@@ -357,9 +357,9 @@ export default function BaselOverview() {
                 height={280}
                 footer={
                   <span>
-                    CET1 {fmtCurrency(num(structure.cet1CapitalGhs), 'GHS')} ·
-                    Tier 1 {fmtCurrency(num(structure.tier1CapitalGhs), 'GHS')} ·
-                    Total {fmtCurrency(num(structure.totalCapitalGhs), 'GHS')} ·{' '}
+                    CET1 {fmtCurrency(num(structure.cet1CapitalGhs))} ·
+                    Tier 1 {fmtCurrency(num(structure.tier1CapitalGhs))} ·
+                    Total {fmtCurrency(num(structure.totalCapitalGhs))} ·{' '}
                     {fmtPct(num(data.metrics.carPct), 2)} of RWA
                   </span>
                 }
@@ -378,14 +378,14 @@ export default function BaselOverview() {
             {/* Regulatory buffers */}
             <SectionCard
               title="Regulatory buffer status"
-              subtitle="BoG CRD thresholds for the Capital Adequacy Ratio"
+              subtitle={`${regShort()} CRD thresholds for the Capital Adequacy Ratio`}
               computedAt={computedAt}
               runBadge={run ? <RunBadge run={run} /> : undefined}
               footer={provenance}
             >
               <div className="grid grid-cols-2 md:grid-cols-5 gap-5">
                 <BufferCell
-                  label="BoG minimum CAR"
+                  label={`${regShort()} minimum CAR`}
                   value={carMin}
                   note="Hard regulatory floor"
                 />
@@ -409,7 +409,7 @@ export default function BaselOverview() {
                   label="Headroom"
                   value={num(data.buffers.headroomPp)}
                   suffix=" pp"
-                  note="Above the BoG minimum"
+                  note={`Above the ${regShort()} minimum`}
                   emphasis={statusTone(data.metrics.carStatus)}
                 />
               </div>

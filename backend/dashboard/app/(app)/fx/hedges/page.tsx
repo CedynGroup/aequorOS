@@ -102,7 +102,7 @@ function HedgesBody({ ctx }: { ctx: FxFrameContext }) {
       key: 'mtm',
       header: 'MTM (GHS)',
       numeric: true,
-      render: (r) => fmtCurrencySigned(num(r.mtmGhs), 'GHS'),
+      render: (r) => fmtCurrencySigned(num(r.mtmGhs)),
     },
     {
       key: 'status',
@@ -131,7 +131,7 @@ function HedgesBody({ ctx }: { ctx: FxFrameContext }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <KpiStat
           label="Aggregate hedge MTM"
-          value={fmtCurrencySigned(aggregateMtm, 'GHS')}
+          value={fmtCurrencySigned(aggregateMtm)}
           hint="Sum of hedge marks, GHS equivalent"
         />
         <KpiStat

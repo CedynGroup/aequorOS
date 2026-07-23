@@ -79,7 +79,7 @@ export default function ExposureBars({
             const point = item?.payload as ExposureBarPoint | undefined;
             const net = typeof value === 'number' ? value : Number(value);
             return [
-              `${fmtCurrencySigned(net, 'GHS')} · ${fmtPct(point?.absPctTier1 ?? 0, 2)} of Tier 1`,
+              `${fmtCurrencySigned(net)} · ${fmtPct(point?.absPctTier1 ?? 0, 2)} of Tier 1`,
               point ? `${point.currency} ${net >= 0 ? 'long' : 'short'}` : 'Net NOP',
             ];
           }}

@@ -47,7 +47,9 @@ class Bank(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     short_name: Mapped[str] = mapped_column(String(80), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="GHS", nullable=False)
-    jurisdiction_code: Mapped[str] = mapped_column(String(8), default="GH", nullable=False)
+    jurisdiction_code: Mapped[str] = mapped_column(
+        String(8), ForeignKey("jurisdictions.code"), default="GH", nullable=False
+    )
     license_type: Mapped[str] = mapped_column(String(40), nullable=False)
     # DNS-safe identifier used in storage bucket names
     # (aequoros-{env}-{storage_slug}-{tier}); assigned on first ingestion.

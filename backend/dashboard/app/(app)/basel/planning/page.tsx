@@ -24,7 +24,7 @@ import {
   useForecastRuns,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, labelize, num } from '@/lib/api/values';
-import { fmtCurrency, fmtPct } from '@/lib/format';
+import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
 const SCENARIO_ORDER = ['base', 'adverse', 'severely_adverse', 'custom'] as const;
 
@@ -68,13 +68,13 @@ const pathColumns: Column<PathRow>[] = [
     key: 'ni',
     header: 'Net income',
     numeric: true,
-    render: (r) => fmtCurrency(r.netIncome, 'GHS'),
+    render: (r) => fmtCurrency(r.netIncome),
   },
   {
     key: 'assets',
     header: 'Total assets',
     numeric: true,
-    render: (r) => fmtCurrency(r.totalAssets, 'GHS'),
+    render: (r) => fmtCurrency(r.totalAssets),
   },
 ];
 
@@ -215,7 +215,7 @@ export default function CapitalPlanning() {
                     label="Year-5 CAR"
                     value={fmtPct(num(summary.year5CarPct), 2)}
                     status={num(summary.year5CarPct) >= carMin ? 'ok' : 'crit'}
-                    hint={`BoG minimum ${carMin.toFixed(1)}%`}
+                    hint={`${regShort()} minimum ${carMin.toFixed(1)}%`}
                   />
                   <KpiStat
                     label="Minimum CAR on path"
@@ -230,7 +230,7 @@ export default function CapitalPlanning() {
                   />
                   <KpiStat
                     label="Cumulative net income"
-                    value={fmtCurrency(num(summary.cumulativeNetIncome), 'GHS')}
+                    value={fmtCurrency(num(summary.cumulativeNetIncome))}
                     hint="Retained earnings feed CET1"
                   />
                 </div>
@@ -298,8 +298,8 @@ export default function CapitalPlanning() {
             actions={<IllustrativeBadge label="What-if · client-side" />}
             footer={
               <span>
-                Base position: RWA {fmtCurrency(totalRwa, 'GHS')} · total
-                capital {fmtCurrency(totalCapital, 'GHS')} · CAR{' '}
+                Base position: RWA {fmtCurrency(totalRwa)} · total
+                capital {fmtCurrency(totalCapital)} · CAR{' '}
                 {fmtPct(currentCar, 2)} (stored values). Sliders apply simple
                 arithmetic on these figures; run a forecast scenario for a
                 governed projection.
@@ -317,7 +317,7 @@ export default function CapitalPlanning() {
                   max={40}
                   step={1}
                   display={`${rwaGrowthPct >= 0 ? '+' : ''}${rwaGrowthPct}%`}
-                  hint={`Pro-forma RWA ${fmtCurrency(proRwa, 'GHS')}`}
+                  hint={`Pro-forma RWA ${fmtCurrency(proRwa)}`}
                 />
                 <PlannerSlider
                   label="Retained earnings added to CET1"
@@ -327,7 +327,7 @@ export default function CapitalPlanning() {
                   max={25}
                   step={0.5}
                   display={`${retainedPct.toFixed(1)}% of capital`}
-                  hint={fmtCurrency(retained, 'GHS')}
+                  hint={fmtCurrency(retained)}
                 />
                 <PlannerSlider
                   label="New AT1 issuance"
@@ -337,7 +337,7 @@ export default function CapitalPlanning() {
                   max={15}
                   step={0.5}
                   display={`${at1IssuePct.toFixed(1)}% of capital`}
-                  hint={fmtCurrency(at1New, 'GHS')}
+                  hint={fmtCurrency(at1New)}
                 />
                 <PlannerSlider
                   label="New Tier 2 issuance"
@@ -347,7 +347,7 @@ export default function CapitalPlanning() {
                   max={15}
                   step={0.5}
                   display={`${tier2IssuePct.toFixed(1)}% of capital`}
-                  hint={fmtCurrency(tier2New, 'GHS')}
+                  hint={fmtCurrency(tier2New)}
                 />
               </div>
 
@@ -382,26 +382,26 @@ export default function CapitalPlanning() {
                   />
                 </div>
                 <LimitBar
-                  label="Pro-forma CAR vs BoG floors"
+                  label={`Pro-forma CAR vs ${regShort()} floors`}
                   value={proCar}
                   limit={carMin}
                   warnAt={carEarlyWarning}
                   direction="above"
                   unit="%"
-                  limitLabel="BoG minimum"
+                  limitLabel={`${regShort()} minimum`}
                   warnLabel={data?.buffers.carEarlyWarningLabel || 'Early warning'}
                   format={(v) => v.toFixed(1)}
                 />
                 <p className="text-caption text-slate leading-relaxed">
-                  Pro-forma capital = CET1 {fmtCurrency(proCet1, 'GHS')} + AT1{' '}
-                  {fmtCurrency(at1 + at1New, 'GHS')} + Tier 2{' '}
-                  {fmtCurrency(tier2 + tier2New, 'GHS')} ={' '}
+                  Pro-forma capital = CET1 {fmtCurrency(proCet1)} + AT1{' '}
+                  {fmtCurrency(at1 + at1New)} + Tier 2{' '}
+                  {fmtCurrency(tier2 + tier2New)} ={' '}
                   <span className="font-mono text-navy">
-                    {fmtCurrency(proTotal, 'GHS')}
+                    {fmtCurrency(proTotal)}
                   </span>{' '}
                   over RWA{' '}
                   <span className="font-mono text-navy">
-                    {fmtCurrency(proRwa, 'GHS')}
+                    {fmtCurrency(proRwa)}
                   </span>
                   .
                 </p>

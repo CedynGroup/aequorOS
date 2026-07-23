@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
-from app.models import Bank, BankFinancialFact, BankReportingPeriod
+from app.models import Bank, BankFinancialFact, BankReportingPeriod, Jurisdiction
 from app.schemas.banks import (
     BankFactRead,
     BankFactsRead,
@@ -17,6 +17,7 @@ from app.schemas.banks import (
     BankReportingPeriodListRead,
     BankReportingPeriodRead,
     BankSeedSummaryRead,
+    JurisdictionRead,
 )
 from app.services.audit import record_event
 from app.services.sample_bank_seed import DEMO_ORG_ID, seed_sample_bank
@@ -34,6 +35,21 @@ _FACT_GROUP_FIELDS: dict[str, str] = {
 }
 
 
+def _jurisdictions_by_code(db: Session, codes: set[str]) -> dict[str, JurisdictionRead]:
+    """Resolve registry rows for the given codes (global reference data)."""
+    if not codes:
+        return {}
+    rows = db.scalars(select(Jurisdiction).where(Jurisdiction.code.in_(codes)))
+    return {
+        row.code: JurisdictionRead.model_validate(row, from_attributes=True) for row in rows
+    }
+
+
+def _bank_read(bank: Bank, registry: dict[str, JurisdictionRead]) -> BankRead:
+    read = BankRead.model_validate(bank, from_attributes=True)
+    return read.model_copy(update={"jurisdiction": registry.get(bank.jurisdiction_code)})
+
+
 def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
     banks = list(
         db.scalars(
@@ -42,14 +58,14 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
             .order_by(Bank.name, Bank.id)
         )
     )
-    return BankListRead(
-        banks=[BankRead.model_validate(bank, from_attributes=True) for bank in banks]
-    )
+    registry = _jurisdictions_by_code(db, {bank.jurisdiction_code for bank in banks})
+    return BankListRead(banks=[_bank_read(bank, registry) for bank in banks])
 
 
 def get_bank(db: Session, ctx: TenantContext, bank_id: UUID) -> BankRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    return BankRead.model_validate(bank, from_attributes=True)
+    registry = _jurisdictions_by_code(db, {bank.jurisdiction_code})
+    return _bank_read(bank, registry)
 
 
 def list_reporting_periods(

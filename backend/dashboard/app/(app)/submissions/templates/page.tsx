@@ -24,6 +24,7 @@ import {
   TEMPLATE_SECTIONS,
 } from '@/components/submissions/shared';
 import { useReturnTemplates } from '@/lib/api/hooks';
+import { centralBankName } from '@/lib/format';
 
 export default function TemplatesPage() {
   const query = useReturnTemplates();
@@ -46,7 +47,7 @@ export default function TemplatesPage() {
           <BookOpenCheck size={16} className="text-action shrink-0 mt-0.5" aria-hidden />
           <p className="text-caption text-navy/80 leading-relaxed">
             Template structures, citations, deadlines and fidelity grades
-            follow the Bank of Ghana research dossiers
+            follow the {centralBankName()} research dossiers
             (<span className="font-mono">docs/research/bog_returns_and_templates.md</span>,{' '}
             <span className="font-mono">docs/research/bog_orass_submission_channels.md</span>).
             Grades are honest: <strong>CONFIRMED</strong> structures are

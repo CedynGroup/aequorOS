@@ -124,7 +124,7 @@ export function fxLimits(data: FxDashboardRead | undefined): LimitRow[] {
       status: fromTrafficLight(metrics.nopStatus),
       unit: '%',
       computedAt,
-      detail: `Net ${fmtCurrencySigned(num(metrics.nopGhs), 'GHS')}`,
+      detail: `Net ${fmtCurrencySigned(num(metrics.nopGhs))}`,
     },
   ];
   for (const position of data.positions) {

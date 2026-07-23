@@ -599,7 +599,7 @@ def _validation_rows(analysis: _FxAnalysis) -> tuple[tuple[str, bool, str, str],
     nop_message = (
         f"The aggregate net open position of {_pct_text(nop.nop_pct_tier1)}% of Tier 1 is "
         + ("within" if nop.within_aggregate_limit else "above")
-        + f" the {aggregate_limit}% BoG aggregate limit."
+        + f" the {aggregate_limit}% regulatory aggregate limit."
     )
     single_message = (
         f"The largest single-currency net open position ({nop.single_ccy_max_currency} at "

@@ -25,6 +25,7 @@ import type {
 } from '@aequoros/risk-service-api';
 import { isApiError } from '@/lib/api/client';
 import { useBanks, useReportingPeriods } from '@/lib/api/hooks';
+import { setActiveJurisdiction } from '@/lib/format';
 import Logo from './Logo';
 
 type BankContextValue = {
@@ -50,6 +51,37 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const banksQuery = useBanks();
   const bank = banksQuery.data?.banks[0] ?? null;
+
+  // Bind the resolved jurisdiction (registry row on the bank payload) into the
+  // formatter module BEFORE children render, so every fmtCurrency/regShort call
+  // in the same commit reflects this bank's country. Render-phase assignment is
+  // deliberate and idempotent — an effect would leave the first paint on the
+  // GH defaults for a non-GH bank.
+  useMemo(() => {
+    if (bank) {
+      setActiveJurisdiction(
+        bank.jurisdiction
+          ? {
+              currencyCode: bank.jurisdiction.currencyCode,
+              locale: bank.jurisdiction.locale,
+              regulatorShort: bank.jurisdiction.regulatorShort,
+              centralBankName: bank.jurisdiction.centralBankName,
+              countryName: bank.jurisdiction.countryName,
+              submissionPortal: bank.jurisdiction.submissionPortal ?? null,
+            }
+          : // No registry row for this code: neutral labels + raw bank fields
+            // (never the GH defaults — that would mislabel the regulator).
+            {
+              currencyCode: bank.currency,
+              locale: 'en-US',
+              regulatorShort: 'Regulator',
+              centralBankName: 'Central bank',
+              countryName: bank.jurisdictionCode,
+              submissionPortal: null,
+            }
+      );
+    }
+  }, [bank]);
 
   const periodsQuery = useReportingPeriods(bank?.id);
   const periods = useMemo(

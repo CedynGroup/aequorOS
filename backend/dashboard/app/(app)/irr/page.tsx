@@ -21,7 +21,7 @@ import StatusPill from '@/components/ui/StatusPill';
 import EmptyState from '@/components/ui/EmptyState';
 import ValidationList from '@/components/ui/ValidationList';
 import { fmtRelative, num, statusTone } from '@/lib/api/values';
-import { fmtCurrency, fmtCurrencySigned, fmtPct } from '@/lib/format';
+import { fmtCurrency, fmtCurrencySigned, fmtPct, regShort } from '@/lib/format';
 
 function kpiStatus(status: string): KpiStatus | undefined {
   return status === 'green'
@@ -43,7 +43,7 @@ export default function IrrOverviewPage() {
   return (
     <IrrWorkspace
       crumb="Overview"
-      subtitle="Banking book IRRBB · Repricing gap · EVE & EaR sensitivity · BoG CRD"
+      subtitle={`Banking book IRRBB · Repricing gap · EVE & EaR sensitivity · ${regShort()} CRD`}
     >
       {({ data, metrics: m, latestRun, computedAt }) => {
         const eveLimit = num(m.eveLimitPct);
@@ -122,9 +122,9 @@ export default function IrrOverviewPage() {
               />
               <KpiStat
                 label="NII sensitivity ±200bp"
-                value={fmtCurrencySigned(earWorst, 'GHS')}
+                value={fmtCurrencySigned(earWorst)}
                 status={earWorst < 0 ? 'warn' : 'ok'}
-                hint={`+200bp ${fmtCurrencySigned(earUp, 'GHS')} · −200bp ${fmtCurrencySigned(
+                hint={`+200bp ${fmtCurrencySigned(earUp)} · −200bp ${fmtCurrencySigned(
                   earDown,
                   'GHS'
                 )}`}
@@ -150,7 +150,7 @@ export default function IrrOverviewPage() {
                 subtitle={`Six Basel IRRBB shocks · Base EVE ${fmtCurrency(
                   num(m.eveBaseGhs),
                   'GHS'
-                )} · Tier 1 ${fmtCurrency(num(m.tier1Ghs), 'GHS')}`}
+                )} · Tier 1 ${fmtCurrency(num(m.tier1Ghs))}`}
                 actions={
                   <Link
                     href="/irr/sensitivity"
@@ -172,7 +172,7 @@ export default function IrrOverviewPage() {
 
               <SectionCard
                 title="Repricing gap profile"
-                subtitle="Net gap per BoG CRD tenor bucket with cumulative overlay"
+                subtitle={`Net gap per ${regShort()} CRD tenor bucket with cumulative overlay`}
                 actions={
                   <Link
                     href="/irr/gaps"
@@ -192,7 +192,7 @@ export default function IrrOverviewPage() {
                         num(m.cumulative12mGapGhs) < 0 ? 'text-warning' : 'text-navy'
                       }`}
                     >
-                      {fmtCurrencySigned(num(m.cumulative12mGapGhs), 'GHS')}
+                      {fmtCurrencySigned(num(m.cumulative12mGapGhs))}
                     </span>
                   </span>
                 }

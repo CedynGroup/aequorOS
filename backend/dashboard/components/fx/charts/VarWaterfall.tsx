@@ -99,8 +99,8 @@ export default function VarWaterfall({
             if (!step) return ['—', ''];
             const text =
               step.kind === 'total'
-                ? fmtCurrency(step.signed, 'GHS')
-                : fmtCurrencySigned(step.signed, 'GHS');
+                ? fmtCurrency(step.signed)
+                : fmtCurrencySigned(step.signed);
             return [
               text,
               step.kind === 'benefit'

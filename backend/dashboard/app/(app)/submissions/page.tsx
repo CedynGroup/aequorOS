@@ -28,6 +28,7 @@ import {
   indicativePenaltyGhs,
   returnsHref,
 } from '@/components/submissions/shared';
+import { centralBankName } from '@/lib/format';
 
 const HORIZON_OPTIONS = [3, 6, 12];
 
@@ -150,7 +151,7 @@ export default function RegulatoryCalendarPage() {
           { label: 'Calendar' },
         ]}
         title="Regulatory Reporting"
-        subtitle="Bank of Ghana deadline board · every official return, its due date, and its package state"
+        subtitle={`${centralBankName()} deadline board · every official return, its due date, and its package state`}
         asOf={asOf ? fmtDateUTC(asOf) : undefined}
         action={
           <label className="flex items-center gap-2 text-caption text-slate">

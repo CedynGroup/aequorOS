@@ -19,7 +19,7 @@ import {
   useRegulatoryRun,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
-import { fmtCurrency } from '@/lib/format';
+import { fmtCurrency, regShort } from '@/lib/format';
 
 type WeightedRow = {
   item: string;
@@ -125,7 +125,7 @@ export default function NSFRDashboard() {
           { label: 'NSFR' },
         ]}
         title="Net Stable Funding Ratio"
-        subtitle="Basel III NSFR per BoG CRD · 1-year stable funding horizon"
+        subtitle={`Basel III NSFR per ${regShort()} CRD · 1-year stable funding horizon`}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <div className="flex items-center gap-2">
@@ -157,20 +157,20 @@ export default function NSFRDashboard() {
               </div>
               <KpiStat
                 label="Available stable funding"
-                value={fmtCurrency(num(data.metrics.asfTotalGhs), 'GHS')}
+                value={fmtCurrency(num(data.metrics.asfTotalGhs))}
                 hint="Liability-side weighting"
               />
               <KpiStat
                 label="Required stable funding"
-                value={fmtCurrency(num(data.metrics.rsfTotalGhs), 'GHS')}
-                hint={`Funding surplus ${fmtCurrency(surplus, 'GHS')}`}
+                value={fmtCurrency(num(data.metrics.rsfTotalGhs))}
+                hint={`Funding surplus ${fmtCurrency(surplus)}`}
                 status={surplus >= 0 ? 'ok' : 'crit'}
               />
             </div>
 
             <SectionCard
               title="Regulatory floor"
-              subtitle="NSFR is a floor limit — compliant while the ratio stays above the BoG minimum"
+              subtitle={`NSFR is a floor limit — compliant while the ratio stays above the ${regShort()} minimum`}
               computedAt={computedAt}
               runBadge={run ? <RunBadge run={run} /> : undefined}
             >
@@ -181,8 +181,8 @@ export default function NSFRDashboard() {
                 warnAt={nsfrMin}
                 direction="above"
                 unit="%"
-                limitLabel={nsfrRedFloor === nsfrMin ? 'BoG minimum' : 'Red floor'}
-                warnLabel="BoG minimum"
+                limitLabel={nsfrRedFloor === nsfrMin ? `${regShort()} minimum` : 'Red floor'}
+                warnLabel={`${regShort()} minimum`}
                 format={(v) => v.toFixed(1)}
               />
             </SectionCard>
@@ -254,17 +254,17 @@ export default function NSFRDashboard() {
                 <p className="text-caption text-slate">
                   NSFR = Total ASF{' '}
                   <span className="font-mono text-navy">
-                    {fmtCurrency(asfTotal, 'GHS')}
+                    {fmtCurrency(asfTotal)}
                   </span>{' '}
                   / Total RSF{' '}
                   <span className="font-mono text-navy">
-                    {fmtCurrency(rsfTotal, 'GHS')}
+                    {fmtCurrency(rsfTotal)}
                   </span>{' '}
                   ={' '}
                   <span className="font-mono font-medium text-success">
                     {num(data.metrics.nsfrPct).toFixed(2)}%
                   </span>
-                  . BoG minimum {nsfrMin.toFixed(0)}%.{' '}
+                  . {regShort()} minimum {nsfrMin.toFixed(0)}%.{' '}
                   {bank?.name ?? 'The bank'} holds{' '}
                   <span className="font-mono text-navy">
                     {(num(data.metrics.nsfrPct) - nsfrMin).toFixed(2)} pts
