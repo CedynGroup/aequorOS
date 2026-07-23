@@ -215,7 +215,6 @@ export default function ProfilePage() {
           { label: 'Profile & preferences' },
         ]}
         title="Profile & preferences"
-        subtitle="Manage how your personal details and dashboard appearance are displayed."
       />
 
       <div className="px-4 md:px-8 py-6 max-w-5xl">
@@ -245,10 +244,7 @@ export default function ProfilePage() {
         ) : profile ? (
           <form onSubmit={onSubmit} className="space-y-6">
             <Card>
-              <CardHeader
-                title="Personal details"
-                subtitle="These details identify you throughout AequorOS."
-              />
+              <CardHeader title="Personal details" />
               <CardBody>
                 <div className="flex items-center gap-4 pb-6 mb-6 border-b border-border-light">
                   <span
@@ -363,10 +359,7 @@ export default function ProfilePage() {
             </Card>
 
             <Card>
-              <CardHeader
-                title="Appearance"
-                subtitle="This preference follows your account across browsers."
-              />
+              <CardHeader title="Appearance" />
               <CardBody>
                 <div
                   role="radiogroup"
