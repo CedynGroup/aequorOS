@@ -263,9 +263,6 @@ export default function ProfilePage() {
                     <p className="text-caption text-slate truncate">
                       {profile.email} · {roleLabel(profile.role)}
                     </p>
-                    <p className="mt-1 text-micro text-slate">
-                      Your avatar is generated from your initials.
-                    </p>
                   </div>
                 </div>
 
