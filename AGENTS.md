@@ -147,3 +147,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   citations, the GHS ’000 unit convention in `SnapshotPreview`/`lib/templates.ts`,
   and the `sample_bank_seed` test fixture. Return families per jurisdiction are the
   unbuilt half (product.md §Phase 5 item 0).
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.

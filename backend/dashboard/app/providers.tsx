@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { setAccessToken } from '@/lib/api/token';
 import { LOGIN_URL } from '@/lib/loginUrl';
+import ProfileProvider from '@/components/profile/ProfileProvider';
 
 /** Keeps the API client's bearer token in sync with the NextAuth session. */
 function TokenSync() {
@@ -42,7 +43,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     // access token propagates to the client cache before it expires.
     <SessionProvider refetchInterval={10 * 60} refetchOnWindowFocus>
       <TokenSync />
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <ProfileProvider>{children}</ProfileProvider>
+      </QueryClientProvider>
     </SessionProvider>
   );
 }

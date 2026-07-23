@@ -15,6 +15,7 @@ import type {
   ErrorResponse,
   LoginRequest,
   MeResponse,
+  ProfileUpdateRequest,
   SsoAccessRequestApprove,
   SsoAccessRequestRead,
   SsoConnectionResponse,
@@ -31,6 +32,8 @@ import {
   LoginRequestToJSON,
   MeResponseFromJSON,
   MeResponseToJSON,
+  ProfileUpdateRequestFromJSON,
+  ProfileUpdateRequestToJSON,
   SsoAccessRequestApproveFromJSON,
   SsoAccessRequestApproveToJSON,
   SsoAccessRequestReadFromJSON,
@@ -72,6 +75,10 @@ export interface AuthRejectSsoAccessRequestRequest {
 
 export interface AuthSsoRequest {
   ssoLoginRequest: SsoLoginRequest;
+}
+
+export interface AuthUpdateMeRequest {
+  profileUpdateRequest: ProfileUpdateRequest;
 }
 
 /**
@@ -581,6 +588,66 @@ export class AuthApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<SsoStatusResponse> {
     const response = await this.authSsoStatusRaw(initOverrides);
+    return await response.value();
+  }
+
+  /**
+   * Update Me
+   */
+  async authUpdateMeRaw(
+    requestParameters: AuthUpdateMeRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<MeResponse>> {
+    if (requestParameters["profileUpdateRequest"] == null) {
+      throw new runtime.RequiredError(
+        "profileUpdateRequest",
+        'Required parameter "profileUpdateRequest" was null or undefined when calling authUpdateMe().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/auth/me`,
+        method: "PATCH",
+        headers: headerParameters,
+        query: queryParameters,
+        body: ProfileUpdateRequestToJSON(
+          requestParameters["profileUpdateRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      MeResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Update Me
+   */
+  async authUpdateMe(
+    requestParameters: AuthUpdateMeRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<MeResponse> {
+    const response = await this.authUpdateMeRaw(
+      requestParameters,
+      initOverrides,
+    );
     return await response.value();
   }
 }

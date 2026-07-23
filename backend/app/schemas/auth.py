@@ -5,8 +5,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+_BCP47_PATTERN = (
+    r"^[A-Za-z]{2,3}(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|[0-9]{3}))?"
+    r"(?:-(?:[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*$"
+)
 
 
 class LoginRequest(BaseModel):
@@ -40,7 +46,42 @@ class MeResponse(BaseModel):
     organization_id: UUID
     email: str
     display_name: str | None
+    job_title: str | None
+    locale: str | None
+    timezone: str | None
+    theme: Literal["light", "dark", "system"] | None
     role: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    """Personal, non-security fields a signed-in user may change for themself."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(default=None, max_length=255)
+    job_title: str | None = Field(default=None, max_length=255)
+    locale: str | None = Field(default=None, max_length=35, pattern=_BCP47_PATTERN)
+    timezone: str | None = Field(default=None, max_length=255)
+    theme: Literal["light", "dark", "system"] | None = None
+
+    @field_validator("display_name", "job_title", "locale", "timezone", mode="before")
+    @classmethod
+    def strip_nullable_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        stripped = value.strip()
+        return stripped or None
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("timezone must be a valid IANA time zone") from exc
+        return value
 
 
 class SsoStatusResponse(BaseModel):

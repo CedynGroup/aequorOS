@@ -12,7 +12,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
-import { Moon, Sun } from 'lucide-react';
+import { Monitor, Moon, Sun } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import AuthenticationPanel from '@/components/settings/AuthenticationPanel';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -21,7 +21,11 @@ import RunBadge from '@/components/ui/RunBadge';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { SkeletonLine } from '@/components/ui/Skeleton';
 import { useBankContext } from '@/components/shell/BankContext';
-import { useTheme, type Theme } from '@/components/shell/ThemeProvider';
+import {
+  useTheme,
+  type ThemePreference,
+} from '@/components/shell/ThemeProvider';
+import { useUserProfile } from '@/components/profile/ProfileProvider';
 import { MODULE_LABELS, useLatestRunsByModule } from '@/components/reports/hooks';
 import { apiBaseUrl, apiOrigin } from '@/lib/api/client';
 import {
@@ -30,7 +34,7 @@ import {
   useMarketDataConnections,
 } from '@/lib/api/hooks';
 import { fmtRelative, labelize } from '@/lib/api/values';
-import { initialsFrom, roleLabel } from '@/lib/api/identity';
+import { avatarColor, initialsFrom, roleLabel } from '@/lib/api/identity';
 
 /** A copyable UUID row for the identity grid. */
 function IdField({ label, value }: { label: string; value: string | undefined }) {
@@ -170,15 +174,20 @@ function InstitutionProfile({
 
 function AppearancePanel() {
   const { theme, setTheme } = useTheme();
-  const options: { value: Theme; label: string; Icon: typeof Sun }[] = [
+  const options: {
+    value: ThemePreference;
+    label: string;
+    Icon: typeof Sun;
+  }[] = [
     { value: 'dark', label: 'Dark', Icon: Moon },
     { value: 'light', label: 'Light', Icon: Sun },
+    { value: 'system', label: 'System', Icon: Monitor },
   ];
   return (
     <Card>
       <CardHeader
         title="Appearance"
-        subtitle="Theme preference — stored locally in this browser"
+        subtitle="Theme preference — synced to your profile"
       />
       <CardBody>
         <div
@@ -218,10 +227,17 @@ function AppearancePanel() {
 
 function UsersRolesPanel() {
   const { data: session } = useSession();
-  const email = session?.user?.email ?? '';
-  const name = session?.user?.name || email || 'Signed in';
+  const { profile } = useUserProfile();
+  const email = profile?.email ?? session?.user?.email ?? '';
+  const name =
+    profile?.displayName || session?.user?.name || email || 'Signed in';
   const roles = session?.user?.roles ?? [];
-  const role = roles.length ? roleLabel(roles[0]) : 'Signed in';
+  const role = profile?.role
+    ? roleLabel(profile.role)
+    : roles.length
+      ? roleLabel(roles[0])
+      : 'Signed in';
+  const avatarBackground = avatarColor(profile?.userId ?? email);
 
   return (
     <Card>
@@ -233,7 +249,10 @@ function UsersRolesPanel() {
       <CardBody className="p-0">
         <ul className="divide-y divide-border-light">
           <li className="px-5 py-3 flex items-center gap-4">
-            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal text-white text-caption font-semibold shrink-0">
+            <span
+              className="inline-flex items-center justify-center w-8 h-8 rounded-full text-white text-caption font-semibold shrink-0"
+              style={{ backgroundColor: avatarBackground }}
+            >
               {initialsFrom(name)}
             </span>
             <div className="min-w-0 flex-1">
