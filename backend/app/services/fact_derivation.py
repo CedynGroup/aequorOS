@@ -364,6 +364,7 @@ class _PositionRow:
 @dataclass(frozen=True)
 class _Canonical:
     as_of: date
+    base_currency: str
     positions: list[_PositionRow]
     gl_accounts: list[CanonicalGlAccount]
     refs: dict[str, list[dict[str, Any]]]
@@ -511,8 +512,9 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         )
     ).all()
 
+    base_currency = (bank.currency or _BASE_CURRENCY).strip().upper()
     positions = [
-        _position_row(snapshot, position, product, counterparty)
+        _position_row(snapshot, position, product, counterparty, base_currency)
         for snapshot, position, product, counterparty in rows
     ]
 
@@ -577,6 +579,7 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
     market_curve, market_spots, market_fx_history = _load_market_data(db, ctx, bank, as_of)
     return _Canonical(
         as_of=as_of,
+        base_currency=base_currency,
         positions=positions,
         gl_accounts=sorted(latest_by_code.values(), key=lambda account: account.account_code),
         refs=refs,
@@ -596,18 +599,15 @@ def _load_market_data(
     series replace ``fx_rates_historical`` per currency. Everything absent
     falls back to the legacy reference rows.
     """
-    market_curve = get_yield_curve(db, ctx.organization_id, bank.id, _BASE_CURRENCY, as_of)
+    base_ccy = (bank.currency or _BASE_CURRENCY).strip().upper()
+    market_curve = get_yield_curve(db, ctx.organization_id, bank.id, base_ccy, as_of)
     market_spots: dict[str, Decimal] = {}
     market_fx_history: dict[str, list[tuple[date, Decimal]]] = {}
-    for currency in list_fx_base_currencies(
-        db, ctx.organization_id, bank.id, _BASE_CURRENCY, as_of
-    ):
-        spot = get_fx_spot(db, ctx.organization_id, bank.id, currency, _BASE_CURRENCY, as_of)
+    for currency in list_fx_base_currencies(db, ctx.organization_id, bank.id, base_ccy, as_of):
+        spot = get_fx_spot(db, ctx.organization_id, bank.id, currency, base_ccy, as_of)
         if spot is not None:
             market_spots[currency] = spot.rate
-        history = get_fx_spot_history(
-            db, ctx.organization_id, bank.id, currency, _BASE_CURRENCY, as_of
-        )
+        history = get_fx_spot_history(db, ctx.organization_id, bank.id, currency, base_ccy, as_of)
         if len(history) >= _MARKET_FX_HISTORY_MIN_OBSERVATIONS:
             market_fx_history[currency] = history
     return market_curve, market_spots, market_fx_history
@@ -618,13 +618,14 @@ def _position_row(
     position: CanonicalPosition,
     product: CanonicalProduct | None,
     counterparty: CanonicalCounterparty | None,
+    base_currency: str,
 ) -> _PositionRow:
     attributes = snapshot.attributes or {}
     balance = _dec(snapshot.balance, _ZERO)
     balance_ghs = _dec_or_none(attributes.get("balance_ghs"))
     if balance_ghs is None:
-        # GHS-denominated books carry no explicit conversion; fall back to balance.
-        balance_ghs = balance if position.currency == "GHS" else _ZERO
+        # Base-currency books carry no explicit conversion; fall back to balance.
+        balance_ghs = balance if position.currency == base_currency else _ZERO
     return _PositionRow(
         source_reference=snapshot.source_reference,
         position_type=position.position_type,
@@ -809,7 +810,7 @@ def _classify_gl_assets(
         and (cash["bog_required_reserves"] + cash["bog_excess_reserves"]) == 0
     ):
         warnings.append(
-            "The BoG required/excess reserve split is unavailable in the GL; the full "
+            "The central-bank required/excess reserve split is unavailable in the GL; the full "
             "cash balance is carried as cash_vault."
         )
     return cash, other
@@ -969,13 +970,15 @@ def _derive_balance_sheet_block(
     plug_note: str | None = None
     if gap > 0:
         other_assets += gap
-        plug_note = f"balance plug +{money(gap)} GHS added to other_assets"
+        plug_note = f"balance plug +{money(gap)} {canonical.base_currency} added to other_assets"
     elif gap < 0:
         term_borrowings += -gap
-        plug_note = f"balance plug +{money(-gap)} GHS added to term_borrowings_gt_1y"
+        plug_note = (
+            f"balance plug +{money(-gap)} {canonical.base_currency} added to term_borrowings_gt_1y"
+        )
     if assets_total > 0 and abs(gap) > assets_total * BALANCE_GAP_WARN_FRACTION:
         warnings.append(
-            f"Balance-sheet identity gap of {money(abs(gap))} GHS "
+            f"Balance-sheet identity gap of {money(abs(gap))} {canonical.base_currency} "
             f"({(abs(gap) / assets_total * _HUNDRED).quantize(Decimal('0.01'))}% of assets) "
             f"was plugged ({plug_note}). Uploaded GL and sub-ledgers do not fully "
             "reconcile — review the reconciliation report."
@@ -995,7 +998,7 @@ def _derive_balance_sheet_block(
         bs(
             "bog_required_reserves", cash["bog_required_reserves"], "asset", "GL statutory reserves"
         ),
-        bs("bog_excess_reserves", cash["bog_excess_reserves"], "asset", "GL BoG other balances"),
+        bs("bog_excess_reserves", cash["bog_excess_reserves"], "asset", "GL central-bank balances"),
         bs("securities_bog_bills", bills, "asset", "SECURITY_HOLDING positions (bills)"),
         bs("securities_gog_bonds", bonds, "asset", "SECURITY_HOLDING positions (bonds)"),
         bs("loans_gross", loans_gross, "asset", "LOAN positions Σ balance_ghs"),
@@ -1237,7 +1240,8 @@ def _derive_lcr_inflows(  # noqa: PLR0912
                 corporate += expected
         if prepaid_total > _ZERO:
             derived_from += (
-                f"; +{money(prepaid_total)} GHS expected 30-day prepayment (PREPAYMENT_RATE model)"
+                f"; +{money(prepaid_total)} {canonical.base_currency} expected 30-day "
+                "prepayment (PREPAYMENT_RATE model)"
             )
 
     interbank = sum(
@@ -1321,11 +1325,11 @@ def _fx_hedge_deltas(canonical: _Canonical, warnings: list[str]) -> dict[str, De
         attributes = row.attributes
         hedge_id = str(attributes.get("hedge_id") or row.source_reference)
         sell = str(attributes.get("sell_currency") or row.currency).strip().upper()
-        buy = str(attributes.get("buy_currency") or "GHS").strip().upper()
+        buy = str(attributes.get("buy_currency") or canonical.base_currency).strip().upper()
         notional = abs(row.balance)
-        if sell != "GHS":
+        if sell != canonical.base_currency:
             deltas[sell] = deltas.get(sell, _ZERO) - notional
-        if buy != "GHS":
+        if buy != canonical.base_currency:
             rate = _dec_or_none(attributes.get("contract_rate"))
             if rate is None or rate <= _ZERO:
                 warnings.append(
@@ -1350,7 +1354,7 @@ def _derive_fx_positions(
     assets_ghs: dict[str, Decimal] = {}
     liabilities_ghs: dict[str, Decimal] = {}
     for row in canonical.positions:
-        if row.currency == "GHS" or row.position_type == "LC_GUARANTEE":
+        if row.currency == canonical.base_currency or row.position_type == "LC_GUARANTEE":
             continue
         if row.position_type in _FX_ASSET_TYPES:
             assets_ccy[row.currency] = assets_ccy.get(row.currency, _ZERO) + row.balance
@@ -1433,7 +1437,7 @@ def _derive_fx_positions(
                 group="fx_position",
                 status="skipped",
                 warnings=warnings,
-                note="No non-GHS positions with return histories exist; the FX module "
+                note="No foreign-currency positions with return histories exist; the FX module "
                 "will report no open positions.",
             )
         )
@@ -1806,8 +1810,8 @@ def _derive_irr_positions(
         )
     if excluded_core > _ZERO:
         warnings.append(
-            f"{money(excluded_core)} GHS of zero-rate non-maturity deposits were "
-            "excluded from the rate-sensitive book as the behavioral core."
+            f"{money(excluded_core)} {canonical.base_currency} of zero-rate non-maturity "
+            "deposits were excluded from the rate-sensitive book as the behavioral core."
         )
 
     specs: list[_FactSpec] = []
@@ -1910,7 +1914,10 @@ def _derive_irr_swaps(canonical: _Canonical, groups: list[GroupResult]) -> list[
             continue
         notional = row.notional_ghs if row.notional_ghs > _ZERO else row.balance_ghs
         if notional <= _ZERO:
-            warnings.append(f"Swap {swap_id}: no positive GHS notional; the swap was excluded.")
+            warnings.append(
+                f"Swap {swap_id}: no positive {canonical.base_currency} notional; "
+                "the swap was excluded."
+            )
             continue
         pay_rate = _dec_or_none(attributes.get("pay_rate_pct"))
         if pay_rate is None and row.interest_rate is not None:
@@ -1992,7 +1999,7 @@ def _long_curve_rate(canonical: _Canonical) -> Decimal:
     best_months = _ZERO
     best_rate = _ZERO
     for payload in canonical.refs.get("yield_curve", ()):
-        if str(payload.get("currency", "")).strip().upper() not in ("", "GHS"):
+        if str(payload.get("currency", "")).strip().upper() not in ("", canonical.base_currency):
             continue
         months = _dec_or_none(payload.get("tenor_months"))
         rate = _dec_or_none(payload.get("rate"))
@@ -2035,22 +2042,22 @@ def _derive_ftp_curve(
         for tenor_months, rate in market_curve.points:
             by_months[Decimal(tenor_months)] = rate * _HUNDRED
         base_source = (
-            f"canonical GHS market yield curve {market_curve.curve_name} "
+            f"canonical {canonical.base_currency} market yield curve {market_curve.curve_name} "
             f"({market_curve.attribution.source_system})"
         )
         if market_curve.attribution.stale:
             # Stale data is usable but never silent (§15): attribute it.
             curve_warnings.append(
-                "The canonical GHS yield curve is stale "
+                f"The canonical {canonical.base_currency} yield curve is stale "
                 f"(ingested {market_curve.attribution.ingested_at.isoformat()}); "
                 "FTP curve points were derived from stale market data."
             )
     else:
-        base_source = "ingested GHS yield curve"
+        base_source = f"ingested {canonical.base_currency} yield curve"
         for payload in canonical.refs.get("yield_curve", ()):
             currency = str(payload.get("currency", "")).strip().upper()
             curve_name = str(payload.get("curve_name", "")).upper()
-            if currency != "GHS" and "GHS" not in curve_name:
+            if currency != canonical.base_currency and canonical.base_currency not in curve_name:
                 continue
             months = _dec_or_none(payload.get("tenor_months"))
             rate = _dec_or_none(payload.get("rate"))

@@ -62,11 +62,11 @@ export default function EarningsChart({
           {...axisProps}
           axisLine={false}
           width={64}
-          tickFormatter={(v: number) => fmtCurrency(v, 'GHS', { decimals: 1 })}
+          tickFormatter={(v: number) => fmtCurrency(v, undefined, { decimals: 1 })}
         />
         <Tooltip
           {...chartTooltipProps}
-          formatter={(v: number, name: string) => [fmtCurrencySigned(v, 'GHS'), name]}
+          formatter={(v: number, name: string) => [fmtCurrencySigned(v), name]}
         />
         <Legend verticalAlign="top" align="right" height={28} {...chartLegendProps} />
         <ReferenceLine y={0} stroke={CHART_AXIS} />

@@ -32,6 +32,7 @@ import BalanceSheetStrip from '@/components/home/BalanceSheetStrip';
 import RatioTrendChart from '@/components/home/RatioTrendChart';
 import OperationalFeed from '@/components/home/OperationalFeed';
 import FreshnessStrip from '@/components/home/FreshnessStrip';
+import { centralBankName } from '@/lib/format';
 
 export default function CommandCenterPage() {
   const { bank } = useBankContext();
@@ -46,7 +47,7 @@ export default function CommandCenterPage() {
         title="Treasury Command Center"
         subtitle={
           bank
-            ? `${bank.name} · Bank of Ghana licensee · ${labelize(bank.licenseType)}`
+            ? `${bank.name} · ${centralBankName()} licensee · ${labelize(bank.licenseType)}`
             : 'Loading bank profile…'
         }
         asOf={

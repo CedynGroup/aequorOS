@@ -42,7 +42,7 @@ export default function RwaBucketChart({
         <XAxis
           type="number"
           {...axisProps}
-          tickFormatter={(v: number) => fmtCurrency(v, 'GHS', { decimals: 0 })}
+          tickFormatter={(v: number) => fmtCurrency(v, undefined, { decimals: 0 })}
         />
         <YAxis
           type="category"
@@ -61,7 +61,7 @@ export default function RwaBucketChart({
               row?.weightPct === null || row?.weightPct === undefined
                 ? ''
                 : ` @ ${row.weightPct.toFixed(0)}% RW`;
-            return [`${fmtCurrency(v, 'GHS')}${weight}`, 'RWA'];
+            return [`${fmtCurrency(v)}${weight}`, 'RWA'];
           }}
         />
         <Bar

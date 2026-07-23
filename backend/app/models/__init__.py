@@ -38,6 +38,7 @@ from app.models.ingestion import (
     MappingConfigRecord,
     TranslationFailure,
 )
+from app.models.jurisdiction import Jurisdiction
 from app.models.live import LiveFinding, LiveMetric
 from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
 from app.models.organization import Organization
@@ -121,6 +122,7 @@ __all__ = [
     "FinancialValidationIssue",
     "IngestionBatch",
     "Job",
+    "Jurisdiction",
     "LineageRecord",
     "LiveFinding",
     "LiveMetric",

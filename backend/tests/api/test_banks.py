@@ -36,6 +36,22 @@ def test_seed_demo_is_refused_when_flag_off(
     assert "data engine" in r.json()["error"]["message"].lower()
 
 
+def test_bank_read_resolves_jurisdiction_from_registry(db_client: TestClient) -> None:
+    """Country identity is DATA: the bank's jurisdiction_code resolves through
+    the jurisdictions registry to currency/locale/central bank — never
+    hardcoded in clients."""
+    _seed_demo_bank(db_client)
+    bank = db_client.get(f"/api/v1/banks/{SAMPLE_BANK_ID}", headers=headers()).json()
+    j = bank["jurisdiction"]
+    assert j["code"] == "GH"
+    assert j["country_name"] == "Ghana"
+    assert j["currency_code"] == "GHS"
+    assert j["locale"] == "en-GH"
+    assert j["central_bank_name"] == "Bank of Ghana"
+    assert j["regulator_short"] == "BoG"
+    assert j["submission_portal"] == "ORASS"
+
+
 def test_seed_demo_creates_sample_bank(db_client: TestClient) -> None:
     summary = _seed_demo_bank(db_client)
     assert summary["bank_id"] == str(SAMPLE_BANK_ID)

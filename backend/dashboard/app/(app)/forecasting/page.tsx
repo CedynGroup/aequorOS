@@ -55,7 +55,7 @@ import {
   useForecastRuns,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, isoDate, labelize, num, statusTone } from '@/lib/api/values';
-import { fmtCurrency, fmtPct, fmtPctSigned } from '@/lib/format';
+import { fmtCurrency, fmtPct, fmtPctSigned, regShort } from '@/lib/format';
 import { seriesColor } from '@/lib/chartTheme';
 
 const PRESET_SCENARIOS: { code: ForecastScenarioCode; label: string }[] = [
@@ -311,7 +311,7 @@ function RunDashboard({
           label="Year-5 CAR"
           value={fmtPct(num(run.summary.year5CarPct), 2)}
           status={kpiTone(metricStatus(run, 'year5_car_pct'))}
-          hint={`BoG minimum ${fmtPct(carThreshold, 0)}`}
+          hint={`${regShort()} minimum ${fmtPct(carThreshold, 0)}`}
           sparkline={
             <Sparkline
               data={path.map((p) => num(p.carPct))}
@@ -332,7 +332,7 @@ function RunDashboard({
         />
         <KpiStat
           label="Cumulative net income"
-          value={fmtCurrency(num(run.summary.cumulativeNetIncome), 'GHS')}
+          value={fmtCurrency(num(run.summary.cumulativeNetIncome))}
           hint="Sum of projected Y1–Y5 profit after tax"
           sparkline={
             <Sparkline
@@ -397,39 +397,39 @@ function RunDashboard({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <ChartFrame
           title="CAR path"
-          subtitle={`BoG minimum ${fmtPct(carThreshold, 0)}`}
+          subtitle={`${regShort()} minimum ${fmtPct(carThreshold, 0)}`}
           height={240}
         >
           <RatioPathChart
             data={path.map((p) => ({ label: yearLabel(p), value: num(p.carPct) }))}
             threshold={carThreshold}
-            thresholdLabel={`BoG min ${fmtPct(carThreshold, 0)}`}
+            thresholdLabel={`${regShort()} min ${fmtPct(carThreshold, 0)}`}
             color={seriesColor(0)}
             label="CAR"
           />
         </ChartFrame>
         <ChartFrame
           title="LCR path"
-          subtitle={`BoG minimum ${fmtPct(lcrThreshold, 0)}`}
+          subtitle={`${regShort()} minimum ${fmtPct(lcrThreshold, 0)}`}
           height={240}
         >
           <RatioPathChart
             data={path.map((p) => ({ label: yearLabel(p), value: num(p.lcrPct) }))}
             threshold={lcrThreshold}
-            thresholdLabel={`BoG min ${fmtPct(lcrThreshold, 0)}`}
+            thresholdLabel={`${regShort()} min ${fmtPct(lcrThreshold, 0)}`}
             color={seriesColor(1)}
             label="LCR"
           />
         </ChartFrame>
         <ChartFrame
           title="NSFR path"
-          subtitle={`BoG minimum ${fmtPct(nsfrThreshold, 0)}`}
+          subtitle={`${regShort()} minimum ${fmtPct(nsfrThreshold, 0)}`}
           height={240}
         >
           <RatioPathChart
             data={path.map((p) => ({ label: yearLabel(p), value: num(p.nsfrPct) }))}
             threshold={nsfrThreshold}
-            thresholdLabel={`BoG min ${fmtPct(nsfrThreshold, 0)}`}
+            thresholdLabel={`${regShort()} min ${fmtPct(nsfrThreshold, 0)}`}
             color={seriesColor(2)}
             label="NSFR"
           />
@@ -580,7 +580,7 @@ const horizonColumns: Column<HorizonRow>[] = [
     numeric: true,
     render: (r) => (
       <>
-        {fmtCurrency(num(r.point.totalAssets), 'GHS')}
+        {fmtCurrency(num(r.point.totalAssets))}
         <DeltaUnder value={r.assetGrowthPct} />
       </>
     ),
@@ -589,19 +589,19 @@ const horizonColumns: Column<HorizonRow>[] = [
     key: 'loans',
     header: 'Loans',
     numeric: true,
-    render: (r) => fmtCurrency(num(r.point.loans), 'GHS'),
+    render: (r) => fmtCurrency(num(r.point.loans)),
   },
   {
     key: 'deposits',
     header: 'Deposits',
     numeric: true,
-    render: (r) => fmtCurrency(num(r.point.deposits), 'GHS'),
+    render: (r) => fmtCurrency(num(r.point.deposits)),
   },
   {
     key: 'equity',
     header: 'Equity',
     numeric: true,
-    render: (r) => fmtCurrency(num(r.point.equity), 'GHS'),
+    render: (r) => fmtCurrency(num(r.point.equity)),
   },
   {
     key: 'nii',
@@ -612,7 +612,7 @@ const horizonColumns: Column<HorizonRow>[] = [
         '—'
       ) : (
         <>
-          {fmtCurrency(num(r.point.nii), 'GHS')}
+          {fmtCurrency(num(r.point.nii))}
           <DeltaUnder value={r.niiGrowthPct} />
         </>
       ),
@@ -622,7 +622,7 @@ const horizonColumns: Column<HorizonRow>[] = [
     header: 'Net income',
     numeric: true,
     render: (r) =>
-      r.point.year === 0 ? '—' : fmtCurrency(num(r.point.netIncome), 'GHS'),
+      r.point.year === 0 ? '—' : fmtCurrency(num(r.point.netIncome)),
   },
   {
     key: 'roe',

@@ -31,6 +31,7 @@ import {
   useTestMarketDataConnection,
 } from '@/lib/api/hooks';
 import CredentialFields from './CredentialFields';
+import { fmtLocale } from '@/lib/format';
 import {
   CATEGORY_LABELS,
   ConnectionStatusPill,
@@ -326,7 +327,7 @@ export default function AddSourcePanel({
           <p className="text-body text-navy">
             Selected scopes will consume approximately{' '}
             <span className="font-mono font-medium">{unitsPerPull}</span> units per pull,
-            roughly <span className="font-mono font-medium">{monthlyUnits.toLocaleString('en-GH')}</span>{' '}
+            roughly <span className="font-mono font-medium">{monthlyUnits.toLocaleString(fmtLocale())}</span>{' '}
             units per month against your subscription.
           </p>
         </div>

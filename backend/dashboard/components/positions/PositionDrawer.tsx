@@ -12,6 +12,7 @@ import type { CanonicalPositionRead } from '@aequoros/risk-service-api';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { useLineageWalk } from '@/lib/api/ingestion';
 import { fmtDateUTC, fmtTimestamp, labelize, num } from '@/lib/api/values';
+import { fmtLocale } from '@/lib/format';
 
 export function validationTone(status: string): StatusTone {
   switch (status) {
@@ -31,7 +32,7 @@ export function fmtBalance(value: string | null | undefined): string {
   if (value === null || value === undefined) return '—';
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return value;
-  return parsed.toLocaleString('en-GH', { maximumFractionDigits: 2 });
+  return parsed.toLocaleString(fmtLocale(), { maximumFractionDigits: 2 });
 }
 
 export function fmtRate(value: string | null | undefined): string {

@@ -130,3 +130,20 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   dashboard; not in OpenAPI) — the single plaintext read path for the secret. Bank-IT
   runbook: `docs/sso-onboarding.md`; roadmap: rbac.md §15 Phase 2 (multi-connection +
   home-realm discovery — extend the existing code, don't rebuild).
+- **Jurisdiction is data — never hardcode country identity (built 2026-07-23).** The
+  global `jurisdictions` registry (`code → country, currency, locale, central bank,
+  regulator short, portal, timezone`; NOT tenant-scoped; GH/NG/KE/ZA seeded) resolves
+  through `banks.jurisdiction_code` and rides the bank API payload
+  (`BankRead.jurisdiction`). Dashboard: BankContext binds it into `lib/format.ts`
+  (`setActiveJurisdiction`) — use `fmtCurrency`/`fmtInt`/`fmtLocale()`/`regShort()`/
+  `centralBankName()`/`currencyCode()`; never literal `'GHS'`, `'en-GH'`, `'BoG'`,
+  `'Bank of Ghana'` in display code. Module-level constants evaluate before the
+  binding — use jurisdiction-neutral wording there ("regulatory minimum",
+  "supervisory severe"), not getter calls. Backend: services resolve names via
+  `app/services/jurisdictions.py` (BSD-2/BSD-3 headers do); fact derivation reads
+  `_Canonical.base_currency` (from `bank.currency`) for FX base-leg and curve
+  selection. Deliberate exceptions (Ghana-factual content, keep literal): the BoG
+  return-family artifacts — BSD templates/registry, ORASS/DBK rules, notice
+  citations, the GHS ’000 unit convention in `SnapshotPreview`/`lib/templates.ts`,
+  and the `sample_bank_seed` test fixture. Return families per jurisdiction are the
+  unbuilt half (product.md §Phase 5 item 0).

@@ -24,6 +24,7 @@ import {
 } from '@/lib/api/hooks';
 import { fmtTimestamp, shortId } from '@/lib/api/values';
 import { CHANNEL_LABELS } from '@/components/submissions/shared';
+import { regShort } from '@/lib/format';
 
 const CHANNELS: ChannelCode[] = ['orass_sandbox', 'email', 'manual'];
 
@@ -334,10 +335,10 @@ function ChannelForm({
                   className={inputClass}
                 />
                 <p className="mt-1 text-micro text-slate leading-relaxed">
-                  The BoG downtime-return address is UNKNOWN in the public
+                  The {regShort()} downtime-return address is UNKNOWN in the public
                   record; bsdletters@bog.gov.gh is confirmed only for
                   directive-consultation correspondence. Use the address your
-                  BoG supervision contact provides.
+                  {regShort()} supervision contact provides.
                 </p>
               </div>
             )}
@@ -429,7 +430,7 @@ function ChannelForm({
           <p className="text-caption text-navy/80 leading-relaxed">
             ORASS integration ships as a clearly-labeled sandbox simulator —
             the portal&apos;s API is not publicly documented. Real onboarding
-            (BoG/Regnology-issued specs and credentials) is a configuration
+            ({regShort()}/Regnology-issued specs and credentials) is a configuration
             swap behind the same channel interface.
           </p>
         </div>

@@ -47,10 +47,6 @@ function IdField({ label, value }: { label: string; value: string | undefined })
   );
 }
 
-const JURISDICTIONS: Record<string, string> = {
-  GH: 'Ghana',
-};
-
 /** Ping the risk-service liveness endpoint directly (outside the generated client). */
 function useRiskServiceHealth() {
   return useQuery({
@@ -127,8 +123,7 @@ function InstitutionProfile({
             </dt>
             <dd className="mt-1 text-navy">
               {profile
-                ? JURISDICTIONS[profile.jurisdictionCode] ??
-                  profile.jurisdictionCode
+                ? profile.jurisdiction?.countryName ?? profile.jurisdictionCode
                 : '—'}
             </dd>
           </div>
@@ -136,7 +131,9 @@ function InstitutionProfile({
             <dt className="text-micro font-medium uppercase tracking-wider text-slate">
               Regulator
             </dt>
-            <dd className="mt-1 text-navy">Bank of Ghana</dd>
+            <dd className="mt-1 text-navy">
+              {profile?.jurisdiction?.centralBankName ?? '—'}
+            </dd>
           </div>
           <div>
             <dt className="text-micro font-medium uppercase tracking-wider text-slate">

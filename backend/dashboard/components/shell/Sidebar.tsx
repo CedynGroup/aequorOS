@@ -24,6 +24,7 @@ import {
   PanelLeftOpen,
 } from 'lucide-react';
 import Logo from './Logo';
+import { centralBankName } from '@/lib/format';
 
 const COLLAPSE_STORAGE_KEY = 'aeq-sidebar-collapsed';
 
@@ -193,7 +194,7 @@ export default function Sidebar() {
             </p>
             <p className="mt-1 text-body text-white">Demo · Sandbox data</p>
             <p className="mt-1 text-caption text-white/50">
-              Synthetic Bank of Ghana licensee
+              {`Synthetic ${centralBankName()} licensee`}
             </p>
           </div>
         )}

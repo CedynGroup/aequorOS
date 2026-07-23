@@ -72,6 +72,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryValidationRead,
 )
 from app.services.audit import record_event
+from app.services.jurisdictions import regulator_name
 from app.services.live_block import live_block
 from app.services.live_types import (
     LiveModuleResult,
@@ -89,8 +90,12 @@ LIQUIDITY_SCENARIO_CODES = ("baseline", "idiosyncratic", "market_wide", "combine
 
 BSD3_FORM_CODE = "BSD-3"
 BSD3_FORM_TITLE = "Liquidity Returns (LCR & NSFR)"
-BSD3_REGULATOR = "Bank of Ghana"
-BSD3_PREVIEW_NOTE = "PREVIEW ONLY — This system does not file submissions with Bank of Ghana."
+
+
+def preview_note(regulator: str) -> str:
+    """Shared BSD preview disclaimer, jurisdiction-resolved by the caller."""
+    return f"PREVIEW ONLY — This system does not file submissions with {regulator}."
+
 
 _ZERO = Decimal("0")
 _REQUIRED_THRESHOLDS = ("lcr_min", "lcr_amber_floor", "nsfr_min", "lcr_inflow_cap_pct")
@@ -383,18 +388,19 @@ def get_bsd3_preview(
         )
         for item in _stored_validations(db, run)
     ]
+    regulator = regulator_name(db, bank)
     return Bsd3PreviewRead(
         header=Bsd3HeaderRead(
             form_code=BSD3_FORM_CODE,
             form_title=BSD3_FORM_TITLE,
-            regulator=BSD3_REGULATOR,
+            regulator=regulator,
             bank_name=bank.name,
             license_type=bank.license_type,
             reporting_period_label=period.label,
             period_end=period.period_end,
             currency=bank.currency,
             generated_at=datetime.now(UTC),
-            preview_note=BSD3_PREVIEW_NOTE,
+            preview_note=preview_note(regulator),
         ),
         run_id=run.id,
         scenario_code=run.scenario_code,  # type: ignore[arg-type]

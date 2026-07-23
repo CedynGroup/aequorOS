@@ -21,6 +21,7 @@ import {
   useCashflowHistory,
 } from '@/lib/api/hooks';
 import { fmtDateUTC } from '@/lib/api/values';
+import { currencyCode } from '@/lib/format';
 
 const HORIZONS: CashflowHorizon[] = [30, 60, 90];
 
@@ -168,7 +169,7 @@ export default function CashFlowForecast() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <KpiStat
                 label={`Cumulative net (${horizon}d) — ${mode === 'lstm' ? 'LSTM' : 'Static'}`}
-                value={`GHS ${cumulativeNet.toFixed(1)}M`}
+                value={`${currencyCode()} ${cumulativeNet.toFixed(1)}M`}
                 status={cumulativeNet >= 0 ? 'ok' : 'crit'}
                 sparkline={
                   <Sparkline
@@ -194,7 +195,7 @@ export default function CashFlowForecast() {
               />
               <KpiStat
                 label="Worst day projection"
-                value={`GHS ${(worstDay?.netFlow ?? 0).toFixed(2)}M`}
+                value={`${currencyCode()} ${(worstDay?.netFlow ?? 0).toFixed(2)}M`}
                 status={(worstDay?.netFlow ?? 0) < 0 ? 'warn' : 'ok'}
                 hint={worstDay ? `Day +${worstDay.day}` : undefined}
               />

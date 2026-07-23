@@ -9,6 +9,7 @@
  */
 
 import type { IngestionBatchRead } from '@aequoros/risk-service-api';
+import { fmtLocale } from '@/lib/format';
 
 type ReportFinding = {
   rule?: string;
@@ -49,7 +50,7 @@ function humanize(key: string): string {
 
 function scalarText(value: unknown): string {
   if (value == null) return '—';
-  if (typeof value === 'number') return value.toLocaleString('en-GH');
+  if (typeof value === 'number') return value.toLocaleString(fmtLocale());
   if (typeof value === 'boolean') return value ? 'yes' : 'no';
   if (typeof value === 'string') return value;
   return JSON.stringify(value);

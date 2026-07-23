@@ -27,6 +27,21 @@ class ClosedModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class JurisdictionRead(ClosedModel):
+    """Country identity resolved from the jurisdictions registry — the source
+    of every country-derived display value (currency, locale, regulator)."""
+
+    code: str
+    country_name: str
+    currency_code: str
+    currency_name: str
+    locale: str
+    central_bank_name: str
+    regulator_short: str
+    submission_portal: str | None
+    timezone: str | None
+
+
 class BankRead(ClosedModel):
     id: UUID
     organization_id: UUID
@@ -35,6 +50,9 @@ class BankRead(ClosedModel):
     currency: str
     jurisdiction_code: str
     license_type: str
+    # Resolved from the registry; None only if the code has no registry row
+    # (clients fall back to the raw code + bank currency).
+    jurisdiction: JurisdictionRead | None = None
     created_at: datetime
     updated_at: datetime
 

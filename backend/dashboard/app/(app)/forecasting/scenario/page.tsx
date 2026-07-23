@@ -93,19 +93,19 @@ const COMPARE_METRICS = [
   {
     code: 'totalAssets',
     label: 'Total assets',
-    fmt: (v: number) => fmtCurrency(v, 'GHS'),
+    fmt: (v: number) => fmtCurrency(v),
     isCurrency: true,
   },
   {
     code: 'nii',
     label: 'NII',
-    fmt: (v: number) => fmtCurrency(v, 'GHS'),
+    fmt: (v: number) => fmtCurrency(v),
     isCurrency: true,
   },
   {
     code: 'netIncome',
     label: 'Net income',
-    fmt: (v: number) => fmtCurrency(v, 'GHS'),
+    fmt: (v: number) => fmtCurrency(v),
     isCurrency: true,
   },
 ] as const;
@@ -382,7 +382,7 @@ function ScenarioDesigner({
               />
               <KpiStat
                 label="Cumulative net income"
-                value={fmtCurrency(num(result.summary.cumulativeNetIncome), 'GHS')}
+                value={fmtCurrency(num(result.summary.cumulativeNetIncome))}
               />
             </div>
           </div>
@@ -642,7 +642,7 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
       label: 'Cumulative net income',
       a: num(a.summary.cumulativeNetIncome),
       b: num(b.summary.cumulativeNetIncome),
-      fmt: (v: number) => fmtCurrency(v, 'GHS'),
+      fmt: (v: number) => fmtCurrency(v),
       isCurrency: true,
     },
   ];
@@ -694,7 +694,7 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
             valueFormatter={metric.fmt}
             tickFormatter={
               metric.isCurrency
-                ? (v) => fmtCurrency(v, 'GHS', { decimals: 1 })
+                ? (v) => fmtCurrency(v, undefined, { decimals: 1 })
                 : (v) => `${Math.round(v)}%`
             }
           />

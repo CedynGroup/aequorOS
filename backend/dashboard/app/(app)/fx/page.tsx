@@ -13,14 +13,14 @@ import ExposureBars from '@/components/fx/charts/ExposureBars';
 import ScenarioStrip from '@/components/fx/ScenarioStrip';
 import { fxPositionSplits, type FxPositionSplit } from '@/components/fx/params';
 import { num } from '@/lib/api/values';
-import { fmtCurrency, fmtCurrencySigned, fmtNum, fmtPct } from '@/lib/format';
+import { fmtCurrency, fmtCurrencySigned, fmtNum, fmtPct, regShort, currencyCode } from '@/lib/format';
 
 export default function FxExposurePage() {
   return (
     <FxModuleFrame
       crumb="Exposure"
       title="FX Exposure"
-      subtitle="Net open position by currency · BoG NOP framework · GHS equivalents at period-end spot"
+      subtitle={`Net open position by currency · ${regShort()} NOP framework · ${currencyCode()} equivalents at period-end spot`}
     >
       {(ctx) => <ExposureBody ctx={ctx} />}
     </FxModuleFrame>
@@ -85,7 +85,7 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
       key: 'netGhs',
       header: 'Net (GHS)',
       numeric: true,
-      render: (r) => fmtCurrencySigned(num(r.netGhs), 'GHS'),
+      render: (r) => fmtCurrencySigned(num(r.netGhs)),
     },
     {
       key: 'pct',
@@ -129,15 +129,15 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
         />
         <KpiStat
           label="Net open position"
-          value={fmtCurrency(num(m.nopGhs), 'GHS')}
-          hint={`Long ${fmtCurrency(num(m.sumLongGhs), 'GHS')} · Short ${fmtCurrency(
+          value={fmtCurrency(num(m.nopGhs))}
+          hint={`Long ${fmtCurrency(num(m.sumLongGhs))} · Short ${fmtCurrency(
             num(m.sumShortGhs),
             'GHS'
           )}`}
         />
         <KpiStat
           label="Tier 1 capital"
-          value={fmtCurrency(num(m.tier1Ghs), 'GHS')}
+          value={fmtCurrency(num(m.tier1Ghs))}
           hint="Limit denominator"
         />
       </div>

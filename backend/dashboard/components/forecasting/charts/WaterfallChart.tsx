@@ -87,7 +87,7 @@ export default function WaterfallChart({
           {...axisProps}
           axisLine={false}
           width={64}
-          tickFormatter={(v: number) => fmtCurrency(v, 'GHS', { decimals: 1 })}
+          tickFormatter={(v: number) => fmtCurrency(v, undefined, { decimals: 1 })}
         />
         <Tooltip
           {...chartTooltipProps}
@@ -97,8 +97,8 @@ export default function WaterfallChart({
             if (!row || name === 'offset') return [null as unknown as string, ''];
             return [
               row.kind === 'total'
-                ? fmtCurrency(row.signed, 'GHS')
-                : fmtCurrencySigned(row.signed, 'GHS'),
+                ? fmtCurrency(row.signed)
+                : fmtCurrencySigned(row.signed),
               row.kind === 'total' ? 'Balance' : 'Change',
             ];
           }}

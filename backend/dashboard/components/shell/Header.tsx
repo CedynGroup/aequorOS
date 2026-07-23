@@ -23,6 +23,7 @@ import { LOGIN_URL } from '@/lib/loginUrl';
 import { useBankFreshness } from '@/lib/api/hooks';
 import CommandPalette from './CommandPalette';
 import AlertsBell from '@/components/live/AlertsBell';
+import { regShort } from '@/lib/format';
 
 export default function Header({
   onMobileMenu,
@@ -62,7 +63,7 @@ export default function Header({
           </span>
           <span className="hidden md:inline mx-2 text-slate-light">|</span>
           <span className="hidden md:inline text-slate text-caption">
-            BoG license · {bank ? capitalize(bank.licenseType) : '—'}
+            {regShort()} license · {bank ? capitalize(bank.licenseType) : '—'}
           </span>
         </div>
       </div>

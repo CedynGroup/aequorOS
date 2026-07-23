@@ -57,18 +57,18 @@ export default function ProjectionChart({
           {...axisProps}
           axisLine={false}
           width={64}
-          tickFormatter={(v: number) => fmtCurrency(v, 'GHS', { decimals: 1 })}
+          tickFormatter={(v: number) => fmtCurrency(v, undefined, { decimals: 1 })}
         />
         <Tooltip
           {...chartTooltipProps}
           formatter={(v: number | [number, number], name: string) => {
             if (Array.isArray(v)) {
               return [
-                `${fmtCurrency(v[0], 'GHS')} – ${fmtCurrency(v[1], 'GHS')}`,
+                `${fmtCurrency(v[0])} – ${fmtCurrency(v[1])}`,
                 name,
               ];
             }
-            return [fmtCurrency(v, 'GHS'), name];
+            return [fmtCurrency(v), name];
           }}
         />
         <Legend verticalAlign="top" align="right" height={28} {...chartLegendProps} />

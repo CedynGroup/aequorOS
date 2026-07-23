@@ -25,6 +25,7 @@ import ConnectionForm, {
   emptyFormState,
 } from './ConnectionForm';
 import { ConnectionStatusPill, extraIsValid } from './shared';
+import { fmtLocale } from '@/lib/format';
 
 export default function AddConnectionPanel({
   bankId,
@@ -184,7 +185,7 @@ export default function AddConnectionPanel({
                 <ul className="space-y-0.5 text-body text-navy font-mono">
                   {testResult.latencyMs != null && (
                     <li>
-                      latency: {Number(testResult.latencyMs).toLocaleString('en-GH')} ms
+                      latency: {Number(testResult.latencyMs).toLocaleString(fmtLocale())} ms
                     </li>
                   )}
                   {testResult.tablesPulled != null && (

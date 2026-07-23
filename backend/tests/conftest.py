@@ -19,7 +19,7 @@ from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
-from app.models import Organization, User
+from app.models import Jurisdiction, Organization, User
 from tests.api.factories import ApiFactories
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.storage.inmemory import InMemoryStorageClient
@@ -191,6 +191,12 @@ def _seed_demo_tenants(engine: Engine) -> None:
     with Session(engine) as session:
         session.add_all(
             [
+                Jurisdiction(
+                    code="GH", country_name="Ghana", currency_code="GHS",
+                    currency_name="Ghana Cedi", locale="en-GH",
+                    central_bank_name="Bank of Ghana", regulator_short="BoG",
+                    submission_portal="ORASS", timezone="Africa/Accra",
+                ),
                 Organization(id=ORG_1, name="Demo Tenant 1"),
                 Organization(id=ORG_2, name="Demo Tenant 2"),
                 User(

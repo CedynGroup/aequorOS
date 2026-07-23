@@ -10,6 +10,7 @@ import {
   Cell,
 } from 'recharts';
 import { axisProps, chartTooltipProps } from '@/lib/chartTheme';
+import { currencyCode } from '@/lib/format';
 
 type Item = {
   level: string;
@@ -49,7 +50,7 @@ export default function HQLAStackChart({
         <Tooltip
           {...chartTooltipProps}
           cursor={{ fill: 'rgb(var(--surface-hover))' }}
-          formatter={(v: number) => [`GHS ${(v / 1_000_000).toFixed(1)}M`, 'Amount']}
+          formatter={(v: number) => [`${currencyCode()} ${(v / 1_000_000).toFixed(1)}M`, 'Amount']}
         />
         <Bar dataKey="shareGHS" radius={[0, 2, 2, 0]} maxBarSize={32}>
           {data.map((d, i) => (

@@ -69,6 +69,7 @@ import LifecycleStepper from '@/components/submissions/LifecycleStepper';
 import SnapshotPreview from '@/components/submissions/SnapshotPreview';
 import ValidationPanel from '@/components/submissions/ValidationPanel';
 import EventsFeed from '@/components/submissions/EventsFeed';
+import { regShort } from '@/lib/format';
 
 export default function ReturnsWorkspacePage() {
   // useSearchParams requires a Suspense boundary in the app router.
@@ -594,7 +595,7 @@ function PackageWorkspace({
 
           <SectionCard
             title="Export artifacts"
-            subtitle="Renders the snapshot through the declarative BoG templates"
+            subtitle={`Renders the snapshot through the declarative ${regShort()} templates`}
           >
             <div className="flex items-center gap-2">
               {EXPORT_KINDS.map((kind) => (
