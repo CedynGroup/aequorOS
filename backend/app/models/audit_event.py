@@ -18,8 +18,8 @@ class AuditEvent(UuidV4PrimaryKeyMixin, Base):
         Index("ix_audit_events_created_at", "created_at"),
     )
 
-    organization_id: Mapped[UUID | None] = mapped_column(
-        Uuid(as_uuid=True),
+    organization_id: Mapped[str | None] = mapped_column(
+        String(16),
         ForeignKey("organizations.id", ondelete="SET NULL"),
         nullable=True,
     )
@@ -30,7 +30,9 @@ class AuditEvent(UuidV4PrimaryKeyMixin, Base):
     )
     event_type: Mapped[str] = mapped_column(String(120), nullable=False)
     entity_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    entity_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    # Polymorphic reference: a UUID for most entities, a platform ID
+    # (BK-/OR-XXXXXXXX) for banks/organizations — stored as text.
+    entity_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

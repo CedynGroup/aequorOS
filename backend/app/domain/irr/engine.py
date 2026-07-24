@@ -104,6 +104,13 @@ IRR_SCENARIO_CODES: tuple[str, ...] = (
     "steepener",
     "flattener",
 )
+# Jurisdiction-calibrated add-ons (BoG IRRBB Guideline Feb 2026, Appendix
+# II-III: GHS parallel ±450 bp). Computed only when the active parameter set
+# carries the shock rows — a bank without the calibration is not an error.
+IRR_OPTIONAL_SCENARIO_CODES: tuple[str, ...] = (
+    "parallel_up_450",
+    "parallel_down_450",
+)
 EAR_UP_BP = Decimal("200")
 EAR_DOWN_BP = Decimal("-200")
 
@@ -366,7 +373,12 @@ def run_irr_scenarios(
         )
     ]
     scenarios: list[EveScenario] = []
-    for code in IRR_SCENARIO_CODES:
+    # Basel scenarios are mandatory; jurisdiction add-ons run when their shock
+    # rows exist in the active parameter set (never fabricated otherwise).
+    optional_present = tuple(
+        code for code in IRR_OPTIONAL_SCENARIO_CODES if code in scenario_shocks
+    )
+    for code in (*IRR_SCENARIO_CODES, *optional_present):
         shocks = scenario_shocks.get(code)
         if shocks is None:
             raise MissingParameterError(f"stress_shock:{code}")
@@ -374,7 +386,12 @@ def run_irr_scenarios(
         eve = compute_eve(positions, curve, shifts)
         delta = money(eve - base_eve)
         pct = ratio_pct(delta / tier1 * _HUNDRED)
-        breach = ratio_pct(abs(delta) / tier1 * _HUNDRED) > limit_pct
+        # Jurisdiction add-ons are informational until their directive takes
+        # effect (BoG IRRBB: 1 Jan 2027) — they never trip the outlier limit.
+        informational = code in IRR_OPTIONAL_SCENARIO_CODES
+        breach = (
+            False if informational else ratio_pct(abs(delta) / tier1 * _HUNDRED) > limit_pct
+        )
         scenarios.append(
             EveScenario(
                 scenario_code=code,
@@ -394,7 +411,13 @@ def run_irr_scenarios(
                 weighted_amount=delta,
             )
         )
-    worst = max(scenarios, key=lambda scenario: abs(scenario.delta_eve))
+    # The supervisory outlier test runs over the Basel scenario set only.
+    basel_scenarios = [
+        scenario
+        for scenario in scenarios
+        if scenario.scenario_code not in IRR_OPTIONAL_SCENARIO_CODES
+    ]
+    worst = max(basel_scenarios, key=lambda scenario: abs(scenario.delta_eve))
     return EveResult(
         tier1=money(tier1),
         base_eve=base_eve,
@@ -402,7 +425,7 @@ def run_irr_scenarios(
         worst_scenario_code=worst.scenario_code,
         worst_delta_eve=worst.delta_eve,
         worst_delta_eve_pct_tier1=worst.delta_eve_pct_tier1,
-        breach=any(scenario.breach for scenario in scenarios),
+        breach=any(scenario.breach for scenario in basel_scenarios),
         line_items=tuple(line_items),
     )
 

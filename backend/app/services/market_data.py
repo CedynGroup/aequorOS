@@ -137,8 +137,8 @@ def _attribution(
 
 def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request key
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     currency: str,
     as_of: date,
     *,
@@ -200,8 +200,8 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
 
 def get_fx_spot(  # noqa: PLR0913 - scope + tenant + as-of is the request key
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     base_currency: str,
     quote_currency: str,
     as_of: date,
@@ -238,8 +238,8 @@ def get_fx_spot(  # noqa: PLR0913 - scope + tenant + as-of is the request key
 
 def get_fx_spot_history(  # noqa: PLR0913 - scope + tenant + as-of is the request key
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     base_currency: str,
     quote_currency: str,
     as_of: date,
@@ -268,8 +268,8 @@ def get_fx_spot_history(  # noqa: PLR0913 - scope + tenant + as-of is the reques
 
 
 def _fx_spot_query(
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     base_currency: str,
     quote_currency: str,
     as_of: date,
@@ -288,8 +288,8 @@ def _fx_spot_query(
 
 def list_fx_base_currencies(
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     quote_currency: str,
     as_of: date,
 ) -> list[str]:
@@ -325,8 +325,8 @@ def list_fx_base_currencies(
 
 def list_curve_currencies(
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     as_of: date,
 ) -> list[str]:
     """Currencies with at least one servable yield curve at ``as_of``."""
@@ -346,8 +346,8 @@ def list_curve_currencies(
 
 def list_fx_pairs(
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     as_of: date,
 ) -> list[tuple[str, str]]:
     """Distinct (base, quote) spot pairs servable at ``as_of``."""
@@ -368,8 +368,8 @@ def list_fx_pairs(
 
 def list_rating_issuers(
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     as_of: date,
 ) -> list[str]:
     """Issuers with at least one servable rating observation at ``as_of``."""
@@ -389,8 +389,8 @@ def list_rating_issuers(
 
 def list_index_scopes(
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     as_of: date,
 ) -> list[tuple[str, str]]:
     """Distinct (index_code, scenario) pairs servable at ``as_of``."""
@@ -410,8 +410,8 @@ def list_index_scopes(
 
 def get_rating(  # noqa: PLR0913 - scope + tenant + as-of is the request key
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     issuer: str,
     as_of: date,
     *,
@@ -457,8 +457,8 @@ def get_rating(  # noqa: PLR0913 - scope + tenant + as-of is the request key
 
 def get_index(  # noqa: PLR0913 - scope + tenant + as-of is the request key
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     index_code: str,
     as_of: date,
     scenario: str = "base",

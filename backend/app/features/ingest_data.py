@@ -60,7 +60,7 @@ IngestionStorage = Annotated[StorageClient, Depends(get_ingestion_storage)]
     operation_id="createMappingConfig",
 )
 def create_mapping_config(
-    bank_id: UUID, payload: MappingConfigCreate, db: DbSession, ctx: MutationTenant
+    bank_id: str, payload: MappingConfigCreate, db: DbSession, ctx: MutationTenant
 ) -> MappingConfigRead:
     return ingestion.create_mapping_config(db, ctx, bank_id, payload)
 
@@ -70,7 +70,7 @@ def create_mapping_config(
     response_model=MappingConfigListRead,
     operation_id="listMappingConfigs",
 )
-def list_mapping_configs(bank_id: UUID, db: DbSession, ctx: Tenant) -> MappingConfigListRead:
+def list_mapping_configs(bank_id: str, db: DbSession, ctx: Tenant) -> MappingConfigListRead:
     return ingestion.list_mapping_configs(db, ctx, bank_id)
 
 
@@ -81,7 +81,7 @@ def list_mapping_configs(bank_id: UUID, db: DbSession, ctx: Tenant) -> MappingCo
     operation_id="uploadIngestionSource",
 )
 async def upload_ingestion_source(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: MutationTenant,
     storage: IngestionStorage,
@@ -108,7 +108,7 @@ async def upload_ingestion_source(
     operation_id="startIngestionBatch",
 )
 def start_ingestion_batch(
-    bank_id: UUID,
+    bank_id: str,
     payload: IngestionBatchCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -123,7 +123,7 @@ def start_ingestion_batch(
     operation_id="listIngestionBatches",
 )
 def list_ingestion_batches(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     source_system: Annotated[SourceSystem | None, Query()] = None,
@@ -136,7 +136,7 @@ def list_ingestion_batches(
     response_model=IngestionSummaryRead,
     operation_id="getIngestionSummary",
 )
-def get_ingestion_summary(bank_id: UUID, db: DbSession, ctx: Tenant) -> IngestionSummaryRead:
+def get_ingestion_summary(bank_id: str, db: DbSession, ctx: Tenant) -> IngestionSummaryRead:
     """Per-source ingestion rollup plus canonical model counts and activations."""
     return ingestion.get_ingestion_summary(db, ctx, bank_id)
 
@@ -147,7 +147,7 @@ def get_ingestion_summary(bank_id: UUID, db: DbSession, ctx: Tenant) -> Ingestio
     operation_id="getIngestionBatch",
 )
 def get_ingestion_batch(
-    bank_id: UUID, batch_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, batch_id: UUID, db: DbSession, ctx: Tenant
 ) -> IngestionBatchRead:
     return ingestion.get_batch(db, ctx, bank_id, batch_id)
 
@@ -158,7 +158,7 @@ def get_ingestion_batch(
     operation_id="listTranslationFailures",
 )
 def list_translation_failures(
-    bank_id: UUID, batch_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, batch_id: UUID, db: DbSession, ctx: Tenant
 ) -> TranslationFailureListRead:
     return ingestion.list_translation_failures(db, ctx, bank_id, batch_id)
 
@@ -169,7 +169,7 @@ def list_translation_failures(
     operation_id="listCanonicalPositions",
 )
 def list_canonical_positions(  # noqa: PLR0913 - one query param per blotter control
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     as_of_date: date | None = None,
@@ -199,7 +199,7 @@ def list_canonical_positions(  # noqa: PLR0913 - one query param per blotter con
     operation_id="listCanonicalPositionFacets",
 )
 def list_canonical_position_facets(
-    bank_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, db: DbSession, ctx: Tenant
 ) -> CanonicalPositionFacetsRead:
     """Distinct position types/currencies with counts — filter dropdowns + KPIs."""
     return ingestion.list_position_facets(db, ctx, bank_id)
@@ -211,7 +211,7 @@ def list_canonical_position_facets(
     operation_id="overridePositionSnapshot",
 )
 def override_position_snapshot(
-    bank_id: UUID,
+    bank_id: str,
     snapshot_id: UUID,
     payload: PositionSnapshotOverrideCreate,
     db: DbSession,
@@ -236,7 +236,7 @@ def walk_lineage(lineage_id: UUID, db: DbSession, ctx: Tenant) -> LineageWalkRea
     operation_id="activateBankData",
 )
 def activate_bank_data(
-    bank_id: UUID,
+    bank_id: str,
     payload: DataActivationCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -251,7 +251,7 @@ def activate_bank_data(
     operation_id="listBankDataActivations",
 )
 def list_bank_data_activations(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,

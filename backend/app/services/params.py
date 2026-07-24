@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import date
-from uuid import UUID
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -11,7 +10,7 @@ from app.models.regulatory import RegulatoryParameterMixin
 
 def get_active_params[ParamT: RegulatoryParameterMixin](
     session: Session,
-    organization_id: UUID,
+    organization_id: str,
     jurisdiction_code: str,
     model: type[ParamT],
     as_of_date: date,

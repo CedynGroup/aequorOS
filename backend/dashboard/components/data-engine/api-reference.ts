@@ -185,7 +185,7 @@ export const EXAMPLE_SCRIPT = `#!/usr/bin/env bash
 set -euo pipefail
 
 BASE_URL="http://127.0.0.1:8003/api/v1"          # your endpoint
-ORG_ID="11111111-1111-4111-8111-111111111111"    # X-Org-Id
+ORG_ID="OR-DEM00001"    # X-Org-Id
 USER_ID="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"   # X-User-Id (service account)
 AS_OF="2026-04-30"
 

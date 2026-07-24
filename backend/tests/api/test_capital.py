@@ -216,7 +216,7 @@ def test_capital_projection_findings_evidence_comparison_and_tenant_isolation(
         )
         assert session.scalar(
             select(AuditEvent).where(
-                AuditEvent.entity_id == UUID(baseline["id"]),
+                AuditEvent.entity_id == baseline["id"],
                 AuditEvent.event_type == "capital_projection.succeeded",
             )
         )

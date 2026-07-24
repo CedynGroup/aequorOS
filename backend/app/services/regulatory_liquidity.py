@@ -130,7 +130,7 @@ class _ActiveLiquidityParams:
 
 
 def create_liquidity_run(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: RegulatoryRunCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryRunCreate
 ) -> RegulatoryRunRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -139,7 +139,7 @@ def create_liquidity_run(
 
 
 def run_all_liquidity_scenarios(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: LiquidityScenarioBatchCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: LiquidityScenarioBatchCreate
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -154,7 +154,7 @@ def run_all_liquidity_scenarios(
 def list_regulatory_runs(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     *,
     module: str | None = None,
     reporting_period_id: UUID | None = None,
@@ -202,14 +202,14 @@ def list_regulatory_runs(  # noqa: PLR0913
 
 
 def get_regulatory_run(
-    db: Session, ctx: TenantContext, bank_id: UUID, run_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, run_id: UUID
 ) -> RegulatoryRunRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     return _read_run(db, _run_or_404(db, ctx, bank.id, run_id))
 
 
 def get_liquidity_dashboard(
-    db: Session, ctx: TenantContext, bank_id: UUID, reporting_period_id: UUID | None = None
+    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> LiquidityDashboardRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
@@ -279,7 +279,7 @@ def get_liquidity_dashboard(
 
 
 def get_bsd3_preview(
-    db: Session, ctx: TenantContext, bank_id: UUID, reporting_period_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID
 ) -> Bsd3PreviewRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, reporting_period_id)
@@ -1177,7 +1177,7 @@ def _read_run(db: Session, run: RegulatoryRun) -> RegulatoryRunRead:
     )
 
 
-def _run_or_404(db: Session, ctx: TenantContext, bank_id: UUID, run_id: UUID) -> RegulatoryRun:
+def _run_or_404(db: Session, ctx: TenantContext, bank_id: str, run_id: UUID) -> RegulatoryRun:
     run = db.scalar(
         select(RegulatoryRun).where(
             RegulatoryRun.id == run_id,
@@ -1225,7 +1225,7 @@ def _list_periods_ascending(
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

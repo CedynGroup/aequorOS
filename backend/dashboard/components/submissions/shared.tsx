@@ -33,6 +33,7 @@ export const FAMILY_LABELS: Record<string, string> = {
   icaap_stress: 'ICAAP & Stress',
   large_exposures: 'Large Exposures',
   corporate: 'Corporate (LRT)',
+  dbk: 'Daily Returns (DBK)',
 };
 
 export const CHANNEL_LABELS: Record<ChannelCode, string> = {
@@ -256,6 +257,36 @@ export async function downloadArtifact(
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = artifact.objectPath.split('/').pop() ?? 'return-artifact';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Download the send-ready downtime email bundle (.eml, RFC 822) for one
+ * package. Tenant-scoped endpoint, so fetch + Blob like downloadArtifact;
+ * the served filename comes from the Content-Disposition header.
+ */
+export async function downloadEmailFallbackEml(
+  bankId: string,
+  packageId: string
+): Promise<void> {
+  const response = await fetch(
+    `${apiBaseUrl}/banks/${bankId}/regulatory-packages/${packageId}/email-fallback.eml`,
+    { headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` } }
+  );
+  if (!response.ok) {
+    throw new Error(`Email bundle download failed (${response.status}).`);
+  }
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const match = /filename="([^"]+)"/.exec(disposition);
+  const filename = match?.[1] ?? `orass-downtime-${packageId.slice(0, 8)}.eml`;
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();

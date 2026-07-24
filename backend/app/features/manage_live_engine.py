@@ -24,7 +24,7 @@ router = APIRouter(tags=["live-engine"])
     response_model=LiveSummaryRead,
     operation_id="getLiveSummary",
 )
-def get_live_summary(bank_id: UUID, db: DbSession, ctx: Tenant) -> LiveSummaryRead:
+def get_live_summary(bank_id: str, db: DbSession, ctx: Tenant) -> LiveSummaryRead:
     return live_view.get_live_summary(db, ctx, bank_id)
 
 
@@ -34,7 +34,7 @@ def get_live_summary(bank_id: UUID, db: DbSession, ctx: Tenant) -> LiveSummaryRe
     operation_id="getBankFreshness",
 )
 def get_bank_freshness(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
@@ -48,7 +48,7 @@ def get_bank_freshness(
     operation_id="getBankAlerts",
 )
 def get_bank_alerts(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -63,7 +63,7 @@ def get_bank_alerts(
     operation_id="refreshBankData",
 )
 def refresh_bank_data(
-    bank_id: UUID,
+    bank_id: str,
     payload: RefreshRequest,
     db: DbSession,
     ctx: MutationTenant,
@@ -78,7 +78,7 @@ def refresh_bank_data(
     operation_id="mintOfficialRun",
 )
 def mint_official_run(
-    bank_id: UUID,
+    bank_id: str,
     payload: OfficialRunRequest,
     db: DbSession,
     ctx: MutationTenant,

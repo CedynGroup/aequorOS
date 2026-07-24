@@ -128,7 +128,7 @@ class CaseRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     title: str
     case_type: str
     subject_type: str | None
@@ -152,7 +152,7 @@ class CaseRead(BaseModel):
 
 class CaseQueueItemRead(BaseModel):
     id: UUID
-    organization_id: UUID
+    organization_id: str
     title: str
     case_type: str
     subject_type: str | None
@@ -273,7 +273,7 @@ class CaseDecisionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     decision: CaseDecision
     previous_decision: CaseDecision | None
@@ -286,7 +286,7 @@ class ScoreRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     assessment_id: UUID | None
     run_id: UUID | None

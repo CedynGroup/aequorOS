@@ -49,7 +49,7 @@ class FinancialInstitution(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -99,7 +99,7 @@ class FinancialAccount(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     institution_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
@@ -143,7 +143,7 @@ class FinancialReportingPeriod(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     period_type: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -199,7 +199,7 @@ class FinancialBalance(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     account_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
@@ -262,7 +262,7 @@ class FinancialCashFlow(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     account_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
@@ -333,7 +333,7 @@ class FinancialObligation(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     institution_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
@@ -401,7 +401,7 @@ class FinancialCovenant(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     dedupe_key: Mapped[str] = mapped_column(String(96), nullable=False)
     obligation_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
@@ -453,7 +453,7 @@ class FinancialSourceRow(UuidV7PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     document_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     document_extraction_id: Mapped[UUID | None] = mapped_column(
@@ -512,7 +512,7 @@ class FinancialRecordSourceLink(UuidV7PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     record_table: Mapped[str] = mapped_column(String(120), nullable=False)
     record_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -552,7 +552,7 @@ class FinancialManualEditHistory(UuidV7PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     record_table: Mapped[str] = mapped_column(String(120), nullable=False)
     record_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -602,7 +602,7 @@ class FinancialValidationIssue(UuidV7PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     record_table: Mapped[str | None] = mapped_column(String(120), nullable=True)
     record_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)

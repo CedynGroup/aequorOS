@@ -33,7 +33,7 @@ class FinancialWorkspaceMapSummary(BaseModel):
 
 class FinancialWorkspaceMapResponse(BaseModel):
     case_id: UUID
-    organization_id: UUID
+    organization_id: str
     document_id: UUID
     document_extraction_id: UUID
     summary: FinancialWorkspaceMapSummary

@@ -82,8 +82,8 @@ class TemenosConnection(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_temenos_connections_org_bank", "organization_id", "bank_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     core_system: Mapped[str] = mapped_column(
         String(20), default="T24", server_default=sql_text("'T24'"), nullable=False
     )

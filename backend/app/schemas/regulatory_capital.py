@@ -78,13 +78,13 @@ class CapitalStructureSummaryRead(ClosedModel):
 
 
 class CapitalStructureRead(CapitalStructureSummaryRead):
-    bank_id: UUID
+    bank_id: str
     reporting_period_id: UUID
     run_id: UUID
 
 
 class RwaBreakdownRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     reporting_period_id: UUID
     run_id: UUID
     credit_rwa_ghs: Decimal

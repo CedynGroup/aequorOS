@@ -92,7 +92,7 @@ def _secret(settings: AuthSettings) -> str:
 def create_token(  # noqa: PLR0913 - a token carries the full identity envelope
     *,
     subject: UUID,
-    organization_id: UUID,
+    organization_id: str,
     roles: list[str],
     token_type: TokenType,
     email: str | None = None,

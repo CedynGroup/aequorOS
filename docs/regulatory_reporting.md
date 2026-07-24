@@ -39,10 +39,21 @@ What changed, by workstream (`docs/submission_pipeline_plan.md`):
 - **W6 — family completeness.** New `large_exposures` family (Templates
   1/1a/2/3/4 from canonical exposures vs a capital-run NOF proxy); LMT Tables
   filled (maturity ladder, funding concentration, unencumbered assets); IRRBB
-  BoG ±450bp shock **parameters** + conditional rows (engine-side ±450 computation
-  is a documented gap). *Remaining (built, pending merge): DBK daily family with
-  T+1 10:00 deadlines, T−1 comparative columns, SOLO|CONSOLIDATED basis
-  dimension, per-bank deadline overrides.*
+  BoG ±450bp shock parameters — and (gap wave) the ENGINE now computes ±450 as
+  informational scenarios excluded from the Basel outlier test.
+- **Gap wave (same day):** DBK daily family (5-business-day calendar window,
+  T+1 10:00 Africa/Accra due_time, Fri→Mon roll); T−1 comparative columns on
+  BSD3/BSD2 (prior-period package values, never fabricated); SOLO|CONSOLIDATED
+  ``basis`` on package identity (independent version chains; unique index
+  includes basis); per-bank deadline overrides
+  (``regulatory_reporting_settings``, get/putReportingSettings) — the honest
+  correction path for the BSD2/FX placeholder deadlines; Institution Profile
+  register UI (Governance → Institution Profile: profile, related parties +
+  roles + shareholdings + UBO links, outlets, products/licences, name history —
+  reason-required mutations, CSV bulk import via the reasoned endpoints);
+  History server-side filters + pagination + per-revision audit-log view;
+  ``.eml`` download buttons; SMTP notification mirror (outbox on
+  ``notifications.emailed_at``, default OFF, ``SMTP_*`` settings).
 - **W7 — hardening + verification.** `listPackageArtifacts` (artifact lists are
   persisted, not session-local); `snapshot_sha256`; schema-level
   `(org,package,kind)` artifact uniqueness; server-side family/date-range package
@@ -50,8 +61,7 @@ What changed, by workstream (`docs/submission_pipeline_plan.md`):
   backend + minted NextAuth cookies) covering authenticated navigation, live
   package generation, the deadline board, and role gates.
 
-Migrations `202607240018`–`202607240022` are applied to the primary DB;
-`202607240023` (the DBK/T−1/basis/overrides slice) is built and pending merge.
+Migrations `202607240018`–`202607240023` are applied to the primary DB.
 The status vocabulary, channel set, and family set in the sections below are
 superseded by this delta where they differ.
 

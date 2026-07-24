@@ -124,7 +124,7 @@ class CaseSummary:
 @dataclass(frozen=True)
 class CaseSnapshot:
     id: UUID
-    organization_id: UUID
+    organization_id: str
     title: str
     case_type: str
     subject_type: str | None

@@ -322,7 +322,7 @@ class GroupResult:
 
 @dataclass(frozen=True)
 class DerivationResult:
-    bank_id: UUID
+    bank_id: str
     reporting_period_id: UUID
     period_label: str
     as_of_date: date
@@ -408,7 +408,7 @@ def _dec_or_none(value: Any) -> Decimal | None:
 
 
 def derive_facts(
-    db: Session, ctx: TenantContext, bank_id: UUID, as_of_date: date
+    db: Session, ctx: TenantContext, bank_id: str, as_of_date: date
 ) -> DerivationResult:
     """Derive the full module fact set for ``as_of_date`` from canonical data."""
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -483,7 +483,7 @@ def derive_facts(
 # ---------------------------------------------------------------------------
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

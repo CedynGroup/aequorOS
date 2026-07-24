@@ -20,6 +20,7 @@ from app.schemas.banks import (
     JurisdictionRead,
 )
 from app.services.audit import record_event
+from app.services.public_ids import normalize_public_id
 from app.services.sample_bank_seed import DEMO_ORG_ID, seed_sample_bank
 
 _FACT_GROUP_FIELDS: dict[str, str] = {
@@ -60,16 +61,16 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
     return BankListRead(banks=[_bank_read(bank, registry) for bank in banks])
 
 
-def get_bank(db: Session, ctx: TenantContext, bank_id: UUID) -> BankRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
+    bank = resolve_bank_reference(db, ctx, bank_reference)
     registry = _jurisdictions_by_code(db, {bank.jurisdiction_code})
     return _bank_read(bank, registry)
 
 
 def list_reporting_periods(
-    db: Session, ctx: TenantContext, bank_id: UUID
+    db: Session, ctx: TenantContext, bank_reference: str
 ) -> BankReportingPeriodListRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = resolve_bank_reference(db, ctx, bank_reference)
     periods = list(
         db.scalars(
             select(BankReportingPeriod)
@@ -90,9 +91,9 @@ def list_reporting_periods(
 
 
 def get_period_facts(
-    db: Session, ctx: TenantContext, bank_id: UUID, period_id: UUID
+    db: Session, ctx: TenantContext, bank_reference: str, period_id: UUID
 ) -> BankFactsRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = resolve_bank_reference(db, ctx, bank_reference)
     period = db.scalar(
         select(BankReportingPeriod).where(
             BankReportingPeriod.id == period_id,
@@ -164,10 +165,19 @@ def seed_demo(db: Session, ctx: TenantContext) -> BankSeedSummaryRead:
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )
     if bank is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
     return bank
+
+
+def resolve_bank_reference(db: Session, ctx: TenantContext, reference: str) -> Bank:
+    """Resolve a bank path token — the institution ID (BK-XXXXXXXX).
+
+    Canonical form is uppercase; lowercase input from integrations is
+    tolerated. Lookup is tenant-scoped.
+    """
+    return _get_bank_or_404(db, ctx, normalize_public_id(reference))

@@ -30,7 +30,7 @@ from app.adapters.market_data.credential_manager import (
 from app.core.config import get_settings
 
 if TYPE_CHECKING:
-    from uuid import UUID
+    pass
 
 __all__ = [
     "CredentialVaultError",
@@ -46,7 +46,7 @@ _PASSWORD_KEY = "password"
 _EXTRA_KEY = "extra"
 
 
-def build_db_vault_path(bank_id: UUID | str, backend: str) -> str:
+def build_db_vault_path(bank_id: str | str, backend: str) -> str:
     """Logical credential locator for a direct core-database connection."""
     return f"vault://institutions/{bank_id}/db_direct/{backend}/default"
 

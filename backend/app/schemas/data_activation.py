@@ -41,7 +41,7 @@ class ActivationRunRead(ClosedModel):
 
 
 class DataActivationRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     reporting_period_id: UUID
     period_label: str
     as_of_date: date
@@ -64,5 +64,5 @@ class DataActivationSummaryRead(ClosedModel):
 
 
 class DataActivationListRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     activations: list[DataActivationSummaryRead]

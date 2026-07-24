@@ -7,12 +7,14 @@
  */
 
 import {
+  IntegrationKeysApi,
   AuthApi,
   BanksApi,
   BehavioralModelsApi,
   CashflowForecastApi,
   Configuration,
   ForecastingApi,
+  InstitutionProfileApi,
   JobsApi,
   LiveEngineApi,
   MarketDataApi,
@@ -78,8 +80,10 @@ export const jobsApi = new JobsApi(configuration);
 export const marketDataApi = new MarketDataApi(configuration);
 export const temenosApi = new TemenosApi(configuration);
 export const regulatoryReportingApi = new RegulatoryReportingApi(configuration);
+export const institutionProfileApi = new InstitutionProfileApi(configuration);
 export const organizationApi = new OrganizationApi(configuration);
 export const notificationsApi = new NotificationsApi(configuration);
+export const integrationKeysApi = new IntegrationKeysApi(configuration);
 
 /**
  * Normalized error surfaced to the UI. `status` is the HTTP status code,

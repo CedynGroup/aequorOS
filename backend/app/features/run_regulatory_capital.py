@@ -26,7 +26,7 @@ router = APIRouter(tags=["regulatory-capital"])
     operation_id="runAllCapitalScenarios",
 )
 def run_all_capital_scenarios(
-    bank_id: UUID,
+    bank_id: str,
     payload: CapitalScenarioBatchCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -40,7 +40,7 @@ def run_all_capital_scenarios(
     operation_id="getCapitalDashboard",
 )
 def get_capital_dashboard(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
@@ -54,7 +54,7 @@ def get_capital_dashboard(
     operation_id="getRwaBreakdown",
 )
 def get_rwa_breakdown(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
@@ -68,7 +68,7 @@ def get_rwa_breakdown(
     operation_id="getCapitalStructure",
 )
 def get_capital_structure(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
@@ -82,7 +82,7 @@ def get_capital_structure(
     operation_id="getBsd2Preview",
 )
 def get_bsd2_preview(
-    bank_id: UUID,
+    bank_id: str,
     reporting_period_id: Annotated[UUID, Query()],
     db: DbSession,
     ctx: Tenant,

@@ -102,7 +102,7 @@ SWAP_NOTIONAL_GHS = Decimal("20000000")
 
 
 def seed_canonical_fixture(  # noqa: PLR0915 - one linear, readable fixture script
-    session: Session, *, organization_id: UUID, bank_id: UUID, as_of: date = FIXTURE_AS_OF
+    session: Session, *, organization_id: str, bank_id: str, as_of: date = FIXTURE_AS_OF
 ) -> None:
     """Insert the full canonical fixture for one bank at ``as_of``."""
     bank = session.get(Bank, bank_id)
@@ -501,7 +501,7 @@ def seed_canonical_fixture(  # noqa: PLR0915 - one linear, readable fixture scri
 
 
 def seed_hedge_and_swap_positions(
-    session: Session, *, organization_id: UUID, bank_id: UUID, as_of: date = FIXTURE_AS_OF
+    session: Session, *, organization_id: str, bank_id: str, as_of: date = FIXTURE_AS_OF
 ) -> None:
     """Overlay an FX hedge book and a pay-fixed IRS on the canonical fixture.
 
@@ -630,7 +630,7 @@ def seed_hedge_and_swap_positions(
 
 
 def seed_directional_swap_positions(
-    session: Session, *, organization_id: UUID, bank_id: UUID, as_of: date = FIXTURE_AS_OF
+    session: Session, *, organization_id: str, bank_id: str, as_of: date = FIXTURE_AS_OF
 ) -> None:
     """Overlay one receive-fixed IRS and one unknown-direction IRS.
 

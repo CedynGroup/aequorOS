@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from uuid import UUID
 
 from fastapi.testclient import TestClient
 
@@ -18,7 +17,7 @@ class CaseFactory:
     def create(  # noqa: PLR0913
         self,
         *,
-        org_id: UUID = ORG_1,
+        org_id: str = ORG_1,
         title: str = "Vendor case",
         case_type: str = "vendor",
         status: str = "active",

@@ -34,7 +34,7 @@ router = APIRouter(tags=["temenos"])
     operation_id="listTemenosConnections",
 )
 def list_temenos_connections(
-    bank_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, db: DbSession, ctx: Tenant
 ) -> TemenosConnectionListRead:
     return temenos_connections.list_connections(db, ctx, bank_id)
 
@@ -46,7 +46,7 @@ def list_temenos_connections(
     operation_id="createTemenosConnection",
 )
 def create_temenos_connection(
-    bank_id: UUID,
+    bank_id: str,
     payload: TemenosConnectionCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -60,7 +60,7 @@ def create_temenos_connection(
     operation_id="validateTemenosConnection",
 )
 def validate_temenos_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -74,7 +74,7 @@ def validate_temenos_connection(
     operation_id="testTemenosConnection",
 )
 def test_temenos_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -88,7 +88,7 @@ def test_temenos_connection(
     operation_id="updateTemenosConnection",
 )
 def update_temenos_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     payload: TemenosConnectionUpdate,
     db: DbSession,
@@ -103,7 +103,7 @@ def update_temenos_connection(
     operation_id="disableTemenosConnection",
 )
 def disable_temenos_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -117,7 +117,7 @@ def disable_temenos_connection(
     operation_id="enableTemenosConnection",
 )
 def enable_temenos_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -131,7 +131,7 @@ def enable_temenos_connection(
     operation_id="revokeTemenosConnection",
 )
 def revoke_temenos_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -146,7 +146,7 @@ def revoke_temenos_connection(
     operation_id="triggerTemenosPull",
 )
 def trigger_temenos_pull(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     payload: TemenosPullTriggerRequest,
     db: DbSession,
@@ -162,7 +162,7 @@ def trigger_temenos_pull(
     operation_id="triggerTemenosBackfill",
 )
 def trigger_temenos_backfill(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     payload: TemenosBackfillRequest,
     db: DbSession,
@@ -177,6 +177,6 @@ def trigger_temenos_backfill(
     operation_id="listTemenosDomains",
 )
 def list_temenos_domains(
-    bank_id: UUID, db: DbSession, ctx: Tenant, mode: str = "OFS"
+    bank_id: str, db: DbSession, ctx: Tenant, mode: str = "OFS"
 ) -> TemenosDomainListRead:
     return temenos_connections.list_domains(db, ctx, bank_id, mode)

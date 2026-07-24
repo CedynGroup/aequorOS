@@ -45,7 +45,7 @@ _ROLE_USERS: tuple[tuple[UUID, str, str, bool], ...] = (
 )
 
 
-def _ensure_role_users(db: Session, organization_id: UUID) -> None:
+def _ensure_role_users(db: Session, organization_id: str) -> None:
     for user_id, role, email, is_active in _ROLE_USERS:
         if db.scalar(select(User.id).where(User.id == user_id)) is None:
             db.add(
@@ -276,7 +276,7 @@ def test_approval_request_and_decision_emit_notifications(db_session: Session) -
     assert {row.recipient_user_id for row in pending} == {ADMIN_ID, APPROVER_ID}
     assert all(row.severity == "warning" for row in pending)
     assert all("BSD3" in row.title and "2026-03-31" in row.title for row in pending)
-    assert all(row.entity_id == package.id for row in pending)
+    assert all(row.entity_id == str(package.id) for row in pending)
 
     workflow.decide_approval(
         db_session,

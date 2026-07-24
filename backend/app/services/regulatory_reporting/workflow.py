@@ -177,7 +177,7 @@ def _add_approval(  # noqa: PLR0913
 def request_approval(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     payload: PackageApprovalRequestCreate,
 ) -> RegulatoryPackageRead:
@@ -227,7 +227,7 @@ def request_approval(
 def decide_approval(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     payload: PackageApprovalDecisionCreate,
 ) -> RegulatoryPackageRead:
@@ -325,7 +325,7 @@ def add_submission_event(  # noqa: PLR0913
 def submit_package(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     *,
     channel: str,
@@ -358,7 +358,7 @@ def submit_package(  # noqa: PLR0913
 def record_regulator_decision(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     *,
     channel: str,
@@ -448,7 +448,7 @@ def _notify_regulator_decision(
 def list_submission_events(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     *,
     limit: int = 50,
@@ -590,7 +590,7 @@ def _build_channel(
 
 
 def _load_channel_context(
-    db: Session, ctx: TenantContext, bank_id: UUID, channel_code: str
+    db: Session, ctx: TenantContext, bank_id: str, channel_code: str
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """The channel's config JSON plus decrypted credentials (or None).
 
@@ -647,7 +647,7 @@ def _ensure_channel_submittable(
 def submit_package_via_channel(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     *,
     channel_override: str | None = None,
@@ -765,7 +765,7 @@ def submit_package_via_channel(
 
 
 def poll_submission(
-    db: Session, ctx: TenantContext, bank_id: UUID, package_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
 ) -> SubmissionPollRead:
     """Poll the latest channel submission and record regulator decisions."""
     require_actor(ctx)
@@ -833,7 +833,7 @@ def poll_submission(
 
 
 def _next_submission_sequence(
-    db: Session, ctx: TenantContext, bank_id: UUID, package: RegulatoryPackage
+    db: Session, ctx: TenantContext, bank_id: str, package: RegulatoryPackage
 ) -> int:
     """Monotonic per-(bank, return) sequence for ORASS-style references."""
     prior = (
@@ -872,7 +872,7 @@ def _version_chain_ids(db: Session, package: RegulatoryPackage) -> list[UUID]:
 
 
 def _submission_revision(
-    db: Session, ctx: TenantContext, bank_id: UUID, package: RegulatoryPackage
+    db: Session, ctx: TenantContext, bank_id: str, package: RegulatoryPackage
 ) -> str:
     """ORASS revision: ``1.<granted resubmissions in this version chain>``."""
     chain_ids = _version_chain_ids(db, package)
@@ -905,7 +905,7 @@ def _read_resubmission(row: RegulatoryResubmissionRequest) -> ResubmissionReques
 def request_resubmission(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     payload: ResubmissionRequestCreate,
 ) -> ResubmissionRequestRead:
@@ -1007,7 +1007,7 @@ def request_resubmission(
 def decide_resubmission(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     request_id: UUID,
     *,
@@ -1055,7 +1055,7 @@ def decide_resubmission(  # noqa: PLR0913
 
 
 def list_resubmission_requests(
-    db: Session, ctx: TenantContext, bank_id: UUID, package_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
 ) -> ResubmissionRequestListRead:
     get_bank_or_404(db, ctx, bank_id)
     package = get_package_or_404(db, ctx, bank_id, package_id)
@@ -1095,7 +1095,7 @@ def granted_unconsumed_resubmission(
 
 
 def list_package_artifacts(
-    db: Session, ctx: TenantContext, bank_id: UUID, package_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
 ) -> list[RegulatoryPackageArtifact]:
     """All artifacts for a package (persisted list; UI must not rely on
     session-local export caches)."""
@@ -1107,7 +1107,7 @@ def list_package_artifacts(
 def export_package_artifact(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     kind: ArtifactKind,
 ) -> RegulatoryArtifactRead:
@@ -1144,7 +1144,7 @@ def export_package_artifact(
 
 
 def get_artifact_or_404(
-    db: Session, ctx: TenantContext, bank_id: UUID, artifact_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, artifact_id: UUID
 ) -> RegulatoryPackageArtifact:
     """Tenant-scoped artifact lookup, constrained to the bank via its package."""
     get_bank_or_404(db, ctx, bank_id)
@@ -1169,7 +1169,7 @@ def get_artifact_or_404(
 
 
 def prepare_artifact_download(
-    db: Session, ctx: TenantContext, bank_id: UUID, artifact_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, artifact_id: UUID
 ) -> tuple[RegulatoryPackageArtifact, str]:
     """Resolve the artifact + institution storage slug and audit the download."""
     bank = get_bank_or_404(db, ctx, bank_id)
@@ -1196,7 +1196,7 @@ def prepare_artifact_download(
 
 
 def email_fallback_instructions(
-    db: Session, ctx: TenantContext, bank_id: UUID, package_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
 ) -> EmailFallbackInstructionsRead:
     """Preview the send-ready email fallback bundle without submitting."""
     bank = get_bank_or_404(db, ctx, bank_id)

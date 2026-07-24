@@ -175,7 +175,7 @@ def _record_pull_failure(
 
 def enqueue_due_market_data_pulls(
     session: Session,
-    organization_id: UUID,
+    organization_id: str,
     now: datetime | None = None,
 ) -> list[Job]:
     """Enqueue one coalesced pull per connection whose schedule slot arrived.
@@ -325,7 +325,7 @@ def _connection_or_error(session: Session, job: Job) -> MarketDataConnection:
     return connection
 
 
-def _bank_or_error(session: Session, organization_id: UUID, bank_id: UUID) -> Bank:
+def _bank_or_error(session: Session, organization_id: str, bank_id: str) -> Bank:
     bank = session.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == organization_id)
     )

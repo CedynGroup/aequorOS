@@ -88,7 +88,7 @@ class IndexViewRead(ClosedModel):
 class MarketDataViewsRead(ClosedModel):
     """Everything the canonical store can answer for a bank at an as-of date."""
 
-    bank_id: UUID
+    bank_id: str
     as_of_date: date = Field(title="Market Data Views As Of Date")
     curves: list[YieldCurveViewRead]
     fx_rates: list[FxRateViewRead]

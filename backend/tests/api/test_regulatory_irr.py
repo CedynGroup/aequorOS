@@ -123,7 +123,8 @@ def test_run_all_irr_scenarios_persists_seven_runs_with_golden_metrics(  # noqa:
     assert _four_dp(metrics["liability_duration"]) == Decimal("0.3267")
     assert _four_dp(metrics["duration_gap"]) == Decimal("0.4807")
     assert len(metrics["gap_buckets"]) == 9
-    assert len(metrics["eve_by_scenario"]) == 6
+    # 6 Basel scenarios + the 2 informational BoG GHS ±450 bp add-ons.
+    assert len(metrics["eve_by_scenario"]) == 8
 
     metric_results = {item["metric_code"]: item for item in baseline["metric_results"]}
     assert {
@@ -135,6 +136,10 @@ def test_run_all_irr_scenarios_persists_seven_runs_with_golden_metrics(  # noqa:
         "eve_base_ghs",
         "ear_up_200_ghs",
         "ear_down_200_ghs",
+        # BoG GHS ±450 bp calibration — computed because the seed carries the
+        # shock rows (informational; excluded from the outlier test).
+        "ear_up_450_ghs",
+        "ear_down_450_ghs",
     } == set(metric_results)
     assert metric_results["worst_eve_change_pct_tier1"]["unit"] == "pct"
     assert metric_results["worst_eve_change_pct_tier1"]["status"] == "green"
@@ -146,7 +151,7 @@ def test_run_all_irr_scenarios_persists_seven_runs_with_golden_metrics(  # noqa:
     for item in baseline["line_items"]:
         sections.setdefault(item["section"], []).append(item)
     assert len(sections["irr_gap"]) == 9
-    assert len(sections["irr_eve"]) == 7
+    assert len(sections["irr_eve"]) == 9  # base + 6 Basel + 2 BoG ±450 informational
     assert len(sections["irr_ear"]) == 2
     positions = [item["position"] for item in baseline["line_items"]]
     assert positions == sorted(positions)
@@ -211,7 +216,7 @@ def test_irr_dashboard_computes_inline_then_prefers_stored_runs(db_client: TestC
     assert metrics["eve_status"] == "green"
     assert _four_dp(metrics["duration_gap"]) == Decimal("0.4807")
     assert len(body["gap_table"]) == 9
-    assert len(body["eve_scenarios"]) == 6
+    assert len(body["eve_scenarios"]) == 8  # 6 Basel + 2 BoG ±450 informational
     assert len(body["validations"]) == 3
 
     trend = body["trend"]

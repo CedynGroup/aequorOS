@@ -18,6 +18,13 @@ import {
   ReportingObligationReadPackageStatusToJSON,
   ReportingObligationReadPackageStatusToJSONTyped,
 } from "./ReportingObligationReadPackageStatus";
+import type { DueTime } from "./DueTime";
+import {
+  DueTimeFromJSON,
+  DueTimeFromJSONTyped,
+  DueTimeToJSON,
+  DueTimeToJSONTyped,
+} from "./DueTime";
 import type { FidelityGrade } from "./FidelityGrade";
 import {
   FidelityGradeFromJSON,
@@ -46,6 +53,13 @@ import {
   PackageIdToJSON,
   PackageIdToJSONTyped,
 } from "./PackageId";
+import type { ReturnBasis } from "./ReturnBasis";
+import {
+  ReturnBasisFromJSON,
+  ReturnBasisFromJSONTyped,
+  ReturnBasisToJSON,
+  ReturnBasisToJSONTyped,
+} from "./ReturnBasis";
 import type { PackageVersion } from "./PackageVersion";
 import {
   PackageVersionFromJSON,
@@ -76,6 +90,12 @@ import {
 export interface ReportingObligationRead {
   /**
    *
+   * @type {ReturnBasis}
+   * @memberof ReportingObligationRead
+   */
+  basis?: ReturnBasis;
+  /**
+   *
    * @type {ChannelCode}
    * @memberof ReportingObligationRead
    */
@@ -86,6 +106,12 @@ export interface ReportingObligationRead {
    * @memberof ReportingObligationRead
    */
   dueDate: Date;
+  /**
+   *
+   * @type {DueTime}
+   * @memberof ReportingObligationRead
+   */
+  dueTime?: DueTime;
   /**
    *
    * @type {FidelityGrade}
@@ -190,8 +216,12 @@ export function ReportingObligationReadFromJSONTyped(
   }
   return {
     ...json,
+    basis:
+      json["basis"] == null ? undefined : ReturnBasisFromJSON(json["basis"]),
     defaultChannel: ChannelCodeFromJSON(json["default_channel"]),
     dueDate: new Date(json["due_date"]),
+    dueTime:
+      json["due_time"] == null ? undefined : DueTimeFromJSON(json["due_time"]),
     fidelity: FidelityGradeFromJSON(json["fidelity"]),
     frequency: ReturnFrequencyFromJSON(json["frequency"]),
     packageId: PackageIdFromJSON(json["package_id"]),
@@ -222,8 +252,10 @@ export function ReportingObligationReadToJSONTyped(
   }
 
   return {
+    basis: ReturnBasisToJSON(value["basis"]),
     default_channel: ChannelCodeToJSON(value["defaultChannel"]),
     due_date: value["dueDate"].toISOString().substring(0, 10),
+    due_time: DueTimeToJSON(value["dueTime"]),
     fidelity: FidelityGradeToJSON(value["fidelity"]),
     frequency: ReturnFrequencyToJSON(value["frequency"]),
     package_id: PackageIdToJSON(value["packageId"]),

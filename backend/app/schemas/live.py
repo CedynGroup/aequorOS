@@ -24,7 +24,7 @@ class LiveModuleView(ClosedModel):
 
 
 class LiveSummaryRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     reporting_period_id: UUID | None
     period_label: str | None
     modules: list[LiveModuleView]
@@ -42,7 +42,7 @@ class FreshnessModuleRead(ClosedModel):
 
 
 class BankFreshnessRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     reporting_period_id: UUID | None
     period_label: str | None
     modules: list[FreshnessModuleRead]
@@ -60,7 +60,7 @@ class AlertItemRead(ClosedModel):
 
 
 class BankAlertsRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     total: int
     by_severity: dict[str, int]
     by_module: dict[str, int]

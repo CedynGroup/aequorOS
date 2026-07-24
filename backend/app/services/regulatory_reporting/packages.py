@@ -28,7 +28,7 @@ from app.services.regulatory_reporting.registry import REGISTRY
 def list_packages(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     *,
     return_code: str | None = None,
     return_family: str | None = None,
@@ -36,6 +36,7 @@ def list_packages(  # noqa: PLR0913
     reporting_date_from: date | None = None,
     reporting_date_to: date | None = None,
     status: str | None = None,
+    basis: str | None = None,
     include_superseded: bool = True,
     limit: int = 25,
     offset: int = 0,
@@ -57,6 +58,8 @@ def list_packages(  # noqa: PLR0913
         conditions += (RegulatoryPackage.reporting_date <= reporting_date_to,)
     if status is not None:
         conditions += (RegulatoryPackage.status == status,)
+    if basis is not None:
+        conditions += (RegulatoryPackage.basis == basis,)
     if not include_superseded:
         conditions += (RegulatoryPackage.status != "superseded",)
     total = db.scalar(select(func.count()).select_from(RegulatoryPackage).where(*conditions)) or 0
@@ -84,7 +87,7 @@ def list_packages(  # noqa: PLR0913
 
 
 def get_package(
-    db: Session, ctx: TenantContext, bank_id: UUID, package_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
 ) -> RegulatoryPackageRead:
     get_bank_or_404(db, ctx, bank_id)
     return read_package(db, get_package_or_404(db, ctx, bank_id, package_id))

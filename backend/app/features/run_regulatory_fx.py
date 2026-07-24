@@ -20,7 +20,7 @@ router = APIRouter(tags=["regulatory-fx"])
     operation_id="runAllFxScenarios",
 )
 def run_all_fx_scenarios(
-    bank_id: UUID,
+    bank_id: str,
     payload: FxScenarioBatchCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -34,7 +34,7 @@ def run_all_fx_scenarios(
     operation_id="getFxDashboard",
 )
 def get_fx_dashboard(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     reporting_period_id: Annotated[UUID | None, Query()] = None,

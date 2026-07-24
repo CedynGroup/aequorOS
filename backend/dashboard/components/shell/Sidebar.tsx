@@ -19,6 +19,7 @@ import {
   BrainCircuit,
   FileBarChart2,
   FileCheck2,
+  Landmark,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -73,6 +74,7 @@ const groups: { label: string; items: NavItem[] }[] = [
     label: 'Governance',
     items: [
       { href: '/reports', label: 'Reports', icon: FileBarChart2 },
+      { href: '/institution', label: 'Institution Profile', icon: Landmark },
       { href: '/submissions', label: 'Regulatory Reporting', icon: FileCheck2 },
       { href: '/settings', label: 'Settings', icon: Settings },
     ],

@@ -66,7 +66,7 @@ class ForecastScenarioRead(ClosedModel):
 
 
 class ForecastScenarioListRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     scenarios: list[ForecastScenarioRead]
     defaults: ForecastAssumptionDefaultsRead
 
@@ -124,8 +124,8 @@ class ProjectionSummaryRead(ClosedModel):
 
 class ForecastRunRead(ClosedModel):
     id: UUID
-    organization_id: UUID
-    bank_id: UUID
+    organization_id: str
+    bank_id: str
     reporting_period_id: UUID
     module: Literal["forecast"]
     scenario_code: ForecastScenarioCode
@@ -164,7 +164,7 @@ class ForecastRunSummaryRead(ClosedModel):
 
 
 class ForecastRunListRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     runs: list[ForecastRunSummaryRead]
     total: int
     limit: int
@@ -201,7 +201,7 @@ class OptimizerCandidateRead(ClosedModel):
 
 class OptimizerResultRead(ClosedModel):
     run_id: UUID
-    bank_id: UUID
+    bank_id: str
     reporting_period_id: UUID
     scenario_code: Literal["constrained_search"]
     status: RegulatoryRunStatus
@@ -243,7 +243,7 @@ class WhatIfYear5ComparisonRead(ClosedModel):
 
 class WhatIfResultRead(ClosedModel):
     run_id: UUID
-    bank_id: UUID
+    bank_id: str
     reporting_period_id: UUID
     shock_code: WhatIfShockCode
     status: RegulatoryRunStatus

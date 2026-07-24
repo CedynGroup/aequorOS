@@ -102,7 +102,7 @@ def build_bundle(
 def stage_extract(  # noqa: PLR0913 - a pull binds connection + transport + auth inputs
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     storage: StorageClient,
     *,
     mode: str,
@@ -148,7 +148,7 @@ def stage_extract(  # noqa: PLR0913 - a pull binds connection + transport + auth
 def pull_and_ingest(  # noqa: PLR0913 - a pull binds connection + transport + auth inputs
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     storage: StorageClient,
     *,
     mode: str,

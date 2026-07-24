@@ -69,8 +69,8 @@ class RegulatoryRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_regulatory_runs_org_input_hash", "organization_id", "input_hash"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     reporting_period_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     module: Mapped[str] = mapped_column(String(16), nullable=False)
     scenario_code: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -116,8 +116,8 @@ class RegulatoryMetricResult(UuidV4PrimaryKeyMixin, Base):
         Index("ix_regulatory_metric_results_run_id", "run_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     metric_code: Mapped[str] = mapped_column(String(60), nullable=False)
     metric_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
@@ -154,8 +154,8 @@ class RegulatoryLineItem(UuidV4PrimaryKeyMixin, Base):
         Index("ix_regulatory_line_items_run_id", "run_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     section: Mapped[str] = mapped_column(String(24), nullable=False)
     line_code: Mapped[str] = mapped_column(String(60), nullable=False)
@@ -188,8 +188,8 @@ class RegulatoryValidation(UuidV4PrimaryKeyMixin, Base):
         Index("ix_regulatory_validations_run_id", "run_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     rule_code: Mapped[str] = mapped_column(String(60), nullable=False)
     passed: Mapped[bool] = mapped_column(Boolean, nullable=False)

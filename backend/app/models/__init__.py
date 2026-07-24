@@ -48,6 +48,7 @@ from app.models.institution_profile import (
     RelatedPartyRole,
     Shareholding,
 )
+from app.models.integration_key import IntegrationKey
 from app.models.jurisdiction import Jurisdiction
 from app.models.live import LiveFinding, LiveMetric
 from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
@@ -68,6 +69,7 @@ from app.models.regulatory_reporting import (
     RegulatoryPackage,
     RegulatoryPackageApproval,
     RegulatoryPackageArtifact,
+    RegulatoryReportingSettings,
     RegulatoryResubmissionRequest,
     RegulatorySubmissionEvent,
 )
@@ -147,6 +149,7 @@ __all__ = [
     "MarketDataConnection",
     "MarketDataQuotaUsage",
     "Notification",
+    "IntegrationKey",
     "Organization",
     "Outlet",
     "TemenosConnection",
@@ -162,6 +165,7 @@ __all__ = [
     "RegulatoryPackage",
     "RegulatoryPackageApproval",
     "RegulatoryPackageArtifact",
+    "RegulatoryReportingSettings",
     "RegulatoryResubmissionRequest",
     "RegulatoryRun",
     "RegulatorySubmissionEvent",

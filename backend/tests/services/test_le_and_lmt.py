@@ -647,7 +647,7 @@ def _irr_baseline_run(db: Session) -> RegulatoryRun:
     return run
 
 
-def test_irrbb_bog_450_param_rows_seeded_but_engine_set_is_basel(db_session: Session) -> None:
+def test_irrbb_bog_450_params_flow_into_engine_outputs(db_session: Session) -> None:
     seed_sample_bank(db_session)
     shocks = db_session.scalars(
         select(ParamStressShock).where(
@@ -661,8 +661,10 @@ def test_irrbb_bog_450_param_rows_seeded_but_engine_set_is_basel(db_session: Ses
     }
     assert {row.shock_value for row in shocks} == {Decimal("450"), Decimal("-450")}
 
-    # Documented engine gap: the run computes the fixed Basel scenario set, so
-    # the ±450 parameters do not (yet) surface in the run metrics.
+    # GAP-5 closed the former engine gap: when the active parameter set
+    # carries the BoG GHS ±450 bp shocks, the engine computes them as
+    # INFORMATIONAL scenarios — present in the outputs, excluded from the
+    # Basel outlier test (worst scenario/breach stay Basel-only).
     regulatory_irr.run_all_irr_scenarios(
         db_session,
         MAKER,
@@ -671,8 +673,13 @@ def test_irrbb_bog_450_param_rows_seeded_but_engine_set_is_basel(db_session: Ses
     )
     metrics = _irr_baseline_run(db_session).metrics
     scenario_codes = {entry["scenario_code"] for entry in metrics["eve_by_scenario"]}
-    assert "parallel_up_450" not in scenario_codes
-    assert "eve_up_450_ghs" not in metrics and "ear_up_450_ghs" not in metrics
+    assert {"parallel_up_450", "parallel_down_450"} <= scenario_codes
+    assert "eve_up_450_ghs" in metrics and "ear_up_450_ghs" in metrics
+    # The supervisory outlier verdict is unchanged by the add-ons.
+    assert metrics["worst_scenario"] not in ("parallel_up_450", "parallel_down_450")
+    for entry in metrics["eve_by_scenario"]:
+        if entry["scenario_code"] in ("parallel_up_450", "parallel_down_450"):
+            assert entry["breach"] is False
 
 
 def test_irrbb_450_rows_render_only_when_metrics_carry_them(db_session: Session) -> None:
@@ -684,7 +691,17 @@ def test_irrbb_450_rows_render_only_when_metrics_carry_them(db_session: Session)
         IrrScenarioBatchCreate(reporting_period_id=_period_id(db_session)),
     )
 
-    # Engine metrics carry no ±450 keys → the rows are honestly absent.
+    # Simulate an uncalibrated bank: the engine now computes ±450 whenever the
+    # param set carries the shocks (GAP-5), so strip the keys to model a param
+    # set without the BoG calibration — the rows must be honestly absent.
+    run = _irr_baseline_run(db_session)
+    run.metrics = {
+        key: value
+        for key, value in run.metrics.items()
+        if key
+        not in ("eve_up_450_ghs", "eve_down_450_ghs", "ear_up_450_ghs", "ear_down_450_ghs")
+    }
+    db_session.commit()
     package = _generate(db_session, "IRRBB-PILOT")
     sections = _sections(package)
     eve_codes = {row["code"] for row in sections["eve_scenarios"]["rows"]}

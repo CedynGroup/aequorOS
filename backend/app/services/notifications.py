@@ -41,7 +41,7 @@ def emit(  # noqa: PLR0913 - a notification carries the full display envelope
     title: str,
     body: str,
     entity_type: str | None = None,
-    entity_id: UUID | None = None,
+    entity_id: UUID | str | None = None,
     recipient_user_id: UUID | None = None,
     recipient_role: str | None = None,
 ) -> list[Notification]:
@@ -73,7 +73,7 @@ def emit(  # noqa: PLR0913 - a notification carries the full display envelope
             title=title,
             body=body,
             entity_type=entity_type,
-            entity_id=entity_id,
+            entity_id=None if entity_id is None else str(entity_id),
         )
         for recipient in recipient_ids
     ]

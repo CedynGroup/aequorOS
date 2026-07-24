@@ -23,7 +23,6 @@ import math
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
-from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -74,14 +73,14 @@ def _generic_series(config: TrainingConfig) -> list[DailyFlow]:
 
 
 def get_forecast(
-    db: Session, ctx: TenantContext, bank_id: UUID, *, horizon: int, mode: CashflowForecastMode
+    db: Session, ctx: TenantContext, bank_id: str, *, horizon: int, mode: CashflowForecastMode
 ) -> CashflowForecastRead:
     _get_bank_or_404(db, ctx, bank_id)
     return _get_service(db, ctx, bank_id).forecast(horizon=horizon, mode=mode)
 
 
 def get_history(
-    db: Session, ctx: TenantContext, bank_id: UUID, *, days: int
+    db: Session, ctx: TenantContext, bank_id: str, *, days: int
 ) -> CashflowHistoryRead:
     _get_bank_or_404(db, ctx, bank_id)
     return _get_service(db, ctx, bank_id).history(days)
@@ -213,17 +212,17 @@ class ForecastService:
 
 
 # Per-tenant service cache: one warm model per (org, bank), no process-wide sharing.
-_services: dict[tuple[UUID, UUID], ForecastService] = {}
+_services: dict[tuple[str, str], ForecastService] = {}
 _services_lock = threading.Lock()
-_key_locks: dict[tuple[UUID, UUID], threading.Lock] = {}
+_key_locks: dict[tuple[str, str], threading.Lock] = {}
 
 
-def _key_lock(key: tuple[UUID, UUID]) -> threading.Lock:
+def _key_lock(key: tuple[str, str]) -> threading.Lock:
     with _services_lock:
         return _key_locks.setdefault(key, threading.Lock())
 
 
-def _bank_artifacts_dir(settings: CashflowSettings, key: tuple[UUID, UUID]) -> Path:
+def _bank_artifacts_dir(settings: CashflowSettings, key: tuple[str, str]) -> Path:
     org_id, bank_id = key
     return Path(settings.artifacts_dir) / str(org_id) / str(bank_id)
 
@@ -232,7 +231,7 @@ def _generic_artifacts_dir(settings: CashflowSettings) -> Path:
     return Path(settings.artifacts_dir) / "generic"
 
 
-def _build_service(db: Session, ctx: TenantContext, bank_id: UUID) -> ForecastService:
+def _build_service(db: Session, ctx: TenantContext, bank_id: str) -> ForecastService:
     """Bank-specific service when the bank has enough own history, else generic."""
     settings = get_settings().cashflow
     config = TrainingConfig.from_settings(settings)
@@ -257,7 +256,7 @@ def _build_service(db: Session, ctx: TenantContext, bank_id: UUID) -> ForecastSe
     )
 
 
-def _get_service(db: Session, ctx: TenantContext, bank_id: UUID) -> ForecastService:
+def _get_service(db: Session, ctx: TenantContext, bank_id: str) -> ForecastService:
     """One warm ForecastService per (org, bank); built once, then cached."""
     key = (ctx.organization_id, bank_id)
     with _services_lock:
@@ -282,7 +281,7 @@ def reset_forecast_service() -> None:
         _key_locks.clear()
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

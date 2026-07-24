@@ -7,8 +7,6 @@ finding lifecycle (open on breach, superseded on clear).
 
 from __future__ import annotations
 
-from uuid import UUID
-
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -23,7 +21,7 @@ _OPEN_STATUSES = ("open", "needs_review")
 
 
 def get_bank_alerts(
-    db: Session, ctx: TenantContext, bank_id: UUID, *, limit: int = 50
+    db: Session, ctx: TenantContext, bank_id: str, *, limit: int = 50
 ) -> BankAlertsRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _latest_period(db, ctx, bank)
@@ -87,7 +85,7 @@ def _latest_period(db: Session, ctx: TenantContext, bank: Bank) -> BankReporting
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

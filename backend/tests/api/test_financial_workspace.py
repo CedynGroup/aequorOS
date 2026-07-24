@@ -363,7 +363,7 @@ def test_financial_cash_flows_can_be_manually_created_and_corrected(
         assert all(edit.edited_by == USER_1 for edit in create_edits)
         events = set(
             session.scalars(
-                select(AuditEvent.event_type).where(AuditEvent.entity_id == UUID(created["id"]))
+                select(AuditEvent.event_type).where(AuditEvent.entity_id == created["id"])
             )
         )
         assert events >= {"financial_record.created", "financial_record.corrected"}

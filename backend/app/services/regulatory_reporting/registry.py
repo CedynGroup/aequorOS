@@ -27,12 +27,16 @@ from typing import Literal
 
 type FidelityGrade = Literal["CONFIRMED", "PARTIAL", "REPRESENTATIVE"]
 type ReturnFamily = Literal[
-    "liquidity", "capital", "irrbb", "fx", "icaap_stress", "corporate", "large_exposures"
+    "liquidity", "capital", "irrbb", "fx", "icaap_stress", "corporate", "large_exposures", "dbk"
 ]
-type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual"]
+type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual", "daily"]
 type ChannelCode = Literal["orass_sandbox", "email", "manual"]
 
 REGULATOR_BOG = "BOG"
+
+# Africa/Accra is UTC±00:00 with no DST, so a naive next-business-day rule is
+# exact for BoG deadlines; the timezone label is carried for display only.
+ACCRA_TZ = "Africa/Accra"
 
 
 def _month_end(year: int, month: int) -> date:
@@ -73,6 +77,26 @@ def annual_month_day(month: int, day: int) -> Callable[[date], date]:
     return rule
 
 
+def daily_next_business_day(hour: int, minute: int, tz: str = ACCRA_TZ) -> Callable[[date], date]:
+    """Due the next business day after the reporting date (T+1).
+
+    Weekends roll forward (Fri reporting date -> Mon due date). The cut-off
+    time-of-day (``hour``:``minute`` in ``tz``) is carried on the
+    :class:`ReturnDefinition` as ``due_time`` — the due *date* stays a plain
+    date for the model while the calendar surfaces the time separately.
+    """
+
+    _ = (hour, minute, tz)  # captured on the definition's due_time, not the date
+
+    def rule(reporting_date: date) -> date:
+        due = reporting_date + timedelta(days=1)
+        while due.weekday() >= 5:  # noqa: PLR2004 — Sat=5, Sun=6
+            due += timedelta(days=1)
+        return due
+
+    return rule
+
+
 @dataclass(frozen=True)
 class ReturnDefinition:
     """One registry entry: an official return and how AequorOS produces it."""
@@ -88,6 +112,9 @@ class ReturnDefinition:
     fidelity: FidelityGrade
     default_channel: ChannelCode = "email"
     regulator: str = field(default=REGULATOR_BOG)
+    # Cut-off time-of-day on the due date, "HH:MM" (daily DBK filings close at
+    # 10:00 the next business day); None for calendar-day-only deadlines.
+    due_time: str | None = None
     # Event-driven returns (plan W5: the LRT corporate packs) have no periodic
     # reporting cycle: a pack exists because a corporate event happened. The
     # calendar skips them entirely — their nominal ``frequency``/
@@ -211,6 +238,28 @@ REGISTRY: dict[str, ReturnDefinition] = {
             template_id="bog-fx-nop-v1",
             fidelity="REPRESENTATIVE",
             default_channel="email",
+        ),
+        ReturnDefinition(
+            code="DBK-DAILY",
+            family="dbk",
+            title="Daily Bank Return (FX Net Open Position & Contingents)",
+            directive_citation=(
+                "Revised Directive on FX Net Open Position Limits, Notice "
+                "BG/FMD/2026/07 (final, 10 Feb 2026): DAILY Bank Returns (DBK) via "
+                "ORASS by 10:00 a.m. the next business day; single-currency 0% to "
+                "−10% of NOF, aggregate ≤ 20% NOF. The DBK 102/300/400/700 forms "
+                "are named but their full layouts are unpublished (research §9, "
+                "gap G5) — this daily family reconstructs the NOP and contingents "
+                "figures from the FX engine pending the official DBK templates."
+            ),
+            frequency="daily",
+            # CONFIRMED cadence: next business day by 10:00 a.m. Africa/Accra.
+            deadline_rule=daily_next_business_day(10, 0),
+            due_time="10:00",
+            generator="dbk",
+            template_id="bog-dbk-daily-v1",
+            fidelity="REPRESENTATIVE",
+            default_channel="orass_sandbox",
         ),
         ReturnDefinition(
             code="LE-MONTHLY",

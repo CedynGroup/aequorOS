@@ -16,7 +16,7 @@ class AssessmentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     name: str
     assessment_type: str
@@ -32,7 +32,7 @@ class AssessmentRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     assessment_id: UUID
     status: str
     engine_version: str | None

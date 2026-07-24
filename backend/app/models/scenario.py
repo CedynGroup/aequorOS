@@ -47,7 +47,7 @@ class RiskScenario(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -84,7 +84,7 @@ class ScenarioAssumption(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     scenario_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     category: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -106,7 +106,7 @@ class ScenarioAssumptionHistory(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "scenario_assumption_history"
     __table_args__ = (Index("ix_scenario_assumption_history_assumption_id", "assumption_id"),)
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     scenario_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     assumption_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)

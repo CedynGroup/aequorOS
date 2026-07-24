@@ -161,7 +161,7 @@ class _FxAnalysis:
 
 
 def run_all_fx_scenarios(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: FxScenarioBatchCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: FxScenarioBatchCreate
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -174,7 +174,7 @@ def run_all_fx_scenarios(
 
 
 def get_fx_dashboard(
-    db: Session, ctx: TenantContext, bank_id: UUID, reporting_period_id: UUID | None = None
+    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> FxDashboardRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
@@ -1185,7 +1185,7 @@ def _list_periods_ascending(
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

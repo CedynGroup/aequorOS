@@ -139,8 +139,8 @@ def _months_from_panels(panels_dir: Path) -> list[datetime.date]:
 
 def load_history(  # noqa: PLR0913, PLR0912, PLR0915
     session: Session,
-    org_id: UUID,
-    bank_id: UUID,
+    org_id: str,
+    bank_id: str,
     panels_dir: Path,
     *,
     months: list[datetime.date] | None = None,
@@ -439,8 +439,8 @@ def _load_reference_rows(  # noqa: PLR0913 - one kwarg per reference dataset kin
 
 def derive_all_periods(  # noqa: PLR0913 - loader entrypoint carries the full run configuration
     session: Session,
-    org_id: UUID,
-    bank_id: UUID,  # noqa: PLR0913
+    org_id: str,
+    bank_id: str,  # noqa: PLR0913
     months: list[datetime.date],
     *,
     actor_user_id: UUID | None = None,

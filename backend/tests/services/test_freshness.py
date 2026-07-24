@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pytest
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -125,5 +123,5 @@ def test_freshness_without_any_period_is_not_stale(db_session: Session) -> None:
 
 def test_freshness_unknown_bank_404s(db_session: Session) -> None:
     with pytest.raises(HTTPException) as excinfo:
-        freshness.get_bank_freshness(db_session, _ctx(), uuid4())
+        freshness.get_bank_freshness(db_session, _ctx(), "BK-ZZZZZZZZ")
     assert excinfo.value.status_code == 404

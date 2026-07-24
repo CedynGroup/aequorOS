@@ -66,8 +66,8 @@ class LiveMetric(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     reporting_period_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     module: Mapped[str] = mapped_column(String(16), nullable=False)
     metrics: Mapped[dict[str, Any]] = mapped_column(
@@ -123,8 +123,8 @@ class LiveFinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_live_findings_org_bank_status", "organization_id", "bank_id", "status"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     reporting_period_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     module: Mapped[str] = mapped_column(String(16), nullable=False)
     rule_id: Mapped[str] = mapped_column(String(120), nullable=False)

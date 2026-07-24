@@ -25,9 +25,10 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
+from app.services.public_ids import new_bank_public_id
 
 
-class Bank(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
+class Bank(TimestampMixin, Base):
     __tablename__ = "banks"
     __table_args__ = (
         Index("ix_banks_organization_id", "organization_id"),
@@ -41,8 +42,12 @@ class Bank(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("id", "organization_id", name="uq_banks_id_organization_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("organizations.id"), nullable=False
+    # THE institution identifier (BK-XXXXXXXX): platform-generated at creation
+    # for every bank — sandbox and real tenants alike — and used everywhere
+    # (primary key, API paths, UI, integrations). One identity, no aliases.
+    id: Mapped[str] = mapped_column(String(16), primary_key=True, default=new_bank_public_id)
+    organization_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("organizations.id"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     short_name: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -76,8 +81,8 @@ class BankReportingPeriod(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     period_start: Mapped[date] = mapped_column(Date, nullable=False)
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
     label: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -119,8 +124,8 @@ class BankFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     reporting_period_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     fact_group: Mapped[str] = mapped_column(String(40), nullable=False)
     category: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -143,8 +148,8 @@ class BankFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 class RegulatoryParameterMixin(UuidV4PrimaryKeyMixin, TimestampMixin):
     """Shared columns for effective-dated, approval-tracked regulatory parameters."""
 
-    organization_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("organizations.id"), nullable=False
+    organization_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("organizations.id"), nullable=False
     )
     jurisdiction_code: Mapped[str] = mapped_column(String(8), default="GH", nullable=False)
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)

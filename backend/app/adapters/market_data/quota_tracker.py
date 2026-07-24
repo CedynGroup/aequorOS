@@ -18,7 +18,6 @@ from app.adapters.market_data.scope_translator import Catalog, quota_units
 from app.models.market_data import MarketDataQuotaUsage
 
 if TYPE_CHECKING:
-    from uuid import UUID
 
     from sqlalchemy.orm import Session
 
@@ -73,8 +72,8 @@ def estimate(
 
 def record_consumption(  # noqa: PLR0913
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     vendor: str,
     units: int,
     when: datetime | None = None,
@@ -116,8 +115,8 @@ def record_consumption(  # noqa: PLR0913
 
 def current_month_usage(
     db: Session,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     vendor: str,
     when: datetime | None = None,
 ) -> int:

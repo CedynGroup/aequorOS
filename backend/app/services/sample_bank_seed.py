@@ -37,14 +37,17 @@ from app.models import (
 )
 from app.models.regulatory import RegulatoryParameterMixin
 
-DEMO_ORG_ID = UUID("11111111-1111-4111-8111-111111111111")
+# Deterministic platform IDs for the hermetic test fixture (valid BK-/OR-
+# format; Crockford charset). Real tenants — the primary DB sandbox included —
+# get generator-assigned codes from the model defaults at creation.
+DEMO_ORG_ID = "OR-DEM00001"
 DEMO_ORG_NAME = "AequorOS Demo Organization"
 DEMO_USER_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 DEMO_USER_EMAIL = "demo.user.one@example.test"
 DEMO_USER_NAME = "Demo User One"
-ISOLATED_ORG_ID = UUID("22222222-2222-4222-8222-222222222222")
+ISOLATED_ORG_ID = "OR-1S000002"
 ISOLATED_ORG_NAME = "AequorOS Isolated Tenant"
-SAMPLE_BANK_ID = UUID("77000000-0000-4000-8000-000000000001")
+SAMPLE_BANK_ID = "BK-SAMP0001"
 
 CURRENCY = "GHS"
 JURISDICTION_CODE = "GH"
@@ -553,7 +556,7 @@ class SampleBankSeedError(RuntimeError):
 
 @dataclass(frozen=True)
 class SeedSummary:
-    bank_id: UUID
+    bank_id: str
     periods: int
     fact_count: int
     param_count: int
@@ -612,7 +615,7 @@ def seed_sample_bank(session: Session) -> SeedSummary:
     )
 
 
-def _set_tenant_context(session: Session, organization_id: UUID) -> None:
+def _set_tenant_context(session: Session, organization_id: str) -> None:
     if session.get_bind().dialect.name != "postgresql":
         return
     session.execute(
@@ -621,7 +624,7 @@ def _set_tenant_context(session: Session, organization_id: UUID) -> None:
     )
 
 
-def _ensure_organization(session: Session, organization_id: UUID, name: str) -> None:
+def _ensure_organization(session: Session, organization_id: str, name: str) -> None:
     exists = session.scalar(select(Organization.id).where(Organization.id == organization_id))
     if exists is None:
         session.add(Organization(id=organization_id, name=name))
@@ -652,6 +655,27 @@ def _ensure_demo_user(session: Session) -> None:
 # a table absent from the current schema (e.g. a partial SQLite test DB) is
 # skipped. regulatory_runs cascades to its metric/line-item/validation children.
 _DEPENDENT_TABLES: tuple[str, ...] = (
+    # Regulatory reporting hub (child rows before regulatory_packages) —
+    # without these, reseeding leaves orphaned packages referencing deleted
+    # reporting periods, and terminal-state packages (acknowledged) block
+    # regeneration with the ORASS-parity resubmission 409 (found by the e2e
+    # rerun journey, plan GAP-4).
+    "regulatory_resubmission_requests",
+    "regulatory_submission_events",
+    "regulatory_package_approvals",
+    "regulatory_package_artifacts",
+    "regulatory_packages",
+    "regulatory_channel_configs",
+    "regulatory_reporting_settings",
+    # Corporate register (children before related_parties).
+    "shareholdings",
+    "related_party_roles",
+    "related_parties",
+    "outlets",
+    "bank_products",
+    "bank_licenses",
+    "bank_name_history",
+    "institution_profiles",
     "regulatory_runs",
     "canonical_position_snapshots",
     "canonical_positions",
@@ -675,6 +699,21 @@ def _delete_bank_dependents(session: Session) -> None:
         columns = {column["name"] for column in inspector.get_columns(table)}
         if "bank_id" in columns:
             where = "WHERE bank_id = :bank_id AND organization_id = :organization_id"
+        elif "package_id" in columns:
+            # Regulatory-package children (approvals, events, artifacts,
+            # resubmission requests) — cleared via their parent package,
+            # which is deleted after this table.
+            where = (
+                "WHERE package_id IN "
+                "(SELECT id FROM regulatory_packages WHERE bank_id = :bank_id)"
+            )
+        elif "party_id" in columns:
+            # Related-party children (roles, shareholdings) — cleared via
+            # their parent party, which is deleted after this table.
+            where = (
+                "WHERE party_id IN "
+                "(SELECT id FROM related_parties WHERE bank_id = :bank_id)"
+            )
         elif "ingestion_batch_id" in columns:
             # Rows keyed to a batch rather than the bank (e.g. lineage_records);
             # cleared via their parent batch, which is deleted after this table.

@@ -30,7 +30,6 @@ from app.core.config import get_settings
 from app.models.market_data import MarketDataConnection
 
 if TYPE_CHECKING:
-    from uuid import UUID
 
     from sqlalchemy.orm import Session
 
@@ -56,21 +55,21 @@ class CredentialVault(Protocol):
     def store(
         self,
         *,
-        organization_id: UUID,
-        bank_id: UUID,
+        organization_id: str,
+        bank_id: str,
         vendor: str,
         credentials: dict[str, Any],
         expires_at: datetime | None = None,
     ) -> str: ...
 
-    def retrieve(self, *, organization_id: UUID, bank_id: UUID, vendor: str) -> CredentialSet: ...
+    def retrieve(self, *, organization_id: str, bank_id: str, vendor: str) -> CredentialSet: ...
 
-    def delete(self, *, organization_id: UUID, bank_id: UUID, vendor: str) -> None: ...
+    def delete(self, *, organization_id: str, bank_id: str, vendor: str) -> None: ...
 
     def fingerprint(self, credentials: dict[str, Any]) -> str: ...
 
 
-def build_vault_path(bank_id: UUID | str, vendor: str) -> str:
+def build_vault_path(bank_id: str | str, vendor: str) -> str:
     """Logical credential locator per storage.md §7 / market_data_adapter.md §10.1."""
     return f"vault://institutions/{bank_id}/vendor_credentials/{vendor}/default"
 
@@ -196,7 +195,7 @@ class EncryptedDbVault:
         self._key = derive_master_key(key_material)
 
     def _connection(
-        self, organization_id: UUID, bank_id: UUID, vendor: str
+        self, organization_id: str, bank_id: str, vendor: str
     ) -> MarketDataConnection:
         row = (
             self._db.query(MarketDataConnection)
@@ -215,8 +214,8 @@ class EncryptedDbVault:
     def store(
         self,
         *,
-        organization_id: UUID,
-        bank_id: UUID,
+        organization_id: str,
+        bank_id: str,
         vendor: str,
         credentials: dict[str, Any],
         expires_at: datetime | None = None,
@@ -237,7 +236,7 @@ class EncryptedDbVault:
         self._db.flush()
         return vault_path
 
-    def retrieve(self, *, organization_id: UUID, bank_id: UUID, vendor: str) -> CredentialSet:
+    def retrieve(self, *, organization_id: str, bank_id: str, vendor: str) -> CredentialSet:
         """Decrypt for one pull cycle. Discard the result after the pull;
         never persist or log the plaintext credentials (§15)."""
         row = self._connection(organization_id, bank_id, vendor)
@@ -257,7 +256,7 @@ class EncryptedDbVault:
             ),
         )
 
-    def delete(self, *, organization_id: UUID, bank_id: UUID, vendor: str) -> None:
+    def delete(self, *, organization_id: str, bank_id: str, vendor: str) -> None:
         """Wipe the stored ciphertext (cryptographic deletion of the record).
 
         The connection row itself is retained for audit (§10.5): revocation

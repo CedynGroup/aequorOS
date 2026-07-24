@@ -19,6 +19,7 @@ export const ReturnFrequency = {
   Quarterly: "quarterly",
   Semiannual: "semiannual",
   Annual: "annual",
+  Daily: "daily",
 } as const;
 export type ReturnFrequency =
   (typeof ReturnFrequency)[keyof typeof ReturnFrequency];

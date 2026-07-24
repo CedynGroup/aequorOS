@@ -176,8 +176,40 @@ _ICAAP_CITATION = (
 
 _T_MINUS_1_NOTE = (
     "BoG comparative-column convention (Reporting Month vs Previous Month — LMTD Table 1; "
-    "T vs T−1 — IRRBB Table 8) is not yet carried by the package snapshot; single-period "
-    "values are exported and no prior-period figures are fabricated."
+    "T vs T−1 — IRRBB Table 8) is carried for the headline totals via the Headline Totals "
+    "comparative section; on the first reporting period the Previous-Period column is blank "
+    "and no prior-period figures are fabricated. Per-line T−1 columns for the detailed "
+    "schedules remain a gap and are not fabricated."
+)
+
+_HEADLINE_COMPARATIVE_CITATION = (
+    "BoG monthly returns report each headline figure alongside the previous period "
+    "(Reporting Month vs Previous Month — LMTD Table 1; T vs T−1 — IRRBB Table 8, "
+    "CONFIRMED conventions). The Previous-Period column is populated only from a prior "
+    "generated package for the same return and basis."
+)
+
+# A T vs T−1 headline-totals comparative shared by BSD3 and BSD2. The generator
+# emits a ``headline_comparative`` snapshot section (headline totals + a
+# per-row ``prior_value``); the Previous-Period column renders blank when no
+# prior period exists.
+_HEADLINE_COMPARATIVE = SectionLayout(
+    section_code="headline_comparative",
+    layout_id="headline_comparative_representative",
+    sheet_title="Headline Totals vs Previous Period",
+    columns=(
+        _CODE,
+        _ITEM,
+        ColumnSpec("value", "Reporting Period", "auto"),
+        ColumnSpec("prior_value", "Previous Period", "auto"),
+    ),
+    fidelity="REPRESENTATIVE",
+    source_citation=_HEADLINE_COMPARATIVE_CITATION,
+    notes=(
+        "The Previous-Period column is drawn from the immediately-prior reporting "
+        "period's package for the same return and basis; it is blank on the first "
+        "period and never fabricated.",
+    ),
 )
 
 
@@ -277,7 +309,7 @@ _BSD3_TEMPLATE = ReturnTemplate(
     title="Liquidity Returns (LCR & NSFR)",
     fidelity="PARTIAL",
     source_citation=f"{_LMTD_CITATION}; {_LCR_GAP_CITATION}",
-    sections=_liquidity_sections(lmt_subset=False),
+    sections=(*_liquidity_sections(lmt_subset=False), _HEADLINE_COMPARATIVE),
     notes=(_T_MINUS_1_NOTE,),
 )
 
@@ -600,6 +632,7 @@ _BSD2_TEMPLATE = ReturnTemplate(
                 "CAR 10%, CAR + conservation buffer 13%, leverage ratio 6% (Tier 1)"
             ),
         ),
+        _HEADLINE_COMPARATIVE,
     ),
     notes=(_T_MINUS_1_NOTE,),
 )
@@ -789,6 +822,78 @@ _FX_NOP_TEMPLATE = ReturnTemplate(
         "The confirmed BoG cadence is DAILY Bank Returns (DBK) by 10:00 a.m. the next "
         "business day, exclusively via ORASS; AequorOS registers this monthly summary "
         "return while the DBK 102/300/400/700 layouts remain unpublished (gap G5).",
+    ),
+)
+
+_DBK_CITATION = (
+    "Revised Directive on FX Net Open Position Limits, Notice BG/FMD/2026/07 "
+    "(final, 10 Feb 2026) — daily DBK filing via ORASS by 10:00 a.m. the next "
+    "business day; DBK 102/300/400/700 form layouts not public (research §9, gap G5)"
+)
+
+_DBK_DAILY_TEMPLATE = ReturnTemplate(
+    template_id="bog-dbk-daily-v1",
+    return_code="DBK-DAILY",
+    title="Daily Bank Return (FX Net Open Position & Contingents)",
+    fidelity="REPRESENTATIVE",
+    source_citation=_DBK_CITATION,
+    sections=(
+        SectionLayout(
+            section_code="nop_by_currency",
+            layout_id="dbk_nop_by_currency_representative",
+            sheet_title="Net Open Position by Currency",
+            columns=(
+                ColumnSpec("code", "Currency", "text"),
+                ColumnSpec("side", "Long / Short", "text"),
+                ColumnSpec("net_ccy", "Net Position (FCY '000)", "number"),
+                ColumnSpec("spot_ghs", "BoG End-of-Day Rate (GHS)", "number"),
+                ColumnSpec("value", "Net Position (GHS '000)", "ghs"),
+                ColumnSpec("abs_pct_nof", "|NOP| / NOF (%)", "pct"),
+                ColumnSpec("within_single_limit", "Within 0% to −10% Limit", "bool"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_DBK_CITATION} — single-currency 0% to −10% of NOF limit and GHS "
+                "conversion at the BoG end-of-day rate are CONFIRMED; the DBK column "
+                "layout is reconstructed"
+            ),
+        ),
+        SectionLayout(
+            section_code="nop_aggregate",
+            layout_id="dbk_nop_aggregate_representative",
+            sheet_title="Aggregate Net Open Position",
+            columns=(_CODE, _ITEM, ColumnSpec("value", "Value (GHS '000 / %)", "auto")),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_DBK_CITATION} — the ≤20% NOF aggregate (short-hand method) limit is CONFIRMED"
+            ),
+            notes=(
+                "Aggregate values mix GHS amounts and percentages; see row codes for "
+                "units. 'NOF' is proxied by Tier 1 capital pending the DBK definition.",
+            ),
+        ),
+        SectionLayout(
+            section_code="contingents",
+            layout_id="dbk_contingents_representative",
+            sheet_title="DBK 102 — Off-Balance-Sheet & Contingents",
+            columns=(_CODE, _ITEM, _AMOUNT),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_DBK_CITATION} — DBK 102 records contingent / off-balance-sheet "
+                "exposures; the FX snapshot carries none, so this schedule is blank"
+            ),
+            notes=(
+                "Off-balance-sheet / letter-of-credit contingent exposures are not "
+                "carried by the FX run snapshot and are shown blank rather than "
+                "fabricated (gap G5).",
+            ),
+            optional=True,
+        ),
+    ),
+    notes=(
+        "This is a REPRESENTATIVE reconstruction of the daily DBK NOP figures from the "
+        "FX engine; the official DBK 102/300/400/700 layouts remain unpublished (gap G5). "
+        "The snapshot draws on the latest effective monthly reporting period's FX run.",
     ),
 )
 
@@ -1268,6 +1373,7 @@ TEMPLATES: dict[str, ReturnTemplate] = {
         _BSD2_TEMPLATE,
         _IRRBB_TEMPLATE,
         _FX_NOP_TEMPLATE,
+        _DBK_DAILY_TEMPLATE,
         _LE_TEMPLATE,
         _ICAAP_STRESS_TEMPLATE,
         _LRT_PROFILE_TEMPLATE,

@@ -20,7 +20,7 @@ router = APIRouter(tags=["regulatory-irr"])
     operation_id="runAllIrrScenarios",
 )
 def run_all_irr_scenarios(
-    bank_id: UUID,
+    bank_id: str,
     payload: IrrScenarioBatchCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -34,7 +34,7 @@ def run_all_irr_scenarios(
     operation_id="getIrrDashboard",
 )
 def get_irr_dashboard(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     reporting_period_id: Annotated[UUID | None, Query()] = None,

@@ -63,7 +63,7 @@ def get_financial_workspace(
     )
 
 
-def financial_stmt(model: type, organization_id: UUID, case_id: UUID) -> Select:
+def financial_stmt(model: type, organization_id: str, case_id: UUID) -> Select:
     return (
         select(model)
         .where(model.organization_id == organization_id, model.case_id == case_id)

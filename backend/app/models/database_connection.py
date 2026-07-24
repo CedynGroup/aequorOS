@@ -107,8 +107,8 @@ class DatabaseDirectConnection(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_database_direct_connections_org_bank", "organization_id", "bank_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     backend: Mapped[str] = mapped_column(String(20), nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[str] = mapped_column(

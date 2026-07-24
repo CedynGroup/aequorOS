@@ -50,7 +50,7 @@ class FinancialInstitutionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     name: str
     institution_type: str | None
@@ -64,7 +64,7 @@ class FinancialAccountRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     institution_id: UUID | None
     account_number: str | None
@@ -81,7 +81,7 @@ class FinancialReportingPeriodRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     period_type: str
     start_date: date | None
@@ -97,7 +97,7 @@ class FinancialBalanceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     account_id: UUID | None
     reporting_period_id: UUID | None
@@ -114,7 +114,7 @@ class FinancialCashFlowRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     account_id: UUID | None
     reporting_period_id: UUID | None
@@ -132,7 +132,7 @@ class FinancialObligationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     institution_id: UUID | None
     account_id: UUID | None
@@ -299,7 +299,7 @@ class FinancialCovenantRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     obligation_id: UUID | None
     reporting_period_id: UUID | None
@@ -348,7 +348,7 @@ class FinancialSourceRowRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     document_id: UUID | None
     document_extraction_id: UUID | None
@@ -362,7 +362,7 @@ class FinancialRecordSourceLinkRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     record_table: str
     record_id: UUID
@@ -378,7 +378,7 @@ class FinancialManualEditRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     record_table: str
     record_id: UUID
@@ -394,7 +394,7 @@ class FinancialValidationIssueRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     record_table: str | None
     record_id: UUID | None
@@ -446,7 +446,7 @@ class FinancialValidationSummaryRead(BaseModel):
 
 class FinancialValidationRunResponse(BaseModel):
     case_id: UUID
-    organization_id: UUID
+    organization_id: str
     issue_count: int
     summary: FinancialValidationSummaryRead
     issues: list[FinancialValidationIssueRead]
@@ -489,7 +489,7 @@ class FinancialCovenantMutationResponse(BaseModel):
 
 class FinancialDataWorkspaceRead(BaseModel):
     case_id: UUID
-    organization_id: UUID
+    organization_id: str
     institutions: list[FinancialInstitutionRead]
     accounts: list[FinancialAccountRead]
     reporting_periods: list[FinancialReportingPeriodRead]

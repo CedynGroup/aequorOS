@@ -13,7 +13,7 @@ import { encode } from '@auth/core/jwt';
 import { mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
 
-export const E2E_ORG_ID = '11111111-1111-4111-8111-111111111111';
+export const E2E_ORG_ID = 'OR-DEM00001';
 export const E2E_JWT_SECRET = 'e2e-backend-jwt-secret-not-production-000';
 export const E2E_AUTH_SECRET = 'e2e-nextauth-secret-not-production-000';
 

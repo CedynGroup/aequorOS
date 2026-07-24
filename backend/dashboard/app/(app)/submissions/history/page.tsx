@@ -2,17 +2,21 @@
 
 /**
  * Regulatory Reporting — History. Every package version (superseded included)
- * with family/status/date-range filters; selecting a row expands the full
- * record: approvals trail, submission events, persisted artifacts,
- * resubmission requests, regulator comments, and the superseded chain for
- * its (return, reporting date).
+ * with server-side family/status/date-range filters and offset pagination;
+ * selecting a row expands the full record: the ORASS View-Audit-Log-parity
+ * audit table (version chain + approvals + channel events, chronological),
+ * approvals trail, submission events, persisted artifacts, resubmission
+ * requests, regulator comments, and the superseded chain for its
+ * (return, reporting date).
  */
 
-import { useMemo, useState } from 'react';
-import { Archive, Download } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Archive, ChevronLeft, ChevronRight, Download, Mail } from 'lucide-react';
 import type {
-  PackageStatus,
+  PackageApprovalRead,
+  PackageStatusFilter,
   RegulatoryPackageSummaryRead,
+  SubmissionEventRead,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import DataTable, { type Column } from '@/components/ui/DataTable';
@@ -33,17 +37,20 @@ import {
 } from '@/lib/api/hooks';
 import { fmtDateUTC, fmtTimestamp, isoDate, labelize, shortId } from '@/lib/api/values';
 import {
+  CHANNEL_LABELS,
   FAMILY_LABELS,
   PACKAGE_STATUS_LABELS,
   PackageStatusPill,
   ResubmissionStatusPill,
   downloadArtifact,
+  downloadEmailFallbackEml,
   fmtBytes,
 } from '@/components/submissions/shared';
 import EventsFeed from '@/components/submissions/EventsFeed';
 
 const ALL = 'all';
-const STATUS_OPTIONS: PackageStatus[] = [
+const PAGE_SIZE = 25;
+const STATUS_OPTIONS: PackageStatusFilter[] = [
   'generated',
   'validated',
   'pending_approval',
@@ -63,28 +70,30 @@ export default function HistoryPage() {
   const [status, setStatus] = useState(ALL);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [offset, setOffset] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Fetch wide and filter client-side: the list endpoint filters by exact
-  // return_code/reporting_date only, and demo volumes are small.
-  const query = useRegulatoryPackages(bankId, {
-    includeSuperseded: true,
-    limit: 100,
-  });
-  const all = useMemo(() => query.data?.packages ?? [], [query.data]);
+  // Every filter change restarts pagination from the first page.
+  const applyFilter = (apply: () => void) => {
+    apply();
+    setOffset(0);
+    setSelectedId(null);
+  };
 
-  const rows = useMemo(
-    () =>
-      all.filter((pkg) => {
-        if (family !== ALL && pkg.returnFamily !== family) return false;
-        if (status !== ALL && pkg.status !== status) return false;
-        const date = isoDate(pkg.reportingDate);
-        if (from && date < from) return false;
-        if (to && date > to) return false;
-        return true;
-      }),
-    [all, family, status, from, to]
-  );
+  // Server-side filtering + pagination — the list endpoint filters by
+  // family/status/date range and counts the filtered set.
+  const query = useRegulatoryPackages(bankId, {
+    returnFamily: family !== ALL ? family : undefined,
+    status: status !== ALL ? (status as PackageStatusFilter) : undefined,
+    reportingDateFrom: from || undefined,
+    reportingDateTo: to || undefined,
+    includeSuperseded: true,
+    limit: PAGE_SIZE,
+    offset,
+  });
+  const rows = useMemo(() => query.data?.packages ?? [], [query.data]);
+  const total = query.data?.total ?? 0;
+  const hasMore = query.data?.hasMore ?? false;
 
   const selected = rows.find((pkg) => pkg.id === selectedId) ?? null;
 
@@ -150,7 +159,8 @@ export default function HistoryPage() {
     },
   ];
 
-  const families = Array.from(new Set(all.map((pkg) => pkg.returnFamily)));
+  const rangeStart = total === 0 ? 0 : offset + 1;
+  const rangeEnd = offset + rows.length;
 
   return (
     <>
@@ -166,20 +176,20 @@ export default function HistoryPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <select
               value={family}
-              onChange={(e) => setFamily(e.target.value)}
+              onChange={(e) => applyFilter(() => setFamily(e.target.value))}
               aria-label="Filter by family"
               className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
             >
               <option value={ALL}>All families</option>
-              {families.map((value) => (
+              {Object.entries(FAMILY_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
-                  {FAMILY_LABELS[value] ?? value}
+                  {label}
                 </option>
               ))}
             </select>
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value)}
+              onChange={(e) => applyFilter(() => setStatus(e.target.value))}
               aria-label="Filter by status"
               className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
             >
@@ -193,7 +203,7 @@ export default function HistoryPage() {
             <input
               type="date"
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
+              onChange={(e) => applyFilter(() => setFrom(e.target.value))}
               aria-label="Reporting date from"
               className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy tnum"
             />
@@ -201,7 +211,7 @@ export default function HistoryPage() {
             <input
               type="date"
               value={to}
-              onChange={(e) => setTo(e.target.value)}
+              onChange={(e) => applyFilter(() => setTo(e.target.value))}
               aria-label="Reporting date to"
               className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy tnum"
             />
@@ -222,8 +232,39 @@ export default function HistoryPage() {
         >
           <SectionCard
             title="Packages"
-            subtitle={`${rows.length} of ${all.length} versions — click a row for the full record`}
+            subtitle={`Showing ${rangeStart}–${rangeEnd} of ${total} versions — click a row for the full record`}
             noPadding
+            footer={
+              <span className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={offset === 0 || query.isFetching}
+                  onClick={() => {
+                    setOffset((prev) => Math.max(prev - PAGE_SIZE, 0));
+                    setSelectedId(null);
+                  }}
+                  className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
+                >
+                  <ChevronLeft size={11} aria-hidden />
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  disabled={!hasMore || query.isFetching}
+                  onClick={() => {
+                    setOffset((prev) => prev + PAGE_SIZE);
+                    setSelectedId(null);
+                  }}
+                  className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
+                >
+                  Next
+                  <ChevronRight size={11} aria-hidden />
+                </button>
+                <span className="font-mono text-micro tnum">
+                  page {Math.floor(offset / PAGE_SIZE) + 1}
+                </span>
+              </span>
+            }
           >
             {rows.length === 0 ? (
               <div className="p-5">
@@ -248,9 +289,7 @@ export default function HistoryPage() {
             )}
           </SectionCard>
 
-          {selected && (
-            <PackageRecord bankId={bankId!} summary={selected} siblings={all} />
-          )}
+          {selected && <PackageRecord bankId={bankId!} summary={selected} />}
         </QueryBoundary>
       </div>
     </>
@@ -260,11 +299,9 @@ export default function HistoryPage() {
 function PackageRecord({
   bankId,
   summary,
-  siblings,
 }: {
   bankId: string;
   summary: RegulatoryPackageSummaryRead;
-  siblings: RegulatoryPackageSummaryRead[];
 }) {
   const detail = useRegulatoryPackage(bankId, summary.id);
   const events = useSubmissionEvents(bankId, summary.id);
@@ -273,13 +310,24 @@ function PackageRecord({
   const officerName = useOfficerNames();
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  const chain = siblings
-    .filter(
-      (pkg) =>
-        pkg.returnCode === summary.returnCode &&
-        isoDate(pkg.reportingDate) === isoDate(summary.reportingDate)
-    )
-    .sort((a, b) => b.version - a.version);
+  // The full version chain for this (return, reporting date) — fetched
+  // server-filtered so it stays complete regardless of the page window.
+  const chainQuery = useRegulatoryPackages(bankId, {
+    returnCode: summary.returnCode,
+    reportingDate: isoDate(summary.reportingDate),
+    includeSuperseded: true,
+    limit: 50,
+  });
+  const chain = useMemo(() => {
+    const rows = chainQuery.data?.packages ?? [];
+    return [...rows].sort((a, b) => b.version - a.version);
+  }, [chainQuery.data]);
+
+  // Latest submitted channel drives the .eml affordance (email fallback only).
+  const latestSubmitted = (events.data?.events ?? []).find(
+    (event) => event.event === 'submitted'
+  );
+  const emailChannel = latestSubmitted?.channel === 'email';
 
   return (
     <SectionCard
@@ -302,12 +350,14 @@ function PackageRecord({
             Version chain
           </p>
           <p className="font-mono text-caption text-navy/85 tnum">
-            {chain
-              .map(
-                (pkg) =>
-                  `v${pkg.version}${pkg.submissionRevision ? ` rev ${pkg.submissionRevision}` : ''}${pkg.status === 'superseded' ? '' : ` (${PACKAGE_STATUS_LABELS[pkg.status].toLowerCase()})`}`
-              )
-              .join(' ← ')}
+            {chain.length === 0
+              ? `v${summary.version}`
+              : chain
+                  .map(
+                    (pkg) =>
+                      `v${pkg.version}${pkg.submissionRevision ? ` rev ${pkg.submissionRevision}` : ''}${pkg.status === 'superseded' ? '' : ` (${PACKAGE_STATUS_LABELS[pkg.status].toLowerCase()})`}`
+                  )
+                  .join(' ← ')}
           </p>
         </div>
 
@@ -321,6 +371,14 @@ function PackageRecord({
             </p>
           </div>
         )}
+
+        <AuditLog
+          summary={summary}
+          chain={chain}
+          approvals={detail.data?.approvals ?? []}
+          events={events.data?.events ?? []}
+          officerName={officerName}
+        />
 
         {detail.isLoading ? (
           <SkeletonCard />
@@ -442,6 +500,27 @@ function PackageRecord({
                 </ul>
               )}
 
+              {emailChannel && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDownloadError(null);
+                    downloadEmailFallbackEml(bankId, summary.id).catch(
+                      (error: unknown) =>
+                        setDownloadError(
+                          error instanceof Error
+                            ? error.message
+                            : 'Download failed.'
+                        )
+                    );
+                  }}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                >
+                  <Mail size={11} aria-hidden />
+                  Download .eml
+                </button>
+              )}
+
               <p className="text-micro font-medium text-slate uppercase tracking-wider mt-4 mb-1.5">
                 Resubmission requests
               </p>
@@ -474,5 +553,113 @@ function PackageRecord({
         ) : null}
       </div>
     </SectionCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Audit log — ORASS View-Audit-Log parity: one row per version in the chain,
+// with the selected package's approvals and channel events interleaved
+// chronologically.
+// ---------------------------------------------------------------------------
+
+type AuditRow = {
+  id: string;
+  action: string;
+  actor: string;
+  detail: ReactNode;
+  at: Date;
+};
+
+function AuditLog({
+  summary,
+  chain,
+  approvals,
+  events,
+  officerName,
+}: {
+  summary: RegulatoryPackageSummaryRead;
+  chain: RegulatoryPackageSummaryRead[];
+  approvals: PackageApprovalRead[];
+  events: SubmissionEventRead[];
+  officerName: (userId: string) => string;
+}) {
+  const rows = useMemo(() => {
+    const versionRows: AuditRow[] = (chain.length > 0 ? chain : [summary]).map(
+      (pkg) => ({
+        id: `version-${pkg.id}`,
+        action: `Generated v${pkg.version}${
+          pkg.submissionRevision ? ` · rev ${pkg.submissionRevision}` : ''
+        }`,
+        actor: officerName(pkg.generatedBy),
+        detail: <PackageStatusPill status={pkg.status} />,
+        at: pkg.generatedAt,
+      })
+    );
+    const approvalRows: AuditRow[] = approvals.map((approval) => ({
+      id: `approval-${approval.id}`,
+      action: labelize(approval.action),
+      actor: officerName(approval.actorUserId),
+      detail: approval.reason ? (
+        <span className="text-caption text-slate">{approval.reason}</span>
+      ) : null,
+      at: approval.occurredAt,
+    }));
+    const eventRows: AuditRow[] = events.map((event) => ({
+      id: `event-${event.id}`,
+      action: labelize(event.event),
+      actor: CHANNEL_LABELS[event.channel] ?? event.channel,
+      detail: event.externalRef ? (
+        <span className="font-mono text-micro text-slate tnum">
+          ref {shortId(event.externalRef, 24)}
+        </span>
+      ) : null,
+      at: event.occurredAt,
+    }));
+    return [...versionRows, ...approvalRows, ...eventRows].sort(
+      (a, b) => a.at.getTime() - b.at.getTime()
+    );
+  }, [summary, chain, approvals, events, officerName]);
+
+  const columns: Column<AuditRow>[] = [
+    {
+      key: 'action',
+      header: 'Action',
+      render: (row) => (
+        <span className="text-caption font-medium text-navy">{row.action}</span>
+      ),
+    },
+    {
+      key: 'actor',
+      header: 'Actor / channel',
+      render: (row) => (
+        <span className="text-caption text-navy/85">{row.actor}</span>
+      ),
+    },
+    {
+      key: 'detail',
+      header: 'Detail',
+      render: (row) => row.detail ?? <span className="text-caption text-slate">—</span>,
+    },
+    {
+      key: 'at',
+      header: 'When',
+      align: 'right',
+      render: (row) => (
+        <span className="font-mono text-micro text-slate tnum whitespace-nowrap">
+          {fmtTimestamp(row.at)}
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <div>
+      <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
+        Audit log
+      </p>
+      <div className="rounded border border-border-light overflow-hidden">
+        <DataTable columns={columns} rows={rows} density="compact" />
+      </div>
+    </div>
   );
 }

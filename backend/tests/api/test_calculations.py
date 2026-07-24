@@ -193,7 +193,7 @@ def test_calculation_correctness_persistence_and_reproducible_rerun(
         )
         assert session.scalar(
             select(AuditEvent).where(
-                AuditEvent.entity_id == UUID(run["id"]),
+                AuditEvent.entity_id == run["id"],
                 AuditEvent.event_type == "calculation_run.succeeded",
             )
         )
@@ -360,7 +360,7 @@ def test_audit_binds_pending_run_to_established_input_hash(db_client: TestClient
         events = list(
             session.scalars(
                 select(AuditEvent)
-                .where(AuditEvent.entity_id == UUID(run["id"]))
+                .where(AuditEvent.entity_id == run["id"])
                 .order_by(AuditEvent.created_at, AuditEvent.id)
             )
         )
@@ -412,7 +412,7 @@ def test_failure_after_liquidity_publication_rolls_back_atomic_run_result(
         established = list(
             session.scalars(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id == UUID(run["id"]),
+                    AuditEvent.entity_id == run["id"],
                     AuditEvent.event_type == "calculation_run.input_snapshot_established",
                 )
             )
@@ -420,7 +420,7 @@ def test_failure_after_liquidity_publication_rolls_back_atomic_run_result(
         liquidity_events = list(
             session.scalars(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id == UUID(run["id"]),
+                    AuditEvent.entity_id == run["id"],
                     AuditEvent.event_type == "liquidity_analysis.completed",
                 )
             )
@@ -649,7 +649,7 @@ def test_scenario_archive_wins_before_calculation_publication(
         )
         event_types = set(
             verification_session.scalars(
-                select(AuditEvent.event_type).where(AuditEvent.entity_id == UUID(run["id"]))
+                select(AuditEvent.event_type).where(AuditEvent.entity_id == run["id"])
             )
         )
     assert "calculation_run.succeeded" not in event_types
@@ -726,7 +726,7 @@ def test_failed_run_is_persisted_and_prior_success_remains_current(
         events = list(
             session.scalars(
                 select(AuditEvent)
-                .where(AuditEvent.entity_id == UUID(body["id"]))
+                .where(AuditEvent.entity_id == body["id"])
                 .order_by(AuditEvent.created_at, AuditEvent.id)
             )
         )
@@ -858,7 +858,7 @@ def test_out_of_range_forecast_is_persisted_as_failed(
         events = list(
             session.scalars(
                 select(AuditEvent)
-                .where(AuditEvent.entity_id == UUID(run["id"]))
+                .where(AuditEvent.entity_id == run["id"])
                 .order_by(AuditEvent.created_at, AuditEvent.id)
             )
         )

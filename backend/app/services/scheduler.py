@@ -69,6 +69,15 @@ def run_tick(session: Session, job: Job) -> None:
 
     deadline_scan_enqueued = enqueue_due_deadline_scan(session, org_id, now=now)
 
+    from app.services.notification_email_mirror import (  # noqa: PLC0415
+        enqueue_due_notification_mirror,
+        mirror_enabled,
+    )
+
+    mirror_enqueued = (
+        enqueue_due_notification_mirror(session, org_id, now=now) if mirror_enabled() else None
+    )
+
     job_queue.enqueue(
         session,
         org_id,
@@ -82,11 +91,15 @@ def run_tick(session: Session, job: Job) -> None:
         "market_data_pulls_enqueued": market_data_pulls,
         "temenos_pulls_enqueued": temenos_pulls,
         "deadline_scan_enqueued": deadline_scan_enqueued,
+        # Key present only when the SMTP mirror is configured (default off).
+        **(
+            {"notification_mirror_enqueued": mirror_enqueued} if mirror_enqueued is not None else {}
+        ),
     }
 
 
 def _enqueue_due_official_runs(
-    session: Session, org_id: UUID, settings: Settings, now: datetime
+    session: Session, org_id: str, settings: Settings, now: datetime
 ) -> list[str]:
     """Enqueue an official run for every bank without one since today's cutoff."""
     actor_id = session.scalar(
@@ -120,7 +133,7 @@ def _enqueue_due_official_runs(
     return enqueued
 
 
-def seed_tick(db: Session, organization_id: UUID) -> Job:
+def seed_tick(db: Session, organization_id: str) -> Job:
     """Seed the first (or a replacement) tick for one org; coalesces to one."""
     return job_queue.enqueue(
         db,
@@ -145,7 +158,7 @@ def seed_ticks(db: Session) -> int:
     return len(org_ids)
 
 
-def _latest_period(session: Session, org_id: UUID, bank_id: UUID) -> BankReportingPeriod | None:
+def _latest_period(session: Session, org_id: str, bank_id: str) -> BankReportingPeriod | None:
     return session.scalar(
         select(BankReportingPeriod)
         .where(
@@ -159,8 +172,8 @@ def _latest_period(session: Session, org_id: UUID, bank_id: UUID) -> BankReporti
 
 def _official_run_done_today(  # noqa: PLR0913 - the "due" predicate needs the full key
     session: Session,
-    org_id: UUID,
-    bank_id: UUID,
+    org_id: str,
+    bank_id: str,
     period_id: UUID,
     official_run_hour: int,
     now: datetime,

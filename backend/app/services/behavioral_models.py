@@ -15,7 +15,6 @@ import dataclasses
 import json
 import threading
 from pathlib import Path
-from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -44,9 +43,9 @@ _MODULES = {
 }
 _DATASET_KIND = "behavioral_assumptions"
 
-_cache: dict[tuple[UUID, UUID, str], ModelResult] = {}
+_cache: dict[tuple[str, str, str], ModelResult] = {}
 _cache_lock = threading.Lock()
-_key_locks: dict[tuple[UUID, UUID, str], threading.Lock] = {}
+_key_locks: dict[tuple[str, str, str], threading.Lock] = {}
 
 
 def reset_cache() -> None:
@@ -64,7 +63,7 @@ def _validate_model(model: str) -> None:
         )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )
@@ -73,12 +72,12 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
     return bank
 
 
-def _artifacts_path(org_id: UUID, bank_id: UUID, model: str) -> Path:
+def _artifacts_path(org_id: str, bank_id: str, model: str) -> Path:
     root = get_settings().behavioral.artifacts_dir
     return Path(root) / model / str(org_id) / str(bank_id) / "estimates.json"
 
 
-def _key_lock(key: tuple[UUID, UUID, str]) -> threading.Lock:
+def _key_lock(key: tuple[str, str, str]) -> threading.Lock:
     with _cache_lock:
         return _key_locks.setdefault(key, threading.Lock())
 
@@ -86,7 +85,7 @@ def _key_lock(key: tuple[UUID, UUID, str]) -> threading.Lock:
 def get_estimates(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     model: str,
     *,
     refresh: bool = False,
@@ -120,7 +119,7 @@ def get_estimates(
         return result
 
 
-def _compute(db: Session, ctx: TenantContext, bank_id: UUID, model: str) -> ModelResult:
+def _compute(db: Session, ctx: TenantContext, bank_id: str, model: str) -> ModelResult:
     cfg = BehavioralTrainingConfig.from_settings(get_settings().behavioral)
     dates = available_as_of_dates(db, ctx, bank_id)
     if not dates:
@@ -150,7 +149,7 @@ def _compute(db: Session, ctx: TenantContext, bank_id: UUID, model: str) -> Mode
 def apply_estimates(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     model: str,
     rows: list[dict],
     *,
@@ -247,7 +246,7 @@ def apply_estimates(  # noqa: PLR0913
     }
 
 
-def _latest_behavioral_payloads(db: Session, ctx: TenantContext, bank_id: UUID) -> list[dict]:
+def _latest_behavioral_payloads(db: Session, ctx: TenantContext, bank_id: str) -> list[dict]:
     """Payloads of the current latest accepted behavioral_assumptions batch."""
     batch_rows = db.execute(
         select(
@@ -284,7 +283,7 @@ def _latest_behavioral_payloads(db: Session, ctx: TenantContext, bank_id: UUID) 
 # --------------------------------------------------------------------------
 
 
-def _save_artifact(key: tuple[UUID, UUID, str], result: ModelResult) -> None:
+def _save_artifact(key: tuple[str, str, str], result: ModelResult) -> None:
     path = _artifacts_path(*key)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -293,7 +292,7 @@ def _save_artifact(key: tuple[UUID, UUID, str], result: ModelResult) -> None:
         pass  # a non-writable artifacts dir must not break serving
 
 
-def _load_artifact(key: tuple[UUID, UUID, str]) -> ModelResult | None:
+def _load_artifact(key: tuple[str, str, str]) -> ModelResult | None:
     path = _artifacts_path(*key)
     if not path.exists():
         return None

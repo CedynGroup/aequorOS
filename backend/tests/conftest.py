@@ -1,6 +1,16 @@
 from __future__ import annotations
 
 import os
+
+# IMPORT-TIME guards (before any `app.*` import below): the per-test fixture
+# sets these too, but module import happens during COLLECTION — a developer's
+# .env (RUN_INPROCESS_WORKER=1, remote DATABASE_URL) would otherwise spawn a
+# real background worker thread at import that races test-invoked handlers
+# for the entire session (the historical source of order-dependent flakes).
+os.environ["RUN_INPROCESS_WORKER"] = "0"
+os.environ["DATABASE_URL"] = ""
+os.environ["WORKER_DATABASE_URL"] = ""
+
 from collections.abc import Iterator
 from pathlib import Path
 from uuid import uuid4

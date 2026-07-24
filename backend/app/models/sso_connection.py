@@ -24,8 +24,8 @@ class SsoConnection(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("organization_id", name="uq_sso_connections_organization_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True),
+    organization_id: Mapped[str] = mapped_column(
+        String(16),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )

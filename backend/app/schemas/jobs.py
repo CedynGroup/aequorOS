@@ -10,7 +10,7 @@ class JobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     job_type: str
     status: str
     entity_type: str | None

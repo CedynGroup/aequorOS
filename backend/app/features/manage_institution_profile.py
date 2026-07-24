@@ -47,7 +47,7 @@ router = APIRouter(tags=["institution-profile"])
     operation_id="getInstitutionProfile",
 )
 def get_institution_profile(
-    bank_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, db: DbSession, ctx: Tenant
 ) -> InstitutionProfileFullRead:
     """The composed corporate register: profile + parties + outlets + more."""
     return institution_profile.get_full_profile(db, ctx, bank_id)
@@ -59,7 +59,7 @@ def get_institution_profile(
     operation_id="putInstitutionProfile",
 )
 def put_institution_profile(
-    bank_id: UUID, payload: InstitutionProfilePut, db: DbSession, ctx: MutationTenant
+    bank_id: str, payload: InstitutionProfilePut, db: DbSession, ctx: MutationTenant
 ) -> InstitutionProfileRead:
     return institution_profile.upsert_profile(db, ctx, bank_id, payload)
 
@@ -71,7 +71,7 @@ def put_institution_profile(
     operation_id="createRelatedParty",
 )
 def create_related_party(
-    bank_id: UUID, payload: RelatedPartyCreate, db: DbSession, ctx: MutationTenant
+    bank_id: str, payload: RelatedPartyCreate, db: DbSession, ctx: MutationTenant
 ) -> RelatedPartyRead:
     return institution_profile.create_related_party(db, ctx, bank_id, payload)
 
@@ -82,7 +82,7 @@ def create_related_party(
     operation_id="updateRelatedParty",
 )
 def update_related_party(
-    bank_id: UUID,
+    bank_id: str,
     party_id: UUID,
     payload: RelatedPartyUpdate,
     db: DbSession,
@@ -98,7 +98,7 @@ def update_related_party(
     operation_id="createShareholding",
 )
 def create_shareholding(
-    bank_id: UUID,
+    bank_id: str,
     party_id: UUID,
     payload: ShareholdingCreate,
     db: DbSession,
@@ -113,7 +113,7 @@ def create_shareholding(
     operation_id="updateShareholding",
 )
 def update_shareholding(  # noqa: PLR0913
-    bank_id: UUID,
+    bank_id: str,
     party_id: UUID,
     shareholding_id: UUID,
     payload: ShareholdingUpdate,
@@ -132,7 +132,7 @@ def update_shareholding(  # noqa: PLR0913
     operation_id="createOutlet",
 )
 def create_outlet(
-    bank_id: UUID, payload: OutletCreate, db: DbSession, ctx: MutationTenant
+    bank_id: str, payload: OutletCreate, db: DbSession, ctx: MutationTenant
 ) -> OutletRead:
     return institution_profile.create_outlet(db, ctx, bank_id, payload)
 
@@ -143,7 +143,7 @@ def create_outlet(
     operation_id="updateOutlet",
 )
 def update_outlet(
-    bank_id: UUID, outlet_id: UUID, payload: OutletUpdate, db: DbSession, ctx: MutationTenant
+    bank_id: str, outlet_id: UUID, payload: OutletUpdate, db: DbSession, ctx: MutationTenant
 ) -> OutletRead:
     return institution_profile.update_outlet(db, ctx, bank_id, outlet_id, payload)
 
@@ -155,7 +155,7 @@ def update_outlet(
     operation_id="createBankProduct",
 )
 def create_bank_product(
-    bank_id: UUID, payload: BankProductCreate, db: DbSession, ctx: MutationTenant
+    bank_id: str, payload: BankProductCreate, db: DbSession, ctx: MutationTenant
 ) -> BankProductRead:
     return institution_profile.create_product(db, ctx, bank_id, payload)
 
@@ -166,7 +166,7 @@ def create_bank_product(
     operation_id="updateBankProduct",
 )
 def update_bank_product(
-    bank_id: UUID,
+    bank_id: str,
     product_id: UUID,
     payload: BankProductUpdate,
     db: DbSession,
@@ -182,7 +182,7 @@ def update_bank_product(
     operation_id="createBankLicense",
 )
 def create_bank_license(
-    bank_id: UUID, payload: BankLicenseCreate, db: DbSession, ctx: MutationTenant
+    bank_id: str, payload: BankLicenseCreate, db: DbSession, ctx: MutationTenant
 ) -> BankLicenseRead:
     return institution_profile.create_license(db, ctx, bank_id, payload)
 
@@ -193,7 +193,7 @@ def create_bank_license(
     operation_id="updateBankLicense",
 )
 def update_bank_license(
-    bank_id: UUID,
+    bank_id: str,
     license_id: UUID,
     payload: BankLicenseUpdate,
     db: DbSession,
@@ -209,7 +209,7 @@ def update_bank_license(
     operation_id="createNameHistoryEntry",
 )
 def create_name_history_entry(
-    bank_id: UUID, payload: BankNameHistoryCreate, db: DbSession, ctx: MutationTenant
+    bank_id: str, payload: BankNameHistoryCreate, db: DbSession, ctx: MutationTenant
 ) -> BankNameHistoryRead:
     return institution_profile.create_name_history_entry(db, ctx, bank_id, payload)
 
@@ -220,7 +220,7 @@ def create_name_history_entry(
     operation_id="updateNameHistoryEntry",
 )
 def update_name_history_entry(
-    bank_id: UUID,
+    bank_id: str,
     entry_id: UUID,
     payload: BankNameHistoryUpdate,
     db: DbSession,

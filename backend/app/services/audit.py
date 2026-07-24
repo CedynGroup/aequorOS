@@ -15,7 +15,7 @@ def record_event(  # noqa: PLR0913
     *,
     event_type: str,
     entity_type: str,
-    entity_id: UUID,
+    entity_id: UUID | str,
     details: dict[str, Any] | None = None,
 ) -> AuditEvent:
     event = AuditEvent(
@@ -23,7 +23,7 @@ def record_event(  # noqa: PLR0913
         actor_user_id=ctx.actor_user_id,
         event_type=event_type,
         entity_type=entity_type,
-        entity_id=entity_id,
+        entity_id=str(entity_id),
         details=details or {},
     )
     db.add(event)

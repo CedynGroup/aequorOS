@@ -15,6 +15,7 @@ from app.features.manage_banks import router as banks_router
 from app.features.manage_capital import router as capital_router
 from app.features.manage_documents import router as documents_router
 from app.features.manage_institution_profile import router as institution_profile_router
+from app.features.manage_integration_keys import router as integration_keys_router
 from app.features.manage_live_engine import router as live_engine_router
 from app.features.manage_market_data_connections import router as market_data_connections_router
 from app.features.manage_market_data_uploads import router as market_data_uploads_router
@@ -58,6 +59,7 @@ v1_router.include_router(regulatory_ftp_router)
 v1_router.include_router(regulatory_reporting_router)
 v1_router.include_router(organization_users_router)
 v1_router.include_router(institution_profile_router)
+v1_router.include_router(integration_keys_router)
 v1_router.include_router(notifications_router)
 v1_router.include_router(forecasting_router)
 v1_router.include_router(live_engine_router)

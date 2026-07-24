@@ -71,7 +71,7 @@ _OWNERSHIP_SUM_TOLERANCE = Decimal("0.01")
 # --- shared lookups ------------------------------------------------------------
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )
@@ -81,7 +81,7 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
 
 
 def _get_party_or_404(
-    db: Session, ctx: TenantContext, bank_id: UUID, party_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, party_id: UUID
 ) -> RelatedParty:
     party = db.scalar(
         select(RelatedParty).where(
@@ -97,7 +97,7 @@ def _get_party_or_404(
     return party
 
 
-def _profile_row(db: Session, ctx: TenantContext, bank_id: UUID) -> InstitutionProfile | None:
+def _profile_row(db: Session, ctx: TenantContext, bank_id: str) -> InstitutionProfile | None:
     return db.scalar(
         select(InstitutionProfile).where(
             InstitutionProfile.organization_id == ctx.organization_id,
@@ -116,7 +116,7 @@ def _require_jurisdiction(db: Session, code: str) -> None:
 
 
 def _require_individual_ubo(
-    db: Session, ctx: TenantContext, bank_id: UUID, ubo_party_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, ubo_party_id: UUID
 ) -> None:
     """UBOs are natural persons: the linked party must exist and be an individual."""
     ubo = db.scalar(
@@ -315,7 +315,7 @@ def _name_history_read(entry: BankNameHistory) -> BankNameHistoryRead:
     )
 
 
-def _bank_children[T](db: Session, model: type[T], ctx: TenantContext, bank_id: UUID) -> list[T]:
+def _bank_children[T](db: Session, model: type[T], ctx: TenantContext, bank_id: str) -> list[T]:
     return list(
         db.scalars(
             select(model)
@@ -331,7 +331,7 @@ def _bank_children[T](db: Session, model: type[T], ctx: TenantContext, bank_id: 
 # --- composed read ---------------------------------------------------------------
 
 
-def get_full_profile(db: Session, ctx: TenantContext, bank_id: UUID) -> InstitutionProfileFullRead:
+def get_full_profile(db: Session, ctx: TenantContext, bank_id: str) -> InstitutionProfileFullRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     profile = _profile_row(db, ctx, bank.id)
     parties = _bank_children(db, RelatedParty, ctx, bank.id)
@@ -356,7 +356,7 @@ def get_full_profile(db: Session, ctx: TenantContext, bank_id: UUID) -> Institut
 
 
 def upsert_profile(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: InstitutionProfilePut
+    db: Session, ctx: TenantContext, bank_id: str, payload: InstitutionProfilePut
 ) -> InstitutionProfileRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     if payload.parent_country_code is not None:
@@ -474,7 +474,7 @@ def _replace_roles(
 
 
 def create_related_party(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: RelatedPartyCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: RelatedPartyCreate
 ) -> RelatedPartyRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     _validate_party_rules(db, ctx, payload, party_id=None)
@@ -508,7 +508,7 @@ def create_related_party(
 
 
 def update_related_party(
-    db: Session, ctx: TenantContext, bank_id: UUID, party_id: UUID, payload: RelatedPartyUpdate
+    db: Session, ctx: TenantContext, bank_id: str, party_id: UUID, payload: RelatedPartyUpdate
 ) -> RelatedPartyRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     party = _get_party_or_404(db, ctx, bank.id, party_id)
@@ -549,7 +549,7 @@ def _apply_shareholding_fields(
 
 
 def add_shareholding(
-    db: Session, ctx: TenantContext, bank_id: UUID, party_id: UUID, payload: ShareholdingCreate
+    db: Session, ctx: TenantContext, bank_id: str, party_id: UUID, payload: ShareholdingCreate
 ) -> RelatedPartyRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     party = _get_party_or_404(db, ctx, bank.id, party_id)
@@ -587,7 +587,7 @@ def add_shareholding(
 def update_shareholding(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     party_id: UUID,
     shareholding_id: UUID,
     payload: ShareholdingUpdate,
@@ -643,7 +643,7 @@ def _apply_outlet_fields(outlet: Outlet, payload: OutletCreate | OutletUpdate) -
 
 
 def create_outlet(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: OutletCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: OutletCreate
 ) -> OutletRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     outlet = Outlet(
@@ -673,7 +673,7 @@ def create_outlet(
 
 
 def update_outlet(
-    db: Session, ctx: TenantContext, bank_id: UUID, outlet_id: UUID, payload: OutletUpdate
+    db: Session, ctx: TenantContext, bank_id: str, outlet_id: UUID, payload: OutletUpdate
 ) -> OutletRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     outlet = db.scalar(
@@ -708,7 +708,7 @@ def update_outlet(
 
 
 def create_product(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: BankProductCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: BankProductCreate
 ) -> BankProductRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     product = BankProduct(
@@ -729,7 +729,7 @@ def create_product(
 
 
 def update_product(
-    db: Session, ctx: TenantContext, bank_id: UUID, product_id: UUID, payload: BankProductUpdate
+    db: Session, ctx: TenantContext, bank_id: str, product_id: UUID, payload: BankProductUpdate
 ) -> BankProductRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     product = db.scalar(
@@ -754,7 +754,7 @@ def update_product(
 
 
 def create_license(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: BankLicenseCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: BankLicenseCreate
 ) -> BankLicenseRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     license_row = BankLicense(
@@ -775,7 +775,7 @@ def create_license(
 
 
 def update_license(
-    db: Session, ctx: TenantContext, bank_id: UUID, license_id: UUID, payload: BankLicenseUpdate
+    db: Session, ctx: TenantContext, bank_id: str, license_id: UUID, payload: BankLicenseUpdate
 ) -> BankLicenseRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     license_row = db.scalar(
@@ -800,7 +800,7 @@ def update_license(
 
 
 def create_name_history_entry(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: BankNameHistoryCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: BankNameHistoryCreate
 ) -> BankNameHistoryRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     entry = BankNameHistory(
@@ -820,7 +820,7 @@ def create_name_history_entry(
 
 
 def update_name_history_entry(
-    db: Session, ctx: TenantContext, bank_id: UUID, entry_id: UUID, payload: BankNameHistoryUpdate
+    db: Session, ctx: TenantContext, bank_id: str, entry_id: UUID, payload: BankNameHistoryUpdate
 ) -> BankNameHistoryRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     entry = db.scalar(
@@ -851,7 +851,7 @@ def _record_bank_child_event(  # noqa: PLR0913
     event_type: str,
     entity_type: str,
     entity_id: UUID,
-    bank_id: UUID,
+    bank_id: str,
     reason: str,
 ) -> None:
     record_event(
@@ -864,7 +864,7 @@ def _record_bank_child_event(  # noqa: PLR0913
     )
 
 
-def orass_institution_code(db: Session, ctx: TenantContext, bank_id: UUID) -> str | None:
+def orass_institution_code(db: Session, ctx: TenantContext, bank_id: str) -> str | None:
     """The profile's ORASS institution code, when a profile exists (else None)."""
     return db.scalar(
         select(InstitutionProfile.orass_institution_code).where(
@@ -874,7 +874,7 @@ def orass_institution_code(db: Session, ctx: TenantContext, bank_id: UUID) -> st
     )
 
 
-def profile_exists(db: Session, ctx: TenantContext, bank_id: UUID) -> bool:
+def profile_exists(db: Session, ctx: TenantContext, bank_id: str) -> bool:
     return (
         db.scalar(
             select(InstitutionProfile.id).where(

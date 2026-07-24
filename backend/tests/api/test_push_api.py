@@ -9,7 +9,6 @@ like an uploaded workbook would.
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -95,7 +94,7 @@ YIELD_CURVE = [
 
 
 def open_push(
-    client: TestClient, bank_id: str, key: str, as_of: str = AS_OF, org: UUID = ORG_1
+    client: TestClient, bank_id: str, key: str, as_of: str = AS_OF, org: str = ORG_1
 ) -> Any:
     return client.post(
         f"/api/v1/banks/{bank_id}/push-batches",

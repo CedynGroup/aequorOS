@@ -21,7 +21,7 @@ class MarketDataUploadRead(ClosedModel):
     """
 
     batch_id: UUID
-    bank_id: UUID
+    bank_id: str
     status: str
     as_of_date: date
     scopes: list[str]

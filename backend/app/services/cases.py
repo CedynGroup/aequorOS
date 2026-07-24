@@ -55,7 +55,7 @@ CASE_STATUS_TRANSITIONS = {
 }
 
 
-def get_case_or_404(db: Session, organization_id: UUID, case_id: UUID) -> RiskCase:
+def get_case_or_404(db: Session, organization_id: str, case_id: UUID) -> RiskCase:
     case = db.scalar(
         select(RiskCase).where(RiskCase.id == case_id, RiskCase.organization_id == organization_id)
     )
@@ -64,7 +64,7 @@ def get_case_or_404(db: Session, organization_id: UUID, case_id: UUID) -> RiskCa
     return case
 
 
-def get_case_for_update_or_404(db: Session, organization_id: UUID, case_id: UUID) -> RiskCase:
+def get_case_for_update_or_404(db: Session, organization_id: str, case_id: UUID) -> RiskCase:
     case = db.scalar(
         select(RiskCase)
         .where(RiskCase.id == case_id, RiskCase.organization_id == organization_id)

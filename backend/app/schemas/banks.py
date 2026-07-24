@@ -43,8 +43,10 @@ class JurisdictionRead(ClosedModel):
 
 
 class BankRead(ClosedModel):
-    id: UUID
-    organization_id: UUID
+    # THE institution identifier (BK-XXXXXXXX) and tenant identifier
+    # (OR-XXXXXXXX) — platform-generated primary keys, no UUID aliases.
+    id: str
+    organization_id: str
     name: str
     short_name: str
     currency: str
@@ -63,7 +65,7 @@ class BankListRead(ClosedModel):
 
 class BankReportingPeriodRead(ClosedModel):
     id: UUID
-    bank_id: UUID
+    bank_id: str
     period_start: date
     period_end: date
     label: str
@@ -71,7 +73,7 @@ class BankReportingPeriodRead(ClosedModel):
 
 
 class BankReportingPeriodListRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     periods: list[BankReportingPeriodRead]
 
 
@@ -105,7 +107,7 @@ class BankFactsRead(ClosedModel):
 
 
 class BankSeedSummaryRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     periods: int
     fact_count: int
     param_count: int

@@ -11,7 +11,6 @@ consumed by ``fact_derivation`` → ftp_nmd / ftp_product / irr_position.
 from __future__ import annotations
 
 import datetime
-from uuid import UUID
 
 import numpy as np
 from sqlalchemy.orm import Session
@@ -37,7 +36,7 @@ def _duration_from_stability(score: float) -> float:
 def estimate(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     as_of: datetime.date,
     cfg: BehavioralTrainingConfig,
 ) -> ModelResult:

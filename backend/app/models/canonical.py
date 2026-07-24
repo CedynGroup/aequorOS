@@ -68,8 +68,8 @@ class CanonicalMetadataMixin(UuidV7PrimaryKeyMixin, TimestampMixin):
     entry, which runs through the same batch machinery as any adapter.
     """
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
     ingested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -331,8 +331,8 @@ class CanonicalReferenceRow(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     ingestion_batch_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
     dataset_kind: Mapped[str] = mapped_column(String(40), nullable=False)

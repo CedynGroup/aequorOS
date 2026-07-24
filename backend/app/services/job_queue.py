@@ -41,6 +41,7 @@ JOB_TYPES = (
     "temenos_pull",
     "etl_dedup",
     "reporting_deadline_scan",
+    "notification_email_mirror",
 )
 
 # Retry backoff is 2**attempts * base seconds (10s, 20s, 40s at base=5).
@@ -66,15 +67,15 @@ def backoff(attempts: int) -> timedelta:
 
 def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
     db: Session,
-    organization_id: UUID,
+    organization_id: str,
     job_type: str,
     *,
-    bank_id: UUID | None = None,
+    bank_id: str | None = None,
     payload: dict[str, Any] | None = None,
     run_after: datetime | None = None,
     coalesce_key: str | None = None,
     entity_type: str | None = None,
-    entity_id: UUID | None = None,
+    entity_id: UUID | str | None = None,
     max_attempts: int = 3,
 ) -> Job:
     """Insert a queued job, or coalesce into an existing un-started one.
@@ -116,7 +117,7 @@ def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
         job_type=job_type,
         status="queued",
         entity_type=entity_type,
-        entity_id=entity_id,
+        entity_id=None if entity_id is None else str(entity_id),
         bank_id=bank_id,
         payload=payload,
         run_after=run_after,

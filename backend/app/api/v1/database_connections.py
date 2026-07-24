@@ -54,7 +54,7 @@ _BASE = "/banks/{bank_id}/database-direct/connections"
     operation_id="listDatabaseDirectConnections",
 )
 def list_database_connections(
-    bank_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, db: DbSession, ctx: Tenant
 ) -> DatabaseConnectionListRead:
     return database_connections.list_connections(db, ctx, bank_id)
 
@@ -66,7 +66,7 @@ def list_database_connections(
     operation_id="createDatabaseDirectConnection",
 )
 def create_database_connection(
-    bank_id: UUID,
+    bank_id: str,
     payload: DatabaseConnectionCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -80,7 +80,7 @@ def create_database_connection(
     operation_id="getDatabaseDirectConnection",
 )
 def get_database_connection(
-    bank_id: UUID, connection_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, connection_id: UUID, db: DbSession, ctx: Tenant
 ) -> DatabaseConnectionRead:
     return database_connections.get_connection(db, ctx, bank_id, connection_id)
 
@@ -91,7 +91,7 @@ def get_database_connection(
     operation_id="updateDatabaseDirectConnection",
 )
 def update_database_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     payload: DatabaseConnectionUpdate,
     db: DbSession,
@@ -106,7 +106,7 @@ def update_database_connection(
     operation_id="disableDatabaseDirectConnection",
 )
 def disable_database_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -120,7 +120,7 @@ def disable_database_connection(
     operation_id="enableDatabaseDirectConnection",
 )
 def enable_database_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -134,7 +134,7 @@ def enable_database_connection(
     operation_id="revokeDatabaseDirectConnection",
 )
 def revoke_database_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -148,7 +148,7 @@ def revoke_database_connection(
     operation_id="testDatabaseDirectConnection",
 )
 def test_database_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -162,7 +162,7 @@ def test_database_connection(
     operation_id="discoverDatabaseDirectSchema",
 )
 def discover_database_schema(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -177,7 +177,7 @@ def discover_database_schema(
     operation_id="syncDatabaseDirectConnection",
 )
 def sync_database_connection(  # noqa: PLR0913 - FastAPI path params + deps + body
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     payload: DatabaseConnectionSyncRequest,
     db: DbSession,

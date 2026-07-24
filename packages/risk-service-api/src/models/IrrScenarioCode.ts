@@ -22,6 +22,8 @@ export const IrrScenarioCode = {
   ShortDown250: "short_down_250",
   Steepener: "steepener",
   Flattener: "flattener",
+  ParallelUp450: "parallel_up_450",
+  ParallelDown450: "parallel_down_450",
 } as const;
 export type IrrScenarioCode =
   (typeof IrrScenarioCode)[keyof typeof IrrScenarioCode];
