@@ -90,6 +90,12 @@ def list_obligations(
 
     obligations: list[ReportingObligationRead] = []
     for definition in REGISTRY.values():
+        # Event-driven returns (plan W5: the LRT corporate packs) have no
+        # periodic reporting cycle — expanding their nominal frequency would
+        # fabricate obligations that do not exist. Their packages still
+        # appear in the package list/history like any other package.
+        if definition.event_driven:
+            continue
         for reporting_date in _reporting_dates(definition, today, horizon_end):
             due_date = definition.deadline_rule(reporting_date)
             package = db.scalar(

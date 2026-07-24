@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Calendar,
   Check,
+  Inbox,
   Menu,
   Sun,
   Moon,
@@ -21,8 +22,9 @@ import { fmtDateUTC, fmtRelative } from '@/lib/api/values';
 import { avatarColor, initialsFrom, roleLabel } from '@/lib/api/identity';
 import { useUserProfile } from '@/components/profile/ProfileProvider';
 import { LOGIN_URL } from '@/lib/loginUrl';
-import { useBankFreshness } from '@/lib/api/hooks';
+import { useBankFreshness, useNotifications } from '@/lib/api/hooks';
 import CommandPalette from './CommandPalette';
+import NotificationDrawer from './NotificationDrawer';
 import AlertsBell from '@/components/live/AlertsBell';
 import { regShort } from '@/lib/format';
 
@@ -97,6 +99,8 @@ export default function Header({
 
         <AlertsBell />
 
+        <NotificationsBell />
+
         <ThemeToggle />
 
         <UserMenu />
@@ -104,6 +108,32 @@ export default function Header({
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </header>
+  );
+}
+
+/** In-app notification inbox: unread badge + drawer (distinct from the
+ * live limit-breach AlertsBell). */
+function NotificationsBell() {
+  const [open, setOpen] = useState(false);
+  const feed = useNotifications();
+  const unread = feed.data?.unreadCount ?? 0;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`}
+        className="relative w-9 h-9 inline-flex items-center justify-center rounded text-slate hover:bg-surface"
+      >
+        <Inbox size={16} aria-hidden />
+        {unread > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-action text-white text-[10px] font-semibold inline-flex items-center justify-center">
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
+      </button>
+      <NotificationDrawer open={open} onClose={() => setOpen(false)} />
+    </>
   );
 }
 

@@ -32,6 +32,7 @@ from app.models import (
     RegulatoryPackage,
     RegulatoryPackageApproval,
     RegulatoryPackageArtifact,
+    RegulatoryResubmissionRequest,
     RegulatorySubmissionEvent,
 )
 from app.schemas.regulatory_reporting import (
@@ -40,10 +41,14 @@ from app.schemas.regulatory_reporting import (
     PackageApprovalRequestCreate,
     RegulatoryArtifactRead,
     RegulatoryPackageRead,
+    ResubmissionRequestCreate,
+    ResubmissionRequestListRead,
+    ResubmissionRequestRead,
     SubmissionEventListRead,
     SubmissionEventRead,
     SubmissionPollRead,
 )
+from app.services import institution_profile, notifications
 from app.services.audit import record_event
 from app.services.regulatory_reporting.channel_config import (
     channel_config_row,
@@ -51,8 +56,10 @@ from app.services.regulatory_reporting.channel_config import (
 )
 from app.services.regulatory_reporting.channels import (
     ChannelDowntimeError,
+    ChannelError,
     ChannelPreconditionError,
     EmailFallbackChannel,
+    OrassApiChannel,
     OrassSandboxChannel,
     build_email_bundle,
 )
@@ -76,9 +83,16 @@ ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     "validated": frozenset({"pending_approval", "generated", "superseded"}),
     "pending_approval": frozenset({"approved", "generated", "superseded"}),
     "approved": frozenset({"submitted", "superseded"}),
-    "submitted": frozenset({"acknowledged", "rejected", "submitted"}),
+    # Regulator outcomes (ORASS parity): "rejected" is returned-for-correction
+    # (rework via a superseding version), "declined" is the final refusal.
+    "submitted": frozenset({"acknowledged", "rejected", "declined", "submitted"}),
+    # Acknowledged is terminal for status transitions; a correction after
+    # acknowledgement requires a GRANTED resubmission request, which authorizes
+    # the superseding regeneration (enforced in generation.py — supersession
+    # is a direct regeneration effect, not a table transition).
     "acknowledged": frozenset(),
     "rejected": frozenset({"superseded"}),
+    "declined": frozenset({"superseded"}),
     "superseded": frozenset(),
 }
 
@@ -190,6 +204,21 @@ def request_approval(
     _add_approval(
         db, ctx, package, action="requested", actor_user_id=actor_user_id, reason=payload.reason
     )
+    notifications.emit(
+        db,
+        ctx,
+        type="reporting.package.pending_approval",
+        severity="warning",
+        title=f"{package.return_code} {package.reporting_date.isoformat()} awaits approval",
+        body=(
+            f"Version {package.version} of {package.return_code} for "
+            f"{package.reporting_date.isoformat()} is pending an approval decision."
+            + (f" Requester note: {payload.reason}" if payload.reason else "")
+        ),
+        entity_type="regulatory_package",
+        entity_id=package.id,
+        recipient_role="approver",
+    )
     transition(db, ctx, package, "pending_approval")
     db.commit()
     return read_package(db, package)
@@ -228,6 +257,26 @@ def decide_approval(
         action=payload.action,
         actor_user_id=actor_user_id,
         reason=payload.reason,
+    )
+    approved = payload.action == "approved"
+    notifications.emit(
+        db,
+        ctx,
+        type="reporting.package.approved" if approved else "reporting.package.approval_rejected",
+        severity="info" if approved else "warning",
+        title=(
+            f"{package.return_code} {package.reporting_date.isoformat()} "
+            + ("approved" if approved else "returned for rework")
+        ),
+        body=(
+            f"Version {package.version} of {package.return_code} for "
+            f"{package.reporting_date.isoformat()} was "
+            + ("approved for submission." if approved else "rejected at approval.")
+            + (f" Reason: {payload.reason}" if payload.reason else "")
+        ),
+        entity_type="regulatory_package",
+        entity_id=package.id,
+        recipient_user_id=package.generated_by,
     )
     new_status = "approved" if payload.action == "approved" else "generated"
     transition(db, ctx, package, new_status, details={"decision": payload.action})
@@ -317,16 +366,24 @@ def record_regulator_decision(  # noqa: PLR0913
     external_ref: str | None = None,
     detail: dict[str, Any] | None = None,
 ) -> RegulatoryPackageRead:
-    """Record the regulator outcome: ``submitted -> acknowledged | rejected``."""
-    if event not in ("acknowledged", "rejected"):
+    """Record the regulator outcome: ``submitted -> acknowledged | rejected | declined``.
+
+    Rejection/decline responses carry supervisor comments (ORASS "View
+    Comments" parity); they are sealed onto the package for the UI.
+    """
+    if event not in ("acknowledged", "rejected", "declined"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The regulator decision must be 'acknowledged' or 'rejected'.",
+            detail="The regulator decision must be 'acknowledged', 'rejected' or 'declined'.",
         )
     require_actor(ctx)
     get_bank_or_404(db, ctx, bank_id)
     package = get_package_or_404(db, ctx, bank_id, package_id)
     transition(db, ctx, package, event, details={"channel": channel})
+    if event in ("rejected", "declined"):
+        comments = (detail or {}).get("comments") or (detail or {}).get("message")
+        if comments:
+            package.regulator_comments = str(comments)
     add_submission_event(
         db,
         ctx,
@@ -336,8 +393,56 @@ def record_regulator_decision(  # noqa: PLR0913
         external_ref=external_ref,
         detail=detail,
     )
+    _notify_regulator_decision(db, ctx, package, event=event, detail=detail)
     db.commit()
     return read_package(db, package)
+
+
+_REGULATOR_DECISION_SEVERITIES = {
+    "acknowledged": "info",
+    "rejected": "warning",
+    "declined": "critical",
+}
+_REGULATOR_DECISION_LABELS = {
+    "acknowledged": "acknowledged",
+    "rejected": "rejected (returned for correction)",
+    "declined": "declined (final refusal)",
+}
+_COMMENT_SNIPPET_CHARS = 300
+
+
+def _notify_regulator_decision(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    *,
+    event: str,
+    detail: dict[str, Any] | None,
+) -> None:
+    """Notify approver-class users AND the package generator (no commit).
+
+    The generator gets a direct row only when the approver fan-out did not
+    already reach them (an approver who generated the package gets one row).
+    """
+    label = _REGULATOR_DECISION_LABELS[event]
+    body = (
+        f"The regulator {label} {package.return_code} for "
+        f"{package.reporting_date.isoformat()} (version {package.version})."
+    )
+    comments = (detail or {}).get("comments") or (detail or {}).get("message")
+    if comments:
+        body += f" Supervisor comments: {str(comments)[:_COMMENT_SNIPPET_CHARS]}"
+    envelope: dict[str, Any] = {
+        "type": f"reporting.regulator.{event}",
+        "severity": _REGULATOR_DECISION_SEVERITIES[event],
+        "title": f"{package.return_code} {package.reporting_date.isoformat()} {label}",
+        "body": body,
+        "entity_type": "regulatory_package",
+        "entity_id": package.id,
+    }
+    rows = notifications.emit(db, ctx, **envelope, recipient_role="approver")
+    if all(row.recipient_user_id != package.generated_by for row in rows):
+        notifications.emit(db, ctx, **envelope, recipient_user_id=package.generated_by)
 
 
 def list_submission_events(  # noqa: PLR0913
@@ -457,16 +562,27 @@ def has_pending_orass_reupload(db: Session, package: RegulatoryPackage) -> bool:
     return bool(latest.detail.get("pending_orass_reupload"))
 
 
+type _ChannelPlugin = OrassApiChannel | OrassSandboxChannel | EmailFallbackChannel
+
+
 def _build_channel(
     channel_code: str,
     *,
     config: dict[str, Any],
+    credentials: dict[str, Any] | None,
     prior_events: list[RegulatorySubmissionEvent],
-) -> OrassSandboxChannel | EmailFallbackChannel:
+    institution_code_fallback: str | None = None,
+) -> _ChannelPlugin:
+    if channel_code == "orass_api":
+        return OrassApiChannel(config=config, credentials=credentials, prior_events=prior_events)
     if channel_code == "orass_sandbox":
         return OrassSandboxChannel(config=config, prior_events=prior_events)
     if channel_code == "email":
-        return EmailFallbackChannel(config=config, prior_events=prior_events)
+        return EmailFallbackChannel(
+            config=config,
+            prior_events=prior_events,
+            institution_code_fallback=institution_code_fallback,
+        )
     raise HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail=f"Channel '{channel_code}' has no automated submission plugin.",
@@ -475,23 +591,25 @@ def _build_channel(
 
 def _load_channel_context(
     db: Session, ctx: TenantContext, bank_id: UUID, channel_code: str
-) -> tuple[dict[str, Any], bool]:
-    """The channel's config JSON plus whether stored credentials decrypted.
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """The channel's config JSON plus decrypted credentials (or None).
 
     Credentials are retrieved per submission cycle via the channel_config
-    vault helpers ONLY for the ORASS channel when a config row exists, then
-    discarded immediately — the sandbox transmits nothing and works
-    credential-less; the decrypt run keeps the real-ORASS seam honest.
+    vault helpers for the ORASS channels only, handed to the channel plugin
+    for the one request cycle, and never persisted or logged. The sandbox
+    receives none (it transmits nothing); the API channel authenticates
+    with them.
     """
     row = channel_config_row(db, ctx, bank_id, channel_code)
     if row is None:
-        return {}, False
-    credentials_present = False
-    if channel_code == "orass_sandbox" and row.credential_ciphertext is not None:
+        return {}, None
+    credentials: dict[str, Any] | None = None
+    if channel_code in ("orass_api", "orass_sandbox") and row.credential_ciphertext is not None:
         credentials = decrypt_channel_credentials(row)
-        credentials_present = credentials is not None
-        del credentials  # per-cycle retrieval: discard, never persist or log
-    return dict(row.config), credentials_present
+    if channel_code == "orass_sandbox":
+        del credentials  # the simulator must never hold credential material
+        credentials = None
+    return dict(row.config), credentials
 
 
 def _ensure_channel_submittable(
@@ -513,13 +631,13 @@ def _ensure_channel_submittable(
                 "submission awaiting its ORASS re-upload can be submitted again."
             ),
         )
-    if channel_code != "orass_sandbox":
+    if channel_code not in ("orass_api", "orass_sandbox"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 "A downtime email submission is deemed complete only after "
                 "re-upload through ORASS (Notice BG/FMD/2026/07); submit via "
-                "the 'orass_sandbox' channel."
+                "an ORASS channel."
             ),
         )
     assert latest is not None
@@ -575,8 +693,18 @@ def submit_package_via_channel(
         auto_exported = True
 
     prior_events = _submission_events_asc(db, package)
-    config, credentials_present = _load_channel_context(db, ctx, bank.id, channel_code)
-    channel = _build_channel(channel_code, config=config, prior_events=prior_events)
+    config, credentials = _load_channel_context(db, ctx, bank.id, channel_code)
+    credentials_present = credentials is not None
+    # ORASS-style references are form-set sequences; inject the per-(bank,
+    # return) submission sequence so the sandbox mints deterministic refs.
+    config["_submission_sequence"] = _next_submission_sequence(db, ctx, bank.id, package)
+    channel = _build_channel(
+        channel_code,
+        config=config,
+        credentials=credentials,
+        prior_events=prior_events,
+        institution_code_fallback=institution_profile.orass_institution_code(db, ctx, bank.id),
+    )
     try:
         external_ref = channel.submit(package, artifacts)
     except ChannelDowntimeError as exc:
@@ -602,6 +730,12 @@ def submit_package_via_channel(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=exc.operator_message
         ) from exc
+    except ChannelError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.operator_message
+        ) from exc
+    finally:
+        del credentials  # per-cycle retrieval: discard, never persist or log
 
     detail = dict(channel.last_detail)
     if auto_exported:
@@ -613,6 +747,9 @@ def submit_package_via_channel(
         detail["pending_orass_reupload"] = False
         detail["reupload_of"] = prior_email_ref
         transition_details["orass_reupload_of"] = prior_email_ref
+    # ORASS revision semantics: 1.<granted resubmissions in this chain>.
+    package.submission_revision = _submission_revision(db, ctx, bank.id, package)
+    detail["submission_revision"] = package.submission_revision
     transition(db, ctx, package, "submitted", details=transition_details)
     add_submission_event(
         db,
@@ -649,9 +786,23 @@ def poll_submission(
                 "the regulator decision manually instead."
             ),
         )
-    config, _ = _load_channel_context(db, ctx, bank_id, latest.channel)
-    channel = _build_channel(latest.channel, config=config, prior_events=events)
-    poll_status, poll_detail = channel.poll_with_detail(latest.external_ref)
+    config, credentials = _load_channel_context(db, ctx, bank_id, latest.channel)
+    channel = _build_channel(
+        latest.channel, config=config, credentials=credentials, prior_events=events
+    )
+    try:
+        poll_status, poll_detail = channel.poll_with_detail(latest.external_ref)
+    except ChannelDowntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error_code": "channel_downtime", "message": exc.operator_message},
+        ) from exc
+    except ChannelError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.operator_message
+        ) from exc
+    finally:
+        del credentials  # per-cycle retrieval: discard, never persist or log
     poll_event = add_submission_event(
         db,
         ctx,
@@ -661,7 +812,7 @@ def poll_submission(
         external_ref=latest.external_ref,
         detail={**poll_detail, "result": poll_status},
     )
-    if poll_status in ("acknowledged", "rejected"):
+    if poll_status in ("acknowledged", "rejected", "declined"):
         record_regulator_decision(
             db,
             ctx,
@@ -679,6 +830,278 @@ def poll_submission(
         event=SubmissionEventRead.model_validate(poll_event),
         package=read_package(db, package),
     )
+
+
+def _next_submission_sequence(
+    db: Session, ctx: TenantContext, bank_id: UUID, package: RegulatoryPackage
+) -> int:
+    """Monotonic per-(bank, return) sequence for ORASS-style references."""
+    prior = (
+        db.scalar(
+            select(func.count())
+            .select_from(RegulatorySubmissionEvent)
+            .join(
+                RegulatoryPackage,
+                (RegulatoryPackage.id == RegulatorySubmissionEvent.package_id)
+                & (RegulatoryPackage.organization_id == RegulatorySubmissionEvent.organization_id),
+            )
+            .where(
+                RegulatorySubmissionEvent.organization_id == ctx.organization_id,
+                RegulatorySubmissionEvent.event == "submitted",
+                RegulatoryPackage.bank_id == bank_id,
+                RegulatoryPackage.return_code == package.return_code,
+            )
+        )
+        or 0
+    )
+    return prior + 1
+
+
+def _version_chain_ids(db: Session, package: RegulatoryPackage) -> list[UUID]:
+    """All package ids for this (bank, return_code, reporting_date) chain."""
+    return list(
+        db.scalars(
+            select(RegulatoryPackage.id).where(
+                RegulatoryPackage.organization_id == package.organization_id,
+                RegulatoryPackage.bank_id == package.bank_id,
+                RegulatoryPackage.return_code == package.return_code,
+                RegulatoryPackage.reporting_date == package.reporting_date,
+            )
+        )
+    )
+
+
+def _submission_revision(
+    db: Session, ctx: TenantContext, bank_id: UUID, package: RegulatoryPackage
+) -> str:
+    """ORASS revision: ``1.<granted resubmissions in this version chain>``."""
+    chain_ids = _version_chain_ids(db, package)
+    granted = (
+        db.scalar(
+            select(func.count())
+            .select_from(RegulatoryResubmissionRequest)
+            .where(
+                RegulatoryResubmissionRequest.organization_id == ctx.organization_id,
+                RegulatoryResubmissionRequest.package_id.in_(chain_ids),
+                RegulatoryResubmissionRequest.status == "granted",
+            )
+        )
+        or 0
+    )
+    return f"1.{granted}"
+
+
+# ---------------------------------------------------------------------------
+# Resubmission requests (ORASS "Request Resubmission", LRT guide §5.3)
+# ---------------------------------------------------------------------------
+
+_RESUBMITTABLE_STATUSES = ("submitted", "acknowledged")
+
+
+def _read_resubmission(row: RegulatoryResubmissionRequest) -> ResubmissionRequestRead:
+    return ResubmissionRequestRead.model_validate(row)
+
+
+def request_resubmission(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    package_id: UUID,
+    payload: ResubmissionRequestCreate,
+) -> ResubmissionRequestRead:
+    """File a resubmission request; ORASS channels decide it in-cycle.
+
+    A submitted/acknowledged return is immutable at the regulator; this is the
+    only path to a correcting version. On grant, the next regeneration for the
+    same return and reporting date consumes the request and the subsequent
+    submission carries revision +0.1. Email/manual submissions leave the
+    request ``requested`` for a manual decision (decideResubmission).
+    """
+    actor_user_id = require_actor(ctx)
+    get_bank_or_404(db, ctx, bank_id)
+    package = get_package_or_404(db, ctx, bank_id, package_id)
+    if package.status not in _RESUBMITTABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Resubmission can only be requested for a submitted or "
+                f"acknowledged package; this package is '{package.status}'."
+            ),
+        )
+    open_request = db.scalar(
+        select(RegulatoryResubmissionRequest).where(
+            RegulatoryResubmissionRequest.organization_id == ctx.organization_id,
+            RegulatoryResubmissionRequest.package_id == package.id,
+            RegulatoryResubmissionRequest.status == "requested",
+        )
+    )
+    if open_request is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A resubmission request is already pending for this package.",
+        )
+    events = _submission_events_asc(db, package)
+    latest = _latest_submitted_event(events)
+    channel_code = latest.channel if latest is not None else "manual"
+
+    row = RegulatoryResubmissionRequest(
+        organization_id=package.organization_id,
+        package_id=package.id,
+        reason=payload.reason,
+        status="requested",
+        requested_by=actor_user_id,
+        detail={},
+        occurred_at=datetime.now(UTC),
+    )
+    db.add(row)
+    db.flush()
+
+    if channel_code in ("orass_api", "orass_sandbox") and latest is not None:
+        config, credentials = _load_channel_context(db, ctx, bank_id, channel_code)
+        channel = _build_channel(
+            channel_code, config=config, credentials=credentials, prior_events=events
+        )
+        try:
+            if isinstance(channel, OrassSandboxChannel):
+                decision, detail = channel.decide_resubmission(
+                    latest.external_ref or "", payload.reason
+                )
+            else:
+                assert isinstance(channel, OrassApiChannel)
+                decision, detail = channel.request_resubmission(
+                    latest.external_ref or "", payload.reason
+                )
+        except ChannelDowntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"error_code": "channel_downtime", "message": exc.operator_message},
+            ) from exc
+        except ChannelError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.operator_message
+            ) from exc
+        finally:
+            del credentials
+        if decision in ("granted", "denied"):
+            row.status = decision
+            row.decided_at = datetime.now(UTC)
+        row.detail = detail
+
+    record_event(
+        db,
+        ctx,
+        event_type="regulatory_package.resubmission_requested",
+        entity_type="regulatory_package",
+        entity_id=package.id,
+        details={
+            "return_code": package.return_code,
+            "version": package.version,
+            "request_id": str(row.id),
+            "status": row.status,
+        },
+    )
+    db.commit()
+    return _read_resubmission(row)
+
+
+def decide_resubmission(  # noqa: PLR0913
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    package_id: UUID,
+    request_id: UUID,
+    *,
+    decision: str,
+    note: str | None = None,
+) -> ResubmissionRequestRead:
+    """Record a manual grant/deny for email/manual-channel submissions."""
+    require_actor(ctx)
+    get_bank_or_404(db, ctx, bank_id)
+    package = get_package_or_404(db, ctx, bank_id, package_id)
+    row = db.scalar(
+        select(RegulatoryResubmissionRequest).where(
+            RegulatoryResubmissionRequest.id == request_id,
+            RegulatoryResubmissionRequest.organization_id == ctx.organization_id,
+            RegulatoryResubmissionRequest.package_id == package.id,
+        )
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Resubmission request not found."
+        )
+    if row.status != "requested":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This resubmission request is already '{row.status}'.",
+        )
+    if decision not in ("granted", "denied"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The decision must be 'granted' or 'denied'.",
+        )
+    row.status = decision
+    row.decided_at = datetime.now(UTC)
+    row.detail = {**row.detail, "manual_decision": True, "note": note}
+    record_event(
+        db,
+        ctx,
+        event_type=f"regulatory_package.resubmission_{decision}",
+        entity_type="regulatory_package",
+        entity_id=package.id,
+        details={"request_id": str(row.id), "manual": True},
+    )
+    db.commit()
+    return _read_resubmission(row)
+
+
+def list_resubmission_requests(
+    db: Session, ctx: TenantContext, bank_id: UUID, package_id: UUID
+) -> ResubmissionRequestListRead:
+    get_bank_or_404(db, ctx, bank_id)
+    package = get_package_or_404(db, ctx, bank_id, package_id)
+    rows = list(
+        db.scalars(
+            select(RegulatoryResubmissionRequest)
+            .where(
+                RegulatoryResubmissionRequest.organization_id == ctx.organization_id,
+                RegulatoryResubmissionRequest.package_id == package.id,
+            )
+            .order_by(
+                RegulatoryResubmissionRequest.occurred_at,
+                RegulatoryResubmissionRequest.id,
+            )
+        )
+    )
+    return ResubmissionRequestListRead(
+        package_id=package.id, requests=[_read_resubmission(row) for row in rows]
+    )
+
+
+def granted_unconsumed_resubmission(
+    db: Session, package: RegulatoryPackage
+) -> RegulatoryResubmissionRequest | None:
+    """The one-shot authorization an acknowledged package needs to regenerate."""
+    return db.scalar(
+        select(RegulatoryResubmissionRequest)
+        .where(
+            RegulatoryResubmissionRequest.organization_id == package.organization_id,
+            RegulatoryResubmissionRequest.package_id == package.id,
+            RegulatoryResubmissionRequest.status == "granted",
+            RegulatoryResubmissionRequest.consumed_by_package_id.is_(None),
+        )
+        .order_by(RegulatoryResubmissionRequest.occurred_at)
+        .limit(1)
+    )
+
+
+def list_package_artifacts(
+    db: Session, ctx: TenantContext, bank_id: UUID, package_id: UUID
+) -> list[RegulatoryPackageArtifact]:
+    """All artifacts for a package (persisted list; UI must not rely on
+    session-local export caches)."""
+    get_bank_or_404(db, ctx, bank_id)
+    package = get_package_or_404(db, ctx, bank_id, package_id)
+    return _package_artifacts(db, package)
 
 
 def export_package_artifact(
@@ -780,5 +1203,10 @@ def email_fallback_instructions(
     package = get_package_or_404(db, ctx, bank_id, package_id)
     row = channel_config_row(db, ctx, bank.id, "email")
     config = dict(row.config) if row is not None else {}
-    bundle = build_email_bundle(package, _package_artifacts(db, package), config)
+    bundle = build_email_bundle(
+        package,
+        _package_artifacts(db, package),
+        config,
+        institution_code_fallback=institution_profile.orass_institution_code(db, ctx, bank.id),
+    )
     return EmailFallbackInstructionsRead(package_id=package.id, **bundle)

@@ -29,6 +29,7 @@ from app.services import (
     job_queue,
     market_data_jobs,
     pipeline,
+    reporting_deadline_scan,
     scheduler,
     temenos_jobs,
 )
@@ -44,6 +45,7 @@ HANDLERS: dict[str, Handler] = {
     "market_data_pull": market_data_jobs.run_market_data_pull,
     "temenos_pull": temenos_jobs.run_temenos_pull,
     "etl_dedup": etl_dedup_jobs.run_etl_dedup,
+    "reporting_deadline_scan": reporting_deadline_scan.run_reporting_deadline_scan,
 }
 
 

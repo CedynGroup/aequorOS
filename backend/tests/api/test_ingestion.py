@@ -165,9 +165,7 @@ class TestSourceRefSeparation:
     both ``DB_DIRECT`` — must not have one connection's mapping clobber the other's.
     """
 
-    def test_two_db_direct_sources_stay_independently_active(
-        self, db_client: TestClient
-    ) -> None:
+    def test_two_db_direct_sources_stay_independently_active(self, db_client: TestClient) -> None:
         bank_id = seed_bank(db_client)
         oracle = create_scoped_mapping(
             db_client, bank_id, source_ref="conn-oracle", name="Oracle FLEXCUBE"

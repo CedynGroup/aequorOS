@@ -359,11 +359,13 @@ def test_scheduler_tick_enqueues_due_pulls_when_enabled(
     pulls = list(db_session.scalars(select(Job).where(Job.job_type == "market_data_pull")))
     assert len(pulls) == 1
     assert pulls[0].payload["connection_id"] == str(connection.id)
-    # Official runs stay disabled; the tick still self-perpetuates.
+    # Official runs stay disabled; the tick still self-perpetuates. The tick
+    # also enqueues the daily reporting-deadline scan (plan W3).
     assert tick.progress == {
         "official_runs_enqueued": [],
         "market_data_pulls_enqueued": 1,
         "temenos_pulls_enqueued": 0,
+        "deadline_scan_enqueued": True,
     }
     queued_ticks = list(
         db_session.scalars(

@@ -76,9 +76,7 @@ _STATUS_BY_ERROR_CODE: dict[str, str] = {
 # --- Reads -----------------------------------------------------------------
 
 
-def list_connections(
-    db: Session, ctx: TenantContext, bank_id: UUID
-) -> TemenosConnectionListRead:
+def list_connections(db: Session, ctx: TenantContext, bank_id: UUID) -> TemenosConnectionListRead:
     _get_bank_or_404(db, ctx, bank_id)
     rows = db.scalars(
         select(TemenosConnection)

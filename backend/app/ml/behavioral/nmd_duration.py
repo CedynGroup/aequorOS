@@ -25,8 +25,8 @@ from app.ml.behavioral.estimator import estimate as _estimate
 from app.ml.behavioral.features import month_num, stability_score, trailing_series_features
 
 _SLUG = "nmd-duration"
-_FLOOR_MONTHS = 6.0   # duration of a maximally-volatile NMD book
-_CEIL_MONTHS = 84.0   # duration of a maximally-sticky NMD book
+_FLOOR_MONTHS = 6.0  # duration of a maximally-volatile NMD book
+_CEIL_MONTHS = 84.0  # duration of a maximally-sticky NMD book
 
 
 def _duration_from_stability(score: float) -> float:
@@ -34,10 +34,16 @@ def _duration_from_stability(score: float) -> float:
     return _FLOOR_MONTHS + (_CEIL_MONTHS - _FLOOR_MONTHS) * score
 
 
-def estimate(db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.date,
-             cfg: BehavioralTrainingConfig) -> ModelResult:
+def estimate(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    as_of: datetime.date,
+    cfg: BehavioralTrainingConfig,
+) -> ModelResult:
     aggs = history.load_deposit_month_aggregates(
-        db, ctx, bank_id, as_of, cfg.window_months, non_maturing_only=True)
+        db, ctx, bank_id, as_of, cfg.window_months, non_maturing_only=True
+    )
     short = history.load_ghs_short_rate_history(db, ctx, bank_id, as_of, cfg.window_months)
     series = _product_series(aggs)
 
@@ -67,7 +73,16 @@ def estimate(db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.dat
     result, _ = _estimate(
         model_slug=_SLUG,
         x_num=np.asarray(x_num, dtype=float).reshape(-1, 12) if x_num else np.empty((0, 12)),
-        products=products, y=y, months=months, latest_by_product=latest, cfg=cfg,
-        assumption_type=ASSUMPTION_TYPE[_SLUG], unit=UNIT[_SLUG],
-        clamp_lo=lo, clamp_hi=hi, generic_prior=GENERIC_PRIOR[_SLUG], extra_by_product=extra)
+        products=products,
+        y=y,
+        months=months,
+        latest_by_product=latest,
+        cfg=cfg,
+        assumption_type=ASSUMPTION_TYPE[_SLUG],
+        unit=UNIT[_SLUG],
+        clamp_lo=lo,
+        clamp_hi=hi,
+        generic_prior=GENERIC_PRIOR[_SLUG],
+        extra_by_product=extra,
+    )
     return result

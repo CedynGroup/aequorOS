@@ -3,8 +3,9 @@
 /**
  * Regulatory Reporting — History. Every package version (superseded included)
  * with family/status/date-range filters; selecting a row expands the full
- * record: approvals trail, submission events, session-exported artifacts,
- * and the superseded chain for its (return, reporting date).
+ * record: approvals trail, submission events, persisted artifacts,
+ * resubmission requests, regulator comments, and the superseded chain for
+ * its (return, reporting date).
  */
 
 import { useMemo, useState } from 'react';
@@ -23,9 +24,11 @@ import EmptyState from '@/components/ui/EmptyState';
 import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
+  useOfficerNames,
+  usePackageArtifacts,
   useRegulatoryPackage,
   useRegulatoryPackages,
-  useSessionArtifacts,
+  useResubmissionRequests,
   useSubmissionEvents,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, fmtTimestamp, isoDate, labelize, shortId } from '@/lib/api/values';
@@ -33,9 +36,9 @@ import {
   FAMILY_LABELS,
   PACKAGE_STATUS_LABELS,
   PackageStatusPill,
+  ResubmissionStatusPill,
   downloadArtifact,
   fmtBytes,
-  officerName,
 } from '@/components/submissions/shared';
 import EventsFeed from '@/components/submissions/EventsFeed';
 
@@ -48,6 +51,7 @@ const STATUS_OPTIONS: PackageStatus[] = [
   'submitted',
   'acknowledged',
   'rejected',
+  'declined',
   'superseded',
 ];
 
@@ -264,7 +268,9 @@ function PackageRecord({
 }) {
   const detail = useRegulatoryPackage(bankId, summary.id);
   const events = useSubmissionEvents(bankId, summary.id);
-  const artifacts = useSessionArtifacts(bankId, summary.id);
+  const artifacts = usePackageArtifacts(bankId, summary.id);
+  const resubmissions = useResubmissionRequests(bankId, summary.id);
+  const officerName = useOfficerNames();
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const chain = siblings
@@ -299,11 +305,22 @@ function PackageRecord({
             {chain
               .map(
                 (pkg) =>
-                  `v${pkg.version}${pkg.status === 'superseded' ? '' : ` (${PACKAGE_STATUS_LABELS[pkg.status].toLowerCase()})`}`
+                  `v${pkg.version}${pkg.submissionRevision ? ` rev ${pkg.submissionRevision}` : ''}${pkg.status === 'superseded' ? '' : ` (${PACKAGE_STATUS_LABELS[pkg.status].toLowerCase()})`}`
               )
               .join(' ← ')}
           </p>
         </div>
+
+        {(detail.data?.regulatorComments ?? summary.regulatorComments) && (
+          <div>
+            <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
+              Supervisor comments
+            </p>
+            <p className="text-caption text-navy/80 leading-relaxed whitespace-pre-wrap rounded border border-border-light bg-surface px-3 py-2">
+              {detail.data?.regulatorComments ?? summary.regulatorComments}
+            </p>
+          </div>
+        )}
 
         {detail.isLoading ? (
           <SkeletonCard />
@@ -381,14 +398,14 @@ function PackageRecord({
               {downloadError && (
                 <p className="mb-1.5 text-caption text-critical">{downloadError}</p>
               )}
-              {(artifacts.data ?? []).length === 0 ? (
+              {(artifacts.data?.artifacts ?? []).length === 0 ? (
                 <p className="text-caption text-slate leading-relaxed">
-                  No artifacts exported this session — exports minted from the
-                  Returns workspace appear here with checksums and downloads.
+                  No artifacts exported yet — exports minted from the Returns
+                  workspace appear here with checksums and downloads.
                 </p>
               ) : (
                 <ul className="space-y-1.5">
-                  {(artifacts.data ?? []).map((artifact) => (
+                  {(artifacts.data?.artifacts ?? []).map((artifact) => (
                     <li
                       key={artifact.id}
                       className="flex items-center gap-2 text-caption"
@@ -420,6 +437,34 @@ function PackageRecord({
                         <Download size={11} aria-hidden />
                         Download
                       </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <p className="text-micro font-medium text-slate uppercase tracking-wider mt-4 mb-1.5">
+                Resubmission requests
+              </p>
+              {(resubmissions.data?.requests ?? []).length === 0 ? (
+                <p className="text-caption text-slate">
+                  No resubmission requests filed for this version.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {(resubmissions.data?.requests ?? []).map((request) => (
+                    <li
+                      key={request.id}
+                      className="flex items-baseline gap-2 text-caption"
+                    >
+                      <ResubmissionStatusPill status={request.status} />
+                      <span className="text-slate truncate">
+                        — {request.reason}
+                      </span>
+                      <span className="ml-auto font-mono text-micro text-slate tnum whitespace-nowrap">
+                        {request.decidedAt
+                          ? `decided ${fmtTimestamp(new Date(request.decidedAt))}`
+                          : fmtTimestamp(request.occurredAt)}
+                      </span>
                     </li>
                   ))}
                 </ul>

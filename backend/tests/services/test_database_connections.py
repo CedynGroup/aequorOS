@@ -236,9 +236,7 @@ def test_rotate_credentials_changes_fingerprint(
     assert updated.credential_fingerprint != before
 
 
-def test_revoke_wipes_credential(
-    db_session: Session, ctx: TenantContext, vault_key: None
-) -> None:
+def test_revoke_wipes_credential(db_session: Session, ctx: TenantContext, vault_key: None) -> None:
     bank = _bank(db_session)
     read = database_connections.create_connection(db_session, ctx, bank.id, _create_payload())
     revoked = database_connections.revoke_connection(db_session, ctx, bank.id, read.id)

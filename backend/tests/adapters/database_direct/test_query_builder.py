@@ -138,7 +138,7 @@ class TestJoins:
     def test_left_join_projects_detail_columns_by_bare_name(self) -> None:
         query = build_select(self._loan_with_pricing(), "oracle")
         assert query.sql == (
-            'SELECT t0.*, '
+            "SELECT t0.*, "
             'j1."INTEREST_RATE" AS "INTEREST_RATE", '
             'j1."RATE_TYPE" AS "RATE_TYPE", '
             'j1."RATE_SPREAD" AS "RATE_SPREAD" '
@@ -152,8 +152,7 @@ class TestJoins:
         sql = build_select(self._loan_with_pricing(), "sqlserver").sql
         assert "[CORE].[CLTB_ACCOUNT_MASTER] t0" in sql
         assert (
-            "LEFT JOIN [CORE].[LDTB_CONTRACT_MASTER] j1 "
-            "ON t0.[ACCOUNT_ID] = j1.[ACCOUNT_ID]"
+            "LEFT JOIN [CORE].[LDTB_CONTRACT_MASTER] j1 ON t0.[ACCOUNT_ID] = j1.[ACCOUNT_ID]"
         ) in sql
         assert "j1.[INTEREST_RATE] AS [INTEREST_RATE]" in sql
 

@@ -20,11 +20,16 @@ import type {
   PackageApprovalRequestCreate,
   PackageStatusFilter,
   PackageSubmitCreate,
+  RegulatoryArtifactListRead,
   RegulatoryArtifactRead,
   RegulatoryPackageCreate,
   RegulatoryPackageListRead,
   RegulatoryPackageRead,
   ReportingObligationListRead,
+  ResubmissionDecisionCreate,
+  ResubmissionRequestCreate,
+  ResubmissionRequestListRead,
+  ResubmissionRequestRead,
   ReturnTemplateListRead,
   SubmissionEventListRead,
   SubmissionPollRead,
@@ -46,6 +51,8 @@ import {
   PackageStatusFilterToJSON,
   PackageSubmitCreateFromJSON,
   PackageSubmitCreateToJSON,
+  RegulatoryArtifactListReadFromJSON,
+  RegulatoryArtifactListReadToJSON,
   RegulatoryArtifactReadFromJSON,
   RegulatoryArtifactReadToJSON,
   RegulatoryPackageCreateFromJSON,
@@ -56,6 +63,14 @@ import {
   RegulatoryPackageReadToJSON,
   ReportingObligationListReadFromJSON,
   ReportingObligationListReadToJSON,
+  ResubmissionDecisionCreateFromJSON,
+  ResubmissionDecisionCreateToJSON,
+  ResubmissionRequestCreateFromJSON,
+  ResubmissionRequestCreateToJSON,
+  ResubmissionRequestListReadFromJSON,
+  ResubmissionRequestListReadToJSON,
+  ResubmissionRequestReadFromJSON,
+  ResubmissionRequestReadToJSON,
   ReturnTemplateListReadFromJSON,
   ReturnTemplateListReadToJSON,
   SubmissionEventListReadFromJSON,
@@ -73,6 +88,18 @@ export interface DecidePackageApprovalRequest {
   bankId: string;
   packageId: string;
   packageApprovalDecisionCreate: PackageApprovalDecisionCreate;
+}
+
+export interface DecidePackageResubmissionRequest {
+  bankId: string;
+  packageId: string;
+  requestId: string;
+  resubmissionDecisionCreate: ResubmissionDecisionCreate;
+}
+
+export interface DownloadEmailFallbackEmlRequest {
+  bankId: string;
+  packageId: string;
 }
 
 export interface DownloadRegulatoryArtifactRequest {
@@ -101,10 +128,18 @@ export interface GetRegulatoryPackageRequest {
   packageId: string;
 }
 
+export interface ListPackageArtifactsRequest {
+  bankId: string;
+  packageId: string;
+}
+
 export interface ListRegulatoryPackagesRequest {
   bankId: string;
   returnCode?: string | null;
+  returnFamily?: string | null;
   reportingDate?: Date | null;
+  reportingDateFrom?: Date | null;
+  reportingDateTo?: Date | null;
   status?: PackageStatusFilter | null;
   includeSuperseded?: boolean;
   limit?: number;
@@ -114,6 +149,11 @@ export interface ListRegulatoryPackagesRequest {
 export interface ListReportingObligationsRequest {
   bankId: string;
   horizonMonths?: number;
+}
+
+export interface ListResubmissionRequestsRequest {
+  bankId: string;
+  packageId: string;
 }
 
 export interface ListSubmissionEventsRequest {
@@ -138,6 +178,12 @@ export interface RequestPackageApprovalRequest {
   bankId: string;
   packageId: string;
   packageApprovalRequestCreate: PackageApprovalRequestCreate;
+}
+
+export interface RequestPackageResubmissionRequest {
+  bankId: string;
+  packageId: string;
+  resubmissionRequestCreate: ResubmissionRequestCreate;
 }
 
 export interface SubmitRegulatoryPackageRequest {
@@ -305,6 +351,167 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       initOverrides,
     );
     return await response.value();
+  }
+
+  /**
+   * Record a manual grant/deny (email/manual submissions the regulator decides offline).
+   * Decide Package Resubmission
+   */
+  async decidePackageResubmissionRaw(
+    requestParameters: DecidePackageResubmissionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ResubmissionRequestRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling decidePackageResubmission().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling decidePackageResubmission().',
+      );
+    }
+
+    if (requestParameters["requestId"] == null) {
+      throw new runtime.RequiredError(
+        "requestId",
+        'Required parameter "requestId" was null or undefined when calling decidePackageResubmission().',
+      );
+    }
+
+    if (requestParameters["resubmissionDecisionCreate"] == null) {
+      throw new runtime.RequiredError(
+        "resubmissionDecisionCreate",
+        'Required parameter "resubmissionDecisionCreate" was null or undefined when calling decidePackageResubmission().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/resubmission-requests/{request_id}/decide`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          )
+          .replace(
+            `{${"request_id"}}`,
+            encodeURIComponent(String(requestParameters["requestId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: ResubmissionDecisionCreateToJSON(
+          requestParameters["resubmissionDecisionCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ResubmissionRequestReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Record a manual grant/deny (email/manual submissions the regulator decides offline).
+   * Decide Package Resubmission
+   */
+  async decidePackageResubmission(
+    requestParameters: DecidePackageResubmissionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ResubmissionRequestRead> {
+    const response = await this.decidePackageResubmissionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * The BG/FMD/2026/07 downtime bundle as a send-ready .eml (RFC 822).  Subject, body, and attachments come from the same bundle the email channel records; the operator opens it in their mail client, confirms the recipient (the official downtime address is institution-configured), and sends. No SMTP happens server-side.
+   * Download Email Fallback Eml
+   */
+  async downloadEmailFallbackEmlRaw(
+    requestParameters: DownloadEmailFallbackEmlRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<void>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling downloadEmailFallbackEml().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling downloadEmailFallbackEml().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/email-fallback.eml`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.VoidApiResponse(response);
+  }
+
+  /**
+   * The BG/FMD/2026/07 downtime bundle as a send-ready .eml (RFC 822).  Subject, body, and attachments come from the same bundle the email channel records; the operator opens it in their mail client, confirms the recipient (the official downtime address is institution-configured), and sends. No SMTP happens server-side.
+   * Download Email Fallback Eml
+   */
+  async downloadEmailFallbackEml(
+    requestParameters: DownloadEmailFallbackEmlRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<void> {
+    await this.downloadEmailFallbackEmlRaw(requestParameters, initOverrides);
   }
 
   /**
@@ -667,6 +874,78 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * Persisted artifact list for a package (never session-local).
+   * List Package Artifacts
+   */
+  async listPackageArtifactsRaw(
+    requestParameters: ListPackageArtifactsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<RegulatoryArtifactListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listPackageArtifacts().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling listPackageArtifacts().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/artifacts`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      RegulatoryArtifactListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Persisted artifact list for a package (never session-local).
+   * List Package Artifacts
+   */
+  async listPackageArtifacts(
+    requestParameters: ListPackageArtifactsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<RegulatoryArtifactListRead> {
+    const response = await this.listPackageArtifactsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * List Regulatory Packages
    */
   async listRegulatoryPackagesRaw(
@@ -686,9 +965,29 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       queryParameters["return_code"] = requestParameters["returnCode"];
     }
 
+    if (requestParameters["returnFamily"] != null) {
+      queryParameters["return_family"] = requestParameters["returnFamily"];
+    }
+
     if (requestParameters["reportingDate"] != null) {
       queryParameters["reporting_date"] = (
         requestParameters["reportingDate"] as any
+      )
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    if (requestParameters["reportingDateFrom"] != null) {
+      queryParameters["reporting_date_from"] = (
+        requestParameters["reportingDateFrom"] as any
+      )
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    if (requestParameters["reportingDateTo"] != null) {
+      queryParameters["reporting_date_to"] = (
+        requestParameters["reportingDateTo"] as any
       )
         .toISOString()
         .substring(0, 10);
@@ -809,6 +1108,76 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<ReportingObligationListRead> {
     const response = await this.listReportingObligationsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * List Resubmission Requests
+   */
+  async listResubmissionRequestsRaw(
+    requestParameters: ListResubmissionRequestsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ResubmissionRequestListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listResubmissionRequests().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling listResubmissionRequests().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/resubmission-requests`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ResubmissionRequestListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * List Resubmission Requests
+   */
+  async listResubmissionRequests(
+    requestParameters: ListResubmissionRequestsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ResubmissionRequestListRead> {
+    const response = await this.listResubmissionRequestsRaw(
       requestParameters,
       initOverrides,
     );
@@ -1171,6 +1540,90 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * File an ORASS-style resubmission request for a submitted/acknowledged return.
+   * Request Package Resubmission
+   */
+  async requestPackageResubmissionRaw(
+    requestParameters: RequestPackageResubmissionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ResubmissionRequestRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling requestPackageResubmission().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling requestPackageResubmission().',
+      );
+    }
+
+    if (requestParameters["resubmissionRequestCreate"] == null) {
+      throw new runtime.RequiredError(
+        "resubmissionRequestCreate",
+        'Required parameter "resubmissionRequestCreate" was null or undefined when calling requestPackageResubmission().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/request-resubmission`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: ResubmissionRequestCreateToJSON(
+          requestParameters["resubmissionRequestCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ResubmissionRequestReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * File an ORASS-style resubmission request for a submitted/acknowledged return.
+   * Request Package Resubmission
+   */
+  async requestPackageResubmission(
+    requestParameters: RequestPackageResubmissionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ResubmissionRequestRead> {
+    const response = await this.requestPackageResubmissionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Submit an approved package via the requested (or registry-default) channel.
    * Submit Regulatory Package
    */
@@ -1339,6 +1792,7 @@ export type ExportRegulatoryPackageKindEnum =
  * @export
  */
 export const GetChannelConfigChannelEnum = {
+  OrassApi: "orass_api",
   OrassSandbox: "orass_sandbox",
   Email: "email",
   Manual: "manual",
@@ -1349,6 +1803,7 @@ export type GetChannelConfigChannelEnum =
  * @export
  */
 export const PutChannelConfigChannelEnum = {
+  OrassApi: "orass_api",
   OrassSandbox: "orass_sandbox",
   Email: "email",
   Manual: "manual",

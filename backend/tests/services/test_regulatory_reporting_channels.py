@@ -92,7 +92,7 @@ def _poll_event(external_ref: str) -> RegulatorySubmissionEvent:
 def test_sandbox_submit_labels_everything_as_simulation() -> None:
     channel = OrassSandboxChannel()
     ref = channel.submit(_transient_package(), [_transient_artifact()])
-    assert ref.startswith("SANDBOX-ORASS-BSD3-")
+    assert ref.startswith("BSD3")  # ORASS-style ref; sandbox marker lives in detail
     assert channel.last_detail["sandbox"] is True
     assert channel.last_detail["note"] == SANDBOX_NOTE
     assert "not publicly documented" in SANDBOX_NOTE
@@ -335,7 +335,7 @@ def test_submit_auto_exports_xlsx_when_no_artifacts(
     assert event.channel == "orass_sandbox"
     assert event.event == "submitted"
     assert event.external_ref is not None
-    assert event.external_ref.startswith("SANDBOX-ORASS-BSD3-")
+    assert event.external_ref == "BSD300001"
     assert event.detail["sandbox"] is True
     assert event.detail["note"] == SANDBOX_NOTE
     assert event.detail["auto_exported_kinds"] == ["xlsx"]

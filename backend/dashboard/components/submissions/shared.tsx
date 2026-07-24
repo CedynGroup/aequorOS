@@ -4,10 +4,10 @@
  * Shared vocabulary for the Regulatory Reporting hub: family/status/RAG/
  * fidelity labels and tones, the return registry's deadline-rule wording and
  * template section lists (transcribed from the backend registry/templates —
- * display copy only, the API stays the source of truth for data), the demo
- * approver roster for the maker-checker affordance, and the tenant-header
- * artifact download helper (fetch + Blob — plain anchors cannot carry the
- * tenant headers).
+ * display copy only, the API stays the source of truth for data), and the
+ * tenant-header artifact download helper (fetch + Blob — plain anchors cannot
+ * carry the tenant headers). Officer-name resolution lives in
+ * lib/api/hooks.ts (useOfficerNames — backed by the organization roster).
  */
 
 import type {
@@ -15,6 +15,7 @@ import type {
   FidelityGrade,
   ObligationRag,
   PackageStatus,
+  ResubmissionStatus,
 } from '@aequoros/risk-service-api';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { apiBaseUrl } from '@/lib/api/client';
@@ -30,9 +31,12 @@ export const FAMILY_LABELS: Record<string, string> = {
   irrbb: 'IRRBB',
   fx: 'FX',
   icaap_stress: 'ICAAP & Stress',
+  large_exposures: 'Large Exposures',
+  corporate: 'Corporate (LRT)',
 };
 
 export const CHANNEL_LABELS: Record<ChannelCode, string> = {
+  orass_api: 'ORASS (API)',
   orass_sandbox: 'ORASS (sandbox)',
   email: 'Email fallback',
   manual: 'Manual record',
@@ -47,6 +51,7 @@ const PACKAGE_STATUS_TONES: Record<PackageStatus, StatusTone> = {
   submitted: 'action',
   acknowledged: 'success',
   rejected: 'critical',
+  declined: 'critical',
   superseded: 'slate',
 };
 
@@ -59,6 +64,7 @@ export const PACKAGE_STATUS_LABELS: Record<PackageStatus, string> = {
   submitted: 'Submitted',
   acknowledged: 'Acknowledged',
   rejected: 'Rejected',
+  declined: 'Declined',
   superseded: 'Superseded',
 };
 
@@ -66,6 +72,30 @@ export function PackageStatusPill({ status }: { status: PackageStatus }) {
   return (
     <StatusPill tone={PACKAGE_STATUS_TONES[status] ?? 'pending'}>
       {PACKAGE_STATUS_LABELS[status] ?? status}
+    </StatusPill>
+  );
+}
+
+const RESUBMISSION_STATUS_TONES: Record<ResubmissionStatus, StatusTone> = {
+  requested: 'amber',
+  granted: 'success',
+  denied: 'critical',
+};
+
+export const RESUBMISSION_STATUS_LABELS: Record<ResubmissionStatus, string> = {
+  requested: 'Requested',
+  granted: 'Granted',
+  denied: 'Denied',
+};
+
+export function ResubmissionStatusPill({
+  status,
+}: {
+  status: ResubmissionStatus;
+}) {
+  return (
+    <StatusPill tone={RESUBMISSION_STATUS_TONES[status]}>
+      {RESUBMISSION_STATUS_LABELS[status]}
     </StatusPill>
   );
 }
@@ -203,40 +233,6 @@ export function indicativePenaltyGhs(daysOverdue: number): {
   const baseGhs = PENALTY_BASE_UNITS * PENALTY_UNIT_GHS;
   const dailyGhs = PENALTY_DAILY_UNITS * PENALTY_UNIT_GHS;
   return { baseGhs, dailyGhs, runningGhs: dailyGhs * Math.max(daysOverdue, 0) };
-}
-
-// ---------------------------------------------------------------------------
-// Demo approver roster — maker-checker affordance. Stable fixed UUIDs; the
-// select is clearly labeled "Demo: acting as a second officer — production
-// uses your login". The session user is included so the same-user 409 can be
-// demonstrated verbatim.
-// ---------------------------------------------------------------------------
-
-export type DemoOfficer = { id: string; name: string; role: string };
-
-export const DEMO_OFFICERS: DemoOfficer[] = [
-  {
-    id: 'bbbbbbbb-0000-4000-8000-000000000001',
-    name: 'Kojo Aboagye',
-    role: 'ALM Manager',
-  },
-  {
-    id: 'bbbbbbbb-0000-4000-8000-000000000002',
-    name: 'Yaa Adjei',
-    role: 'Risk Officer',
-  },
-  {
-    id: 'bbbbbbbb-0000-4000-8000-000000000003',
-    name: 'Eric Inkoom Danso',
-    role: 'CFO',
-  },
-];
-
-/** Resolve a demo-roster or session user id to a display name. */
-export function officerName(userId: string): string {
-  const officer = DEMO_OFFICERS.find((entry) => entry.id === userId);
-  if (officer) return `${officer.name} (${officer.role})`;
-  return userId.slice(0, 8);
 }
 
 // ---------------------------------------------------------------------------

@@ -28,7 +28,9 @@ from app.services.sample_bank_seed import (
 
 EXPECTED_PERIODS = 12
 EXPECTED_FACTS = 1308
-EXPECTED_PARAMS = 167
+# 169 = the long-standing 167 plus the two BoG GHS ±450 bp IRRBB parallel
+# shock rows (plan W6.4; IRRBB Guideline Feb 2026 Appendix II–III).
+EXPECTED_PARAMS = 169
 OTHER_ASSETS_FLOOR = Decimal("40000000")
 
 
@@ -192,7 +194,9 @@ def test_parameter_seed_counts_and_values(db_session: Session) -> None:
     assert _count(db_session, ParamNsfrWeight) == 21
     assert _count(db_session, ParamRiskWeight) == 7
     assert _count(db_session, ParamCapitalThreshold) == 28
-    assert _count(db_session, ParamStressShock) == 99
+    # 101 = the long-standing 99 plus the two BoG GHS ±450 bp IRRBB parallel
+    # shock rows (plan W6.4; IRRBB Guideline Feb 2026 Appendix II–III).
+    assert _count(db_session, ParamStressShock) == 101
 
     rwa_multiplier = db_session.scalar(
         select(ParamCapitalThreshold).where(

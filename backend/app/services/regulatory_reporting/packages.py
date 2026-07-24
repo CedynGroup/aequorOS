@@ -31,7 +31,10 @@ def list_packages(  # noqa: PLR0913
     bank_id: UUID,
     *,
     return_code: str | None = None,
+    return_family: str | None = None,
     reporting_date: date | None = None,
+    reporting_date_from: date | None = None,
+    reporting_date_to: date | None = None,
     status: str | None = None,
     include_superseded: bool = True,
     limit: int = 25,
@@ -44,15 +47,19 @@ def list_packages(  # noqa: PLR0913
     )
     if return_code is not None:
         conditions += (RegulatoryPackage.return_code == return_code,)
+    if return_family is not None:
+        conditions += (RegulatoryPackage.return_family == return_family,)
     if reporting_date is not None:
         conditions += (RegulatoryPackage.reporting_date == reporting_date,)
+    if reporting_date_from is not None:
+        conditions += (RegulatoryPackage.reporting_date >= reporting_date_from,)
+    if reporting_date_to is not None:
+        conditions += (RegulatoryPackage.reporting_date <= reporting_date_to,)
     if status is not None:
         conditions += (RegulatoryPackage.status == status,)
     if not include_superseded:
         conditions += (RegulatoryPackage.status != "superseded",)
-    total = (
-        db.scalar(select(func.count()).select_from(RegulatoryPackage).where(*conditions)) or 0
-    )
+    total = db.scalar(select(func.count()).select_from(RegulatoryPackage).where(*conditions)) or 0
     rows = list(
         db.scalars(
             select(RegulatoryPackage)

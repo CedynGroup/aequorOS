@@ -20,6 +20,8 @@ check compares across reporting dates.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -30,7 +32,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod, RegulatoryPackage, RegulatoryRun
+from app.models import (
+    Bank,
+    BankReportingPeriod,
+    InstitutionProfile,
+    RegulatoryPackage,
+    RegulatoryRun,
+)
 from app.schemas.regulatory_liquidity import Bsd3SummaryRowRead
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate, RegulatoryPackageRead
 from app.services import regulatory_capital, regulatory_liquidity
@@ -45,6 +53,18 @@ from app.services.regulatory_reporting.registry import REGISTRY, ReturnDefinitio
 
 SNAPSHOT_SCHEMA_VERSION = "regulatory-package-v1"
 BASELINE_SCENARIO = "baseline"
+
+
+def snapshot_content_hash(snapshot: dict[str, Any]) -> str:
+    """SHA-256 over the canonical-JSON snapshot — the package's content seal.
+
+    Value-based and key-sorted, mirroring the regulatory ``input_hash``
+    discipline: identical content always hashes identically regardless of
+    insertion order.
+    """
+    canonical = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
 
 MODULE_LIQUIDITY = "liquidity"
 MODULE_CAPITAL = "capital"
@@ -89,6 +109,7 @@ def generate_package(
     period = get_period_for_reporting_date_or_404(db, ctx, bank, payload.reporting_date)
 
     generated = _GENERATORS[definition.generator](db, ctx, bank, period, definition)
+    _enrich_institution_block(db, ctx, bank, generated.snapshot)
 
     prior_current = db.scalar(
         select(RegulatoryPackage).where(
@@ -99,6 +120,25 @@ def generate_package(
             RegulatoryPackage.status != "superseded",
         )
     )
+    # ORASS parity: an ACKNOWLEDGED return is final at the regulator; a
+    # correcting version exists only under a granted resubmission request
+    # (LRT guide §5.3). The grant is one-shot — consumed by this regeneration.
+    resubmission_authorization = None
+    if prior_current is not None and prior_current.status == "acknowledged":
+        from app.services.regulatory_reporting.workflow import (  # noqa: PLC0415
+            granted_unconsumed_resubmission,
+        )
+
+        resubmission_authorization = granted_unconsumed_resubmission(db, prior_current)
+        if resubmission_authorization is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "This return was acknowledged by the regulator; regenerating "
+                    "it requires a GRANTED resubmission request (Request "
+                    "Resubmission) on the acknowledged package first."
+                ),
+            )
     prior_version = db.scalar(
         select(RegulatoryPackage.version)
         .where(
@@ -142,9 +182,12 @@ def generate_package(
         generated_by=actor_user_id,
         generated_at=datetime.now(UTC),
         notes=payload.notes,
+        snapshot_sha256=snapshot_content_hash(generated.snapshot),
     )
     db.add(package)
     db.flush()
+    if resubmission_authorization is not None:
+        resubmission_authorization.consumed_by_package_id = package.id
     record_event(
         db,
         ctx,
@@ -157,9 +200,7 @@ def generate_package(
             "return_family": definition.family,
             "reporting_date": payload.reporting_date.isoformat(),
             "version": package.version,
-            "supersedes_id": (
-                str(prior_current.id) if prior_current is not None else None
-            ),
+            "supersedes_id": (str(prior_current.id) if prior_current is not None else None),
             "source_runs": [entry["run_id"] for entry in generated.source_runs],
         },
     )
@@ -233,6 +274,29 @@ def _envelope(  # noqa: PLR0913
     }
 
 
+def _enrich_institution_block(
+    db: Session, ctx: TenantContext, bank: Bank, snapshot: dict[str, Any]
+) -> None:
+    """Fold corporate-profile master data (plan W4) into the envelope.
+
+    When an ``InstitutionProfile`` row exists for the bank, the snapshot's
+    institution block additionally carries its ORASS institution code (the
+    identifier the regulator's portal knows the institution by). None-safe:
+    no profile row means no key, and an unset code rides as ``null``.
+    """
+    profile = db.scalar(
+        select(InstitutionProfile).where(
+            InstitutionProfile.organization_id == ctx.organization_id,
+            InstitutionProfile.bank_id == bank.id,
+        )
+    )
+    if profile is None:
+        return
+    institution = snapshot.get("institution")
+    if isinstance(institution, dict):
+        institution["orass_institution_code"] = profile.orass_institution_code
+
+
 def _source_run_entry(run: RegulatoryRun) -> dict[str, Any]:
     return {
         "module": run.module,
@@ -298,16 +362,10 @@ def _baseline_run_or_409(  # noqa: PLR0913
     return run
 
 
-def _generate_liquidity(
-    db: Session,
-    ctx: TenantContext,
-    bank: Bank,
-    period: BankReportingPeriod,
-    definition: ReturnDefinition,
-) -> GeneratedReturn:
-    preview = regulatory_liquidity.get_bsd3_preview(db, ctx, bank.id, period.id)
+def _lcr_sections(preview: Any) -> list[dict[str, Any]]:
+    """The LCR-tool sections shared by BSD3 and the LMT return (Table 11 subset)."""
     summary = {row.row_code: row for row in preview.summary_rows}
-    sections = [
+    return [
         _section(
             "hqla",
             "High Quality Liquid Assets",
@@ -352,6 +410,42 @@ def _generate_liquidity(
                 for row in preview.summary_rows
             ],
         ),
+    ]
+
+
+def _lcr_totals(preview: Any) -> list[dict[str, Any]]:
+    """Headline LCR totals shared by BSD3 and the LMT return."""
+    summary = {row.row_code: row for row in preview.summary_rows}
+    return [
+        _row("hqla_total_ghs", summary["3.0"].description, summary["3.0"].value, unit="ghs"),
+        _row("total_outflows_ghs", summary["5.0"].description, summary["5.0"].value, unit="ghs"),
+        _row("net_outflows_30d_ghs", summary["8.0"].description, summary["8.0"].value, unit="ghs"),
+        _row("lcr_pct", summary["9.0"].description, summary["9.0"].value, unit="pct"),
+    ]
+
+
+def _liquidity_metadata(preview: Any) -> dict[str, Any]:
+    """Envelope metadata shared by BSD3 and the LMT return."""
+    return {
+        "form_code": preview.header.form_code,
+        "form_title": preview.header.form_title,
+        "regulator_name": preview.header.regulator,
+        "preview_note": preview.header.preview_note,
+        "baseline_run_id": str(preview.run_id),
+        "engine_validations": [item.model_dump(mode="json") for item in preview.validations],
+    }
+
+
+def _generate_liquidity(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    definition: ReturnDefinition,
+) -> GeneratedReturn:
+    preview = regulatory_liquidity.get_bsd3_preview(db, ctx, bank.id, period.id)
+    sections = [
+        *_lcr_sections(preview),
         _section(
             "nsfr_asf",
             "Available Stable Funding",
@@ -396,12 +490,7 @@ def _generate_liquidity(
         ),
     ]
     totals = [
-        _row("hqla_total_ghs", summary["3.0"].description, summary["3.0"].value, unit="ghs"),
-        _row("total_outflows_ghs", summary["5.0"].description, summary["5.0"].value, unit="ghs"),
-        _row(
-            "net_outflows_30d_ghs", summary["8.0"].description, summary["8.0"].value, unit="ghs"
-        ),
-        _row("lcr_pct", summary["9.0"].description, summary["9.0"].value, unit="pct"),
+        *_lcr_totals(preview),
         _row(
             "asf_total_ghs",
             preview.nsfr.asf_total.description,
@@ -421,14 +510,7 @@ def _generate_liquidity(
             unit="pct",
         ),
     ]
-    metadata = {
-        "form_code": preview.header.form_code,
-        "form_title": preview.header.form_title,
-        "regulator_name": preview.header.regulator,
-        "preview_note": preview.header.preview_note,
-        "baseline_run_id": str(preview.run_id),
-        "engine_validations": [item.model_dump(mode="json") for item in preview.validations],
-    }
+    metadata = _liquidity_metadata(preview)
     runs = _latest_succeeded_runs_by_scenario(db, ctx, bank, period, MODULE_LIQUIDITY)
     return GeneratedReturn(
         snapshot=_envelope(bank, period, definition, sections, totals, metadata),
@@ -565,6 +647,24 @@ def _generate_capital(
     )
 
 
+# BoG GHS IRRBB calibration (plan W6.4): the IRRBB Guideline (exposure draft,
+# Feb 2026) Appendix II–III Tables 5–6 prescribe a ±450 bp parallel GHS shock
+# (short 500 / long 300). The IRR engine currently computes only the six Basel
+# scenarios (app/domain/irr/engine.py IRR_SCENARIO_CODES) and hard-coded
+# ±200 bp earnings-at-risk, so these rows are emitted ONLY when a run's
+# metrics actually carry them — never fabricated. The BoG ±450 param rows
+# (module='irr', parallel_up_450 / parallel_down_450) are stored effective-
+# dated in param_stress_shock awaiting engine-side adoption (documented gap).
+_BOG_GHS_450_EVE_ROWS: tuple[tuple[str, str], ...] = (
+    ("eve_up_450_ghs", "ΔEVE under +450 bp parallel (BoG GHS calibration)"),
+    ("eve_down_450_ghs", "ΔEVE under -450 bp parallel (BoG GHS calibration)"),
+)
+_BOG_GHS_450_EAR_ROWS: tuple[tuple[str, str], ...] = (
+    ("ear_up_450_ghs", "Earnings at risk, +450 bp parallel (BoG GHS calibration)"),
+    ("ear_down_450_ghs", "Earnings at risk, -450 bp parallel (BoG GHS calibration)"),
+)
+
+
 def _generate_irrbb(
     db: Session,
     ctx: TenantContext,
@@ -572,9 +672,7 @@ def _generate_irrbb(
     period: BankReportingPeriod,
     definition: ReturnDefinition,
 ) -> GeneratedReturn:
-    run = _baseline_run_or_409(
-        db, ctx, bank, period, MODULE_IRR, artifact="the IRRBB pilot return"
-    )
+    run = _baseline_run_or_409(db, ctx, bank, period, MODULE_IRR, artifact="the IRRBB pilot return")
     metrics = run.metrics
     gap_rows = [
         _row(
@@ -599,10 +697,18 @@ def _generate_irrbb(
         )
         for scenario in metrics.get("eve_by_scenario", [])
     ]
+    eve_rows.extend(
+        _row(code, description, metrics[code])
+        for code, description in _BOG_GHS_450_EVE_ROWS
+        if code in metrics
+    )
     ear_rows = [
         _row("ear_up_200_ghs", "Earnings at risk, +200 bp parallel", metrics["ear_up_200_ghs"]),
-        _row(
-            "ear_down_200_ghs", "Earnings at risk, -200 bp parallel", metrics["ear_down_200_ghs"]
+        _row("ear_down_200_ghs", "Earnings at risk, -200 bp parallel", metrics["ear_down_200_ghs"]),
+        *(
+            _row(code, description, metrics[code])
+            for code, description in _BOG_GHS_450_EAR_ROWS
+            if code in metrics
         ),
         _row("nii_base_ghs", "Base net interest income", metrics["nii_base_ghs"]),
     ]
@@ -642,10 +748,15 @@ def _generate_irrbb(
         ),
         _row("tier1_ghs", "Tier 1 capital", metrics["tier1_ghs"]),
     ]
+    bog_450_keys = {code for code, _ in (*_BOG_GHS_450_EVE_ROWS, *_BOG_GHS_450_EAR_ROWS)}
     metadata = {
         "worst_scenario": metrics.get("worst_scenario"),
         "eve_limit_pct": metrics.get("eve_limit_pct"),
         "baseline_run_id": str(run.id),
+        # True only when the engine actually computed the BoG ±450 bp GHS
+        # shock set; while False, the ±450 rows are honestly absent (engine
+        # gap — see the IRRBB template notes).
+        "bog_ghs_450_rows_present": any(code in metrics for code in bog_450_keys),
     }
     runs = _latest_succeeded_runs_by_scenario(db, ctx, bank, period, MODULE_IRR)
     return GeneratedReturn(
@@ -786,11 +897,7 @@ def _generate_icaap_stress(
             f"year_{entry['year']}",
             f"Projected position for {entry['period_label']}",
             entry["total_assets"],
-            **{
-                key: value
-                for key, value in entry.items()
-                if key not in ("year", "period_label")
-            },
+            **{key: value for key, value in entry.items() if key not in ("year", "period_label")},
         )
         for entry in metrics.get("path", [])
     ]
@@ -843,12 +950,34 @@ def _generate_icaap_stress(
     )
 
 
+# Public seams for sibling generator modules: the LRT corporate packs (plan
+# W5, ``lrt_generation.py``) and the W6 canonical-position returns
+# (``le_generation.py``) assemble the same regulatory-package-v1
+# envelope/section/row shapes without reaching into private helpers.
+snapshot_row = _row
+snapshot_section = _section
+snapshot_total = _total
+build_envelope = _envelope
+baseline_run_or_409 = _baseline_run_or_409
+source_run_entry = _source_run_entry
+latest_succeeded_runs_by_scenario = _latest_succeeded_runs_by_scenario
+lcr_snapshot_sections = _lcr_sections
+lcr_snapshot_totals = _lcr_totals
+liquidity_snapshot_metadata = _liquidity_metadata
+
+# Imported at the bottom — after the seams above are defined — so the module
+# pairs load cleanly regardless of which side is imported first.
+from app.services.regulatory_reporting.le_generation import LE_GENERATORS  # noqa: E402
+from app.services.regulatory_reporting.lrt_generation import LRT_GENERATORS  # noqa: E402
+
 _GENERATORS = {
     "liquidity": _generate_liquidity,
     "capital": _generate_capital,
     "irrbb": _generate_irrbb,
     "fx": _generate_fx,
     "icaap_stress": _generate_icaap_stress,
+    **LRT_GENERATORS,
+    **LE_GENERATORS,
 }
 
 __all__ = [

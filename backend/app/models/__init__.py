@@ -38,9 +38,20 @@ from app.models.ingestion import (
     MappingConfigRecord,
     TranslationFailure,
 )
+from app.models.institution_profile import (
+    BankLicense,
+    BankNameHistory,
+    BankProduct,
+    InstitutionProfile,
+    Outlet,
+    RelatedParty,
+    RelatedPartyRole,
+    Shareholding,
+)
 from app.models.jurisdiction import Jurisdiction
 from app.models.live import LiveFinding, LiveMetric
 from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
+from app.models.notification import Notification
 from app.models.organization import Organization
 from app.models.regulatory import (
     Bank,
@@ -57,6 +68,7 @@ from app.models.regulatory_reporting import (
     RegulatoryPackage,
     RegulatoryPackageApproval,
     RegulatoryPackageArtifact,
+    RegulatoryResubmissionRequest,
     RegulatorySubmissionEvent,
 )
 from app.models.regulatory_run import (
@@ -88,6 +100,9 @@ __all__ = [
     "AuditEvent",
     "Bank",
     "BankFinancialFact",
+    "BankLicense",
+    "BankNameHistory",
+    "BankProduct",
     "BankReportingPeriod",
     "CanonicalCounterparty",
     "CanonicalCounterpartyRating",
@@ -121,6 +136,7 @@ __all__ = [
     "FinancialSourceRow",
     "FinancialValidationIssue",
     "IngestionBatch",
+    "InstitutionProfile",
     "Job",
     "Jurisdiction",
     "LineageRecord",
@@ -130,7 +146,9 @@ __all__ = [
     "DatabaseDirectConnection",
     "MarketDataConnection",
     "MarketDataQuotaUsage",
+    "Notification",
     "Organization",
+    "Outlet",
     "TemenosConnection",
     "TranslationFailure",
     "ParamCapitalThreshold",
@@ -144,9 +162,12 @@ __all__ = [
     "RegulatoryPackage",
     "RegulatoryPackageApproval",
     "RegulatoryPackageArtifact",
+    "RegulatoryResubmissionRequest",
     "RegulatoryRun",
     "RegulatorySubmissionEvent",
     "RegulatoryValidation",
+    "RelatedParty",
+    "RelatedPartyRole",
     "RiskAssessment",
     "RiskAssessmentRun",
     "RiskCase",
@@ -157,6 +178,7 @@ __all__ = [
     "RiskScenario",
     "ScenarioAssumption",
     "ScenarioAssumptionHistory",
+    "Shareholding",
     "SsoConnection",
     "StoredObject",
     "User",

@@ -17,6 +17,7 @@ const EVENT_TONES: Record<string, StatusTone> = {
   status_poll: 'slate',
   acknowledged: 'success',
   rejected: 'critical',
+  declined: 'critical',
 };
 
 const EVENT_LABELS: Record<string, string> = {
@@ -24,6 +25,7 @@ const EVENT_LABELS: Record<string, string> = {
   status_poll: 'Status poll',
   acknowledged: 'Acknowledged',
   rejected: 'Rejected',
+  declined: 'Declined',
 };
 
 function detailMessage(detail: Record<string, unknown>): string | null {

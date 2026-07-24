@@ -26,7 +26,9 @@ from datetime import date, timedelta
 from typing import Literal
 
 type FidelityGrade = Literal["CONFIRMED", "PARTIAL", "REPRESENTATIVE"]
-type ReturnFamily = Literal["liquidity", "capital", "irrbb", "fx", "icaap_stress"]
+type ReturnFamily = Literal[
+    "liquidity", "capital", "irrbb", "fx", "icaap_stress", "corporate", "large_exposures"
+]
 type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual"]
 type ChannelCode = Literal["orass_sandbox", "email", "manual"]
 
@@ -86,6 +88,12 @@ class ReturnDefinition:
     fidelity: FidelityGrade
     default_channel: ChannelCode = "email"
     regulator: str = field(default=REGULATOR_BOG)
+    # Event-driven returns (plan W5: the LRT corporate packs) have no periodic
+    # reporting cycle: a pack exists because a corporate event happened. The
+    # calendar skips them entirely — their nominal ``frequency``/
+    # ``deadline_rule`` exist only to satisfy the package row shape and must
+    # never mint month-end obligations.
+    event_driven: bool = False
 
 
 REGISTRY: dict[str, ReturnDefinition] = {
@@ -125,14 +133,16 @@ REGISTRY: dict[str, ReturnDefinition] = {
             frequency="monthly",
             # CONFIRMED: LMTD Part II ¶7 — within 9 days after month end.
             deadline_rule=monthly_day(9),
-            # Reuses the liquidity generator's snapshot: only the LCR-by-
-            # significant-currency subset (LMTD Table 11 taxonomy, aggregate
-            # currency) is honestly fillable today, hence PARTIAL rather than
-            # CONFIRMED despite the published appendix.
-            # TODO(RR-6): extend the liquidity snapshot with contractual
-            # maturity buckets and funding-concentration data so LMTD Tables
-            # 1–10 can be exported verbatim; never fabricate bucket values.
-            generator="liquidity",
+            # Dedicated "lmt" generator (plan W6.3, retires TODO(RR-6)): the
+            # LCR-by-significant-currency subset (LMTD Table 11 taxonomy,
+            # aggregate currency) from the liquidity run, plus canonical-data
+            # monitoring tools — a contractual maturity-mismatch ladder
+            # (condensed Table 2 bucket set), top-10 depositor funding
+            # concentration (Table 5 asks Top 20/100), and HQLA-classified
+            # available assets (Table 9 subset). PARTIAL rather than
+            # CONFIRMED: the published grids carry more columns/rows than the
+            # canonical data honestly fills — nothing missing is fabricated.
+            generator="lmt",
             template_id="bog-lmt-liquidity-v1",
             fidelity="PARTIAL",
             default_channel="orass_sandbox",
@@ -203,6 +213,31 @@ REGISTRY: dict[str, ReturnDefinition] = {
             default_channel="email",
         ),
         ReturnDefinition(
+            code="LE-MONTHLY",
+            family="large_exposures",
+            title="Large Exposures Return (Templates 1/1a/2/3/4)",
+            directive_citation=(
+                "Large Exposures Directive (exposure draft Dec 2024), Part VI "
+                "Templates 1/1a/2/3/4; the final directive (September 2025, "
+                "effective 1 Jan 2027) confirms the five appendix templates and "
+                "monthly reporting (¶57–58). Template STRUCTURE is CONFIRMED "
+                "from the published appendix; the exposure derivation basis "
+                "(canonical positions, Tier-1 Net-Own-Funds proxy, "
+                "group_reference connected-counterparty grouping) is AequorOS's."
+            ),
+            frequency="monthly",
+            # The directive requires monthly reporting but does not state the
+            # day-count (draft Part VI; research bog_orass_submission_channels
+            # §4.5 "exact day-count not stated in draft"). Day 9 follows the
+            # observed BoG monthly-return convention (LMTD Part II ¶7) and is
+            # overridable once ORASS onboarding confirms the LE deadline.
+            deadline_rule=monthly_day(9),
+            generator="large_exposures",
+            template_id="bog-le-monthly-v1",
+            fidelity="CONFIRMED",
+            default_channel="orass_sandbox",
+        ),
+        ReturnDefinition(
             code="ICAAP-STRESS",
             family="icaap_stress",
             title="ICAAP Data Companion & Stress Summary",
@@ -221,6 +256,109 @@ REGISTRY: dict[str, ReturnDefinition] = {
             template_id="bog-icaap-stress-v1",
             fidelity="REPRESENTATIVE",
             default_channel="manual",
+        ),
+        # --- LRT corporate return packs (plan W5) --------------------------
+        # Event-driven (event_driven=True): the calendar never expands them
+        # into periodic obligations. frequency="annual" +
+        # annual_month_day(12, 31) are nominal placeholders only — they exist
+        # because packages carry a frequency column, not because these
+        # returns have a reporting cycle. Structures come from the ORASS LRT
+        # Portal User Guide v1.0 (Sept 2020, draft): form-set structure
+        # documented; field-level layouts transcribed from the guide's
+        # screenshots. Generators pre-fill from the W4 institution-profile
+        # register only (no engine runs).
+        ReturnDefinition(
+            code="LRT-PROFILE",
+            family="corporate",
+            title="Corporate Profile Update pack",
+            directive_citation=(
+                "ORASS LRT Portal User Guide v1.0 (Sept 2020, draft) — Reporting "
+                "Institution Profile form set: General Details, Business "
+                "Activities, Stock Exchange membership, Ownership; event-driven "
+                "corporate submission, no periodic deadline."
+            ),
+            frequency="annual",
+            deadline_rule=annual_month_day(12, 31),
+            generator="lrt_profile",
+            template_id="bog-lrt-profile-v1",
+            fidelity="CONFIRMED",
+            default_channel="orass_sandbox",
+            event_driven=True,
+        ),
+        ReturnDefinition(
+            code="LRT-OUTLET",
+            family="corporate",
+            title="Outlet Opening / Relocation / Closure pack",
+            directive_citation=(
+                "ORASS LRT Portal User Guide v1.0 (Sept 2020, draft) — Contact "
+                "Information form set: ACI (add) / UCI (update) with OO Opening "
+                "of Outlets, CRO Closure and Relocation of Outlets, RD Required "
+                "Documents; event-driven corporate submission."
+            ),
+            frequency="annual",
+            deadline_rule=annual_month_day(12, 31),
+            generator="lrt_outlet",
+            template_id="bog-lrt-outlet-v1",
+            fidelity="CONFIRMED",
+            default_channel="orass_sandbox",
+            event_driven=True,
+        ),
+        ReturnDefinition(
+            code="LRT-PARTY",
+            family="corporate",
+            title="Related Party / Service Provider pack",
+            directive_citation=(
+                "ORASS LRT Portal User Guide v1.0 (Sept 2020, draft) — Related "
+                "Parties/Service Providers form set: ARP (add) with ARD role "
+                "details, ARCI contact information, CDD comprehensive due "
+                "diligence, EDD enhanced due diligence (individuals), PNF "
+                "personality notes (individuals), ASI shareholder information, "
+                "ADI director information, AAI auditor information, RD required "
+                "documents; event-driven corporate submission."
+            ),
+            frequency="annual",
+            deadline_rule=annual_month_day(12, 31),
+            generator="lrt_party",
+            template_id="bog-lrt-party-v1",
+            fidelity="CONFIRMED",
+            default_channel="orass_sandbox",
+            event_driven=True,
+        ),
+        ReturnDefinition(
+            code="LRT-CAPITAL",
+            family="corporate",
+            title="Capital Injection pack",
+            directive_citation=(
+                "ORASS LRT Portal User Guide v1.0 (Sept 2020, draft) — Capital "
+                "Injection form set: URP update related party, USI update "
+                "shareholder information, RES Resolution, SOP Submission of "
+                "Payments; event-driven corporate submission."
+            ),
+            frequency="annual",
+            deadline_rule=annual_month_day(12, 31),
+            generator="lrt_capital",
+            template_id="bog-lrt-capital-v1",
+            fidelity="CONFIRMED",
+            default_channel="orass_sandbox",
+            event_driven=True,
+        ),
+        ReturnDefinition(
+            code="LRT-PRODUCT",
+            family="corporate",
+            title="Product / Service Approval pack",
+            directive_citation=(
+                "ORASS LRT Portal User Guide v1.0 (Sept 2020, draft) — Products/"
+                "Services form set: AP (add) with DN Declaration, MOU, RES "
+                "Resolution, SOP Submission of Payments; event-driven corporate "
+                "submission."
+            ),
+            frequency="annual",
+            deadline_rule=annual_month_day(12, 31),
+            generator="lrt_product",
+            template_id="bog-lrt-product-v1",
+            fidelity="CONFIRMED",
+            default_channel="orass_sandbox",
+            event_driven=True,
         ),
     )
 }

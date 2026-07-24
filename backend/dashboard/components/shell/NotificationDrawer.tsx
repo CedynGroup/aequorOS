@@ -1,60 +1,51 @@
 'use client';
 
-import { X, AlertCircle, CheckCircle2, Info, Clock } from 'lucide-react';
-import { useEffect } from 'react';
+/**
+ * Notification drawer — the real in-app feed (plan W3).
+ *
+ * Rows are emitted server-side by the reporting workflow (approvals, regulator
+ * decisions) and the daily deadline scan (due-soon / overdue / re-upload
+ * pending), visible to the signed-in user (direct rows) plus org-wide rows.
+ * Unread rows are highlighted; clicking marks read and deep-links to the
+ * relevant surface when the notification carries a package/bank entity.
+ */
 
-const notifications = [
-  {
-    id: '1',
-    severity: 'amber',
-    title: 'Monthly Prudential Return — review pending',
-    body: 'BSD-2 Q1 due in 8 days. Three line items flagged for treasury review.',
-    when: '2h ago',
+import { X, AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import type { NotificationRead } from '@aequoros/risk-service-api';
+import {
+  useMarkAllNotificationsRead,
+  useMarkNotificationRead,
+  useNotifications,
+} from '@/lib/api/hooks';
+import { fmtRelative } from '@/lib/api/values';
+
+const SEVERITY_STYLES: Record<
+  string,
+  { Icon: typeof Info; color: string; unreadBg: string }
+> = {
+  info: { Icon: Info, color: 'text-action', unreadBg: 'bg-action-light/30' },
+  warning: {
+    Icon: AlertTriangle,
+    color: 'text-warning',
+    unreadBg: 'bg-warning-light/30',
+  },
+  critical: {
     Icon: AlertCircle,
-    color: 'text-warning',
-    bg: 'bg-warning-light/40',
+    color: 'text-critical',
+    unreadBg: 'bg-critical-light/30',
   },
-  {
-    id: '2',
-    severity: 'success',
-    title: 'LCR run completed — 142.0%',
-    body: 'Daily recalculation finished. All 28 regulatory validation checks passed.',
-    when: '5h ago',
-    Icon: CheckCircle2,
-    color: 'text-success',
-    bg: 'bg-success-light/40',
-  },
-  {
-    id: '3',
-    severity: 'info',
-    title: 'New AI hedging recommendation',
-    body: 'Deep RL: Add 6M IRS notional GHS 50M, pay fixed at 25.30%. Confidence 81%.',
-    when: '5h ago',
-    Icon: Info,
-    color: 'text-action',
-    bg: 'bg-action-light/40',
-  },
-  {
-    id: '4',
-    severity: 'amber',
-    title: 'FX hedge expiring in 11 days',
-    body: 'FX-2025-091 (USD 4M forward at 12.62) expires 12 Apr. ML model recommends extending.',
-    when: 'Yesterday',
-    Icon: Clock,
-    color: 'text-warning',
-    bg: 'bg-warning-light/40',
-  },
-  {
-    id: '5',
-    severity: 'success',
-    title: 'Capital Adequacy Return Q4 2025 acknowledged',
-    body: 'Returns receipt confirmed by the regulator. No follow-up queries.',
-    when: 'Yesterday',
-    Icon: CheckCircle2,
-    color: 'text-success',
-    bg: 'bg-success-light/40',
-  },
-];
+};
+
+/** Deep-link target for a notification, when its entity supports one. */
+function notificationHref(notification: NotificationRead): string | null {
+  if (notification.type.startsWith('reporting.deadline.')) return '/submissions';
+  if (notification.entityType === 'regulatory_package') {
+    return '/submissions/history';
+  }
+  return null;
+}
 
 export default function NotificationDrawer({
   open,
@@ -63,6 +54,11 @@ export default function NotificationDrawer({
   open: boolean;
   onClose: () => void;
 }) {
+  const router = useRouter();
+  const feed = useNotifications();
+  const markRead = useMarkNotificationRead();
+  const markAll = useMarkAllNotificationsRead();
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -73,6 +69,20 @@ export default function NotificationDrawer({
   }, [open, onClose]);
 
   if (!open) return null;
+
+  const notifications = feed.data?.notifications ?? [];
+  const unread = feed.data?.unreadCount ?? 0;
+
+  const openNotification = (notification: NotificationRead) => {
+    if (notification.readAt == null) {
+      markRead.mutate(notification.id);
+    }
+    const href = notificationHref(notification);
+    if (href) {
+      onClose();
+      router.push(href);
+    }
+  };
 
   return (
     <div
@@ -92,7 +102,9 @@ export default function NotificationDrawer({
           <div>
             <h2 className="text-h3 text-navy">Notifications</h2>
             <p className="text-caption text-slate">
-              {notifications.length} active · 3 require action
+              {feed.isLoading
+                ? 'Loading…'
+                : `${notifications.length} recent · ${unread} unread`}
             </p>
           </div>
           <button
@@ -105,37 +117,77 @@ export default function NotificationDrawer({
           </button>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <ul className="divide-y divide-border-light">
-            {notifications.map((n) => (
-              <li
-                key={n.id}
-                className={`px-5 py-4 hover:bg-surface-alt cursor-pointer ${n.bg}`}
-              >
-                <div className="flex items-start gap-3">
-                  <n.Icon size={16} className={`shrink-0 mt-0.5 ${n.color}`} aria-hidden />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-body font-medium text-navy">{n.title}</p>
-                    <p className="mt-1 text-body text-navy/75 leading-relaxed">{n.body}</p>
-                    <p className="mt-1.5 text-caption text-slate">{n.when}</p>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {feed.error ? (
+            <p className="px-5 py-6 text-body text-slate">
+              Could not load notifications. They will retry automatically.
+            </p>
+          ) : notifications.length === 0 && !feed.isLoading ? (
+            <p className="px-5 py-6 text-body text-slate">
+              Nothing yet — approvals, regulator decisions, and reporting
+              deadlines will appear here.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border-light">
+              {notifications.map((notification) => {
+                const style =
+                  SEVERITY_STYLES[notification.severity] ?? SEVERITY_STYLES.info;
+                const isUnread = notification.readAt == null;
+                return (
+                  <li key={notification.id}>
+                    <button
+                      type="button"
+                      onClick={() => openNotification(notification)}
+                      className={`w-full text-left px-5 py-4 hover:bg-surface-alt ${
+                        isUnread ? style.unreadBg : ''
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <style.Icon
+                          size={16}
+                          className={`shrink-0 mt-0.5 ${style.color}`}
+                          aria-hidden
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={`text-body text-navy ${
+                              isUnread ? 'font-semibold' : 'font-medium'
+                            }`}
+                          >
+                            {notification.title}
+                          </p>
+                          <p className="mt-1 text-body text-navy/75 leading-relaxed">
+                            {notification.body}
+                          </p>
+                          <p className="mt-1.5 text-caption text-slate">
+                            {fmtRelative(notification.createdAt)}
+                          </p>
+                        </div>
+                        {isUnread && (
+                          <span
+                            aria-label="Unread"
+                            className="mt-1 w-2 h-2 rounded-full bg-action shrink-0"
+                          />
+                        )}
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
         <div className="px-5 py-3 border-t border-border-light flex items-center justify-between">
           <button
             type="button"
-            className="text-caption font-medium text-action hover:text-action-hover"
+            onClick={() => markAll.mutate()}
+            disabled={markAll.isPending || unread === 0}
+            className="text-caption font-medium text-action hover:text-action-hover disabled:text-slate disabled:cursor-default"
           >
-            Mark all as read
+            {markAll.isPending ? 'Marking…' : 'Mark all as read'}
           </button>
-          <button
-            type="button"
-            className="text-caption font-medium text-slate hover:text-navy"
-          >
-            Notification settings →
-          </button>
+          <span className="text-caption text-slate">
+            Approvals · regulator decisions · deadlines
+          </span>
         </div>
       </aside>
     </div>

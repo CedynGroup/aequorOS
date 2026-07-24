@@ -6,7 +6,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-type ReturnFamily = Literal["liquidity", "capital", "irrbb", "fx", "icaap_stress"]
+type ReturnFamily = Literal[
+    "liquidity", "capital", "irrbb", "fx", "icaap_stress", "corporate", "large_exposures"
+]
 type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual"]
 type PackageStatus = Literal[
     "draft",
@@ -17,12 +19,16 @@ type PackageStatus = Literal[
     "submitted",
     "acknowledged",
     "rejected",
+    "declined",
     "superseded",
 ]
 type ArtifactKind = Literal["xlsx", "csv", "pdf"]
-type ChannelCode = Literal["orass_sandbox", "email", "manual"]
-type SubmissionEventType = Literal["submitted", "status_poll", "acknowledged", "rejected"]
+type ChannelCode = Literal["orass_api", "orass_sandbox", "email", "manual"]
+type SubmissionEventType = Literal[
+    "submitted", "status_poll", "acknowledged", "rejected", "declined"
+]
 type ApprovalAction = Literal["requested", "approved", "rejected"]
+type ResubmissionStatus = Literal["requested", "granted", "denied"]
 type ApprovalDecision = Literal["approved", "rejected"]
 type ValidationSeverity = Literal["INFO", "WARNING", "ERROR"]
 type FidelityGrade = Literal["CONFIRMED", "PARTIAL", "REPRESENTATIVE"]
@@ -86,6 +92,11 @@ class RegulatoryPackageSummaryRead(ClosedModel):
     generated_at: datetime
     validation_passed: bool | None
     notes: str | None
+    # ORASS parity: revision stamped at submit (1.0/1.1), snapshot seal, and
+    # supervisor comments from a reject/decline decision.
+    submission_revision: str | None
+    snapshot_sha256: str | None
+    regulator_comments: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -218,9 +229,46 @@ class SubmissionPollRead(ClosedModel):
     """One poll cycle: the regulator-side status, the recorded poll event,
     and the package after any resulting transition."""
 
-    poll_status: Literal["pending", "acknowledged", "rejected"]
+    poll_status: Literal["pending", "acknowledged", "rejected", "declined"]
     event: SubmissionEventRead
     package: RegulatoryPackageRead
+
+
+class ResubmissionRequestCreate(ClosedModel):
+    """ORASS "Request Resubmission": a reason is mandatory (LRT guide §5.3)."""
+
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class ResubmissionDecisionCreate(ClosedModel):
+    """Manual grant/deny for email/manual-channel submissions."""
+
+    decision: Literal["granted", "denied"]
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class ResubmissionRequestRead(ClosedModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: UUID
+    package_id: UUID
+    reason: str
+    status: ResubmissionStatus
+    requested_by: UUID
+    decided_at: datetime | None
+    detail: dict[str, Any]
+    consumed_by_package_id: UUID | None
+    occurred_at: datetime
+
+
+class ResubmissionRequestListRead(ClosedModel):
+    package_id: UUID
+    requests: list[ResubmissionRequestRead]
+
+
+class RegulatoryArtifactListRead(ClosedModel):
+    package_id: UUID
+    artifacts: list[RegulatoryArtifactRead]
 
 
 class EmailRecipientGuidanceRead(ClosedModel):

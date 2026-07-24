@@ -25,6 +25,13 @@ import {
   Timezone1ToJSON,
   Timezone1ToJSONTyped,
 } from "./Timezone1";
+import type { JobTitle1 } from "./JobTitle1";
+import {
+  JobTitle1FromJSON,
+  JobTitle1FromJSONTyped,
+  JobTitle1ToJSON,
+  JobTitle1ToJSONTyped,
+} from "./JobTitle1";
 import type { Theme } from "./Theme";
 import {
   ThemeFromJSON,
@@ -32,20 +39,13 @@ import {
   ThemeToJSON,
   ThemeToJSONTyped,
 } from "./Theme";
-import type { JobTitle } from "./JobTitle";
+import type { DisplayName2 } from "./DisplayName2";
 import {
-  JobTitleFromJSON,
-  JobTitleFromJSONTyped,
-  JobTitleToJSON,
-  JobTitleToJSONTyped,
-} from "./JobTitle";
-import type { DisplayName1 } from "./DisplayName1";
-import {
-  DisplayName1FromJSON,
-  DisplayName1FromJSONTyped,
-  DisplayName1ToJSON,
-  DisplayName1ToJSONTyped,
-} from "./DisplayName1";
+  DisplayName2FromJSON,
+  DisplayName2FromJSONTyped,
+  DisplayName2ToJSON,
+  DisplayName2ToJSONTyped,
+} from "./DisplayName2";
 
 /**
  * Personal, non-security fields a signed-in user may change for themself.
@@ -55,16 +55,16 @@ import {
 export interface ProfileUpdateRequest {
   /**
    *
-   * @type {DisplayName1}
+   * @type {DisplayName2}
    * @memberof ProfileUpdateRequest
    */
-  displayName?: DisplayName1;
+  displayName?: DisplayName2;
   /**
    *
-   * @type {JobTitle}
+   * @type {JobTitle1}
    * @memberof ProfileUpdateRequest
    */
-  jobTitle?: JobTitle;
+  jobTitle?: JobTitle1;
   /**
    *
    * @type {Locale}
@@ -110,11 +110,11 @@ export function ProfileUpdateRequestFromJSONTyped(
     displayName:
       json["display_name"] == null
         ? undefined
-        : DisplayName1FromJSON(json["display_name"]),
+        : DisplayName2FromJSON(json["display_name"]),
     jobTitle:
       json["job_title"] == null
         ? undefined
-        : JobTitleFromJSON(json["job_title"]),
+        : JobTitle1FromJSON(json["job_title"]),
     locale: json["locale"] == null ? undefined : LocaleFromJSON(json["locale"]),
     theme: json["theme"] == null ? undefined : ThemeFromJSON(json["theme"]),
     timezone:
@@ -137,8 +137,8 @@ export function ProfileUpdateRequestToJSONTyped(
   }
 
   return {
-    display_name: DisplayName1ToJSON(value["displayName"]),
-    job_title: JobTitleToJSON(value["jobTitle"]),
+    display_name: DisplayName2ToJSON(value["displayName"]),
+    job_title: JobTitle1ToJSON(value["jobTitle"]),
     locale: LocaleToJSON(value["locale"]),
     theme: ThemeToJSON(value["theme"]),
     timezone: Timezone1ToJSON(value["timezone"]),

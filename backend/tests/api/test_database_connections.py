@@ -132,9 +132,7 @@ def test_create_activates_on_valid_credentials(dd_client: TestClient, vault_key:
     assert body["credential_fingerprint"]
 
 
-def test_credentials_never_appear_in_any_response(
-    dd_client: TestClient, vault_key: None
-) -> None:
+def test_credentials_never_appear_in_any_response(dd_client: TestClient, vault_key: None) -> None:
     bank_id = _seed_bank(dd_client)
     created = _create(dd_client, bank_id)
     assert SECRET not in created.text

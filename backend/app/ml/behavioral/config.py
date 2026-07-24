@@ -38,11 +38,11 @@ UNIT: dict[str, str] = {
 class BehavioralTrainingConfig:
     """Hyperparameters + robustness gate for the behavioral GBMs."""
 
-    window_months: int = 36          # trailing history used for training
-    min_months: int = 18             # gate: distinct as-of months required for ML
-    min_samples: int = 24            # gate: product-month label rows required for ML
-    cv_folds: int = 4                # expanding-window time-series CV folds
-    forward_window: int = 6          # deposit-stability retained-fraction horizon
+    window_months: int = 36  # trailing history used for training
+    min_months: int = 18  # gate: distinct as-of months required for ML
+    min_samples: int = 24  # gate: product-month label rows required for ML
+    cv_folds: int = 4  # expanding-window time-series CV folds
+    forward_window: int = 6  # deposit-stability retained-fraction horizon
     # HistGradientBoostingRegressor hyperparameters (regularized for small data).
     max_leaf_nodes: int = 15
     min_samples_leaf: int = 20

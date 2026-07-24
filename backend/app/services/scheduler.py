@@ -62,6 +62,13 @@ def run_tick(session: Session, job: Job) -> None:
 
         temenos_pulls = len(enqueue_due_temenos_pulls(session, org_id, now=now))
 
+    # Daily reporting-deadline scan (submission_pipeline_plan.md §W3): the scan
+    # date rides the coalesce key, so each org gets at most one scan per day.
+    # Lazy import: the scan pulls in the regulatory reporting module tree.
+    from app.services.reporting_deadline_scan import enqueue_due_deadline_scan  # noqa: PLC0415
+
+    deadline_scan_enqueued = enqueue_due_deadline_scan(session, org_id, now=now)
+
     job_queue.enqueue(
         session,
         org_id,
@@ -74,6 +81,7 @@ def run_tick(session: Session, job: Job) -> None:
         "official_runs_enqueued": enqueued,
         "market_data_pulls_enqueued": market_data_pulls,
         "temenos_pulls_enqueued": temenos_pulls,
+        "deadline_scan_enqueued": deadline_scan_enqueued,
     }
 
 

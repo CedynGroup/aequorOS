@@ -16,6 +16,8 @@ import {
   JobsApi,
   LiveEngineApi,
   MarketDataApi,
+  NotificationsApi,
+  OrganizationApi,
   RegulatoryCapitalApi,
   RegulatoryFtpApi,
   RegulatoryFxApi,
@@ -76,6 +78,8 @@ export const jobsApi = new JobsApi(configuration);
 export const marketDataApi = new MarketDataApi(configuration);
 export const temenosApi = new TemenosApi(configuration);
 export const regulatoryReportingApi = new RegulatoryReportingApi(configuration);
+export const organizationApi = new OrganizationApi(configuration);
+export const notificationsApi = new NotificationsApi(configuration);
 
 /**
  * Normalized error surfaced to the UI. `status` is the HTTP status code,

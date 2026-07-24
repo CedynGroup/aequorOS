@@ -192,10 +192,15 @@ def _seed_demo_tenants(engine: Engine) -> None:
         session.add_all(
             [
                 Jurisdiction(
-                    code="GH", country_name="Ghana", currency_code="GHS",
-                    currency_name="Ghana Cedi", locale="en-GH",
-                    central_bank_name="Bank of Ghana", regulator_short="BoG",
-                    submission_portal="ORASS", timezone="Africa/Accra",
+                    code="GH",
+                    country_name="Ghana",
+                    currency_code="GHS",
+                    currency_name="Ghana Cedi",
+                    locale="en-GH",
+                    central_bank_name="Bank of Ghana",
+                    regulator_short="BoG",
+                    submission_portal="ORASS",
+                    timezone="Africa/Accra",
                 ),
                 Organization(id=ORG_1, name="Demo Tenant 1"),
                 Organization(id=ORG_2, name="Demo Tenant 2"),

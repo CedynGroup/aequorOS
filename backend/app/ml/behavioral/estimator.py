@@ -34,8 +34,8 @@ if TYPE_CHECKING:
     # so a missing/broken install degrades to the baseline instead of failing.
     from sklearn.ensemble import HistGradientBoostingRegressor
 
-_TARGET_N = 60        # product-month samples for full data-sufficiency
-_TARGET_MONTHS = 24   # month coverage for full data-sufficiency
+_TARGET_N = 60  # product-month samples for full data-sufficiency
+_TARGET_MONTHS = 24  # month coverage for full data-sufficiency
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,7 +124,8 @@ def estimate(  # noqa: PLR0913, PLR0915
             trained = (model, code_to_idx)
         except Exception as exc:  # noqa: BLE001 - sklearn missing/broken → degrade to baseline
             logging.getLogger(__name__).warning(
-                "behavioral GBM training failed for %s (%s); using baseline.", model_slug, exc)
+                "behavioral GBM training failed for %s (%s); using baseline.", model_slug, exc
+            )
             method = "baseline"
 
     # per-product empirical mean (baseline value + fallback for unpredictable products)
@@ -149,16 +150,31 @@ def estimate(  # noqa: PLR0913, PLR0915
         value = clamp(value, clamp_lo, clamp_hi)
         n_p = int((prod_arr == p).sum())
         conf = compute_confidence(
-            pmethod, n_p, _TARGET_N, coverage, _TARGET_MONTHS, cv_rmse, label_std)
-        products_out.append(ProductEstimate(
-            product_code=p, assumption_type=assumption_type, value=round(value, 6),
-            unit=unit, confidence=conf, method=pmethod, extra=extra_by_product.get(p, {}),
-        ))
+            pmethod, n_p, _TARGET_N, coverage, _TARGET_MONTHS, cv_rmse, label_std
+        )
+        products_out.append(
+            ProductEstimate(
+                product_code=p,
+                assumption_type=assumption_type,
+                value=round(value, 6),
+                unit=unit,
+                confidence=conf,
+                method=pmethod,
+                extra=extra_by_product.get(p, {}),
+            )
+        )
 
     products_out.sort(key=lambda e: e.product_code)
-    accuracy = Accuracy(cv_rmse=cv_rmse, cv_mae=cv_mae, sample_count=n, month_coverage=coverage,
-                        method=method)
-    result = ModelResult(model_id=model_id, model_version=model_id, method=method, as_of_date=None,
-                         accuracy=accuracy, products=products_out)
+    accuracy = Accuracy(
+        cv_rmse=cv_rmse, cv_mae=cv_mae, sample_count=n, month_coverage=coverage, method=method
+    )
+    result = ModelResult(
+        model_id=model_id,
+        model_version=model_id,
+        method=method,
+        as_of_date=None,
+        accuracy=accuracy,
+        products=products_out,
+    )
     predictor = Predictor(model=trained[0], code_to_idx=trained[1]) if trained is not None else None
     return result, predictor

@@ -45,11 +45,7 @@ class TemenosCredentials:
     def from_dict(cls, data: dict[str, object]) -> TemenosCredentials:
         """Build credentials from a bank-supplied dict; unknown keys go to extra."""
         known = {k: str(data[k]) for k in cls._KNOWN if k in data and data[k] is not None}
-        extra = {
-            str(k): str(v)
-            for k, v in data.items()
-            if k not in cls._KNOWN and v is not None
-        }
+        extra = {str(k): str(v) for k, v in data.items() if k not in cls._KNOWN and v is not None}
         return cls(**known, extra=extra)
 
 

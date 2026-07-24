@@ -2,10 +2,10 @@
 
 /**
  * Regulatory Reporting — Approvals (checker queue). Lists pending_approval
- * packages and hosts the decide panel. Maker-checker demo affordance: an
- * "Acting as" select feeds the X-User-Id override so a second officer can
- * decide; choosing the session user (the generator) surfaces the backend's
- * same-user 409 verbatim — that IS the maker-checker rule.
+ * packages and hosts the decide panel. Decisions are attributed to the
+ * signed-in user (the verified token); deciding on a package you generated
+ * surfaces the backend's same-user 409 verbatim — that IS the maker-checker
+ * rule.
  */
 
 import { useState } from 'react';
@@ -21,19 +21,17 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useDecidePackageApproval,
+  useOfficerNames,
   useRegulatoryPackage,
   useRegulatoryPackages,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, fmtTimestamp, shortId } from '@/lib/api/values';
-import {
-  DEMO_OFFICERS,
-  FAMILY_LABELS,
-  officerName,
-} from '@/components/submissions/shared';
+import { FAMILY_LABELS } from '@/components/submissions/shared';
 
 export default function ApprovalsPage() {
   const { bank } = useBankContext();
   const bankId = bank?.id;
+  const officerName = useOfficerNames();
 
   const queueQuery = useRegulatoryPackages(bankId, {
     status: 'pending_approval',
@@ -175,7 +173,7 @@ function DecidePanel({
 }) {
   const decide = useDecidePackageApproval(bankId);
   const detailQuery = useRegulatoryPackage(bankId, pkg.id);
-  const [actingUserId, setActingUserId] = useState(DEMO_OFFICERS[0].id);
+  const officerName = useOfficerNames();
   const [reason, setReason] = useState('');
 
   const rejectNeedsReason = reason.trim().length === 0;
@@ -205,28 +203,6 @@ function DecidePanel({
 
         <div>
           <label className="block text-caption font-medium text-navy mb-1.5">
-            Acting as
-          </label>
-          <select
-            value={actingUserId}
-            onChange={(e) => setActingUserId(e.target.value)}
-            className="w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy"
-          >
-            {DEMO_OFFICERS.map((officer) => (
-              <option key={officer.id} value={officer.id}>
-                {officer.name} — {officer.role}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1.5 text-caption text-slate leading-relaxed">
-            Demo: acting as a second officer — production uses your login.
-            Deciding as the maker is rejected by the backend&apos;s
-            maker-checker rule.
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-caption font-medium text-navy mb-1.5">
             Reason{' '}
             <span className="font-normal text-slate">(required to reject)</span>
           </label>
@@ -248,7 +224,6 @@ function DecidePanel({
                 packageId: pkg.id,
                 action: 'approved',
                 reason: reason.trim() || undefined,
-                actingUserId,
               })
             }
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
@@ -269,7 +244,6 @@ function DecidePanel({
                 packageId: pkg.id,
                 action: 'rejected',
                 reason: reason.trim(),
-                actingUserId,
               })
             }
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-critical border border-critical/30 bg-critical-light/40 rounded-md hover:bg-critical-light disabled:opacity-60"
@@ -278,6 +252,11 @@ function DecidePanel({
             Reject (rework)
           </button>
         </div>
+
+        <p className="text-caption text-slate leading-relaxed">
+          Approving requires the approver role; the decision is recorded
+          against your login.
+        </p>
 
         {decide.error && (
           <ErrorPanel error={decide.error} title="Decision rejected" />

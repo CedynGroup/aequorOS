@@ -75,9 +75,7 @@ def run_etl_dedup(session: Session, job: Job) -> None:
         config=EtlConfig(
             deduplicate=True,
             detect_anomalies=True,
-            counterparty_model=model_loading.load_counterparty_model(
-                ctx.organization_id, bank.id
-            ),
+            counterparty_model=model_loading.load_counterparty_model(ctx.organization_id, bank.id),
             anomaly_model=model_loading.load_anomaly_model(ctx.organization_id, bank.id),
         ),
     )
@@ -147,9 +145,7 @@ def _dedup_anomaly_overlay(result: ETLResult) -> dict[str, Any]:
     }
 
 
-def _reextract(
-    session: Session, batch: IngestionBatch, bank: Bank, mapping: MappingConfig
-):
+def _reextract(session: Session, batch: IngestionBatch, bank: Bank, mapping: MappingConfig):
     """Reconstruct the batch's extraction from its persisted raw artifact.
 
     Mirrors ingestion's extract path: materialize the untouched source file from
@@ -235,9 +231,7 @@ def _batch_or_error(session: Session, job: Job) -> IngestionBatch:
 
 def _bank_or_error(session: Session, batch: IngestionBatch) -> Bank:
     bank = session.scalar(
-        select(Bank).where(
-            Bank.id == batch.bank_id, Bank.organization_id == batch.organization_id
-        )
+        select(Bank).where(Bank.id == batch.bank_id, Bank.organization_id == batch.organization_id)
     )
     if bank is None:
         msg = f"Ingestion batch {batch.id} references unknown bank {batch.bank_id}."

@@ -93,9 +93,7 @@ _adapter = DatabaseDirectAdapter()
 # --- Reads -----------------------------------------------------------------
 
 
-def list_connections(
-    db: Session, ctx: TenantContext, bank_id: UUID
-) -> DatabaseConnectionListRead:
+def list_connections(db: Session, ctx: TenantContext, bank_id: UUID) -> DatabaseConnectionListRead:
     _get_bank_or_404(db, ctx, bank_id)
     rows = db.scalars(
         select(DatabaseDirectConnection)
@@ -400,13 +398,9 @@ def discover_schema(
     try:
         tables = _discover_live(db, connection, driver=driver)
     except DatabaseDirectError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     except (ValueError, StagedTableError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return DatabaseConnectionDiscoverResult(tables=tables)
 
@@ -460,9 +454,7 @@ def sync_now(  # noqa: PLR0913 - a sync binds bank, connection, storage, and req
         db.commit()
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     except (ValueError, StagedTableError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     # Reconcile the requested as-of against the snapshot's own reporting date so a
     # point-in-time book is never valued at the wrong date (which would, e.g.,
@@ -474,9 +466,7 @@ def sync_now(  # noqa: PLR0913 - a sync binds bank, connection, storage, and req
         bundle = bundle.model_copy(update={"as_of_date": as_of.isoformat()})
 
     filename = f"db-direct-{connection.backend}-{as_of.isoformat()}.json"
-    upload = upload_source(
-        db, ctx, bank_id, storage, filename, bundle.to_json().encode("utf-8")
-    )
+    upload = upload_source(db, ctx, bank_id, storage, filename, bundle.to_json().encode("utf-8"))
     batch_payload = IngestionBatchCreate(
         source_system="DB_DIRECT",
         # Each connection is its own data source: scope the mapping to this

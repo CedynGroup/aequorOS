@@ -208,10 +208,20 @@ _IRR_BASE_CURVE: dict[str, str] = {
 # Six Basel IRRBB scenarios plus the base discount curve. Short-rate scenarios
 # decay with tenor via decay_years; steepener/flattener use the standard
 # e^(-t/4) short weight applied in the engine.
+#
+# parallel_up_450 / parallel_down_450 are the BoG GHS calibration from the
+# IRRBB Guideline (exposure draft, Feb 2026) Appendix II–III Tables 5–6
+# (GHS ±450 bp parallel; short 500 / long 300). They are stored as
+# effective-dated parameters (plan W6.4) alongside the Basel set, but the IRR
+# engine currently iterates only the fixed Basel IRR_SCENARIO_CODES — the
+# ±450 rows await engine-side adoption (documented gap; the IRRBB return
+# renders ±450 rows only when run metrics actually carry them).
 _IRR_STRESS: dict[str, dict[str, str]] = {
     "base_curve": _IRR_BASE_CURVE,
     "parallel_up_200": {"parallel_bp": "200"},
     "parallel_down_200": {"parallel_bp": "-200"},
+    "parallel_up_450": {"parallel_bp": "450"},
+    "parallel_down_450": {"parallel_bp": "-450"},
     "short_up_250": {"short_bp": "250", "decay_years": "3"},
     "short_down_250": {"short_bp": "-250", "decay_years": "3"},
     "steepener": {"short_bp": "-65", "long_bp": "90"},

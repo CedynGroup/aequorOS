@@ -23,6 +23,7 @@ export const PackageStatusFilter = {
   Submitted: "submitted",
   Acknowledged: "acknowledged",
   Rejected: "rejected",
+  Declined: "declined",
   Superseded: "superseded",
 } as const;
 export type PackageStatusFilter =

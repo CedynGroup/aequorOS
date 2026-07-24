@@ -63,9 +63,7 @@ def anomaly_artifact_path(org_id: UUID, bank_id: UUID) -> Path:
     return tenant_artifact_dir(org_id, bank_id) / name
 
 
-def load_counterparty_model(
-    org_id: UUID, bank_id: UUID
-) -> CounterpartyMatchingModel | None:
+def load_counterparty_model(org_id: UUID, bank_id: UUID) -> CounterpartyMatchingModel | None:
     """This bank's trained counterparty matcher, or ``None`` (→ heuristic fallback)."""
     key = (org_id, bank_id)
     with _lock:

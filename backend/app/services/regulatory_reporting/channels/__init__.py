@@ -13,6 +13,10 @@ from app.services.regulatory_reporting.channels.errors import (
     ChannelError,
     ChannelPreconditionError,
 )
+from app.services.regulatory_reporting.channels.orass_api import (
+    PROVISIONAL_CONTRACT_NOTE,
+    OrassApiChannel,
+)
 from app.services.regulatory_reporting.channels.orass_sandbox import (
     SANDBOX_NOTE,
     OrassSandboxChannel,
@@ -21,11 +25,13 @@ from app.services.regulatory_reporting.channels.orass_sandbox import (
 __all__ = [
     "ACT_930_PENALTY_REMINDER",
     "CONFIRMED_CONSULTATION_ADDRESS",
+    "PROVISIONAL_CONTRACT_NOTE",
     "SANDBOX_NOTE",
     "ChannelDowntimeError",
     "ChannelError",
     "ChannelPreconditionError",
     "EmailFallbackChannel",
+    "OrassApiChannel",
     "OrassSandboxChannel",
     "SubmissionChannel",
     "SubmissionPollStatus",

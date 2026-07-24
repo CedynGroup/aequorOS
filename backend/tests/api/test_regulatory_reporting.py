@@ -25,7 +25,11 @@ from tests.storage.inmemory import InMemoryStorageClient
 
 CHECKER_USER_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 REPORTING_DATE = "2026-03-31"
-REGISTRY_CODES = {"BSD3", "LMT", "BSD2", "IRRBB-PILOT", "FX-NOP", "ICAAP-STRESS"}
+# Periodic returns only: the event-driven corporate LRT packs (plan W5)
+# never appear as calendar obligations. LE-MONTHLY (plan W6) is periodic
+# monthly, so the calendar expands it like any other return.
+REGISTRY_CODES = {"BSD3", "LMT", "BSD2", "IRRBB-PILOT", "FX-NOP", "ICAAP-STRESS", "LE-MONTHLY"}
+CORPORATE_CODES = {"LRT-PROFILE", "LRT-OUTLET", "LRT-PARTY", "LRT-CAPITAL", "LRT-PRODUCT"}
 
 
 def _seed_latest_period(db_client: TestClient) -> dict[str, Any]:
@@ -442,6 +446,8 @@ def test_calendar_lists_obligations_for_all_families(db_client: TestClient) -> N
     assert body["horizon_months"] == 3
     obligations = body["obligations"]
     assert obligations
+    # Event-driven corporate codes (CORPORATE_CODES, plan W5) are excluded:
+    # only periodic returns expand into calendar obligations.
     assert {item["return_code"] for item in obligations} == REGISTRY_CODES
     assert {item["return_family"] for item in obligations} == {
         "liquidity",
@@ -449,6 +455,7 @@ def test_calendar_lists_obligations_for_all_families(db_client: TestClient) -> N
         "irrbb",
         "fx",
         "icaap_stress",
+        "large_exposures",
     }
     due_dates = [item["due_date"] for item in obligations]
     assert due_dates == sorted(due_dates)
@@ -469,7 +476,9 @@ def test_return_templates_expose_registry_with_fidelity(db_client: TestClient) -
     response = db_client.get("/api/v1/regulatory-reporting/templates", headers=headers())
     assert response.status_code == 200, response.text
     templates = {item["code"]: item for item in response.json()["templates"]}
-    assert set(templates) == REGISTRY_CODES
+    # The registry (and hence the templates endpoint) also carries the
+    # event-driven corporate LRT packs; only the calendar excludes them.
+    assert set(templates) == REGISTRY_CODES | CORPORATE_CODES
     assert templates["BSD3"]["fidelity"] == "PARTIAL"
     assert templates["BSD3"]["default_channel"] == "orass_sandbox"
     assert templates["BSD3"]["regulator"] == "BOG"
@@ -673,7 +682,8 @@ def test_submit_default_channel_auto_exports_then_poll_acknowledges(
     event = events["events"][0]
     assert event["channel"] == "orass_sandbox"
     assert event["event"] == "submitted"
-    assert event["external_ref"].startswith("SANDBOX-ORASS-BSD3-")
+    # ORASS-style form-set reference: prefix + zero-padded per-return sequence
+    assert event["external_ref"] == "BSD300001"
     assert event["detail"]["sandbox"] is True
     assert "not publicly documented" in event["detail"]["note"]
     assert event["detail"]["auto_exported_kinds"] == ["xlsx"]
@@ -758,3 +768,90 @@ def test_downtime_then_email_fallback_then_orass_reupload(
     # A completed package cannot be submitted again.
     again = db_client.post(f"{base}/submit", headers=headers(), json={"channel": "email"})
     assert again.status_code == 409
+
+
+def test_control_actions_require_approver_role(db_client: TestClient) -> None:
+    """W2 role gates: analysts prepare (generate/validate/export), but approval
+    decisions, channel submissions, polls, and resubmission decisions need the
+    ``approver`` role — the AequorOS mirror of ORASS's Principal-only submit."""
+    period = _seed_latest_period(db_client)
+    _run_liquidity_baseline(db_client, period["id"])
+    _seed_checker_user()
+    package = _generate_bsd3(db_client, reporting_date=period["period_end"]).json()
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}"
+    analyst = headers(roles=("analyst",))
+    approver = headers(ORG_1, CHECKER_USER_ID, roles=("approver",))
+
+    # Analysts CAN prepare.
+    assert db_client.post(f"{base}/validate", headers=analyst).status_code == 200
+    assert db_client.post(f"{base}/request-approval", headers=analyst, json={}).status_code == 200
+    # Analysts CANNOT decide, submit, poll, or decide resubmissions.
+    decided = db_client.post(
+        f"{base}/decide-approval", headers=analyst, json={"action": "approved"}
+    )
+    assert decided.status_code == 403
+    assert "approver" in decided.json()["error"]["message"]
+    assert db_client.post(f"{base}/submit", headers=analyst, json={}).status_code == 403
+    assert db_client.post(f"{base}/poll", headers=analyst).status_code == 403
+
+    # An approver (who is not the maker) can decide.
+    approved = db_client.post(
+        f"{base}/decide-approval", headers=approver, json={"action": "approved"}
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved"
+
+
+def test_viewer_is_read_only_across_the_hub(db_client: TestClient) -> None:
+    _seed_latest_period(db_client)
+    viewer = headers(roles=("viewer",))
+    refused = db_client.post(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages",
+        headers=viewer,
+        json={"return_code": "BSD3", "reporting_date": REPORTING_DATE},
+    )
+    assert refused.status_code == 403
+    listed = db_client.get(f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages", headers=viewer)
+    assert listed.status_code == 200
+
+
+def test_organization_users_directory_resolves_actors(db_client: TestClient) -> None:
+    _seed_latest_period(db_client)
+    _seed_checker_user()
+    response = db_client.get("/api/v1/organization/users", headers=headers())
+    assert response.status_code == 200
+    users = response.json()["users"]
+    emails = {user["email"] for user in users}
+    assert "demo.checker@example.test" in emails
+    assert all({"id", "display_name", "role", "is_active"} <= set(u) for u in users)
+
+
+def test_email_fallback_eml_downloads_as_rfc822_with_attachments(
+    db_client: TestClient, fake_export_seam: InMemoryStorageClient
+) -> None:
+    """W7: the downtime bundle is downloadable as a send-ready .eml whose
+    subject/body/attachments mirror the email-fallback instructions."""
+    import email as email_lib
+    from email import policy as email_policy
+
+    period = _seed_latest_period(db_client)
+    _run_liquidity_baseline(db_client, period["id"])
+    package = _generate_bsd3(db_client).json()
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}"
+    exported = db_client.post(f"{base}/export", headers=headers(), params={"kind": "xlsx"})
+    assert exported.status_code == 201
+
+    response = db_client.get(f"{base}/email-fallback.eml", headers=headers())
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("message/rfc822")
+    message = email_lib.message_from_bytes(response.content, policy=email_policy.default)
+    assert "submitted under ORASS downtime" in message["Subject"]
+    attachments = [part for part in message.walk() if part.get_filename()]
+    assert [part.get_filename() for part in attachments] == ["BSD3.xlsx"]
+    assert attachments[0].get_payload(decode=True) == (
+        f"BSD3:xlsx:{package['id']}".encode()
+    )
+    # Body carries the re-upload rule and the Act 930 penalty reminder.
+    body = message.get_body(preferencelist=("plain",)).get_content()
+    assert "re-upload" in body.lower() or "reupload" in body.lower() or "restored" in body.lower()
+    assert "penalty" in body.lower()

@@ -336,9 +336,7 @@ def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orches
         config=EtlConfig(
             deduplicate=etl_inline_dedup,
             detect_anomalies=etl_inline_dedup,
-            counterparty_model=model_loading.load_counterparty_model(
-                ctx.organization_id, bank_id
-            ),
+            counterparty_model=model_loading.load_counterparty_model(ctx.organization_id, bank_id),
             anomaly_model=model_loading.load_anomaly_model(ctx.organization_id, bank_id),
         ),
     )
@@ -757,9 +755,7 @@ def list_positions(  # noqa: PLR0913 - one keyword-only filter per blotter contr
             .exists()
         )
 
-    total = int(
-        db.scalar(select(func.count()).select_from(CanonicalPosition).where(*filters)) or 0
-    )
+    total = int(db.scalar(select(func.count()).select_from(CanonicalPosition).where(*filters)) or 0)
     # Two-phase page fetch: resolve the page's ids first so the ordered,
     # filtered walk stays an index-only scan (type/currency/reference live in
     # the blotter index), then fetch just those ~100 full rows by id. A
@@ -878,9 +874,7 @@ def list_position_facets(
         ).all()
         return [PositionFacetValueRead(value=value, count=int(count)) for value, count in rows]
 
-    total = int(
-        db.scalar(select(func.count()).select_from(CanonicalPosition).where(*current)) or 0
-    )
+    total = int(db.scalar(select(func.count()).select_from(CanonicalPosition).where(*current)) or 0)
     return CanonicalPositionFacetsRead(
         bank_id=bank.id,
         total=total,

@@ -40,9 +40,7 @@ def _jurisdictions_by_code(db: Session, codes: set[str]) -> dict[str, Jurisdicti
     if not codes:
         return {}
     rows = db.scalars(select(Jurisdiction).where(Jurisdiction.code.in_(codes)))
-    return {
-        row.code: JurisdictionRead.model_validate(row, from_attributes=True) for row in rows
-    }
+    return {row.code: JurisdictionRead.model_validate(row, from_attributes=True) for row in rows}
 
 
 def _bank_read(bank: Bank, registry: dict[str, JurisdictionRead]) -> BankRead:

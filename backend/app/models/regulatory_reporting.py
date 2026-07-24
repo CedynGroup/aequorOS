@@ -42,15 +42,35 @@ PACKAGE_STATUSES = (
     "approved",
     "submitted",
     "acknowledged",
+    # Regulator outcomes mirror ORASS (LRT guide §5): "rejected" is returned
+    # for correction (rework via a superseding version), "declined" is final.
     "rejected",
+    "declined",
     "superseded",
 )
-RETURN_FAMILIES = ("liquidity", "capital", "irrbb", "fx", "icaap_stress")
+# "corporate" (plan W5) is the event-driven LRT pack family; the DB CHECK
+# constraint ck_regulatory_packages_return_family was widened to include it
+# in migration 202607240021. "large_exposures" (plan W6) is the monthly
+# Large Exposures Directive family (Templates 1/1a/2/3/4); the constraint
+# was widened again in migration 202607240022.
+RETURN_FAMILIES = (
+    "liquidity",
+    "capital",
+    "irrbb",
+    "fx",
+    "icaap_stress",
+    "corporate",
+    "large_exposures",
+)
 RETURN_FREQUENCIES = ("monthly", "quarterly", "semiannual", "annual")
 ARTIFACT_KINDS = ("xlsx", "csv", "pdf")
-SUBMISSION_CHANNELS = ("orass_sandbox", "email", "manual")
-SUBMISSION_EVENTS = ("submitted", "status_poll", "acknowledged", "rejected")
+# "orass_api" is the production machine-to-machine channel (Vizor API Service
+# wire contract configured per bank once BoG/Regnology onboarding completes);
+# "orass_sandbox" remains the labeled simulator for pre-onboarding use.
+SUBMISSION_CHANNELS = ("orass_api", "orass_sandbox", "email", "manual")
+SUBMISSION_EVENTS = ("submitted", "status_poll", "acknowledged", "rejected", "declined")
 APPROVAL_ACTIONS = ("requested", "approved", "rejected")
+RESUBMISSION_STATUSES = ("requested", "granted", "denied")
 
 
 def _values(options: tuple[str, ...]) -> str:
@@ -130,6 +150,15 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True), default=utc_now, nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # SHA-256 over the canonical-JSON snapshot, sealed at generation; exports
+    # verify against it so a drifted snapshot can never silently render.
+    snapshot_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # ORASS-style submission revision ("1.0", "1.1", ...) stamped at submit
+    # time; the minor number counts granted resubmissions in the version chain.
+    submission_revision: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # Supervisor comments captured from the regulator's reject/decline response
+    # (ORASS "View Comments" parity); None until such a decision is recorded.
+    regulator_comments: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class RegulatoryPackageArtifact(UuidV7PrimaryKeyMixin, Base):
@@ -147,6 +176,14 @@ class RegulatoryPackageArtifact(UuidV7PrimaryKeyMixin, Base):
             ondelete="CASCADE",
         ),
         UniqueConstraint("id", "organization_id", name="uq_regulatory_package_artifacts_id_org"),
+        # One artifact per kind per package at the schema level; the exporter
+        # upserts in place, so a duplicate row is always a bug.
+        UniqueConstraint(
+            "organization_id",
+            "package_id",
+            "kind",
+            name="uq_regulatory_package_artifacts_pkg_kind",
+        ),
         Index(
             "ix_regulatory_package_artifacts_org_package",
             "organization_id",
@@ -234,6 +271,57 @@ class RegulatorySubmissionEvent(UuidV7PrimaryKeyMixin, Base):
     detail: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class RegulatoryResubmissionRequest(UuidV7PrimaryKeyMixin, Base):
+    """One post-submission correction request (ORASS "Request Resubmission").
+
+    A submitted/acknowledged return is immutable at the regulator; corrections
+    require this formal request with a reason, which the regulator grants or
+    denies. A granted request authorizes exactly one superseding regeneration
+    (``consumed_by_package_id`` links the version it produced), which carries
+    the next submission revision (1.0 -> 1.1).
+    """
+
+    __tablename__ = "regulatory_resubmission_requests"
+    __table_args__ = (
+        CheckConstraint(
+            f"status IN ({_values(RESUBMISSION_STATUSES)})",
+            name="ck_regulatory_resubmission_requests_status",
+        ),
+        ForeignKeyConstraint(
+            ["package_id", "organization_id"],
+            ["regulatory_packages.id", "regulatory_packages.organization_id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "id", "organization_id", name="uq_regulatory_resubmission_requests_id_org"
+        ),
+        Index(
+            "ix_regulatory_resubmission_requests_org_package",
+            "organization_id",
+            "package_id",
+        ),
+    )
+
+    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    package_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="requested")
+    requested_by: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    detail: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
+    # The superseding package a granted request produced; a granted request
+    # with this still NULL is the one-shot authorization the generator checks.
+    consumed_by_package_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
