@@ -52,7 +52,9 @@ PACKAGE_STATUSES = (
 # constraint ck_regulatory_packages_return_family was widened to include it
 # in migration 202607240021. "large_exposures" (plan W6) is the monthly
 # Large Exposures Directive family (Templates 1/1a/2/3/4); the constraint
-# was widened again in migration 202607240022.
+# was widened again in migration 202607240022. "dbk" (W6 remainder) is the
+# DBK daily family (Notice BG/FMD/2026/07) — the family and the "daily"
+# frequency were admitted in migration 202607240023.
 RETURN_FAMILIES = (
     "liquidity",
     "capital",
@@ -61,8 +63,10 @@ RETURN_FAMILIES = (
     "icaap_stress",
     "corporate",
     "large_exposures",
+    "dbk",
 )
-RETURN_FREQUENCIES = ("monthly", "quarterly", "semiannual", "annual")
+RETURN_FREQUENCIES = ("monthly", "quarterly", "semiannual", "annual", "daily")
+RETURN_BASES = ("solo", "consolidated")
 ARTIFACT_KINDS = ("xlsx", "csv", "pdf")
 # "orass_api" is the production machine-to-machine channel (Vizor API Service
 # wire contract configured per bank once BoG/Regnology onboarding completes);
@@ -94,6 +98,10 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             f"frequency IN ({_values(RETURN_FREQUENCIES)})",
             name="ck_regulatory_packages_frequency",
         ),
+        CheckConstraint(
+            f"basis IN ({_values(RETURN_BASES)})",
+            name="ck_regulatory_packages_basis",
+        ),
         CheckConstraint("version >= 1", name="ck_regulatory_packages_version"),
         ForeignKeyConstraint(
             ["bank_id", "organization_id"],
@@ -116,13 +124,16 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "bank_id",
             "status",
         ),
-        # One current (non-superseded) version per return per reporting date.
+        # One current (non-superseded) version per return per reporting date
+        # per reporting basis — solo and consolidated are independent version
+        # chains for the same (return_code, reporting_date).
         Index(
             "uq_regulatory_packages_current",
             "organization_id",
             "bank_id",
             "return_code",
             "reporting_date",
+            "basis",
             unique=True,
             postgresql_where=sql_text("status != 'superseded'"),
             sqlite_where=sql_text("status != 'superseded'"),
@@ -135,6 +146,9 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     return_code: Mapped[str] = mapped_column(String(40), nullable=False)
     reporting_date: Mapped[date] = mapped_column(Date, nullable=False)
     frequency: Mapped[str] = mapped_column(String(12), nullable=False)
+    basis: Mapped[str] = mapped_column(
+        String(12), default="solo", server_default=sql_text("'solo'"), nullable=False
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     supersedes_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
@@ -365,3 +379,38 @@ class RegulatoryChannelConfig(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     )
     credential_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     credential_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class RegulatoryReportingSettings(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
+    """Per-bank reporting configuration — currently the deadline-override map.
+
+    ``deadline_overrides`` is a ``{return_code: day_of_month}`` JSON map that
+    lets Bank-IT correct the registry's placeholder monthly deadlines (e.g. the
+    BSD2 day-14 and FX-NOP day-10 placeholders) once ORASS onboarding confirms
+    the real day. One row per (org, bank). RLS-forced like every tenant table.
+    """
+
+    __tablename__ = "regulatory_reporting_settings"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+        ),
+        UniqueConstraint("id", "organization_id", name="uq_regulatory_reporting_settings_id_org"),
+        UniqueConstraint(
+            "organization_id",
+            "bank_id",
+            name="uq_regulatory_reporting_settings_scope",
+        ),
+        Index(
+            "ix_regulatory_reporting_settings_org_bank",
+            "organization_id",
+            "bank_id",
+        ),
+    )
+
+    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    deadline_overrides: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )

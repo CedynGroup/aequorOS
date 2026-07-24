@@ -68,6 +68,7 @@ from app.models.regulatory_reporting import (
     RegulatoryPackage,
     RegulatoryPackageApproval,
     RegulatoryPackageArtifact,
+    RegulatoryReportingSettings,
     RegulatoryResubmissionRequest,
     RegulatorySubmissionEvent,
 )
@@ -162,6 +163,7 @@ __all__ = [
     "RegulatoryPackage",
     "RegulatoryPackageApproval",
     "RegulatoryPackageArtifact",
+    "RegulatoryReportingSettings",
     "RegulatoryResubmissionRequest",
     "RegulatoryRun",
     "RegulatorySubmissionEvent",

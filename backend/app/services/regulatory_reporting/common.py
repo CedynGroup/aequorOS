@@ -60,6 +60,37 @@ def get_period_for_reporting_date_or_404(
     return period
 
 
+def get_effective_period_or_404(
+    db: Session, ctx: TenantContext, bank: Bank, reporting_date: date
+) -> BankReportingPeriod:
+    """The latest reporting period ending on or before ``reporting_date``.
+
+    Daily returns file on business days that rarely coincide with a monthly
+    reporting-period end, so their snapshot draws on the most recent effective
+    period's canonical data (mirrors the forecast as-of convention).
+    """
+    period = db.scalar(
+        select(BankReportingPeriod)
+        .where(
+            BankReportingPeriod.organization_id == ctx.organization_id,
+            BankReportingPeriod.bank_id == bank.id,
+            BankReportingPeriod.period_end <= reporting_date,
+        )
+        .order_by(BankReportingPeriod.period_end.desc())
+        .limit(1)
+    )
+    if period is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"No reporting period ends on or before {reporting_date.isoformat()} for "
+                "this bank. Ingest financial data and compute its regulatory inputs "
+                "before generating the return."
+            ),
+        )
+    return period
+
+
 def get_package_or_404(
     db: Session, ctx: TenantContext, bank_id: UUID, package_id: UUID
 ) -> RegulatoryPackage:
@@ -92,6 +123,7 @@ def read_summary(package: RegulatoryPackage) -> RegulatoryPackageSummaryRead:
         return_code=package.return_code,
         reporting_date=package.reporting_date,
         frequency=package.frequency,  # type: ignore[arg-type]
+        basis=package.basis,  # type: ignore[arg-type]
         status=package.status,  # type: ignore[arg-type]
         version=package.version,
         supersedes_id=package.supersedes_id,

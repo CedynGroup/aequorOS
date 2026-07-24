@@ -23,6 +23,9 @@ type IrrScenarioCode = Literal[
     "short_down_250",
     "steepener",
     "flattener",
+    # BoG GHS calibration (informational until the 2027 effective date).
+    "parallel_up_450",
+    "parallel_down_450",
 ]
 type RegulatoryScenarioCode = Literal[
     "baseline",
@@ -47,6 +50,8 @@ type RegulatoryScenarioCode = Literal[
     "short_down_250",
     "steepener",
     "flattener",
+    "parallel_up_450",
+    "parallel_down_450",
     "mild_depreciation",
     "severe_depreciation",
     "cedi_crisis",

@@ -7,9 +7,10 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 type ReturnFamily = Literal[
-    "liquidity", "capital", "irrbb", "fx", "icaap_stress", "corporate", "large_exposures"
+    "liquidity", "capital", "irrbb", "fx", "icaap_stress", "corporate", "large_exposures", "dbk"
 ]
-type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual"]
+type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual", "daily"]
+type ReturnBasis = Literal["solo", "consolidated"]
 type PackageStatus = Literal[
     "draft",
     "generated",
@@ -42,6 +43,7 @@ class ClosedModel(BaseModel):
 class RegulatoryPackageCreate(ClosedModel):
     return_code: str = Field(min_length=1, max_length=40)
     reporting_date: date
+    basis: ReturnBasis = "solo"
     notes: str | None = Field(default=None, max_length=2000)
 
 
@@ -85,6 +87,7 @@ class RegulatoryPackageSummaryRead(ClosedModel):
     return_code: str
     reporting_date: date
     frequency: ReturnFrequency
+    basis: ReturnBasis
     status: PackageStatus
     version: int
     supersedes_id: UUID | None
@@ -163,6 +166,13 @@ class ReportingObligationRead(ClosedModel):
     default_channel: ChannelCode
     reporting_date: date
     due_date: date
+    # Cut-off time-of-day on the due date (e.g. daily DBK "10:00"); None for
+    # returns whose deadline is a calendar day only.
+    due_time: str | None = None
+    # Obligations are enumerated on the solo basis only for now (the calendar is
+    # not doubled per basis); generated packages still carry solo/consolidated
+    # basis independently.
+    basis: ReturnBasis = "solo"
     package_id: UUID | None
     package_status: PackageStatus | None
     package_version: int | None
@@ -203,6 +213,35 @@ class ChannelConfigRead(ClosedModel):
     config: dict[str, Any]
     has_credentials: bool
     credential_fingerprint: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReportingSettingsPut(ClosedModel):
+    """Per-bank deadline overrides: ``{return_code: day_of_month}``.
+
+    Corrects the registry's placeholder monthly deadlines (e.g. BSD2 day-14,
+    FX-NOP day-10) at onboarding once ORASS confirms the real day. Day values
+    are 1..31 and are clamped to the target month's length by ``monthly_day``.
+    """
+
+    deadline_overrides: dict[str, int] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_days(self) -> ReportingSettingsPut:
+        for return_code, day in self.deadline_overrides.items():
+            if not 1 <= day <= 31:
+                msg = (
+                    f"Deadline override for '{return_code}' must be a day of month "
+                    f"between 1 and 31, got {day}."
+                )
+                raise ValueError(msg)
+        return self
+
+
+class ReportingSettingsRead(ClosedModel):
+    bank_id: UUID
+    deadline_overrides: dict[str, int]
     created_at: datetime
     updated_at: datetime
 

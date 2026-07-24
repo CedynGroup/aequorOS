@@ -60,6 +60,13 @@ import {
   PackageStatusToJSON,
   PackageStatusToJSONTyped,
 } from "./PackageStatus";
+import type { ReturnBasis } from "./ReturnBasis";
+import {
+  ReturnBasisFromJSON,
+  ReturnBasisFromJSONTyped,
+  ReturnBasisToJSON,
+  ReturnBasisToJSONTyped,
+} from "./ReturnBasis";
 import type { SupersedesId } from "./SupersedesId";
 import {
   SupersedesIdFromJSON,
@@ -87,6 +94,12 @@ export interface RegulatoryPackageSummaryRead {
    * @memberof RegulatoryPackageSummaryRead
    */
   bankId: string;
+  /**
+   *
+   * @type {ReturnBasis}
+   * @memberof RegulatoryPackageSummaryRead
+   */
+  basis: ReturnBasis;
   /**
    *
    * @type {Date}
@@ -198,6 +211,7 @@ export function instanceOfRegulatoryPackageSummaryRead(
   value: object,
 ): value is RegulatoryPackageSummaryRead {
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
+  if (!("basis" in value) || value["basis"] === undefined) return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
   if (!("frequency" in value) || value["frequency"] === undefined) return false;
   if (!("generatedAt" in value) || value["generatedAt"] === undefined)
@@ -250,6 +264,7 @@ export function RegulatoryPackageSummaryReadFromJSONTyped(
   return {
     ...json,
     bankId: json["bank_id"],
+    basis: ReturnBasisFromJSON(json["basis"]),
     createdAt: new Date(json["created_at"]),
     frequency: ReturnFrequencyFromJSON(json["frequency"]),
     generatedAt: new Date(json["generated_at"]),
@@ -286,6 +301,7 @@ export function RegulatoryPackageSummaryReadToJSONTyped(
 
   return {
     bank_id: value["bankId"],
+    basis: ReturnBasisToJSON(value["basis"]),
     created_at: value["createdAt"].toISOString(),
     frequency: ReturnFrequencyToJSON(value["frequency"]),
     generated_at: value["generatedAt"].toISOString(),

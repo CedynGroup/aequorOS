@@ -37,6 +37,8 @@ export const RegulatoryScenarioCode = {
   ShortDown250: "short_down_250",
   Steepener: "steepener",
   Flattener: "flattener",
+  ParallelUp450: "parallel_up_450",
+  ParallelDown450: "parallel_down_450",
   MildDepreciation: "mild_depreciation",
   SevereDepreciation: "severe_depreciation",
   CediCrisis: "cedi_crisis",

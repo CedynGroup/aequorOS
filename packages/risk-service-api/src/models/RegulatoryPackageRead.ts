@@ -18,6 +18,27 @@ import {
   RegulatorCommentsToJSON,
   RegulatorCommentsToJSONTyped,
 } from "./RegulatorComments";
+import type { SubmissionRevision } from "./SubmissionRevision";
+import {
+  SubmissionRevisionFromJSON,
+  SubmissionRevisionFromJSONTyped,
+  SubmissionRevisionToJSON,
+  SubmissionRevisionToJSONTyped,
+} from "./SubmissionRevision";
+import type { PackageStatus } from "./PackageStatus";
+import {
+  PackageStatusFromJSON,
+  PackageStatusFromJSONTyped,
+  PackageStatusToJSON,
+  PackageStatusToJSONTyped,
+} from "./PackageStatus";
+import type { ReturnFrequency } from "./ReturnFrequency";
+import {
+  ReturnFrequencyFromJSON,
+  ReturnFrequencyFromJSONTyped,
+  ReturnFrequencyToJSON,
+  ReturnFrequencyToJSONTyped,
+} from "./ReturnFrequency";
 import type { SnapshotSha256 } from "./SnapshotSha256";
 import {
   SnapshotSha256FromJSON,
@@ -39,13 +60,6 @@ import {
   ReturnFamilyToJSON,
   ReturnFamilyToJSONTyped,
 } from "./ReturnFamily";
-import type { SubmissionRevision } from "./SubmissionRevision";
-import {
-  SubmissionRevisionFromJSON,
-  SubmissionRevisionFromJSONTyped,
-  SubmissionRevisionToJSON,
-  SubmissionRevisionToJSONTyped,
-} from "./SubmissionRevision";
 import type { Notes1 } from "./Notes1";
 import {
   Notes1FromJSON,
@@ -60,13 +74,13 @@ import {
   PackageApprovalReadToJSON,
   PackageApprovalReadToJSONTyped,
 } from "./PackageApprovalRead";
-import type { PackageStatus } from "./PackageStatus";
+import type { ReturnBasis } from "./ReturnBasis";
 import {
-  PackageStatusFromJSON,
-  PackageStatusFromJSONTyped,
-  PackageStatusToJSON,
-  PackageStatusToJSONTyped,
-} from "./PackageStatus";
+  ReturnBasisFromJSON,
+  ReturnBasisFromJSONTyped,
+  ReturnBasisToJSON,
+  ReturnBasisToJSONTyped,
+} from "./ReturnBasis";
 import type { SupersedesId } from "./SupersedesId";
 import {
   SupersedesIdFromJSON,
@@ -88,13 +102,6 @@ import {
   RegulatoryPackageReadValidationReportToJSON,
   RegulatoryPackageReadValidationReportToJSONTyped,
 } from "./RegulatoryPackageReadValidationReport";
-import type { ReturnFrequency } from "./ReturnFrequency";
-import {
-  ReturnFrequencyFromJSON,
-  ReturnFrequencyFromJSONTyped,
-  ReturnFrequencyToJSON,
-  ReturnFrequencyToJSONTyped,
-} from "./ReturnFrequency";
 
 /**
  *
@@ -114,6 +121,12 @@ export interface RegulatoryPackageRead {
    * @memberof RegulatoryPackageRead
    */
   bankId: string;
+  /**
+   *
+   * @type {ReturnBasis}
+   * @memberof RegulatoryPackageRead
+   */
+  basis: ReturnBasis;
   /**
    *
    * @type {Date}
@@ -244,6 +257,7 @@ export function instanceOfRegulatoryPackageRead(
 ): value is RegulatoryPackageRead {
   if (!("approvals" in value) || value["approvals"] === undefined) return false;
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
+  if (!("basis" in value) || value["basis"] === undefined) return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
   if (!("frequency" in value) || value["frequency"] === undefined) return false;
   if (!("generatedAt" in value) || value["generatedAt"] === undefined)
@@ -304,6 +318,7 @@ export function RegulatoryPackageReadFromJSONTyped(
       PackageApprovalReadFromJSON,
     ),
     bankId: json["bank_id"],
+    basis: ReturnBasisFromJSON(json["basis"]),
     createdAt: new Date(json["created_at"]),
     frequency: ReturnFrequencyFromJSON(json["frequency"]),
     generatedAt: new Date(json["generated_at"]),
@@ -348,6 +363,7 @@ export function RegulatoryPackageReadToJSONTyped(
       PackageApprovalReadToJSON,
     ),
     bank_id: value["bankId"],
+    basis: ReturnBasisToJSON(value["basis"]),
     created_at: value["createdAt"].toISOString(),
     frequency: ReturnFrequencyToJSON(value["frequency"]),
     generated_at: value["generatedAt"].toISOString(),

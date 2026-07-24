@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { ReturnBasis } from "./ReturnBasis";
+import {
+  ReturnBasisFromJSON,
+  ReturnBasisFromJSONTyped,
+  ReturnBasisToJSON,
+  ReturnBasisToJSONTyped,
+} from "./ReturnBasis";
 import type { Notes } from "./Notes";
 import {
   NotesFromJSON,
@@ -25,6 +32,12 @@ import {
  * @interface RegulatoryPackageCreate
  */
 export interface RegulatoryPackageCreate {
+  /**
+   *
+   * @type {ReturnBasis}
+   * @memberof RegulatoryPackageCreate
+   */
+  basis?: ReturnBasis;
   /**
    *
    * @type {Notes}
@@ -73,6 +86,8 @@ export function RegulatoryPackageCreateFromJSONTyped(
   }
   return {
     ...json,
+    basis:
+      json["basis"] == null ? undefined : ReturnBasisFromJSON(json["basis"]),
     notes: json["notes"] == null ? undefined : NotesFromJSON(json["notes"]),
     reportingDate: new Date(json["reporting_date"]),
     returnCode: json["return_code"],
@@ -94,6 +109,7 @@ export function RegulatoryPackageCreateToJSONTyped(
   }
 
   return {
+    basis: ReturnBasisToJSON(value["basis"]),
     notes: NotesToJSON(value["notes"]),
     reporting_date: value["reportingDate"].toISOString().substring(0, 10),
     return_code: value["returnCode"],

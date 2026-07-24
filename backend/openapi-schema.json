@@ -1567,6 +1567,13 @@
         "title": "BankSeedSummaryRead",
         "type": "object"
       },
+      "BasisFilter": {
+        "enum": [
+          "solo",
+          "consolidated"
+        ],
+        "type": "string"
+      },
       "BehavioralAccuracyRead": {
         "additionalProperties": false,
         "properties": {
@@ -13438,7 +13445,9 @@
           "short_up_250",
           "short_down_250",
           "steepener",
-          "flattener"
+          "flattener",
+          "parallel_up_450",
+          "parallel_down_450"
         ],
         "type": "string"
       },
@@ -17583,6 +17592,10 @@
       "RegulatoryPackageCreate": {
         "additionalProperties": false,
         "properties": {
+          "basis": {
+            "$ref": "#/components/schemas/ReturnBasis",
+            "default": "solo"
+          },
           "notes": {
             "anyOf": [
               {
@@ -17671,6 +17684,9 @@
             "format": "uuid",
             "title": "Bank Id",
             "type": "string"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/ReturnBasis"
           },
           "created_at": {
             "format": "date-time",
@@ -17816,6 +17832,7 @@
           "return_code",
           "reporting_date",
           "frequency",
+          "basis",
           "status",
           "version",
           "supersedes_id",
@@ -17843,6 +17860,9 @@
             "format": "uuid",
             "title": "Bank Id",
             "type": "string"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/ReturnBasis"
           },
           "created_at": {
             "format": "date-time",
@@ -17966,6 +17986,7 @@
           "return_code",
           "reporting_date",
           "frequency",
+          "basis",
           "status",
           "version",
           "supersedes_id",
@@ -18364,6 +18385,8 @@
           "short_down_250",
           "steepener",
           "flattener",
+          "parallel_up_450",
+          "parallel_down_450",
           "mild_depreciation",
           "severe_depreciation",
           "cedi_crisis",
@@ -19279,6 +19302,10 @@
       "ReportingObligationRead": {
         "additionalProperties": false,
         "properties": {
+          "basis": {
+            "$ref": "#/components/schemas/ReturnBasis",
+            "default": "solo"
+          },
           "default_channel": {
             "$ref": "#/components/schemas/ChannelCode"
           },
@@ -19286,6 +19313,17 @@
             "format": "date",
             "title": "Due Date",
             "type": "string"
+          },
+          "due_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Time"
           },
           "fidelity": {
             "$ref": "#/components/schemas/FidelityGrade"
@@ -19361,6 +19399,56 @@
           "rag"
         ],
         "title": "ReportingObligationRead",
+        "type": "object"
+      },
+      "ReportingSettingsPut": {
+        "additionalProperties": false,
+        "description": "Per-bank deadline overrides: ``{return_code: day_of_month}``.\n\nCorrects the registry's placeholder monthly deadlines (e.g. BSD2 day-14,\nFX-NOP day-10) at onboarding once ORASS confirms the real day. Day values\nare 1..31 and are clamped to the target month's length by ``monthly_day``.",
+        "properties": {
+          "deadline_overrides": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Deadline Overrides",
+            "type": "object"
+          }
+        },
+        "title": "ReportingSettingsPut",
+        "type": "object"
+      },
+      "ReportingSettingsRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "format": "uuid",
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deadline_overrides": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Deadline Overrides",
+            "type": "object"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "deadline_overrides",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReportingSettingsRead",
         "type": "object"
       },
       "ResubmissionDecisionCreate": {
@@ -19516,6 +19604,13 @@
         ],
         "type": "string"
       },
+      "ReturnBasis": {
+        "enum": [
+          "solo",
+          "consolidated"
+        ],
+        "type": "string"
+      },
       "ReturnFamily": {
         "enum": [
           "liquidity",
@@ -19524,7 +19619,8 @@
           "fx",
           "icaap_stress",
           "corporate",
-          "large_exposures"
+          "large_exposures",
+          "dbk"
         ],
         "type": "string"
       },
@@ -19533,7 +19629,8 @@
           "monthly",
           "quarterly",
           "semiannual",
-          "annual"
+          "annual",
+          "daily"
         ],
         "type": "string"
       },
@@ -33157,6 +33254,22 @@
           },
           {
             "in": "query",
+            "name": "basis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/BasisFilter"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            }
+          },
+          {
+            "in": "query",
             "name": "include_superseded",
             "required": false,
             "schema": {
@@ -35216,6 +35329,212 @@
           }
         ],
         "summary": "Put Channel Config",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-reporting/settings": {
+      "get": {
+        "description": "The per-bank deadline-override map (empty when never configured).",
+        "operationId": "getReportingSettings",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportingSettingsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reporting Settings",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      },
+      "put": {
+        "description": "Set per-bank monthly-deadline overrides ({return_code: day_of_month}).",
+        "operationId": "putReportingSettings",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportingSettingsPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportingSettingsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Reporting Settings",
         "tags": [
           "regulatory-reporting"
         ]

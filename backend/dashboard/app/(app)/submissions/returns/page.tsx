@@ -75,6 +75,7 @@ import {
   PackageStatusPill,
   ResubmissionStatusPill,
   downloadArtifact,
+  downloadEmailFallbackEml,
   fmtBytes,
 } from '@/components/submissions/shared';
 import LifecycleStepper from '@/components/submissions/LifecycleStepper';
@@ -382,6 +383,7 @@ function PackageWorkspace({
   useEffect(() => setChannel(defaultChannel), [defaultChannel, summary.id]);
   const [exportingKind, setExportingKind] = useState<ArtifactKind | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [emlError, setEmlError] = useState<string | null>(null);
 
   const status = pkg?.status ?? summary.status;
   const report = pkg?.validationReport ?? null;
@@ -428,6 +430,13 @@ function PackageWorkspace({
     setDownloadError(null);
     downloadArtifact(bankId, artifact).catch((error: unknown) =>
       setDownloadError(error instanceof Error ? error.message : 'Download failed.')
+    );
+  };
+
+  const handleEmlDownload = () => {
+    setEmlError(null);
+    downloadEmailFallbackEml(bankId, summary.id).catch((error: unknown) =>
+      setEmlError(error instanceof Error ? error.message : 'Download failed.')
     );
   };
 
@@ -761,6 +770,25 @@ function PackageWorkspace({
                   : 'Submission unlocks once the package is approved.'}
               </p>
             )}
+            {latestSubmitted?.channel === 'email' && (
+              <div className="mt-3 space-y-1.5">
+                <button
+                  type="button"
+                  onClick={handleEmlDownload}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
+                >
+                  <Download size={13} aria-hidden />
+                  Download .eml
+                </button>
+                <p className="text-micro text-slate leading-relaxed">
+                  Send-ready downtime email bundle (subject, instructions, and
+                  attachments) — open in your mail client and send.
+                </p>
+              </div>
+            )}
+            {emlError && (
+              <p className="mt-2 text-caption text-critical">{emlError}</p>
+            )}
             {poll.data && (
               <p className="mt-2 text-caption text-navy/80">
                 Last poll:{' '}
@@ -787,17 +815,27 @@ function PackageWorkspace({
                 <p className="text-caption text-navy/80 leading-relaxed">
                   {fallback.message}
                 </p>
-                <button
-                  type="button"
-                  disabled={submit.isPending}
-                  onClick={() =>
-                    submit.mutate({ packageId: summary.id, channel: 'email' })
-                  }
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-                >
-                  <Mail size={13} aria-hidden />
-                  Use email fallback
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={submit.isPending}
+                    onClick={() =>
+                      submit.mutate({ packageId: summary.id, channel: 'email' })
+                    }
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+                  >
+                    <Mail size={13} aria-hidden />
+                    Use email fallback
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEmlDownload}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
+                  >
+                    <Download size={13} aria-hidden />
+                    Download .eml
+                  </button>
+                </div>
                 {instructionsQuery.data && (
                   <details className="text-caption text-navy/80">
                     <summary className="cursor-pointer font-medium text-navy">

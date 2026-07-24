@@ -37,7 +37,11 @@ export default defineConfig({
   webServer: [
     {
       command:
-        `sh -c 'mkdir -p "${E2E_TMP}" && ` +
+        // Start from a FRESH disposable database every run: seed-demo only
+        // wipes the seeded bank's ingestion/run dependents, so terminal
+        // regulatory packages (acknowledged/rejected) minted by lifecycle
+        // journeys would otherwise leak across runs and block regeneration.
+        `sh -c 'mkdir -p "${E2E_TMP}" && rm -f "${E2E_DB}" "${E2E_DB}-wal" "${E2E_DB}-shm" && ` +
         `PYTHONPATH=. DATABASE_URL="sqlite+pysqlite:///${E2E_DB}" uv run python scripts/e2e_bootstrap.py && ` +
         `exec uv run uvicorn app.main:app --port ${E2E_BACKEND_PORT} --log-level warning'`,
       cwd: BACKEND_DIR,

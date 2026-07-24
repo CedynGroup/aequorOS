@@ -12,6 +12,7 @@
 
 import * as runtime from "../runtime";
 import type {
+  BasisFilter,
   ChannelConfigPut,
   ChannelConfigRead,
   EmailFallbackInstructionsRead,
@@ -26,6 +27,8 @@ import type {
   RegulatoryPackageListRead,
   RegulatoryPackageRead,
   ReportingObligationListRead,
+  ReportingSettingsPut,
+  ReportingSettingsRead,
   ResubmissionDecisionCreate,
   ResubmissionRequestCreate,
   ResubmissionRequestListRead,
@@ -35,6 +38,8 @@ import type {
   SubmissionPollRead,
 } from "../models/index";
 import {
+  BasisFilterFromJSON,
+  BasisFilterToJSON,
   ChannelConfigPutFromJSON,
   ChannelConfigPutToJSON,
   ChannelConfigReadFromJSON,
@@ -63,6 +68,10 @@ import {
   RegulatoryPackageReadToJSON,
   ReportingObligationListReadFromJSON,
   ReportingObligationListReadToJSON,
+  ReportingSettingsPutFromJSON,
+  ReportingSettingsPutToJSON,
+  ReportingSettingsReadFromJSON,
+  ReportingSettingsReadToJSON,
   ResubmissionDecisionCreateFromJSON,
   ResubmissionDecisionCreateToJSON,
   ResubmissionRequestCreateFromJSON,
@@ -128,6 +137,10 @@ export interface GetRegulatoryPackageRequest {
   packageId: string;
 }
 
+export interface GetReportingSettingsRequest {
+  bankId: string;
+}
+
 export interface ListPackageArtifactsRequest {
   bankId: string;
   packageId: string;
@@ -141,6 +154,7 @@ export interface ListRegulatoryPackagesRequest {
   reportingDateFrom?: Date | null;
   reportingDateTo?: Date | null;
   status?: PackageStatusFilter | null;
+  basis?: BasisFilter | null;
   includeSuperseded?: boolean;
   limit?: number;
   offset?: number;
@@ -172,6 +186,11 @@ export interface PutChannelConfigRequest {
   bankId: string;
   channel: PutChannelConfigChannelEnum;
   channelConfigPut: ChannelConfigPut;
+}
+
+export interface PutReportingSettingsRequest {
+  bankId: string;
+  reportingSettingsPut: ReportingSettingsPut;
 }
 
 export interface RequestPackageApprovalRequest {
@@ -874,6 +893,66 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * The per-bank deadline-override map (empty when never configured).
+   * Get Reporting Settings
+   */
+  async getReportingSettingsRaw(
+    requestParameters: GetReportingSettingsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ReportingSettingsRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getReportingSettings().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-reporting/settings`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ReportingSettingsReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The per-bank deadline-override map (empty when never configured).
+   * Get Reporting Settings
+   */
+  async getReportingSettings(
+    requestParameters: GetReportingSettingsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ReportingSettingsRead> {
+    const response = await this.getReportingSettingsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Persisted artifact list for a package (never session-local).
    * List Package Artifacts
    */
@@ -995,6 +1074,10 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     if (requestParameters["status"] != null) {
       queryParameters["status"] = requestParameters["status"];
+    }
+
+    if (requestParameters["basis"] != null) {
+      queryParameters["basis"] = requestParameters["basis"];
     }
 
     if (requestParameters["includeSuperseded"] != null) {
@@ -1451,6 +1534,78 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<ChannelConfigRead> {
     const response = await this.putChannelConfigRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Set per-bank monthly-deadline overrides ({return_code: day_of_month}).
+   * Put Reporting Settings
+   */
+  async putReportingSettingsRaw(
+    requestParameters: PutReportingSettingsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ReportingSettingsRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling putReportingSettings().',
+      );
+    }
+
+    if (requestParameters["reportingSettingsPut"] == null) {
+      throw new runtime.RequiredError(
+        "reportingSettingsPut",
+        'Required parameter "reportingSettingsPut" was null or undefined when calling putReportingSettings().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-reporting/settings`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: ReportingSettingsPutToJSON(
+          requestParameters["reportingSettingsPut"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ReportingSettingsReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Set per-bank monthly-deadline overrides ({return_code: day_of_month}).
+   * Put Reporting Settings
+   */
+  async putReportingSettings(
+    requestParameters: PutReportingSettingsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ReportingSettingsRead> {
+    const response = await this.putReportingSettingsRaw(
       requestParameters,
       initOverrides,
     );

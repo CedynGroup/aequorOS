@@ -27,6 +27,10 @@ from app.services.regulatory_reporting.registry import (
     ReturnDefinition,
     get_definition,
 )
+from app.services.regulatory_reporting.reporting_settings import (
+    get_reporting_settings,
+    put_reporting_settings,
+)
 from app.services.regulatory_reporting.validation import validate_package
 from app.services.regulatory_reporting.workflow import (
     ALLOWED_TRANSITIONS,
@@ -47,11 +51,13 @@ __all__ = [
     "get_channel_config",
     "get_definition",
     "get_package",
+    "get_reporting_settings",
     "list_obligations",
     "list_packages",
     "list_return_templates",
     "list_submission_events",
     "put_channel_config",
+    "put_reporting_settings",
     "record_regulator_decision",
     "request_approval",
     "submit_package",

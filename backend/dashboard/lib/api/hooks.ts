@@ -20,16 +20,29 @@ import {
 import type {
   ApprovalDecision,
   ArtifactKind,
+  BankLicenseCreate,
+  BankLicenseUpdate,
+  BankNameHistoryCreate,
+  BankNameHistoryUpdate,
+  BankProductCreate,
+  BankProductUpdate,
   BehavioralApplyProduct,
   CashflowForecastMode,
   CashflowHorizon,
   ChannelCode,
   ForecastRunCreate,
+  InstitutionProfilePut,
   MarketDataConnectionCreate,
   MarketDataConnectionUpdate,
+  OutletCreate,
+  OutletUpdate,
   PackageStatusFilter,
   RegulatoryModule,
   RegulatoryScenarioCode,
+  RelatedPartyCreate,
+  RelatedPartyUpdate,
+  ShareholdingCreate,
+  ShareholdingUpdate,
   TemenosBackfillRequest,
   TemenosConnectionCreate,
   TemenosConnectionUpdate,
@@ -42,6 +55,7 @@ import {
   behavioralModelsApi,
   cashflowForecastApi,
   forecastingApi,
+  institutionProfileApi,
   isApiError,
   jobsApi,
   liveEngineApi,
@@ -1356,8 +1370,12 @@ export function useReportingObligations(
 
 export type RegulatoryPackageFilters = {
   returnCode?: string;
+  returnFamily?: string;
   /** ISO date (YYYY-MM-DD). */
   reportingDate?: string;
+  /** Inclusive ISO date range bounds (YYYY-MM-DD). */
+  reportingDateFrom?: string;
+  reportingDateTo?: string;
   status?: PackageStatusFilter;
   includeSuperseded?: boolean;
   limit?: number;
@@ -1373,7 +1391,10 @@ export function useRegulatoryPackages(
       'rr-packages',
       bankId,
       filters.returnCode ?? null,
+      filters.returnFamily ?? null,
       filters.reportingDate ?? null,
+      filters.reportingDateFrom ?? null,
+      filters.reportingDateTo ?? null,
       filters.status ?? null,
       filters.includeSuperseded ?? true,
       filters.limit ?? 25,
@@ -1384,8 +1405,15 @@ export function useRegulatoryPackages(
         regulatoryReportingApi.listRegulatoryPackages({
           bankId: bankId!,
           returnCode: filters.returnCode,
+          returnFamily: filters.returnFamily,
           reportingDate: filters.reportingDate
             ? new Date(`${filters.reportingDate}T00:00:00Z`)
+            : undefined,
+          reportingDateFrom: filters.reportingDateFrom
+            ? new Date(`${filters.reportingDateFrom}T00:00:00Z`)
+            : undefined,
+          reportingDateTo: filters.reportingDateTo
+            ? new Date(`${filters.reportingDateTo}T00:00:00Z`)
             : undefined,
           status: filters.status,
           includeSuperseded: filters.includeSuperseded,
@@ -1782,6 +1810,224 @@ export function useSaveChannelConfig(bankId: string | undefined) {
       );
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Institution Profile register — the corporate master-data mirror behind the
+// LRT return family: profile, related parties (+roles/shareholdings), outlets,
+// products, licences, and name history.
+//
+// Query key: ['institution-profile', bankId] — one composed read serves every
+// register tab, so every mutation invalidates that single key. All mutation
+// payloads carry a required non-empty `reason` (canonical-mutation convention).
+// ---------------------------------------------------------------------------
+
+/** The composed corporate register (profile may be null until first configured). */
+export function useInstitutionProfile(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['institution-profile', bankId],
+    queryFn: () =>
+      apiCall(() =>
+        institutionProfileApi.getInstitutionProfile({ bankId: bankId! })
+      ),
+    enabled: Boolean(bankId),
+  });
+}
+
+/** Shared invalidation: every register mutation refreshes the composed read. */
+function useInstitutionRegisterMutation<TVariables, TData>(
+  bankId: string | undefined,
+  mutationFn: (variables: TVariables) => Promise<TData>
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['institution-profile', bankId],
+      });
+    },
+  });
+}
+
+/** Create-or-replace the corporate profile (PUT upsert). */
+export function useSaveInstitutionProfile(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(
+    bankId,
+    (payload: InstitutionProfilePut) =>
+      apiCall(() =>
+        institutionProfileApi.putInstitutionProfile({
+          bankId: bankId!,
+          institutionProfilePut: payload,
+        })
+      )
+  );
+}
+
+export function useCreateRelatedParty(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(bankId, (payload: RelatedPartyCreate) =>
+    apiCall(() =>
+      institutionProfileApi.createRelatedParty({
+        bankId: bankId!,
+        relatedPartyCreate: payload,
+      })
+    )
+  );
+}
+
+/** Full replacement; the `roles` list is replace-on-write. */
+export function useUpdateRelatedParty(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(
+    bankId,
+    ({ partyId, payload }: { partyId: string; payload: RelatedPartyUpdate }) =>
+      apiCall(() =>
+        institutionProfileApi.updateRelatedParty({
+          bankId: bankId!,
+          partyId,
+          relatedPartyUpdate: payload,
+        })
+      )
+  );
+}
+
+export function useCreateShareholding(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(
+    bankId,
+    ({ partyId, payload }: { partyId: string; payload: ShareholdingCreate }) =>
+      apiCall(() =>
+        institutionProfileApi.createShareholding({
+          bankId: bankId!,
+          partyId,
+          shareholdingCreate: payload,
+        })
+      )
+  );
+}
+
+export function useUpdateShareholding(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(
+    bankId,
+    ({
+      partyId,
+      shareholdingId,
+      payload,
+    }: {
+      partyId: string;
+      shareholdingId: string;
+      payload: ShareholdingUpdate;
+    }) =>
+      apiCall(() =>
+        institutionProfileApi.updateShareholding({
+          bankId: bankId!,
+          partyId,
+          shareholdingId,
+          shareholdingUpdate: payload,
+        })
+      )
+  );
+}
+
+export function useCreateOutlet(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(bankId, (payload: OutletCreate) =>
+    apiCall(() =>
+      institutionProfileApi.createOutlet({
+        bankId: bankId!,
+        outletCreate: payload,
+      })
+    )
+  );
+}
+
+/** Full replacement; closing (status='closed') stamps `closed_on`. */
+export function useUpdateOutlet(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(
+    bankId,
+    ({ outletId, payload }: { outletId: string; payload: OutletUpdate }) =>
+      apiCall(() =>
+        institutionProfileApi.updateOutlet({
+          bankId: bankId!,
+          outletId,
+          outletUpdate: payload,
+        })
+      )
+  );
+}
+
+export function useCreateBankProduct(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(bankId, (payload: BankProductCreate) =>
+    apiCall(() =>
+      institutionProfileApi.createBankProduct({
+        bankId: bankId!,
+        bankProductCreate: payload,
+      })
+    )
+  );
+}
+
+export function useUpdateBankProduct(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(
+    bankId,
+    ({ productId, payload }: { productId: string; payload: BankProductUpdate }) =>
+      apiCall(() =>
+        institutionProfileApi.updateBankProduct({
+          bankId: bankId!,
+          productId,
+          bankProductUpdate: payload,
+        })
+      )
+  );
+}
+
+export function useCreateBankLicense(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(bankId, (payload: BankLicenseCreate) =>
+    apiCall(() =>
+      institutionProfileApi.createBankLicense({
+        bankId: bankId!,
+        bankLicenseCreate: payload,
+      })
+    )
+  );
+}
+
+export function useUpdateBankLicense(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(
+    bankId,
+    ({ licenseId, payload }: { licenseId: string; payload: BankLicenseUpdate }) =>
+      apiCall(() =>
+        institutionProfileApi.updateBankLicense({
+          bankId: bankId!,
+          licenseId,
+          bankLicenseUpdate: payload,
+        })
+      )
+  );
+}
+
+export function useCreateNameHistoryEntry(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(
+    bankId,
+    (payload: BankNameHistoryCreate) =>
+      apiCall(() =>
+        institutionProfileApi.createNameHistoryEntry({
+          bankId: bankId!,
+          bankNameHistoryCreate: payload,
+        })
+      )
+  );
+}
+
+export function useUpdateNameHistoryEntry(bankId: string | undefined) {
+  return useInstitutionRegisterMutation(
+    bankId,
+    ({ entryId, payload }: { entryId: string; payload: BankNameHistoryUpdate }) =>
+      apiCall(() =>
+        institutionProfileApi.updateNameHistoryEntry({
+          bankId: bankId!,
+          entryId,
+          bankNameHistoryUpdate: payload,
+        })
+      )
+  );
 }
 
 // ---------------------------------------------------------------------------

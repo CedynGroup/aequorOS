@@ -36,6 +36,7 @@ def list_packages(  # noqa: PLR0913
     reporting_date_from: date | None = None,
     reporting_date_to: date | None = None,
     status: str | None = None,
+    basis: str | None = None,
     include_superseded: bool = True,
     limit: int = 25,
     offset: int = 0,
@@ -57,6 +58,8 @@ def list_packages(  # noqa: PLR0913
         conditions += (RegulatoryPackage.reporting_date <= reporting_date_to,)
     if status is not None:
         conditions += (RegulatoryPackage.status == status,)
+    if basis is not None:
+        conditions += (RegulatoryPackage.basis == basis,)
     if not include_superseded:
         conditions += (RegulatoryPackage.status != "superseded",)
     total = db.scalar(select(func.count()).select_from(RegulatoryPackage).where(*conditions)) or 0

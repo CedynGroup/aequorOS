@@ -132,12 +132,55 @@ export const REQUIRED_MAPPING: Record<TemplateFormat, string> = {
   source: SOURCE_MAPPING,
 };
 
+// --- institution register bulk-import templates ------------------------------
+// Client-side bulk import on the Related parties / Outlets register pages:
+// parsed in the browser and replayed through the reasoned single-row register
+// endpoints (createRelatedParty / createOutlet). These are NOT Data Engine
+// ingestion templates — no mapping applies. Enum columns must carry generated
+// contract values (PartyType / RelatedPartyRoleCode / OutletType /
+// OutletStatus); the import UIs validate against those before writing.
+
+export type RegisterTemplate = {
+  filename: string;
+  columns: string[];
+  sampleRows: string[][];
+};
+
+export const RELATED_PARTIES_TEMPLATE: RegisterTemplate = {
+  filename: 'related_parties.csv',
+  columns: [
+    'party_type',
+    'full_name',
+    'role',
+    'appointed_on',
+    'regulated_elsewhere',
+    'regulated_jurisdiction',
+  ],
+  sampleRows: [
+    ['individual', 'Ama Serwaa Boateng', 'director', '2024-03-01', 'false', ''],
+    ['individual', 'Kwabena Osei', 'chief_finance_officer', '2022-06-15', 'false', ''],
+    ['legal_entity', 'Example Audit Partners LLP', 'external_auditor', '2023-01-02', 'true', 'GH'],
+  ],
+};
+
+export const OUTLETS_TEMPLATE: RegisterTemplate = {
+  filename: 'outlets.csv',
+  columns: ['outlet_type', 'name', 'outlet_number', 'status', 'opened_on'],
+  sampleRows: [
+    ['head_office', 'Head Office', 'HO-001', 'active', '2015-01-02'],
+    ['branch', 'Adum Branch', 'BR-014', 'active', '2021-11-15'],
+    ['agency', 'Tema Harbour Agency', 'AG-003', 'active', '2024-05-06'],
+  ],
+};
+
 /** RFC-4180-ish CSV: quote fields containing comma, quote, or newline. */
 function csvCell(value: string): string {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
-export function templateCsv(template: Template): string {
+export function templateCsv(
+  template: Pick<Template, 'columns' | 'sampleRows'>,
+): string {
   const lines = [template.columns, ...template.sampleRows].map((row) =>
     row.map(csvCell).join(','),
   );

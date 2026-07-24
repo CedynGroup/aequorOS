@@ -10,6 +10,7 @@
  *   · About — engine versions and provenance from persisted regulatory runs
  */
 
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { Monitor, Moon, Sun } from 'lucide-react';
@@ -112,6 +113,14 @@ function InstitutionProfile({
       <CardHeader
         title="Institution profile"
         subtitle="Reporting entity from the risk service"
+        action={
+          <Link
+            href="/institution"
+            className="text-caption font-medium text-action hover:text-action-hover"
+          >
+            Manage register →
+          </Link>
+        }
       />
       <CardBody>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-body">

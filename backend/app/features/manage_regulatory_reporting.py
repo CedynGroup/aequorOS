@@ -32,6 +32,8 @@ from app.schemas.regulatory_reporting import (
     RegulatoryPackageListRead,
     RegulatoryPackageRead,
     ReportingObligationListRead,
+    ReportingSettingsPut,
+    ReportingSettingsRead,
     ResubmissionDecisionCreate,
     ResubmissionRequestCreate,
     ResubmissionRequestListRead,
@@ -53,6 +55,7 @@ _ARTIFACT_MEDIA_TYPES = {
 }
 
 type ChannelPath = Literal["orass_api", "orass_sandbox", "email", "manual"]
+type BasisFilter = Literal["solo", "consolidated"]
 type PackageStatusFilter = Literal[
     "draft",
     "generated",
@@ -96,6 +99,7 @@ def list_regulatory_packages(  # noqa: PLR0913
     reporting_date_from: Annotated[date | None, Query()] = None,
     reporting_date_to: Annotated[date | None, Query()] = None,
     package_status: Annotated[PackageStatusFilter | None, Query(alias="status")] = None,
+    basis: Annotated[BasisFilter | None, Query()] = None,
     include_superseded: Annotated[bool, Query()] = True,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -110,6 +114,7 @@ def list_regulatory_packages(  # noqa: PLR0913
         reporting_date_from=reporting_date_from,
         reporting_date_to=reporting_date_to,
         status=package_status,
+        basis=basis,
         include_superseded=include_superseded,
         limit=limit,
         offset=offset,
@@ -469,3 +474,28 @@ def put_channel_config(
     ctx: MutationTenant,
 ) -> ChannelConfigRead:
     return regulatory_reporting.put_channel_config(db, ctx, bank_id, channel, payload)
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-reporting/settings",
+    response_model=ReportingSettingsRead,
+    operation_id="getReportingSettings",
+)
+def get_reporting_settings(bank_id: UUID, db: DbSession, ctx: Tenant) -> ReportingSettingsRead:
+    """The per-bank deadline-override map (empty when never configured)."""
+    return regulatory_reporting.get_reporting_settings(db, ctx, bank_id)
+
+
+@router.put(
+    "/banks/{bank_id}/regulatory-reporting/settings",
+    response_model=ReportingSettingsRead,
+    operation_id="putReportingSettings",
+)
+def put_reporting_settings(
+    bank_id: UUID,
+    payload: ReportingSettingsPut,
+    db: DbSession,
+    ctx: MutationTenant,
+) -> ReportingSettingsRead:
+    """Set per-bank monthly-deadline overrides ({return_code: day_of_month})."""
+    return regulatory_reporting.put_reporting_settings(db, ctx, bank_id, payload)

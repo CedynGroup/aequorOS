@@ -56,6 +56,35 @@ class DatabaseSettings(BaseSettings):
         return value
 
 
+class SmtpSettings(BaseSettings):
+    """Outbound email for the notification mirror (plan GAP-5).
+
+    Default OFF: the in-app feed is always on; email mirroring activates only
+    when SMTP_HOST is set. Credentials live in the deployment environment,
+    never in code or the database.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_username: str | None = Field(default=None, alias="SMTP_USERNAME")
+    smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD")
+    smtp_from: str | None = Field(default=None, alias="SMTP_FROM")
+    smtp_starttls: bool = Field(default=True, alias="SMTP_STARTTLS")
+
+    @field_validator("smtp_host", "smtp_username", "smtp_password", "smtp_from", mode="before")
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    @property
+    def enabled(self) -> bool:
+        return self.smtp_host is not None and self.smtp_from is not None
+
+
 class CorsSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
@@ -263,6 +292,7 @@ class Settings(BaseSettings):
     market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
     temenos: TemenosSettings = Field(default_factory=TemenosSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
+    smtp: SmtpSettings = Field(default_factory=SmtpSettings)
 
     @property
     def storage_configured(self) -> bool:

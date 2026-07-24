@@ -29,8 +29,18 @@ CHECKER_USER_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 REPORTING_DATE = "2026-03-31"
 # Periodic returns only: the event-driven corporate LRT packs (plan W5)
 # never appear as calendar obligations. LE-MONTHLY (plan W6) is periodic
-# monthly, so the calendar expands it like any other return.
-REGISTRY_CODES = {"BSD3", "LMT", "BSD2", "IRRBB-PILOT", "FX-NOP", "ICAAP-STRESS", "LE-MONTHLY"}
+# monthly, so the calendar expands it like any other return; DBK-DAILY
+# (W6 remainder) appears via the bounded trailing business-day window.
+REGISTRY_CODES = {
+    "BSD3",
+    "LMT",
+    "BSD2",
+    "IRRBB-PILOT",
+    "FX-NOP",
+    "DBK-DAILY",
+    "ICAAP-STRESS",
+    "LE-MONTHLY",
+}
 CORPORATE_CODES = {"LRT-PROFILE", "LRT-OUTLET", "LRT-PARTY", "LRT-CAPITAL", "LRT-PRODUCT"}
 
 
@@ -186,6 +196,7 @@ def test_generate_package_snapshots_sources_and_versions(db_client: TestClient) 
         "nsfr_asf",
         "nsfr_rsf",
         "nsfr_summary",
+        "headline_comparative",
     }
     hqla = sections["hqla"]
     assert hqla["total"]["equals_sum_of_rows"] is True
@@ -456,6 +467,7 @@ def test_calendar_lists_obligations_for_all_families(db_client: TestClient) -> N
         "capital",
         "irrbb",
         "fx",
+        "dbk",
         "icaap_stress",
         "large_exposures",
     }
@@ -465,12 +477,24 @@ def test_calendar_lists_obligations_for_all_families(db_client: TestClient) -> N
         assert item["rag"] in ("overdue", "due_soon", "on_track")
         assert item["due_date"] > item["reporting_date"]
         assert item["package_id"] is None  # nothing generated for these dates yet
+        # Obligations are enumerated on the solo basis only (the calendar is
+        # not doubled per basis); packages still carry basis independently.
+        assert item["basis"] == "solo"
+
+    # DBK is a daily family: it appears via a small trailing business-day window
+    # (not expanded across the horizon) and carries a 10:00 next-day cut-off time.
+    dbk = [item for item in obligations if item["return_code"] == "DBK-DAILY"]
+    assert dbk
+    assert all(item["due_time"] == "10:00" for item in dbk)
+    assert all(item["frequency"] == "daily" for item in dbk)
+    assert all(item["due_time"] is None for item in obligations if item["frequency"] != "daily")
 
     wider = db_client.get(
         f"/api/v1/banks/{SAMPLE_BANK_ID}/reporting-obligations",
         headers=headers(),
         params={"horizon_months": 12},
     ).json()["obligations"]
+    # Periodic returns expand with the horizon; the fixed daily window does not.
     assert len(wider) > len(obligations)
 
 
@@ -854,3 +878,58 @@ def test_email_fallback_eml_downloads_as_rfc822_with_attachments(
     body = body_part.get_content()
     assert "re-upload" in body.lower() or "reupload" in body.lower() or "restored" in body.lower()
     assert "penalty" in body.lower()
+
+
+def test_reporting_settings_endpoints_round_trip_and_shift_due_dates(
+    db_client: TestClient,
+) -> None:
+    _seed_latest_period(db_client)
+    url = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-reporting/settings"
+
+    empty = db_client.get(url, headers=headers())
+    assert empty.status_code == 200, empty.text
+    assert empty.json()["deadline_overrides"] == {}
+
+    put = db_client.put(url, headers=headers(), json={"deadline_overrides": {"BSD2": 21}})
+    assert put.status_code == 200, put.text
+    assert put.json()["deadline_overrides"] == {"BSD2": 21}
+
+    stored = db_client.get(url, headers=headers())
+    assert stored.json()["deadline_overrides"] == {"BSD2": 21}
+
+    obligations = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/reporting-obligations",
+        headers=headers(),
+        params={"horizon_months": 1},
+    ).json()["obligations"]
+    bsd2 = [item for item in obligations if item["return_code"] == "BSD2"]
+    assert bsd2 and all(item["due_date"].endswith("-21") for item in bsd2)
+
+    # Out-of-range days are rejected by the schema (422).
+    bad = db_client.put(url, headers=headers(), json={"deadline_overrides": {"BSD2": 40}})
+    assert bad.status_code == 422
+
+
+def test_basis_dimension_via_create_and_list_endpoints(db_client: TestClient) -> None:
+    period = _seed_latest_period(db_client)
+    _run_liquidity_baseline(db_client, period["id"])
+
+    solo = _generate_bsd3(db_client, basis="solo")
+    assert solo.status_code == 201, solo.text
+    assert solo.json()["basis"] == "solo"
+    consolidated = _generate_bsd3(db_client, basis="consolidated")
+    assert consolidated.status_code == 201, consolidated.text
+    assert consolidated.json()["basis"] == "consolidated"
+
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages"
+    solo_only = db_client.get(
+        base, headers=headers(), params={"return_code": "BSD3", "basis": "solo"}
+    ).json()
+    assert solo_only["total"] == 1
+    assert solo_only["packages"][0]["basis"] == "solo"
+
+    consolidated_only = db_client.get(
+        base, headers=headers(), params={"return_code": "BSD3", "basis": "consolidated"}
+    ).json()
+    assert consolidated_only["total"] == 1
+    assert consolidated_only["packages"][0]["basis"] == "consolidated"

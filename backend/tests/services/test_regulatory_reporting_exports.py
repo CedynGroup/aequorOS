@@ -229,8 +229,9 @@ def test_csv_zip_parses_with_metadata_sections_and_provenance(
         assert "00_metadata.csv" in names
         assert "01_hqla.csv" in names
         assert "99_provenance.csv" in names
-        # One numbered file per template section (BSD3 has 7) + metadata + provenance.
-        assert len(names) == 9
+        # One numbered file per template section (BSD3's 7 schedules + the
+        # headline-comparative section) + metadata + provenance.
+        assert len(names) == 10
 
         metadata_rows = archive.read("00_metadata.csv").decode("utf-8").splitlines()
         assert any("Sample Bank Ltd" in row for row in metadata_rows)
@@ -278,6 +279,56 @@ def test_missing_snapshot_section_raises_409(
     assert "snapshot_empty" in str(empty_info.value.detail)
 
 
+def test_headline_comparative_column_renders_prior_period(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    seed_sample_bank(db_session)
+    february = date(2026, 2, 28)
+    for period_end in (february, REPORTING_DATE):
+        period_id = db_session.scalar(
+            select(BankReportingPeriod.id).where(
+                BankReportingPeriod.organization_id == DEMO_ORG_ID,
+                BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+                BankReportingPeriod.period_end == period_end,
+            )
+        )
+        assert period_id is not None
+        run = regulatory_liquidity.create_liquidity_run(
+            db_session,
+            MAKER,
+            SAMPLE_BANK_ID,
+            RegulatoryRunCreate(
+                module="liquidity", reporting_period_id=period_id, scenario_code="baseline"
+            ),
+        )
+        assert run.status == "succeeded"
+        generation.generate_package(
+            db_session,
+            MAKER,
+            SAMPLE_BANK_ID,
+            RegulatoryPackageCreate(return_code="BSD3", reporting_date=period_end),
+        )
+
+    package = db_session.scalar(
+        select(RegulatoryPackage).where(
+            RegulatoryPackage.return_code == "BSD3",
+            RegulatoryPackage.reporting_date == REPORTING_DATE,
+            RegulatoryPackage.status != "superseded",
+        )
+    )
+    assert package is not None
+    artifact = export_package(db_session, MAKER, package, "xlsx")
+    payload = _read_output(db_session, storage, artifact.object_path)
+    workbook = load_workbook(io.BytesIO(payload))
+    sheet_name = next(name for name in workbook.sheetnames if name.startswith("Headline Totals"))
+    sheet = workbook[sheet_name]
+    headers = [sheet.cell(row=5, column=idx).value for idx in range(1, 5)]
+    assert headers == ["Row", "Item", "Reporting Period", "Previous Period"]
+    # The Previous-Period column (4) is populated for the March return.
+    values = [sheet.cell(row=r, column=4).value for r in range(6, 6 + 7)]
+    assert any(value not in (None, "") for value in values)
+
+
 def test_lmt_return_exports_lcr_subset_and_data_backed_tools(
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
@@ -316,6 +367,7 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "nsfr_asf",
             "nsfr_rsf",
             "nsfr_summary",
+            "headline_comparative",
         },
         "capital": {
             "cet1",
@@ -325,6 +377,7 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "market_rwa",
             "operational_rwa",
             "capital_ratios",
+            "headline_comparative",
         },
         "irrbb": {"repricing_gap", "eve_scenarios", "earnings_at_risk", "summary"},
         "fx": {
@@ -334,6 +387,9 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "scenario_nop",
             "nop_summary",
         },
+        # W6 remainder: the DBK daily family reconstructs NOP + contingents
+        # from the FX engine's baseline run (gap G5).
+        "dbk": {"nop_by_currency", "nop_aggregate", "contingents"},
         "icaap_stress": {"forecast_summary", "forecast_path", "stress_summary"},
         # W6: the LMT return = the liquidity LCR subset + three canonical-data
         # monitoring tools; LE-MONTHLY = the five Large Exposures templates.

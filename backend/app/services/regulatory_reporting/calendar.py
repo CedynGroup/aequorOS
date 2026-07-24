@@ -15,29 +15,49 @@ satisfy its obligation for RAG purposes.
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import RegulatoryPackage
+from app.models import RegulatoryPackage, RegulatoryReportingSettings
 from app.schemas.regulatory_reporting import (
     ReportingObligationListRead,
     ReportingObligationRead,
 )
 from app.services.regulatory_reporting.common import get_bank_or_404
-from app.services.regulatory_reporting.registry import REGISTRY, ReturnDefinition
+from app.services.regulatory_reporting.registry import REGISTRY, ReturnDefinition, monthly_day
 from app.services.regulatory_reporting.workflow import has_pending_orass_reupload
 
 DUE_SOON_DAYS = 7
 _COMPLETED_STATUSES = ("submitted", "acknowledged")
 _FREQUENCY_MONTHS = {"monthly": 1, "quarterly": 3, "semiannual": 6, "annual": 12}
+# Daily obligations enumerate only the most recent business days (a full year of
+# daily rows would swamp the calendar); the window ends at ``as_of``.
+_DAILY_WINDOW_BUSINESS_DAYS = 5
 
 
 def _month_end(year: int, month: int) -> date:
     return date(year, month, monthrange(year, month)[1])
+
+
+def _daily_reporting_dates(as_of: date) -> list[date]:
+    """The most recent ``_DAILY_WINDOW_BUSINESS_DAYS`` business days ending on
+    or before ``as_of`` (weekends skipped), oldest first.
+
+    Daily returns do not expand across the horizon like periodic returns — a
+    small trailing window keeps the calendar bounded while still surfacing any
+    recently-missed daily filings.
+    """
+    dates: list[date] = []
+    cursor = as_of
+    while len(dates) < _DAILY_WINDOW_BUSINESS_DAYS:
+        if cursor.weekday() < 5:  # noqa: PLR2004 — Mon..Fri
+            dates.append(cursor)
+        cursor -= timedelta(days=1)
+    return sorted(dates)
 
 
 def _period_end_months(frequency: str) -> tuple[int, ...]:
@@ -75,6 +95,39 @@ def _rag(
     return "on_track"
 
 
+def _deadline_overrides(db: Session, ctx: TenantContext, bank_id: UUID) -> dict[str, int]:
+    """The per-bank ``{return_code: day_of_month}`` deadline overrides, or {}."""
+    settings = db.scalar(
+        select(RegulatoryReportingSettings).where(
+            RegulatoryReportingSettings.organization_id == ctx.organization_id,
+            RegulatoryReportingSettings.bank_id == bank_id,
+        )
+    )
+    if settings is None:
+        return {}
+    return {
+        str(code): int(day)
+        for code, day in settings.deadline_overrides.items()
+        if isinstance(day, int)
+    }
+
+
+def _due_date(
+    definition: ReturnDefinition, reporting_date: date, overrides: dict[str, int]
+) -> date:
+    """The obligation's due date, honouring a per-bank monthly-day override.
+
+    An override replaces the registry's default deadline rule with
+    ``monthly_day(day)`` — this is how the BSD2 day-14 / FX-NOP day-10
+    placeholders get corrected per bank at onboarding once ORASS confirms the
+    real day.
+    """
+    override_day = overrides.get(definition.code)
+    if override_day is not None:
+        return monthly_day(override_day)(reporting_date)
+    return definition.deadline_rule(reporting_date)
+
+
 def list_obligations(
     db: Session,
     ctx: TenantContext,
@@ -87,6 +140,7 @@ def list_obligations(
     today = as_of or date.today()
     total_months = today.year * 12 + (today.month - 1) + horizon_months
     horizon_end = _month_end(total_months // 12, total_months % 12 + 1)
+    overrides = _deadline_overrides(db, ctx, bank.id)
 
     obligations: list[ReportingObligationRead] = []
     for definition in REGISTRY.values():
@@ -96,8 +150,13 @@ def list_obligations(
         # appear in the package list/history like any other package.
         if definition.event_driven:
             continue
-        for reporting_date in _reporting_dates(definition, today, horizon_end):
-            due_date = definition.deadline_rule(reporting_date)
+        reporting_dates = (
+            _daily_reporting_dates(today)
+            if definition.frequency == "daily"
+            else _reporting_dates(definition, today, horizon_end)
+        )
+        for reporting_date in reporting_dates:
+            due_date = _due_date(definition, reporting_date, overrides)
             package = db.scalar(
                 select(RegulatoryPackage).where(
                     RegulatoryPackage.organization_id == ctx.organization_id,
@@ -118,6 +177,8 @@ def list_obligations(
                     default_channel=definition.default_channel,
                     reporting_date=reporting_date,
                     due_date=due_date,
+                    due_time=definition.due_time,
+                    basis="solo",
                     package_id=package.id if package is not None else None,
                     package_status=(
                         package.status if package is not None else None  # type: ignore[arg-type]

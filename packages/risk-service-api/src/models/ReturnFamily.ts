@@ -22,6 +22,7 @@ export const ReturnFamily = {
   IcaapStress: "icaap_stress",
   Corporate: "corporate",
   LargeExposures: "large_exposures",
+  Dbk: "dbk",
 } as const;
 export type ReturnFamily = (typeof ReturnFamily)[keyof typeof ReturnFamily];
 

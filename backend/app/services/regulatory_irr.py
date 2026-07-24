@@ -135,6 +135,10 @@ class _IrrAnalysis:
     nii_base: Decimal
     eve_limit_pct: Decimal
     nii_limit_pct: Decimal
+    # BoG GHS calibration (IRRBB Guideline Feb 2026): present only when the
+    # active parameter set carries the parallel_up/down_450 shock rows.
+    ear_up_450: Decimal | None = None
+    ear_down_450: Decimal | None = None
 
 
 def create_irr_run(
@@ -352,6 +356,8 @@ def _run_analysis(  # noqa: PLR0913
     eve = run_irr_scenarios(
         positions, active.curve, active.scenario_shocks, tier1, active.eve_limit_pct
     )
+    up_450 = active.scenario_shocks.get("parallel_up_450", {}).get("parallel_bp")
+    down_450 = active.scenario_shocks.get("parallel_down_450", {}).get("parallel_bp")
     return _IrrAnalysis(
         gap=gap,
         duration=duration,
@@ -361,6 +367,8 @@ def _run_analysis(  # noqa: PLR0913
         nii_base=compute_nii(positions),
         eve_limit_pct=active.eve_limit_pct,
         nii_limit_pct=active.nii_limit_pct,
+        ear_up_450=compute_ear(gap, up_450) if up_450 is not None else None,
+        ear_down_450=compute_ear(gap, down_450) if down_450 is not None else None,
     )
 
 
@@ -388,6 +396,13 @@ def _persist_success(
         ("ear_up_200_ghs", analysis.ear_up, "ghs", None, "na"),
         ("ear_down_200_ghs", analysis.ear_down, "ghs", None, "na"),
     ]
+    if analysis.ear_up_450 is not None and analysis.ear_down_450 is not None:
+        metric_rows.extend(
+            [
+                ("ear_up_450_ghs", analysis.ear_up_450, "ghs", None, "na"),
+                ("ear_down_450_ghs", analysis.ear_down_450, "ghs", None, "na"),
+            ]
+        )
     for position, (code, value, unit, threshold_min, metric_status) in enumerate(
         metric_rows, start=1
     ):
@@ -503,6 +518,23 @@ def _metrics_payload(analysis: _IrrAnalysis) -> dict[str, Any]:
         "eve_limit_pct": str(analysis.eve_limit_pct),
         "ear_up_200_ghs": str(analysis.ear_up),
         "ear_down_200_ghs": str(analysis.ear_down),
+        # BoG GHS ±450 bp calibration — present only when the parameter set
+        # carries the shock rows (the BSD templates render them conditionally).
+        **(
+            {
+                "ear_up_450_ghs": str(analysis.ear_up_450),
+                "ear_down_450_ghs": str(analysis.ear_down_450),
+            }
+            if analysis.ear_up_450 is not None and analysis.ear_down_450 is not None
+            else {}
+        ),
+        **{
+            f"eve_{'up' if scenario.scenario_code == 'parallel_up_450' else 'down'}_450_ghs": str(
+                scenario.delta_eve
+            )
+            for scenario in analysis.eve.scenarios
+            if scenario.scenario_code in ("parallel_up_450", "parallel_down_450")
+        },
         "nii_base_ghs": str(analysis.nii_base),
         "asset_duration": str(analysis.duration.asset_modified),
         "liability_duration": str(analysis.duration.liability_modified),

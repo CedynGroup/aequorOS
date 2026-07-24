@@ -45,6 +45,7 @@ from app.services import regulatory_capital, regulatory_liquidity
 from app.services.audit import record_event
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
+    get_effective_period_or_404,
     get_period_for_reporting_date_or_404,
     read_package,
     require_actor,
@@ -106,17 +107,27 @@ def generate_package(
                 "List the available templates via the return-template endpoint."
             ),
         )
-    period = get_period_for_reporting_date_or_404(db, ctx, bank, payload.reporting_date)
+    # Daily returns file on business days that seldom coincide with a monthly
+    # reporting-period end, so they draw on the latest effective period.
+    if definition.frequency == "daily":
+        period = get_effective_period_or_404(db, ctx, bank, payload.reporting_date)
+    else:
+        period = get_period_for_reporting_date_or_404(db, ctx, bank, payload.reporting_date)
 
     generated = _GENERATORS[definition.generator](db, ctx, bank, period, definition)
     _enrich_institution_block(db, ctx, bank, generated.snapshot)
+    _stamp_basis(generated.snapshot, payload.basis)
+    _apply_prior_period_comparative(db, ctx, bank, definition, payload, generated.snapshot)
 
+    # Supersession and versioning are per-basis: solo and consolidated are
+    # independent current-version chains for the same (return, reporting date).
     prior_current = db.scalar(
         select(RegulatoryPackage).where(
             RegulatoryPackage.organization_id == ctx.organization_id,
             RegulatoryPackage.bank_id == bank.id,
             RegulatoryPackage.return_code == definition.code,
             RegulatoryPackage.reporting_date == payload.reporting_date,
+            RegulatoryPackage.basis == payload.basis,
             RegulatoryPackage.status != "superseded",
         )
     )
@@ -146,6 +157,7 @@ def generate_package(
             RegulatoryPackage.bank_id == bank.id,
             RegulatoryPackage.return_code == definition.code,
             RegulatoryPackage.reporting_date == payload.reporting_date,
+            RegulatoryPackage.basis == payload.basis,
         )
         .order_by(RegulatoryPackage.version.desc())
         .limit(1)
@@ -173,6 +185,7 @@ def generate_package(
         return_code=definition.code,
         reporting_date=payload.reporting_date,
         frequency=definition.frequency,
+        basis=payload.basis,
         status="generated",
         version=(prior_version or 0) + 1,
         supersedes_id=prior_current.id if prior_current is not None else None,
@@ -199,6 +212,7 @@ def generate_package(
             "return_code": definition.code,
             "return_family": definition.family,
             "reporting_date": payload.reporting_date.isoformat(),
+            "basis": payload.basis,
             "version": package.version,
             "supersedes_id": (str(prior_current.id) if prior_current is not None else None),
             "source_runs": [entry["run_id"] for entry in generated.source_runs],
@@ -236,6 +250,85 @@ def _section(
 
 def _summary_total(row: Bsd3SummaryRowRead, code: str, *, equals_sum: bool) -> dict[str, Any]:
     return _total(code, row.description, row.value, equals_sum_of_rows=equals_sum)
+
+
+def _headline_comparative_section(totals: list[dict[str, Any]]) -> dict[str, Any]:
+    """A T vs T−1 section carrying the headline totals plus a ``prior_value``
+    slot the caller fills from the immediately-prior period (None until then).
+
+    The BoG monthly returns show a Reporting-Month-vs-Previous-Month column
+    (LMTD Table 1); this section is the snapshot's honest carrier for that
+    convention. Values that have no prior stay blank — never fabricated.
+    """
+    rows = [
+        {
+            "code": total["code"],
+            "description": total["description"],
+            "value": total["value"],
+            "unit": total.get("unit", ""),
+            "prior_value": None,
+        }
+        for total in totals
+    ]
+    return _section(
+        "headline_comparative",
+        "Headline Totals — Reporting Period vs Previous Period",
+        rows,
+    )
+
+
+def _stamp_basis(snapshot: dict[str, Any], basis: str) -> None:
+    """Record the solo/consolidated reporting basis on the snapshot in place."""
+    snapshot.setdefault("institution", {})["basis"] = basis
+    snapshot.setdefault("metadata", {})["basis"] = basis
+
+
+def _apply_prior_period_comparative(  # noqa: PLR0913
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    definition: ReturnDefinition,
+    payload: RegulatoryPackageCreate,
+    snapshot: dict[str, Any],
+) -> None:
+    """Fill the ``headline_comparative`` section's ``prior_value`` cells from the
+    immediately-prior reporting period's current package for the same
+    (bank, return_code, basis). No-op when the snapshot has no comparative
+    section or no prior package exists — prior figures are never invented."""
+    section = next(
+        (
+            item
+            for item in snapshot.get("sections", [])
+            if item.get("code") == "headline_comparative"
+        ),
+        None,
+    )
+    if section is None:
+        return
+    prior = db.scalar(
+        select(RegulatoryPackage)
+        .where(
+            RegulatoryPackage.organization_id == ctx.organization_id,
+            RegulatoryPackage.bank_id == bank.id,
+            RegulatoryPackage.return_code == definition.code,
+            RegulatoryPackage.basis == payload.basis,
+            RegulatoryPackage.reporting_date < payload.reporting_date,
+            RegulatoryPackage.status != "superseded",
+        )
+        .order_by(
+            RegulatoryPackage.reporting_date.desc(),
+            RegulatoryPackage.version.desc(),
+        )
+        .limit(1)
+    )
+    if prior is None:
+        return
+    prior_totals = {row.get("code"): row.get("value") for row in prior.snapshot.get("totals", [])}
+    for row in section.get("rows", []):
+        row["prior_value"] = prior_totals.get(row.get("code"))
+    snapshot.setdefault("metadata", {})["prior_period_reporting_date"] = (
+        prior.reporting_date.isoformat()
+    )
 
 
 def _envelope(  # noqa: PLR0913
@@ -510,6 +603,7 @@ def _generate_liquidity(
             unit="pct",
         ),
     ]
+    sections.append(_headline_comparative_section(totals))
     metadata = _liquidity_metadata(preview)
     runs = _latest_succeeded_runs_by_scenario(db, ctx, bank, period, MODULE_LIQUIDITY)
     return GeneratedReturn(
@@ -632,6 +726,7 @@ def _generate_capital(
         ),
         _row("total_rwa_ghs", preview.total_rwa.description, preview.total_rwa.value, unit="ghs"),
     ]
+    sections.append(_headline_comparative_section(totals))
     metadata = {
         "form_code": preview.header.form_code,
         "form_title": preview.header.form_title,
@@ -967,6 +1062,7 @@ liquidity_snapshot_metadata = _liquidity_metadata
 
 # Imported at the bottom — after the seams above are defined — so the module
 # pairs load cleanly regardless of which side is imported first.
+from app.services.regulatory_reporting.dbk_generation import DBK_GENERATORS  # noqa: E402
 from app.services.regulatory_reporting.le_generation import LE_GENERATORS  # noqa: E402
 from app.services.regulatory_reporting.lrt_generation import LRT_GENERATORS  # noqa: E402
 
@@ -978,6 +1074,7 @@ _GENERATORS = {
     "icaap_stress": _generate_icaap_stress,
     **LRT_GENERATORS,
     **LE_GENERATORS,
+    **DBK_GENERATORS,
 }
 
 __all__ = [

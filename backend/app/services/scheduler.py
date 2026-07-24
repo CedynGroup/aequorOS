@@ -69,6 +69,15 @@ def run_tick(session: Session, job: Job) -> None:
 
     deadline_scan_enqueued = enqueue_due_deadline_scan(session, org_id, now=now)
 
+    from app.services.notification_email_mirror import (  # noqa: PLC0415
+        enqueue_due_notification_mirror,
+        mirror_enabled,
+    )
+
+    mirror_enqueued = (
+        enqueue_due_notification_mirror(session, org_id, now=now) if mirror_enabled() else None
+    )
+
     job_queue.enqueue(
         session,
         org_id,
@@ -82,6 +91,10 @@ def run_tick(session: Session, job: Job) -> None:
         "market_data_pulls_enqueued": market_data_pulls,
         "temenos_pulls_enqueued": temenos_pulls,
         "deadline_scan_enqueued": deadline_scan_enqueued,
+        # Key present only when the SMTP mirror is configured (default off).
+        **(
+            {"notification_mirror_enqueued": mirror_enqueued} if mirror_enqueued is not None else {}
+        ),
     }
 
 

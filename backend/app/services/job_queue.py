@@ -41,6 +41,7 @@ JOB_TYPES = (
     "temenos_pull",
     "etl_dedup",
     "reporting_deadline_scan",
+    "notification_email_mirror",
 )
 
 # Retry backoff is 2**attempts * base seconds (10s, 20s, 40s at base=5).
