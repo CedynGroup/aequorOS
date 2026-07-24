@@ -22,6 +22,7 @@ Revises: 202607210017
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -113,7 +114,7 @@ def upgrade() -> None:
         sa.Column("decided_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "detail",
-            sa.dialects.postgresql.JSONB(astext_type=sa.Text()),
+            postgresql.JSONB(astext_type=sa.Text()),
             server_default=sa.text("'{}'"),
             nullable=False,
         ),
