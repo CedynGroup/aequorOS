@@ -849,6 +849,8 @@ def test_email_fallback_eml_downloads_as_rfc822_with_attachments(
     assert [part.get_filename() for part in attachments] == ["BSD3.xlsx"]
     assert attachments[0].get_payload(decode=True) == (f"BSD3:xlsx:{package['id']}".encode())
     # Body carries the re-upload rule and the Act 930 penalty reminder.
-    body = message.get_body(preferencelist=("plain",)).get_content()
+    body_part = message.get_body(preferencelist=("plain",))
+    assert body_part is not None
+    body = body_part.get_content()
     assert "re-upload" in body.lower() or "reupload" in body.lower() or "restored" in body.lower()
     assert "penalty" in body.lower()
