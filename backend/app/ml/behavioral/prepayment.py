@@ -36,7 +36,7 @@ def _cpr_from_smm(unscheduled: float, denominator: float) -> float:
     return 1.0 - (1.0 - smm) ** 12
 
 
-def estimate(
+def estimate(  # noqa: PLR0912, PLR0915 - staged estimator pipeline; refactor tracked by the behavioral effort
     db: Session,
     ctx: TenantContext,
     bank_id: UUID,

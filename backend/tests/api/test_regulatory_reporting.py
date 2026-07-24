@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import email as email_lib
 import hashlib
 import io
 from datetime import UTC, datetime
 from decimal import Decimal
+from email import policy as email_policy
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -831,9 +833,6 @@ def test_email_fallback_eml_downloads_as_rfc822_with_attachments(
 ) -> None:
     """W7: the downtime bundle is downloadable as a send-ready .eml whose
     subject/body/attachments mirror the email-fallback instructions."""
-    import email as email_lib
-    from email import policy as email_policy
-
     period = _seed_latest_period(db_client)
     _run_liquidity_baseline(db_client, period["id"])
     package = _generate_bsd3(db_client).json()
@@ -848,9 +847,7 @@ def test_email_fallback_eml_downloads_as_rfc822_with_attachments(
     assert "submitted under ORASS downtime" in message["Subject"]
     attachments = [part for part in message.walk() if part.get_filename()]
     assert [part.get_filename() for part in attachments] == ["BSD3.xlsx"]
-    assert attachments[0].get_payload(decode=True) == (
-        f"BSD3:xlsx:{package['id']}".encode()
-    )
+    assert attachments[0].get_payload(decode=True) == (f"BSD3:xlsx:{package['id']}".encode())
     # Body carries the re-upload rule and the Act 930 penalty reminder.
     body = message.get_body(preferencelist=("plain",)).get_content()
     assert "re-upload" in body.lower() or "reupload" in body.lower() or "restored" in body.lower()
