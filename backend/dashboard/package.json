@@ -21,7 +21,7 @@
     "recharts": "^2.13.0"
   },
   "devDependencies": {
-    "@auth/core": "0.37.2",
+    "@auth/core": "0.41.3",
     "@playwright/test": "1.49.1",
     "@types/node": "^20.16.11",
     "@types/react": "^18.3.11",
