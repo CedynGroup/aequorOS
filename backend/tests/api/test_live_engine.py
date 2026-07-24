@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from uuid import UUID
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -70,7 +69,7 @@ def test_accepted_ingestion_enqueues_pipeline_refresh(
     try:
         jobs = list(
             session.scalars(
-                select(Job).where(Job.job_type == "pipeline_refresh", Job.bank_id == UUID(bank_id))
+                select(Job).where(Job.job_type == "pipeline_refresh", Job.bank_id == bank_id)
             )
         )
     finally:

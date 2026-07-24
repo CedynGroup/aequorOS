@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict
-from uuid import UUID
 
 import numpy as np
 from sqlalchemy.orm import Session
@@ -39,7 +38,7 @@ def _cpr_from_smm(unscheduled: float, denominator: float) -> float:
 def estimate(  # noqa: PLR0912, PLR0915 - staged estimator pipeline; refactor tracked by the behavioral effort
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     as_of: datetime.date,  # noqa: PLR0912, PLR0915
     cfg: BehavioralTrainingConfig,
 ) -> ModelResult:

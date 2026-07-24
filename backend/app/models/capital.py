@@ -45,7 +45,7 @@ class CapitalProjection(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     scenario_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     calculation_run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -82,7 +82,7 @@ class CapitalIndicator(UuidV4PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     projection_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     forecast_period_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -113,7 +113,7 @@ class CapitalProjectionFinding(UuidV4PrimaryKeyMixin, Base):
         Index("ix_capital_projection_findings_projection", "projection_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     projection_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     finding_id: Mapped[UUID] = mapped_column(

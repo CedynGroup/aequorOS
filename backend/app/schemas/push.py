@@ -53,7 +53,7 @@ class PushRecordsPage(BaseModel):
 
 class PushBatchStatusRead(BaseModel):
     push_batch_id: UUID
-    bank_id: UUID
+    bank_id: str
     as_of_date: date
     idempotency_key: str
     status: PushBatchStatus

@@ -76,7 +76,7 @@ _STATUS_BY_ERROR_CODE: dict[str, str] = {
 # --- Reads -----------------------------------------------------------------
 
 
-def list_connections(db: Session, ctx: TenantContext, bank_id: UUID) -> TemenosConnectionListRead:
+def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> TemenosConnectionListRead:
     _get_bank_or_404(db, ctx, bank_id)
     rows = db.scalars(
         select(TemenosConnection)
@@ -92,7 +92,7 @@ def list_connections(db: Session, ctx: TenantContext, bank_id: UUID) -> TemenosC
 
 
 def list_domains(
-    db: Session, ctx: TenantContext, bank_id: UUID, mode: str
+    db: Session, ctx: TenantContext, bank_id: str, mode: str
 ) -> TemenosDomainListRead:
     """The core-banking domain catalog for a connection mode: category, canonical
     entity type, default cadence, and whether the mode catalog supports it."""
@@ -119,7 +119,7 @@ def list_domains(
 
 
 def create_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: TemenosConnectionCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: TemenosConnectionCreate
 ) -> TemenosConnectionRead:
     """Onboard a connection. Credentials are stored through the encrypted vault
     and validated inline: success activates it, failure leaves it TESTING with
@@ -207,7 +207,7 @@ def create_connection(
     return _read_model(connection, validation_error=validation_error)
 
 
-def _seed_default_mapping(db: Session, ctx: TenantContext, bank_id: UUID, mode: str) -> None:
+def _seed_default_mapping(db: Session, ctx: TenantContext, bank_id: str, mode: str) -> None:
     """Seed the bank's default T24 mapping on onboarding if it has none, so the
     connection is immediately pull-ready. The default mapping is mode-independent
     (identity fields + attribute columns + enum maps), so one serves every mode.
@@ -237,7 +237,7 @@ def _seed_default_mapping(db: Session, ctx: TenantContext, bank_id: UUID, mode: 
 
 
 def validate_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnectionRead:
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
@@ -271,7 +271,7 @@ def validate_connection(
 
 
 def test_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosTestPullRead:
     """Sign on and report the pull plan. A live pull runs when the portal-gated
     transport is enabled; MVP verifies configuration + credentials end-to-end
@@ -307,7 +307,7 @@ def test_connection(
 def update_connection(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     payload: TemenosConnectionUpdate,
 ) -> TemenosConnectionRead:
@@ -390,7 +390,7 @@ def update_connection(
 
 
 def disable_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnectionRead:
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
@@ -411,7 +411,7 @@ def disable_connection(
 
 
 def enable_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnectionRead:
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
@@ -444,7 +444,7 @@ def enable_connection(
 def trigger_pull(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     payload: TemenosPullTriggerRequest,
 ) -> TemenosPullTriggerRead:
@@ -468,7 +468,7 @@ def trigger_pull(
 def trigger_backfill(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     payload: TemenosBackfillRequest,
 ) -> TemenosPullTriggerRead:
@@ -487,7 +487,7 @@ def trigger_backfill(
 
 
 def revoke_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnectionRead:
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
@@ -510,7 +510,7 @@ def revoke_connection(
 # --- Internals -------------------------------------------------------------
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )
@@ -520,7 +520,7 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
 
 
 def _get_connection_or_404(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnection:
     connection = db.scalar(
         select(TemenosConnection).where(

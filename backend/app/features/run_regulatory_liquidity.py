@@ -27,7 +27,7 @@ router = APIRouter(tags=["regulatory-liquidity"])
     operation_id="createRegulatoryRun",
 )
 def create_regulatory_run(
-    bank_id: UUID,
+    bank_id: str,
     payload: RegulatoryRunCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -46,7 +46,7 @@ def create_regulatory_run(
     operation_id="runAllLiquidityScenarios",
 )
 def run_all_liquidity_scenarios(
-    bank_id: UUID,
+    bank_id: str,
     payload: LiquidityScenarioBatchCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -60,7 +60,7 @@ def run_all_liquidity_scenarios(
     operation_id="listRegulatoryRuns",
 )
 def list_regulatory_runs(  # noqa: PLR0913
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     module: Annotated[
@@ -91,7 +91,7 @@ def list_regulatory_runs(  # noqa: PLR0913
     operation_id="getRegulatoryRun",
 )
 def get_regulatory_run(
-    bank_id: UUID, run_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, run_id: UUID, db: DbSession, ctx: Tenant
 ) -> RegulatoryRunRead:
     return regulatory_liquidity.get_regulatory_run(db, ctx, bank_id, run_id)
 
@@ -102,7 +102,7 @@ def get_regulatory_run(
     operation_id="getLiquidityDashboard",
 )
 def get_liquidity_dashboard(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
@@ -116,7 +116,7 @@ def get_liquidity_dashboard(
     operation_id="getBsd3Preview",
 )
 def get_bsd3_preview(
-    bank_id: UUID,
+    bank_id: str,
     reporting_period_id: Annotated[UUID, Query()],
     db: DbSession,
     ctx: Tenant,

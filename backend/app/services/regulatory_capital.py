@@ -148,7 +148,7 @@ class _ActiveCapitalParams:
 
 
 def create_capital_run(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: RegulatoryRunCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryRunCreate
 ) -> RegulatoryRunRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -157,7 +157,7 @@ def create_capital_run(
 
 
 def run_all_capital_scenarios(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: CapitalScenarioBatchCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: CapitalScenarioBatchCreate
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -170,7 +170,7 @@ def run_all_capital_scenarios(
 
 
 def get_capital_dashboard(
-    db: Session, ctx: TenantContext, bank_id: UUID, reporting_period_id: UUID | None = None
+    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> CapitalDashboardRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
@@ -237,7 +237,7 @@ def get_capital_dashboard(
 
 
 def get_capital_structure(
-    db: Session, ctx: TenantContext, bank_id: UUID, reporting_period_id: UUID | None = None
+    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> CapitalStructureRead:
     bank, period, run = _baseline_run_or_409(
         db, ctx, bank_id, reporting_period_id, artifact="the capital structure"
@@ -253,7 +253,7 @@ def get_capital_structure(
 
 
 def get_rwa_breakdown(
-    db: Session, ctx: TenantContext, bank_id: UUID, reporting_period_id: UUID | None = None
+    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> RwaBreakdownRead:
     bank, period, run = _baseline_run_or_409(
         db, ctx, bank_id, reporting_period_id, artifact="the RWA breakdown"
@@ -275,7 +275,7 @@ def get_rwa_breakdown(
 
 
 def get_bsd2_preview(
-    db: Session, ctx: TenantContext, bank_id: UUID, reporting_period_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID
 ) -> Bsd2PreviewRead:
     bank, period, run = _baseline_run_or_409(
         db, ctx, bank_id, reporting_period_id, artifact="the BSD-2 preview"
@@ -1032,7 +1032,7 @@ def compute_live(
 def _baseline_run_or_409(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     reporting_period_id: UUID | None,
     *,
     artifact: str,
@@ -1325,7 +1325,7 @@ def _list_periods_ascending(
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

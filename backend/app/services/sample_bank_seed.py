@@ -37,14 +37,17 @@ from app.models import (
 )
 from app.models.regulatory import RegulatoryParameterMixin
 
-DEMO_ORG_ID = UUID("11111111-1111-4111-8111-111111111111")
+# Deterministic platform IDs for the hermetic test fixture (valid BK-/OR-
+# format; Crockford charset). Real tenants — the primary DB sandbox included —
+# get generator-assigned codes from the model defaults at creation.
+DEMO_ORG_ID = "OR-DEM00001"
 DEMO_ORG_NAME = "AequorOS Demo Organization"
 DEMO_USER_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 DEMO_USER_EMAIL = "demo.user.one@example.test"
 DEMO_USER_NAME = "Demo User One"
-ISOLATED_ORG_ID = UUID("22222222-2222-4222-8222-222222222222")
+ISOLATED_ORG_ID = "OR-1S000002"
 ISOLATED_ORG_NAME = "AequorOS Isolated Tenant"
-SAMPLE_BANK_ID = UUID("77000000-0000-4000-8000-000000000001")
+SAMPLE_BANK_ID = "BK-SAMP0001"
 
 CURRENCY = "GHS"
 JURISDICTION_CODE = "GH"
@@ -553,7 +556,7 @@ class SampleBankSeedError(RuntimeError):
 
 @dataclass(frozen=True)
 class SeedSummary:
-    bank_id: UUID
+    bank_id: str
     periods: int
     fact_count: int
     param_count: int
@@ -612,7 +615,7 @@ def seed_sample_bank(session: Session) -> SeedSummary:
     )
 
 
-def _set_tenant_context(session: Session, organization_id: UUID) -> None:
+def _set_tenant_context(session: Session, organization_id: str) -> None:
     if session.get_bind().dialect.name != "postgresql":
         return
     session.execute(
@@ -621,7 +624,7 @@ def _set_tenant_context(session: Session, organization_id: UUID) -> None:
     )
 
 
-def _ensure_organization(session: Session, organization_id: UUID, name: str) -> None:
+def _ensure_organization(session: Session, organization_id: str, name: str) -> None:
     exists = session.scalar(select(Organization.id).where(Organization.id == organization_id))
     if exists is None:
         session.add(Organization(id=organization_id, name=name))

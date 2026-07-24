@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import datetime
 from typing import Any
-from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -53,7 +52,7 @@ def _flow_from_payload(payload: dict[str, Any]) -> DailyFlow | None:
     return DailyFlow(date=date, inflow=inflow, outflow=outflow, net=net)
 
 
-def load_bank_daily_series(db: Session, ctx: TenantContext, bank_id: UUID) -> list[DailyFlow]:
+def load_bank_daily_series(db: Session, ctx: TenantContext, bank_id: str) -> list[DailyFlow]:
     """The bank's own daily cash-flow series (ascending by date), or ``[]`` if none.
 
     Uses the latest accepted ``historical_cashflows`` batch — newest ``created_at``,

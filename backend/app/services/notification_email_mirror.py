@@ -16,7 +16,6 @@ from __future__ import annotations
 import smtplib
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
-from uuid import UUID
 
 from loguru import logger
 from sqlalchemy import select
@@ -42,7 +41,7 @@ def mirror_enabled() -> bool:
 
 
 def enqueue_due_notification_mirror(
-    session: Session, org_id: UUID, *, now: datetime
+    session: Session, org_id: str, *, now: datetime
 ) -> bool:
     """Enqueue at most one mirror job per org per hour; no-op when disabled."""
     if not mirror_enabled():
@@ -63,7 +62,7 @@ def enqueue_due_notification_mirror(
     return True
 
 
-def _pending_rows(session: Session, org_id: UUID, now: datetime) -> list[Notification]:
+def _pending_rows(session: Session, org_id: str, now: datetime) -> list[Notification]:
     cutoff = now - timedelta(days=_MAX_AGE_DAYS)
     return list(
         session.scalars(

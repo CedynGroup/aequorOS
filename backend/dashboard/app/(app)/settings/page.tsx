@@ -2,7 +2,9 @@
 
 /**
  * Settings — token'd governance cards:
- *   · Institution profile — real bank fields from the risk service
+ *   · Institution profile — identity from the corporate register (single
+ *     source of truth, managed under Governance → Institution Profile) plus
+ *     platform reporting facts from the bank record
  *   · Appearance — real theme toggle (ThemeProvider)
  *   · Users & roles — static demo roster, clearly labeled
  *   · Data & compute — real service health, market-data connections, and the
@@ -11,6 +13,7 @@
  */
 
 import Link from 'next/link';
+import type { InstitutionProfileRead } from '@aequoros/risk-service-api';
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { Monitor, Moon, Sun } from 'lucide-react';
@@ -32,15 +35,24 @@ import { apiBaseUrl, apiOrigin } from '@/lib/api/client';
 import {
   useBank,
   useCashflowHistory,
+  useInstitutionProfile,
   useMarketDataConnections,
 } from '@/lib/api/hooks';
 import { fmtRelative, labelize } from '@/lib/api/values';
 import { avatarColor, initialsFrom, roleLabel } from '@/lib/api/identity';
 
-/** A copyable UUID row for the identity grid. */
-function IdField({ label, value }: { label: string; value: string | undefined }) {
+/** A copyable identifier row for the identity grid. */
+function IdField({
+  label,
+  value,
+  wide = true,
+}: {
+  label: string;
+  value: string | undefined | null;
+  wide?: boolean;
+}) {
   return (
-    <div className="sm:col-span-2">
+    <div className={wide ? 'sm:col-span-2' : undefined}>
       <dt className="text-micro font-medium uppercase tracking-wider text-slate">
         {label}
       </dt>
@@ -73,6 +85,8 @@ export default function SettingsPage() {
   const { bank, periods } = useBankContext();
   const bankQuery = useBank(bank?.id);
   const profile = bankQuery.data ?? bank;
+  const registerQuery = useInstitutionProfile(bank?.id);
+  const register = registerQuery.data?.profile ?? null;
 
   return (
     <>
@@ -84,6 +98,8 @@ export default function SettingsPage() {
       <div className="px-8 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <InstitutionProfile
           profile={profile}
+          register={register}
+          registerLoading={registerQuery.isLoading}
           periodCount={periods.length}
           latestPeriodLabel={periods[0]?.label}
         />
@@ -99,12 +115,38 @@ export default function SettingsPage() {
   );
 }
 
+/** A plain label/value pair for the identity grid. */
+function Field({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string | null | undefined;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <dt className="text-micro font-medium uppercase tracking-wider text-slate">
+        {label}
+      </dt>
+      <dd className={`mt-1 text-navy ${mono ? 'font-mono' : ''}`}>
+        {value || '—'}
+      </dd>
+    </div>
+  );
+}
+
 function InstitutionProfile({
   profile,
+  register,
+  registerLoading,
   periodCount,
   latestPeriodLabel,
 }: {
   profile: ReturnType<typeof useBank>['data'] | null;
+  register: InstitutionProfileRead | null;
+  registerLoading: boolean;
   periodCount: number;
   latestPeriodLabel: string | undefined;
 }) {
@@ -112,7 +154,7 @@ function InstitutionProfile({
     <Card>
       <CardHeader
         title="Institution profile"
-        subtitle="Reporting entity from the risk service"
+        subtitle="Identity from the corporate register · reporting facts from the risk service"
         action={
           <Link
             href="/institution"
@@ -123,59 +165,89 @@ function InstitutionProfile({
         }
       />
       <CardBody>
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-body">
-          <div>
-            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-              Legal name
-            </dt>
-            <dd className="mt-1 text-navy">{profile?.name ?? '—'}</dd>
+        {registerLoading ? (
+          <div className="space-y-3">
+            <SkeletonLine className="w-2/3" />
+            <SkeletonLine className="w-1/2" />
+            <SkeletonLine className="w-3/5" />
           </div>
-          <div>
-            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-              Jurisdiction
-            </dt>
-            <dd className="mt-1 text-navy">
-              {profile
-                ? profile.jurisdiction?.countryName ?? profile.jurisdictionCode
-                : '—'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-              Regulator
-            </dt>
-            <dd className="mt-1 text-navy">
-              {profile?.jurisdiction?.centralBankName ?? '—'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-              License class
-            </dt>
-            <dd className="mt-1 text-navy">
-              {profile ? labelize(profile.licenseType) : '—'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-              Reporting currency
-            </dt>
-            <dd className="mt-1 font-mono text-navy">
-              {profile?.currency ?? '—'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-              Reporting periods
-            </dt>
-            <dd className="mt-1 text-navy">
-              {periodCount} loaded
-              {latestPeriodLabel && ` · latest ${latestPeriodLabel}`}
-            </dd>
-          </div>
-          <IdField label="Organization ID" value={profile?.organizationId} />
-          <IdField label="Bank ID" value={profile?.id} />
-        </dl>
+        ) : (
+          <>
+            {!register && (
+              <p className="mb-4 rounded border border-warning/25 bg-warning-light/50 px-3.5 py-2.5 text-caption text-navy/85">
+                No corporate profile configured yet — the fields below fall
+                back to the platform bank record.{' '}
+                <Link
+                  href="/institution"
+                  className="font-medium text-action hover:text-action-hover"
+                >
+                  Set up the register →
+                </Link>
+              </p>
+            )}
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-body">
+              <Field label="Legal name" value={profile?.name} />
+              <Field
+                label="Institution type"
+                value={register?.institutionType}
+              />
+              <Field
+                label="Registration number"
+                value={register?.registrationNumber}
+                mono
+              />
+              <Field
+                label="ORASS institution code"
+                value={register?.orassInstitutionCode}
+                mono
+              />
+              <Field label="TIN" value={register?.tin} mono />
+              <Field
+                label="Legal entity structure"
+                value={register?.legalEntityStructure}
+              />
+              <Field
+                label="Jurisdiction"
+                value={
+                  profile
+                    ? profile.jurisdiction?.countryName ??
+                      profile.jurisdictionCode
+                    : null
+                }
+              />
+              <Field
+                label="Regulator"
+                value={profile?.jurisdiction?.centralBankName}
+              />
+              <Field
+                label="License class"
+                value={profile ? labelize(profile.licenseType) : null}
+              />
+              <Field
+                label="Reporting currency"
+                value={profile?.currency}
+                mono
+              />
+              <Field
+                label="Reporting periods"
+                value={
+                  `${periodCount} loaded` +
+                  (latestPeriodLabel ? ` · latest ${latestPeriodLabel}` : '')
+                }
+              />
+              <IdField
+                label="Institution ID"
+                value={profile?.id}
+                wide={false}
+              />
+              <IdField
+                label="Organization ID"
+                value={profile?.organizationId}
+                wide={false}
+              />
+            </dl>
+          </>
+        )}
       </CardBody>
     </Card>
   );

@@ -140,8 +140,8 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     return_family: Mapped[str] = mapped_column(String(20), nullable=False)
     return_code: Mapped[str] = mapped_column(String(40), nullable=False)
     reporting_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -205,7 +205,7 @@ class RegulatoryPackageArtifact(UuidV7PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     package_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     kind: Mapped[str] = mapped_column(String(8), nullable=False)
     object_path: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -238,7 +238,7 @@ class RegulatoryPackageApproval(UuidV7PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     package_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     action: Mapped[str] = mapped_column(String(12), nullable=False)
     actor_user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -277,7 +277,7 @@ class RegulatorySubmissionEvent(UuidV7PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     package_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     channel: Mapped[str] = mapped_column(String(20), nullable=False)
     event: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -324,7 +324,7 @@ class RegulatoryResubmissionRequest(UuidV7PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     package_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="requested")
@@ -371,8 +371,8 @@ class RegulatoryChannelConfig(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     channel: Mapped[str] = mapped_column(String(20), nullable=False)
     config: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
@@ -409,8 +409,8 @@ class RegulatoryReportingSettings(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     deadline_overrides: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )

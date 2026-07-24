@@ -68,7 +68,7 @@ IDENTITY_MAPPING_NAME = "API push identity mapping"
 def open_push_batch(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     payload: PushBatchOpen,
     storage: StorageClient,
 ) -> PushBatchStatusRead:
@@ -129,7 +129,7 @@ def open_push_batch(
 def stage_push_records(  # noqa: PLR0913 - mirrors record_event's shape
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     push_batch_id: UUID,
     page: PushRecordsPage,
     storage: StorageClient,
@@ -187,7 +187,7 @@ def stage_push_records(  # noqa: PLR0913 - mirrors record_event's shape
 def commit_push_batch(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     push_batch_id: UUID,
     storage: StorageClient,
 ) -> IngestionBatchStartRead:
@@ -246,7 +246,7 @@ def commit_push_batch(
 def get_push_batch(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     push_batch_id: UUID,
     storage: StorageClient,
 ) -> PushBatchStatusRead:
@@ -321,7 +321,7 @@ def _status_read(manifest: dict[str, Any]) -> PushBatchStatusRead:
     records_staged = {key: int(count) for key, count in manifest["records_staged"].items()}
     return PushBatchStatusRead(
         push_batch_id=UUID(manifest["push_batch_id"]),
-        bank_id=UUID(manifest["bank_id"]),
+        bank_id=str(manifest["bank_id"]),
         as_of_date=date.fromisoformat(manifest["as_of_date"]),
         idempotency_key=manifest["idempotency_key"],
         status=manifest["status"],
@@ -420,7 +420,7 @@ def _read_json(storage: StorageClient, location: StorageLocation) -> dict[str, A
     return json.loads(stream.read().decode("utf-8"))
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )
@@ -430,7 +430,7 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
 
 
 def _get_batch_or_404(
-    db: Session, ctx: TenantContext, bank_id: UUID, batch_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, batch_id: UUID
 ) -> IngestionBatch:
     batch = db.scalar(
         select(IngestionBatch).where(

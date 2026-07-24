@@ -14,17 +14,22 @@ Base URL: `http://<host>:8003/api/v1` (adjust per environment).
 
 ## 1. Authentication
 
-**MVP:** the platform's tenant headers, sent on every request:
+An **integration key**, sent as the bearer credential on every request:
 
-| Header | Value |
-| --- | --- |
-| `X-Org-Id` | Your organization UUID |
-| `X-User-Id` | The service-account user UUID acting for your middleware |
+```
+Authorization: Bearer aeq_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
 
-> **Production note.** These headers identify the tenant inside a trusted
-> perimeter. Production deployments put OAuth2 client-credentials (or mTLS)
-> in front of these endpoints; the resource design below does not change.
-> Do not build against the headers as a security mechanism.
+Your administrator generates the key once in the dashboard (Data Engine →
+API Push → Integration keys). It authenticates your middleware as a
+dedicated service account with data-push rights only, is shown exactly once
+at generation (the platform stores only a hash), and can be revoked
+instantly from the same screen. Rotate by generating a new key, switching
+your middleware, then revoking the old one.
+
+> **Production note.** Deployments may additionally front these endpoints
+> with OAuth2 client-credentials or mTLS; the resource design below does
+> not change.
 
 ---
 
@@ -36,6 +41,11 @@ Base URL: `http://<host>:8003/api/v1` (adjust per environment).
 3. POST /banks/{bank_id}/push-batches/{push_id}/commit   run the ingestion pipeline
    GET  /banks/{bank_id}/push-batches/{push_id}          staging status (any time)
 ```
+
+> **Bank identifier.** `{bank_id}` is your **institution ID** — the short
+> identifier you were onboarded with (format `BK-XXXXXXXX`, shown in
+> Settings → Institution profile). It is the bank's one and only identifier
+> across the platform. Lowercase input is accepted and normalized.
 
 ### 2.1 Open a push batch
 

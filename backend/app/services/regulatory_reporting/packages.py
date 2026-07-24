@@ -28,7 +28,7 @@ from app.services.regulatory_reporting.registry import REGISTRY
 def list_packages(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     *,
     return_code: str | None = None,
     return_family: str | None = None,
@@ -87,7 +87,7 @@ def list_packages(  # noqa: PLR0913
 
 
 def get_package(
-    db: Session, ctx: TenantContext, bank_id: UUID, package_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
 ) -> RegulatoryPackageRead:
     get_bank_or_404(db, ctx, bank_id)
     return read_package(db, get_package_or_404(db, ctx, bank_id, package_id))

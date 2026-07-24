@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 def upload_market_data(  # noqa: PLR0913 - one call carries the full upload context
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     storage: StorageClient,
     *,
     filename: str,
@@ -93,7 +93,7 @@ def upload_market_data(  # noqa: PLR0913 - one call carries the full upload cont
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

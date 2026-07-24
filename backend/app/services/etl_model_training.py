@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -39,7 +38,7 @@ _MIN_COUNTERPARTIES = 10
 _MIN_POSITIONS = 20
 
 
-def _counterparty_rows(db: Session, ctx: TenantContext, bank_id: UUID) -> list[dict[str, str]]:
+def _counterparty_rows(db: Session, ctx: TenantContext, bank_id: str) -> list[dict[str, str]]:
     counterparties = db.scalars(
         select(CanonicalCounterparty).where(
             CanonicalCounterparty.organization_id == ctx.organization_id,
@@ -61,7 +60,7 @@ def _counterparty_rows(db: Session, ctx: TenantContext, bank_id: UUID) -> list[d
     return rows
 
 
-def _position_records(db: Session, ctx: TenantContext, bank_id: UUID) -> list[RawRecord]:
+def _position_records(db: Session, ctx: TenantContext, bank_id: str) -> list[RawRecord]:
     pairs = db.execute(
         select(CanonicalPosition, CanonicalPositionSnapshot)
         .join(
@@ -100,7 +99,7 @@ def _position_records(db: Session, ctx: TenantContext, bank_id: UUID) -> list[Ra
     return records
 
 
-def train_bank_etl_models(db: Session, ctx: TenantContext, bank_id: UUID) -> dict[str, Any]:
+def train_bank_etl_models(db: Session, ctx: TenantContext, bank_id: str) -> dict[str, Any]:
     """Train + persist this bank's counterparty and anomaly models on its own data.
 
     Returns a per-model summary; a model with too little data is reported as skipped

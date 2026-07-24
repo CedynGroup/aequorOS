@@ -7,7 +7,7 @@ import type { FullConfig } from '@playwright/test';
 import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from '../playwright.config';
 import { mintBackendToken, writeStorageState } from './support/mint';
 
-const SAMPLE_BANK_ID = '77000000-0000-4000-8000-000000000001';
+const SAMPLE_BANK_ID = 'BK-SAMP0001';
 
 async function api(
   token: string,

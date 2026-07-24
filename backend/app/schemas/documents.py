@@ -31,7 +31,7 @@ class DocumentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     stored_object_id: UUID
     filename: str

@@ -10,7 +10,6 @@ date with ``monthly_day(override)`` instead of the registry default.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -34,7 +33,7 @@ def _read(settings: RegulatoryReportingSettings) -> ReportingSettingsRead:
 
 
 def _settings_row(
-    db: Session, ctx: TenantContext, bank_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str
 ) -> RegulatoryReportingSettings | None:
     return db.scalar(
         select(RegulatoryReportingSettings).where(
@@ -44,7 +43,7 @@ def _settings_row(
     )
 
 
-def get_reporting_settings(db: Session, ctx: TenantContext, bank_id: UUID) -> ReportingSettingsRead:
+def get_reporting_settings(db: Session, ctx: TenantContext, bank_id: str) -> ReportingSettingsRead:
     bank = get_bank_or_404(db, ctx, bank_id)
     settings = _settings_row(db, ctx, bank.id)
     if settings is None:
@@ -58,7 +57,7 @@ def get_reporting_settings(db: Session, ctx: TenantContext, bank_id: UUID) -> Re
 
 
 def put_reporting_settings(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: ReportingSettingsPut
+    db: Session, ctx: TenantContext, bank_id: str, payload: ReportingSettingsPut
 ) -> ReportingSettingsRead:
     require_actor(ctx)
     bank = get_bank_or_404(db, ctx, bank_id)

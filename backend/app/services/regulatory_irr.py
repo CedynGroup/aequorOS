@@ -142,7 +142,7 @@ class _IrrAnalysis:
 
 
 def create_irr_run(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: RegulatoryRunCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryRunCreate
 ) -> RegulatoryRunRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -151,7 +151,7 @@ def create_irr_run(
 
 
 def run_all_irr_scenarios(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: IrrScenarioBatchCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: IrrScenarioBatchCreate
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -164,7 +164,7 @@ def run_all_irr_scenarios(
 
 
 def get_irr_dashboard(
-    db: Session, ctx: TenantContext, bank_id: UUID, reporting_period_id: UUID | None = None
+    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> IrrDashboardRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
@@ -1123,7 +1123,7 @@ def _list_periods_ascending(
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

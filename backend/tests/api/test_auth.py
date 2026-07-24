@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import jwt
 import pytest
@@ -21,7 +21,7 @@ _CLIENT_ID = "test-client-id.apps.googleusercontent.com"
 
 
 def _seed_sso_connection(
-    org_id: UUID,
+    org_id: str,
     *,
     allowed_email_domains: list[str] | None = None,
     jit_enabled: bool = False,
@@ -60,7 +60,7 @@ def _id_token(**overrides: object) -> str:
 
 def _seed_user(role: str = "analyst") -> tuple:
     session = get_sessionmaker()()
-    org = Organization(id=uuid4(), name="Auth Test Bank")
+    org = Organization(name="Auth Test Bank")  # id from the platform generator
     session.add(org)
     session.flush()
     user = User(

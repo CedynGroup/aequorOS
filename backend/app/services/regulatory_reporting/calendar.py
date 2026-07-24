@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date, timedelta
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -95,7 +94,7 @@ def _rag(
     return "on_track"
 
 
-def _deadline_overrides(db: Session, ctx: TenantContext, bank_id: UUID) -> dict[str, int]:
+def _deadline_overrides(db: Session, ctx: TenantContext, bank_id: str) -> dict[str, int]:
     """The per-bank ``{return_code: day_of_month}`` deadline overrides, or {}."""
     settings = db.scalar(
         select(RegulatoryReportingSettings).where(
@@ -131,7 +130,7 @@ def _due_date(
 def list_obligations(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     horizon_months: int = 3,
     *,
     as_of: date | None = None,

@@ -67,7 +67,7 @@ def test_resource_specific_manual_entry_and_correction_refresh_validation_and_hi
         assert all(edit.edited_by is not None for edit in edits)
         assert session.scalar(
             select(AuditEvent).where(
-                AuditEvent.entity_id == UUID(corrected["record"]["id"]),
+                AuditEvent.entity_id == corrected["record"]["id"],
                 AuditEvent.event_type == "financial_record.corrected",
             )
         )

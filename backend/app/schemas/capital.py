@@ -49,7 +49,7 @@ class CapitalFindingRead(ClosedModel):
 
 class CapitalProjectionRead(ClosedModel):
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     scenario_id: UUID
     calculation_run_id: UUID

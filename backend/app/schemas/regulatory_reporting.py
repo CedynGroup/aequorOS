@@ -82,7 +82,7 @@ class PackageApprovalRead(ClosedModel):
 
 class RegulatoryPackageSummaryRead(ClosedModel):
     id: UUID
-    bank_id: UUID
+    bank_id: str
     return_family: ReturnFamily
     return_code: str
     reporting_date: date
@@ -112,7 +112,7 @@ class RegulatoryPackageRead(RegulatoryPackageSummaryRead):
 
 
 class RegulatoryPackageListRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     packages: list[RegulatoryPackageSummaryRead]
     total: int
     limit: int
@@ -180,7 +180,7 @@ class ReportingObligationRead(ClosedModel):
 
 
 class ReportingObligationListRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     as_of: date
     horizon_months: int
     obligations: list[ReportingObligationRead]
@@ -240,7 +240,7 @@ class ReportingSettingsPut(ClosedModel):
 
 
 class ReportingSettingsRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     deadline_overrides: dict[str, int]
     created_at: datetime
     updated_at: datetime

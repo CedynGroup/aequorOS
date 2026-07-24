@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 from datetime import date
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
@@ -44,7 +43,7 @@ def get_market_data_template(kind: TemplateKind, ctx: Tenant) -> StreamingRespon
     operation_id="uploadMarketData",
 )
 async def upload_market_data(  # noqa: PLR0913 - route wiring: tenant, storage, file, form field
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: MutationTenant,
     storage: IngestionStorage,

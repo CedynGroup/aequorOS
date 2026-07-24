@@ -93,7 +93,7 @@ _adapter = DatabaseDirectAdapter()
 # --- Reads -----------------------------------------------------------------
 
 
-def list_connections(db: Session, ctx: TenantContext, bank_id: UUID) -> DatabaseConnectionListRead:
+def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> DatabaseConnectionListRead:
     _get_bank_or_404(db, ctx, bank_id)
     rows = db.scalars(
         select(DatabaseDirectConnection)
@@ -109,7 +109,7 @@ def list_connections(db: Session, ctx: TenantContext, bank_id: UUID) -> Database
 
 
 def get_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionRead:
     _get_bank_or_404(db, ctx, bank_id)
     return _read_model(_get_connection_or_404(db, ctx, bank_id, connection_id))
@@ -119,7 +119,7 @@ def get_connection(
 
 
 def create_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: DatabaseConnectionCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: DatabaseConnectionCreate
 ) -> DatabaseConnectionRead:
     """Onboard a connection. The adapter config blocks are validated for shape,
     credentials are sealed into the vault, and a successful credential-shape
@@ -201,7 +201,7 @@ def create_connection(
 def update_connection(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     payload: DatabaseConnectionUpdate,
 ) -> DatabaseConnectionRead:
@@ -259,7 +259,7 @@ def update_connection(
 
 
 def disable_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionRead:
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
@@ -280,7 +280,7 @@ def disable_connection(
 
 
 def enable_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionRead:
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
@@ -304,7 +304,7 @@ def enable_connection(
 
 
 def revoke_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionRead:
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
@@ -332,7 +332,7 @@ def revoke_connection(
 def test_connection(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     *,
     driver: DatabaseDriver | None = None,
@@ -384,7 +384,7 @@ def test_connection(
 def discover_schema(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     *,
     driver: DatabaseDriver | None = None,
@@ -408,7 +408,7 @@ def discover_schema(
 def sync_now(  # noqa: PLR0913 - a sync binds bank, connection, storage, and request
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     storage: StorageClient,
     payload: DatabaseConnectionSyncRequest,
@@ -631,7 +631,7 @@ def _safe_column_samples(
     return samples
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )
@@ -641,7 +641,7 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
 
 
 def _get_connection_or_404(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseDirectConnection:
     connection = db.scalar(
         select(DatabaseDirectConnection).where(

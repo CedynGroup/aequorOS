@@ -6,14 +6,14 @@ from uuid import UUID
 from app.core.config import get_settings
 from app.core.security import create_token
 
-ORG_1 = UUID("11111111-1111-4111-8111-111111111111")
-ORG_2 = UUID("22222222-2222-4222-8222-222222222222")
+ORG_1 = "OR-DEM00001"  # sample_bank_seed.DEMO_ORG_ID
+ORG_2 = "OR-1S000002"  # sample_bank_seed.ISOLATED_ORG_ID
 USER_1 = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 USER_2 = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 
 
 def headers(
-    org_id: UUID = ORG_1,
+    org_id: str = ORG_1,
     user_id: UUID | None = None,
     roles: Sequence[str] = ("admin",),
 ) -> dict[str, str]:

@@ -1,15 +1,25 @@
 'use client';
 
 /**
- * API Push integration guide: connection details, the three-call flow with
- * copyable curl examples, and the per-entity record schemas — rendered from
- * the typed content in api-reference.ts (authored against
+ * API Push integration guide: connection details, integration-key management
+ * (generate-once, revocable service-account credentials), the three-call flow
+ * with copyable curl examples, and the per-entity record schemas — rendered
+ * from the typed content in api-reference.ts (authored against
  * docs/API_INTEGRATION.md, the authoritative contract).
  */
 
-import { Download, ShieldAlert, Webhook } from 'lucide-react';
+import { useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { Download, KeyRound, ShieldAlert, Webhook } from 'lucide-react';
 import CopyButton from '@/components/ui/CopyButton';
+import StatusPill from '@/components/ui/StatusPill';
 import { apiOrigin } from '@/lib/api/client';
+import {
+  useIntegrationKeys,
+  useIssueIntegrationKey,
+  useRevokeIntegrationKey,
+} from '@/lib/api/hooks';
+import { fmtRelative } from '@/lib/api/values';
 import { downloadTextFile } from '@/lib/download';
 import {
   ENTITY_SPECS,
@@ -67,23 +77,151 @@ export function ConnectionCard() {
           <ConnectionField label="Base URL" value={`${apiOrigin}/api/v1`} />
           <ConnectionField
             label="Authorization"
-            value="Bearer <access token>"
-            hint="A signed access token from POST /api/v1/auth/login — send on every request."
+            value="Bearer aeq_live_…"
+            hint="Your integration key, sent as the bearer credential on every request — generate one below."
           />
         </div>
         <div className="rounded border border-warning/30 bg-warning-light/40 p-4">
           <p className="inline-flex items-center gap-1.5 text-caption font-medium text-warning">
-            <ShieldAlert size={13} aria-hidden /> Production note
+            <ShieldAlert size={13} aria-hidden /> Key handling
           </p>
           <p className="mt-1 text-body text-navy/80 leading-relaxed">
-            The access token identifies + authorizes the tenant (verified server-side). Production
-            deployments put OAuth2 client-credentials or mTLS in front of these
-            endpoints; the resource design does not change. Do not build against the
-            headers as a security mechanism.
+            The key identifies + authorizes your institution as a service
+            account (verified server-side, analyst rights — data push only).
+            It is shown once at generation and stored only as a hash. If a key
+            is exposed, revoke it here immediately; rotate by generating a new
+            key before revoking the old one.
           </p>
         </div>
       </div>
+      <IntegrationKeysPanel />
     </section>
+  );
+}
+
+function IntegrationKeysPanel() {
+  const { data: session } = useSession();
+  const isAdmin = (session?.user?.roles ?? []).includes('admin');
+  const keysQuery = useIntegrationKeys(isAdmin);
+  const issue = useIssueIntegrationKey();
+  const revoke = useRevokeIntegrationKey();
+  const [label, setLabel] = useState('');
+  // The one moment the raw key is visible — held in memory only, never listed.
+  const [freshKey, setFreshKey] = useState<string | null>(null);
+
+  if (!isAdmin) {
+    return (
+      <p className="mt-4 text-caption text-slate">
+        Integration keys are managed by an administrator.
+      </p>
+    );
+  }
+  const keys = keysQuery.data?.keys ?? [];
+
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <div className="flex items-center gap-2">
+        <KeyRound size={15} className="text-action" aria-hidden />
+        <h3 className="text-h3 text-navy">Integration keys</h3>
+      </div>
+
+      {freshKey && (
+        <div className="mt-3 rounded border border-success/40 bg-success-light/40 p-4">
+          <p className="text-caption font-medium text-navy">
+            Key generated — copy it now. It will not be shown again.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <code className="text-body font-mono text-navy break-all">{freshKey}</code>
+            <CopyButton text={freshKey} label="Integration key" className="shrink-0" />
+          </div>
+          <button
+            type="button"
+            className="mt-2 text-caption font-medium text-action hover:text-action-hover"
+            onClick={() => setFreshKey(null)}
+          >
+            I have stored it securely — dismiss
+          </button>
+        </div>
+      )}
+
+      <form
+        className="mt-3 flex items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!label.trim() || issue.isPending) return;
+          issue.mutate(label.trim(), {
+            onSuccess: (result) => {
+              setFreshKey(result.key);
+              setLabel('');
+            },
+          });
+        }}
+      >
+        <input
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          placeholder="Key label — e.g. Core banking nightly push"
+          maxLength={80}
+          className="flex-1 rounded border border-border bg-surface-raised px-2.5 py-1.5 text-body text-navy placeholder:text-slate-light"
+          aria-label="Key label"
+        />
+        <button
+          type="submit"
+          disabled={!label.trim() || issue.isPending}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 shrink-0"
+        >
+          {issue.isPending ? 'Generating…' : 'Generate key'}
+        </button>
+      </form>
+      {issue.isError && (
+        <p className="mt-1 text-caption text-critical">
+          {issue.error instanceof Error ? issue.error.message : 'Key generation failed.'}
+        </p>
+      )}
+
+      {keys.length > 0 && (
+        <ul className="mt-4 divide-y divide-line">
+          {keys.map((key) => (
+            <li key={key.id} className="flex items-center gap-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="text-body text-navy truncate">{key.label}</p>
+                <p className="text-caption text-slate font-mono">
+                  {key.keyPrefix}
+                  <span className="ml-2 font-sans">
+                    created {fmtRelative(key.createdAt)}
+                    {key.lastUsedAt
+                      ? ` · last used ${fmtRelative(key.lastUsedAt)}`
+                      : ' · never used'}
+                  </span>
+                </p>
+              </div>
+              {key.revokedAt ? (
+                <StatusPill tone="slate">Revoked</StatusPill>
+              ) : (
+                <>
+                  <StatusPill tone="success">Active</StatusPill>
+                  <button
+                    type="button"
+                    className="text-caption font-medium text-critical hover:underline"
+                    disabled={revoke.isPending}
+                    onClick={() => {
+                      const reason = window.prompt(
+                        `Revoke "${key.label}"? Middleware using it stops authenticating immediately. Reason:`
+                      );
+                      if (reason?.trim()) {
+                        revoke.mutate({ keyId: key.id, reason: reason.trim() });
+                      }
+                    }}
+                  >
+                    Revoke
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

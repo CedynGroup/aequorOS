@@ -55,7 +55,7 @@ class RiskCase(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("id", "organization_id", name="uq_risk_cases_id_organization_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     case_type: Mapped[str] = mapped_column(String(120), nullable=False)
     subject_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -89,7 +89,7 @@ class RiskCaseDecision(UuidV4PrimaryKeyMixin, Base):
         Index("ix_risk_case_decisions_organization_id_case_id", "organization_id", "case_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("risk_cases.id"), nullable=False
     )
@@ -116,7 +116,7 @@ class StoredObject(UuidV4PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
     bucket: Mapped[str] = mapped_column(Text, nullable=False)
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
@@ -147,7 +147,7 @@ class Document(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("risk_cases.id"), nullable=False
     )
@@ -177,7 +177,7 @@ class DocumentChunk(UuidV4PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     document_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("documents.id"), nullable=False
     )
@@ -197,7 +197,7 @@ class DocumentChunk(UuidV4PrimaryKeyMixin, Base):
 class DocumentExtraction(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "document_extractions"
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     document_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("documents.id"), nullable=False
     )
@@ -217,7 +217,7 @@ class DocumentExtraction(UuidV4PrimaryKeyMixin, Base):
 class RiskAssessment(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "risk_assessments"
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("risk_cases.id"), nullable=False
     )
@@ -236,7 +236,7 @@ class RiskAssessment(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 class RiskAssessmentRun(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "risk_assessment_runs"
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     assessment_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("risk_assessments.id"), nullable=False
     )
@@ -266,7 +266,7 @@ class RiskScore(UuidV4PrimaryKeyMixin, Base):
         Index("ix_risk_scores_organization_id_case_id", "organization_id", "case_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("risk_cases.id"), nullable=False
     )
@@ -313,7 +313,7 @@ class RiskFinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_risk_findings_organization_id_severity", "organization_id", "severity"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("risk_cases.id"), nullable=False
     )
@@ -349,7 +349,7 @@ class RiskFinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 class RiskFindingEvidence(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "risk_finding_evidence"
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     finding_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("risk_findings.id"), nullable=False
     )
@@ -377,15 +377,16 @@ class Job(UuidV4PrimaryKeyMixin, Base):
         Index("ix_jobs_organization_id_coalesce_key", "organization_id", "coalesce_key"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     job_type: Mapped[str] = mapped_column(String(80), nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False)
     entity_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    entity_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    # Polymorphic reference: UUID for most entities, platform ID for banks/orgs.
+    entity_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     # Live-engine dispatch fields: the target bank, an arbitrary JSON payload,
     # a not-before schedule time (debounce/backoff/scheduler), and a coalesce
     # key so a burst of ingestions collapses into one queued refresh.
-    bank_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    bank_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     payload: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )

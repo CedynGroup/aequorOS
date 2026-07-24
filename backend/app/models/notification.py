@@ -58,7 +58,7 @@ class Notification(UuidV7PrimaryKeyMixin, Base):
         Index("ix_notifications_org_created", "organization_id", "created_at"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     recipient_user_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     # Long enough for the deadline-scan dedupe keys (namespace + return_code +
     # reporting_date + scan date); same width as audit_events.event_type.
@@ -67,7 +67,8 @@ class Notification(UuidV7PrimaryKeyMixin, Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     entity_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    entity_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    # Polymorphic reference: UUID for most entities, platform ID for banks/orgs.
+    entity_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     # Set once the SMTP mirror has delivered this row (outbox semantics);
     # stays NULL forever when the mirror is disabled.
     emailed_at: Mapped[datetime | None] = mapped_column(

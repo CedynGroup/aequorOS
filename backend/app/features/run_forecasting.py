@@ -26,7 +26,7 @@ router = APIRouter(tags=["forecasting"])
     response_model=ForecastScenarioListRead,
     operation_id="listForecastScenarios",
 )
-def list_forecast_scenarios(bank_id: UUID, db: DbSession, ctx: Tenant) -> ForecastScenarioListRead:
+def list_forecast_scenarios(bank_id: str, db: DbSession, ctx: Tenant) -> ForecastScenarioListRead:
     return regulatory_forecasting.list_forecast_scenarios(db, ctx, bank_id)
 
 
@@ -37,7 +37,7 @@ def list_forecast_scenarios(bank_id: UUID, db: DbSession, ctx: Tenant) -> Foreca
     operation_id="createForecastRun",
 )
 def create_forecast_run(
-    bank_id: UUID,
+    bank_id: str,
     payload: ForecastRunCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -51,7 +51,7 @@ def create_forecast_run(
     operation_id="listForecastRuns",
 )
 def list_forecast_runs(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
@@ -65,7 +65,7 @@ def list_forecast_runs(
     response_model=ForecastRunRead,
     operation_id="getForecastRun",
 )
-def get_forecast_run(bank_id: UUID, run_id: UUID, db: DbSession, ctx: Tenant) -> ForecastRunRead:
+def get_forecast_run(bank_id: str, run_id: UUID, db: DbSession, ctx: Tenant) -> ForecastRunRead:
     return regulatory_forecasting.get_forecast_run(db, ctx, bank_id, run_id)
 
 
@@ -76,7 +76,7 @@ def get_forecast_run(bank_id: UUID, run_id: UUID, db: DbSession, ctx: Tenant) ->
     operation_id="runStrategicOptimizer",
 )
 def run_strategic_optimizer(
-    bank_id: UUID,
+    bank_id: str,
     payload: OptimizerRunCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -91,7 +91,7 @@ def run_strategic_optimizer(
     operation_id="runWhatIfAnalysis",
 )
 def run_whatif_analysis(
-    bank_id: UUID,
+    bank_id: str,
     payload: WhatIfRunCreate,
     db: DbSession,
     ctx: MutationTenant,

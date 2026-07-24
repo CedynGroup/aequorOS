@@ -169,8 +169,8 @@ class RegulatoryValidationRead(BaseModel):
 
 class RegulatoryRunRead(ClosedModel):
     id: UUID
-    organization_id: UUID
-    bank_id: UUID
+    organization_id: str
+    bank_id: str
     reporting_period_id: UUID
     module: RegulatoryModule
     scenario_code: RegulatoryScenarioCode
@@ -207,7 +207,7 @@ class RegulatoryRunSummaryRead(ClosedModel):
 
 
 class RegulatoryRunListRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     runs: list[RegulatoryRunSummaryRead]
     total: int
     limit: int
@@ -216,7 +216,7 @@ class RegulatoryRunListRead(ClosedModel):
 
 
 class RegulatoryRunBatchRead(ClosedModel):
-    bank_id: UUID
+    bank_id: str
     reporting_period_id: UUID
     runs: list[RegulatoryRunRead]
 

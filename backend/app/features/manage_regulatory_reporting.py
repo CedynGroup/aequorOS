@@ -76,7 +76,7 @@ type PackageStatusFilter = Literal[
     operation_id="listReportingObligations",
 )
 def list_reporting_obligations(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     horizon_months: Annotated[int, Query(ge=1, le=24)] = 3,
@@ -90,7 +90,7 @@ def list_reporting_obligations(
     operation_id="listRegulatoryPackages",
 )
 def list_regulatory_packages(  # noqa: PLR0913
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     return_code: Annotated[str | None, Query(max_length=40)] = None,
@@ -128,7 +128,7 @@ def list_regulatory_packages(  # noqa: PLR0913
     operation_id="createRegulatoryPackage",
 )
 def create_regulatory_package(
-    bank_id: UUID,
+    bank_id: str,
     payload: RegulatoryPackageCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -142,7 +142,7 @@ def create_regulatory_package(
     operation_id="getRegulatoryPackage",
 )
 def get_regulatory_package(
-    bank_id: UUID, package_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, package_id: UUID, db: DbSession, ctx: Tenant
 ) -> RegulatoryPackageRead:
     return regulatory_reporting.get_package(db, ctx, bank_id, package_id)
 
@@ -153,7 +153,7 @@ def get_regulatory_package(
     operation_id="validateRegulatoryPackage",
 )
 def validate_regulatory_package(
-    bank_id: UUID, package_id: UUID, db: DbSession, ctx: MutationTenant
+    bank_id: str, package_id: UUID, db: DbSession, ctx: MutationTenant
 ) -> RegulatoryPackageRead:
     return regulatory_reporting.validate_package(db, ctx, bank_id, package_id)
 
@@ -164,7 +164,7 @@ def validate_regulatory_package(
     operation_id="requestPackageApproval",
 )
 def request_package_approval(
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     payload: PackageApprovalRequestCreate,
     db: DbSession,
@@ -179,7 +179,7 @@ def request_package_approval(
     operation_id="decidePackageApproval",
 )
 def decide_package_approval(
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     payload: PackageApprovalDecisionCreate,
     db: DbSession,
@@ -195,7 +195,7 @@ def decide_package_approval(
     operation_id="exportRegulatoryPackage",
 )
 def export_regulatory_package(
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     kind: Annotated[Literal["xlsx", "csv", "pdf"], Query()],
     db: DbSession,
@@ -210,7 +210,7 @@ def export_regulatory_package(
     operation_id="downloadRegulatoryArtifact",
 )
 def download_regulatory_artifact(
-    bank_id: UUID,
+    bank_id: str,
     artifact_id: UUID,
     db: DbSession,
     ctx: Tenant,
@@ -242,7 +242,7 @@ def download_regulatory_artifact(
     operation_id="downloadEmailFallbackEml",
 )
 def download_email_fallback_eml(
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     db: DbSession,
     ctx: Tenant,
@@ -311,7 +311,7 @@ def download_email_fallback_eml(
     operation_id="submitRegulatoryPackage",
 )
 def submit_regulatory_package(
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     payload: PackageSubmitCreate,
     db: DbSession,
@@ -329,7 +329,7 @@ def submit_regulatory_package(
     operation_id="pollRegulatorySubmission",
 )
 def poll_regulatory_submission(
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     db: DbSession,
     ctx: ApproverTenant,
@@ -345,7 +345,7 @@ def poll_regulatory_submission(
     status_code=status.HTTP_201_CREATED,
 )
 def request_package_resubmission(
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     payload: ResubmissionRequestCreate,
     db: DbSession,
@@ -361,7 +361,7 @@ def request_package_resubmission(
     operation_id="decidePackageResubmission",
 )
 def decide_package_resubmission(  # noqa: PLR0913
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     request_id: UUID,
     payload: ResubmissionDecisionCreate,
@@ -380,7 +380,7 @@ def decide_package_resubmission(  # noqa: PLR0913
     operation_id="listResubmissionRequests",
 )
 def list_resubmission_requests(
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     db: DbSession,
     ctx: Tenant,
@@ -394,7 +394,7 @@ def list_resubmission_requests(
     operation_id="listPackageArtifacts",
 )
 def list_package_artifacts(
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     db: DbSession,
     ctx: Tenant,
@@ -413,7 +413,7 @@ def list_package_artifacts(
     operation_id="getEmailFallbackInstructions",
 )
 def get_email_fallback_instructions(
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     db: DbSession,
     ctx: Tenant,
@@ -428,7 +428,7 @@ def get_email_fallback_instructions(
     operation_id="listSubmissionEvents",
 )
 def list_submission_events(  # noqa: PLR0913
-    bank_id: UUID,
+    bank_id: str,
     package_id: UUID,
     db: DbSession,
     ctx: Tenant,
@@ -456,7 +456,7 @@ def list_return_templates(ctx: Tenant) -> ReturnTemplateListRead:
     operation_id="getChannelConfig",
 )
 def get_channel_config(
-    bank_id: UUID, channel: ChannelPath, db: DbSession, ctx: Tenant
+    bank_id: str, channel: ChannelPath, db: DbSession, ctx: Tenant
 ) -> ChannelConfigRead:
     return regulatory_reporting.get_channel_config(db, ctx, bank_id, channel)
 
@@ -467,7 +467,7 @@ def get_channel_config(
     operation_id="putChannelConfig",
 )
 def put_channel_config(
-    bank_id: UUID,
+    bank_id: str,
     channel: ChannelPath,
     payload: ChannelConfigPut,
     db: DbSession,
@@ -481,7 +481,7 @@ def put_channel_config(
     response_model=ReportingSettingsRead,
     operation_id="getReportingSettings",
 )
-def get_reporting_settings(bank_id: UUID, db: DbSession, ctx: Tenant) -> ReportingSettingsRead:
+def get_reporting_settings(bank_id: str, db: DbSession, ctx: Tenant) -> ReportingSettingsRead:
     """The per-bank deadline-override map (empty when never configured)."""
     return regulatory_reporting.get_reporting_settings(db, ctx, bank_id)
 
@@ -492,7 +492,7 @@ def get_reporting_settings(bank_id: UUID, db: DbSession, ctx: Tenant) -> Reporti
     operation_id="putReportingSettings",
 )
 def put_reporting_settings(
-    bank_id: UUID,
+    bank_id: str,
     payload: ReportingSettingsPut,
     db: DbSession,
     ctx: MutationTenant,

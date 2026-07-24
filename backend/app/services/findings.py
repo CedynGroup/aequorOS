@@ -89,7 +89,7 @@ class EvidenceResult:
     chunk: EvidenceChunk | None
 
 
-def get_finding_or_404(db: Session, organization_id: UUID, finding_id: UUID) -> RiskFinding:
+def get_finding_or_404(db: Session, organization_id: str, finding_id: UUID) -> RiskFinding:
     finding = db.scalar(
         select(RiskFinding).where(
             RiskFinding.id == finding_id,

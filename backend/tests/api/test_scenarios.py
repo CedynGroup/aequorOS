@@ -170,7 +170,7 @@ def test_custom_scenario_assumptions_copy_archive_and_provenance(
         )
         assert session.scalar(
             select(AuditEvent).where(
-                AuditEvent.entity_id == UUID(custom["id"]),
+                AuditEvent.entity_id == custom["id"],
                 AuditEvent.event_type == "scenario.archived",
             )
         )

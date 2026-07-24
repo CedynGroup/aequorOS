@@ -41,7 +41,7 @@ class ParseResult:
     status: str
 
 
-def get_document_or_404(db: Session, organization_id: UUID, document_id: UUID) -> Document:
+def get_document_or_404(db: Session, organization_id: str, document_id: UUID) -> Document:
     document = db.scalar(
         select(Document).where(
             Document.id == document_id,
@@ -54,7 +54,7 @@ def get_document_or_404(db: Session, organization_id: UUID, document_id: UUID) -
 
 
 def get_stored_object_or_404(
-    db: Session, organization_id: UUID, stored_object_id: UUID
+    db: Session, organization_id: str, stored_object_id: UUID
 ) -> StoredObject:
     stored_object = db.scalar(
         select(StoredObject).where(
@@ -128,7 +128,7 @@ def request_upload(
         ctx,
         event_type="document.upload_requested",
         entity_type="document",
-        entity_id=document.id,
+        entity_id=str(document.id),
     )
     db.commit()
     return UploadRequestResult(
@@ -184,7 +184,7 @@ def complete_upload(
         ctx,
         event_type="document.upload_completed",
         entity_type="document",
-        entity_id=document.id,
+        entity_id=str(document.id),
     )
     db.commit()
     return document
@@ -240,7 +240,7 @@ def request_parse(db: Session, ctx: TenantContext, document_id: UUID) -> ParseRe
         job_type="document_parse",
         status="queued",
         entity_type="document",
-        entity_id=document.id,
+        entity_id=str(document.id),
     )
     db.add(job)
     document.parse_status = "pending"
@@ -250,7 +250,7 @@ def request_parse(db: Session, ctx: TenantContext, document_id: UUID) -> ParseRe
         ctx,
         event_type="document.parse_requested",
         entity_type="document",
-        entity_id=document.id,
+        entity_id=str(document.id),
     )
     try:
         run_parse_stub(db, ctx, document, job)

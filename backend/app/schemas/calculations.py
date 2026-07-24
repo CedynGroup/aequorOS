@@ -54,7 +54,7 @@ class ForecastPeriodRead(BaseModel):
 
 class CalculationRunRead(ClosedModel):
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     scenario_id: UUID
     rerun_of_run_id: UUID | None

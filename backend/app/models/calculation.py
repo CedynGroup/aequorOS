@@ -52,7 +52,7 @@ class CalculationRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     scenario_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     rerun_of_run_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
@@ -85,7 +85,7 @@ class CalculationForecastPeriod(UuidV4PrimaryKeyMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     period_number: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -116,7 +116,7 @@ class LiquidityAnalysisResult(UuidV4PrimaryKeyMixin, Base):
         UniqueConstraint("run_id", name="uq_liquidity_analysis_results_run_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     analysis_version: Mapped[str] = mapped_column(String(80), nullable=False)

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
 
 import pytest
 
@@ -203,7 +202,7 @@ def test_encrypted_db_vault_roundtrip(db_session) -> None:
 def test_encrypted_db_vault_missing_connection_fails_loudly(db_session) -> None:
     vault = EncryptedDbVault(db_session, master_key="unit-test-master-key")
     with pytest.raises(CredentialVaultError, match="No market data connection"):
-        vault.retrieve(organization_id=ORG_1, bank_id=uuid4(), vendor="bloomberg")
+        vault.retrieve(organization_id=ORG_1, bank_id="BK-ZZZZZZZZ", vendor="bloomberg")
 
 
 def test_encrypted_db_vault_requires_master_key(db_session) -> None:

@@ -94,8 +94,8 @@ class InstitutionProfile(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("organization_id", "bank_id", name="uq_institution_profiles_org_bank"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     institution_type: Mapped[str] = mapped_column(String(60), nullable=False)
     legal_entity_structure: Mapped[str] = mapped_column(String(60), nullable=False)
     authorisation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -137,8 +137,8 @@ class RelatedParty(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_related_parties_org_bank", "organization_id", "bank_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     party_type: Mapped[str] = mapped_column(String(16), nullable=False)
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     contact: Mapped[dict[str, Any]] = mapped_column(
@@ -169,7 +169,7 @@ class RelatedPartyRole(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_related_party_roles_org_party", "organization_id", "party_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     party_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     role: Mapped[str] = mapped_column(String(40), nullable=False)
     other_responsibilities: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -208,7 +208,7 @@ class Shareholding(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_shareholdings_org_party", "organization_id", "party_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     party_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     share_type: Mapped[str] = mapped_column(String(60), nullable=False)
     share_subtype: Mapped[str | None] = mapped_column(String(60), nullable=True)
@@ -239,8 +239,8 @@ class Outlet(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_outlets_org_bank", "organization_id", "bank_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     outlet_type: Mapped[str] = mapped_column(String(16), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     outlet_number: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -270,8 +270,8 @@ class BankProduct(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_bank_products_org_bank", "organization_id", "bank_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     product_type: Mapped[str] = mapped_column(String(80), nullable=False)
     status: Mapped[str] = mapped_column(String(12), default="proposed", nullable=False)
@@ -295,8 +295,8 @@ class BankLicense(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_bank_licenses_org_bank", "organization_id", "bank_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     license_name: Mapped[str] = mapped_column(String(120), nullable=False)
     license_class: Mapped[str | None] = mapped_column(String(60), nullable=True)
     issued_on: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -316,8 +316,8 @@ class BankNameHistory(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_bank_name_history_org_bank", "organization_id", "bank_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     previous_name: Mapped[str] = mapped_column(String(200), nullable=False)
     changed_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)

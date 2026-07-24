@@ -20,7 +20,8 @@ from sqlalchemy.orm import Session
 from app.db.base import Base
 from app.models import Jurisdiction, Organization, User
 
-DEMO_ORG_ID = UUID("11111111-1111-4111-8111-111111111111")
+# The platform tenant ID pinned by the hermetic fixture (sample_bank_seed).
+DEMO_ORG_ID = "OR-DEM00001"
 E2E_USERS = {
     # id suffix encodes the role for readable storage-state files.
     "admin": UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),

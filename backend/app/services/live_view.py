@@ -8,8 +8,6 @@ immediately and return the job id to poll via ``GET /jobs/{id}``.
 
 from __future__ import annotations
 
-from uuid import UUID
-
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -33,7 +31,7 @@ _MODULE_ORDER = {
 }
 
 
-def get_live_summary(db: Session, ctx: TenantContext, bank_id: UUID) -> LiveSummaryRead:
+def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSummaryRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _latest_period(db, ctx, bank)
     if period is None:
@@ -79,7 +77,7 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: UUID) -> LiveSumm
 
 
 def refresh_bank_data(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: RefreshRequest
+    db: Session, ctx: TenantContext, bank_id: str, payload: RefreshRequest
 ) -> JobEnqueuedRead:
     """Enqueue an immediate live refresh (the "Recompute now" button)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -105,7 +103,7 @@ def refresh_bank_data(
 
 
 def mint_official_run(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: OfficialRunRequest
+    db: Session, ctx: TenantContext, bank_id: str, payload: OfficialRunRequest
 ) -> JobEnqueuedRead:
     """Enqueue an immediate immutable official run (the "Mint for filing" button)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -149,7 +147,7 @@ def _latest_period(db: Session, ctx: TenantContext, bank: Bank) -> BankReporting
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

@@ -159,7 +159,7 @@ class _FtpAnalysis:
 
 
 def run_all_ftp_scenarios(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: FtpScenarioBatchCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: FtpScenarioBatchCreate
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -172,7 +172,7 @@ def run_all_ftp_scenarios(
 
 
 def get_ftp_dashboard(
-    db: Session, ctx: TenantContext, bank_id: UUID, reporting_period_id: UUID | None = None
+    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> FtpDashboardRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
@@ -1203,7 +1203,7 @@ def _list_periods_ascending(
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

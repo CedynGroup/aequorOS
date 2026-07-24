@@ -14,6 +14,7 @@ export * from "./ForecastingApi";
 export * from "./HealthApi";
 export * from "./IngestionApi";
 export * from "./InstitutionProfileApi";
+export * from "./IntegrationKeysApi";
 export * from "./JobsApi";
 export * from "./LiquidityApi";
 export * from "./LiveEngineApi";

@@ -23,7 +23,7 @@ import path from 'path';
 import { E2E_API_ORIGIN, E2E_TMP } from '../playwright.config';
 import { mintBackendToken } from './support/mint';
 
-const SAMPLE_BANK_ID = '77000000-0000-4000-8000-000000000001';
+const SAMPLE_BANK_ID = 'BK-SAMP0001';
 const adminState = path.join(E2E_TMP, 'admin.json');
 const approverState = path.join(E2E_TMP, 'approver.json');
 

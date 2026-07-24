@@ -26,7 +26,9 @@ from app.models.financial import (
 from tests.api.helpers import ORG_1, ORG_2, USER_2
 
 
-def db_uuid(session: Session, value: UUID) -> str:
+def db_uuid(session: Session, value: UUID | str) -> str:
+    if isinstance(value, str):  # platform IDs (BK-/OR-) are stored verbatim
+        return value
     if session.bind is not None and session.bind.dialect.name == "sqlite":
         return value.hex
     return str(value)

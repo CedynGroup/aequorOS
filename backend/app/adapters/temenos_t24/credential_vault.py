@@ -28,7 +28,6 @@ from app.adapters.temenos_t24.auth import TemenosCredentials
 from app.core.config import get_settings
 
 if TYPE_CHECKING:
-    from uuid import UUID
 
     from sqlalchemy.orm import Session
 
@@ -38,7 +37,7 @@ if TYPE_CHECKING:
 __all__ = ["CredentialVaultError", "TemenosCredentialVault", "build_core_vault_path"]
 
 
-def build_core_vault_path(bank_id: UUID | str, mode: str) -> str:
+def build_core_vault_path(bank_id: str | str, mode: str) -> str:
     """Logical credential locator for a core-banking connection."""
     return f"vault://institutions/{bank_id}/core_credentials/{mode}/default"
 

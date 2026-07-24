@@ -239,7 +239,7 @@ def run_validation_rules(db: Session, package: RegulatoryPackage) -> list[dict[s
 
 
 def validate_package(
-    db: Session, ctx: TenantContext, bank_id: UUID, package_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
 ) -> RegulatoryPackageRead:
     get_bank_or_404(db, ctx, bank_id)
     package = get_package_or_404(db, ctx, bank_id, package_id)

@@ -8,7 +8,7 @@ from tests.api.helpers import ORG_1, headers
 
 
 def test_rejects_unknown_tenant(db_client: TestClient) -> None:
-    response = db_client.get("/api/v1/cases", headers=headers(uuid4()))
+    response = db_client.get("/api/v1/cases", headers=headers("OR-N0TENANT"))
 
     assert response.status_code == 401
 

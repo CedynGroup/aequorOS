@@ -19,7 +19,7 @@ class LoginRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=1024)
     # Optional tenant disambiguation when one email exists in more than one org.
-    organization_id: UUID | None = None
+    organization_id: str | None = None
 
 
 class TokenRefreshRequest(BaseModel):
@@ -31,7 +31,7 @@ class SsoLoginRequest(BaseModel):
     # it against the configured connection's issuer JWKS (zero-trust) before
     # issuing app tokens.
     id_token: str = Field(min_length=1)
-    organization_id: UUID | None = None
+    organization_id: str | None = None
 
 
 class TokenResponse(BaseModel):
@@ -43,7 +43,7 @@ class TokenResponse(BaseModel):
 
 class MeResponse(BaseModel):
     user_id: UUID
-    organization_id: UUID
+    organization_id: str
     email: str
     display_name: str | None
     job_title: str | None

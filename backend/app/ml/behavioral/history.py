@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass
-from uuid import UUID
 
 from sqlalchemy import Float, cast, func, select
 from sqlalchemy.orm import Session
@@ -68,7 +67,7 @@ class LoanMonthRow:
     months_on_book: int | None
 
 
-def available_as_of_dates(db: Session, ctx: TenantContext, bank_id: UUID) -> list[datetime.date]:
+def available_as_of_dates(db: Session, ctx: TenantContext, bank_id: str) -> list[datetime.date]:
     """Distinct as-of dates with accepted position snapshots for this bank."""
     rows = db.execute(
         select(CanonicalPositionSnapshot.as_of_date)
@@ -87,7 +86,7 @@ def available_as_of_dates(db: Session, ctx: TenantContext, bank_id: UUID) -> lis
 def load_deposit_month_aggregates(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     as_of: datetime.date,
     window_months: int,
     *,
@@ -144,7 +143,7 @@ def load_deposit_month_aggregates(  # noqa: PLR0913
 def load_loan_month_rows(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     as_of: datetime.date,
     window_months: int,
 ) -> list[LoanMonthRow]:
@@ -192,7 +191,7 @@ def load_loan_month_rows(
 def load_ghs_short_rate_history(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     as_of: datetime.date,
     window_months: int,
 ) -> dict[datetime.date, float]:

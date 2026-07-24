@@ -68,7 +68,7 @@ class InstitutionProfilePut(ClosedModel):
 
 class InstitutionProfileRead(ClosedModel):
     id: UUID
-    bank_id: UUID
+    bank_id: str
     institution_type: str
     legal_entity_structure: str
     authorisation_date: date | None
@@ -158,7 +158,7 @@ class ShareholdingRead(ClosedModel):
 
 class RelatedPartyRead(ClosedModel):
     id: UUID
-    bank_id: UUID
+    bank_id: str
     party_type: PartyType
     full_name: str
     contact: dict[str, Any]
@@ -192,7 +192,7 @@ class OutletUpdate(OutletCreate):
 
 class OutletRead(ClosedModel):
     id: UUID
-    bank_id: UUID
+    bank_id: str
     outlet_type: OutletType
     name: str
     outlet_number: str | None
@@ -219,7 +219,7 @@ class BankProductUpdate(BankProductCreate):
 
 class BankProductRead(ClosedModel):
     id: UUID
-    bank_id: UUID
+    bank_id: str
     name: str
     product_type: str
     status: ProductStatus
@@ -242,7 +242,7 @@ class BankLicenseUpdate(BankLicenseCreate):
 
 class BankLicenseRead(ClosedModel):
     id: UUID
-    bank_id: UUID
+    bank_id: str
     license_name: str
     license_class: str | None
     issued_on: date | None
@@ -268,7 +268,7 @@ class BankNameHistoryUpdate(BankNameHistoryCreate):
 
 class BankNameHistoryRead(ClosedModel):
     id: UUID
-    bank_id: UUID
+    bank_id: str
     previous_name: str
     changed_on: date | None
     change_reason: str | None = Field(title="Name change reason")
@@ -282,7 +282,7 @@ class BankNameHistoryRead(ClosedModel):
 class InstitutionProfileFullRead(ClosedModel):
     """The full corporate register for one bank — the ORASS master-data mirror."""
 
-    bank_id: UUID
+    bank_id: str
     profile: InstitutionProfileRead | None
     related_parties: list[RelatedPartyRead]
     outlets: list[OutletRead]

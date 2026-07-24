@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict
-from uuid import UUID
 
 import numpy as np
 from sqlalchemy.orm import Session
@@ -72,7 +71,7 @@ def _feature_row(
 def estimate(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     as_of: datetime.date,
     cfg: BehavioralTrainingConfig,
 ) -> ModelResult:

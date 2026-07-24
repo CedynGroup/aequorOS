@@ -57,7 +57,7 @@ FORECAST_BASE_SCENARIO = "base"
 
 
 def activate_bank_data(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: DataActivationCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: DataActivationCreate
 ) -> DataActivationRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -104,7 +104,7 @@ def activate_bank_data(
 
 
 def list_bank_data_activations(
-    db: Session, ctx: TenantContext, bank_id: UUID, *, limit: int = 10
+    db: Session, ctx: TenantContext, bank_id: str, *, limit: int = 10
 ) -> DataActivationListRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     events = db.scalars(
@@ -134,7 +134,7 @@ def list_bank_data_activations(
 
 
 def run_official_modules(
-    db: Session, ctx: TenantContext, bank_id: UUID, period_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, period_id: UUID
 ) -> list[ActivationRunRead]:
     """Public entry to the immutable 22-scenario + forecast official-run path.
 
@@ -146,7 +146,7 @@ def run_official_modules(
 
 
 def _run_all_modules(
-    db: Session, ctx: TenantContext, bank_id: UUID, period_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, period_id: UUID
 ) -> list[ActivationRunRead]:
     modules: tuple[tuple[str, Callable[[], ActivationRunRead]], ...] = (
         (
@@ -246,7 +246,7 @@ def _batch_outcome(
 
 
 def _forecast_outcome(
-    db: Session, ctx: TenantContext, bank_id: UUID, period_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, period_id: UUID
 ) -> ActivationRunRead:
     run = regulatory_forecasting.create_forecast_run(
         db,
@@ -320,7 +320,7 @@ def _read(
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

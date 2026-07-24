@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pytest
 
 from app.etl import model_loading
@@ -17,9 +15,9 @@ def test_etl_models_persist_and_load_per_tenant_no_spillover(
     # Isolate the artifact tree so the test never touches the repo's real one.
     monkeypatch.setattr(model_loading, "DEFAULT_ARTIFACT_DIR", tmp_path)
 
-    org = uuid4()
-    bank_a = uuid4()
-    bank_b = uuid4()
+    org = "OR-M0DEL001"
+    bank_a = "BK-M0DEL00A"
+    bank_b = "BK-M0DEL00B"
 
     # Train a (tiny) model and persist it to bank A's per-tenant path only.
     model = CounterpartyMatchingModel().fit(

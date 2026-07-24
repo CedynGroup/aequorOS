@@ -108,7 +108,7 @@ _ETL_INLINE_DEDUP_MAX_RECORDS = 5000
 
 
 def create_mapping_config(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: MappingConfigCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: MappingConfigCreate
 ) -> MappingConfigRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     # Versions and the single-active guarantee are scoped per (bank, source_system,
@@ -169,7 +169,7 @@ def create_mapping_config(
     return MappingConfigRead.model_validate(record, from_attributes=True)
 
 
-def list_mapping_configs(db: Session, ctx: TenantContext, bank_id: UUID) -> MappingConfigListRead:
+def list_mapping_configs(db: Session, ctx: TenantContext, bank_id: str) -> MappingConfigListRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     records = db.scalars(
         select(MappingConfigRecord)
@@ -269,7 +269,7 @@ def _prepare_extraction(
 def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orchestration
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     payload: IngestionBatchCreate,
     storage: StorageClient,
 ) -> IngestionBatchStartRead:
@@ -536,7 +536,7 @@ def _enqueue_etl_dedup(
 def list_batches(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     source_system: SourceSystem | None = None,
 ) -> IngestionBatchListRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -555,7 +555,7 @@ def list_batches(
     )
 
 
-def get_ingestion_summary(db: Session, ctx: TenantContext, bank_id: UUID) -> IngestionSummaryRead:
+def get_ingestion_summary(db: Session, ctx: TenantContext, bank_id: str) -> IngestionSummaryRead:
     """Per-source ingestion rollup plus current canonical model counts.
 
     Cheap aggregates only: batch counts/record totals grouped by source
@@ -677,13 +677,13 @@ def get_ingestion_summary(db: Session, ctx: TenantContext, bank_id: UUID) -> Ing
     )
 
 
-def get_batch(db: Session, ctx: TenantContext, bank_id: UUID, batch_id: UUID) -> IngestionBatchRead:
+def get_batch(db: Session, ctx: TenantContext, bank_id: str, batch_id: UUID) -> IngestionBatchRead:
     batch = _get_batch_or_404(db, ctx, bank_id, batch_id)
     return IngestionBatchRead.model_validate(batch, from_attributes=True)
 
 
 def list_translation_failures(
-    db: Session, ctx: TenantContext, bank_id: UUID, batch_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, batch_id: UUID
 ) -> TranslationFailureListRead:
     batch = _get_batch_or_404(db, ctx, bank_id, batch_id)
     failures = db.scalars(
@@ -711,7 +711,7 @@ def _escape_like(value: str) -> str:
 def list_positions(  # noqa: PLR0913 - one keyword-only filter per blotter control
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     as_of_date: date | None,
     *,
     limit: int = 100,
@@ -855,7 +855,7 @@ def list_positions(  # noqa: PLR0913 - one keyword-only filter per blotter contr
 
 
 def list_position_facets(
-    db: Session, ctx: TenantContext, bank_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str
 ) -> CanonicalPositionFacetsRead:
     """Distinct position types and currencies with current-generation counts."""
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -894,7 +894,7 @@ _OVERRIDE_COERCIONS: dict[str, Any] = {
 def override_position_snapshot(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     snapshot_id: UUID,
     payload: PositionSnapshotOverrideCreate,
 ) -> PositionSnapshotRead:
@@ -1049,7 +1049,7 @@ def walk_lineage(db: Session, ctx: TenantContext, lineage_id: UUID) -> LineageWa
     return LineageWalkRead(nodes=nodes)
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )
@@ -1059,7 +1059,7 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
 
 
 def _get_batch_or_404(
-    db: Session, ctx: TenantContext, bank_id: UUID, batch_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, batch_id: UUID
 ) -> IngestionBatch:
     batch = db.scalar(
         select(IngestionBatch).where(
@@ -1693,7 +1693,7 @@ _FILENAME_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 def upload_source(  # noqa: PLR0913 - mirrors record_event's shape
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     storage: StorageClient,
     filename: str,
     content: bytes,
@@ -1777,7 +1777,7 @@ def bank_slug(db: Session, bank: Bank) -> str:
     """
     if bank.storage_slug is None:
         base = _SLUG_UNSAFE.sub("-", bank.short_name.lower()).strip("-") or "bank"
-        bank.storage_slug = f"{base[:40]}-{bank.id.hex[:6]}"
+        bank.storage_slug = f"{base[:40]}-{bank.id.split('-', 1)[-1].lower()[:6]}"
         db.flush()
     return bank.storage_slug
 

@@ -18,7 +18,7 @@ from app.schemas.live import LiveModuleView
 
 
 def live_block(
-    db: Session, ctx: TenantContext, bank_id: UUID, period_id: UUID, module: str
+    db: Session, ctx: TenantContext, bank_id: str, period_id: UUID, module: str
 ) -> LiveModuleView | None:
     row = db.scalar(
         select(LiveMetric).where(

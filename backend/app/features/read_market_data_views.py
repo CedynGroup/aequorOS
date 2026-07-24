@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
@@ -45,7 +44,7 @@ FX_HISTORY_POINTS = 30
     operation_id="getMarketDataViews",
 )
 def get_market_data_views(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     as_of: Annotated[date | None, Query()] = None,
@@ -151,7 +150,7 @@ def _attribution_read(attribution: market_data.SourceAttribution) -> MarketDataA
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

@@ -15,7 +15,7 @@ class FindingRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     assessment_id: UUID | None
     run_id: UUID | None

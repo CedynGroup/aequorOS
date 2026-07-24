@@ -218,7 +218,7 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
         assert persisted_finding.risk_type == LIQUIDITY_RISK_TYPE
         assert session.scalar(
             select(AuditEvent).where(
-                AuditEvent.entity_id == UUID(finding["id"]),
+                AuditEvent.entity_id == finding["id"],
                 AuditEvent.event_type == "liquidity_finding.reviewed",
             )
         )
@@ -631,7 +631,7 @@ def test_liquidity_review_rejects_archived_scenario_findings(
         assert (
             session.scalar(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id == UUID(finding_id),
+                    AuditEvent.entity_id == finding_id,
                     AuditEvent.event_type == "liquidity_finding.reviewed",
                 )
             )
@@ -707,7 +707,7 @@ def test_liquidity_review_cannot_overwrite_concurrent_supersession(
         assert (
             verification_session.scalar(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id == UUID(finding_id),
+                    AuditEvent.entity_id == finding_id,
                     AuditEvent.event_type == "liquidity_finding.reviewed",
                 )
             )
@@ -787,7 +787,7 @@ def test_liquidity_review_cannot_commit_after_concurrent_scenario_archive(
         assert (
             verification_session.scalar(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id == UUID(finding_id),
+                    AuditEvent.entity_id == finding_id,
                     AuditEvent.event_type == "liquidity_finding.reviewed",
                 )
             )
@@ -1016,7 +1016,7 @@ def test_stale_run_uses_latest_newer_run_as_superseder(db_client: TestClient) ->
         completed_events = list(
             session.scalars(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id == oldest_run.id,
+                    AuditEvent.entity_id == str(oldest_run.id),
                     AuditEvent.event_type == "liquidity_analysis.completed",
                 )
             )

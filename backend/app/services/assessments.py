@@ -29,7 +29,7 @@ class RunAssessmentResult:
 
 
 def get_assessment_or_404(
-    db: Session, organization_id: UUID, assessment_id: UUID
+    db: Session, organization_id: str, assessment_id: UUID
 ) -> RiskAssessment:
     assessment = db.scalar(
         select(RiskAssessment).where(
@@ -42,7 +42,7 @@ def get_assessment_or_404(
     return assessment
 
 
-def get_run_or_404(db: Session, organization_id: UUID, run_id: UUID) -> RiskAssessmentRun:
+def get_run_or_404(db: Session, organization_id: str, run_id: UUID) -> RiskAssessmentRun:
     run = db.scalar(
         select(RiskAssessmentRun).where(
             RiskAssessmentRun.id == run_id,
@@ -123,7 +123,7 @@ def run_assessment(db: Session, ctx: TenantContext, assessment_id: UUID) -> RunA
         job_type="assessment_run",
         status="queued",
         entity_type="risk_assessment_run",
-        entity_id=run.id,
+        entity_id=str(run.id),
     )
     db.add(job)
     assessment.status = "running"

@@ -101,7 +101,7 @@ class _AdapterFactory(Protocol):
 
 
 def list_connections(
-    db: Session, ctx: TenantContext, bank_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str
 ) -> MarketDataConnectionListRead:
     _get_bank_or_404(db, ctx, bank_id)
     rows = list(
@@ -118,7 +118,7 @@ def list_connections(
     return MarketDataConnectionListRead(connections=connections, total=len(connections))
 
 
-def list_scopes(db: Session, ctx: TenantContext, bank_id: UUID) -> MarketDataScopeListRead:
+def list_scopes(db: Session, ctx: TenantContext, bank_id: str) -> MarketDataScopeListRead:
     """Every taxonomy scope with per-vendor support and quota impact (§9.2 step 4)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
@@ -149,7 +149,7 @@ def list_scopes(db: Session, ctx: TenantContext, bank_id: UUID) -> MarketDataSco
     return MarketDataScopeListRead(scopes=scopes)
 
 
-def get_quota(db: Session, ctx: TenantContext, bank_id: UUID) -> MarketDataQuotaListRead:
+def get_quota(db: Session, ctx: TenantContext, bank_id: str) -> MarketDataQuotaListRead:
     """Current-month quota ledger per vendor (§11.1). Vendors without a ledger
     row report zero consumption and no cap."""
     _get_bank_or_404(db, ctx, bank_id)
@@ -183,7 +183,7 @@ def get_quota(db: Session, ctx: TenantContext, bank_id: UUID) -> MarketDataQuota
 
 
 def create_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: MarketDataConnectionCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: MarketDataConnectionCreate
 ) -> MarketDataConnectionRead:
     """Onboard a connection (§9.2 step 7).
 
@@ -286,7 +286,7 @@ def create_connection(
 
 
 def validate_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> MarketDataConnectionRead:
     """Re-run the §10.3 credential health check on demand."""
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -330,7 +330,7 @@ def validate_connection(
 
 
 def test_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TestPullRead:
     """Run the §9.2 step-5 representative test pull for the connection's scopes."""
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -356,7 +356,7 @@ def test_connection(
 def update_connection(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     payload: MarketDataConnectionUpdate,
 ) -> MarketDataConnectionRead:
@@ -438,7 +438,7 @@ def update_connection(  # noqa: PLR0913
 
 
 def disable_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> MarketDataConnectionRead:
     """Temporarily disable a source (§9.3): scheduled pulls stop, credentials stay."""
     _get_bank_or_404(db, ctx, bank_id)
@@ -460,7 +460,7 @@ def disable_connection(
 
 
 def enable_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> MarketDataConnectionRead:
     """Re-enable a disabled source: credentials are re-validated before pulls resume."""
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -499,7 +499,7 @@ def enable_connection(
 
 
 def revoke_connection(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> MarketDataConnectionRead:
     """Revoke a connection (§10.5): wipe the stored credential, keep the row.
 
@@ -534,7 +534,7 @@ def revoke_connection(
 # ---------------------------------------------------------------------------
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )
@@ -544,7 +544,7 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
 
 
 def _get_connection_or_404(
-    db: Session, ctx: TenantContext, bank_id: UUID, connection_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> MarketDataConnection:
     connection = db.scalar(
         select(MarketDataConnection).where(

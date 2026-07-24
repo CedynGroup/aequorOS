@@ -211,7 +211,7 @@ class _ActiveForecastParams:
 
 
 def list_forecast_scenarios(
-    db: Session, ctx: TenantContext, bank_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str
 ) -> ForecastScenarioListRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     as_of = _latest_period_end(db, ctx, bank) or date.today()
@@ -230,7 +230,7 @@ def list_forecast_scenarios(
 
 
 def create_forecast_run(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: ForecastRunCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: ForecastRunCreate
 ) -> ForecastRunRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -280,7 +280,7 @@ def create_forecast_run(
 def list_forecast_runs(
     db: Session,
     ctx: TenantContext,
-    bank_id: UUID,
+    bank_id: str,
     *,
     limit: int = 25,
     offset: int = 0,
@@ -320,14 +320,14 @@ def list_forecast_runs(
 
 
 def get_forecast_run(
-    db: Session, ctx: TenantContext, bank_id: UUID, run_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, run_id: UUID
 ) -> ForecastRunRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     return _read_forecast_run(db, _run_or_404(db, ctx, bank.id, run_id, module=MODULE_FORECAST))
 
 
 def run_strategic_optimizer(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: OptimizerRunCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: OptimizerRunCreate
 ) -> OptimizerResultRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -372,7 +372,7 @@ def run_strategic_optimizer(
 
 
 def run_whatif_analysis(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: WhatIfRunCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: WhatIfRunCreate
 ) -> WhatIfResultRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
@@ -1281,7 +1281,7 @@ def _pct_text(value: Decimal) -> str:
 
 
 def _run_or_404(
-    db: Session, ctx: TenantContext, bank_id: UUID, run_id: UUID, *, module: str | None = None
+    db: Session, ctx: TenantContext, bank_id: str, run_id: UUID, *, module: str | None = None
 ) -> RegulatoryRun:
     conditions = [
         RegulatoryRun.id == run_id,
@@ -1307,7 +1307,7 @@ def _latest_period_end(db: Session, ctx: TenantContext, bank: Bank) -> date | No
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )

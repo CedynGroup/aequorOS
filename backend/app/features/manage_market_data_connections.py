@@ -36,7 +36,7 @@ router = APIRouter(tags=["market-data"])
     operation_id="listMarketDataConnections",
 )
 def list_market_data_connections(
-    bank_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, db: DbSession, ctx: Tenant
 ) -> MarketDataConnectionListRead:
     return market_data_connections.list_connections(db, ctx, bank_id)
 
@@ -48,7 +48,7 @@ def list_market_data_connections(
     operation_id="createMarketDataConnection",
 )
 def create_market_data_connection(
-    bank_id: UUID,
+    bank_id: str,
     payload: MarketDataConnectionCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -62,7 +62,7 @@ def create_market_data_connection(
     operation_id="validateMarketDataConnection",
 )
 def validate_market_data_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -76,7 +76,7 @@ def validate_market_data_connection(
     operation_id="testMarketDataConnection",
 )
 def test_market_data_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -90,7 +90,7 @@ def test_market_data_connection(
     operation_id="updateMarketDataConnection",
 )
 def update_market_data_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     payload: MarketDataConnectionUpdate,
     db: DbSession,
@@ -105,7 +105,7 @@ def update_market_data_connection(
     operation_id="disableMarketDataConnection",
 )
 def disable_market_data_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -119,7 +119,7 @@ def disable_market_data_connection(
     operation_id="enableMarketDataConnection",
 )
 def enable_market_data_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -133,7 +133,7 @@ def enable_market_data_connection(
     operation_id="revokeMarketDataConnection",
 )
 def revoke_market_data_connection(
-    bank_id: UUID,
+    bank_id: str,
     connection_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
@@ -146,7 +146,7 @@ def revoke_market_data_connection(
     response_model=MarketDataScopeListRead,
     operation_id="listMarketDataScopes",
 )
-def list_market_data_scopes(bank_id: UUID, db: DbSession, ctx: Tenant) -> MarketDataScopeListRead:
+def list_market_data_scopes(bank_id: str, db: DbSession, ctx: Tenant) -> MarketDataScopeListRead:
     return market_data_connections.list_scopes(db, ctx, bank_id)
 
 
@@ -155,5 +155,5 @@ def list_market_data_scopes(bank_id: UUID, db: DbSession, ctx: Tenant) -> Market
     response_model=MarketDataQuotaListRead,
     operation_id="getMarketDataQuota",
 )
-def get_market_data_quota(bank_id: UUID, db: DbSession, ctx: Tenant) -> MarketDataQuotaListRead:
+def get_market_data_quota(bank_id: str, db: DbSession, ctx: Tenant) -> MarketDataQuotaListRead:
     return market_data_connections.get_quota(db, ctx, bank_id)

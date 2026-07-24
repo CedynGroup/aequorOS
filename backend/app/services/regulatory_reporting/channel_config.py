@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -45,7 +44,7 @@ def _read(config: RegulatoryChannelConfig) -> ChannelConfigRead:
 
 
 def _config_row(
-    db: Session, ctx: TenantContext, bank_id: UUID, channel: str
+    db: Session, ctx: TenantContext, bank_id: str, channel: str
 ) -> RegulatoryChannelConfig | None:
     return db.scalar(
         select(RegulatoryChannelConfig).where(
@@ -57,7 +56,7 @@ def _config_row(
 
 
 def get_channel_config(
-    db: Session, ctx: TenantContext, bank_id: UUID, channel: str
+    db: Session, ctx: TenantContext, bank_id: str, channel: str
 ) -> ChannelConfigRead:
     bank = get_bank_or_404(db, ctx, bank_id)
     config = _config_row(db, ctx, bank.id, channel)
@@ -70,7 +69,7 @@ def get_channel_config(
 
 
 def put_channel_config(
-    db: Session, ctx: TenantContext, bank_id: UUID, channel: str, payload: ChannelConfigPut
+    db: Session, ctx: TenantContext, bank_id: str, channel: str, payload: ChannelConfigPut
 ) -> ChannelConfigRead:
     require_actor(ctx)
     bank = get_bank_or_404(db, ctx, bank_id)
@@ -108,7 +107,7 @@ def put_channel_config(
 
 
 def channel_config_row(
-    db: Session, ctx: TenantContext, bank_id: UUID, channel: str
+    db: Session, ctx: TenantContext, bank_id: str, channel: str
 ) -> RegulatoryChannelConfig | None:
     """The raw per-bank channel config row, or None when never configured."""
     return _config_row(db, ctx, bank_id, channel)
@@ -139,7 +138,7 @@ def decrypt_channel_credentials(config: RegulatoryChannelConfig) -> dict[str, An
     return credentials if isinstance(credentials, dict) else None
 
 
-def _encrypt(bank_id: UUID, channel: str, credentials: dict[str, Any]) -> str:
+def _encrypt(bank_id: str, channel: str, credentials: dict[str, Any]) -> str:
     key_material = get_settings().market_data.credential_vault_master_key
     if not key_material:
         raise HTTPException(

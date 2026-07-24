@@ -87,8 +87,8 @@ class IngestionBatch(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_ingestion_batches_org_content_hash", "organization_id", "content_hash"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     source_system: Mapped[str] = mapped_column(String(40), nullable=False)
     adapter_version: Mapped[str] = mapped_column(String(40), nullable=False)
     extraction_mode: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -162,7 +162,7 @@ class LineageRecord(UuidV7PrimaryKeyMixin, Base):
         Index("ix_lineage_records_org_batch", "organization_id", "ingestion_batch_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     ingestion_batch_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     operation_type: Mapped[str] = mapped_column(String(24), nullable=False)
     # Human-readable operation identity, e.g. "excel_csv_v1.0/positions".
@@ -227,8 +227,8 @@ class MappingConfigRecord(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     source_system: Mapped[str] = mapped_column(String(40), nullable=False)
     # Specific source instance this mapping serves (e.g. a database-direct
     # connection id). Empty string = the whole source_system (single-source
@@ -260,8 +260,8 @@ class TranslationFailure(UuidV7PrimaryKeyMixin, Base):
         Index("ix_translation_failures_org_batch", "organization_id", "ingestion_batch_id"),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    bank_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     ingestion_batch_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(40), nullable=False)
     # Where in the source the record came from, e.g. "positions.xlsx#Sheet1!R14".

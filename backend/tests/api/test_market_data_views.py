@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
-from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -27,7 +26,7 @@ AS_OF = date(2026, 7, 15)
 INGESTED_AT = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
 
 
-def _seed_bank(session: Session) -> UUID:
+def _seed_bank(session: Session) -> str:
     bank = Bank(
         organization_id=ORG_1,
         name="Market Data Views Test Bank",
@@ -41,7 +40,7 @@ def _seed_bank(session: Session) -> UUID:
 
 def _meta(
     session: Session,
-    bank_id: UUID,
+    bank_id: str,
     *,
     source_system: str,
     as_of: date,
@@ -80,7 +79,7 @@ def _meta(
     }
 
 
-def _seed_curve(session: Session, bank_id: UUID, *, rates: dict[int, str]) -> None:
+def _seed_curve(session: Session, bank_id: str, *, rates: dict[int, str]) -> None:
     meta = _meta(session, bank_id, source_system="BLOOMBERG", as_of=AS_OF)
     curve = CanonicalYieldCurve(
         **meta,
@@ -104,7 +103,7 @@ def _seed_curve(session: Session, bank_id: UUID, *, rates: dict[int, str]) -> No
     session.flush()
 
 
-def _seed_spot(session: Session, bank_id: UUID, *, rate: str, as_of: date) -> None:
+def _seed_spot(session: Session, bank_id: str, *, rate: str, as_of: date) -> None:
     meta = _meta(session, bank_id, source_system="REFINITIV", as_of=as_of)
     session.add(
         CanonicalFxRate(
@@ -120,7 +119,7 @@ def _seed_spot(session: Session, bank_id: UUID, *, rate: str, as_of: date) -> No
     session.flush()
 
 
-def _seed_rating(session: Session, bank_id: UUID) -> None:
+def _seed_rating(session: Session, bank_id: str) -> None:
     meta = _meta(session, bank_id, source_system="MANUAL_UPLOAD", as_of=AS_OF)
     session.add(
         CanonicalCounterpartyRating(
@@ -136,7 +135,7 @@ def _seed_rating(session: Session, bank_id: UUID) -> None:
     session.flush()
 
 
-def _seed_index(session: Session, bank_id: UUID) -> None:
+def _seed_index(session: Session, bank_id: str) -> None:
     meta = _meta(session, bank_id, source_system="REFINITIV", as_of=AS_OF)
     session.add(
         CanonicalMarketIndex(
@@ -151,7 +150,7 @@ def _seed_index(session: Session, bank_id: UUID) -> None:
     session.flush()
 
 
-def _views_url(bank_id: UUID | str) -> str:
+def _views_url(bank_id: str | str) -> str:
     return f"/api/v1/banks/{bank_id}/market-data/views?as_of={AS_OF.isoformat()}"
 
 
@@ -224,7 +223,7 @@ def test_views_are_tenant_isolated(db_client: TestClient) -> None:
     response = db_client.get(_views_url(bank_id), headers=headers(ORG_2))
     assert response.status_code == 404, response.text
 
-    missing = db_client.get(_views_url(uuid4()), headers=headers(ORG_1))
+    missing = db_client.get(_views_url("BK-ZZZZZZZZ"), headers=headers(ORG_1))
     assert missing.status_code == 404, missing.text
 
 

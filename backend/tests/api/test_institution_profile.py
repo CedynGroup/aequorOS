@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -44,7 +43,7 @@ def _audit_events(entity_id: str, event_type: str) -> list[AuditEvent]:
         return list(
             session.scalars(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id == UUID(entity_id),
+                    AuditEvent.entity_id == entity_id,
                     AuditEvent.event_type == event_type,
                 )
             )

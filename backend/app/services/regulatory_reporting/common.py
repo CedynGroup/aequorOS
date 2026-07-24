@@ -29,7 +29,7 @@ def require_actor(ctx: TenantContext) -> UUID:
     return ctx.actor_user_id
 
 
-def get_bank_or_404(db: Session, ctx: TenantContext, bank_id: UUID) -> Bank:
+def get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     bank = db.scalar(
         select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     )
@@ -92,7 +92,7 @@ def get_effective_period_or_404(
 
 
 def get_package_or_404(
-    db: Session, ctx: TenantContext, bank_id: UUID, package_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
 ) -> RegulatoryPackage:
     package = db.scalar(
         select(RegulatoryPackage).where(

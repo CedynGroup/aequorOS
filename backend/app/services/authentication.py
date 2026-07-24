@@ -54,7 +54,7 @@ def issue_tokens(user: User, settings: AuthSettings | None = None) -> IssuedToke
     )
 
 
-def _resolve_user(db: Session, email: str, organization_id: UUID | None) -> User | None:
+def _resolve_user(db: Session, email: str, organization_id: str | None) -> User | None:
     stmt = select(User).where(User.email == email, User.is_active.is_(True))
     if organization_id is not None:
         stmt = stmt.where(User.organization_id == organization_id)
@@ -68,7 +68,7 @@ def login_with_password(
     *,
     email: str,
     password: str,
-    organization_id: UUID | None = None,
+    organization_id: str | None = None,
     settings: AuthSettings | None = None,
 ) -> IssuedTokens:
     settings = settings or get_settings().auth
@@ -108,7 +108,7 @@ def login_with_password(
 
 
 def _resolve_sso_user(
-    db: Session, subject: str, email: str | None, organization_id: UUID | None
+    db: Session, subject: str, email: str | None, organization_id: str | None
 ) -> User | None:
     # Already linked to this OIDC subject?
     linked_stmt = select(User).where(
@@ -146,7 +146,7 @@ _SSO_PENDING = HTTPException(
 )
 
 
-def _inactive_user_by_email(db: Session, organization_id: UUID, email: str) -> User | None:
+def _inactive_user_by_email(db: Session, organization_id: str, email: str) -> User | None:
     return db.scalar(
         select(User).where(
             User.organization_id == organization_id,
@@ -180,7 +180,7 @@ def login_with_sso(
     db: Session,
     *,
     id_token: str,
-    organization_id: UUID | None = None,
+    organization_id: str | None = None,
     settings: AuthSettings | None = None,
 ) -> IssuedTokens:
     """Verify an OIDC id_token against its configured connection, link it to a
@@ -255,7 +255,7 @@ def login_with_sso(
 
 
 # -- SSO access requests (JIT stubs awaiting admin approval) -------------------
-def _access_request_stmt(organization_id: UUID):  # noqa: ANN202 - sqlalchemy Select
+def _access_request_stmt(organization_id: str):  # noqa: ANN202 - sqlalchemy Select
     """A pure JIT stub: deactivated, OIDC-linked, never logged in, no password.
     Deliberately narrow so admin-deactivated (offboarded) accounts never show
     up as approvable requests."""
@@ -268,11 +268,11 @@ def _access_request_stmt(organization_id: UUID):  # noqa: ANN202 - sqlalchemy Se
     )
 
 
-def list_sso_access_requests(db: Session, organization_id: UUID) -> list[User]:
+def list_sso_access_requests(db: Session, organization_id: str) -> list[User]:
     return list(db.scalars(_access_request_stmt(organization_id).order_by(User.created_at)))
 
 
-def _get_access_request(db: Session, organization_id: UUID, user_id: UUID) -> User:
+def _get_access_request(db: Session, organization_id: str, user_id: UUID) -> User:
     user = db.scalar(_access_request_stmt(organization_id).where(User.id == user_id))
     if user is None:
         raise HTTPException(
@@ -282,7 +282,7 @@ def _get_access_request(db: Session, organization_id: UUID, user_id: UUID) -> Us
 
 
 def approve_sso_access_request(
-    db: Session, *, organization_id: UUID, user_id: UUID, role: str
+    db: Session, *, organization_id: str, user_id: UUID, role: str
 ) -> User:
     """The authorization act: an admin activates the requested account with an
     explicitly chosen role."""
@@ -294,7 +294,7 @@ def approve_sso_access_request(
     return user
 
 
-def reject_sso_access_request(db: Session, *, organization_id: UUID, user_id: UUID) -> None:
+def reject_sso_access_request(db: Session, *, organization_id: str, user_id: UUID) -> None:
     """Deletes the never-activated stub (safe: it has no history); the employee
     can request again, which recreates it."""
     user = _get_access_request(db, organization_id, user_id)
@@ -315,7 +315,7 @@ def refresh_tokens(
     user = db.scalar(
         select(User).where(
             User.id == UUID(claims["sub"]),
-            User.organization_id == UUID(claims["org"]),
+            User.organization_id == str(claims["org"]),
             User.is_active.is_(True),
         )
     )

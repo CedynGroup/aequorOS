@@ -20,7 +20,7 @@ router = APIRouter(tags=["regulatory-ftp"])
     operation_id="runAllFtpScenarios",
 )
 def run_all_ftp_scenarios(
-    bank_id: UUID,
+    bank_id: str,
     payload: FtpScenarioBatchCreate,
     db: DbSession,
     ctx: MutationTenant,
@@ -34,7 +34,7 @@ def run_all_ftp_scenarios(
     operation_id="getFtpDashboard",
 )
 def get_ftp_dashboard(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     reporting_period_id: Annotated[UUID | None, Query()] = None,

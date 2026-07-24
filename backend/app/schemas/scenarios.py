@@ -32,7 +32,7 @@ class ScenarioAssumptionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     scenario_id: UUID
     category: AssumptionCategory
@@ -52,7 +52,7 @@ class ScenarioRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: str
     case_id: UUID
     name: str
     description: str | None

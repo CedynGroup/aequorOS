@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import APIRouter, Query
 
@@ -23,7 +22,7 @@ router = APIRouter(tags=["cashflow-forecast"])
     operation_id="getCashflowForecast",
 )
 def get_cashflow_forecast(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     horizon: Annotated[CashflowHorizon, Query()] = CashflowHorizon.DAYS_30,
@@ -38,7 +37,7 @@ def get_cashflow_forecast(
     operation_id="getCashflowHistory",
 )
 def get_cashflow_history(
-    bank_id: UUID,
+    bank_id: str,
     db: DbSession,
     ctx: Tenant,
     days: Annotated[int, Query(ge=30, le=365)] = 90,

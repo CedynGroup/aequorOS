@@ -23,7 +23,8 @@ _bearer_scheme = HTTPBearer(auto_error=False, description="App JWT access token"
 
 @dataclass(frozen=True)
 class TenantContext:
-    organization_id: UUID
+    # The platform tenant identifier (OR-XXXXXXXX) — the organizations PK.
+    organization_id: str
     actor_user_id: UUID | None = None
     roles: tuple[str, ...] = ()
 
@@ -42,6 +43,21 @@ def get_current_principal(
             detail="Missing bearer token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # Integration keys (aeq_live_…) are an alternate bearer credential: bank
+    # middleware authenticates as its service account. Resolved pre-tenant
+    # (global hash lookup), then validated like any principal downstream.
+    # Local import: the service imports TenantContext from this module.
+    from app.services.integration_keys import (  # noqa: PLC0415 - break the deps<->service cycle
+        authenticate_key,
+        looks_like_integration_key,
+    )
+
+    if looks_like_integration_key(credentials.credentials):
+        session = get_sessionmaker()()
+        try:
+            return authenticate_key(session, credentials.credentials)
+        finally:
+            session.close()
     try:
         claims = security.decode_token(credentials.credentials, expected_type="access")
     except security.AuthConfigError as exc:  # signing secret unset — fail closed
@@ -56,7 +72,7 @@ def get_current_principal(
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
     return TenantContext(
-        organization_id=UUID(claims["org"]),
+        organization_id=str(claims["org"]),
         actor_user_id=UUID(claims["sub"]),
         roles=tuple(claims.get("roles", ())),
     )

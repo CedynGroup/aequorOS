@@ -158,7 +158,7 @@ ExtractFn = Callable[[DataScope], ScopeExtraction]
 def execute_pull(  # noqa: PLR0913 - one call carries the full pull context
     db: Session,
     *,
-    organization_id: UUID,
+    organization_id: str,
     bank: Bank,
     bank_slug: str,
     vendor: str,
@@ -431,8 +431,8 @@ def _finalize_batch(  # noqa: PLR0913 - internal seam of execute_pull
 def _persist_bundle(  # noqa: PLR0913 - full persistence scope in one call
     db: Session,
     *,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     batch: IngestionBatch,
     lineage_id: UUID,
     source_system: str,
@@ -586,8 +586,8 @@ def _supersede(  # noqa: PLR0913 - natural-key supersession needs full scope
     new_row: Any,
     key_clauses: tuple[Any, ...],
     *,
-    organization_id: UUID,
-    bank_id: UUID,
+    organization_id: str,
+    bank_id: str,
     as_of_date: date,
 ) -> None:
     """Idempotent re-pull semantics per §4.3: supersede, never duplicate.
@@ -655,7 +655,7 @@ def _validate_fx(fx: FxRateRecord) -> list[str]:
 
 def _lineage(  # noqa: PLR0913 - mirrors ingestion's lineage writer
     db: Session,
-    organization_id: UUID,
+    organization_id: str,
     batch: IngestionBatch,
     *,
     operation_type: str,

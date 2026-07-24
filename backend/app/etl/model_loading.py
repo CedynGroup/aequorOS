@@ -20,7 +20,6 @@ from __future__ import annotations
 import logging
 import threading
 from pathlib import Path
-from uuid import UUID
 
 from app.etl.models._mrm import DEFAULT_ARTIFACT_DIR, ModelUnavailableError
 from app.etl.models.anomaly_detection_model.model import (
@@ -45,25 +44,25 @@ from app.etl.models.counterparty_matching_model.model import (
 logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
-_cp_cache: dict[tuple[UUID, UUID], CounterpartyMatchingModel | None] = {}
-_anomaly_cache: dict[tuple[UUID, UUID], AnomalyDetectionModel | None] = {}
+_cp_cache: dict[tuple[str, str], CounterpartyMatchingModel | None] = {}
+_anomaly_cache: dict[tuple[str, str], AnomalyDetectionModel | None] = {}
 
 
-def tenant_artifact_dir(org_id: UUID, bank_id: UUID) -> Path:
+def tenant_artifact_dir(org_id: str, bank_id: str) -> Path:
     """Per-tenant artifact directory. One bank's models never sit in another's dir."""
     return DEFAULT_ARTIFACT_DIR / str(org_id) / str(bank_id)
 
 
-def counterparty_artifact_path(org_id: UUID, bank_id: UUID) -> Path:
+def counterparty_artifact_path(org_id: str, bank_id: str) -> Path:
     return tenant_artifact_dir(org_id, bank_id) / f"{CP_MODEL_ID}-{CP_MODEL_VERSION}.joblib"
 
 
-def anomaly_artifact_path(org_id: UUID, bank_id: UUID) -> Path:
+def anomaly_artifact_path(org_id: str, bank_id: str) -> Path:
     name = f"{ANOMALY_MODEL_ID}-{ANOMALY_MODEL_VERSION}.joblib"
     return tenant_artifact_dir(org_id, bank_id) / name
 
 
-def load_counterparty_model(org_id: UUID, bank_id: UUID) -> CounterpartyMatchingModel | None:
+def load_counterparty_model(org_id: str, bank_id: str) -> CounterpartyMatchingModel | None:
     """This bank's trained counterparty matcher, or ``None`` (→ heuristic fallback)."""
     key = (org_id, bank_id)
     with _lock:
@@ -82,7 +81,7 @@ def load_counterparty_model(org_id: UUID, bank_id: UUID) -> CounterpartyMatching
     return model
 
 
-def load_anomaly_model(org_id: UUID, bank_id: UUID) -> AnomalyDetectionModel | None:
+def load_anomaly_model(org_id: str, bank_id: str) -> AnomalyDetectionModel | None:
     """This bank's trained anomaly detector, or ``None`` (→ per-batch fallback)."""
     key = (org_id, bank_id)
     with _lock:

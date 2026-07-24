@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Any
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -42,7 +41,7 @@ _DUE_SOON_THRESHOLDS = (1, 3, 7)
 
 
 def scan_reporting_deadlines(
-    db: Session, organization_id: UUID, *, as_of: date | None = None
+    db: Session, organization_id: str, *, as_of: date | None = None
 ) -> dict[str, Any]:
     """Scan one org's banks and emit deadline notifications (no commit)."""
     ctx = TenantContext(organization_id=organization_id)
@@ -160,7 +159,7 @@ def _emit_once(  # noqa: PLR0913 - dedupe key + display envelope
 
 
 def enqueue_due_deadline_scan(
-    session: Session, organization_id: UUID, *, now: datetime | None = None
+    session: Session, organization_id: str, *, now: datetime | None = None
 ) -> bool:
     """Enqueue today's scan for one org — at most one job per org per day.
 

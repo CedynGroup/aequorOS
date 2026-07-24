@@ -56,6 +56,7 @@ import {
   cashflowForecastApi,
   forecastingApi,
   institutionProfileApi,
+  integrationKeysApi,
   isApiError,
   jobsApi,
   liveEngineApi,
@@ -2096,6 +2097,50 @@ export function useMarkAllNotificationsRead() {
     mutationFn: () => apiCall(() => notificationsApi.markAllNotificationsRead()),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Integration keys — generate-once revocable API credentials for bank
+// middleware (admin-only surface; the raw key is returned exactly once).
+// ---------------------------------------------------------------------------
+
+export function useIntegrationKeys(enabled: boolean) {
+  return useQuery({
+    queryKey: ['integration-keys'],
+    queryFn: () => apiCall(() => integrationKeysApi.listIntegrationKeys()),
+    enabled,
+  });
+}
+
+export function useIssueIntegrationKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (label: string) =>
+      apiCall(() =>
+        integrationKeysApi.issueIntegrationKey({
+          integrationKeyIssueRequest: { label },
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['integration-keys'] });
+    },
+  });
+}
+
+export function useRevokeIntegrationKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ keyId, reason }: { keyId: string; reason: string }) =>
+      apiCall(() =>
+        integrationKeysApi.revokeIntegrationKey({
+          keyId,
+          integrationKeyRevokeRequest: { reason },
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['integration-keys'] });
     },
   });
 }

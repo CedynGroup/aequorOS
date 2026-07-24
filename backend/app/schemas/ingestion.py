@@ -32,7 +32,7 @@ class MappingConfigCreate(BaseModel):
 
 class MappingConfigRead(BaseModel):
     id: UUID
-    bank_id: UUID
+    bank_id: str
     source_system: SourceSystem
     source_ref: str
     version: int
@@ -43,7 +43,7 @@ class MappingConfigRead(BaseModel):
 
 
 class MappingConfigListRead(BaseModel):
-    bank_id: UUID
+    bank_id: str
     configs: list[MappingConfigRead]
 
 
@@ -74,7 +74,7 @@ class IngestionBatchCreate(BaseModel):
 
 class IngestionBatchRead(BaseModel):
     id: UUID
-    bank_id: UUID
+    bank_id: str
     source_system: SourceSystem
     adapter_version: str
     extraction_mode: ExtractionMode
@@ -107,7 +107,7 @@ class IngestionBatchStartRead(BaseModel):
 
 
 class IngestionBatchListRead(BaseModel):
-    bank_id: UUID
+    bank_id: str
     batches: list[IngestionBatchRead]
 
 
@@ -136,7 +136,7 @@ class CanonicalCountsRead(BaseModel):
 
 
 class IngestionSummaryRead(BaseModel):
-    bank_id: UUID
+    bank_id: str
     sources: list[IngestionSourceSummaryRead]
     canonical_counts: CanonicalCountsRead
     activations_count: int
@@ -174,7 +174,7 @@ class CanonicalPositionRead(BaseModel):
 
 
 class CanonicalPositionListRead(BaseModel):
-    bank_id: UUID
+    bank_id: str
     as_of_date: date | None
     positions: list[CanonicalPositionRead]
     # Server pagination over the filtered set: `total` counts every row that
@@ -197,7 +197,7 @@ class CanonicalPositionFacetsRead(BaseModel):
     Powers the blotter's filter dropdowns and KPIs without paging the book.
     """
 
-    bank_id: UUID
+    bank_id: str
     total: int
     position_types: list[PositionFacetValueRead]
     currencies: list[PositionFacetValueRead]

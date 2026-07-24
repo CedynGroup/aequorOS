@@ -25,7 +25,6 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -94,7 +93,7 @@ class GeneratedReturn:
 
 
 def generate_package(
-    db: Session, ctx: TenantContext, bank_id: UUID, payload: RegulatoryPackageCreate
+    db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryPackageCreate
 ) -> RegulatoryPackageRead:
     actor_user_id = require_actor(ctx)
     bank = get_bank_or_404(db, ctx, bank_id)

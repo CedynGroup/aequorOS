@@ -379,7 +379,7 @@ def test_calendar_links_current_package_and_grades_rag(db_session: Session) -> N
 
 def test_unknown_bank_is_tenant_scoped_404(db_session: Session) -> None:
     _seed_with_baseline_run(db_session)
-    stranger = TenantContext(organization_id=uuid4(), actor_user_id=uuid4())
+    stranger = TenantContext(organization_id="OR-STRANGER", actor_user_id=uuid4())
     with pytest.raises(HTTPException) as exc_info:
         generation.generate_package(
             db_session,

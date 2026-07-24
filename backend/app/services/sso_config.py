@@ -72,14 +72,14 @@ def normalize_domains(domains: list[str]) -> list[str]:
     return seen
 
 
-def get_connection(db: Session, organization_id: UUID) -> SsoConnection | None:
+def get_connection(db: Session, organization_id: str) -> SsoConnection | None:
     return db.scalar(select(SsoConnection).where(SsoConnection.organization_id == organization_id))
 
 
 def upsert_connection(  # noqa: PLR0913 - a connection is configured in one call
     db: Session,
     *,
-    organization_id: UUID,
+    organization_id: str,
     issuer: str,
     client_id: str,
     client_secret: str | None,

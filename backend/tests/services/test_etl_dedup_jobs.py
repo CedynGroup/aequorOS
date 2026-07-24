@@ -229,7 +229,7 @@ def test_run_etl_dedup_backfills_report_lineage_and_audit(
         select(AuditEvent).where(
             AuditEvent.organization_id == ORG_1,
             AuditEvent.event_type == "ml_etl.dedup_completed",
-            AuditEvent.entity_id == batch.id,
+            AuditEvent.entity_id == str(batch.id),
         )
     )
     assert event is not None
@@ -264,7 +264,7 @@ def test_run_etl_dedup_is_idempotent(
         select(AuditEvent).where(
             AuditEvent.organization_id == ORG_1,
             AuditEvent.event_type == "ml_etl.dedup_completed",
-            AuditEvent.entity_id == batch.id,
+            AuditEvent.entity_id == str(batch.id),
         )
     ).all()
     assert len(events) == 1
