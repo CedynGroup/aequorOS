@@ -114,9 +114,7 @@ def test_as_of_date_keeps_snapshot_gating_semantics(db_client: TestClient) -> No
 def test_limit_validation_rejects_out_of_range_values(db_client: TestClient) -> None:
     _seed(db_client)
     for bad_limit in (0, 501):
-        response = db_client.get(
-            POSITIONS_URL, headers=headers(), params={"limit": bad_limit}
-        )
+        response = db_client.get(POSITIONS_URL, headers=headers(), params={"limit": bad_limit})
         assert response.status_code == 422, response.text
 
 

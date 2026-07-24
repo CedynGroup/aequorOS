@@ -278,7 +278,7 @@ def test_missing_snapshot_section_raises_409(
     assert "snapshot_empty" in str(empty_info.value.detail)
 
 
-def test_lmt_return_reuses_liquidity_generator_and_exports_subset(
+def test_lmt_return_exports_lcr_subset_and_data_backed_tools(
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
     _seed_with_baseline_run(db_session)
@@ -289,14 +289,18 @@ def test_lmt_return_reuses_liquidity_generator_and_exports_subset(
     artifact = export_package(db_session, MAKER, package, "xlsx")
     payload = _read_output(db_session, storage, artifact.object_path)
     workbook = load_workbook(io.BytesIO(payload))
-    # Metadata + the four LCR-subset sections + provenance; the NSFR sheets
-    # and the unfillable LMTD Tables 1-10 are honestly absent (TODO(RR-6)).
+    # Metadata + the four LCR-subset sections + the HQLA-fact-backed
+    # unencumbered-assets tool + provenance. The NSFR sheets stay absent, and
+    # with no canonical position data seeded here the maturity-ladder and
+    # funding-concentration tools are honestly absent too (plan W6.3: tool
+    # sections render only when their underlying data exists).
     assert workbook.sheetnames == [
         "Return Metadata",
         "Stock of HQLA",
         "Cash Outflows (30 days)",
         "Cash Inflows (30 days)",
         "Liquidity Coverage Ratio Summar",
+        "Available Unencumbered Assets",
         "Fidelity & Provenance",
     ]
     assert artifact.object_path.endswith("/LMT.xlsx")
@@ -331,6 +335,46 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "nop_summary",
         },
         "icaap_stress": {"forecast_summary", "forecast_path", "stress_summary"},
+        # W6: the LMT return = the liquidity LCR subset + three canonical-data
+        # monitoring tools; LE-MONTHLY = the five Large Exposures templates.
+        "lmt": {
+            "hqla",
+            "outflows",
+            "inflows",
+            "lcr_summary",
+            "maturity_ladder",
+            "funding_concentration",
+            "unencumbered_assets",
+        },
+        "large_exposures": {
+            "template_1",
+            "template_1a",
+            "template_2",
+            "template_3",
+            "template_4",
+        },
+        # LRT corporate packs (plan W5) — event-driven master-data packs.
+        "lrt_profile": {
+            "general_details",
+            "business_activities",
+            "exchange_membership",
+            "ownership",
+            "licenses",
+            "name_history",
+        },
+        "lrt_outlet": {"outlets_open", "outlets_closed", "required_documents"},
+        "lrt_party": {
+            "shareholders",
+            "directors",
+            "key_management",
+            "auditors",
+            "ubos",
+            "outsourced",
+            "liquidators",
+            "due_diligence_checklist",
+        },
+        "lrt_capital": {"shareholder_register", "capital_summary", "capital_checklist"},
+        "lrt_product": {"products", "product_checklist"},
     }
     for definition in REGISTRY.values():
         template = get_template(definition.template_id)

@@ -61,9 +61,14 @@ def test_unavailable_transport_does_not_leak_internal_detail_into_str() -> None:
 
 def test_fixture_transport_replays_json_records(tmp_path: Path) -> None:
     (tmp_path / "GL_BALANCES.json").write_text(
-        json.dumps({"source": "AEQ.NOFILE.GL.BALANCES", "records": [
-            "1000/1,DESCRIPTION:1:1=Cash,CURRENCY:1:1=GHS,LCY.BALANCE:1:1=500000",
-        ]}),
+        json.dumps(
+            {
+                "source": "AEQ.NOFILE.GL.BALANCES",
+                "records": [
+                    "1000/1,DESCRIPTION:1:1=Cash,CURRENCY:1:1=GHS,LCY.BALANCE:1:1=500000",
+                ],
+            }
+        ),
         encoding="utf-8",
     )
     request = _request(CoreBankingDomain.GL_BALANCES)

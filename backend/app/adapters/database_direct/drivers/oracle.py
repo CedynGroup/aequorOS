@@ -74,6 +74,7 @@ def _wallet_material(extra: dict[str, str]) -> str:
             return value
     return ""
 
+
 # ALL_TAB_COLUMNS spans tables and views the connected account may read; column
 # order is preserved via COLUMN_ID. Owners are bound, never interpolated.
 _INTROSPECT_BASE = "SELECT owner, table_name, column_name, data_type, nullable FROM all_tab_columns"

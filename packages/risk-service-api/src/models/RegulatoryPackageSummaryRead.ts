@@ -11,6 +11,20 @@
  */
 
 import { mapValues } from "../runtime";
+import type { RegulatorComments } from "./RegulatorComments";
+import {
+  RegulatorCommentsFromJSON,
+  RegulatorCommentsFromJSONTyped,
+  RegulatorCommentsToJSON,
+  RegulatorCommentsToJSONTyped,
+} from "./RegulatorComments";
+import type { SnapshotSha256 } from "./SnapshotSha256";
+import {
+  SnapshotSha256FromJSON,
+  SnapshotSha256FromJSONTyped,
+  SnapshotSha256ToJSON,
+  SnapshotSha256ToJSONTyped,
+} from "./SnapshotSha256";
 import type { ValidationPassed } from "./ValidationPassed";
 import {
   ValidationPassedFromJSON,
@@ -25,6 +39,13 @@ import {
   ReturnFamilyToJSON,
   ReturnFamilyToJSONTyped,
 } from "./ReturnFamily";
+import type { SubmissionRevision } from "./SubmissionRevision";
+import {
+  SubmissionRevisionFromJSON,
+  SubmissionRevisionFromJSONTyped,
+  SubmissionRevisionToJSON,
+  SubmissionRevisionToJSONTyped,
+} from "./SubmissionRevision";
 import type { Notes1 } from "./Notes1";
 import {
   Notes1FromJSON,
@@ -104,6 +125,12 @@ export interface RegulatoryPackageSummaryRead {
   notes: Notes1;
   /**
    *
+   * @type {RegulatorComments}
+   * @memberof RegulatoryPackageSummaryRead
+   */
+  regulatorComments: RegulatorComments;
+  /**
+   *
    * @type {Date}
    * @memberof RegulatoryPackageSummaryRead
    */
@@ -122,10 +149,22 @@ export interface RegulatoryPackageSummaryRead {
   returnFamily: ReturnFamily;
   /**
    *
+   * @type {SnapshotSha256}
+   * @memberof RegulatoryPackageSummaryRead
+   */
+  snapshotSha256: SnapshotSha256;
+  /**
+   *
    * @type {PackageStatus}
    * @memberof RegulatoryPackageSummaryRead
    */
   status: PackageStatus;
+  /**
+   *
+   * @type {SubmissionRevision}
+   * @memberof RegulatoryPackageSummaryRead
+   */
+  submissionRevision: SubmissionRevision;
   /**
    *
    * @type {SupersedesId}
@@ -167,13 +206,25 @@ export function instanceOfRegulatoryPackageSummaryRead(
     return false;
   if (!("id" in value) || value["id"] === undefined) return false;
   if (!("notes" in value) || value["notes"] === undefined) return false;
+  if (
+    !("regulatorComments" in value) ||
+    value["regulatorComments"] === undefined
+  )
+    return false;
   if (!("reportingDate" in value) || value["reportingDate"] === undefined)
     return false;
   if (!("returnCode" in value) || value["returnCode"] === undefined)
     return false;
   if (!("returnFamily" in value) || value["returnFamily"] === undefined)
     return false;
+  if (!("snapshotSha256" in value) || value["snapshotSha256"] === undefined)
+    return false;
   if (!("status" in value) || value["status"] === undefined) return false;
+  if (
+    !("submissionRevision" in value) ||
+    value["submissionRevision"] === undefined
+  )
+    return false;
   if (!("supersedesId" in value) || value["supersedesId"] === undefined)
     return false;
   if (!("updatedAt" in value) || value["updatedAt"] === undefined) return false;
@@ -205,10 +256,13 @@ export function RegulatoryPackageSummaryReadFromJSONTyped(
     generatedBy: json["generated_by"],
     id: json["id"],
     notes: Notes1FromJSON(json["notes"]),
+    regulatorComments: RegulatorCommentsFromJSON(json["regulator_comments"]),
     reportingDate: new Date(json["reporting_date"]),
     returnCode: json["return_code"],
     returnFamily: ReturnFamilyFromJSON(json["return_family"]),
+    snapshotSha256: SnapshotSha256FromJSON(json["snapshot_sha256"]),
     status: PackageStatusFromJSON(json["status"]),
+    submissionRevision: SubmissionRevisionFromJSON(json["submission_revision"]),
     supersedesId: SupersedesIdFromJSON(json["supersedes_id"]),
     updatedAt: new Date(json["updated_at"]),
     validationPassed: ValidationPassedFromJSON(json["validation_passed"]),
@@ -238,10 +292,13 @@ export function RegulatoryPackageSummaryReadToJSONTyped(
     generated_by: value["generatedBy"],
     id: value["id"],
     notes: Notes1ToJSON(value["notes"]),
+    regulator_comments: RegulatorCommentsToJSON(value["regulatorComments"]),
     reporting_date: value["reportingDate"].toISOString().substring(0, 10),
     return_code: value["returnCode"],
     return_family: ReturnFamilyToJSON(value["returnFamily"]),
+    snapshot_sha256: SnapshotSha256ToJSON(value["snapshotSha256"]),
     status: PackageStatusToJSON(value["status"]),
+    submission_revision: SubmissionRevisionToJSON(value["submissionRevision"]),
     supersedes_id: SupersedesIdToJSON(value["supersedesId"]),
     updated_at: value["updatedAt"].toISOString(),
     validation_passed: ValidationPassedToJSON(value["validationPassed"]),

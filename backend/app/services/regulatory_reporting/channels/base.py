@@ -13,7 +13,9 @@ from typing import Literal, Protocol
 
 from app.models import RegulatoryPackage, RegulatoryPackageArtifact
 
-type SubmissionPollStatus = Literal["pending", "acknowledged", "rejected"]
+# "rejected" is returned-for-correction (rework via resubmission); "declined"
+# is the regulator's final refusal — mirrors the documented ORASS lifecycle.
+type SubmissionPollStatus = Literal["pending", "acknowledged", "rejected", "declined"]
 
 
 class SubmissionChannel(Protocol):

@@ -36,8 +36,13 @@ def _cpr_from_smm(unscheduled: float, denominator: float) -> float:
     return 1.0 - (1.0 - smm) ** 12
 
 
-def estimate(db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.date,  # noqa: PLR0912, PLR0915
-             cfg: BehavioralTrainingConfig) -> ModelResult:
+def estimate(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    as_of: datetime.date,  # noqa: PLR0912, PLR0915
+    cfg: BehavioralTrainingConfig,
+) -> ModelResult:
     rows = history.load_loan_month_rows(db, ctx, bank_id, as_of, cfg.window_months)
     short = history.load_ghs_short_rate_history(db, ctx, bank_id, as_of, cfg.window_months)
 
@@ -55,8 +60,16 @@ def estimate(db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.dat
 
     # per (product, month): prepayment numerator/denominator + balance-weighted features
     cells: dict[tuple[str, int], dict] = defaultdict(
-        lambda: {"unsch": 0.0, "den": 0.0, "rate_num": 0.0, "rate_bal": 0.0,
-                 "age_num": 0.0, "rem_num": 0.0, "bal": 0.0})
+        lambda: {
+            "unsch": 0.0,
+            "den": 0.0,
+            "rate_num": 0.0,
+            "rate_bal": 0.0,
+            "age_num": 0.0,
+            "rem_num": 0.0,
+            "bal": 0.0,
+        }
+    )
     for months_map in loans.values():
         for mn, r in months_map.items():
             bal = r.balance_ghs
@@ -95,8 +108,17 @@ def estimate(db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.dat
         avg_age = c["age_num"] / c["bal"] if c["bal"] > 0 else np.nan
         avg_rem = c["rem_num"] / c["bal"] if c["bal"] > 0 else np.nan
         s, co = month_sin_cos(mdate)
-        feats[(pc, mn)] = [incentive, avg_note, avg_age, avg_rem,
-                           float(np.log1p(c["bal"])), sr, s, co, np.nan]  # lagged filled below
+        feats[(pc, mn)] = [
+            incentive,
+            avg_note,
+            avg_age,
+            avg_rem,
+            float(np.log1p(c["bal"])),
+            sr,
+            s,
+            co,
+            np.nan,
+        ]  # lagged filled below
         if c["den"] > 0 and mn in next_of:
             cpr[(pc, mn)] = _cpr_from_smm(c["unsch"], c["den"])
 
@@ -106,7 +128,7 @@ def estimate(db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.dat
     months: list[int] = []
     latest: dict[str, np.ndarray] = {}
     by_product_months: dict[str, list[int]] = defaultdict(list)
-    for (pc, mn) in feats:
+    for pc, mn in feats:
         by_product_months[pc].append(mn)
     for pc, mns in by_product_months.items():
         mns.sort()
@@ -122,12 +144,25 @@ def estimate(db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.dat
                 months.append(mn)
 
     lo, hi = VALUE_RANGE[_SLUG]
-    x_arr = (np.asarray(x_num, dtype=float).reshape(-1, _N_FEATURES)
-             if x_num else np.empty((0, _N_FEATURES)))
+    x_arr = (
+        np.asarray(x_num, dtype=float).reshape(-1, _N_FEATURES)
+        if x_num
+        else np.empty((0, _N_FEATURES))
+    )
     result, predictor = _estimate(
-        model_slug=_SLUG, x_num=x_arr, products=products, y=y, months=months,
-        latest_by_product=latest, cfg=cfg, assumption_type=ASSUMPTION_TYPE[_SLUG],
-        unit=UNIT[_SLUG], clamp_lo=lo, clamp_hi=hi, generic_prior=GENERIC_PRIOR[_SLUG])
+        model_slug=_SLUG,
+        x_num=x_arr,
+        products=products,
+        y=y,
+        months=months,
+        latest_by_product=latest,
+        cfg=cfg,
+        assumption_type=ASSUMPTION_TYPE[_SLUG],
+        unit=UNIT[_SLUG],
+        clamp_lo=lo,
+        clamp_hi=hi,
+        generic_prior=GENERIC_PRIOR[_SLUG],
+    )
 
     # rate-incentive partial-dependence curve per product (ml only)
     if predictor is not None:
@@ -140,10 +175,12 @@ def estimate(db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.dat
                 grid_rows.append(r)
             preds = predictor.predict_num(np.asarray(grid_rows, dtype=float), pc)
             if not np.all(np.isnan(preds)):
-                curves[pc] = {"incentiveCurve": [
-                    {"incentiveBps": bps, "cpr": round(float(min(max(p, lo), hi)), 6)}
-                    for bps, p in zip(_CURVE_BPS, preds, strict=True)
-                ]}
+                curves[pc] = {
+                    "incentiveCurve": [
+                        {"incentiveBps": bps, "cpr": round(float(min(max(p, lo), hi)), 6)}
+                        for bps, p in zip(_CURVE_BPS, preds, strict=True)
+                    ]
+                }
         result = _attach_extra(result, curves)
     return result
 
@@ -153,12 +190,21 @@ def _attach_extra(result: ModelResult, curves: dict[str, dict]) -> ModelResult:
 
     products = [
         ProductEstimate(
-            product_code=p.product_code, assumption_type=p.assumption_type, value=p.value,
-            unit=p.unit, confidence=p.confidence, method=p.method,
+            product_code=p.product_code,
+            assumption_type=p.assumption_type,
+            value=p.value,
+            unit=p.unit,
+            confidence=p.confidence,
+            method=p.method,
             extra={**p.extra, **curves.get(p.product_code, {})},
         )
         for p in result.products
     ]
-    return ModelResult(model_id=result.model_id, model_version=result.model_version,
-                       method=result.method, as_of_date=result.as_of_date,
-                       accuracy=result.accuracy, products=products)
+    return ModelResult(
+        model_id=result.model_id,
+        model_version=result.model_version,
+        method=result.method,
+        as_of_date=result.as_of_date,
+        accuracy=result.accuracy,
+        products=products,
+    )

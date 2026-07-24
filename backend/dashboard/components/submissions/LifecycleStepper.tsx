@@ -1,10 +1,12 @@
 /**
  * Package lifecycle stepper: draft → generated → validated → pending approval
- * → approved → submitted → acknowledged. Rejected/superseded render as a
- * terminal badge beside the last reached step (spec §2 lifecycle).
+ * → approved → submitted → acknowledged. Rejected/declined/superseded render
+ * as a terminal badge beside the last reached step (spec §2 lifecycle);
+ * declined is the regulator's final refusal — treated like rejected, it drops
+ * at the submitted step.
  */
 
-import { Check, XCircle, History } from 'lucide-react';
+import { Check, XCircle, Ban, History } from 'lucide-react';
 import type { PackageStatus } from '@aequoros/risk-service-api';
 
 const STEPS: { status: PackageStatus; label: string }[] = [
@@ -28,12 +30,15 @@ const STEP_INDEX: Partial<Record<PackageStatus, number>> = {
 
 export default function LifecycleStepper({ status }: { status: PackageStatus }) {
   const terminal =
-    status === 'rejected' ? 'rejected' : status === 'superseded' ? 'superseded' : null;
-  // A rejected package fell out of the submitted stage; superseded is history.
+    status === 'rejected' || status === 'declined' || status === 'superseded'
+      ? status
+      : null;
+  // A rejected/declined package fell out of the submitted stage; superseded
+  // is history.
   const reached = terminal
-    ? status === 'rejected'
-      ? 4
-      : -1
+    ? terminal === 'superseded'
+      ? -1
+      : 4
     : STEP_INDEX[status] ?? -1;
 
   return (
@@ -81,6 +86,12 @@ export default function LifecycleStepper({ status }: { status: PackageStatus }) 
         <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-caption font-medium uppercase tracking-wider border bg-critical-light text-critical border-critical/20">
           <XCircle size={11} aria-hidden />
           Rejected
+        </span>
+      )}
+      {terminal === 'declined' && (
+        <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-caption font-medium uppercase tracking-wider border bg-critical-light text-critical border-critical/20">
+          <Ban size={11} aria-hidden />
+          Declined
         </span>
       )}
       {terminal === 'superseded' && (

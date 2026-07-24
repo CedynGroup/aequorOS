@@ -10,9 +10,9 @@ from __future__ import annotations
 
 # Basel/ALM-conventional priors.
 GENERIC_PRIOR: dict[str, float] = {
-    "nmd-duration": 24.0,       # months
-    "prepayment": 0.06,         # annual CPR
-    "deposit-stability": 0.5,   # stable fraction
+    "nmd-duration": 24.0,  # months
+    "prepayment": 0.06,  # annual CPR
+    "deposit-stability": 0.5,  # stable fraction
 }
 
 # Clamp ranges for each model's output value.

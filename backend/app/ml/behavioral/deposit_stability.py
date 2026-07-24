@@ -30,7 +30,8 @@ _SLUG = "deposit-stability"
 def _product_series(aggs) -> dict[str, list]:
     """Collapse (product, counterparty_type, month) → per-product monthly points."""
     by_pm: dict[tuple[str, datetime.date], dict] = defaultdict(
-        lambda: {"balance": 0.0, "n": 0, "rate_num": 0.0, "rate_den": 0.0})
+        lambda: {"balance": 0.0, "n": 0, "rate_num": 0.0, "rate_den": 0.0}
+    )
     for a in aggs:
         cell = by_pm[(a.product_code, a.as_of_date)]
         cell["balance"] += a.balance_ghs
@@ -47,18 +48,37 @@ def _product_series(aggs) -> dict[str, list]:
     return series
 
 
-def _feature_row(balances: list[float], d: datetime.date, n_accounts: int, rate: float,
-                 short_rate: float) -> list[float]:
+def _feature_row(
+    balances: list[float], d: datetime.date, n_accounts: int, rate: float, short_rate: float
+) -> list[float]:
     f = trailing_series_features(balances)
     s, c = month_sin_cos(d)
-    return [f["cov"], f["min_mean"], f["g3"], f["g6"], f["g12"], f["log_level"], f["n_obs"],
-            float(np.log1p(max(n_accounts, 0))), rate, short_rate, s, c]
+    return [
+        f["cov"],
+        f["min_mean"],
+        f["g3"],
+        f["g6"],
+        f["g12"],
+        f["log_level"],
+        f["n_obs"],
+        float(np.log1p(max(n_accounts, 0))),
+        rate,
+        short_rate,
+        s,
+        c,
+    ]
 
 
-def estimate(db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.date,
-             cfg: BehavioralTrainingConfig) -> ModelResult:
+def estimate(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    as_of: datetime.date,
+    cfg: BehavioralTrainingConfig,
+) -> ModelResult:
     aggs = history.load_deposit_month_aggregates(
-        db, ctx, bank_id, as_of, cfg.window_months, non_maturing_only=False)
+        db, ctx, bank_id, as_of, cfg.window_months, non_maturing_only=False
+    )
     short = history.load_ghs_short_rate_history(db, ctx, bank_id, as_of, cfg.window_months)
     series = _product_series(aggs)
 
@@ -77,7 +97,7 @@ def estimate(db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.dat
             if i == len(points) - 1:
                 latest[pc] = np.asarray(row, dtype=float)
             if i + fw < len(points) and bal > 0:
-                future_min = min(balances[i + 1: i + 1 + fw])
+                future_min = min(balances[i + 1 : i + 1 + fw])
                 label = max(0.0, min(1.0, future_min / bal))
                 x_num.append(row)
                 products.append(pc)
@@ -88,7 +108,15 @@ def estimate(db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.dat
     result, _ = _estimate(
         model_slug=_SLUG,
         x_num=np.asarray(x_num, dtype=float).reshape(-1, 12) if x_num else np.empty((0, 12)),
-        products=products, y=y, months=months, latest_by_product=latest, cfg=cfg,
-        assumption_type=ASSUMPTION_TYPE[_SLUG], unit=UNIT[_SLUG],
-        clamp_lo=lo, clamp_hi=hi, generic_prior=GENERIC_PRIOR[_SLUG])
+        products=products,
+        y=y,
+        months=months,
+        latest_by_product=latest,
+        cfg=cfg,
+        assumption_type=ASSUMPTION_TYPE[_SLUG],
+        unit=UNIT[_SLUG],
+        clamp_lo=lo,
+        clamp_hi=hi,
+        generic_prior=GENERIC_PRIOR[_SLUG],
+    )
     return result

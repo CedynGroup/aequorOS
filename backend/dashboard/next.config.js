@@ -3,6 +3,12 @@ const path = require('path');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Isolate the e2e dev-server build cache from a developer's live `.next`.
+  // NEXT_PUBLIC_* values are inlined at compile time and `next dev` shares one
+  // cache per dir, so an e2e run in the same directory would otherwise bake the
+  // e2e API origin into a running dev server's served chunks. The Playwright
+  // config sets NEXT_DIST_DIR=.next-e2e; everyone else uses the default `.next`.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // Self-contained server output for the Docker/Coolify image (.next/standalone).
   output: 'standalone',
   experimental: {

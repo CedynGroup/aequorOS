@@ -4,33 +4,41 @@
  * Regulatory Reporting — Returns workspace. One return family + reporting
  * date at a time: generate/regenerate the immutable package version, preview
  * the snapshot, validate, request approval, export xlsx/csv/pdf artifacts,
- * submit via a channel (ORASS sandbox / email fallback / manual), poll the
- * regulator decision, and read the submission-event trail. Deep-linkable via
- * ?code=&date= (the Calendar and module pages link here).
+ * submit via a channel (ORASS API / sandbox / email fallback / manual), poll
+ * the regulator decision, read the submission-event trail, and run the
+ * ORASS-parity resubmission workflow (request → grant/deny → regenerate the
+ * corrected revision). Deep-linkable via ?code=&date= (the Calendar and
+ * module pages link here).
  */
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
+  CheckCircle2,
   Download,
   FileCheck2,
   FileOutput,
   FlaskConical,
   Loader2,
   Mail,
+  MessageSquareWarning,
   PlayCircle,
   RadioTower,
   RefreshCw,
+  RotateCcw,
   ScrollText,
   Send,
   ShieldCheck,
   UploadCloud,
+  XCircle,
 } from 'lucide-react';
 import type {
   ArtifactKind,
   ChannelCode,
+  PackageStatus,
   RegulatoryPackageRead,
   RegulatoryPackageSummaryRead,
+  ResubmissionRequestRead,
   ReturnTemplateRead,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
@@ -43,15 +51,18 @@ import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useBankContext } from '@/components/shell/BankContext';
 import { isApiError } from '@/lib/api/client';
 import {
+  useDecideResubmission,
   useEmailFallbackInstructions,
   useExportRegulatoryPackage,
   useGenerateRegulatoryPackage,
+  usePackageArtifacts,
   usePollRegulatorySubmission,
   useRegulatoryPackage,
   useRegulatoryPackages,
   useRequestPackageApproval,
+  useRequestResubmission,
+  useResubmissionRequests,
   useReturnTemplates,
-  useSessionArtifacts,
   useSubmissionEvents,
   useSubmitRegulatoryPackage,
   useValidateRegulatoryPackage,
@@ -62,6 +73,7 @@ import {
   FIDELITY_INFO,
   FidelityPill,
   PackageStatusPill,
+  ResubmissionStatusPill,
   downloadArtifact,
   fmtBytes,
 } from '@/components/submissions/shared';
@@ -81,7 +93,12 @@ export default function ReturnsWorkspacePage() {
 }
 
 const EXPORT_KINDS: ArtifactKind[] = ['xlsx', 'csv', 'pdf'];
-const CHANNEL_OPTIONS: ChannelCode[] = ['orass_sandbox', 'email', 'manual'];
+const CHANNEL_OPTIONS: ChannelCode[] = [
+  'orass_api',
+  'orass_sandbox',
+  'email',
+  'manual',
+];
 
 /** The structured ORASS-downtime 409 payload (workflow.submit 409 details). */
 type DowntimeFallback = {
@@ -356,8 +373,9 @@ function PackageWorkspace({
   const exportPackage = useExportRegulatoryPackage(bankId);
   const submit = useSubmitRegulatoryPackage(bankId);
   const poll = usePollRegulatorySubmission(bankId);
-  const artifactsQuery = useSessionArtifacts(bankId, summary.id);
+  const artifactsQuery = usePackageArtifacts(bankId, summary.id);
   const eventsQuery = useSubmissionEvents(bankId, summary.id);
+  const resubmissionsQuery = useResubmissionRequests(bankId, summary.id);
 
   const defaultChannel = template?.defaultChannel ?? 'manual';
   const [channel, setChannel] = useState<ChannelCode>(defaultChannel);
@@ -392,7 +410,11 @@ function PackageWorkspace({
     Boolean(fallback) || channel === 'email'
   );
 
-  const artifacts = artifactsQuery.data ?? [];
+  const artifacts = artifactsQuery.data?.artifacts ?? [];
+  const resubmissions = resubmissionsQuery.data?.requests ?? [];
+  const submissionRevision =
+    pkg?.submissionRevision ?? summary.submissionRevision;
+  const regulatorComments = pkg?.regulatorComments ?? summary.regulatorComments;
 
   const runExport = (kind: ArtifactKind) => {
     setExportingKind(kind);
@@ -420,6 +442,14 @@ function PackageWorkspace({
               v{summary.version}
             </span>
             <PackageStatusPill status={status} />
+            {submissionRevision && (
+              <span
+                title="Submission revision — resubmissions carry +0.1"
+                className="font-mono text-caption text-slate tnum rounded border border-border px-1.5 py-0.5"
+              >
+                Rev {submissionRevision}
+              </span>
+            )}
           </span>
         }
         subtitle={`Generated ${fmtTimestamp(summary.generatedAt)} · immutable snapshot — regeneration supersedes, never mutates`}
@@ -447,6 +477,10 @@ function PackageWorkspace({
           </p>
         )}
       </SectionCard>
+
+      {regulatorComments && (
+        <SupervisorCommentsPanel status={status} comments={regulatorComments} />
+      )}
 
       {pendingReupload && (
         <div className="card border-l-4 border-l-warning bg-warning-light/40 px-5 py-4 flex items-start gap-3">
@@ -654,9 +688,9 @@ function PackageWorkspace({
               </ul>
             ) : (
               <p className="mt-3 text-caption text-slate">
-                No artifacts exported this session. Exports mint checksummed
-                files in the outputs tier; submitting via a channel
-                auto-exports xlsx when none exists.
+                No artifacts exported yet. Exports mint checksummed files in
+                the outputs tier; submitting via a channel auto-exports xlsx
+                when none exists.
               </p>
             )}
           </SectionCard>
@@ -722,6 +756,8 @@ function PackageWorkspace({
                   ? 'Acknowledged by the regulator — this obligation is complete.'
                   : status === 'rejected'
                   ? 'Rejected by the regulator — regenerate to mint a superseding version and rework it.'
+                  : status === 'declined'
+                  ? 'Declined by the regulator — the decision is final; see the supervisor comments above.'
                   : 'Submission unlocks once the package is approved.'}
               </p>
             )}
@@ -776,6 +812,15 @@ function PackageWorkspace({
             )}
           </SectionCard>
 
+          <ResubmissionCard
+            bankId={bankId}
+            packageId={summary.id}
+            status={status}
+            requests={resubmissions}
+            requestsError={resubmissionsQuery.error}
+            latestSubmittedChannel={latestSubmitted?.channel ?? null}
+          />
+
           {priorVersions.length > 0 && (
             <SectionCard
               title="Prior versions"
@@ -803,5 +848,252 @@ function PackageWorkspace({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Regulator ("supervisor") comments carried on the package — ORASS "View
+ * Comments" parity. Critical framing on a declined package (final decision),
+ * amber otherwise (rejected / resubmission feedback).
+ */
+function SupervisorCommentsPanel({
+  status,
+  comments,
+}: {
+  status: PackageStatus;
+  comments: string;
+}) {
+  const critical = status === 'declined';
+  return (
+    <div
+      className={`flex items-start gap-2.5 rounded border px-3.5 py-2.5 ${
+        critical
+          ? 'border-critical/25 bg-critical-light/50'
+          : 'border-warning/25 bg-warning-light/50'
+      }`}
+    >
+      <MessageSquareWarning
+        size={15}
+        className={`${critical ? 'text-critical' : 'text-warning'} shrink-0 mt-0.5`}
+        aria-hidden
+      />
+      <div className="min-w-0 text-body">
+        <p className="font-medium text-navy">Supervisor comments</p>
+        <p className="mt-0.5 text-caption text-navy/80 leading-relaxed whitespace-pre-wrap">
+          {comments}
+        </p>
+        {critical && (
+          <p className="mt-1 text-caption font-medium text-critical">
+            Declined — the regulator&apos;s decision on this return is final.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ORASS-parity resubmission workflow for a submitted/acknowledged package:
+ * file a request (reason required); ORASS-channel requests are decided by
+ * the portal, while email/manual submissions record the regulator's offline
+ * grant/deny here. A granted request unlocks the corrected revision (+0.1)
+ * via regeneration.
+ */
+function ResubmissionCard({
+  bankId,
+  packageId,
+  status,
+  requests,
+  requestsError,
+  latestSubmittedChannel,
+}: {
+  bankId: string;
+  packageId: string;
+  status: PackageStatus;
+  requests: ResubmissionRequestRead[];
+  requestsError: unknown;
+  latestSubmittedChannel: ChannelCode | null;
+}) {
+  const request = useRequestResubmission(bankId);
+  const decide = useDecideResubmission(bankId);
+  const [formOpen, setFormOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [note, setNote] = useState('');
+
+  const canRequest = status === 'submitted' || status === 'acknowledged';
+  if (!canRequest && requests.length === 0) return null;
+
+  const manualDecide =
+    latestSubmittedChannel === 'email' || latestSubmittedChannel === 'manual';
+  const hasOpenRequest = requests.some((entry) => entry.status === 'requested');
+  const grantedPending = requests.some(
+    (entry) => entry.status === 'granted' && entry.consumedByPackageId == null
+  );
+
+  const runDecision = (requestId: string, decision: 'granted' | 'denied') =>
+    decide.mutate(
+      { packageId, requestId, decision, note: note.trim() || undefined },
+      { onSuccess: () => setNote('') }
+    );
+
+  return (
+    <SectionCard
+      title="Resubmission"
+      subtitle="Corrections to an already-submitted return require the regulator's go-ahead"
+    >
+      {canRequest && !hasOpenRequest && (
+        <>
+          {!formOpen ? (
+            <button
+              type="button"
+              onClick={() => setFormOpen(true)}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
+            >
+              <RotateCcw size={13} aria-hidden />
+              Request resubmission
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <label
+                className="block text-caption font-medium text-navy"
+                htmlFor="resubmission-reason"
+              >
+                Reason <span className="font-normal text-slate">(required)</span>
+              </label>
+              <textarea
+                id="resubmission-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={2}
+                placeholder="e.g. Corrected HQLA misclassification found after submission."
+                className="w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={request.isPending || reason.trim().length === 0}
+                  onClick={() =>
+                    request.mutate(
+                      { packageId, reason: reason.trim() },
+                      {
+                        onSuccess: () => {
+                          setFormOpen(false);
+                          setReason('');
+                        },
+                      }
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+                >
+                  {request.isPending ? (
+                    <Loader2 size={13} className="animate-spin" aria-hidden />
+                  ) : (
+                    <RotateCcw size={13} aria-hidden />
+                  )}
+                  File request
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormOpen(false);
+                    setReason('');
+                  }}
+                  className="inline-flex items-center px-3 py-2 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      {request.error && (
+        <div className="mt-3">
+          <ErrorPanel error={request.error} title="Resubmission request failed" />
+        </div>
+      )}
+      {Boolean(requestsError) && (
+        <div className="mt-3">
+          <ErrorPanel
+            error={requestsError}
+            title="Could not load resubmission requests"
+          />
+        </div>
+      )}
+
+      {grantedPending && (
+        <p className="mt-3 rounded border border-success/25 bg-success-light/50 px-3 py-2 text-caption text-navy/85 leading-relaxed">
+          Resubmission granted — regenerate to mint the corrected version; the
+          next submission carries revision +0.1.
+        </p>
+      )}
+
+      {requests.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {requests.map((entry) => (
+            <li
+              key={entry.id}
+              className="rounded border border-border-light bg-surface px-3 py-2 space-y-1.5"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <ResubmissionStatusPill status={entry.status} />
+                <span className="ml-auto font-mono text-micro text-slate tnum whitespace-nowrap">
+                  {fmtTimestamp(entry.occurredAt)}
+                </span>
+              </div>
+              <p className="text-caption text-navy/80 leading-relaxed">
+                {entry.reason}
+              </p>
+              {entry.decidedAt && (
+                <p className="font-mono text-micro text-slate tnum">
+                  decided {fmtTimestamp(new Date(entry.decidedAt))}
+                </p>
+              )}
+              {entry.status === 'requested' && manualDecide && (
+                <div className="pt-1 space-y-1.5">
+                  <input
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Decision note (optional)"
+                    aria-label="Decision note"
+                    className="w-full rounded border border-border bg-surface-raised px-2.5 py-1.5 text-caption text-navy placeholder:text-slate-light"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={decide.isPending}
+                      onClick={() => runDecision(entry.id, 'granted')}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-caption font-medium text-success border border-success/30 bg-success-light/40 rounded-md hover:bg-success-light disabled:opacity-60"
+                    >
+                      <CheckCircle2 size={13} aria-hidden />
+                      Grant
+                    </button>
+                    <button
+                      type="button"
+                      disabled={decide.isPending}
+                      onClick={() => runDecision(entry.id, 'denied')}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-caption font-medium text-critical border border-critical/30 bg-critical-light/40 rounded-md hover:bg-critical-light disabled:opacity-60"
+                    >
+                      <XCircle size={13} aria-hidden />
+                      Deny
+                    </button>
+                  </div>
+                  <p className="text-micro text-slate leading-relaxed">
+                    Email/manual submissions: record the regulator&apos;s
+                    offline decision here. ORASS-channel requests are decided
+                    by the portal poll.
+                  </p>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {decide.error && (
+        <div className="mt-3">
+          <ErrorPanel error={decide.error} title="Decision failed" />
+        </div>
+      )}
+    </SectionCard>
   );
 }

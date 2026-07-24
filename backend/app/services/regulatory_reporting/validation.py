@@ -10,6 +10,11 @@ Three deterministic rules run over the generated snapshot:
    latest submitted/acknowledged package of the same return at an earlier
    reporting date; swings above 25% are flagged as WARNING.
 
+Additionally, generators may record advisory notes at generation time in
+``snapshot.metadata.generation_findings`` (for example the Large Exposures
+top-100 truncation); the pipeline folds them into the report capped at
+INFO/WARNING severity — generator notes can never block validation.
+
 Each finding is ``{rule, severity, detail}`` with severity INFO/WARNING/ERROR.
 The report is persisted onto ``validation_report``; a clean run (no ERROR)
 flips ``generated -> validated``, otherwise the package stays (or returns to)
@@ -37,10 +42,12 @@ from app.services.regulatory_reporting.common import (
     read_package,
 )
 
-RULE_VERSION = "regulatory-package-validation-v1.0.0"
+RULE_VERSION = "regulatory-package-validation-v1.1.0"
 COMPLETENESS_RULE = "package.sections_complete"
 CONSISTENCY_RULE = "package.totals_consistent"
 MOVEMENT_RULE = "package.prior_period_movement"
+GENERATION_NOTES_RULE = "package.generation_notes"
+_GENERATION_NOTE_SEVERITIES = ("INFO", "WARNING")
 MOVEMENT_THRESHOLD_PCT = Decimal("25")
 _MOVEMENT_STATUSES = ("submitted", "acknowledged")
 _VALIDATABLE_STATUSES = ("generated", "validated")
@@ -202,12 +209,32 @@ def _movement_findings(db: Session, package: RegulatoryPackage) -> list[dict[str
     return findings
 
 
+def _generation_note_findings(snapshot: dict[str, Any]) -> list[dict[str, str]]:
+    """Fold generator-recorded advisory notes into the report (INFO/WARNING only)."""
+    metadata = snapshot.get("metadata") or {}
+    raw_findings = metadata.get("generation_findings") or []
+    findings: list[dict[str, str]] = []
+    for entry in raw_findings:
+        if not isinstance(entry, dict):
+            continue
+        detail = str(entry.get("detail") or "").strip()
+        if not detail:
+            continue
+        severity = str(entry.get("severity") or "INFO").upper()
+        if severity not in _GENERATION_NOTE_SEVERITIES:
+            severity = "INFO"
+        rule = str(entry.get("rule") or GENERATION_NOTES_RULE)
+        findings.append(_finding(rule, severity, detail))
+    return findings
+
+
 def run_validation_rules(db: Session, package: RegulatoryPackage) -> list[dict[str, str]]:
     """Pure rule pipeline over one package snapshot; returns ordered findings."""
     return [
         *_completeness_findings(package.snapshot),
         *_consistency_findings(package.snapshot),
         *_movement_findings(db, package),
+        *_generation_note_findings(package.snapshot),
     ]
 
 

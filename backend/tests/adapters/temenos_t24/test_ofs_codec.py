@@ -19,6 +19,7 @@ from app.adapters.temenos_t24.ofs import (
 
 # --- multivalue flattening -------------------------------------------------
 
+
 def test_flatten_scalar_returns_string() -> None:
     assert flatten_value("GHS") == "GHS"
 
@@ -44,10 +45,15 @@ def test_flatten_accepts_native_t24_marker_codepoints() -> None:
 
 # --- request framing -------------------------------------------------------
 
+
 def test_build_ofs_message_frames_app_id_and_fields() -> None:
     msg = build_ofs_message(
-        "AA.ARRANGEMENT", "AA123", {"CUSTOMER": "C100", "AMOUNT": 5000},
-        function="I", user="SVC", password="pw",
+        "AA.ARRANGEMENT",
+        "AA123",
+        {"CUSTOMER": "C100", "AMOUNT": 5000},
+        function="I",
+        user="SVC",
+        password="pw",
     )
     parts = msg.split(",")
     assert parts[0] == "AA.ARRANGEMENT"
@@ -64,13 +70,12 @@ def test_build_enquiry_message_defaults_to_equality() -> None:
 
 
 def test_build_enquiry_message_supports_operand_tuples() -> None:
-    msg = build_enquiry_message(
-        "AEQ.AA.LENDING.POSITIONS", [("MATURITY.DATE", "GT", "20260101")]
-    )
+    msg = build_enquiry_message("AEQ.AA.LENDING.POSITIONS", [("MATURITY.DATE", "GT", "20260101")])
     assert "MATURITY.DATE:GT:20260101" in msg
 
 
 # --- response decoding -----------------------------------------------------
+
 
 def test_parse_single_record_success() -> None:
     raw = "AA123/1,CUSTOMER:1:1=C100,CURRENCY:1:1=GHS,AMOUNT:1:1=5000"

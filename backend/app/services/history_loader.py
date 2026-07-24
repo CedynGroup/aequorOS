@@ -44,12 +44,30 @@ from app.services.fact_derivation import DerivationError, derive_facts
 # Panel column contracts live with the simulator; import lazily to avoid a hard
 # dependency when the package layout differs.
 _ATTRIBUTE_COLUMNS = [
-    "balance_ghs", "branch_id", "ecl_provision_ghs", "notional_ghs",
-    "credit_conversion_factor", "credit_equivalent_ghs",
-    "scheduled_principal_ghs", "interest_accrued_ghs", "months_on_book",
-    "hedge_id", "instrument", "buy_currency", "sell_currency", "contract_rate",
-    "mtm_ghs", "prospective_r2", "dollar_offset_ratio", "currency_pair",
-    "swap_id", "direction", "pay_rate_pct", "receive_index", "tenor_years", "isin",
+    "balance_ghs",
+    "branch_id",
+    "ecl_provision_ghs",
+    "notional_ghs",
+    "credit_conversion_factor",
+    "credit_equivalent_ghs",
+    "scheduled_principal_ghs",
+    "interest_accrued_ghs",
+    "months_on_book",
+    "hedge_id",
+    "instrument",
+    "buy_currency",
+    "sell_currency",
+    "contract_rate",
+    "mtm_ghs",
+    "prospective_r2",
+    "dollar_offset_ratio",
+    "currency_pair",
+    "swap_id",
+    "direction",
+    "pay_rate_pct",
+    "receive_index",
+    "tenor_years",
+    "isin",
 ]
 _SOURCE_SYSTEM = "API_PUSH"
 _ADAPTER_VERSION = "history_sim_v1"
@@ -148,18 +166,38 @@ def load_history(  # noqa: PLR0913, PLR0912, PLR0915
     for m in all_months:
         bid, lid = new_uuid7(), new_uuid7()
         batch_id[m], lineage_id[m] = bid, lid
-        batch_rows.append(dict(id=bid, organization_id=org_id, bank_id=bank_id,
-                               source_system=_SOURCE_SYSTEM, adapter_version=_ADAPTER_VERSION,
-                               extraction_mode="full", status="accepted", as_of_date=m,
-                               created_by=actor_user_id))
-        lineage_rows.append(dict(id=lid, organization_id=org_id, ingestion_batch_id=bid,
-                                 operation_type="VALIDATION",
-                                 operation_ref=f"history_simulator_v1/{m.isoformat()}"))
+        batch_rows.append(
+            dict(
+                id=bid,
+                organization_id=org_id,
+                bank_id=bank_id,
+                source_system=_SOURCE_SYSTEM,
+                adapter_version=_ADAPTER_VERSION,
+                extraction_mode="full",
+                status="accepted",
+                as_of_date=m,
+                created_by=actor_user_id,
+            )
+        )
+        lineage_rows.append(
+            dict(
+                id=lid,
+                organization_id=org_id,
+                ingestion_batch_id=bid,
+                operation_type="VALIDATION",
+                operation_ref=f"history_simulator_v1/{m.isoformat()}",
+            )
+        )
     _bulk_insert(session, IngestionBatch, batch_rows)
     _bulk_insert(session, LineageRecord, lineage_rows)
     first = all_months[0]
-    prov = dict(ingestion_batch_id=batch_id[first], lineage_id=lineage_id[first],
-                validation_status="accepted", source_system=_SOURCE_SYSTEM, **common)
+    prov = dict(
+        ingestion_batch_id=batch_id[first],
+        lineage_id=lineage_id[first],
+        validation_status="accepted",
+        source_system=_SOURCE_SYSTEM,
+        **common,
+    )
 
     # 2) dimensions once (attached to the earliest month; joined by id thereafter)
     cp = pd.read_parquet(panels_dir / "dim_counterparties" / "part.parquet")
@@ -168,9 +206,18 @@ def load_history(  # noqa: PLR0913, PLR0912, PLR0915
     for r in cast("Iterable[Any]", cp.itertuples(index=False)):
         cid = new_uuid7()
         cp_id[r.counterparty_id] = cid
-        cp_rows.append(dict(id=cid, as_of_date=first, source_reference=r.counterparty_id,
-                            name=r.counterparty_name, counterparty_type=r.counterparty_type,
-                            country_code=_clean(r.country), rating=_clean(r.credit_rating), **prov))
+        cp_rows.append(
+            dict(
+                id=cid,
+                as_of_date=first,
+                source_reference=r.counterparty_id,
+                name=r.counterparty_name,
+                counterparty_type=r.counterparty_type,
+                country_code=_clean(r.country),
+                rating=_clean(r.credit_rating),
+                **prov,
+            )
+        )
     summary.counterparties = _bulk_insert(session, CanonicalCounterparty, cp_rows)
 
     prod = pd.read_parquet(panels_dir / "dim_products" / "part.parquet")
@@ -179,11 +226,19 @@ def load_history(  # noqa: PLR0913, PLR0912, PLR0915
     for r in cast("Iterable[Any]", prod.itertuples(index=False)):
         pid = new_uuid7()
         prod_id[r.product_code] = pid
-        prod_rows.append(dict(id=pid, as_of_date=first, source_reference=r.product_code,
-                              product_code=r.product_code, name=r.product_name,
-                              regulatory_category=_clean(r.regulatory_category),
-                              risk_weight_code=None,
-                              attributes={"risk_weight": _clean(r.risk_weight)}, **prov))
+        prod_rows.append(
+            dict(
+                id=pid,
+                as_of_date=first,
+                source_reference=r.product_code,
+                product_code=r.product_code,
+                name=r.product_name,
+                regulatory_category=_clean(r.regulatory_category),
+                risk_weight_code=None,
+                attributes={"risk_weight": _clean(r.risk_weight)},
+                **prov,
+            )
+        )
     summary.products = _bulk_insert(session, CanonicalProduct, prod_rows)
 
     # reference datasets that are static across months
@@ -205,8 +260,13 @@ def load_history(  # noqa: PLR0913, PLR0912, PLR0915
     pos_id: dict[str, UUID] = {}
     for m in all_months:
         bid, lid = batch_id[m], lineage_id[m]
-        mprov = dict(ingestion_batch_id=bid, lineage_id=lid, validation_status="accepted",
-                     source_system=_SOURCE_SYSTEM, **common)
+        mprov = dict(
+            ingestion_batch_id=bid,
+            lineage_id=lid,
+            validation_status="accepted",
+            source_system=_SOURCE_SYSTEM,
+            **common,
+        )
 
         gl = pd.read_parquet(panels_dir / "gl_accounts" / f"month={m.isoformat()}" / "part.parquet")
         gl_id: dict[str, UUID] = {}
@@ -214,10 +274,19 @@ def load_history(  # noqa: PLR0913, PLR0912, PLR0915
         for r in cast("Iterable[Any]", gl.itertuples(index=False)):
             gid = new_uuid7()
             gl_id[r.gl_code] = gid
-            gl_rows.append(dict(id=gid, as_of_date=m, source_reference=r.gl_code,
-                                account_code=r.gl_code, name=r.gl_name,
-                                account_class=r.account_class, currency=_clean(r.currency),
-                                balance=_clean(r.balance_ghs), **mprov))
+            gl_rows.append(
+                dict(
+                    id=gid,
+                    as_of_date=m,
+                    source_reference=r.gl_code,
+                    account_code=r.gl_code,
+                    name=r.gl_name,
+                    account_class=r.account_class,
+                    currency=_clean(r.currency),
+                    balance=_clean(r.balance_ghs),
+                    **mprov,
+                )
+            )
         summary.gl_accounts += _bulk_insert(session, CanonicalGlAccount, gl_rows)
 
         snap_path = panels_dir / "position_snapshots" / f"month={m.isoformat()}" / "part.parquet"
@@ -234,49 +303,100 @@ def load_history(  # noqa: PLR0913, PLR0912, PLR0915
             if pid is None:
                 pid = new_uuid7()
                 pos_id[sref] = pid
-                identity_rows.append(dict(
-                    id=pid, as_of_date=m, source_reference=sref,
-                    position_type=r["position_type"], currency=r["currency"],
-                    origination_date=_as_date(r.get("origination_date")), **mprov))
+                identity_rows.append(
+                    dict(
+                        id=pid,
+                        as_of_date=m,
+                        source_reference=sref,
+                        position_type=r["position_type"],
+                        currency=r["currency"],
+                        origination_date=_as_date(r.get("origination_date")),
+                        **mprov,
+                    )
+                )
             attrs = {}
             for col in _ATTRIBUTE_COLUMNS:
                 v = _clean(r.get(col))
                 if v is not None:
                     attrs[col] = _iso(v) if isinstance(v, (datetime.date, datetime.datetime)) else v
-            snap_rows.append(dict(
-                id=new_uuid7(), as_of_date=m, source_reference=sref, position_id=pid,
-                counterparty_id=_fk(cp_id, r.get("counterparty_id")),
-                product_id=_fk(prod_id, r.get("product_code")),
-                gl_account_id=_fk(gl_id, r.get("gl_code")),
-                balance=_clean(r.get("balance_ccy")), notional=_clean(r.get("notional_ccy")),
-                interest_rate=_clean(r.get("interest_rate")),
-                rate_type=_rate_type(r.get("rate_type")),
-                rate_index=_clean(r.get("rate_index")), rate_spread=_clean(r.get("rate_spread")),
-                contractual_maturity=_as_date(r.get("contractual_maturity")),
-                next_repricing_date=_as_date(r.get("next_repricing_date")),
-                ifrs9_stage=_clean(r.get("ifrs9_stage")), attributes=attrs, **mprov))
+            snap_rows.append(
+                dict(
+                    id=new_uuid7(),
+                    as_of_date=m,
+                    source_reference=sref,
+                    position_id=pid,
+                    counterparty_id=_fk(cp_id, r.get("counterparty_id")),
+                    product_id=_fk(prod_id, r.get("product_code")),
+                    gl_account_id=_fk(gl_id, r.get("gl_code")),
+                    balance=_clean(r.get("balance_ccy")),
+                    notional=_clean(r.get("notional_ccy")),
+                    interest_rate=_clean(r.get("interest_rate")),
+                    rate_type=_rate_type(r.get("rate_type")),
+                    rate_index=_clean(r.get("rate_index")),
+                    rate_spread=_clean(r.get("rate_spread")),
+                    contractual_maturity=_as_date(r.get("contractual_maturity")),
+                    next_repricing_date=_as_date(r.get("next_repricing_date")),
+                    ifrs9_stage=_clean(r.get("ifrs9_stage")),
+                    attributes=attrs,
+                    **mprov,
+                )
+            )
         if identity_rows:
             summary.positions += _bulk_insert(session, CanonicalPosition, identity_rows, batch_size)
         summary.snapshots += _bulk_insert(session, CanonicalPositionSnapshot, snap_rows, batch_size)
         # record the batch's accepted-record tally so the push console shows counts,
         # not 0 (this bulk path bypasses the pipeline that normally increments these).
         session.execute(
-            update(IngestionBatch).where(IngestionBatch.id == bid).values(
-                records_extracted=len(snap_rows), records_translated=len(snap_rows),
-                records_accepted=len(snap_rows)))
+            update(IngestionBatch)
+            .where(IngestionBatch.id == bid)
+            .values(
+                records_extracted=len(snap_rows),
+                records_translated=len(snap_rows),
+                records_accepted=len(snap_rows),
+            )
+        )
 
         summary.reference_rows += _load_reference_rows(
-            session, m, bid, lid, org_id, bank_id,
-            behavioral, units, institution, yc, fxm, fxd, fin, capm)
+            session,
+            m,
+            bid,
+            lid,
+            org_id,
+            bank_id,
+            behavioral,
+            units,
+            institution,
+            yc,
+            fxm,
+            fxd,
+            fin,
+            capm,
+        )
 
-        log(f"  loaded {m}  positions+={len(identity_rows):>6}  snapshots+={len(snap_rows):>7}  "
-            f"(total snapshots {summary.snapshots:,})")
+        log(
+            f"  loaded {m}  positions+={len(identity_rows):>6}  snapshots+={len(snap_rows):>7}  "
+            f"(total snapshots {summary.snapshots:,})"
+        )
 
     return summary
 
 
-def _load_reference_rows(session, m, bid, lid, org_id, bank_id,  # noqa: PLR0913
-                         behavioral, units, institution, yc, fxm, fxd, fin, capm) -> int:
+def _load_reference_rows(
+    session,
+    m,
+    bid,
+    lid,
+    org_id,
+    bank_id,  # noqa: PLR0913
+    behavioral,
+    units,
+    institution,
+    yc,
+    fxm,
+    fxd,
+    fin,
+    capm,
+) -> int:
     def month_recs(df):
         return df[df.month == m].drop(columns=["month"]).to_dict("records")
 
@@ -300,17 +420,32 @@ def _load_reference_rows(session, m, bid, lid, org_id, bank_id,  # noqa: PLR0913
                 k: (_iso(v) if isinstance(v, (datetime.date, datetime.datetime)) else _clean(v))
                 for k, v in payload.items()
             }
-            rows.append(dict(id=new_uuid7(), organization_id=org_id, bank_id=bank_id,
-                             ingestion_batch_id=bid, as_of_date=m, dataset_kind=kind,
-                             row_index=idx, payload=clean,
-                             source_reference=f"history_simulator_v1/{m.isoformat()}#{kind}!{idx}",
-                             lineage_id=lid))
+            rows.append(
+                dict(
+                    id=new_uuid7(),
+                    organization_id=org_id,
+                    bank_id=bank_id,
+                    ingestion_batch_id=bid,
+                    as_of_date=m,
+                    dataset_kind=kind,
+                    row_index=idx,
+                    payload=clean,
+                    source_reference=f"history_simulator_v1/{m.isoformat()}#{kind}!{idx}",
+                    lineage_id=lid,
+                )
+            )
     return _bulk_insert(session, CanonicalReferenceRow, rows)
 
 
-def derive_all_periods(session: Session, org_id: UUID, bank_id: UUID,  # noqa: PLR0913
-                       months: list[datetime.date], *, actor_user_id: UUID | None = None,
-                       log=print) -> dict[str, int]:
+def derive_all_periods(
+    session: Session,
+    org_id: UUID,
+    bank_id: UUID,  # noqa: PLR0913
+    months: list[datetime.date],
+    *,
+    actor_user_id: UUID | None = None,
+    log=print,
+) -> dict[str, int]:
     session.info["organization_id"] = org_id
     ctx = TenantContext(organization_id=org_id, actor_user_id=actor_user_id)
     ok, failed = 0, 0

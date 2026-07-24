@@ -11,6 +11,20 @@
  */
 
 import { mapValues } from "../runtime";
+import type { RegulatorComments } from "./RegulatorComments";
+import {
+  RegulatorCommentsFromJSON,
+  RegulatorCommentsFromJSONTyped,
+  RegulatorCommentsToJSON,
+  RegulatorCommentsToJSONTyped,
+} from "./RegulatorComments";
+import type { SnapshotSha256 } from "./SnapshotSha256";
+import {
+  SnapshotSha256FromJSON,
+  SnapshotSha256FromJSONTyped,
+  SnapshotSha256ToJSON,
+  SnapshotSha256ToJSONTyped,
+} from "./SnapshotSha256";
 import type { ValidationPassed } from "./ValidationPassed";
 import {
   ValidationPassedFromJSON,
@@ -25,6 +39,13 @@ import {
   ReturnFamilyToJSON,
   ReturnFamilyToJSONTyped,
 } from "./ReturnFamily";
+import type { SubmissionRevision } from "./SubmissionRevision";
+import {
+  SubmissionRevisionFromJSON,
+  SubmissionRevisionFromJSONTyped,
+  SubmissionRevisionToJSON,
+  SubmissionRevisionToJSONTyped,
+} from "./SubmissionRevision";
 import type { Notes1 } from "./Notes1";
 import {
   Notes1FromJSON,
@@ -131,6 +152,12 @@ export interface RegulatoryPackageRead {
   notes: Notes1;
   /**
    *
+   * @type {RegulatorComments}
+   * @memberof RegulatoryPackageRead
+   */
+  regulatorComments: RegulatorComments;
+  /**
+   *
    * @type {Date}
    * @memberof RegulatoryPackageRead
    */
@@ -155,6 +182,12 @@ export interface RegulatoryPackageRead {
   snapshot: { [key: string]: any };
   /**
    *
+   * @type {SnapshotSha256}
+   * @memberof RegulatoryPackageRead
+   */
+  snapshotSha256: SnapshotSha256;
+  /**
+   *
    * @type {Array<PackageSourceRunRead>}
    * @memberof RegulatoryPackageRead
    */
@@ -165,6 +198,12 @@ export interface RegulatoryPackageRead {
    * @memberof RegulatoryPackageRead
    */
   status: PackageStatus;
+  /**
+   *
+   * @type {SubmissionRevision}
+   * @memberof RegulatoryPackageRead
+   */
+  submissionRevision: SubmissionRevision;
   /**
    *
    * @type {SupersedesId}
@@ -213,6 +252,11 @@ export function instanceOfRegulatoryPackageRead(
     return false;
   if (!("id" in value) || value["id"] === undefined) return false;
   if (!("notes" in value) || value["notes"] === undefined) return false;
+  if (
+    !("regulatorComments" in value) ||
+    value["regulatorComments"] === undefined
+  )
+    return false;
   if (!("reportingDate" in value) || value["reportingDate"] === undefined)
     return false;
   if (!("returnCode" in value) || value["returnCode"] === undefined)
@@ -220,9 +264,16 @@ export function instanceOfRegulatoryPackageRead(
   if (!("returnFamily" in value) || value["returnFamily"] === undefined)
     return false;
   if (!("snapshot" in value) || value["snapshot"] === undefined) return false;
+  if (!("snapshotSha256" in value) || value["snapshotSha256"] === undefined)
+    return false;
   if (!("sourceRuns" in value) || value["sourceRuns"] === undefined)
     return false;
   if (!("status" in value) || value["status"] === undefined) return false;
+  if (
+    !("submissionRevision" in value) ||
+    value["submissionRevision"] === undefined
+  )
+    return false;
   if (!("supersedesId" in value) || value["supersedesId"] === undefined)
     return false;
   if (!("updatedAt" in value) || value["updatedAt"] === undefined) return false;
@@ -259,14 +310,17 @@ export function RegulatoryPackageReadFromJSONTyped(
     generatedBy: json["generated_by"],
     id: json["id"],
     notes: Notes1FromJSON(json["notes"]),
+    regulatorComments: RegulatorCommentsFromJSON(json["regulator_comments"]),
     reportingDate: new Date(json["reporting_date"]),
     returnCode: json["return_code"],
     returnFamily: ReturnFamilyFromJSON(json["return_family"]),
     snapshot: json["snapshot"],
+    snapshotSha256: SnapshotSha256FromJSON(json["snapshot_sha256"]),
     sourceRuns: (json["source_runs"] as Array<any>).map(
       PackageSourceRunReadFromJSON,
     ),
     status: PackageStatusFromJSON(json["status"]),
+    submissionRevision: SubmissionRevisionFromJSON(json["submission_revision"]),
     supersedesId: SupersedesIdFromJSON(json["supersedes_id"]),
     updatedAt: new Date(json["updated_at"]),
     validationPassed: ValidationPassedFromJSON(json["validation_passed"]),
@@ -300,14 +354,17 @@ export function RegulatoryPackageReadToJSONTyped(
     generated_by: value["generatedBy"],
     id: value["id"],
     notes: Notes1ToJSON(value["notes"]),
+    regulator_comments: RegulatorCommentsToJSON(value["regulatorComments"]),
     reporting_date: value["reportingDate"].toISOString().substring(0, 10),
     return_code: value["returnCode"],
     return_family: ReturnFamilyToJSON(value["returnFamily"]),
     snapshot: value["snapshot"],
+    snapshot_sha256: SnapshotSha256ToJSON(value["snapshotSha256"]),
     source_runs: (value["sourceRuns"] as Array<any>).map(
       PackageSourceRunReadToJSON,
     ),
     status: PackageStatusToJSON(value["status"]),
+    submission_revision: SubmissionRevisionToJSON(value["submissionRevision"]),
     supersedes_id: SupersedesIdToJSON(value["supersedesId"]),
     updated_at: value["updatedAt"].toISOString(),
     validation_passed: ValidationPassedToJSON(value["validationPassed"]),

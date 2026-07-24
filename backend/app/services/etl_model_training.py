@@ -116,7 +116,9 @@ def train_bank_etl_models(db: Session, ctx: TenantContext, bank_id: UUID) -> dic
         )
         path = report.model.save(model_loading.counterparty_artifact_path(org_id, bank_id))
         summary["counterparty_matching_model"] = {
-            "artifact": str(path), "trained_on": len(rows), "metrics": report.metrics,
+            "artifact": str(path),
+            "trained_on": len(rows),
+            "metrics": report.metrics,
         }
     else:
         summary["counterparty_matching_model"] = {"skipped": f"only {len(rows)} counterparties"}

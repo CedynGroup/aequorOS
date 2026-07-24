@@ -24,8 +24,15 @@ def trailing_series_features(values: list[float]) -> dict[str, float]:
     """Level/volatility/growth features from a product's balance series up to t."""
     v = np.asarray(values, dtype=float)
     if v.size == 0:
-        return {"cov": 0.0, "min_mean": 0.0, "g3": 0.0, "g6": 0.0, "g12": 0.0,
-                "log_level": 0.0, "n_obs": 0.0}
+        return {
+            "cov": 0.0,
+            "min_mean": 0.0,
+            "g3": 0.0,
+            "g6": 0.0,
+            "g12": 0.0,
+            "log_level": 0.0,
+            "n_obs": 0.0,
+        }
     mean = float(v.mean())
     cov = float(v.std() / mean) if mean > 0 else 0.0
     min_mean = float(v.min() / mean) if mean > 0 else 0.0
@@ -36,8 +43,11 @@ def trailing_series_features(values: list[float]) -> dict[str, float]:
         return 0.0
 
     return {
-        "cov": cov, "min_mean": min_mean,
-        "g3": growth(3), "g6": growth(6), "g12": growth(12),
+        "cov": cov,
+        "min_mean": min_mean,
+        "g3": growth(3),
+        "g6": growth(6),
+        "g12": growth(12),
         "log_level": float(np.log1p(max(v[-1], 0.0))),
         "n_obs": float(v.size),
     }
@@ -45,8 +55,9 @@ def trailing_series_features(values: list[float]) -> dict[str, float]:
 
 def stability_score(feats: dict[str, float]) -> float:
     """0..1 core-stability score from balance features (high = sticky, low-vol)."""
-    return clamp(feats.get("min_mean", 0.0) * (1.0 - clamp(feats.get("cov", 0.0), 0.0, 1.0)),
-                 0.0, 1.0)
+    return clamp(
+        feats.get("min_mean", 0.0) * (1.0 - clamp(feats.get("cov", 0.0), 0.0, 1.0)), 0.0, 1.0
+    )
 
 
 def month_sin_cos(d: datetime.date) -> tuple[float, float]:
@@ -55,13 +66,19 @@ def month_sin_cos(d: datetime.date) -> tuple[float, float]:
 
 
 def compute_confidence(  # noqa: PLR0913
-    method: str, n_samples: int, target_n: int, coverage_months: int, target_months: int,
-    cv_rmse: float | None, label_std: float | None,
+    method: str,
+    n_samples: int,
+    target_n: int,
+    coverage_months: int,
+    target_months: int,
+    cv_rmse: float | None,
+    label_std: float | None,
 ) -> float:
     """confidence = method_cap x data_sufficiency x skill, in [0,1]."""
     cap = 1.0 if method == "ml" else 0.35
-    suff = (min(1.0, n_samples / max(target_n, 1))
-            * min(1.0, coverage_months / max(target_months, 1)))
+    suff = min(1.0, n_samples / max(target_n, 1)) * min(
+        1.0, coverage_months / max(target_months, 1)
+    )
     if cv_rmse is not None and label_std and label_std > 0:
         skill = clamp(1.0 - cv_rmse / label_std, 0.0, 1.0)
     else:
@@ -70,7 +87,11 @@ def compute_confidence(  # noqa: PLR0913
 
 
 def timeseries_cv_rmse(
-    fit_predict, x: np.ndarray, y: np.ndarray, month_index: np.ndarray, folds: int,
+    fit_predict,
+    x: np.ndarray,
+    y: np.ndarray,
+    month_index: np.ndarray,
+    folds: int,
 ) -> tuple[float | None, float | None]:
     """Expanding-window forward-chaining CV over the month axis. Returns (rmse, mae)."""
     months = np.unique(month_index)

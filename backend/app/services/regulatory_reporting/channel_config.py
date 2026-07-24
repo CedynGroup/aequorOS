@@ -30,7 +30,7 @@ from app.schemas.regulatory_reporting import ChannelConfigPut, ChannelConfigRead
 from app.services.audit import record_event
 from app.services.regulatory_reporting.common import get_bank_or_404, require_actor
 
-CHANNEL_CODES = ("orass_sandbox", "email", "manual")
+CHANNEL_CODES = ("orass_api", "orass_sandbox", "email", "manual")
 
 
 def _read(config: RegulatoryChannelConfig) -> ChannelConfigRead:

@@ -108,9 +108,7 @@ def run_etl(
         operations.extend(
             FingerprintAnomalyDetector(
                 cfg.anomaly_model, score_threshold=cfg.anomaly_score_threshold
-            ).score(
-                cleaned_records
-            )
+            ).score(cleaned_records)
         )
 
     flags = [op for op in operations if op.disposition is Disposition.FLAGGED]

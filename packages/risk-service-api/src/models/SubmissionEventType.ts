@@ -19,6 +19,7 @@ export const SubmissionEventType = {
   StatusPoll: "status_poll",
   Acknowledged: "acknowledged",
   Rejected: "rejected",
+  Declined: "declined",
 } as const;
 export type SubmissionEventType =
   (typeof SubmissionEventType)[keyof typeof SubmissionEventType];

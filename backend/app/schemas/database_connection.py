@@ -50,9 +50,7 @@ class DatabaseConnectionCreate(ClosedModel):
     tls_enabled: bool = True
     tls_verify_server_certificate: bool = True
     query_timeout_seconds: int = Field(default=300, ge=1, le=3600)
-    connection_options: dict[str, Any] = Field(
-        default_factory=dict, title="Connection Options"
-    )
+    connection_options: dict[str, Any] = Field(default_factory=dict, title="Connection Options")
     extraction_spec: dict[str, Any] = Field(
         default_factory=dict, title="Connection Extraction Spec"
     )

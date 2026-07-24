@@ -23,6 +23,7 @@ export const PackageStatus = {
   Submitted: "submitted",
   Acknowledged: "acknowledged",
   Rejected: "rejected",
+  Declined: "declined",
   Superseded: "superseded",
 } as const;
 export type PackageStatus = (typeof PackageStatus)[keyof typeof PackageStatus];

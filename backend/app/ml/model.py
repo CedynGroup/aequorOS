@@ -181,7 +181,8 @@ def train_and_save(
 
     if series is None:
         series = (
-            load_real_daily_series() if cfg.use_real_series
+            load_real_daily_series()
+            if cfg.use_real_series
             else generate_daily_series(days=cfg.total_days)
         )
     dates = [flow.date for flow in series]

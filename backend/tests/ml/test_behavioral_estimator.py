@@ -18,9 +18,7 @@ from app.ml.behavioral.estimator import estimate
 _CFG = BehavioralTrainingConfig(min_months=3, min_samples=6, cv_folds=2)
 
 
-def _panel(
-    n_products: int, n_months: int, n_features: int = 4, *, seed: int = 0
-) -> dict[str, Any]:
+def _panel(n_products: int, n_months: int, n_features: int = 4, *, seed: int = 0) -> dict[str, Any]:
     rng = np.random.default_rng(seed)
     x, products, y, months, latest = [], [], [], [], {}
     for p in range(n_products):
@@ -33,14 +31,26 @@ def _panel(
             y.append(base + rng.normal(0, 0.02))
             months.append(m)
         latest[code] = np.array(x[-1], dtype=float)
-    return dict(x_num=np.array(x, dtype=float), products=products, y=y, months=months,
-               latest_by_product=latest)
+    return dict(
+        x_num=np.array(x, dtype=float),
+        products=products,
+        y=y,
+        months=months,
+        latest_by_product=latest,
+    )
 
 
 def _call(panel):
     return estimate(
-        model_slug="deposit-stability", cfg=_CFG, assumption_type="DEPOSIT_STABILITY",
-        unit="ratio", clamp_lo=0.0, clamp_hi=1.0, generic_prior=0.5, **panel)
+        model_slug="deposit-stability",
+        cfg=_CFG,
+        assumption_type="DEPOSIT_STABILITY",
+        unit="ratio",
+        clamp_lo=0.0,
+        clamp_hi=1.0,
+        generic_prior=0.5,
+        **panel,
+    )
 
 
 def test_ml_when_enough_data():

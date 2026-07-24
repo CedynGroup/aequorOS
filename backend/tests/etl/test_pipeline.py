@@ -140,9 +140,7 @@ def test_sample_bank_batch_links_counterparty_and_flags_malformed_critical_field
     assert link.canonical_winner_id in link.linked_source_ids
 
     # (b) At least one FLAG on a malformed regulatory-critical field (balance under an alias).
-    critical_flags = [
-        f for f in result.flags if resolve_concept(f.field_name) == "balance"
-    ]
+    critical_flags = [f for f in result.flags if resolve_concept(f.field_name) == "balance"]
     assert critical_flags, "the 'N/A' balance must be flagged, not coerced to null"
     assert all(f.after is None for f in critical_flags)
 
@@ -247,9 +245,7 @@ def test_injected_trained_model_runs_through_the_pipeline() -> None:
     )
 
     trained = run_etl(batch, _mapping(), config=EtlConfig(counterparty_model=model))
-    trained_link = next(
-        lk for lk in trained.linkages if lk.match_type is MatchType.CROSS_SOURCE
-    )
+    trained_link = next(lk for lk in trained.linkages if lk.match_type is MatchType.CROSS_SOURCE)
     assert trained_link.provenance.model_id == "counterparty_matching_model"
     assert trained_link.provenance.model_version == "1.0.0"
 

@@ -17,7 +17,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import ApproverTenant, DbSession, MutationTenant, Tenant
 from app.features.ingest_data import IngestionStorage
 from app.schemas.regulatory_reporting import (
     ChannelConfigPut,
@@ -26,11 +26,16 @@ from app.schemas.regulatory_reporting import (
     PackageApprovalDecisionCreate,
     PackageApprovalRequestCreate,
     PackageSubmitCreate,
+    RegulatoryArtifactListRead,
     RegulatoryArtifactRead,
     RegulatoryPackageCreate,
     RegulatoryPackageListRead,
     RegulatoryPackageRead,
     ReportingObligationListRead,
+    ResubmissionDecisionCreate,
+    ResubmissionRequestCreate,
+    ResubmissionRequestListRead,
+    ResubmissionRequestRead,
     ReturnTemplateListRead,
     SubmissionEventListRead,
     SubmissionPollRead,
@@ -47,7 +52,7 @@ _ARTIFACT_MEDIA_TYPES = {
     "pdf": "application/pdf",
 }
 
-type ChannelPath = Literal["orass_sandbox", "email", "manual"]
+type ChannelPath = Literal["orass_api", "orass_sandbox", "email", "manual"]
 type PackageStatusFilter = Literal[
     "draft",
     "generated",
@@ -57,6 +62,7 @@ type PackageStatusFilter = Literal[
     "submitted",
     "acknowledged",
     "rejected",
+    "declined",
     "superseded",
 ]
 
@@ -85,7 +91,10 @@ def list_regulatory_packages(  # noqa: PLR0913
     db: DbSession,
     ctx: Tenant,
     return_code: Annotated[str | None, Query(max_length=40)] = None,
+    return_family: Annotated[str | None, Query(max_length=20)] = None,
     reporting_date: Annotated[date | None, Query()] = None,
+    reporting_date_from: Annotated[date | None, Query()] = None,
+    reporting_date_to: Annotated[date | None, Query()] = None,
     package_status: Annotated[PackageStatusFilter | None, Query(alias="status")] = None,
     include_superseded: Annotated[bool, Query()] = True,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
@@ -96,7 +105,10 @@ def list_regulatory_packages(  # noqa: PLR0913
         ctx,
         bank_id,
         return_code=return_code,
+        return_family=return_family,
         reporting_date=reporting_date,
+        reporting_date_from=reporting_date_from,
+        reporting_date_to=reporting_date_to,
         status=package_status,
         include_superseded=include_superseded,
         limit=limit,
@@ -166,7 +178,7 @@ def decide_package_approval(
     package_id: UUID,
     payload: PackageApprovalDecisionCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ApproverTenant,
 ) -> RegulatoryPackageRead:
     return regulatory_reporting.decide_approval(db, ctx, bank_id, package_id, payload)
 
@@ -219,6 +231,75 @@ def download_regulatory_artifact(
     )
 
 
+@router.get(
+    "/banks/{bank_id}/regulatory-packages/{package_id}/email-fallback.eml",
+    response_class=StreamingResponse,
+    operation_id="downloadEmailFallbackEml",
+)
+def download_email_fallback_eml(
+    bank_id: UUID,
+    package_id: UUID,
+    db: DbSession,
+    ctx: Tenant,
+    storage: IngestionStorage,
+) -> StreamingResponse:
+    """The BG/FMD/2026/07 downtime bundle as a send-ready .eml (RFC 822).
+
+    Subject, body, and attachments come from the same bundle the email
+    channel records; the operator opens it in their mail client, confirms the
+    recipient (the official downtime address is institution-configured), and
+    sends. No SMTP happens server-side.
+    """
+    import io  # noqa: PLC0415
+    from email.message import EmailMessage  # noqa: PLC0415
+
+    from app.services.ingestion import bank_slug  # noqa: PLC0415
+
+    bundle = reporting_workflow.email_fallback_instructions(db, ctx, bank_id, package_id)
+    message = EmailMessage()
+    message["Subject"] = bundle.subject
+    recipient = bundle.recipient_guidance.downtime_return_address
+    if recipient:
+        message["To"] = recipient
+    message.set_content(bundle.instructions + "\n\n" + bundle.penalty_reminder)
+
+    bank = reporting_workflow.get_bank_or_404(db, ctx, bank_id)
+    slug = bank_slug(db, bank)
+    for attachment in bundle.attachments:
+        location = StorageLocation(
+            institution_slug=slug, tier="outputs", object_path=attachment.object_path
+        )
+        try:
+            _descriptor, stream = storage.read(location)
+        except StorageNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    f"The {attachment.kind} artifact's stored object was not found; "
+                    "re-export the package before downloading the email bundle."
+                ),
+            ) from exc
+        payload = b"".join(stream)
+        maintype, _, subtype = _ARTIFACT_MEDIA_TYPES.get(
+            attachment.kind, "application/octet-stream"
+        ).partition("/")
+        message.add_attachment(
+            payload, maintype=maintype, subtype=subtype, filename=attachment.filename
+        )
+
+    raw = message.as_bytes()
+    package_ref = str(package_id)[:8]
+    return StreamingResponse(
+        io.BytesIO(raw),
+        media_type="message/rfc822",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="orass-downtime-{package_ref}.eml"'
+            )
+        },
+    )
+
+
 @router.post(
     "/banks/{bank_id}/regulatory-packages/{package_id}/submit",
     response_model=RegulatoryPackageRead,
@@ -229,7 +310,7 @@ def submit_regulatory_package(
     package_id: UUID,
     payload: PackageSubmitCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ApproverTenant,
 ) -> RegulatoryPackageRead:
     """Submit an approved package via the requested (or registry-default) channel."""
     return reporting_workflow.submit_package_via_channel(
@@ -246,10 +327,79 @@ def poll_regulatory_submission(
     bank_id: UUID,
     package_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ApproverTenant,
 ) -> SubmissionPollRead:
     """Poll the latest channel submission; records regulator decisions."""
     return reporting_workflow.poll_submission(db, ctx, bank_id, package_id)
+
+
+@router.post(
+    "/banks/{bank_id}/regulatory-packages/{package_id}/request-resubmission",
+    response_model=ResubmissionRequestRead,
+    operation_id="requestPackageResubmission",
+    status_code=status.HTTP_201_CREATED,
+)
+def request_package_resubmission(
+    bank_id: UUID,
+    package_id: UUID,
+    payload: ResubmissionRequestCreate,
+    db: DbSession,
+    ctx: MutationTenant,
+) -> ResubmissionRequestRead:
+    """File an ORASS-style resubmission request for a submitted/acknowledged return."""
+    return reporting_workflow.request_resubmission(db, ctx, bank_id, package_id, payload)
+
+
+@router.post(
+    "/banks/{bank_id}/regulatory-packages/{package_id}/resubmission-requests/{request_id}/decide",
+    response_model=ResubmissionRequestRead,
+    operation_id="decidePackageResubmission",
+)
+def decide_package_resubmission(  # noqa: PLR0913
+    bank_id: UUID,
+    package_id: UUID,
+    request_id: UUID,
+    payload: ResubmissionDecisionCreate,
+    db: DbSession,
+    ctx: ApproverTenant,
+) -> ResubmissionRequestRead:
+    """Record a manual grant/deny (email/manual submissions the regulator decides offline)."""
+    return reporting_workflow.decide_resubmission(
+        db, ctx, bank_id, package_id, request_id, decision=payload.decision, note=payload.note
+    )
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-packages/{package_id}/resubmission-requests",
+    response_model=ResubmissionRequestListRead,
+    operation_id="listResubmissionRequests",
+)
+def list_resubmission_requests(
+    bank_id: UUID,
+    package_id: UUID,
+    db: DbSession,
+    ctx: Tenant,
+) -> ResubmissionRequestListRead:
+    return reporting_workflow.list_resubmission_requests(db, ctx, bank_id, package_id)
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-packages/{package_id}/artifacts",
+    response_model=RegulatoryArtifactListRead,
+    operation_id="listPackageArtifacts",
+)
+def list_package_artifacts(
+    bank_id: UUID,
+    package_id: UUID,
+    db: DbSession,
+    ctx: Tenant,
+) -> RegulatoryArtifactListRead:
+    """Persisted artifact list for a package (never session-local)."""
+    artifacts = reporting_workflow.list_package_artifacts(db, ctx, bank_id, package_id)
+    return RegulatoryArtifactListRead(
+        package_id=package_id,
+        artifacts=[RegulatoryArtifactRead.model_validate(artifact) for artifact in artifacts],
+    )
 
 
 @router.get(

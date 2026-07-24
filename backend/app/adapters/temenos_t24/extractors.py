@@ -46,9 +46,7 @@ def _as_ofs_records(element: Any) -> list[OfsRecord]:
     if isinstance(element, str):
         response = parse_ofs_response(element)
         if not response.ok:
-            raise BundleError(
-                f"OFS error block in staged bundle (status {response.error_code!r})"
-            )
+            raise BundleError(f"OFS error block in staged bundle (status {response.error_code!r})")
         return list(response.records)
     if isinstance(element, dict):
         record_id = str(element.get("@ID", element.get("id", "")))
@@ -57,9 +55,7 @@ def _as_ofs_records(element: Any) -> list[OfsRecord]:
     raise BundleError(f"unsupported staged payload element of type {type(element).__name__}")
 
 
-def _entity_record(
-    entry: CatalogEntry, record: OfsRecord, source_locator: str
-) -> RawRecord:
+def _entity_record(entry: CatalogEntry, record: OfsRecord, source_locator: str) -> RawRecord:
     """Build one canonical-keyed entity RawRecord from an OfsRecord."""
     data: dict[str, Any] = {}
     if record.record_id:
@@ -85,9 +81,7 @@ def _entity_record(
     )
 
 
-def _reference_record(
-    entry: CatalogEntry, record: OfsRecord, source_locator: str
-) -> RawRecord:
+def _reference_record(entry: CatalogEntry, record: OfsRecord, source_locator: str) -> RawRecord:
     """Preserve a reference-domain row as a stringified payload under its kind."""
     data: dict[str, Any] = {name: record.scalar(name) for name in record.fields}
     if entry.id_field and entry.id_field not in data and record.record_id:

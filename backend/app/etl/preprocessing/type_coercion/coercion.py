@@ -65,9 +65,7 @@ class TypeCoercer(Preprocessor):
                 ops.append(op)
         return ops
 
-    def _coerce_field(
-        self, rid: str, source_field: str, value: object
-    ) -> ETLOperation | None:
+    def _coerce_field(self, rid: str, source_field: str, value: object) -> ETLOperation | None:
         # (1) Excel serial date in a date column (numeric or numeric-string).
         if _is_date_field(source_field):
             iso = _excel_serial_to_iso(value)

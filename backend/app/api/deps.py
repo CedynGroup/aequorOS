@@ -149,6 +149,27 @@ def validate_tenant_context(session: Session, ctx: TenantContext) -> None:
 
 
 DbSession = Annotated[Session, Depends(get_tenant_db_session)]
+
+
+def get_approver_tenant_context(
+    principal: Annotated[TenantContext, Depends(get_mutation_tenant_context)],
+) -> TenantContext:
+    """Mutation context that additionally requires the ``approver`` role.
+
+    Guards the control actions of the submission pipeline (approval decisions,
+    channel submissions, regulator polls, resubmission decisions) — mirroring
+    the ORASS split where only the Principal user may submit; analysts prepare,
+    approvers release.
+    """
+    if not security.has_role(list(principal.roles), "approver"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This action requires the 'approver' role or higher.",
+        )
+    return principal
+
+
 Tenant = Annotated[TenantContext, Depends(get_tenant_context)]
 MutationTenant = Annotated[TenantContext, Depends(get_mutation_tenant_context)]
+ApproverTenant = Annotated[TenantContext, Depends(get_approver_tenant_context)]
 Storage = Annotated[ObjectStorage, Depends(get_object_storage)]

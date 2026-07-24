@@ -164,9 +164,9 @@ def test_list_domains_reports_catalog(db_client: TestClient, vault_key: None) ->
 def test_create_seeds_default_t24_mapping(db_client: TestClient, vault_key: None) -> None:
     bank_id = _seed_bank(db_client)
     _create(db_client, bank_id)
-    configs = db_client.get(
-        f"/api/v1/banks/{bank_id}/mapping-configs", headers=headers()
-    ).json()["configs"]
+    configs = db_client.get(f"/api/v1/banks/{bank_id}/mapping-configs", headers=headers()).json()[
+        "configs"
+    ]
     t24 = [c for c in configs if c["source_system"] == "T24" and c["status"] == "active"]
     assert len(t24) == 1  # onboarding seeded a default mapping, connection is pull-ready
 
@@ -183,9 +183,7 @@ def test_trigger_pull_enqueues_a_job(db_client: TestClient, vault_key: None) -> 
     assert len(body["job_ids"]) == 1
 
 
-def test_trigger_backfill_enqueues_one_job_per_date(
-    db_client: TestClient, vault_key: None
-) -> None:
+def test_trigger_backfill_enqueues_one_job_per_date(db_client: TestClient, vault_key: None) -> None:
     bank_id = _seed_bank(db_client)
     conn_id = _create(db_client, bank_id).json()["id"]
     response = db_client.post(

@@ -60,6 +60,7 @@ export const SubmissionPollReadPollStatusEnum = {
   Pending: "pending",
   Acknowledged: "acknowledged",
   Rejected: "rejected",
+  Declined: "declined",
 } as const;
 export type SubmissionPollReadPollStatusEnum =
   (typeof SubmissionPollReadPollStatusEnum)[keyof typeof SubmissionPollReadPollStatusEnum];

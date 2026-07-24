@@ -85,8 +85,13 @@ def available_as_of_dates(db: Session, ctx: TenantContext, bank_id: UUID) -> lis
 
 
 def load_deposit_month_aggregates(  # noqa: PLR0913
-    db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.date, window_months: int,
-    *, non_maturing_only: bool,
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    as_of: datetime.date,
+    window_months: int,
+    *,
+    non_maturing_only: bool,
 ) -> list[DepositMonthAgg]:
     """Deposit balances aggregated to (product, counterparty_type, month)."""
     start = months_before(as_of, window_months)
@@ -125,8 +130,11 @@ def load_deposit_month_aggregates(  # noqa: PLR0913
     ).all()
     return [
         DepositMonthAgg(
-            product_code=pc or "<none>", as_of_date=d, balance_ghs=float(bal or 0.0),
-            n_accounts=int(n or 0), avg_rate=float(rate) if rate is not None else None,
+            product_code=pc or "<none>",
+            as_of_date=d,
+            balance_ghs=float(bal or 0.0),
+            n_accounts=int(n or 0),
+            avg_rate=float(rate) if rate is not None else None,
             counterparty_type=ct,
         )
         for pc, ct, d, bal, n, rate in rows
@@ -134,7 +142,11 @@ def load_deposit_month_aggregates(  # noqa: PLR0913
 
 
 def load_loan_month_rows(
-    db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.date, window_months: int,
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    as_of: datetime.date,
+    window_months: int,
 ) -> list[LoanMonthRow]:
     """Per-loan monthly snapshots (for prepayment delta computation)."""
     start = months_before(as_of, window_months)
@@ -164,8 +176,11 @@ def load_loan_month_rows(
     ).all()
     return [
         LoanMonthRow(
-            source_reference=sref, as_of_date=d, product_code=pc,
-            balance_ghs=float(bal or 0.0), scheduled_principal_ghs=float(sched or 0.0),
+            source_reference=sref,
+            as_of_date=d,
+            product_code=pc,
+            balance_ghs=float(bal or 0.0),
+            scheduled_principal_ghs=float(sched or 0.0),
             interest_rate=float(rate) if rate is not None else None,
             contractual_maturity=mat,
             months_on_book=int(mob) if mob is not None else None,
@@ -175,7 +190,11 @@ def load_loan_month_rows(
 
 
 def load_ghs_short_rate_history(
-    db: Session, ctx: TenantContext, bank_id: UUID, as_of: datetime.date, window_months: int,
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    as_of: datetime.date,
+    window_months: int,
 ) -> dict[datetime.date, float]:
     """Per-month GHS short rate (3m tenor) from the yield_curve reference dataset."""
     start = months_before(as_of, window_months)

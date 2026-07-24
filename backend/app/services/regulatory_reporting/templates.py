@@ -150,6 +150,25 @@ _STRESS_CITATION = (
     "Stress Testing Guideline — exposure draft, Feb 2026, Appendix II Tables 1–6 "
     "(CONFIRMED structures), submitted within the ICAAP by end of March of the ensuing year"
 )
+_LE_CITATION = (
+    "Large Exposures Directive — exposure draft Dec 2024, Part VI Templates 1/1a/2/3/4; "
+    "the final directive (September 2025, effective 1 Jan 2027) confirms the five "
+    "appendix templates and monthly reporting (¶57–58), column headers captured "
+    "verbatim (research §6.2)"
+)
+_LE_DERIVATION_NOTE = (
+    "Template STRUCTURE is CONFIRMED from the published appendix; the derivation basis "
+    "is AequorOS's: exposures from canonical LOAN / INTERBANK_PLACEMENT / "
+    "SECURITY_HOLDING positions (drawn = balance_ghs; undrawn/contingent = notional × "
+    "CCF where present), Net Own Funds proxied by Tier 1 (CET1 + AT1) from the "
+    "baseline capital run, connected counterparties grouped by the canonical "
+    "group_reference."
+)
+_LE_CRM_NOTE = (
+    "No CRM/collateral data exists in the canonical model: Section 62(8) collateral / "
+    "ECD columns are omitted (not zero-filled), net exposure equals total exposure, and "
+    "Template 4 (pre-CRM ≥10% NOF not already in Template 1) is empty by construction."
+)
 _ICAAP_CITATION = (
     "ICAAP Guideline — Feb 2026, ¶49 prescribed 17-section format, ¶72 submission "
     "no later than three months after year-end"
@@ -265,18 +284,215 @@ _BSD3_TEMPLATE = ReturnTemplate(
 _LMT_TEMPLATE = ReturnTemplate(
     template_id="bog-lmt-liquidity-v1",
     return_code="LMT",
-    title="Liquidity Monitoring Tools Return (LCR by Significant Currency subset)",
+    title="Liquidity Monitoring Tools Return (LMTD Appendix Tables subset)",
     fidelity="PARTIAL",
     source_citation=_LMTD_CITATION,
-    sections=_liquidity_sections(lmt_subset=True),
+    sections=(
+        *_liquidity_sections(lmt_subset=True),
+        SectionLayout(
+            section_code="maturity_ladder",
+            layout_id="lmt_maturity_ladder_partial",
+            sheet_title="Contractual Maturity Mismatch",
+            columns=(
+                ColumnSpec("code", "Bucket", "text"),
+                ColumnSpec("assets_ghs", "Assets (GHS '000)", "ghs"),
+                ColumnSpec("liabilities_ghs", "Liabilities (GHS '000)", "ghs"),
+                ColumnSpec("value", "Mismatch (GHS '000)", "ghs"),
+                ColumnSpec("cumulative_gap_ghs", "Cumulative Mismatch (GHS '000)", "ghs"),
+            ),
+            fidelity="PARTIAL",
+            source_citation=f"{_LMTD_CITATION} — Table 2 Contractual Cash Flow Mismatch",
+            notes=(
+                "Condensed bucket set (overnight / 2-7d / 8-30d / 1-3m / 3-6m / 6-12m / "
+                ">1y + non-contractual) derived from canonical contractual maturities; "
+                "the published Table 2 carries 15 columns and an off-balance block the "
+                "canonical data does not yet fill. Positions without a stated maturity "
+                "report in the separate non-contractual row (Table 2's final column), "
+                "never in overnight.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="funding_concentration",
+            layout_id="lmt_funding_concentration_partial",
+            sheet_title="Concentration of Funding",
+            columns=(
+                ColumnSpec("code", "Rank", "text"),
+                ColumnSpec("description", "Depositor", "text"),
+                ColumnSpec("counterparty_type", "Counterparty Type", "text"),
+                ColumnSpec("value", "Deposits (GHS '000)", "ghs"),
+                ColumnSpec("pct_total_deposits", "% of Total Deposits", "pct"),
+            ),
+            fidelity="PARTIAL",
+            source_citation=f"{_LMTD_CITATION} — Table 5 Funding from Significant Counterparties",
+            notes=(
+                "Top-10 depositors by canonical counterparty from DEPOSIT positions; "
+                "the published Table 5 asks Top 20 and Top 100 and Tables 7-8 add "
+                "maturity horizons the canonical counterparty links do not yet fill. "
+                "Deposits without a counterparty link count in the total but cannot "
+                "be ranked.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="unencumbered_assets",
+            layout_id="lmt_unencumbered_assets_partial",
+            sheet_title="Available Unencumbered Assets",
+            columns=(
+                ColumnSpec("code", "Item", "text"),
+                ColumnSpec("description", "Description", "text"),
+                ColumnSpec("hqla_level", "HQLA Level", "text"),
+                ColumnSpec("value", "Value (GHS '000)", "ghs"),
+            ),
+            fidelity="PARTIAL",
+            source_citation=(
+                f"{_LMTD_CITATION} — Table 9 Statement of Available Unencumbered Assets"
+            ),
+            notes=(
+                "HQLA-classified securities facts; the canonical model carries no "
+                "encumbrance flags, secondary-market haircuts or monetised values, so "
+                "those Table 9 columns are omitted rather than invented.",
+            ),
+            optional=True,
+        ),
+    ),
     notes=(
-        "LMTD Appendix Tables 1–10 (BOG Prudential Ratios; 15-column Contractual Cash "
-        "Flow Mismatch; Concentration of Funding; Available Unencumbered Assets) are "
-        "published CONFIRMED structures, but the liquidity run snapshot carries no "
-        "maturity-bucket, depositor-concentration or encumbrance data to fill them.",
-        "TODO(RR-6): extend the liquidity snapshot with contractual maturity buckets and "
-        "funding-concentration data, then add LMTD Tables 1–10 layouts here verbatim — "
-        "do not fabricate bucket values in the meantime.",
+        "Retires TODO(RR-6): beyond the LCR-by-significant-currency subset (Table 11 "
+        "taxonomy, aggregate currency), the return now carries a contractual "
+        "maturity-mismatch ladder (condensed Table 2), top-10 depositor funding "
+        "concentration (Table 5 subset) and available HQLA-classified assets (Table 9 "
+        "subset) derived from canonical data. Tool sections appear only when their "
+        "underlying data exists — empty grids are never fabricated.",
+        "LMTD Appendix Tables 1 (BOG Prudential Ratios), 3-4, 6-8 and 10 remain "
+        "unfilled: the canonical data honestly carries no prudential-ratio series, "
+        "collateral re-hypothecation, significant-currency split or horizon-bucketed "
+        "depositor data yet.",
+        _T_MINUS_1_NOTE,
+    ),
+)
+
+_LE_TEMPLATE = ReturnTemplate(
+    template_id="bog-le-monthly-v1",
+    return_code="LE-MONTHLY",
+    title="Large Exposures Return (Templates 1/1a/2/3/4)",
+    fidelity="CONFIRMED",
+    source_citation=_LE_CITATION,
+    sections=(
+        SectionLayout(
+            section_code="template_1",
+            layout_id="le_template_1_confirmed",
+            sheet_title="LE Template 1 Large Exposures",
+            columns=(
+                ColumnSpec("code", "No", "text"),
+                ColumnSpec("description", "Counterparty / Group", "text"),
+                ColumnSpec("connection", "Single / Group of Connected", "text"),
+                ColumnSpec("tin", "Counterparty TIN / Ghana Card No.", "text"),
+                ColumnSpec("drawn_ghs", "Drawn Down (GHS '000)", "ghs"),
+                ColumnSpec("undrawn_ccf_ghs", "Undrawn & Contingent after CCF (GHS '000)", "ghs"),
+                ColumnSpec("value", "Total Exposure (GHS '000)", "ghs"),
+                ColumnSpec("pct_nof", "% of Exposure Value to NOF", "pct"),
+                ColumnSpec("ifrs9_stage", "IFRS Staging", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LE_CITATION} — Template 1 (exposures ≥10% of Net Own Funds)",
+            notes=(
+                "Undrawn/contingent values are reported after applying CCF (Template 1 "
+                "footnote). The Tier 1 Capital and Net Own Funds footer rows ride the "
+                "return's headline totals block.",
+                _LE_DERIVATION_NOTE,
+            ),
+        ),
+        SectionLayout(
+            section_code="template_1a",
+            layout_id="le_template_1a_confirmed",
+            sheet_title="LE Template 1a Connected",
+            columns=(
+                ColumnSpec("code", "No", "text"),
+                ColumnSpec("description", "Counterparty Name", "text"),
+                ColumnSpec("group_reference", "Group of Connected Counterparties", "text"),
+                ColumnSpec("basis_of_connection", "Basis of Connection", "text"),
+                ColumnSpec("tin", "Counterparty TIN / Ghana Card No.", "text"),
+                ColumnSpec("value", "Total Exposure (GHS '000)", "ghs"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LE_CITATION} — Template 1a (details of connected counterparties)",
+            notes=(
+                "Membership rows for every group reported in Template 1; the basis of "
+                "connection is the ingested canonical group reference — control/economic-"
+                "interdependence analysis beyond it is not performed.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="template_2",
+            layout_id="le_template_2_confirmed",
+            sheet_title="LE Template 2 Top 100",
+            columns=(
+                ColumnSpec("code", "No", "text"),
+                ColumnSpec("description", "Counterparty / Group", "text"),
+                ColumnSpec("connection", "Single / Group of Connected", "text"),
+                ColumnSpec("tin", "Counterparty TIN / Ghana Card No.", "text"),
+                ColumnSpec("drawn_ghs", "Drawn Down (GHS '000)", "ghs"),
+                ColumnSpec("undrawn_ccf_ghs", "Undrawn & Contingent after CCF (GHS '000)", "ghs"),
+                ColumnSpec("value", "Total Exposure (GHS '000)", "ghs"),
+                ColumnSpec("provisions_ghs", "Specific Loan Loss Provisions (GHS '000)", "ghs"),
+                ColumnSpec("ifrs9_stage", "IFRS Staging", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LE_CITATION} — Template 2 (top 100 exposures)",
+            notes=(
+                "Top 100 exposures irrespective of value relative to NOF; when more "
+                "than 100 counterparty exposures exist the truncation is surfaced as a "
+                "generation INFO finding in the validation report.",
+            ),
+        ),
+        SectionLayout(
+            section_code="template_3",
+            layout_id="le_template_3_confirmed",
+            sheet_title="LE Template 3 Exempted",
+            columns=(
+                ColumnSpec("code", "No", "text"),
+                ColumnSpec("description", "Counterparty / Group", "text"),
+                ColumnSpec("tin", "Counterparty TIN / Ghana Card No.", "text"),
+                ColumnSpec("exempt_basis", "Exemption Basis", "text"),
+                ColumnSpec("drawn_ghs", "Drawn Down (GHS '000)", "ghs"),
+                ColumnSpec("undrawn_ccf_ghs", "Undrawn & Contingent after CCF (GHS '000)", "ghs"),
+                ColumnSpec("value", "Total Exposure pre-CRM (GHS '000)", "ghs"),
+                ColumnSpec("pct_nof", "% of Exposure Value to NOF", "pct"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LE_CITATION} — Template 3 (exempted exposures ≥10% NOF pre-CRM)",
+            notes=(
+                "Exempt classification is AequorOS's mapping of the directive's "
+                "sovereign/BoG/GoG exemptions onto canonical categories: "
+                "counterparty_type SOVEREIGN / CENTRAL_BANK / GOVERNMENT_ENTITY, or "
+                "counterparty-less securities whose product regulatory_category starts "
+                "with SOVEREIGN. Groups are exempt only when every member is.",
+            ),
+        ),
+        SectionLayout(
+            section_code="template_4",
+            layout_id="le_template_4_confirmed",
+            sheet_title="LE Template 4 Other Pre-CRM",
+            columns=(
+                ColumnSpec("code", "No", "text"),
+                ColumnSpec("description", "Counterparty / Group", "text"),
+                ColumnSpec("tin", "Counterparty TIN / Ghana Card No.", "text"),
+                ColumnSpec("value", "Exposure pre-CRM (GHS '000)", "ghs"),
+                ColumnSpec("pct_nof", "% of Exposure Value to NOF", "pct"),
+                ColumnSpec("ifrs9_stage", "IFRS Staging", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LE_CITATION} — Template 4 (other exposures ≥10% NOF pre-CRM)",
+            notes=(_LE_CRM_NOTE,),
+        ),
+    ),
+    notes=(
+        _LE_DERIVATION_NOTE,
+        _LE_CRM_NOTE,
+        "The monthly deadline day-count is not stated in the directive (draft Part VI); "
+        "the calendar applies the observed BoG monthly convention (day 9) pending the "
+        "bank's onboarding confirmation.",
         _T_MINUS_1_NOTE,
     ),
 )
@@ -437,6 +653,12 @@ _IRRBB_TEMPLATE = ReturnTemplate(
                 "prescribes GHS ±450 bp parallel (short 500 / long 300, Appendix II–III "
                 "Tables 5–6, CONFIRMED). Prescribed-shock alignment is pending; results "
                 "are labelled by their actual scenario codes, not renamed.",
+                "BoG ±450 bp parallel ΔEVE rows (eve_up_450_ghs / eve_down_450_ghs) "
+                "render ONLY when the IRR run metrics actually carry them. The BoG "
+                "GHS calibration is stored as effective-dated param_stress_shock rows "
+                "(module 'irr', parallel_up_450 / parallel_down_450), but the engine "
+                "computes the fixed Basel scenario set today — engine-side ±450 "
+                "computation is a documented gap, and no ±450 value is ever fabricated.",
                 _T_MINUS_1_NOTE,
             ),
         ),
@@ -449,6 +671,12 @@ _IRRBB_TEMPLATE = ReturnTemplate(
             source_citation=(
                 f"{_IRRBB_CITATION} — ΔNII defined as the change in projected NII over a "
                 "forward-looking rolling 12-month period (Table 8 definitions, CONFIRMED)"
+            ),
+            notes=(
+                "Earnings at risk is computed at the Basel ±200 bp parallel shocks; "
+                "BoG ±450 bp EaR rows (ear_up_450_ghs / ear_down_450_ghs) render only "
+                "when a run's metrics carry them (engine-side computation pending — "
+                "documented gap, never fabricated).",
             ),
         ),
         SectionLayout(
@@ -643,6 +871,395 @@ _ICAAP_STRESS_TEMPLATE = ReturnTemplate(
     ),
 )
 
+# ---------------------------------------------------------------------------
+# LRT corporate return packs (plan W5) — event-driven master-data packs
+# ---------------------------------------------------------------------------
+
+_LRT_CITATION = (
+    "ORASS LRT Portal User Guide v1.0 (Sept 2020, draft) — form-set structure "
+    "documented; field-level layouts transcribed from the guide's screenshots"
+)
+_LRT_DRAFT_NOTE = (
+    "The LRT Portal User Guide is a September 2020 v1.0 DRAFT: form-set structure "
+    "and field groups are documented, but later ORASS releases may have revised "
+    "them — verify against the live portal at onboarding."
+)
+_LRT_MASTER_DATA_NOTE = (
+    "Master-data pack: every value pre-fills from the W4 institution-profile "
+    "register (no engine runs); values are text-first and dates are ISO strings."
+)
+
+_LRT_FIELD = ColumnSpec("description", "Field", "text")
+_LRT_VALUE = ColumnSpec("value", "Value", "text")
+_LRT_STATUS = ColumnSpec("value", "Status", "text")
+_LRT_FORM = ColumnSpec("code", "Form", "text")
+_LRT_PROFILE_FIELD_COLUMNS: tuple[ColumnSpec, ...] = (_CODE, _LRT_FIELD, _LRT_VALUE)
+_LRT_CHECKLIST_COLUMNS: tuple[ColumnSpec, ...] = (
+    _LRT_FORM,
+    ColumnSpec("description", "Requirement", "text"),
+    _LRT_STATUS,
+)
+_LRT_SHAREHOLDING_DETAIL_COLUMNS: tuple[ColumnSpec, ...] = (
+    ColumnSpec("share_type", "Share Type", "text"),
+    ColumnSpec("share_subtype", "Share Subtype", "text"),
+    ColumnSpec("rights", "Rights", "text"),
+    ColumnSpec("number_of_shares", "No. of Shares", "number"),
+    ColumnSpec("ubo_name", "Ultimate Beneficial Owner", "text"),
+)
+
+_LRT_PROFILE_TEMPLATE = ReturnTemplate(
+    template_id="bog-lrt-profile-v1",
+    return_code="LRT-PROFILE",
+    title="Corporate Profile Update pack",
+    fidelity="CONFIRMED",
+    source_citation=_LRT_CITATION,
+    sections=(
+        SectionLayout(
+            section_code="general_details",
+            layout_id="lrt_general_details_confirmed",
+            sheet_title="General Details",
+            columns=_LRT_PROFILE_FIELD_COLUMNS,
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            notes=(
+                "Approved capital is shown as an absolute GHS value in this "
+                "field list (not the '000 convention) — it is a registration "
+                "attribute, not a reported amount.",
+            ),
+        ),
+        SectionLayout(
+            section_code="business_activities",
+            layout_id="lrt_business_activities_confirmed",
+            sheet_title="Business Activities",
+            columns=_LRT_PROFILE_FIELD_COLUMNS,
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            notes=(
+                "The register carries no dedicated business-activities table yet; "
+                "the section reflects institution type and licence type only — "
+                "nothing further is fabricated.",
+            ),
+        ),
+        SectionLayout(
+            section_code="exchange_membership",
+            layout_id="lrt_exchange_membership_confirmed",
+            sheet_title="Stock Exchange Membership",
+            columns=_LRT_PROFILE_FIELD_COLUMNS,
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+        ),
+        SectionLayout(
+            section_code="ownership",
+            layout_id="lrt_ownership_confirmed",
+            sheet_title="Ownership",
+            columns=_LRT_PROFILE_FIELD_COLUMNS,
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+        ),
+        SectionLayout(
+            section_code="licenses",
+            layout_id="lrt_licenses_confirmed",
+            sheet_title="Licenses",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "License", "text"),
+                _LRT_STATUS,
+                ColumnSpec("license_class", "Class", "text"),
+                ColumnSpec("issued_on", "Issued On", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="name_history",
+            layout_id="lrt_name_history_confirmed",
+            sheet_title="Name History",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Previous Name", "text"),
+                ColumnSpec("value", "Changed On", "text"),
+                ColumnSpec("change_reason", "Reason", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            optional=True,
+        ),
+    ),
+    notes=(_LRT_DRAFT_NOTE, _LRT_MASTER_DATA_NOTE),
+)
+
+_LRT_OUTLET_TEMPLATE = ReturnTemplate(
+    template_id="bog-lrt-outlet-v1",
+    return_code="LRT-OUTLET",
+    title="Outlet Opening / Relocation / Closure pack",
+    fidelity="CONFIRMED",
+    source_citation=_LRT_CITATION,
+    sections=(
+        SectionLayout(
+            section_code="outlets_open",
+            layout_id="lrt_outlets_open_confirmed",
+            sheet_title="Opening of Outlets (OO)",
+            columns=(
+                ColumnSpec("code", "Outlet No.", "text"),
+                ColumnSpec("description", "Outlet Name", "text"),
+                ColumnSpec("value", "Type", "text"),
+                ColumnSpec("opened_on", "Opened On", "text"),
+                ColumnSpec("address", "Address", "text"),
+                ColumnSpec("relocated_from", "Relocated From", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            notes=(
+                "The guide's OO form also carries projected-investment and "
+                "3-year operating-results tables; the outlet register holds no "
+                "such projections, so they are omitted rather than fabricated "
+                "(complete them in ORASS at submission).",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="outlets_closed",
+            layout_id="lrt_outlets_closed_confirmed",
+            sheet_title="Closure and Relocation (CRO)",
+            columns=(
+                ColumnSpec("code", "Outlet No.", "text"),
+                ColumnSpec("description", "Outlet Name", "text"),
+                ColumnSpec("value", "Type", "text"),
+                ColumnSpec("opened_on", "Opened On", "text"),
+                ColumnSpec("closed_on", "Closed On", "text"),
+                ColumnSpec("address", "Address", "text"),
+                ColumnSpec("relocated_from", "Relocated From / New Location", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="required_documents",
+            layout_id="lrt_outlet_required_documents_confirmed",
+            sheet_title="Required Documents (RD)",
+            columns=_LRT_CHECKLIST_COLUMNS,
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+        ),
+    ),
+    notes=(_LRT_DRAFT_NOTE, _LRT_MASTER_DATA_NOTE),
+)
+
+_LRT_PARTY_TEMPLATE = ReturnTemplate(
+    template_id="bog-lrt-party-v1",
+    return_code="LRT-PARTY",
+    title="Related Party / Service Provider pack",
+    fidelity="CONFIRMED",
+    source_citation=_LRT_CITATION,
+    sections=(
+        SectionLayout(
+            section_code="shareholders",
+            layout_id="lrt_shareholders_confirmed",
+            sheet_title="Shareholder Information (ASI)",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Shareholder", "text"),
+                ColumnSpec("value", "Shareholding (%)", "text"),
+                *_LRT_SHAREHOLDING_DETAIL_COLUMNS,
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="directors",
+            layout_id="lrt_directors_confirmed",
+            sheet_title="Director Information (ADI)",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Director", "text"),
+                ColumnSpec("value", "Role", "text"),
+                ColumnSpec("appointed_on", "Appointed On", "text"),
+                ColumnSpec("term_of_appointment", "Term", "text"),
+                ColumnSpec("sitting_allowance", "Sitting Allowance (GHS)", "number"),
+                ColumnSpec("travel_allowance", "Travel Allowance (GHS)", "number"),
+                ColumnSpec("annual_fees", "Annual Fees (GHS)", "number"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            notes=(
+                "Director allowance/fee fields are absolute GHS values (per-person "
+                "amounts), not the GHS '000 sheet convention.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="key_management",
+            layout_id="lrt_key_management_confirmed",
+            sheet_title="Key Management Personnel (ARD)",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Name", "text"),
+                ColumnSpec("value", "Role", "text"),
+                ColumnSpec("appointed_on", "Appointed On", "text"),
+                ColumnSpec("other_responsibilities", "Other Responsibilities", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="auditors",
+            layout_id="lrt_auditors_confirmed",
+            sheet_title="Auditor Information (AAI)",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Auditor", "text"),
+                ColumnSpec("value", "ICAG Registration", "text"),
+                ColumnSpec("appointed_on", "Appointed On", "text"),
+                ColumnSpec("regulated_jurisdiction", "Regulated Jurisdiction", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="ubos",
+            layout_id="lrt_ubos_confirmed",
+            sheet_title="Ultimate Beneficial Owners",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Name", "text"),
+                _LRT_STATUS,
+                ColumnSpec("contact_email", "Contact Email", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="outsourced",
+            layout_id="lrt_outsourced_confirmed",
+            sheet_title="Outsourced Service Providers",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Provider", "text"),
+                ColumnSpec("value", "Category", "text"),
+                ColumnSpec("other_responsibilities", "Services / Responsibilities", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="liquidators",
+            layout_id="lrt_liquidators_confirmed",
+            sheet_title="Liquidators",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Name", "text"),
+                ColumnSpec("value", "Appointed On", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="due_diligence_checklist",
+            layout_id="lrt_due_diligence_checklist_confirmed",
+            sheet_title="Due Diligence (CDD EDD PNF)",
+            columns=(
+                ColumnSpec("code", "Item", "text"),
+                ColumnSpec("description", "Requirement", "text"),
+                _LRT_STATUS,
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            notes=(
+                "CDD applies to every related party; EDD and PNF apply to "
+                "individuals only (guide form set).",
+            ),
+            optional=True,
+        ),
+    ),
+    notes=(_LRT_DRAFT_NOTE, _LRT_MASTER_DATA_NOTE),
+)
+
+_LRT_CAPITAL_TEMPLATE = ReturnTemplate(
+    template_id="bog-lrt-capital-v1",
+    return_code="LRT-CAPITAL",
+    title="Capital Injection pack",
+    fidelity="CONFIRMED",
+    source_citation=_LRT_CITATION,
+    sections=(
+        SectionLayout(
+            section_code="shareholder_register",
+            layout_id="lrt_shareholder_register_confirmed",
+            sheet_title="Shareholder Register (USI)",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Shareholder", "text"),
+                ColumnSpec("value", "Shareholding (%)", "pct"),
+                *_LRT_SHAREHOLDING_DETAIL_COLUMNS,
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="capital_summary",
+            layout_id="lrt_capital_summary_confirmed",
+            sheet_title="Capital Summary",
+            columns=(
+                _CODE,
+                _LRT_FIELD,
+                ColumnSpec("value", "Value (GHS '000 / %)", "auto"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+        ),
+        SectionLayout(
+            section_code="capital_checklist",
+            layout_id="lrt_capital_checklist_confirmed",
+            sheet_title="Required Companion Forms",
+            columns=_LRT_CHECKLIST_COLUMNS,
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+        ),
+    ),
+    notes=(_LRT_DRAFT_NOTE, _LRT_MASTER_DATA_NOTE),
+)
+
+_LRT_PRODUCT_TEMPLATE = ReturnTemplate(
+    template_id="bog-lrt-product-v1",
+    return_code="LRT-PRODUCT",
+    title="Product / Service Approval pack",
+    fidelity="CONFIRMED",
+    source_citation=_LRT_CITATION,
+    sections=(
+        SectionLayout(
+            section_code="products",
+            layout_id="lrt_products_confirmed",
+            sheet_title="Products & Services (AP)",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Product / Service", "text"),
+                _LRT_STATUS,
+                ColumnSpec("product_type", "Type", "text"),
+                ColumnSpec("approval_reference", "Approval Reference", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+        ),
+        SectionLayout(
+            section_code="product_checklist",
+            layout_id="lrt_product_checklist_confirmed",
+            sheet_title="Companion Forms (DN MOU RES SOP)",
+            columns=_LRT_CHECKLIST_COLUMNS,
+            fidelity="CONFIRMED",
+            source_citation=_LRT_CITATION,
+        ),
+    ),
+    notes=(_LRT_DRAFT_NOTE, _LRT_MASTER_DATA_NOTE),
+)
+
 TEMPLATES: dict[str, ReturnTemplate] = {
     template.template_id: template
     for template in (
@@ -651,7 +1268,13 @@ TEMPLATES: dict[str, ReturnTemplate] = {
         _BSD2_TEMPLATE,
         _IRRBB_TEMPLATE,
         _FX_NOP_TEMPLATE,
+        _LE_TEMPLATE,
         _ICAAP_STRESS_TEMPLATE,
+        _LRT_PROFILE_TEMPLATE,
+        _LRT_OUTLET_TEMPLATE,
+        _LRT_PARTY_TEMPLATE,
+        _LRT_CAPITAL_TEMPLATE,
+        _LRT_PRODUCT_TEMPLATE,
     )
 }
 

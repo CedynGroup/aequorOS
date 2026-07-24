@@ -24,6 +24,7 @@ import {
  * @interface PackageSubmitCreateChannel
  */
 export type PackageSubmitCreateChannel =
+  | "orass_api"
   | "orass_sandbox"
   | "email"
   | "manual"
@@ -36,8 +37,9 @@ export function instanceOfPackageSubmitCreateChannel(
   value: unknown,
 ): value is PackageSubmitCreateChannel {
   return (
-    ["orass_sandbox", "email", "manual"].indexOf(value as never) !== -1 ||
-    value === null
+    ["orass_api", "orass_sandbox", "email", "manual"].indexOf(
+      value as never,
+    ) !== -1 || value === null
   );
 }
 

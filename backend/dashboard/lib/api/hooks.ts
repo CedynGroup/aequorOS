@@ -10,6 +10,7 @@
  * days]. Mutations invalidate the related read keys.
  */
 
+import { useCallback } from 'react';
 import {
   keepPreviousData,
   useMutation,
@@ -27,7 +28,6 @@ import type {
   MarketDataConnectionCreate,
   MarketDataConnectionUpdate,
   PackageStatusFilter,
-  RegulatoryArtifactRead,
   RegulatoryModule,
   RegulatoryScenarioCode,
   TemenosBackfillRequest,
@@ -46,6 +46,8 @@ import {
   jobsApi,
   liveEngineApi,
   marketDataApi,
+  notificationsApi,
+  organizationApi,
   regulatoryCapitalApi,
   regulatoryFtpApi,
   regulatoryFxApi,
@@ -1321,9 +1323,9 @@ export function useTriggerTemenosBackfill(bankId: string | undefined) {
 // Query keys: ['rr-obligations', bankId, horizon], ['rr-packages', bankId,
 // ...filters], ['rr-package', bankId, packageId], ['rr-events', bankId,
 // packageId], ['rr-templates'], ['rr-channel-config', bankId, channel],
-// ['rr-artifacts', bankId, packageId] (session-local export ledger — the API
-// exposes no artifact-list endpoint, so exports minted this session are the
-// downloadable set). Package mutations invalidate obligations + package reads.
+// ['rr-artifacts', bankId, packageId] (persisted artifact list from the API),
+// ['rr-resubmissions', bankId, packageId], ['org-users']. Package mutations
+// invalidate obligations + package reads.
 // ---------------------------------------------------------------------------
 
 const reportingInvalidatePrefixes = [
@@ -1478,10 +1480,9 @@ export function useRequestPackageApproval(bankId: string | undefined) {
 }
 
 /**
- * Maker-checker decision. `actingUserId` overrides the X-User-Id header for
- * the demo "acting as a second officer" affordance — production derives the
- * checker from the login. Deciding as the generator returns the backend's
- * maker-checker 409, surfaced verbatim.
+ * Maker-checker decision, attributed to the authenticated checker (from the
+ * verified token) — you cannot approve "as" another user. Deciding as the
+ * generator returns the backend's maker-checker 409, surfaced verbatim.
  */
 export function useDecidePackageApproval(bankId: string | undefined) {
   const queryClient = useQueryClient();
@@ -1490,16 +1491,11 @@ export function useDecidePackageApproval(bankId: string | undefined) {
       packageId,
       action,
       reason,
-      actingUserId,
     }: {
       packageId: string;
       action: ApprovalDecision;
       reason?: string;
-      actingUserId?: string;
     }) =>
-      // The decision is attributed to the authenticated checker (from the verified
-      // token) — you cannot approve "as" another user. actingUserId is accepted for
-      // backward compatibility but no longer overrides the identity.
       apiCall(() =>
         regulatoryReportingApi.decidePackageApproval({
           bankId: bankId!,
@@ -1515,25 +1511,25 @@ export function useDecidePackageApproval(bankId: string | undefined) {
   });
 }
 
-/**
- * Session-local artifact ledger for one package. The API has no artifact-list
- * endpoint (exports are minted on demand), so artifacts exported in this
- * session accumulate here via useExportRegulatoryPackage. Never invalidated.
- */
-export function useSessionArtifacts(
+/** Persisted artifact list for one package (survives reloads — API-backed). */
+export function usePackageArtifacts(
   bankId: string | undefined,
   packageId: string | null | undefined
 ) {
-  return useQuery<RegulatoryArtifactRead[]>({
+  return useQuery({
     queryKey: ['rr-artifacts', bankId, packageId],
-    queryFn: () => [],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.listPackageArtifacts({
+          bankId: bankId!,
+          packageId: packageId!,
+        })
+      ),
     enabled: Boolean(bankId && packageId),
-    staleTime: Infinity,
-    gcTime: Infinity,
   });
 }
 
-/** Mint one export artifact (xlsx/csv/pdf) and record it in the session ledger. */
+/** Mint one export artifact (xlsx/csv/pdf); refreshes the persisted list. */
 export function useExportRegulatoryPackage(bankId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -1546,13 +1542,9 @@ export function useExportRegulatoryPackage(bankId: string | undefined) {
         })
       ),
     onSuccess: (artifact) => {
-      queryClient.setQueryData<RegulatoryArtifactRead[]>(
-        ['rr-artifacts', bankId, artifact.packageId],
-        (prev = []) => [
-          ...prev.filter((entry) => entry.id !== artifact.id),
-          artifact,
-        ]
-      );
+      void queryClient.invalidateQueries({
+        queryKey: ['rr-artifacts', bankId, artifact.packageId],
+      });
     },
   });
 }
@@ -1604,6 +1596,88 @@ export function usePollRegulatorySubmission(bankId: string | undefined) {
       reportingInvalidatePrefixes.forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
+    },
+  });
+}
+
+/** ORASS-parity resubmission requests filed against one package. */
+export function useResubmissionRequests(
+  bankId: string | undefined,
+  packageId: string | null | undefined
+) {
+  return useQuery({
+    queryKey: ['rr-resubmissions', bankId, packageId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.listResubmissionRequests({
+          bankId: bankId!,
+          packageId: packageId!,
+        })
+      ),
+    enabled: Boolean(bankId && packageId),
+  });
+}
+
+/** File a resubmission request for a submitted/acknowledged package. */
+export function useRequestResubmission(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ packageId, reason }: { packageId: string; reason: string }) =>
+      apiCall(() =>
+        regulatoryReportingApi.requestPackageResubmission({
+          bankId: bankId!,
+          packageId,
+          resubmissionRequestCreate: { reason },
+        })
+      ),
+    onSuccess: (request) => {
+      void queryClient.invalidateQueries({
+        queryKey: ['rr-resubmissions', bankId, request.packageId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['rr-package', bankId, request.packageId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ['rr-packages'] });
+      void queryClient.invalidateQueries({ queryKey: ['rr-events'] });
+    },
+  });
+}
+
+/**
+ * Record a manual grant/deny for email/manual submissions the regulator
+ * decides offline (ORASS-channel requests are decided by the portal).
+ */
+export function useDecideResubmission(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      packageId,
+      requestId,
+      decision,
+      note,
+    }: {
+      packageId: string;
+      requestId: string;
+      decision: 'granted' | 'denied';
+      note?: string;
+    }) =>
+      apiCall(() =>
+        regulatoryReportingApi.decidePackageResubmission({
+          bankId: bankId!,
+          packageId,
+          requestId,
+          resubmissionDecisionCreate: { decision, note: note ?? null },
+        })
+      ),
+    onSuccess: (request) => {
+      void queryClient.invalidateQueries({
+        queryKey: ['rr-resubmissions', bankId, request.packageId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['rr-package', bankId, request.packageId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ['rr-packages'] });
+      void queryClient.invalidateQueries({ queryKey: ['rr-events'] });
     },
   });
 }
@@ -1706,6 +1780,76 @@ export function useSaveChannelConfig(bankId: string | undefined) {
         ['rr-channel-config', bankId, config.channel],
         config
       );
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Organization directory
+// ---------------------------------------------------------------------------
+
+/** The tenant's user roster — display names for actor-id attribution. */
+export function useOrganizationUsers() {
+  return useQuery({
+    queryKey: ['org-users'],
+    queryFn: () => apiCall(() => organizationApi.listOrganizationUsers()),
+    staleTime: 10 * 60_000,
+  });
+}
+
+/**
+ * Resolve actor user ids to "Display Name (Role)" via the organization
+ * roster; unknown ids fall back to the 8-char id prefix.
+ */
+export function useOfficerNames(): (userId: string) => string {
+  const usersQuery = useOrganizationUsers();
+  const users = usersQuery.data?.users;
+  return useCallback(
+    (userId: string) => {
+      const user = users?.find((entry) => entry.id === userId);
+      if (!user) return userId.slice(0, 8);
+      const name = user.displayName ?? user.email;
+      const role = user.jobTitle ?? user.role;
+      return role ? `${name} (${role})` : name;
+    },
+    [users]
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (in-app feed; emitted by the reporting workflow + deadline scan)
+// Query keys: ['notifications', unreadOnly]
+// ---------------------------------------------------------------------------
+
+/** The actor-visible notification feed (user-directed + org-wide rows). */
+export function useNotifications(unreadOnly = false) {
+  return useQuery({
+    queryKey: ['notifications', unreadOnly],
+    queryFn: () =>
+      apiCall(() =>
+        notificationsApi.listNotifications({ unreadOnly, limit: 50 })
+      ),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useMarkNotificationRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (notificationId: string) =>
+      apiCall(() => notificationsApi.markNotificationRead({ notificationId })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiCall(() => notificationsApi.markAllNotificationsRead()),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 }

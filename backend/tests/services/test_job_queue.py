@@ -141,9 +141,7 @@ def test_reclaim_stale_requeues_orphaned_running_job(db_session: Session) -> Non
     claimed.started_at = utc_now() - timedelta(minutes=30)
     db_session.commit()
 
-    reclaimed = job_queue.reclaim_stale(
-        db_session, utc_now(), stale_after=timedelta(minutes=15)
-    )
+    reclaimed = job_queue.reclaim_stale(db_session, utc_now(), stale_after=timedelta(minutes=15))
     assert reclaimed == 1
     db_session.refresh(claimed)
     assert claimed.status == "queued"
@@ -160,9 +158,7 @@ def test_reclaim_stale_leaves_a_recently_started_job(db_session: Session) -> Non
     assert claimed is not None
 
     # Started just now (by claim_next) — a slow-but-alive job must not be reclaimed.
-    reclaimed = job_queue.reclaim_stale(
-        db_session, utc_now(), stale_after=timedelta(minutes=15)
-    )
+    reclaimed = job_queue.reclaim_stale(db_session, utc_now(), stale_after=timedelta(minutes=15))
     assert reclaimed == 0
     assert claimed.status == "running"
 
@@ -177,9 +173,7 @@ def test_reclaim_stale_fails_a_job_past_max_attempts(db_session: Session) -> Non
     claimed.started_at = utc_now() - timedelta(minutes=30)
     db_session.commit()
 
-    reclaimed = job_queue.reclaim_stale(
-        db_session, utc_now(), stale_after=timedelta(minutes=15)
-    )
+    reclaimed = job_queue.reclaim_stale(db_session, utc_now(), stale_after=timedelta(minutes=15))
     assert reclaimed == 1
     db_session.refresh(claimed)
     assert claimed.status == "failed"

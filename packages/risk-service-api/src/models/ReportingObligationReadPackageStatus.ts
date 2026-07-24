@@ -32,6 +32,7 @@ export type ReportingObligationReadPackageStatus =
   | "submitted"
   | "acknowledged"
   | "rejected"
+  | "declined"
   | "superseded"
   | null;
 
@@ -51,6 +52,7 @@ export function instanceOfReportingObligationReadPackageStatus(
       "submitted",
       "acknowledged",
       "rejected",
+      "declined",
       "superseded",
     ].indexOf(value as never) !== -1 || value === null
   );

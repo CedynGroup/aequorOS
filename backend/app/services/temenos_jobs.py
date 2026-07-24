@@ -222,9 +222,7 @@ def enqueue_due_temenos_pulls(
     now = now or utc_now()
     connections = list(
         session.scalars(
-            select(TemenosConnection).where(
-                TemenosConnection.organization_id == organization_id
-            )
+            select(TemenosConnection).where(TemenosConnection.organization_id == organization_id)
         )
     )
     enqueued: list[Job] = []

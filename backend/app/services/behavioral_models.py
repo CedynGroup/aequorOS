@@ -84,7 +84,12 @@ def _key_lock(key: tuple[UUID, UUID, str]) -> threading.Lock:
 
 
 def get_estimates(
-    db: Session, ctx: TenantContext, bank_id: UUID, model: str, *, refresh: bool = False,
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    model: str,
+    *,
+    refresh: bool = False,
 ) -> ModelResult:
     """Train-on-first-request (or reuse cached/persisted) per-product estimates."""
     _validate_model(model)
@@ -123,10 +128,13 @@ def _compute(db: Session, ctx: TenantContext, bank_id: UUID, model: str) -> Mode
         from app.ml.behavioral.config import MODEL_VERSIONS, Accuracy  # noqa: PLC0415
 
         return ModelResult(
-            model_id=MODEL_VERSIONS[model], model_version=MODEL_VERSIONS[model],
-            method="baseline", as_of_date=None,
-            accuracy=Accuracy(cv_rmse=None, cv_mae=None, sample_count=0, month_coverage=0,
-                              method="baseline"),
+            model_id=MODEL_VERSIONS[model],
+            model_version=MODEL_VERSIONS[model],
+            method="baseline",
+            as_of_date=None,
+            accuracy=Accuracy(
+                cv_rmse=None, cv_mae=None, sample_count=0, month_coverage=0, method="baseline"
+            ),
             products=[],
         )
     as_of = dates[-1]
@@ -138,9 +146,15 @@ def _compute(db: Session, ctx: TenantContext, bank_id: UUID, model: str) -> Mode
 # Apply-as-assumptions
 # --------------------------------------------------------------------------
 
+
 def apply_estimates(  # noqa: PLR0913
-    db: Session, ctx: TenantContext, bank_id: UUID, model: str, rows: list[dict],
-    *, commit: bool = True,
+    db: Session,
+    ctx: TenantContext,
+    bank_id: UUID,
+    model: str,
+    rows: list[dict],
+    *,
+    commit: bool = True,
 ) -> dict:
     """Write reviewed estimates as a new accepted ``behavioral_assumptions`` batch.
 
@@ -157,7 +171,8 @@ def apply_estimates(  # noqa: PLR0913
     from app.ml.behavioral.config import MODEL_VERSIONS  # noqa: PLC0415
 
     kept = [
-        p for p in _latest_behavioral_payloads(db, ctx, bank_id)
+        p
+        for p in _latest_behavioral_payloads(db, ctx, bank_id)
         if str(p.get("assumption_type")) != this_type
     ]
     reviewed_at = utc_now().isoformat()
@@ -181,26 +196,45 @@ def apply_estimates(  # noqa: PLR0913
 
     batch_id = new_uuid7()
     lineage_id = new_uuid7()
-    db.add(IngestionBatch(
-        id=batch_id, organization_id=ctx.organization_id, bank_id=bank.id,
-        source_system="API_PUSH", adapter_version="behavioral_ml_v1", extraction_mode="full",
-        status="accepted", as_of_date=as_of_date, created_by=actor,
-    ))
-    db.add(LineageRecord(
-        id=lineage_id, organization_id=ctx.organization_id, ingestion_batch_id=batch_id,
-        operation_type="ENRICHMENT",
-        operation_ref=f"behavioral_ml/{model}/{as_of_date.isoformat()}",
-    ))
+    db.add(
+        IngestionBatch(
+            id=batch_id,
+            organization_id=ctx.organization_id,
+            bank_id=bank.id,
+            source_system="API_PUSH",
+            adapter_version="behavioral_ml_v1",
+            extraction_mode="full",
+            status="accepted",
+            as_of_date=as_of_date,
+            created_by=actor,
+        )
+    )
+    db.add(
+        LineageRecord(
+            id=lineage_id,
+            organization_id=ctx.organization_id,
+            ingestion_batch_id=batch_id,
+            operation_type="ENRICHMENT",
+            operation_ref=f"behavioral_ml/{model}/{as_of_date.isoformat()}",
+        )
+    )
     db.flush()  # batch + lineage must exist before their reference rows (composite FK)
     all_payloads = kept + new_rows
     for idx, payload in enumerate(all_payloads, start=1):
-        db.add(CanonicalReferenceRow(
-            id=new_uuid7(), organization_id=ctx.organization_id, bank_id=bank.id,
-            ingestion_batch_id=batch_id, as_of_date=as_of_date, dataset_kind=_DATASET_KIND,
-            row_index=idx, payload=payload,
-            source_reference=f"behavioral_ml/{model}/{as_of_date.isoformat()}#{idx}",
-            lineage_id=lineage_id,
-        ))
+        db.add(
+            CanonicalReferenceRow(
+                id=new_uuid7(),
+                organization_id=ctx.organization_id,
+                bank_id=bank.id,
+                ingestion_batch_id=batch_id,
+                as_of_date=as_of_date,
+                dataset_kind=_DATASET_KIND,
+                row_index=idx,
+                payload=payload,
+                source_reference=f"behavioral_ml/{model}/{as_of_date.isoformat()}#{idx}",
+                lineage_id=lineage_id,
+            )
+        )
     if commit:
         db.commit()
     else:
@@ -231,21 +265,24 @@ def _latest_behavioral_payloads(db: Session, ctx: TenantContext, bank_id: UUID) 
         return []
     # newest created_at, UUIDv7 text tie-break (matches _load_canonical)
     winner = max(batch_rows, key=lambda r: (r[1], str(r[0])))[0]
-    return list(db.scalars(
-        select(CanonicalReferenceRow.payload)
-        .where(
-            CanonicalReferenceRow.organization_id == ctx.organization_id,
-            CanonicalReferenceRow.bank_id == bank_id,
-            CanonicalReferenceRow.dataset_kind == _DATASET_KIND,
-            CanonicalReferenceRow.ingestion_batch_id == winner,
-        )
-        .order_by(CanonicalReferenceRow.row_index)
-    ).all())
+    return list(
+        db.scalars(
+            select(CanonicalReferenceRow.payload)
+            .where(
+                CanonicalReferenceRow.organization_id == ctx.organization_id,
+                CanonicalReferenceRow.bank_id == bank_id,
+                CanonicalReferenceRow.dataset_kind == _DATASET_KIND,
+                CanonicalReferenceRow.ingestion_batch_id == winner,
+            )
+            .order_by(CanonicalReferenceRow.row_index)
+        ).all()
+    )
 
 
 # --------------------------------------------------------------------------
 # Artifact persistence (the ModelResult JSON is the artifact)
 # --------------------------------------------------------------------------
+
 
 def _save_artifact(key: tuple[UUID, UUID, str], result: ModelResult) -> None:
     path = _artifacts_path(*key)
@@ -270,7 +307,9 @@ def _result_from_dict(d: dict) -> ModelResult:
     from app.ml.behavioral.config import Accuracy, ProductEstimate  # noqa: PLC0415
 
     return ModelResult(
-        model_id=d["model_id"], model_version=d["model_version"], method=d["method"],
+        model_id=d["model_id"],
+        model_version=d["model_version"],
+        method=d["method"],
         as_of_date=d.get("as_of_date"),
         accuracy=Accuracy(**d["accuracy"]),
         products=[ProductEstimate(**p) for p in d["products"]],

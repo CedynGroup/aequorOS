@@ -40,6 +40,7 @@ JOB_TYPES = (
     "market_data_pull",
     "temenos_pull",
     "etl_dedup",
+    "reporting_deadline_scan",
 )
 
 # Retry backoff is 2**attempts * base seconds (10s, 20s, 40s at base=5).

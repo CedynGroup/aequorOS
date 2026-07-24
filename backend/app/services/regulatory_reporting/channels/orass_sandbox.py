@@ -33,14 +33,17 @@ from app.services.regulatory_reporting.channels.errors import (
     ChannelPreconditionError,
 )
 
-type SandboxBehavior = Literal["ack", "reject", "slow"]
+type SandboxBehavior = Literal["ack", "reject", "decline", "slow"]
 
 SANDBOX_PREFIX = "SANDBOX-"
 SANDBOX_NOTE = (
     "ORASS API is not publicly documented; this is a simulation seam — "
     "see docs/research/bog_orass_submission_channels.md"
 )
-SANDBOX_BEHAVIORS: tuple[SandboxBehavior, ...] = ("ack", "reject", "slow")
+SANDBOX_BEHAVIORS: tuple[SandboxBehavior, ...] = ("ack", "reject", "decline", "slow")
+# Resubmission requests are auto-decided by the sandbox per config
+# (resubmission_behavior: grant | deny; default grant).
+RESUBMISSION_BEHAVIORS = ("grant", "deny")
 # 'slow' answers pending this many times before acknowledging.
 SLOW_PENDING_POLLS = 2
 # Statuses a channel may deliver from: 'approved' is the normal path,
@@ -57,6 +60,12 @@ _REJECT_MESSAGE = (
     "rows (tolerance GHS 0.01). Correct the return and resubmit a superseding "
     "package version. [Simulated message; real ORASS rejection semantics are "
     "not public.]"
+)
+# Rejected = returned for correction; Declined = final refusal (LRT guide §5).
+_DECLINE_MESSAGE = (
+    "SANDBOX simulated decline — the regulator declined this submission as "
+    "final: the request is not approvable in its current form. A new return "
+    "requires a fresh submission cycle. [Simulated message; wording is ours.]"
 )
 
 
@@ -115,7 +124,7 @@ class OrassSandboxChannel:
                 "The package has no exported artifacts; export at least one "
                 "file (xlsx/csv/pdf) before submitting."
             )
-        external_ref = f"SANDBOX-ORASS-{package.return_code}-{new_uuid7().hex[:12]}"
+        external_ref = self._reference(package)
         self.last_detail = {
             **sandbox_marker(),
             "behavior": self.behavior,
@@ -125,6 +134,21 @@ class OrassSandboxChannel:
             "artifact_kinds": sorted(artifact.kind for artifact in artifacts),
         }
         return external_ref
+
+    def _reference(self, package: RegulatoryPackage) -> str:
+        """ORASS-style form-set reference: prefix + zero-padded sequence.
+
+        Real ORASS references look like ``PS01390`` (form-set initials + a
+        sequence). The workflow injects the per-(bank, return) submission
+        sequence as ``_submission_sequence``; without it we fall back to a
+        random suffix so references stay unique. The sandbox marker in every
+        detail payload keeps the simulation labeled regardless of the shape.
+        """
+        prefix = "".join(ch for ch in package.return_code if ch.isalnum())[:4].upper()
+        sequence = self._config.get("_submission_sequence")
+        if isinstance(sequence, int) and sequence > 0:
+            return f"{prefix}{sequence:05d}"
+        return f"{prefix}-{new_uuid7().hex[:12].upper()}"
 
     def poll(self, external_ref: str) -> SubmissionPollStatus:
         status, _ = self.poll_with_detail(external_ref)
@@ -150,7 +174,13 @@ class OrassSandboxChannel:
         if self.behavior == "reject":
             detail["response"] = f"SANDBOX-REJECTED-{suffix}"
             detail["message"] = _REJECT_MESSAGE
+            detail["comments"] = _REJECT_MESSAGE
             return "rejected", detail
+        if self.behavior == "decline":
+            detail["response"] = f"SANDBOX-DECLINED-{suffix}"
+            detail["message"] = _DECLINE_MESSAGE
+            detail["comments"] = _DECLINE_MESSAGE
+            return "declined", detail
         if self.behavior == "slow" and prior_polls < SLOW_PENDING_POLLS:
             detail["response"] = f"SANDBOX-PENDING-{suffix}"
             detail["message"] = "SANDBOX simulated queue: the submission is still processing."
@@ -158,3 +188,27 @@ class OrassSandboxChannel:
         detail["response"] = f"SANDBOX-ACK-{suffix}"
         detail["message"] = "SANDBOX simulated acknowledgement: submission received and validated."
         return "acknowledged", detail
+
+    def decide_resubmission(self, external_ref: str, reason: str) -> tuple[str, dict[str, Any]]:
+        """Auto-decide a resubmission request per ``resubmission_behavior``.
+
+        Mirrors ORASS: "Resubmission requests may be granted automatically or
+        may require review by your Regulator, based on the reasons you
+        provide" (LRT guide §5.3). The sandbox decides immediately and labels
+        the decision simulated.
+        """
+        behavior = self._config.get("resubmission_behavior", "grant")
+        granted = behavior != "deny"
+        detail: dict[str, Any] = {
+            **sandbox_marker(),
+            "reason": reason,
+            "external_ref": external_ref,
+            "message": (
+                "SANDBOX simulated resubmission grant: the return is available "
+                "for correction; the next submission carries revision +0.1."
+                if granted
+                else "SANDBOX simulated resubmission denial: the stated reason "
+                "was not accepted. [Simulated message; wording is ours.]"
+            ),
+        }
+        return ("granted" if granted else "denied"), detail

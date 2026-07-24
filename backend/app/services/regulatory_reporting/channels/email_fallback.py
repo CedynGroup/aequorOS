@@ -65,18 +65,37 @@ REUPLOAD_RULE = (
 )
 
 
-def _institution_code(package: RegulatoryPackage, config: dict[str, Any]) -> str:
+def _institution_code(
+    package: RegulatoryPackage,
+    config: dict[str, Any],
+    institution_code_fallback: str | None = None,
+) -> str:
+    """Config wins, then the corporate profile's ORASS institution code
+    (threaded live by the workflow, or frozen in the snapshot's institution
+    block at generation time), then the bank short name."""
     configured = config.get("institution_code")
     if configured:
         return str(configured)
+    if institution_code_fallback:
+        return institution_code_fallback
     institution = package.snapshot.get("institution", {})
-    return str(institution.get("short_name") or institution.get("name") or "INSTITUTION-CODE-UNSET")
+    return str(
+        institution.get("orass_institution_code")
+        or institution.get("short_name")
+        or institution.get("name")
+        or "INSTITUTION-CODE-UNSET"
+    )
 
 
-def build_subject(package: RegulatoryPackage, config: dict[str, Any]) -> str:
+def build_subject(
+    package: RegulatoryPackage,
+    config: dict[str, Any],
+    institution_code_fallback: str | None = None,
+) -> str:
     """'[Institution code] [Return code] [Reporting date] – submitted under ORASS downtime'."""
     return (
-        f"[{_institution_code(package, config)}] [{package.return_code}] "
+        f"[{_institution_code(package, config, institution_code_fallback)}] "
+        f"[{package.return_code}] "
         f"[{package.reporting_date.isoformat()}] – submitted under ORASS downtime"
     )
 
@@ -95,11 +114,12 @@ def build_email_bundle(
     package: RegulatoryPackage,
     artifacts: Sequence[RegulatoryPackageArtifact],
     config: dict[str, Any] | None = None,
+    institution_code_fallback: str | None = None,
 ) -> dict[str, Any]:
     """The full send-ready bundle: guidance + subject + attachments + instructions."""
     config = dict(config or {})
     configured_recipient = config.get("fallback_recipient")
-    subject = build_subject(package, config)
+    subject = build_subject(package, config, institution_code_fallback)
     attachments = [_attachment_entry(artifact) for artifact in artifacts]
 
     lines = [
@@ -157,9 +177,11 @@ class EmailFallbackChannel:
         *,
         config: dict[str, Any] | None = None,
         prior_events: Sequence[RegulatorySubmissionEvent] = (),
+        institution_code_fallback: str | None = None,
     ) -> None:
         self._config = dict(config or {})
         self._prior_events = tuple(prior_events)
+        self._institution_code_fallback = institution_code_fallback
         self.last_detail: dict[str, Any] = {}
 
     def submit(
@@ -177,7 +199,9 @@ class EmailFallbackChannel:
                 "The package has no exported artifacts; export at least one "
                 "file (xlsx/csv/pdf) before preparing the email fallback."
             )
-        self.last_detail = build_email_bundle(package, artifacts, self._config)
+        self.last_detail = build_email_bundle(
+            package, artifacts, self._config, self._institution_code_fallback
+        )
         return f"EMAIL-{package.return_code}-{new_uuid7().hex[:12]}"
 
     def poll(self, external_ref: str) -> SubmissionPollStatus:

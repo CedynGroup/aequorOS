@@ -99,6 +99,9 @@ def read_summary(package: RegulatoryPackage) -> RegulatoryPackageSummaryRead:
         generated_at=package.generated_at,
         validation_passed=_validation_passed(package),
         notes=package.notes,
+        submission_revision=package.submission_revision,
+        snapshot_sha256=package.snapshot_sha256,
+        regulator_comments=package.regulator_comments,
         created_at=package.created_at,
         updated_at=package.updated_at,
     )
