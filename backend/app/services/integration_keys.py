@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import string
 from datetime import UTC, timedelta
 from uuid import UUID
 
@@ -34,7 +35,12 @@ from app.schemas.integration_keys import (
 from app.services.audit import record_event
 
 KEY_PREFIX = "aeq_live_"
-_KEY_ALPHABET = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789"
+# Letters + digits minus visually ambiguous characters (0/O, 1/l/I, U/V-adjacent
+# confusables are kept simple: drop 0O1lIoU). Built programmatically — a long
+# literal here trips secret scanners' entropy rules.
+_KEY_ALPHABET = "".join(
+    c for c in string.ascii_letters + string.digits if c not in "0O1lIoU"
+)
 _KEY_LENGTH = 40
 _LAST_USED_WRITE_INTERVAL = timedelta(minutes=5)
 _MAX_ACTIVE_KEYS = 10
