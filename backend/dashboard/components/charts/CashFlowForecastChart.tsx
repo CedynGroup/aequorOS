@@ -18,6 +18,7 @@ import {
   axisProps,
   chartTooltipProps,
 } from '@/lib/chartTheme';
+import { currencyCode } from '@/lib/format';
 
 export type HistoryPoint = {
   /** Day offset relative to the as-of date (≤ 0). */
@@ -89,7 +90,7 @@ export default function CashFlowForecastChart({
           {...chartTooltipProps}
           labelFormatter={(v: number) => (v > 0 ? `Day +${v}` : `Day ${v}`)}
           formatter={(value: number, name: string) => [
-            `GHS ${value.toFixed(2)}M`,
+            `${currencyCode()} ${value.toFixed(2)}M`,
             name,
           ]}
         />

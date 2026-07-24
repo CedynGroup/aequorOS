@@ -108,7 +108,9 @@ TRIGGER_ACTIONS: dict[CapitalTriggerCode, str] = {
         "Halt dividend distributions, reduce RWA via portfolio sale, and activate the "
         "Tier 2 issuance plan."
     ),
-    TRIGGER_CRITICAL: "Notify Bank of Ghana and initiate the underwritten emergency rights issue.",
+    TRIGGER_CRITICAL: (
+        "Notify the central bank and initiate the underwritten emergency rights issue."
+    ),
 }
 
 

@@ -11,6 +11,14 @@
  */
 
 import { mapValues } from "../runtime";
+import type { BankReadJurisdiction } from "./BankReadJurisdiction";
+import {
+  BankReadJurisdictionFromJSON,
+  BankReadJurisdictionFromJSONTyped,
+  BankReadJurisdictionToJSON,
+  BankReadJurisdictionToJSONTyped,
+} from "./BankReadJurisdiction";
+
 /**
  *
  * @export
@@ -35,6 +43,12 @@ export interface BankRead {
    * @memberof BankRead
    */
   id: string;
+  /**
+   *
+   * @type {BankReadJurisdiction}
+   * @memberof BankRead
+   */
+  jurisdiction?: BankReadJurisdiction;
   /**
    *
    * @type {string}
@@ -108,6 +122,10 @@ export function BankReadFromJSONTyped(
     createdAt: new Date(json["created_at"]),
     currency: json["currency"],
     id: json["id"],
+    jurisdiction:
+      json["jurisdiction"] == null
+        ? undefined
+        : BankReadJurisdictionFromJSON(json["jurisdiction"]),
     jurisdictionCode: json["jurisdiction_code"],
     licenseType: json["license_type"],
     name: json["name"],
@@ -133,6 +151,7 @@ export function BankReadToJSONTyped(
     created_at: value["createdAt"].toISOString(),
     currency: value["currency"],
     id: value["id"],
+    jurisdiction: BankReadJurisdictionToJSON(value["jurisdiction"]),
     jurisdiction_code: value["jurisdictionCode"],
     license_type: value["licenseType"],
     name: value["name"],

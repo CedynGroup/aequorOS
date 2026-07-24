@@ -49,7 +49,7 @@ export default function MarginBars({
   height?: number;
 }) {
   const fmt = (v: number) =>
-    mode === 'pct' ? fmtPct(v, 2) : fmtCurrencySigned(v, 'GHS');
+    mode === 'pct' ? fmtPct(v, 2) : fmtCurrencySigned(v);
   const axisFmt = (v: number) =>
     mode === 'pct' ? `${v}%` : `${(v / 1_000_000).toFixed(0)}M`;
 

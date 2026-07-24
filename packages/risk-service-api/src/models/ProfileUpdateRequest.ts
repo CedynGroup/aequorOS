@@ -18,13 +18,13 @@ import {
   LocaleToJSON,
   LocaleToJSONTyped,
 } from "./Locale";
-import type { Timezone } from "./Timezone";
+import type { Timezone1 } from "./Timezone1";
 import {
-  TimezoneFromJSON,
-  TimezoneFromJSONTyped,
-  TimezoneToJSON,
-  TimezoneToJSONTyped,
-} from "./Timezone";
+  Timezone1FromJSON,
+  Timezone1FromJSONTyped,
+  Timezone1ToJSON,
+  Timezone1ToJSONTyped,
+} from "./Timezone1";
 import type { Theme } from "./Theme";
 import {
   ThemeFromJSON,
@@ -79,10 +79,10 @@ export interface ProfileUpdateRequest {
   theme?: Theme;
   /**
    *
-   * @type {Timezone}
+   * @type {Timezone1}
    * @memberof ProfileUpdateRequest
    */
-  timezone?: Timezone;
+  timezone?: Timezone1;
 }
 
 /**
@@ -118,7 +118,9 @@ export function ProfileUpdateRequestFromJSONTyped(
     locale: json["locale"] == null ? undefined : LocaleFromJSON(json["locale"]),
     theme: json["theme"] == null ? undefined : ThemeFromJSON(json["theme"]),
     timezone:
-      json["timezone"] == null ? undefined : TimezoneFromJSON(json["timezone"]),
+      json["timezone"] == null
+        ? undefined
+        : Timezone1FromJSON(json["timezone"]),
   };
 }
 
@@ -139,6 +141,6 @@ export function ProfileUpdateRequestToJSONTyped(
     job_title: JobTitleToJSON(value["jobTitle"]),
     locale: LocaleToJSON(value["locale"]),
     theme: ThemeToJSON(value["theme"]),
-    timezone: TimezoneToJSON(value["timezone"]),
+    timezone: Timezone1ToJSON(value["timezone"]),
   };
 }

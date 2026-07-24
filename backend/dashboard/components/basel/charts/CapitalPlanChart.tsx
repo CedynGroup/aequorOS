@@ -28,6 +28,7 @@ import {
   chartTooltipProps,
   seriesColor,
 } from '@/lib/chartTheme';
+import { regShort } from '@/lib/format';
 
 export type PlanPoint = {
   label: string;
@@ -76,7 +77,7 @@ export default function CapitalPlanChart({
           stroke={CHART_CRIT}
           strokeDasharray="4 4"
           label={{
-            value: `BoG min ${carMin}%`,
+            value: `${regShort()} min ${carMin}%`,
             position: 'insideBottomRight',
             fill: CHART_CRIT,
             fontSize: 11,

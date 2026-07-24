@@ -14,7 +14,7 @@ import { runComputedAt, runThresholds } from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useLiquidityDashboard, useRegulatoryRun } from '@/lib/api/hooks';
 import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
+import { fmtPct, regShort } from '@/lib/format';
 
 type IndicatorRow = {
   indicator: string;
@@ -76,7 +76,7 @@ const PLAYBOOK_STAGES = [
   {
     stage: 'Stage 1 — Heightened monitoring',
     trigger:
-      'Any indicator amber (e.g. LCR between the red floor and the BoG minimum) or a stress scenario projecting a breach.',
+      'Any indicator amber (e.g. LCR between the red floor and the regulatory minimum) or a stress scenario projecting a breach.',
     actions:
       'Move to daily ALCO reporting, refresh the funding-source inventory, pre-position collateral, restrict discretionary asset growth.',
     owner: 'Head of Treasury',
@@ -84,7 +84,7 @@ const PLAYBOOK_STAGES = [
   {
     stage: 'Stage 2 — CFP activation',
     trigger:
-      'Any indicator red (LCR or NSFR below the BoG minimum) on an actual reporting basis.',
+      'Any indicator red (LCR or NSFR below the regulatory minimum) on an actual reporting basis.',
     actions:
       'Convene the crisis funding committee, draw contingent funding lines, execute the asset-liquidation ladder starting with Level 1 HQLA, daily cash-flow forecasting at desk level.',
     owner: 'CFO / ALCO chair',
@@ -94,7 +94,7 @@ const PLAYBOOK_STAGES = [
     trigger:
       'A confirmed regulatory-minimum breach or CFP measures insufficient within the survival horizon.',
     actions:
-      'Notify Bank of Ghana Banking Supervision, file the remediation plan, activate recovery-plan funding options.',
+      'Notify the central bank banking-supervision department, file the remediation plan, activate recovery-plan funding options.',
     owner: 'CEO / Board risk committee',
   },
 ] as const;
@@ -261,7 +261,7 @@ export default function ContingencyFundingPlan() {
                     ? 'warn'
                     : 'ok'
                 }
-                hint={`BoG minimum ${nsfrMin.toFixed(0)}%`}
+                hint={`${regShort()} minimum ${nsfrMin.toFixed(0)}%`}
               />
               <KpiStat
                 label="Failed validations"
@@ -280,7 +280,7 @@ export default function ContingencyFundingPlan() {
             {/* Early-warning indicators — REAL data */}
             <SectionCard
               title="Early-warning indicators"
-              subtitle="Current values from the regulatory engine, evaluated against the active BoG thresholds"
+              subtitle={`Current values from the regulatory engine, evaluated against the active ${regShort()} thresholds`}
               noPadding
               computedAt={computedAt}
               runBadge={run ? <RunBadge run={run} /> : undefined}
@@ -375,7 +375,7 @@ export default function ContingencyFundingPlan() {
                   indicators are monitored on every reporting period, stress
                   results on the Stress tab test the plan&apos;s adequacy, and the
                   BSD-3 submission evidences the reported position. Indicator
-                  thresholds shown here are the active BoG parameter set
+                  thresholds shown here are the active {regShort()} parameter set
                   snapshotted into the latest baseline run.
                 </p>
                 <p>

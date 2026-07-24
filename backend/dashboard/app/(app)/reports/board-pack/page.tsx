@@ -47,7 +47,7 @@ import {
   num,
   statusTone,
 } from '@/lib/api/values';
-import { fmtCurrency, fmtNum, fmtPct } from '@/lib/format';
+import { fmtCurrency, fmtNum, fmtPct, regShort, centralBankName } from '@/lib/format';
 
 const LIVE_KPI_STATUS: Record<LiveStatus, KpiStatus | undefined> = {
   green: 'ok',
@@ -158,7 +158,7 @@ export default function BoardPackPage() {
                   License · Regulator
                 </dt>
                 <dd className="mt-1 text-navy">
-                  {bank ? labelize(bank.licenseType) : '—'} · Bank of Ghana
+                  {bank ? labelize(bank.licenseType) : '—'} · {centralBankName()}
                 </dd>
               </div>
               <div>
@@ -288,14 +288,14 @@ export default function BoardPackPage() {
                 rows={[
                   {
                     label: 'Liquidity Coverage Ratio',
-                    hint: 'BoG minimum 100%',
+                    hint: `${regShort()} minimum 100%`,
                     value: fmtPct(num(liq.data.metrics.lcrPct), 2),
                     tone: statusTone(liq.data.metrics.lcrStatus),
                     toneLabel: labelize(liq.data.metrics.lcrStatus),
                   },
                   {
                     label: 'Net Stable Funding Ratio',
-                    hint: 'BoG minimum 100%',
+                    hint: `${regShort()} minimum 100%`,
                     value: fmtPct(num(liq.data.metrics.nsfrPct), 2),
                     tone: statusTone(liq.data.metrics.nsfrStatus),
                     toneLabel: labelize(liq.data.metrics.nsfrStatus),

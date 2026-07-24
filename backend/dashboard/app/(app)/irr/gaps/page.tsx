@@ -70,13 +70,13 @@ export default function IrrGapsPage() {
             key: 'rsa',
             header: 'RSA',
             numeric: true,
-            render: (r) => fmtCurrency(num(r.rsaGhs), 'GHS'),
+            render: (r) => fmtCurrency(num(r.rsaGhs)),
           },
           {
             key: 'rsl',
             header: 'RSL',
             numeric: true,
-            render: (r) => fmtCurrency(num(r.rslGhs), 'GHS'),
+            render: (r) => fmtCurrency(num(r.rslGhs)),
           },
           {
             key: 'gap',
@@ -86,7 +86,7 @@ export default function IrrGapsPage() {
               const v = num(r.gapGhs);
               return (
                 <span className={v < 0 ? 'text-warning font-medium' : undefined}>
-                  {fmtCurrencySigned(v, 'GHS')}
+                  {fmtCurrencySigned(v)}
                 </span>
               );
             },
@@ -99,7 +99,7 @@ export default function IrrGapsPage() {
               const v = num(r.cumulativeGapGhs);
               return (
                 <span className={v < 0 ? 'text-warning font-medium' : undefined}>
-                  {fmtCurrencySigned(v, 'GHS')}
+                  {fmtCurrencySigned(v)}
                 </span>
               );
             },
@@ -123,7 +123,7 @@ export default function IrrGapsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <KpiStat
                 label="12-month cumulative gap"
-                value={fmtCurrencySigned(cum12m, 'GHS')}
+                value={fmtCurrencySigned(cum12m)}
                 status={cum12m < 0 ? 'warn' : 'ok'}
                 hint={
                   cum12m < 0
@@ -196,11 +196,11 @@ export default function IrrGapsPage() {
                   </div>
                   <dl className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-body">
                     <DrillField label="Repricing midpoint" value={`${num(selected.midpointYears).toFixed(3)} years`} />
-                    <DrillField label="Rate-sensitive assets" value={fmtCurrency(num(selected.rsaGhs), 'GHS')} />
-                    <DrillField label="Rate-sensitive liabilities" value={fmtCurrency(num(selected.rslGhs), 'GHS')} />
+                    <DrillField label="Rate-sensitive assets" value={fmtCurrency(num(selected.rsaGhs))} />
+                    <DrillField label="Rate-sensitive liabilities" value={fmtCurrency(num(selected.rslGhs))} />
                     <DrillField
                       label="Period gap (RSA − RSL)"
-                      value={fmtCurrencySigned(num(selected.gapGhs), 'GHS')}
+                      value={fmtCurrencySigned(num(selected.gapGhs))}
                     />
                   </dl>
                   {selectedLineItem ? (
@@ -217,12 +217,12 @@ export default function IrrGapsPage() {
                         exposure{' '}
                         <span className="font-mono tnum text-navy">
                           {selectedLineItem.exposureAmount != null
-                            ? fmtCurrency(num(selectedLineItem.exposureAmount), 'GHS')
+                            ? fmtCurrency(num(selectedLineItem.exposureAmount))
                             : '—'}
                         </span>
                         {' · '}weighted (gap){' '}
                         <span className="font-mono tnum text-navy">
-                          {fmtCurrencySigned(num(selectedLineItem.weightedAmount), 'GHS')}
+                          {fmtCurrencySigned(num(selectedLineItem.weightedAmount))}
                         </span>
                         {latestRun && (
                           <>

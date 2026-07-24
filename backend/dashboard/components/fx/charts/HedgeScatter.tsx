@@ -112,7 +112,7 @@ export default function HedgeScatter({
                   R² {fmtPct(point.r2Pct, 1)} · Offset {fmtPct(point.offsetPct, 1)}
                 </p>
                 <p style={chartTooltipProps.itemStyle}>
-                  MTM {fmtCurrencySigned(point.mtmGhs, 'GHS')} ·{' '}
+                  MTM {fmtCurrencySigned(point.mtmGhs)} ·{' '}
                   {point.effective ? 'Effective' : 'Ineffective'}
                 </p>
               </div>

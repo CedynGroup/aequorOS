@@ -59,7 +59,7 @@ export default function NetOutflowChart({
         <XAxis
           type="number"
           {...axisProps}
-          tickFormatter={(v: number) => fmtCurrency(v, 'GHS', { decimals: 0 })}
+          tickFormatter={(v: number) => fmtCurrency(v, undefined, { decimals: 0 })}
         />
         <YAxis
           type="category"
@@ -72,7 +72,7 @@ export default function NetOutflowChart({
         <Tooltip
           {...chartTooltipProps}
           cursor={{ fill: 'rgb(var(--surface-hover))' }}
-          formatter={(v: number, name) => [fmtCurrency(v, 'GHS'), name]}
+          formatter={(v: number, name) => [fmtCurrency(v), name]}
         />
         <Legend {...chartLegendProps} />
         {outflows.map((cat, i) => (
@@ -97,7 +97,7 @@ export default function NetOutflowChart({
           stroke="rgb(var(--text-muted))"
           strokeDasharray="4 3"
           label={{
-            value: `Net ${fmtCurrency(netOutflows, 'GHS')}`,
+            value: `Net ${fmtCurrency(netOutflows)}`,
             position: 'top',
             fill: 'rgb(var(--text-muted))',
             fontSize: 11,

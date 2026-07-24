@@ -15,12 +15,13 @@ import { ErrorPanel, PageSkeleton } from '@/components/ui/QueryBoundary';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useCanonicalPositions, useLineageWalk } from '@/lib/api/ingestion';
 import { formatDate, formatDateTime } from '@/components/data-engine/shared';
+import { fmtLocale } from '@/lib/format';
 
 function formatAmount(value: string | null): string {
   if (value === null || value === undefined) return '—';
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return value;
-  return numeric.toLocaleString('en-GH', { maximumFractionDigits: 2 });
+  return numeric.toLocaleString(fmtLocale(), { maximumFractionDigits: 2 });
 }
 
 function LineageChain({ lineageId }: { lineageId: string }) {

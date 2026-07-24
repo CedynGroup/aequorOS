@@ -21,6 +21,7 @@ import {
   chartTooltipProps,
   seriesColor,
 } from '@/lib/chartTheme';
+import { regShort } from '@/lib/format';
 
 export default function CapitalProjectionChart({
   data,
@@ -71,7 +72,7 @@ export default function CapitalProjectionChart({
           stroke={CHART_CRIT}
           strokeDasharray="4 4"
           label={{
-            value: `BoG min ${bogMin}%`,
+            value: `${regShort()} min ${bogMin}%`,
             position: 'insideBottomRight',
             fill: CHART_CRIT,
             fontSize: 11,

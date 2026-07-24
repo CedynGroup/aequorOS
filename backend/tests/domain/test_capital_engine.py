@@ -405,7 +405,7 @@ def test_severe_stress_golden() -> None:
     assert triggers["critical"].fired is False
     assert triggers["critical"].first_quarter is None
     assert triggers["critical"].action == (
-        "Notify Bank of Ghana and initiate the underwritten emergency rights issue."
+        "Notify the central bank and initiate the underwritten emergency rights issue."
     )
 
 

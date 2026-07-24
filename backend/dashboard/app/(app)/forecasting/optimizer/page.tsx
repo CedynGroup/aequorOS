@@ -40,7 +40,7 @@ import {
   useRunOptimizer,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, labelize, num } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
+import { fmtPct, regShort } from '@/lib/format';
 import {
   axisProps,
   CHART_GRID,
@@ -49,7 +49,7 @@ import {
 } from '@/lib/chartTheme';
 
 const SCOPE_COPY =
-  'Constrained scenario search across 108 decision combinations (loan growth × securities allocation × deposit pricing × dividend payout), projected 5 years each, filtered against BoG constraints (CAR ≥ 10%, LCR ≥ 100%, NSFR ≥ 100%), ranked by 5-year average ROE.';
+  'Constrained scenario search across 108 decision combinations (loan growth × securities allocation × deposit pricing × dividend payout), projected 5 years each, filtered against regulatory constraints (CAR ≥ 10%, LCR ≥ 100%, NSFR ≥ 100%), ranked by 5-year average ROE.';
 
 // ---------------------------------------------------------------------------
 // Normalized optimizer output — from a fresh result or a stored run.
@@ -255,7 +255,7 @@ export default function StrategicOptimizer() {
               <EmptyState
                 Icon={Search}
                 title="No optimizer runs yet"
-                description="Run the optimizer to search the decision grid for the highest 5-year average ROE strategy that keeps CAR, LCR, and NSFR above their BoG minimums. The full result persists as an auditable run."
+                description={`Run the optimizer to search the decision grid for the highest 5-year average ROE strategy that keeps CAR, LCR, and NSFR above their ${regShort()} minimums. The full result persists as an auditable run.`}
                 action={runButton}
               />
             </>
@@ -271,7 +271,7 @@ export default function StrategicOptimizer() {
                 <KpiStat
                   label="Feasible strategies"
                   value={`${view.feasibleCount}`}
-                  hint={`of ${view.candidatesEvaluated} cleared all BoG floors`}
+                  hint={`of ${view.candidatesEvaluated} cleared all ${regShort()} floors`}
                 />
                 <KpiStat
                   label="Best 5Y average ROE"
@@ -306,7 +306,7 @@ export default function StrategicOptimizer() {
               {view.top.length === 0 ? (
                 <SectionCard
                   title="No feasible strategy in this search"
-                  subtitle="Every candidate breached at least one BoG floor"
+                  subtitle={`Every candidate breached at least one ${regShort()} floor`}
                   footer={
                     <RunProvenance
                       runId={view.provenance.runId}
@@ -511,7 +511,7 @@ function StrategyCard({
       {/* Constraint headroom */}
       <div className="border-t border-border-light pt-3 space-y-3">
         <p className="text-micro font-medium uppercase tracking-wider text-slate">
-          Constraint headroom (5-year minimum vs BoG floor)
+          Constraint headroom (5-year minimum vs {regShort()} floor)
         </p>
         {candidate.constraints.map((c) => (
           <LimitBar
@@ -522,7 +522,7 @@ function StrategyCard({
             direction="above"
             unit="%"
             format={(v) => v.toFixed(1)}
-            limitLabel="BoG floor"
+            limitLabel={`${regShort()} floor`}
           />
         ))}
       </div>

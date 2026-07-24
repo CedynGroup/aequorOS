@@ -26,7 +26,7 @@ import {
   useRegulatoryRun,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, isoDate, num, statusTone } from '@/lib/api/values';
-import { fmtCurrency, fmtPct } from '@/lib/format';
+import { fmtCurrency, fmtPct, regShort, centralBankName } from '@/lib/format';
 
 type LineRow = {
   item: string;
@@ -53,7 +53,7 @@ function lineColumns(rateHeader: string, weightedHeader: string): Column<LineRow
       header: 'Balance (GHS)',
       numeric: true,
       render: (r) =>
-        r.balanceGHS === null ? '—' : fmtCurrency(r.balanceGHS, 'GHS'),
+        r.balanceGHS === null ? '—' : fmtCurrency(r.balanceGHS),
     },
     {
       key: 'rate',
@@ -65,7 +65,7 @@ function lineColumns(rateHeader: string, weightedHeader: string): Column<LineRow
       key: 'weighted',
       header: weightedHeader,
       numeric: true,
-      render: (r) => fmtCurrency(r.weightedGHS, 'GHS'),
+      render: (r) => fmtCurrency(r.weightedGHS),
     },
   ];
 }
@@ -130,7 +130,7 @@ export default function LiquidityCockpit() {
           { label: 'Cockpit' },
         ]}
         title="Liquidity Cockpit"
-        subtitle="Basel III LCR & NSFR per Bank of Ghana CRD framework · 30-day stressed horizon"
+        subtitle={`Basel III LCR & NSFR per ${centralBankName()} CRD framework · 30-day stressed horizon`}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <div className="flex items-center gap-2">
@@ -204,7 +204,7 @@ export default function LiquidityCockpit() {
               </div>
               <KpiStat
                 label="HQLA stock"
-                value={fmtCurrency(hqlaTotal, 'GHS')}
+                value={fmtCurrency(hqlaTotal)}
                 status={
                   data.metrics.lcrStatus === 'red'
                     ? 'crit'
@@ -218,7 +218,7 @@ export default function LiquidityCockpit() {
               />
               <KpiStat
                 label="30-day net outflows"
-                value={fmtCurrency(num(data.metrics.netOutflows30dGhs), 'GHS')}
+                value={fmtCurrency(num(data.metrics.netOutflows30dGhs))}
                 hint="Outflows − capped inflows"
               />
             </div>
@@ -235,14 +235,14 @@ export default function LiquidityCockpit() {
               </div>
               <KpiStat
                 label="Available stable funding"
-                value={fmtCurrency(num(data.metrics.asfTotalGhs), 'GHS')}
+                value={fmtCurrency(num(data.metrics.asfTotalGhs))}
                 delta={nsfrDelta}
                 deltaSuffix=" pts NSFR"
                 hint="Liability-side weighting"
               />
               <KpiStat
                 label="Required stable funding"
-                value={fmtCurrency(num(data.metrics.rsfTotalGhs), 'GHS')}
+                value={fmtCurrency(num(data.metrics.rsfTotalGhs))}
                 hint="Asset-side weighting"
               />
             </div>
@@ -250,7 +250,7 @@ export default function LiquidityCockpit() {
             {/* Regulatory floors — LCR & NSFR are floor limits (direction above) */}
             <SectionCard
               title="Regulatory floors"
-              subtitle="BoG CRD thresholds from the active parameter set — green ≥ minimum, amber down to the red floor"
+              subtitle={`${regShort()} CRD thresholds from the active parameter set — green ≥ minimum, amber down to the red floor`}
               computedAt={computedAt}
               runBadge={run ? <RunBadge run={run} /> : undefined}
               footer={provenance}
@@ -269,7 +269,7 @@ export default function LiquidityCockpit() {
                   direction="above"
                   unit="%"
                   limitLabel="Red floor"
-                  warnLabel="BoG minimum"
+                  warnLabel={`${regShort()} minimum`}
                   format={(v) => v.toFixed(1)}
                 />
                 <LimitBar
@@ -284,8 +284,8 @@ export default function LiquidityCockpit() {
                   warnAt={nsfrMin}
                   direction="above"
                   unit="%"
-                  limitLabel={nsfrRedFloor === nsfrMin ? 'BoG minimum' : 'Red floor'}
-                  warnLabel="BoG minimum"
+                  limitLabel={nsfrRedFloor === nsfrMin ? `${regShort()} minimum` : 'Red floor'}
+                  warnLabel={`${regShort()} minimum`}
                   format={(v) => v.toFixed(1)}
                 />
               </div>
@@ -357,7 +357,7 @@ export default function LiquidityCockpit() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <SectionCard
                 title="Cash outflows"
-                subtitle="30-day stressed runoff per BoG CRD weights"
+                subtitle={`30-day stressed runoff per ${regShort()} CRD weights`}
                 noPadding
                 computedAt={computedAt}
                 runBadge={run ? <RunBadge run={run} /> : undefined}
@@ -436,19 +436,19 @@ export default function LiquidityCockpit() {
             <p className="text-caption text-slate flex items-center gap-2 flex-wrap">
               Net outflows = Outflows{' '}
               <span className="font-mono text-navy">
-                {fmtCurrency(totalOutflows, 'GHS')}
+                {fmtCurrency(totalOutflows)}
               </span>{' '}
               − min(Gross inflows, 75% × Outflows){' '}
               <span className="font-mono text-navy">
-                {fmtCurrency(cappedInflows, 'GHS')}
+                {fmtCurrency(cappedInflows)}
               </span>{' '}
               ={' '}
               <span className="font-mono font-medium text-navy">
-                {fmtCurrency(num(data.metrics.netOutflows30dGhs), 'GHS')}
+                {fmtCurrency(num(data.metrics.netOutflows30dGhs))}
               </span>
               . LCR = HQLA{' '}
               <span className="font-mono text-navy">
-                {fmtCurrency(hqlaTotal, 'GHS')}
+                {fmtCurrency(hqlaTotal)}
               </span>{' '}
               / Net outflows ={' '}
               <span className="font-mono font-medium text-success">

@@ -35,6 +35,7 @@ import {
   useValidateMarketDataConnection,
 } from '@/lib/api/hooks';
 import CredentialFields from './CredentialFields';
+import { fmtLocale } from '@/lib/format';
 import {
   ConnectionStatusPill,
   fmtWhen,
@@ -164,10 +165,10 @@ export default function SourceCard({
           <dt className="text-caption text-slate">This month</dt>
           <dd className="font-mono text-navy">
             {quota
-              ? `${quota.unitsConsumed.toLocaleString('en-GH')} units · ${quota.pullCount} pulls`
+              ? `${quota.unitsConsumed.toLocaleString(fmtLocale())} units · ${quota.pullCount} pulls`
               : '—'}
             {quota?.monthlyCap != null && (
-              <span className="text-slate"> / cap {quota.monthlyCap.toLocaleString('en-GH')}</span>
+              <span className="text-slate"> / cap {quota.monthlyCap.toLocaleString(fmtLocale())}</span>
             )}
           </dd>
         </div>

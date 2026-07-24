@@ -19,7 +19,7 @@ import {
 } from '@/lib/api/hooks';
 import { fmtDateUTC, num, shortId } from '@/lib/api/values';
 import { seriesColor } from '@/lib/chartTheme';
-import { fmtCurrency } from '@/lib/format';
+import { fmtCurrency, regShort } from '@/lib/format';
 
 type Row = {
   item: string;
@@ -50,7 +50,7 @@ function rwaColumns(
       header: 'Exposure (GHS)',
       numeric: true,
       render: (r) =>
-        r.exposureGHS === null ? '—' : fmtCurrency(r.exposureGHS, 'GHS'),
+        r.exposureGHS === null ? '—' : fmtCurrency(r.exposureGHS),
     },
     {
       key: 'weight',
@@ -63,7 +63,7 @@ function rwaColumns(
       key: 'rwa',
       header: amountHeader,
       numeric: true,
-      render: (r) => fmtCurrency(r.rwaGHS, 'GHS'),
+      render: (r) => fmtCurrency(r.rwaGHS),
     },
   ];
 }
@@ -140,7 +140,7 @@ export default function RWABreakdown() {
           { label: 'RWA' },
         ]}
         title="RWA Breakdown"
-        subtitle="Risk-weighted assets by risk type · BoG CRD standardized approach"
+        subtitle={`Risk-weighted assets by risk type · ${regShort()} CRD standardized approach`}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
@@ -172,22 +172,22 @@ export default function RWABreakdown() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <KpiStat
                   label="Credit risk RWA"
-                  value={fmtCurrency(creditRwa, 'GHS')}
+                  value={fmtCurrency(creditRwa)}
                   hint={share(creditRwa)}
                 />
                 <KpiStat
                   label="Market risk RWA"
-                  value={fmtCurrency(marketRwa, 'GHS')}
+                  value={fmtCurrency(marketRwa)}
                   hint={share(marketRwa)}
                 />
                 <KpiStat
                   label="Operational risk RWA"
-                  value={fmtCurrency(operationalRwa, 'GHS')}
+                  value={fmtCurrency(operationalRwa)}
                   hint={share(operationalRwa)}
                 />
                 <KpiStat
                   label="Total RWA"
-                  value={fmtCurrency(totalRwa, 'GHS')}
+                  value={fmtCurrency(totalRwa)}
                   hint="Credit + market + operational"
                 />
               </div>
@@ -211,14 +211,14 @@ export default function RWABreakdown() {
 
                 <SectionCard
                   title="Credit vs operational split"
-                  subtitle={`Total ${fmtCurrency(totalRwa, 'GHS')}`}
+                  subtitle={`Total ${fmtCurrency(totalRwa)}`}
                 >
                   <div className="space-y-4">
                     <DonutChart
                       data={splitSlices}
                       centerLabel="Total RWA"
-                      centerValue={fmtCurrency(totalRwa, 'GHS')}
-                      format="ghs-m"
+                      centerValue={fmtCurrency(totalRwa)}
+                      format="ccy-m"
                     />
                     <ul className="space-y-2 text-caption pt-2 border-t border-border-light">
                       {splitSlices.map((s) => (
@@ -230,7 +230,7 @@ export default function RWABreakdown() {
                           />
                           <span className="text-navy/85 flex-1">{s.name}</span>
                           <span className="font-mono text-navy tnum">
-                            {fmtCurrency(s.value, 'GHS')}
+                            {fmtCurrency(s.value)}
                           </span>
                           <span className="font-mono text-slate w-12 text-right tnum">
                             {totalRwa > 0
@@ -246,7 +246,7 @@ export default function RWABreakdown() {
 
               <SectionCard
                 title="Credit risk"
-                subtitle="Standardized approach · BoG risk weights · CCF-converted off-balance lines and 0% RW lines shown for transparency"
+                subtitle={`Standardized approach · ${regShort()} risk weights · CCF-converted off-balance lines and 0% RW lines shown for transparency`}
                 noPadding
                 footer={
                   <span>
@@ -320,19 +320,19 @@ export default function RWABreakdown() {
               <p className="text-caption text-slate">
                 Total RWA = Credit{' '}
                 <span className="font-mono text-navy">
-                  {fmtCurrency(creditRwa, 'GHS')}
+                  {fmtCurrency(creditRwa)}
                 </span>{' '}
                 + Market{' '}
                 <span className="font-mono text-navy">
-                  {fmtCurrency(marketRwa, 'GHS')}
+                  {fmtCurrency(marketRwa)}
                 </span>{' '}
                 + Operational{' '}
                 <span className="font-mono text-navy">
-                  {fmtCurrency(operationalRwa, 'GHS')}
+                  {fmtCurrency(operationalRwa)}
                 </span>{' '}
                 ={' '}
                 <span className="font-mono font-medium text-navy">
-                  {fmtCurrency(totalRwa, 'GHS')}
+                  {fmtCurrency(totalRwa)}
                 </span>
                 . Source run{' '}
                 <span className="font-mono text-navy">{shortId(data.runId)}</span>.

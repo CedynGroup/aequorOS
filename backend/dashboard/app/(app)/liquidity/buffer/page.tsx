@@ -15,7 +15,7 @@ import { useBankContext } from '@/components/shell/BankContext';
 import { useLiquidityDashboard, useRegulatoryRun } from '@/lib/api/hooks';
 import { fmtDateUTC, num } from '@/lib/api/values';
 import { CHART_SERIES, seriesColor } from '@/lib/chartTheme';
-import { fmtCurrency, fmtPct } from '@/lib/format';
+import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
 type BufferRow = {
   code: string;
@@ -39,7 +39,7 @@ const columns: Column<BufferRow>[] = [
     header: 'Market value (GHS)',
     numeric: true,
     render: (r) =>
-      r.marketValueGHS === null ? '—' : fmtCurrency(r.marketValueGHS, 'GHS'),
+      r.marketValueGHS === null ? '—' : fmtCurrency(r.marketValueGHS),
   },
   {
     key: 'haircut',
@@ -52,7 +52,7 @@ const columns: Column<BufferRow>[] = [
     key: 'weighted',
     header: 'Post-haircut value',
     numeric: true,
-    render: (r) => fmtCurrency(r.weightedGHS, 'GHS'),
+    render: (r) => fmtCurrency(r.weightedGHS),
   },
   {
     key: 'share',
@@ -141,7 +141,7 @@ export default function LiquidityBuffer() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <KpiStat
                 label="HQLA stock"
-                value={fmtCurrency(hqlaTotal, 'GHS')}
+                value={fmtCurrency(hqlaTotal)}
                 hint="Post-haircut weighted"
               />
               <KpiStat
@@ -193,7 +193,7 @@ export default function LiquidityBuffer() {
 
               <SectionCard
                 title="Share of buffer"
-                subtitle={`Total ${fmtCurrency(hqlaTotal, 'GHS')}`}
+                subtitle={`Total ${fmtCurrency(hqlaTotal)}`}
               >
                 <ul className="space-y-2.5 text-caption">
                   {stackData.map((h) => (
@@ -207,7 +207,7 @@ export default function LiquidityBuffer() {
                         {h.level}
                       </span>
                       <span className="font-mono text-navy tnum shrink-0">
-                        {fmtCurrency(h.shareGHS, 'GHS')}
+                        {fmtCurrency(h.shareGHS)}
                       </span>
                       <span className="font-mono text-slate tnum w-10 text-right shrink-0">
                         {h.pct}%
@@ -232,7 +232,7 @@ export default function LiquidityBuffer() {
               runBadge={run ? <RunBadge run={run} /> : undefined}
               footer={
                 <span>
-                  Baseline runs carry BoG-eligible instruments at face value;
+                  Baseline runs carry {regShort()}-eligible instruments at face value;
                   market-value haircuts are applied by the stress engine
                   (hqla_securities_haircut) on the Stress tab.
                 </span>

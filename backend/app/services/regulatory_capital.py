@@ -79,6 +79,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
 )
 from app.services.audit import record_event
+from app.services.jurisdictions import regulator_name
 from app.services.live_block import live_block
 from app.services.live_types import (
     LiveModuleResult,
@@ -86,7 +87,7 @@ from app.services.live_types import (
     worst_status,
 )
 from app.services.params import get_active_params
-from app.services.regulatory_liquidity import BSD3_PREVIEW_NOTE, get_regulatory_run
+from app.services.regulatory_liquidity import get_regulatory_run, preview_note
 
 ENGINE_VERSION = "regulatory-capital-v1.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
@@ -97,9 +98,6 @@ CAPITAL_SCENARIO_CODES = ("baseline", "mild", "moderate", "severe")
 
 BSD2_FORM_CODE = "BSD-2"
 BSD2_FORM_TITLE = "Capital Adequacy Return"
-BSD2_REGULATOR = "Bank of Ghana"
-# The BSD-2 preview carries the exact same disclaimer as the BSD-3 preview.
-BSD2_PREVIEW_NOTE = BSD3_PREVIEW_NOTE
 CAR_EARLY_WARNING_LABEL = "Early warning / conservation buffer floor"
 
 _ZERO = Decimal("0")
@@ -323,18 +321,19 @@ def get_bsd2_preview(
         )
         for item in _stored_validations(db, run)
     ]
+    regulator = regulator_name(db, bank)
     return Bsd2PreviewRead(
         header=Bsd2HeaderRead(
             form_code=BSD2_FORM_CODE,
             form_title=BSD2_FORM_TITLE,
-            regulator=BSD2_REGULATOR,
+            regulator=regulator,
             bank_name=bank.name,
             license_type=bank.license_type,
             reporting_period_label=period.label,
             period_end=period.period_end,
             currency=bank.currency,
             generated_at=datetime.now(UTC),
-            preview_note=BSD2_PREVIEW_NOTE,
+            preview_note=preview_note(regulator),
         ),
         run_id=run.id,
         scenario_code=run.scenario_code,  # type: ignore[arg-type]

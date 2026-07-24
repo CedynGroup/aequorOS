@@ -110,7 +110,7 @@ function ProductsBody({ ctx }: { ctx: FtpFrameContext }) {
       key: 'balance',
       header: sortHeader('Balance', 'balance'),
       numeric: true,
-      render: (r) => fmtCurrency(num(r.balanceGhs), 'GHS'),
+      render: (r) => fmtCurrency(num(r.balanceGhs)),
     },
     {
       key: 'customer',
@@ -156,7 +156,7 @@ function ProductsBody({ ctx }: { ctx: FtpFrameContext }) {
       key: 'contribution',
       header: sortHeader('Contribution', 'contribution'),
       numeric: true,
-      render: (r) => fmtCurrencySigned(num(r.contributionGhs), 'GHS'),
+      render: (r) => fmtCurrencySigned(num(r.contributionGhs)),
     },
   ];
 
@@ -171,8 +171,8 @@ function ProductsBody({ ctx }: { ctx: FtpFrameContext }) {
         />
         <KpiStat
           label="Total net contribution"
-          value={fmtCurrency(num(m.totalContributionGhs), 'GHS')}
-          hint={`Across ${fmtCurrency(num(m.totalBalanceGhs), 'GHS')} of balances`}
+          value={fmtCurrency(num(m.totalContributionGhs))}
+          hint={`Across ${fmtCurrency(num(m.totalBalanceGhs))} of balances`}
         />
         <KpiStat
           label="Products below floor"

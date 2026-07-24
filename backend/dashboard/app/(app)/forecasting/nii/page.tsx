@@ -139,13 +139,13 @@ function NiiDashboard({
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiStat
           label="Y1 projected NII"
-          value={fmtCurrency(y1Nii, 'GHS')}
+          value={fmtCurrency(y1Nii)}
           hint={`${scenarioLabel(primary.scenarioCode)} scenario`}
           sparkline={<Sparkline data={niiSeries} color={seriesColor(0)} />}
         />
         <KpiStat
           label="5-year cumulative NII"
-          value={fmtCurrency(cumulativeNii, 'GHS')}
+          value={fmtCurrency(cumulativeNii)}
           hint="Sum of Y1–Y5 path values (derived)"
         />
         <KpiStat
@@ -194,7 +194,7 @@ function NiiDashboard({
           <ScenarioLinesChart
             data={scenarioData}
             series={scenarioSeries}
-            valueFormatter={(v) => fmtCurrency(v, 'GHS')}
+            valueFormatter={(v) => fmtCurrency(v)}
           />
         </ChartFrame>
 
@@ -259,7 +259,7 @@ function SensitivityTable({
               <tr key={year} className="border-b border-border-light last:border-b-0">
                 <td className="px-4 py-2.5 font-medium text-navy">Y{year}</td>
                 <td className="px-4 py-2.5 text-right font-mono tnum">
-                  {baseNii === null ? '—' : fmtCurrency(baseNii, 'GHS')}
+                  {baseNii === null ? '—' : fmtCurrency(baseNii)}
                 </td>
                 {scenarios.map((code) => {
                   const v = niiAt(runsByScenario[code], year);
@@ -271,7 +271,7 @@ function SensitivityTable({
                         <span className="text-slate">—</span>
                       ) : (
                         <span className="inline-flex items-center gap-2 font-mono tnum">
-                          {fmtCurrency(v, 'GHS')}
+                          {fmtCurrency(v)}
                           {deltaPct !== null && (
                             <DeltaBadge value={deltaPct} suffix="%" decimals={1} />
                           )}

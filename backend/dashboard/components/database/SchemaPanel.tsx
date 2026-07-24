@@ -7,6 +7,7 @@
  */
 
 import type { DatabaseConnectionDiscoverResult } from '@aequoros/risk-service-api';
+import { fmtLocale } from '@/lib/format';
 
 export default function SchemaPanel({
   result,
@@ -53,7 +54,7 @@ export default function SchemaPanel({
               </span>
               {table.rowCount != null && (
                 <span className="ml-auto text-caption font-mono text-slate tabular-nums">
-                  {Number(table.rowCount).toLocaleString('en-GH')} rows
+                  {Number(table.rowCount).toLocaleString(fmtLocale())} rows
                 </span>
               )}
             </summary>

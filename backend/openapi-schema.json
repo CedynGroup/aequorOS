@@ -936,6 +936,16 @@
             "title": "Id",
             "type": "string"
           },
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JurisdictionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "jurisdiction_code": {
             "title": "Jurisdiction Code",
             "type": "string"
@@ -12810,6 +12820,75 @@
             "type": "null"
           }
         ]
+      },
+      "JurisdictionRead": {
+        "additionalProperties": false,
+        "description": "Country identity resolved from the jurisdictions registry \u2014 the source\nof every country-derived display value (currency, locale, regulator).",
+        "properties": {
+          "central_bank_name": {
+            "title": "Central Bank Name",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "country_name": {
+            "title": "Country Name",
+            "type": "string"
+          },
+          "currency_code": {
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "currency_name": {
+            "title": "Currency Name",
+            "type": "string"
+          },
+          "locale": {
+            "title": "Locale",
+            "type": "string"
+          },
+          "regulator_short": {
+            "title": "Regulator Short",
+            "type": "string"
+          },
+          "submission_portal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Portal"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          }
+        },
+        "required": [
+          "code",
+          "country_name",
+          "currency_code",
+          "currency_name",
+          "locale",
+          "central_bank_name",
+          "regulator_short",
+          "submission_portal",
+          "timezone"
+        ],
+        "title": "JurisdictionRead",
+        "type": "object"
       },
       "LineageNodeRead": {
         "properties": {

@@ -19,6 +19,7 @@ import {
   useBsd3Preview,
 } from '@/lib/api/hooks';
 import { shortId } from '@/lib/api/values';
+import { regShort } from '@/lib/format';
 
 type PackQuery = {
   isLoading: boolean;
@@ -61,7 +62,7 @@ export default function PackCards({
   }[] = [
     {
       form: 'BSD-2',
-      title: 'BoG Capital Adequacy Return',
+      title: `${regShort()} Capital Adequacy Return`,
       description:
         'Capital structure, risk-weighted assets, and capital ratios — generated from the latest successful baseline capital run; official packages live in the Regulatory Reporting hub.',
       href: '/submissions/returns?code=BSD2',
@@ -70,7 +71,7 @@ export default function PackCards({
     },
     {
       form: 'BSD-3',
-      title: 'BoG Liquidity Return (LCR & NSFR)',
+      title: `${regShort()} Liquidity Return (LCR & NSFR)`,
       description:
         'Liquidity Coverage Ratio and Net Stable Funding Ratio — generated from the latest successful baseline liquidity run; official packages live in the Regulatory Reporting hub.',
       href: '/submissions/returns?code=BSD3',

@@ -43,6 +43,7 @@ import ConnectionForm, {
 import SchemaPanel from './SchemaPanel';
 import SyncPanel from './SyncPanel';
 import { ConnectionStatusPill, backendName, fmtWhen } from './shared';
+import { fmtLocale } from '@/lib/format';
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
@@ -393,7 +394,7 @@ export default function ConnectionCard({
           {testResult.reachable ? (
             <ul className="space-y-0.5 text-body text-navy font-mono">
               {testResult.latencyMs != null && (
-                <li>latency: {Number(testResult.latencyMs).toLocaleString('en-GH')} ms</li>
+                <li>latency: {Number(testResult.latencyMs).toLocaleString(fmtLocale())} ms</li>
               )}
               {testResult.tablesPulled != null && (
                 <li>tables reached: {testResult.tablesPulled}</li>

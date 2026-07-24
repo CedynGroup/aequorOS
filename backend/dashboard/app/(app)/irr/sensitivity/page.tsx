@@ -73,7 +73,7 @@ export default function IrrSensitivityPage() {
             key: 'eve',
             header: 'EVE',
             numeric: true,
-            render: (r) => fmtCurrency(num(r.eveGhs), 'GHS'),
+            render: (r) => fmtCurrency(num(r.eveGhs)),
           },
           {
             key: 'delta',
@@ -83,7 +83,7 @@ export default function IrrSensitivityPage() {
               const v = num(r.deltaEveGhs);
               return (
                 <span className={v < 0 ? 'text-critical font-medium' : undefined}>
-                  {fmtCurrencySigned(v, 'GHS')}
+                  {fmtCurrencySigned(v)}
                 </span>
               );
             },
@@ -117,7 +117,7 @@ export default function IrrSensitivityPage() {
           <>
             <SectionCard
               title="EVE by scenario"
-              subtitle={`Base EVE ${fmtCurrency(num(m.eveBaseGhs), 'GHS')} · Tier 1 ${fmtCurrency(
+              subtitle={`Base EVE ${fmtCurrency(num(m.eveBaseGhs))} · Tier 1 ${fmtCurrency(
                 num(m.tier1Ghs),
                 'GHS'
               )} · supervisory limit ${eveLimit}% of Tier 1`}
@@ -154,18 +154,18 @@ export default function IrrSensitivityPage() {
               <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <KpiStat
                   label="Base NII (annualized)"
-                  value={fmtCurrency(num(m.niiBaseGhs), 'GHS')}
+                  value={fmtCurrency(num(m.niiBaseGhs))}
                   hint="Rate-sensitive book, swap carry included"
                 />
                 <KpiStat
                   label="ΔNII — rates +200bp"
-                  value={fmtCurrencySigned(earUp, 'GHS')}
+                  value={fmtCurrencySigned(earUp)}
                   status={earUp < 0 ? 'warn' : 'ok'}
                   hint="Upward parallel shock"
                 />
                 <KpiStat
                   label="ΔNII — rates −200bp"
-                  value={fmtCurrencySigned(earDown, 'GHS')}
+                  value={fmtCurrencySigned(earDown)}
                   status={earDown < 0 ? 'warn' : 'ok'}
                   hint="Downward parallel shock"
                 />

@@ -18,7 +18,7 @@ import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
 import ValidationList from '@/components/ui/ValidationList';
 import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
-import { fmtCurrencySigned, fmtPct } from '@/lib/format';
+import { fmtCurrencySigned, fmtPct, regShort } from '@/lib/format';
 
 export default function IrrLimitsPage() {
   return (
@@ -41,7 +41,7 @@ export default function IrrLimitsPage() {
           <>
             <SectionCard
               title="ΔEVE / Tier 1 — supervisory limit"
-              subtitle={`Outlier threshold ${eveLimit}% of Tier 1 · source: BoG SDI supervisory parameter (eve_tier1_limit_pct)`}
+              subtitle={`Outlier threshold ${eveLimit}% of Tier 1 · source: ${regShort()} SDI supervisory parameter (eve_tier1_limit_pct)`}
               actions={
                 <StatusPill tone={statusTone(m.eveStatus)}>
                   {fmtPct(worstPct, 2)} of {eveLimit}%
@@ -62,7 +62,7 @@ export default function IrrLimitsPage() {
                   <span className="whitespace-nowrap">
                     ΔEVE{' '}
                     <span className="font-mono tnum font-medium text-navy">
-                      {fmtCurrencySigned(num(m.worstEveChangeGhs), 'GHS')}
+                      {fmtCurrencySigned(num(m.worstEveChangeGhs))}
                     </span>
                   </span>
                 }
@@ -98,7 +98,7 @@ export default function IrrLimitsPage() {
                                 num(s.deltaEveGhs) < 0 ? 'text-critical' : 'text-navy'
                               }`}
                             >
-                              {fmtCurrencySigned(num(s.deltaEveGhs), 'GHS')}
+                              {fmtCurrencySigned(num(s.deltaEveGhs))}
                             </span>
                           </span>
                         }

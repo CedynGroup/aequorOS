@@ -10,6 +10,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import { ErrorPanel, PageSkeleton } from '@/components/ui/QueryBoundary';
 import { useBankContext } from '@/components/shell/BankContext';
+import { fmtLocale } from '@/lib/format';
 import {
   useIngestionBatch,
   useTranslationFailures,
@@ -131,7 +132,7 @@ export default function BatchDetailPage({
         {warningHints.length > 0 && (
           <div className="card border-l-4 border-l-warning p-5 space-y-3">
             <p className="text-body font-medium text-navy">
-              {batch.recordsWarning.toLocaleString('en-GH')} rows carry data-quality
+              {batch.recordsWarning.toLocaleString(fmtLocale())} rows carry data-quality
               flags — they are in the canonical model and participate in calculations.
               How to resolve the flags:
             </p>

@@ -58,7 +58,7 @@ export default function ScenarioStrip({
               <span className="text-caption text-slate font-sans"> of Tier 1</span>
             </p>
             <p className="text-caption text-slate">
-              NOP {fmtCurrency(num(s.nopGhs), 'GHS')} · limit {fmtPct(aggregateLimitPct, 0)}
+              NOP {fmtCurrency(num(s.nopGhs))} · limit {fmtPct(aggregateLimitPct, 0)}
             </p>
           </div>
         );

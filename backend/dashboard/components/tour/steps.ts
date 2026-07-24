@@ -31,7 +31,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'risk',
     title: 'Risk & Limits',
-    body: 'A single limits board across modules: each regulatory ratio against its Bank of Ghana threshold, with traffic-light status and headroom.',
+    body: 'A single limits board across modules: each regulatory ratio against its central-bank threshold, with traffic-light status and headroom.',
     selectors: ["aside nav a[href='/risk']"],
   },
   {

@@ -200,7 +200,7 @@ function NmdTable({ rows }: { rows: FtpNmdSegmentRead[] }) {
       key: 'balance',
       header: 'Balance',
       numeric: true,
-      render: (r) => fmtCurrency(num(r.balanceGhs), 'GHS'),
+      render: (r) => fmtCurrency(num(r.balanceGhs)),
     },
     {
       key: 'core',

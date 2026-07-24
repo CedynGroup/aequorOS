@@ -62,13 +62,13 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
       key: 'net',
       header: 'Net position (GHS)',
       numeric: true,
-      render: (r) => fmtCurrencySigned(num(r.netGhs), 'GHS'),
+      render: (r) => fmtCurrencySigned(num(r.netGhs)),
     },
     {
       key: 'var',
       header: `Standalone VaR (${confidence.toFixed(0)}%, 1d)`,
       numeric: true,
-      render: (r) => fmtCurrency(num(r.standaloneVarGhs), 'GHS'),
+      render: (r) => fmtCurrency(num(r.standaloneVarGhs)),
     },
     {
       key: 'share',
@@ -86,23 +86,23 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiStat
           label={`Portfolio VaR (${confidence.toFixed(0)}%, 1-day)`}
-          value={fmtCurrency(portfolioVar, 'GHS')}
+          value={fmtCurrency(portfolioVar)}
           hint={`${m.varObservations} return observations`}
         />
         <KpiStat
           label="Sum of standalone VaR"
-          value={fmtCurrency(standaloneTotal, 'GHS')}
+          value={fmtCurrency(standaloneTotal)}
           hint="Undiversified currency VaR"
         />
         <KpiStat
           label="Diversification benefit"
-          value={fmtCurrency(benefit, 'GHS')}
+          value={fmtCurrency(benefit)}
           status="ok"
           hint={`${fmtPct(benefitPct, 1)} of standalone sum`}
         />
         <KpiStat
           label="Stressed VaR"
-          value={fmtCurrency(stressed, 'GHS')}
+          value={fmtCurrency(stressed)}
           status="warn"
           hint={
             upliftRatio > 0 ? `${upliftRatio.toFixed(2)}× base VaR` : 'Cedi-crisis calibration'
@@ -118,8 +118,8 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
           className="xl:col-span-3"
           footer={
             <span>
-              Undiversified sum {fmtCurrency(standaloneTotal, 'GHS')} − diversification{' '}
-              {fmtCurrency(benefit, 'GHS')} = portfolio VaR {fmtCurrency(portfolioVar, 'GHS')}
+              Undiversified sum {fmtCurrency(standaloneTotal)} − diversification{' '}
+              {fmtCurrency(benefit)} = portfolio VaR {fmtCurrency(portfolioVar)}
             </span>
           }
         >
@@ -138,11 +138,11 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
               Cedi-crisis stressed VaR
             </p>
             <p className="font-mono text-kpi text-navy tnum">
-              {fmtCurrency(stressed, 'GHS')}
+              {fmtCurrency(stressed)}
             </p>
             <p className="text-caption text-slate leading-relaxed">{stressedNote}</p>
             <p className="text-caption text-slate">
-              Base VaR {fmtCurrency(portfolioVar, 'GHS')}
+              Base VaR {fmtCurrency(portfolioVar)}
               {upliftRatio > 0 && (
                 <>
                   {' '}
@@ -184,7 +184,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
           <TrendChart
             data={varTrend}
             valueLabel="Portfolio VaR"
-            format={(v) => fmtCurrency(v, 'GHS')}
+            format={(v) => fmtCurrency(v)}
             colorIndex={1}
           />
         </ChartFrame>

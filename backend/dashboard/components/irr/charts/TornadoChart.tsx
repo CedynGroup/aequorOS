@@ -81,7 +81,7 @@ export default function TornadoChart({
             const pct = (entry?.payload as TornadoPoint | undefined)?.pctTier1;
             const suffix =
               pct !== undefined ? ` (${fmtPct(pct, 2)} of Tier 1)` : '';
-            return [`${fmtCurrencySigned(v, 'GHS')}${suffix}`, 'ΔEVE'];
+            return [`${fmtCurrencySigned(v)}${suffix}`, 'ΔEVE'];
           }}
         />
         <ReferenceLine x={0} stroke={CHART_AXIS} />

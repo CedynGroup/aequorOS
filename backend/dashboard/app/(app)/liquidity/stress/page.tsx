@@ -28,7 +28,7 @@ import {
   useRunAllLiquidityScenarios,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, labelize, num, statusTone } from '@/lib/api/values';
-import { fmtCurrency, fmtPct } from '@/lib/format';
+import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
 const STRESS_SCENARIOS = ['idiosyncratic', 'market_wide', 'combined'] as const;
 
@@ -36,7 +36,7 @@ const SCENARIO_LABELS: Record<string, string> = {
   baseline: 'Baseline',
   idiosyncratic: 'Idiosyncratic stress',
   market_wide: 'Market-wide stress',
-  combined: 'Combined stress (BoG severe)',
+  combined: 'Combined stress (supervisory severe)',
 };
 
 const SCENARIO_DESCRIPTIONS: Record<string, string> = {
@@ -45,7 +45,7 @@ const SCENARIO_DESCRIPTIONS: Record<string, string> = {
   market_wide:
     'System-wide market stress — inflow haircuts and HQLA securities haircuts applied to the reporting period.',
   combined:
-    'Concurrent idiosyncratic and market-wide shock per the BoG ILAAP severe scenario.',
+    'Concurrent idiosyncratic and market-wide shock per the supervisory ILAAP severe scenario.',
 };
 
 export default function StressScenarios() {
@@ -178,7 +178,7 @@ export default function StressScenarios() {
           { label: 'Stress' },
         ]}
         title="Liquidity Stress"
-        subtitle="Basel III-aligned liquidity stress per BoG ILAAP framework"
+        subtitle={`Basel III-aligned liquidity stress per ${regShort()} ILAAP framework`}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={runAllButton}
       />
@@ -212,7 +212,7 @@ export default function StressScenarios() {
                 <KpiStat
                   label="Baseline HQLA"
                   value={
-                    baselineHqla === null ? '—' : fmtCurrency(baselineHqla, 'GHS')
+                    baselineHqla === null ? '—' : fmtCurrency(baselineHqla)
                   }
                 />
                 <KpiStat label="Survival horizon" value="30" unit="days" />
@@ -287,14 +287,14 @@ export default function StressScenarios() {
           >
             <div className="text-body text-navy/85 leading-relaxed space-y-3">
               <p>
-                Stress factors applied to baseline LCR and NSFR per BoG&apos;s
+                Stress factors applied to baseline LCR and NSFR per {regShort()}&apos;s
                 ILAAP framework and Basel III §35-36 (LCR) and §50-52 (NSFR).
                 Each scenario reruns the regulatory engines with stressed
                 run-off rates, inflow multipliers, and HQLA haircuts, and
                 persists an auditable run with its full input snapshot.
               </p>
               <p>
-                Idiosyncratic and market-wide shocks are calibrated to BoG
+                Idiosyncratic and market-wide shocks are calibrated to {regShort()}
                 severe tolerance levels; the combined scenario assumes a
                 simultaneous shock with no central bank backstop. ILAAP
                 submission quarterly.
@@ -583,7 +583,7 @@ function ComparisonTable({
       render: (r: ComparisonRow) => {
         const value = r.values[i];
         if (value === null) return '—';
-        return r.unit === 'pct' ? fmtPct(value, 2) : fmtCurrency(value, 'GHS');
+        return r.unit === 'pct' ? fmtPct(value, 2) : fmtCurrency(value);
       },
     })),
   ];

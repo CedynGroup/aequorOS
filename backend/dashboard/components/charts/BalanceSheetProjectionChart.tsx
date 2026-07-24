@@ -23,6 +23,7 @@ import {
   chartTooltipProps,
   seriesColor,
 } from '@/lib/chartTheme';
+import { currencyCode, fmtLocale } from '@/lib/format';
 
 export type BalanceSheetPoint = {
   /** X-axis label (e.g. "Y0", "2027-03"). */
@@ -54,7 +55,7 @@ export default function BalanceSheetProjectionChart({
         <Tooltip
           {...chartTooltipProps}
           formatter={(v: number, name: string) => [
-            `GHS ${v.toLocaleString()}M`,
+            `${currencyCode()} ${v.toLocaleString(fmtLocale())}M`,
             name,
           ]}
         />
@@ -84,7 +85,7 @@ export default function BalanceSheetProjectionChart({
           stroke={seriesColor(2)}
           fill={seriesColor(2)}
           fillOpacity={0.8}
-          name="Cash & BoG reserves"
+          name="Cash & central bank reserves"
         />
       </AreaChart>
     </ResponsiveContainer>

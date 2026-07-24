@@ -45,22 +45,22 @@ export default function BalanceSheetStrip({
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           <KpiStat
             label="Total assets"
-            value={fmtCurrency(totalAssets(facts.data), 'GHS')}
+            value={fmtCurrency(totalAssets(facts.data))}
             hint="Asset side, canonical"
           />
           <KpiStat
             label="Deposits"
-            value={fmtCurrency(totalDeposits(facts.data), 'GHS')}
+            value={fmtCurrency(totalDeposits(facts.data))}
             hint="Retail + wholesale"
           />
           <KpiStat
             label="Loans (gross)"
-            value={fmtCurrency(totalLoans(facts.data), 'GHS')}
+            value={fmtCurrency(totalLoans(facts.data))}
             hint="Gross loan book"
           />
           <KpiStat
             label="Capital base"
-            value={fmtCurrency(totalCapital(facts.data), 'GHS')}
+            value={fmtCurrency(totalCapital(facts.data))}
             hint="Total capital"
           />
         </div>

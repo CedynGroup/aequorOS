@@ -157,11 +157,11 @@ function ComparePanel({
     {
       label: 'EVE',
       render: (s) => (
-        <span className="font-mono tnum text-navy">{fmtCurrency(num(s.eveGhs), 'GHS')}</span>
+        <span className="font-mono tnum text-navy">{fmtCurrency(num(s.eveGhs))}</span>
       ),
       spread: (
         <span className="font-mono tnum text-navy">
-          {fmtCurrencySigned(num(a.eveGhs) - num(b.eveGhs), 'GHS')}
+          {fmtCurrencySigned(num(a.eveGhs) - num(b.eveGhs))}
         </span>
       ),
     },
@@ -171,13 +171,13 @@ function ComparePanel({
         const v = num(s.deltaEveGhs);
         return (
           <span className={`font-mono tnum ${v < 0 ? 'text-critical' : 'text-navy'}`}>
-            {fmtCurrencySigned(v, 'GHS')}
+            {fmtCurrencySigned(v)}
           </span>
         );
       },
       spread: (
         <span className="font-mono tnum text-navy">
-          {fmtCurrencySigned(num(a.deltaEveGhs) - num(b.deltaEveGhs), 'GHS')}
+          {fmtCurrencySigned(num(a.deltaEveGhs) - num(b.deltaEveGhs))}
         </span>
       ),
     },

@@ -1,7 +1,7 @@
 """Add non-security personal profile preferences to users.
 
 Revision ID: 202607210017
-Revises: 202607200016
+Revises: 202607230017
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "202607210017"
-down_revision = "202607200016"
+down_revision = "202607230017"
 branch_labels = None
 depends_on = None
 

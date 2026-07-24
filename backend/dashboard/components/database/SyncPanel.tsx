@@ -16,6 +16,7 @@ import { useIngestionBatch } from '@/lib/api/ingestion';
 import { useSyncDatabaseConnection } from '@/lib/api/database-direct';
 import BatchReport from './BatchReport';
 import { SyncStatusPill } from './shared';
+import { fmtLocale } from '@/lib/format';
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
@@ -131,13 +132,13 @@ export default function SyncPanel({
             <div>
               <dt className="text-caption text-slate">Records extracted</dt>
               <dd className="font-mono text-navy tabular-nums">
-                {result.recordsExtracted.toLocaleString('en-GH')}
+                {result.recordsExtracted.toLocaleString(fmtLocale())}
               </dd>
             </div>
             <div>
               <dt className="text-caption text-slate">Records accepted</dt>
               <dd className="font-mono text-navy tabular-nums">
-                {result.recordsAccepted.toLocaleString('en-GH')}
+                {result.recordsAccepted.toLocaleString(fmtLocale())}
               </dd>
             </div>
           </dl>

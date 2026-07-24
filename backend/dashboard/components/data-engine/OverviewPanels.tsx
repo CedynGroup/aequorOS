@@ -25,6 +25,7 @@ import { SkeletonLine } from '@/components/ui/Skeleton';
 import { useIngestionSummary } from '@/lib/api/ingestion';
 import { INTEGRATIONS, type Integration } from './content';
 import { BatchStatusPill, formatDateTime } from './shared';
+import { fmtLocale } from '@/lib/format';
 
 const INTEGRATION_ICONS: Record<string, typeof Server> = {
   'excel-csv': FileSpreadsheet,
@@ -111,7 +112,7 @@ function IntegrationCard({
         <div>
           <p className="text-micro uppercase tracking-wider text-slate">Accepted</p>
           <p className="mt-0.5 font-mono text-h3 text-success">
-            {stats.accepted.toLocaleString('en-GH')}
+            {stats.accepted.toLocaleString(fmtLocale())}
           </p>
         </div>
         <div>
@@ -124,7 +125,7 @@ function IntegrationCard({
           <p
             className={`mt-0.5 font-mono text-h3 ${stats.warnings > 0 ? 'text-warning' : 'text-slate'}`}
           >
-            {stats.warnings.toLocaleString('en-GH')}
+            {stats.warnings.toLocaleString(fmtLocale())}
           </p>
         </div>
       </div>
@@ -209,15 +210,15 @@ export function CanonicalSummaryStrip() {
   const tiles: { label: string; value: string; tone?: string; title?: string }[] = [
     {
       label: 'Canonical records',
-      value: totalRecords.toLocaleString('en-GH'),
+      value: totalRecords.toLocaleString(fmtLocale()),
       title:
         'Current-generation positions, counterparties, GL accounts, and products, plus the reference rows the modules consume.',
     },
-    { label: 'Positions (current gen)', value: counts.positions.toLocaleString('en-GH') },
-    { label: 'Counterparties', value: counts.counterparties.toLocaleString('en-GH') },
-    { label: 'GL accounts', value: counts.glAccounts.toLocaleString('en-GH') },
-    { label: 'Products', value: counts.products.toLocaleString('en-GH') },
-    { label: 'Reference rows', value: counts.referenceRows.toLocaleString('en-GH') },
+    { label: 'Positions (current gen)', value: counts.positions.toLocaleString(fmtLocale()) },
+    { label: 'Counterparties', value: counts.counterparties.toLocaleString(fmtLocale()) },
+    { label: 'GL accounts', value: counts.glAccounts.toLocaleString(fmtLocale()) },
+    { label: 'Products', value: counts.products.toLocaleString(fmtLocale()) },
+    { label: 'Reference rows', value: counts.referenceRows.toLocaleString(fmtLocale()) },
     {
       label: 'Activations',
       value: String(summaryQuery.data.activationsCount),

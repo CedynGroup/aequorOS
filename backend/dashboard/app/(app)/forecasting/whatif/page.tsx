@@ -51,9 +51,9 @@ const SHOCKS: { code: WhatIfShockCode; label: string; description: string }[] = 
   },
   {
     code: 'cedi_depreciation_20',
-    label: 'Cedi depreciation 20%',
+    label: 'Local-currency depreciation 20%',
     description:
-      'GHS depreciation inflates FX-linked risk-weighted assets across the horizon.',
+      'Local-currency depreciation inflates FX-linked risk-weighted assets across the horizon.',
   },
   {
     code: 'default_spike',
@@ -63,7 +63,7 @@ const SHOCKS: { code: WhatIfShockCode; label: string; description: string }[] = 
   },
   {
     code: 'mpr_cut_200',
-    label: 'BoG policy rate cut −200bps',
+    label: 'Policy rate cut −200bps',
     description:
       'Easing cycle compresses the net interest margin as assets reprice downward.',
   },
@@ -243,7 +243,7 @@ const WHATIF_METRICS = [
     fmt: (v: number) => fmtPct(v, 2),
     tick: (v: number) => `${Math.round(v)}%`,
     threshold: 10,
-    thresholdLabel: 'BoG min 10%',
+    thresholdLabel: 'Regulatory min 10%',
   },
   {
     code: 'lcrPct',
@@ -251,7 +251,7 @@ const WHATIF_METRICS = [
     fmt: (v: number) => fmtPct(v, 1),
     tick: (v: number) => `${Math.round(v)}%`,
     threshold: 100,
-    thresholdLabel: 'BoG min 100%',
+    thresholdLabel: 'Regulatory min 100%',
   },
   {
     code: 'nsfrPct',
@@ -259,21 +259,21 @@ const WHATIF_METRICS = [
     fmt: (v: number) => fmtPct(v, 1),
     tick: (v: number) => `${Math.round(v)}%`,
     threshold: 100,
-    thresholdLabel: 'BoG min 100%',
+    thresholdLabel: 'Regulatory min 100%',
   },
   {
     code: 'netIncome',
     label: 'Net income',
-    fmt: (v: number) => fmtCurrency(v, 'GHS'),
-    tick: (v: number) => fmtCurrency(v, 'GHS', { decimals: 1 }),
+    fmt: (v: number) => fmtCurrency(v),
+    tick: (v: number) => fmtCurrency(v, undefined, { decimals: 1 }),
     threshold: undefined,
     thresholdLabel: undefined,
   },
   {
     code: 'totalAssets',
     label: 'Total assets',
-    fmt: (v: number) => fmtCurrency(v, 'GHS'),
-    tick: (v: number) => fmtCurrency(v, 'GHS', { decimals: 1 }),
+    fmt: (v: number) => fmtCurrency(v),
+    tick: (v: number) => fmtCurrency(v, undefined, { decimals: 1 }),
     threshold: undefined,
     thresholdLabel: undefined,
   },
@@ -579,7 +579,7 @@ function ShockResult({
         <ComparisonCell
           label="Y5 net income"
           comparison={view.year5.netIncome}
-          fmt={(v) => fmtCurrency(v, 'GHS')}
+          fmt={(v) => fmtCurrency(v)}
           currencyDelta
         />
       </div>
@@ -657,7 +657,7 @@ function ShockResult({
                       <DeltaCell value={d.nsfrDeltaPp} fmt={(v) => v.toFixed(2)} />
                       <DeltaCell
                         value={d.netIncomeDelta}
-                        fmt={(v) => fmtCurrency(Math.abs(v), 'GHS')}
+                        fmt={(v) => fmtCurrency(Math.abs(v))}
                         signed
                       />
                     </tr>
@@ -757,7 +757,7 @@ function ComparisonCell({
               comparison.delta < 0 ? 'text-critical' : 'text-success'
             }`}
           >
-            {fmtCurrencySigned(comparison.delta, 'GHS')}
+            {fmtCurrencySigned(comparison.delta)}
           </span>
         ) : (
           <DeltaBadge value={comparison.delta} suffix={deltaSuffix} decimals={2} />

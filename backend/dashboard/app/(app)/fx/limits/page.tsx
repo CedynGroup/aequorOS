@@ -11,14 +11,14 @@ import ValidationList from '@/components/ui/ValidationList';
 import FxModuleFrame, { type FxFrameContext } from '@/components/fx/FxModuleFrame';
 import TrendChart from '@/components/fx/charts/TrendChart';
 import { num } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
+import { fmtPct, regShort } from '@/lib/format';
 
 export default function FxLimitsPage() {
   return (
     <FxModuleFrame
       crumb="Limits"
       title="FX Limits"
-      subtitle="BoG net-open-position ceilings · aggregate and single-currency utilisation"
+      subtitle={`${regShort()} net-open-position ceilings · aggregate and single-currency utilisation`}
     >
       {(ctx) => <LimitsBody ctx={ctx} />}
     </FxModuleFrame>
@@ -102,7 +102,7 @@ function LimitsBody({ ctx }: { ctx: FxFrameContext }) {
             direction="below"
             unit="%"
             format={(v) => v.toFixed(2)}
-            limitLabel="BoG aggregate limit"
+            limitLabel={`${regShort()} aggregate limit`}
           />
           <div className="border-t border-border-light pt-5 space-y-5">
             {data.positions.map((p) => (
