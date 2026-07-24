@@ -381,7 +381,7 @@ def load_history(  # noqa: PLR0913, PLR0912, PLR0915
     return summary
 
 
-def _load_reference_rows(
+def _load_reference_rows(  # noqa: PLR0913 - one kwarg per reference dataset kind
     session,
     m,
     bid,
@@ -437,7 +437,7 @@ def _load_reference_rows(
     return _bulk_insert(session, CanonicalReferenceRow, rows)
 
 
-def derive_all_periods(
+def derive_all_periods(  # noqa: PLR0913 - loader entrypoint carries the full run configuration
     session: Session,
     org_id: UUID,
     bank_id: UUID,  # noqa: PLR0913
