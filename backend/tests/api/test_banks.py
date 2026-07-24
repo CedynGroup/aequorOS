@@ -57,7 +57,8 @@ def test_seed_demo_creates_sample_bank(db_client: TestClient) -> None:
     assert summary["bank_id"] == str(SAMPLE_BANK_ID)
     assert summary["periods"] == 12
     assert summary["fact_count"] == 1308
-    assert summary["param_count"] == 167
+    # 169 = 167 baseline + the two IRRBB BoG ±450bp shock rows (plan W6a).
+    assert summary["param_count"] == 169
 
     response = db_client.get("/api/v1/banks", headers=headers())
     assert response.status_code == 200
