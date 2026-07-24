@@ -233,9 +233,151 @@ def upgrade() -> None:  # noqa: PLR0912, PLR0915 - one-time identity epoch, kept
         op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
 
 
-def downgrade() -> None:
-    raise NotImplementedError(
-        "202607240025 is a one-time identity epoch (UUID -> platform ID). "
-        "The legacy UUIDs are preserved in platform_id_legacy_map; restore "
-        "from backup to roll back."
+def downgrade() -> None:  # noqa: PLR0912, PLR0915 - mirror of upgrade, kept linear
+    """Restore UUID identity from platform_id_legacy_map.
+
+    Identities created after the epoch get freshly minted UUIDs (recorded in
+    the map before conversion). Polymorphic entity_id values that cannot be
+    mapped back to a UUID are nulled — the production-grade rollback remains
+    restore-from-backup; this path exists for migration-cycle tests and
+    emergency reversal shortly after the epoch.
+    """
+    connection = op.get_bind()
+    if connection.dialect.name != "postgresql":
+        return
+
+    affected_list = list(AFFECTED)
+
+    forced = [
+        r[0]
+        for r in _rows(
+            connection,
+            "SELECT c.relname FROM pg_class c "
+            "JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = current_schema() AND c.relname = ANY(:tables) "
+            "AND c.relforcerowsecurity",
+            tables=affected_list,
+        )
+    ]
+    for table in forced:
+        op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
+
+    policies = _rows(
+        connection,
+        "SELECT tablename, policyname, permissive, roles, cmd, qual, with_check "
+        "FROM pg_policies WHERE schemaname = current_schema() "
+        "AND tablename = ANY(:tables)",
+        tables=affected_list,
     )
+    for table, name, *_ in policies:
+        op.execute(f'DROP POLICY "{name}" ON {table}')
+
+    fks = _rows(
+        connection,
+        "SELECT con.conname, con.conrelid::regclass::text AS tbl, "
+        "       pg_get_constraintdef(con.oid) AS def "
+        "FROM pg_constraint con "
+        "JOIN pg_namespace n ON n.oid = con.connamespace "
+        "WHERE n.nspname = current_schema() AND con.contype = 'f' AND ("
+        "  con.confrelid IN ('organizations'::regclass, 'banks'::regclass) "
+        "  OR pg_get_constraintdef(con.oid) ~ '\\m(organization_id|bank_id)\\M'"
+        ")",
+    )
+    for name, table, _def in fks:
+        op.execute(f'ALTER TABLE {table} DROP CONSTRAINT "{name}"')
+
+    # Post-epoch identities have no legacy UUID yet — mint one so the reverse
+    # mapping is total.
+    for entity_type, table in (("organization", "organizations"), ("bank", "banks")):
+        op.execute(
+            "INSERT INTO platform_id_legacy_map (entity_type, legacy_uuid, id) "  # noqa: S608
+            f"SELECT '{entity_type}', gen_random_uuid(), t.id FROM {table} t "
+            "WHERE NOT EXISTS (SELECT 1 FROM platform_id_legacy_map m "
+            f"WHERE m.entity_type = '{entity_type}' AND m.id = t.id)"
+        )
+
+    def reverse_case(column: str, entity_type: str) -> str:
+        pairs = _rows(
+            connection,
+            "SELECT id, legacy_uuid FROM platform_id_legacy_map "
+            "WHERE entity_type = :entity",
+            entity=entity_type,
+        )
+        whens = " ".join(
+            f"WHEN '{code}' THEN '{legacy}'::uuid" for code, legacy in pairs
+        )
+        return f"CASE {column} {whens} END" if whens else "NULL"
+
+    org_case = reverse_case("organization_id", "organization")
+    bank_case = reverse_case("bank_id", "bank")
+
+    # Polymorphic references: map codes back where possible, null the rest.
+    for table in ("jobs", "notifications", "audit_events"):
+        op.execute(
+            f"UPDATE {table} SET entity_id = m.legacy_uuid::text "  # noqa: S608
+            "FROM platform_id_legacy_map m "
+            f"WHERE {table}.entity_id = m.id"
+        )
+        op.execute(
+            f"UPDATE {table} SET entity_id = NULL "  # noqa: S608
+            "WHERE entity_id IS NOT NULL AND entity_id !~ "
+            "'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'"
+        )
+        op.execute(
+            f"ALTER TABLE {table} ALTER COLUMN entity_id TYPE uuid "
+            f"USING entity_id::uuid"
+        )
+
+    op.execute("ALTER TABLE organizations ADD COLUMN public_id varchar(16)")
+    op.execute("UPDATE organizations SET public_id = id")
+    op.execute("ALTER TABLE organizations ALTER COLUMN public_id SET NOT NULL")
+    op.execute(
+        "ALTER TABLE organizations ALTER COLUMN id TYPE uuid "
+        f"USING ({reverse_case('id', 'organization')})"
+    )
+    op.execute(
+        "CREATE UNIQUE INDEX uq_organizations_public_id ON organizations (public_id)"
+    )
+    op.execute("ALTER TABLE banks ADD COLUMN public_id varchar(16)")
+    op.execute("UPDATE banks SET public_id = id")
+    op.execute("ALTER TABLE banks ALTER COLUMN public_id SET NOT NULL")
+    op.execute(
+        "ALTER TABLE banks ALTER COLUMN id TYPE uuid "
+        f"USING ({reverse_case('id', 'bank')})"
+    )
+    op.execute("CREATE UNIQUE INDEX uq_banks_public_id ON banks (public_id)")
+
+    org_set = set(ORG_TABLES)
+    bank_set = set(BANK_TABLES)
+    for table in dict.fromkeys([*ORG_TABLES, *BANK_TABLES]):
+        clauses = []
+        if table in org_set:
+            clauses.append(f"ALTER COLUMN organization_id TYPE uuid USING ({org_case})")
+        if table in bank_set:
+            clauses.append(f"ALTER COLUMN bank_id TYPE uuid USING ({bank_case})")
+        op.execute(f"ALTER TABLE {table} " + ", ".join(clauses))
+
+    for name, table, definition in fks:
+        op.execute(f'ALTER TABLE {table} ADD CONSTRAINT "{name}" {definition}')
+    guc = "NULLIF(current_setting('app.organization_id'::text, true), ''::text)"
+    for table, name, permissive, roles, cmd, qual, with_check in policies:
+        qual_text = (qual or "").replace(
+            f"(organization_id)::text = {guc}", f"organization_id = ({guc})::uuid"
+        ).replace(f"(id)::text = {guc}", f"id = ({guc})::uuid")
+        check_text = (with_check or "").replace(
+            f"(organization_id)::text = {guc}", f"organization_id = ({guc})::uuid"
+        ).replace(f"(id)::text = {guc}", f"id = ({guc})::uuid")
+        role_list = ", ".join(roles) if roles else "PUBLIC"
+        statement = f'CREATE POLICY "{name}" ON {table}'
+        statement += f" AS {'PERMISSIVE' if permissive == 'PERMISSIVE' else 'RESTRICTIVE'}"
+        statement += f" FOR {cmd or 'ALL'} TO {role_list}"
+        if qual_text:
+            statement += f" USING ({qual_text})"
+        if check_text:
+            statement += f" WITH CHECK ({check_text})"
+        op.execute(statement)
+
+    for table in forced:
+        op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
+
+    op.execute("DROP TABLE platform_id_legacy_map")
