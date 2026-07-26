@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AppEnv = Literal["local", "test", "staging", "production"]
 StorageBackend = Literal["s3"]
+SigningBackend = Literal["software", "pkcs11", "kms"]
 
 SETTINGS_CONFIG = SettingsConfigDict(
     env_file=".env",
@@ -22,6 +23,10 @@ SETTINGS_CONFIG = SettingsConfigDict(
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CASHFLOW_ARTIFACTS_DIR = BACKEND_ROOT / "artifacts" / "cashflow"
 DEFAULT_BEHAVIORAL_ARTIFACTS_DIR = BACKEND_ROOT / "artifacts" / "behavioral"
+# Sealed soft-key store for the DEV/TEST signing backend only. Deliberately on
+# disk and never in the database: signer_keys holds custody metadata, never key
+# material (docs/attestation_esignature.md §3.4).
+DEFAULT_SIGNING_KEY_DIR = BACKEND_ROOT / "artifacts" / "signing_keys"
 
 
 class AppSettings(BaseSettings):
@@ -83,6 +88,158 @@ class SmtpSettings(BaseSettings):
     @property
     def enabled(self) -> bool:
         return self.smtp_host is not None and self.smtp_from is not None
+
+
+class AttestationSettings(BaseSettings):
+    """Attestation & e-signature configuration (docs/attestation_esignature.md).
+
+    Default OFF end to end. ``SIGNER_ID_PEPPER`` is the only value required to
+    provision signer identities; signing additionally needs a key backend and
+    (for long-term validity) a TSA. An absent pepper is a hard failure at
+    derivation rather than a silent fallback — a predictable signer identity
+    would let anyone holding a filed document enumerate platform user ids.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    signer_id_pepper: str | None = Field(default=None, alias="SIGNER_ID_PEPPER")
+    #: pkcs11 | kms | software. "software" is refused when APP_ENV=prod.
+    signing_backend: SigningBackend = Field(default="software", alias="SIGNING_BACKEND")
+    pkcs11_module_path: str | None = Field(default=None, alias="PKCS11_MODULE_PATH")
+    pkcs11_token_label: str | None = Field(default=None, alias="PKCS11_TOKEN_LABEL")
+    pkcs11_slot: int | None = Field(default=None, alias="PKCS11_SLOT")
+    pkcs11_user_pin: str | None = Field(default=None, alias="PKCS11_USER_PIN")
+    #: Sealed soft-key store for the DEV/TEST backend. On disk, never in the
+    #: database: signer_keys holds custody metadata only (§3.4).
+    software_key_dir: Path = Field(
+        default=DEFAULT_SIGNING_KEY_DIR, alias="SIGNING_SOFTWARE_KEY_DIR"
+    )
+    #: Cloud KMS selection for the (unbuilt) kms backend — see signers.py.
+    kms_provider: str | None = Field(default=None, alias="SIGNING_KMS_PROVIDER")
+    kms_key_id: str | None = Field(default=None, alias="SIGNING_KMS_KEY_ID")
+    #: Seconds a single-use signing authorisation stays valid after step-up.
+    authorization_ttl_seconds: int = Field(default=120, alias="SIGNING_AUTHORIZATION_TTL")
+    #: Master switch for the signing surfaces. Identity provisioning and the
+    #: evidential hardening are always on; producing signatures is not.
+    signing_enabled: bool = Field(default=False, alias="ATTESTATION_SIGNING_ENABLED")
+    #: PEM trust anchors for verification, as a filesystem path (file or
+    #: directory). WITHOUT these, verification can only anchor on the
+    #: certificate chain the signature itself carries — which proves the
+    #: signature is internally consistent but NOT that the signer was issued a
+    #: certificate by an authority the institution recognises. The verifier
+    #: reports that distinction rather than implying trust it cannot establish.
+    trust_roots_path: str | None = Field(default=None, alias="ATTESTATION_TRUST_ROOTS")
+
+    @field_validator(
+        "signer_id_pepper",
+        "trust_roots_path",
+        "pkcs11_module_path",
+        "pkcs11_token_label",
+        "pkcs11_user_pin",
+        "kms_provider",
+        "kms_key_id",
+        mode="before",
+    )
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    @property
+    def identities_available(self) -> bool:
+        return self.signer_id_pepper is not None
+
+    @property
+    def signing_ready(self) -> bool:
+        """True when this deployment can actually produce a signature.
+
+        Signing is REQUIRED by default (attestation.policy.default_policy), so a
+        deployment that cannot sign cannot file — the two settings below are the
+        difference between a working filing pipeline and a locked one. They are
+        reported together because separately they are not actionable: an
+        operator needs to be told "this deployment cannot sign", not "one of two
+        environment variables you have not heard of is unset".
+        """
+        return self.signing_enabled and self.identities_available
+
+    def signing_readiness_gaps(self) -> list[str]:
+        """The specific settings that must be supplied before signing works."""
+        gaps: list[str] = []
+        if not self.signing_enabled:
+            gaps.append("ATTESTATION_SIGNING_ENABLED")
+        if not self.identities_available:
+            gaps.append("SIGNER_ID_PEPPER")
+        return gaps
+
+    def load_trust_roots(self) -> list[bytes]:
+        """Configured PEM trust anchors, or an empty list.
+
+        An unreadable configured path is a hard failure, not a silent fallback:
+        verifying against the embedded chain while an operator believes
+        institutional roots are in force would overstate the result.
+        """
+        if self.trust_roots_path is None:
+            return []
+        root = Path(self.trust_roots_path)
+        if not root.exists():
+            msg = f"ATTESTATION_TRUST_ROOTS path does not exist: {root}"
+            raise ValueError(msg)
+        files = sorted(root.glob("*.pem")) if root.is_dir() else [root]
+        anchors = [path.read_bytes() for path in files if path.is_file()]
+        if not anchors:
+            msg = f"ATTESTATION_TRUST_ROOTS contains no PEM files: {root}"
+            raise ValueError(msg)
+        return anchors
+
+
+class TsaSettings(BaseSettings):
+    """RFC 3161 trusted time (docs/attestation_esignature.md §3.6, gap G4).
+
+    Default OFF: with no ``TSA_URL`` the attestation path has no trusted clock
+    and must fail closed rather than fall back to the app host's wall clock —
+    an unmonitored host clock is precisely the gap the TSA exists to close.
+
+    Only a HASH is ever sent to the URL configured here (RFC 3161 message
+    imprint), never document content — the property that makes an external,
+    possibly offshore, timestamping authority compatible with Act 930 banking
+    secrecy (§5.2). ``TSA_HASH_ALGORITHM`` is the imprint digest and, per
+    RFC 8933, must be the algorithm that produced the digest we submit.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    tsa_url: str | None = Field(default=None, alias="TSA_URL")
+    tsa_username: str | None = Field(default=None, alias="TSA_USERNAME")
+    tsa_password: str | None = Field(default=None, alias="TSA_PASSWORD")
+    # Explicit and finite: a hung TSA must not hold a signing request open.
+    tsa_timeout_seconds: float = Field(default=10.0, alias="TSA_TIMEOUT_SECONDS")
+    tsa_hash_algorithm: str = Field(default="sha256", alias="TSA_HASH_ALGORITHM")
+
+    @field_validator("tsa_url", "tsa_username", "tsa_password", mode="before")
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    @field_validator("tsa_hash_algorithm", mode="before")
+    @classmethod
+    def normalize_hash_algorithm(cls, value: str | None) -> str:
+        if value is None or not str(value).strip():
+            return "sha256"
+        return str(value).strip().lower()
+
+    @property
+    def enabled(self) -> bool:
+        return self.tsa_url is not None
+
+    @property
+    def basic_auth(self) -> tuple[str, str] | None:
+        """HTTP basic credentials, or None when the TSA is open/IP-allowlisted."""
+        if self.tsa_username is None or self.tsa_password is None:
+            return None
+        return (self.tsa_username, self.tsa_password)
 
 
 class CorsSettings(BaseSettings):
@@ -293,6 +450,8 @@ class Settings(BaseSettings):
     temenos: TemenosSettings = Field(default_factory=TemenosSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
     smtp: SmtpSettings = Field(default_factory=SmtpSettings)
+    attestation: AttestationSettings = Field(default_factory=AttestationSettings)
+    tsa: TsaSettings = Field(default_factory=TsaSettings)
 
     @property
     def storage_configured(self) -> bool:

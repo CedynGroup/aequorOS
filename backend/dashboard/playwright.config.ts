@@ -18,6 +18,12 @@ export const E2E_DASHBOARD_PORT = 3021;
 export const E2E_BASE_URL = `http://localhost:${E2E_DASHBOARD_PORT}`;
 export const E2E_API_ORIGIN = `http://127.0.0.1:${E2E_BACKEND_PORT}`;
 export const E2E_TMP = path.join(__dirname, 'e2e', '.tmp');
+// Seals the disposable soft signing keys the ceremony journeys use. The
+// software key backend refuses to initialise when APP_ENV is production, so
+// this fixture value cannot reach a deployment.
+const E2E_VAULT_KEY = Buffer.from('e2e-vault-master-key-not-prod-00000').toString(
+  'base64'
+);
 
 const BACKEND_DIR = path.join(__dirname, '..');
 const E2E_DB = path.join(E2E_TMP, 'e2e.db');
@@ -52,10 +58,25 @@ export default defineConfig({
         DATABASE_URL: `sqlite+pysqlite:///${E2E_DB}`,
         WORKER_DATABASE_URL: '',
         DEMO_SEED_ENABLED: '1',
+        // Signer identities need a pepper to derive; signing itself stays
+        // OFF so the hermetic stack exercises the surfaces and guards
+        // without an HSM.
+        SIGNER_ID_PEPPER: 'e2e-signer-pepper-not-production-000',
+        // Signing ON for the hermetic stack, backed by disposable self-signed
+        // software keys. The software backend refuses to start when APP_ENV is
+        // production, so this configuration cannot leak into a deployment.
+        ATTESTATION_SIGNING_ENABLED: '1',
+        SIGNING_BACKEND: 'software',
+        SIGNING_SOFTWARE_KEY_DIR: `${E2E_TMP}/signing-keys`,
         RUN_INPROCESS_WORKER: '0',
         AUTH_JWT_SECRET: 'e2e-backend-jwt-secret-not-production-000',
         SSO_INTERNAL_KEY: '',
-        CREDENTIAL_VAULT_MASTER_KEY: '',
+        // Computed, not written as a literal: the vault wants base64, and a
+        // base64 literal in source is indistinguishable from a real key to a
+        // secret scanner (gitleaks flagged exactly that). Keeping the readable
+        // string here means a genuine key pasted into this spot would still be
+        // caught, instead of hiding behind an allowlist entry.
+        CREDENTIAL_VAULT_MASTER_KEY: E2E_VAULT_KEY,
         CORS_ORIGINS: E2E_BASE_URL,
         APP_ENV: 'test',
       },

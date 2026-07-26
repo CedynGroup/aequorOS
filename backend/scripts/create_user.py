@@ -13,11 +13,11 @@ back to a local database, so you always know which DB you are writing to.
 Usage:
     # Password account in an existing org (prints a generated temp password):
     uv run python scripts/create_user.py \
-        --email lawrenceaddo@gmail.com --org-id <ORG_UUID> --role admin --password
+        --email lawrenceaddo@gmail.com --org-id OR-XXXXXXXX --role admin --password
 
     # SSO account (links on first OIDC login by matching email):
     uv run python scripts/create_user.py \
-        --email lawrenceaddo@gmail.com --org-id <ORG_UUID> --role admin --sso
+        --email lawrenceaddo@gmail.com --org-id OR-XXXXXXXX --role admin --sso
 
     # Create a brand-new organization at the same time:
     uv run python scripts/create_user.py \
@@ -35,7 +35,6 @@ import argparse
 import secrets
 import sys
 from pathlib import Path
-from uuid import UUID, uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -47,9 +46,13 @@ from app.core import security  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.models.organization import Organization  # noqa: E402
 from app.models.user import USER_ROLES, User  # noqa: E402
+from app.services.public_ids import (  # noqa: E402
+    new_organization_public_id,
+    normalize_public_id,
+)
 
 
-def _set_tenant_context(session: Session, organization_id: UUID) -> None:
+def _set_tenant_context(session: Session, organization_id: str) -> None:
     """Set the RLS GUC so writes/reads are scoped to this tenant (Postgres only)."""
     if session.get_bind().dialect.name != "postgresql":
         return
@@ -59,9 +62,15 @@ def _set_tenant_context(session: Session, organization_id: UUID) -> None:
     )
 
 
-def _resolve_org(session: Session, args: argparse.Namespace) -> UUID:
+def _resolve_org(session: Session, args: argparse.Namespace) -> str:
     if args.create_org:
-        org_id = UUID(args.org_id) if args.org_id else uuid4()
+        # Platform IDs (OR-XXXXXXXX) are the organizations primary key since the
+        # 2026-07-24 identity epoch; omitting --org-id lets the model default mint one.
+        org_id = (
+            normalize_public_id(args.org_id)
+            if args.org_id
+            else new_organization_public_id()
+        )
         _set_tenant_context(session, org_id)
         if session.scalar(select(Organization.id).where(Organization.id == org_id)) is None:
             session.add(Organization(id=org_id, name=args.org_name))
@@ -69,7 +78,7 @@ def _resolve_org(session: Session, args: argparse.Namespace) -> UUID:
             print(f"Created organization {args.org_name!r} ({org_id}).")
         return org_id
 
-    org_id = UUID(args.org_id)
+    org_id = normalize_public_id(args.org_id)
     _set_tenant_context(session, org_id)
     if session.scalar(select(Organization.id).where(Organization.id == org_id)) is None:
         raise SystemExit(
@@ -147,9 +156,9 @@ def build_parser() -> argparse.ArgumentParser:
     auth.add_argument(
         "--sso",
         action="store_true",
-        help="Auth0 SSO login (no password; links on first Auth0 sign-in by email).",
+        help="SSO login (no password; links on first Auth0 sign-in by email).",
     )
-    p.add_argument("--sso-subject", help="Optional Auth0 subject to pre-link (with --sso).")
+    p.add_argument("--sso-subject", help="Optional OIDC subject to pre-link (with --sso).")
     return p
 
 

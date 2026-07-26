@@ -39,6 +39,7 @@ from app.services.history_loader import (  # noqa: E402
     derive_all_periods,
     load_history,
 )
+from app.services.public_ids import normalize_public_id  # noqa: E402
 
 DEMO_ORG_ID = UUID("11111111-1111-4111-8111-111111111111")
 SAMPLE_BANK_ID = UUID("77000000-0000-4000-8000-000000000001")
@@ -72,7 +73,8 @@ def main() -> None:  # noqa: PLR0915
     if not args.yes:
         ap.error("Pass --yes to confirm. This writes millions of rows to the target DB.")
 
-    org_id, bank_id = UUID(args.org_id), UUID(args.bank_id)
+    # Platform IDs since the 2026-07-24 identity epoch, not UUIDs.
+    org_id, bank_id = normalize_public_id(args.org_id), normalize_public_id(args.bank_id)
     panels_dir = Path(args.panels_dir)
     engine = create_engine(args.database_url)
     session = Session(engine)

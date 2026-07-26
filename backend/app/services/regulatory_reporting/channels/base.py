@@ -11,11 +11,23 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Literal, Protocol
 
-from app.models import RegulatoryPackage, RegulatoryPackageArtifact
+from app.models import (
+    RegulatoryArtifactVersion,
+    RegulatoryPackage,
+    RegulatoryPackageArtifact,
+)
 
 # "rejected" is returned-for-correction (rework via resubmission); "declined"
 # is the regulator's final refusal — mirrors the documented ORASS lifecycle.
 type SubmissionPollStatus = Literal["pending", "acknowledged", "rejected", "declined"]
+
+#: One file in a filing. A channel needs a kind, a path, a checksum and a size,
+#: and both rows carry all four — which is the point: what goes to the regulator
+#: is the CANONICAL EXPORT only while a return is unsigned. Once officers have
+#: certified it, the file is the signed revision they pinned
+#: (``regulatory_artifact_versions``), and a channel must be able to carry it
+#: without knowing anything about attestation.
+type FiledArtifact = RegulatoryPackageArtifact | RegulatoryArtifactVersion
 
 
 class SubmissionChannel(Protocol):
@@ -31,7 +43,7 @@ class SubmissionChannel(Protocol):
     def submit(
         self,
         package: RegulatoryPackage,
-        artifacts: Sequence[RegulatoryPackageArtifact],
+        artifacts: Sequence[FiledArtifact],
     ) -> str: ...
 
     def poll(self, external_ref: str) -> SubmissionPollStatus: ...

@@ -133,6 +133,8 @@ def test_user_can_update_and_clear_own_profile(db_client: TestClient) -> None:
         "timezone": "Africa/Accra",
         "theme": "system",
         "role": "viewer",
+        # Exposed so the signing ceremony can offer the right step-up proof.
+        "auth_provider": "password",
     }
     assert db_client.get("/api/v1/auth/me", headers=authorization).json() == updated.json()
 

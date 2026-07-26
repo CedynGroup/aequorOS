@@ -31,6 +31,7 @@ type ReturnFamily = Literal[
 ]
 type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual", "daily"]
 type ChannelCode = Literal["orass_sandbox", "email", "manual"]
+type FilingFormat = Literal["xlsx", "csv", "pdf"]
 
 REGULATOR_BOG = "BOG"
 
@@ -121,6 +122,16 @@ class ReturnDefinition:
     # ``deadline_rule`` exist only to satisfy the package row shape and must
     # never mint month-end obligations.
     event_driven: bool = False
+    # The rendered template format the regulator expects in the filing. Once a
+    # return is certified the SIGNED PDF is what gets filed, and this format is
+    # attached ALONGSIDE it rather than dropped: whether ORASS accepts a PDF as
+    # the filing itself is unconfirmed (docs/attestation_esignature.md §8 C1),
+    # and silently replacing a required template on a statutory filing is not a
+    # bet worth taking on an unconfirmed fact. ``None`` where a return needs no
+    # template beside the signed document. The default restates what the
+    # submission path has always auto-exported — it is the status quo as data,
+    # not a new claim about any return.
+    filing_format: FilingFormat | None = "xlsx"
 
 
 REGISTRY: dict[str, ReturnDefinition] = {

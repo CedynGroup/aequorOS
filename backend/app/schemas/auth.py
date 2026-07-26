@@ -51,6 +51,9 @@ class MeResponse(BaseModel):
     timezone: str | None
     theme: Literal["light", "dark", "system"] | None
     role: str
+    # Lets the signing ceremony offer the correct step-up proof (SSO
+    # re-authentication vs password re-entry) rather than presenting both.
+    auth_provider: str
 
 
 class ProfileUpdateRequest(BaseModel):

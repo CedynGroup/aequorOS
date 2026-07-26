@@ -99,6 +99,11 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_regulatory_packages_frequency",
         ),
         CheckConstraint(
+            "attestation_state IN ('unsigned', 'preparer_certified', "
+            "'fully_certified', 'void')",
+            name="ck_regulatory_packages_attestation_state",
+        ),
+        CheckConstraint(
             f"basis IN ({_values(RETURN_BASES)})",
             name="ck_regulatory_packages_basis",
         ),
@@ -167,6 +172,32 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     # SHA-256 over the canonical-JSON snapshot, sealed at generation; exports
     # verify against it so a drifted snapshot can never silently render.
     snapshot_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # --- attestation (docs/attestation_esignature.md §4) --------------------
+    # Content fingerprint with volatile metadata excluded — unlike
+    # snapshot_sha256 (which embeds metadata.generated_at and therefore seals a
+    # VERSION), this is stable across regenerations of identical figures and is
+    # what a signature binds to.
+    content_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Master-data provenance for packs that bind no engine run (the LRT-*
+    # corporate family, source_runs == []).
+    register_state_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    attestation_state: Mapped[str] = mapped_column(
+        String(24), default="unsigned", server_default="unsigned", nullable=False
+    )
+    # Incremented on void; signatures carry the cycle they belong to so the
+    # signature table stays strictly append-only.
+    attestation_cycle: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=sql_text("1"), nullable=False
+    )
+    # The digest frozen at preparer certification. Every later signer must
+    # match it exactly, and submission is refused if it drifts.
+    certification_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    certified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fully_certified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    void_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # ORASS-style submission revision ("1.0", "1.1", ...) stamped at submit
     # time; the minor number counts granted resubmissions in the version chain.
     submission_revision: Mapped[str | None] = mapped_column(String(8), nullable=True)

@@ -5,10 +5,19 @@ seam), artifact download (outputs tier), and channel submission (ORASS sandbox
 simulator + BG/FMD/2026/07 email fallback + manual record). Credentials on
 channel configs are write-only: responses expose only the fingerprint, never
 the material.
+
+Two artifact surfaces, and the difference decides what a bank files. The
+``regulatory-artifacts`` routes serve the CANONICAL UNSIGNED export — one row
+per kind, upserted. The ``artifact-versions`` routes serve the append-only
+chain, including every signed revision an officer's certification pinned. Once
+a return is certified the signed revision is the document (see
+``services/regulatory_reporting/artifact_versions.py``); the base export stays
+retrievable as the pre-signature engine output.
 """
 
 from __future__ import annotations
 
+import io
 from datetime import date
 from pathlib import PurePosixPath
 from typing import Annotated, Literal
@@ -25,9 +34,12 @@ from app.schemas.regulatory_reporting import (
     EmailFallbackInstructionsRead,
     PackageApprovalDecisionCreate,
     PackageApprovalRequestCreate,
+    PackageComparisonRead,
     PackageSubmitCreate,
+    PackageVersionChainRead,
     RegulatoryArtifactListRead,
     RegulatoryArtifactRead,
+    RegulatoryArtifactVersionListRead,
     RegulatoryPackageCreate,
     RegulatoryPackageListRead,
     RegulatoryPackageRead,
@@ -43,6 +55,7 @@ from app.schemas.regulatory_reporting import (
     SubmissionPollRead,
 )
 from app.services import regulatory_reporting
+from app.services.regulatory_reporting import artifact_versions, version_chain
 from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.storage.client import StorageLocation, StorageNotFoundError
 
@@ -237,6 +250,91 @@ def download_regulatory_artifact(
 
 
 @router.get(
+    "/banks/{bank_id}/regulatory-packages/{package_id}/artifact-versions",
+    response_model=RegulatoryArtifactVersionListRead,
+    operation_id="listPackageArtifactVersions",
+)
+def list_package_artifact_versions(
+    bank_id: str,
+    package_id: UUID,
+    db: DbSession,
+    ctx: Tenant,
+) -> RegulatoryArtifactVersionListRead:
+    """Every archived render and signed revision, oldest first.
+
+    The artifact list above is the upserted row per kind — always the unsigned
+    base export. This is the chain: the base, then one revision per officer,
+    each naming the signature that pinned it.
+    """
+    return artifact_versions.list_versions(db, ctx, bank_id, package_id)
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-packages/{package_id}/version-chain",
+    response_model=PackageVersionChainRead,
+    operation_id="getPackageVersionChain",
+)
+def get_package_version_chain(
+    bank_id: str,
+    package_id: UUID,
+    db: DbSession,
+    ctx: Tenant,
+) -> PackageVersionChainRead:
+    """The whole supersession chain, each version with what it can still offer.
+
+    The package list carries statuses and timestamps only, which cannot answer
+    what is asked about a superseded filing: who certified it, which file went
+    to the regulator, and whether any file survives at all. This adds the
+    signatures (withdrawn cycles flagged), both artifact surfaces, and the
+    ``has_retrievable_files`` verdict a never-exported version needs.
+    """
+    return version_chain.get_version_chain(db, ctx, bank_id, package_id)
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-packages/{package_id}/comparison",
+    response_model=PackageComparisonRead,
+    operation_id="comparePackageVersions",
+)
+def compare_package_versions(
+    bank_id: str,
+    package_id: UUID,
+    against: Annotated[UUID, Query(description="The package to compare against.")],
+    db: DbSession,
+    ctx: Tenant,
+) -> PackageComparisonRead:
+    """Line-item figures diff: the path package is the base, ``against`` the target.
+
+    Computed server-side against the two immutable snapshots, so it is
+    available for every version — including one that was never exported — and
+    so the comparison an examiner is shown is the one the platform computed.
+    """
+    return version_chain.compare_versions(db, ctx, bank_id, package_id, against)
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-artifact-versions/{version_id}/download",
+    response_class=StreamingResponse,
+    operation_id="downloadRegulatoryArtifactVersion",
+)
+def download_regulatory_artifact_version(
+    bank_id: str,
+    version_id: UUID,
+    db: DbSession,
+    ctx: Tenant,
+    storage: IngestionStorage,
+) -> StreamingResponse:
+    """Stream one archived revision, with its checksum re-verified first."""
+    version, payload = artifact_versions.read_version_bytes(db, ctx, bank_id, version_id, storage)
+    filename = PurePosixPath(version.object_path).name
+    return StreamingResponse(
+        io.BytesIO(payload),
+        media_type=_ARTIFACT_MEDIA_TYPES.get(version.kind, "application/octet-stream"),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
     "/banks/{bank_id}/regulatory-packages/{package_id}/email-fallback.eml",
     response_class=StreamingResponse,
     operation_id="downloadEmailFallbackEml",
@@ -298,9 +396,7 @@ def download_email_fallback_eml(
         io.BytesIO(raw),
         media_type="message/rfc822",
         headers={
-            "Content-Disposition": (
-                f'attachment; filename="orass-downtime-{package_ref}.eml"'
-            )
+            "Content-Disposition": (f'attachment; filename="orass-downtime-{package_ref}.eml"')
         },
     )
 

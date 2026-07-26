@@ -17,12 +17,18 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.db.session import get_sessionmaker
-from app.models import Bank, RegulatoryPackage, RegulatoryPackageArtifact, User
+from app.models import (
+    Bank,
+    RegulatoryArtifactVersion,
+    RegulatoryPackage,
+    RegulatoryPackageArtifact,
+    User,
+)
 from app.services.ingestion import bank_slug
 from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.services.sample_bank_seed import SAMPLE_BANK_ID
 from app.storage.client import ObjectMetadata, StorageLocation
-from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.api.helpers import ORG_1, ORG_2, USER_1, headers, relax_signing
 from tests.storage.inmemory import InMemoryStorageClient
 
 CHECKER_USER_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
@@ -337,6 +343,12 @@ def test_validation_errors_keep_package_generated_and_block_approval(
 
 def test_full_lifecycle_happy_path_with_maker_checker(db_client: TestClient) -> None:
     period = _seed_latest_period(db_client)
+    # A bare approval decision is refused while the return's signatures are
+    # outstanding — approving and signing are one act now. This journey is about
+    # the decision's own rules (status, maker-checker, reason, re-decide), so opt
+    # BSD3 out the way an administrator would; the one-act composition is proved
+    # in tests/services/test_attestation_workspace.py.
+    relax_signing(db_client, "BSD3")
     _run_liquidity_baseline(db_client, period["id"])
     _seed_checker_user()
     package = _generate_bsd3(db_client).json()
@@ -421,6 +433,11 @@ def test_submit_and_poll_gate_on_approval_and_events_start_empty(
     db_client: TestClient,
 ) -> None:
     period = _seed_latest_period(db_client)
+    # Signing is required for every return by default, and this journey is not
+    # about who signed — opt BSD3 out the way an administrator would, so what
+    # fails here is the gate under test rather than a missing signature. The
+    # signing gate itself is proved in tests/services/test_attestation_spine.py.
+    relax_signing(db_client, "BSD3")
     _run_liquidity_baseline(db_client, period["id"])
     package = _generate_bsd3(db_client).json()
     base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}"
@@ -643,6 +660,18 @@ def test_regulatory_reporting_endpoints_are_tenant_isolated(db_client: TestClien
         ).status_code
         == 404
     )
+    assert (
+        db_client.get(f"{base}/{package['id']}/artifact-versions", headers=org2).status_code == 404
+    )
+    assert db_client.get(f"{base}/{package['id']}/version-chain", headers=org2).status_code == 404
+    assert (
+        db_client.get(
+            f"{base}/{package['id']}/comparison",
+            headers=org2,
+            params={"against": package["id"]},
+        ).status_code
+        == 404
+    )
 
     # An unknown package id under the right tenant is also a 404.
     assert db_client.get(f"{base}/{uuid4()}", headers=headers()).status_code == 404
@@ -652,6 +681,11 @@ def test_export_creates_artifact_and_download_round_trips(
     db_client: TestClient, fake_export_seam: InMemoryStorageClient
 ) -> None:
     period = _seed_latest_period(db_client)
+    # Signing is required for every return by default, and this journey is not
+    # about who signed — opt BSD3 out the way an administrator would, so what
+    # fails here is the gate under test rather than a missing signature. The
+    # signing gate itself is proved in tests/services/test_attestation_spine.py.
+    relax_signing(db_client, "BSD3")
     _run_liquidity_baseline(db_client, period["id"])
     package = _generate_bsd3(db_client).json()
     base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}"
@@ -688,10 +722,193 @@ def test_export_creates_artifact_and_download_round_trips(
     )
 
 
+def test_artifact_version_list_and_download_round_trip(
+    db_client: TestClient, fake_export_seam: InMemoryStorageClient
+) -> None:
+    """The version routes exist, are tenant-scoped, and prove what they serve.
+
+    The signed-revision resolution is exercised against a real ceremony in
+    tests/services/test_attestation_artifact_signing.py; what is on trial here
+    is the wire — that a version id is not an artifact id, that the checksum is
+    re-verified before any byte is sent, and that a neighbouring tenant sees a
+    404 rather than another bank's return.
+    """
+    period = _seed_latest_period(db_client)
+    relax_signing(db_client, "BSD3")
+    _run_liquidity_baseline(db_client, period["id"])
+    package = _generate_bsd3(db_client).json()
+    version = _seed_artifact_version(package["id"], fake_export_seam, b"%PDF-1.4 unsigned base")
+
+    listed = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}/artifact-versions",
+        headers=headers(),
+    )
+    assert listed.status_code == 200, listed.text
+    versions = listed.json()["versions"]
+    assert [entry["id"] for entry in versions] == [str(version.id)]
+    # Unsigned: nothing pinned it, so nothing is the filed document yet.
+    assert versions[0]["signed_by"] is None
+    assert versions[0]["is_latest"] is True
+    assert versions[0]["is_filed"] is False
+
+    download = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifact-versions/{version.id}/download",
+        headers=headers(),
+    )
+    assert download.status_code == 200, download.text
+    assert download.content == b"%PDF-1.4 unsigned base"
+    assert download.headers["content-type"].startswith("application/pdf")
+    assert 'filename="BSD3.pdf"' in download.headers["content-disposition"]
+
+    # An artifact id is not a version id, and neither is another tenant's.
+    assert (
+        db_client.get(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifact-versions/{uuid4()}/download",
+            headers=headers(),
+        ).status_code
+        == 404
+    )
+    assert (
+        db_client.get(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifact-versions/{version.id}/download",
+            headers=headers(ORG_2),
+        ).status_code
+        == 404
+    )
+
+
+def test_version_chain_and_comparison_serve_a_prior_version(
+    db_client: TestClient, fake_export_seam: InMemoryStorageClient
+) -> None:
+    """A superseded version over the wire: its files (or the absence of them),
+    and a figures diff against the version that replaced it.
+
+    The chain endpoint is what turns the Prior-versions card from a list of
+    timestamps into something an examiner can act on, so the contract it
+    publishes — ``has_retrievable_files``, the artifact surfaces, the diff
+    shape — is asserted rather than assumed.
+    """
+    period = _seed_latest_period(db_client)
+    relax_signing(db_client, "BSD3")
+    _run_liquidity_baseline(db_client, period["id"])
+    prior = _generate_bsd3(db_client).json()
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages"
+    # Exported while it was still current — the only moment it can be, and the
+    # reason a superseded version has files to offer at all.
+    exported = db_client.post(
+        f"{base}/{prior['id']}/export", headers=headers(), params={"kind": "pdf"}
+    )
+    assert exported.status_code == 201, exported.text
+    current = _generate_bsd3(db_client).json()
+
+    chained = db_client.get(f"{base}/{prior['id']}/version-chain", headers=headers())
+    assert chained.status_code == 200, chained.text
+    chain = chained.json()
+    assert chain["current_package_id"] == current["id"]
+    assert [entry["version"] for entry in chain["versions"]] == [2, 1]
+
+    prior_entry = chain["versions"][1]
+    assert prior_entry["status"] == "superseded"
+    assert prior_entry["is_current"] is False
+    assert [artifact["kind"] for artifact in prior_entry["artifacts"]] == ["pdf"]
+    assert prior_entry["has_retrievable_files"] is True
+    assert prior_entry["signatures"] == []
+
+    # The replacement was never exported, so the card must say so rather than
+    # render a download control that cannot work.
+    current_entry = chain["versions"][0]
+    assert current_entry["is_current"] is True
+    assert current_entry["artifacts"] == []
+    assert current_entry["artifact_versions"] == []
+    assert current_entry["has_retrievable_files"] is False
+
+    compared = db_client.get(
+        f"{base}/{prior['id']}/comparison",
+        headers=headers(),
+        params={"against": current["id"]},
+    )
+    assert compared.status_code == 200, compared.text
+    comparison = compared.json()
+    assert comparison["base"]["version"] == 1
+    assert comparison["target"]["version"] == 2
+    # Regeneration off unchanged canonical data reproduces the figures exactly;
+    # only volatile generation metadata differs, and that is not a figure.
+    assert comparison["identical"] is True
+    assert comparison["sections"] == []
+    assert comparison["unchanged_section_count"] > 0
+
+    # A different return has no line items in common — refused, not rendered.
+    other = db_client.post(
+        base,
+        headers=headers(),
+        json={"return_code": "LMT", "reporting_date": REPORTING_DATE},
+    )
+    assert other.status_code == 201, other.text
+    mismatched = db_client.get(
+        f"{base}/{prior['id']}/comparison",
+        headers=headers(),
+        params={"against": other.json()["id"]},
+    )
+    assert mismatched.status_code == 409, mismatched.text
+    assert mismatched.json()["error"]["details"]["error_code"] == "comparison_return_mismatch"
+
+
+def _seed_artifact_version(
+    package_id: str, storage: InMemoryStorageClient, content: bytes
+) -> RegulatoryArtifactVersion:
+    """One archived revision plus its bytes, without running the export engine.
+
+    The fake export seam mints artifact rows only; a version row is what the
+    signing ceremony appends, and this suite has no signer.
+    """
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        package = session.get(RegulatoryPackage, UUID(package_id))
+        assert package is not None
+        bank = session.get(Bank, package.bank_id)
+        assert bank is not None
+        slug = bank_slug(session, bank)
+        object_path = f"bog_returns/{package.reporting_date.isoformat()}/{package.id}/BSD3.pdf"
+        checksum = hashlib.sha256(content).hexdigest()
+        stored = storage.write(
+            StorageLocation(institution_slug=slug, tier="outputs", object_path=object_path),
+            io.BytesIO(content),
+            ObjectMetadata(
+                institution_slug=slug,
+                tier="outputs",
+                checksum_sha256=checksum,
+                written_at=datetime.now(UTC),
+                written_by="test-signer",
+            ),
+        )
+        version = RegulatoryArtifactVersion(
+            organization_id=ORG_1,
+            package_id=package.id,
+            kind="pdf",
+            object_path=object_path,
+            storage_version_id=stored.version_id,
+            checksum_sha256=checksum,
+            size_bytes=len(content),
+        )
+        session.add(version)
+        session.commit()
+        session.refresh(version)
+        session.expunge(version)
+        return version
+    finally:
+        session.close()
+
+
 def test_submit_default_channel_auto_exports_then_poll_acknowledges(
     db_client: TestClient, fake_export_seam: InMemoryStorageClient
 ) -> None:
     period = _seed_latest_period(db_client)
+    # Signing is required for every return by default, and this journey is not
+    # about who signed — opt BSD3 out the way an administrator would, so what
+    # fails here is the gate under test rather than a missing signature. The
+    # signing gate itself is proved in tests/services/test_attestation_spine.py.
+    relax_signing(db_client, "BSD3")
     _run_liquidity_baseline(db_client, period["id"])
     package = _generate_bsd3(db_client).json()
     base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}"
@@ -734,6 +951,11 @@ def test_downtime_then_email_fallback_then_orass_reupload(
     db_client: TestClient, fake_export_seam: InMemoryStorageClient
 ) -> None:
     period = _seed_latest_period(db_client)
+    # Signing is required for every return by default, and this journey is not
+    # about who signed — opt BSD3 out the way an administrator would, so what
+    # fails here is the gate under test rather than a missing signature. The
+    # signing gate itself is proved in tests/services/test_attestation_spine.py.
+    relax_signing(db_client, "BSD3")
     _run_liquidity_baseline(db_client, period["id"])
     package = _generate_bsd3(db_client).json()
     base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}"
@@ -801,6 +1023,10 @@ def test_control_actions_require_approver_role(db_client: TestClient) -> None:
     decisions, channel submissions, polls, and resubmission decisions need the
     ``approver`` role — the AequorOS mirror of ORASS's Principal-only submit."""
     period = _seed_latest_period(db_client)
+    # Role gates are the subject; the signing gate is not. Without this the
+    # approver's decision would be refused for want of a signature and the 403/200
+    # contrast this test draws would disappear.
+    relax_signing(db_client, "BSD3")
     _run_liquidity_baseline(db_client, period["id"])
     _seed_checker_user()
     package = _generate_bsd3(db_client, reporting_date=period["period_end"]).json()
@@ -858,6 +1084,11 @@ def test_email_fallback_eml_downloads_as_rfc822_with_attachments(
     """W7: the downtime bundle is downloadable as a send-ready .eml whose
     subject/body/attachments mirror the email-fallback instructions."""
     period = _seed_latest_period(db_client)
+    # Signing is required for every return by default, and this journey is not
+    # about who signed — opt BSD3 out the way an administrator would, so what
+    # fails here is the gate under test rather than a missing signature. The
+    # signing gate itself is proved in tests/services/test_attestation_spine.py.
+    relax_signing(db_client, "BSD3")
     _run_liquidity_baseline(db_client, period["id"])
     package = _generate_bsd3(db_client).json()
     base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package['id']}"

@@ -108,7 +108,7 @@ def get_package_or_404(
     return package
 
 
-def _validation_passed(package: RegulatoryPackage) -> bool | None:
+def validation_passed(package: RegulatoryPackage) -> bool | None:
     report = package.validation_report
     if report is None:
         return None
@@ -129,8 +129,9 @@ def read_summary(package: RegulatoryPackage) -> RegulatoryPackageSummaryRead:
         supersedes_id=package.supersedes_id,
         generated_by=package.generated_by,
         generated_at=package.generated_at,
-        validation_passed=_validation_passed(package),
+        validation_passed=validation_passed(package),
         notes=package.notes,
+        attestation_state=package.attestation_state,
         submission_revision=package.submission_revision,
         snapshot_sha256=package.snapshot_sha256,
         regulator_comments=package.regulator_comments,

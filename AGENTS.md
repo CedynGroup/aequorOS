@@ -148,9 +148,46 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   (`/auth/sso/access-requests`). Never let JIT auto-activate accounts — that was
   rejected 2026-07-20 as a data-leak path until RBAC group-mapping lands. The dashboard's NextAuth loads the client config through
   `GET /auth/sso/client-config`, gated by `SSO_INTERNAL_KEY` (same value on backend and
-  dashboard; not in OpenAPI) — the single plaintext read path for the secret. Bank-IT
+  dashboard; not in OpenAPI) — the single plaintext read path for the secret. **Two**
+  redirect URIs must be registered at the IdP: `/api/auth/callback/sso` (sign-in) and
+  `/api/attestation/step-up/callback` (signing step-up); registering only the first
+  yields working sign-in with certification failing at re-authentication. Bank-IT
   runbook: `docs/sso-onboarding.md`; roadmap: rbac.md §15 Phase 2 (multi-connection +
   home-realm discovery — extend the existing code, don't rebuild).
+- **Attestation / e-signature (built 2026-07-25; spec `docs/attestation_esignature.md`).**
+  Signing is REQUIRED for every return by default (`default_policy`:
+  `require_signature=True`, `require_signed_pdf=True`, preparer+approver, no family
+  exemptions — changed 2026-07-25 on the founder's call). What BoG demands *of the
+  artifact* stays unconfigured-by-default (spec §8 C1–C4: officer titles stay unset);
+  what the institution demands *of itself* before filing is the product. A deployment
+  that cannot sign therefore cannot file — `ensure_signing_configured` raises
+  `signing_not_configured` naming the settings, and `create_app` refuses to boot in
+  production rather than surfacing it at a filing deadline. Banks relax per return in
+  Settings (an audited PUT); tests use `tests/factories/attestation.relax_signing`.
+  Fields are placed on the document (template per return, package override) from a typed
+  palette — one `signature` per role plus any number of `name`/`title`/`initials`/
+  `date_signed` boxes, because a BoG attestation block asks each officer for four things.
+  Non-signature boxes are AcroForm TEXT fields whose value is DERIVED from the signature
+  record (`SignatureAppearance.derived_values`), never sent by a client, and each kind has
+  its own derived floor (`pdf_signing.MIN_BOX_SIZES`) — the old single 185×61 survives only
+  as the threshold at which the four evidential lines are drawn as a caption. DocMDP means
+  **every field must exist before the first signature**, so the preparer places the
+  approver's boxes too; each role's values are filled in the SAME incremental update as
+  that role's signature (a separate earlier revision makes pyHanko's in-place-appearance
+  rule convict an untouched locked field), and `Sig_Preparer` carries a FieldMDP
+  `/Exclude` lock over everything but the approver's fields. Three digests, all value-based like
+  `input_hash`: `content_digest` (strips volatile `generated_at`), `register_state_digest`
+  (master-data returns), `certification_digest` (what every signer signs) —
+  `app/services/attestation/digests.py`; never add volatile fields. Signer IDs (`SGN-` +
+  16 Crockford) are HMAC-derived from the user UUID under `SIGNER_ID_PEPPER` then
+  **persisted as the authority** — rotating the pepper must never re-derive an existing
+  identity. Append-only is *tiered* by DB trigger (migration `202607250027`):
+  `audit_events` blocks UPDATE+DELETE; signature/identity/artifact-version tables block
+  UPDATE only (DELETE reachable via package CASCADE) — see spec §9 D1 for why. Step-up:
+  password re-entry, or an SSO redirect through the three Next.js server routes under
+  `dashboard/app/api/attestation/` — the id_token and the signing authorisation are
+  server-only by design (HttpOnly cookie, spent by a route), so never move either into
+  the session or a client fetch.
 - **Jurisdiction is data — never hardcode country identity (built 2026-07-23).** The
   global `jurisdictions` registry (`code → country, currency, locale, central bank,
   regulator short, portal, timezone`; NOT tenant-scoped; GH/NG/KE/ZA seeded) resolves

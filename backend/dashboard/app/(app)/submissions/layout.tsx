@@ -7,6 +7,7 @@ import ModuleTabs from '@/components/shell/ModuleTabs';
 // Calendar (it is the hub index route); only the tab position changed.
 const tabs = [
   { href: '/submissions/returns', label: 'Returns' },
+  { href: '/submissions/signatures', label: 'Signatures' },
   { href: '/submissions/approvals', label: 'Approvals' },
   { href: '/submissions/history', label: 'History' },
   { href: '/submissions/templates', label: 'Templates' },

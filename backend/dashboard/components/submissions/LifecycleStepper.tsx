@@ -9,10 +9,13 @@
 import { Check, XCircle, Ban, History } from 'lucide-react';
 import type { PackageStatus } from '@aequoros/risk-service-api';
 
+// "Approval" and "Approved" sat next to each other and read as the same word, so
+// a package resting in the approved state looked stuck at the approval step.
+// The waiting stage now says it is waiting.
 const STEPS: { status: PackageStatus; label: string }[] = [
   { status: 'generated', label: 'Generated' },
   { status: 'validated', label: 'Validated' },
-  { status: 'pending_approval', label: 'Approval' },
+  { status: 'pending_approval', label: 'Awaiting approval' },
   { status: 'approved', label: 'Approved' },
   { status: 'submitted', label: 'Submitted' },
   { status: 'acknowledged', label: 'Acknowledged' },
@@ -44,8 +47,15 @@ export default function LifecycleStepper({ status }: { status: PackageStatus }) 
   return (
     <div className="flex items-center gap-0 flex-wrap" aria-label="Package lifecycle">
       {STEPS.map((step, i) => {
-        const done = i < reached;
-        const current = i === reached && !terminal;
+        // These are states REACHED, not activities in progress: the state a
+        // package is in has been achieved, so it ticks. The highlight moves to
+        // the step that has not happened yet, which is the one someone has to
+        // act on — otherwise "approved" looked identical to "stuck at approval".
+        // A rejected package still reached every stage up to submission, so
+        // `done` must not be suppressed for terminal states — only the
+        // "what's next" highlight is, since a terminal package has no next.
+        const done = i <= reached;
+        const current = i === reached + 1 && !terminal && reached >= 0;
         return (
           <div key={step.status} className="flex items-center">
             {i > 0 && (

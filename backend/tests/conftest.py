@@ -69,6 +69,19 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("RUN_INPROCESS_WORKER", "0")
     # A signing secret so the auth layer is exercised in tests (prod sets its own).
     monkeypatch.setenv("AUTH_JWT_SECRET", "test-jwt-signing-secret-not-for-production-00")
+    # Same .env-leak guard for attestation signing. A developer who has enabled
+    # local signing would otherwise flip every test that asserts the
+    # "this deployment cannot sign" path into the configured branch — and those
+    # tests would pass or fail depending on whose machine ran them. Tests that
+    # need signing configured set these themselves.
+    #
+    # Two notes for anyone adding to these. `monkeypatch.delenv` is NOT a
+    # substitute: removing the variable lets pydantic-settings read the value
+    # straight back out of .env. And the blanking value is per-type — "" reads
+    # as unconfigured for a `str | None` field but fails to parse as a `bool`,
+    # so boolean switches are blanked with "0".
+    monkeypatch.setenv("SIGNER_ID_PEPPER", "")
+    monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
     get_settings.cache_clear()
     get_engine.cache_clear()
     yield

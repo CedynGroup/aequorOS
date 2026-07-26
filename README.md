@@ -62,6 +62,9 @@ pnpm install && pnpm --filter @aequoros/dashboard dev
 - Dashboard: `pnpm --filter @aequoros/dashboard typecheck && pnpm --filter @aequoros/dashboard build`
 - Client regen after API changes: `mise run risk-service:openapi-client`
 
+start python service
+uv run fastapi dev app/main.py --port 8000
+
 See `docs/MVP_BUILD_HANDOFF.md` for the full run/verify guide and module demo flows.
 
 

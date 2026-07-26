@@ -11,6 +11,7 @@ from app.features.ingest_data import router as ingestion_router
 from app.features.list_case_taxonomy import router as case_taxonomy_router
 from app.features.list_organization_users import router as organization_users_router
 from app.features.list_taxonomy import router as taxonomy_router
+from app.features.manage_attestation import router as attestation_router
 from app.features.manage_banks import router as banks_router
 from app.features.manage_capital import router as capital_router
 from app.features.manage_documents import router as documents_router
@@ -47,6 +48,7 @@ api_router.include_router(health_router)
 
 v1_router = APIRouter(prefix="/v1")
 v1_router.include_router(auth_router)
+v1_router.include_router(attestation_router)
 v1_router.include_router(banks_router)
 v1_router.include_router(ingestion_router)
 v1_router.include_router(push_router)

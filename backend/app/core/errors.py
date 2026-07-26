@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from http import HTTPStatus
 from typing import Any
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.logging import get_request_id, logger
 from app.schemas.common import ErrorBody, ErrorResponse
+
+RequestHandler = Callable[[Request], Awaitable[Response]]
 
 OPENAPI_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     status.HTTP_400_BAD_REQUEST: {
@@ -97,20 +101,51 @@ def register_exception_handlers(app: FastAPI) -> None:
             ),
         )
 
+    # Kept as the last line of defence for anything raised outside the middleware
+    # stack (e.g. during startup). Requests are handled by
+    # UnhandledExceptionMiddleware instead — see its docstring for why.
     @app.exception_handler(Exception)
     async def unexpected_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        logger.bind(
-            method=request.method,
-            path=request.url.path,
-        ).opt(exception=exc).error("Unhandled exception while processing request")
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content=build_error_payload(
-                code="internal_server_error",
-                message="An unexpected error occurred.",
-                request_id=_request_id_from_request(request),
-            ),
-        )
+        return _internal_error_response(request, exc)
+
+
+def _internal_error_response(request: Request, exc: BaseException) -> JSONResponse:
+    logger.bind(
+        method=request.method,
+        path=request.url.path,
+    ).opt(exception=exc).error("Unhandled exception while processing request")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=build_error_payload(
+            code="internal_server_error",
+            message="An unexpected error occurred.",
+            request_id=_request_id_from_request(request),
+        ),
+    )
+
+
+class UnhandledExceptionMiddleware(BaseHTTPMiddleware):
+    """Turn an unhandled exception into a 500 *inside* the CORS layer.
+
+    Starlette registers an ``Exception`` handler on ``ServerErrorMiddleware``,
+    which sits ABOVE the user middleware stack — so a 500 it produces is built
+    outside ``CORSMiddleware`` and carries no ``Access-Control-Allow-Origin``.
+    A browser then reports a CORS violation, the dashboard's error mapper reads a
+    header-less failure as a network failure, and the operator is told "could not
+    reach the risk service" while the service is up and returning a perfectly
+    good error envelope.
+
+    That cost real debugging time on 2026-07-25 (a missing migration surfaced as
+    a CORS error). Catching here, below CORS, means the actual code, message and
+    ``request_id`` reach the console — which is the whole point of having a
+    request ID.
+    """
+
+    async def dispatch(self, request: Request, call_next: RequestHandler) -> Response:
+        try:
+            return await call_next(request)
+        except Exception as exc:  # noqa: BLE001 - deliberate catch-all boundary
+            return _internal_error_response(request, exc)
 
 
 def _code_for_http_status(status_code: int) -> str:

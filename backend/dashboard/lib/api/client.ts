@@ -8,6 +8,7 @@
 
 import {
   IntegrationKeysApi,
+  AttestationApi,
   AuthApi,
   BanksApi,
   BehavioralModelsApi,
@@ -66,6 +67,7 @@ export const configuration = new Configuration({
 });
 
 export const authApi = new AuthApi(configuration);
+export const attestationApi = new AttestationApi(configuration);
 export const banksApi = new BanksApi(configuration);
 export const behavioralModelsApi = new BehavioralModelsApi(configuration);
 export const regulatoryLiquidityApi = new RegulatoryLiquidityApi(configuration);

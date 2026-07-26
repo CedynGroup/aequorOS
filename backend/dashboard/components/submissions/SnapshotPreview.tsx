@@ -27,8 +27,12 @@ type Snapshot = Record<string, unknown> & {
 const RESERVED_KEYS = new Set(['code', 'description', 'unit', 'equals_sum_of_rows']);
 
 /** Format a snapshot cell: numbers with separators + parenthesised negatives
- * (BoG sign convention), booleans as Yes/No, everything else verbatim. */
-function fmtCell(value: unknown): string {
+ * (BoG sign convention), booleans as Yes/No, everything else verbatim.
+ *
+ * Exported because the version comparison shows the same cells side by side:
+ * a figure that reads one way in the preview and another in the diff would put
+ * the operator in the position of deciding which rendering to believe. */
+export function fmtSnapshotCell(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   const parsed = Number(value);
@@ -76,14 +80,14 @@ function sectionColumns(rows: SnapshotRow[]): Column<SnapshotRow>[] {
         key,
         header: labelize(key),
         numeric: true,
-        render: (row) => fmtCell(row[key]),
+        render: (row) => fmtSnapshotCell(row[key]),
       })
     ),
     {
       key: 'value',
       header: 'Value',
       numeric: true,
-      render: (row) => fmtCell(row.value),
+      render: (row) => fmtSnapshotCell(row.value),
     },
   ];
   return columns;
@@ -111,7 +115,7 @@ export default function SnapshotPreview({ snapshot }: { snapshot: Snapshot }) {
                 {String(total.description ?? total.code ?? 'Total')}
               </p>
               <p className="mt-1 font-mono text-h3 text-navy tnum truncate">
-                {fmtCell(total.value)}
+                {fmtSnapshotCell(total.value)}
                 {total.unit === 'pct' ? '%' : ''}
               </p>
             </div>

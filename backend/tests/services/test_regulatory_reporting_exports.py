@@ -263,6 +263,10 @@ def test_missing_snapshot_section_raises_409(
         section for section in snapshot["sections"] if section["code"] != "hqla"
     ]
     package.snapshot = snapshot
+    # The seal is dropped on purpose: an edited snapshot would otherwise fail
+    # the G3 integrity check first (covered in test_attestation_phase0.py), and
+    # this case is about a snapshot that lacks a section the template requires.
+    package.snapshot_sha256 = None
     db_session.commit()
 
     with pytest.raises(HTTPException) as exc_info:
