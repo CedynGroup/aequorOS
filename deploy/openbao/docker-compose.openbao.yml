@@ -43,7 +43,19 @@ services:
       # depends on it (DBK is due 10:00 T+1, five days a week).
       # Mounted where the image already owns the directory — see openbao.hcl.
       - openbao-data:/openbao/file
-      - ./openbao.hcl:/openbao/config/openbao.hcl:ro
+      # Long syntax with create_host_path: false ON PURPOSE. Docker's default is
+      # to CREATE a missing bind source as an empty directory, and OpenBao given
+      # a directory reads it as a config dir, finds no .hcl, and dies with
+      # "a storage backend must be specified" — restart-looping on a message that
+      # says nothing about the real cause. That cost a production deploy on
+      # 2026-07-26, when the Base Directory was /deploy rather than
+      # /deploy/openbao. Failing the deploy outright is the honest behaviour.
+      - type: bind
+        source: ./openbao.hcl
+        target: /openbao/config/openbao.hcl
+        read_only: true
+        bind:
+          create_host_path: false
     expose:
       - "8200"
     # Liveness, deliberately NOT readiness. `sealedcode=200&uninitcode=200` makes
