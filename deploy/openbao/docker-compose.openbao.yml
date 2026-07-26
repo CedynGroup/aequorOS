@@ -15,16 +15,38 @@
 # Coolify: Base Directory /deploy/openbao, Compose Location
 # /docker-compose.openbao.yml.
 #
-# NO variable interpolation anywhere in this file, comments included. Coolify
-# parses compose text and auto-seeds a UI environment row for every dollar-brace
-# reference it finds — the 2026-07-21 incident stored guard message text AS
-# VALUES and re-injected duplicate rows on every deploy until the resource had to
-# be recreated. Referencing nothing gives the parser nothing to seed.
+# -----------------------------------------------------------------------------
+# THE CONFIG IS INLINE, AND THAT IS NOT A STYLE CHOICE.
+#
+# Coolify's Docker Compose build pack materialises ONLY the compose file on the
+# deployment host. The repository is not checked out there — that is what the
+# "Preserve Repository During Deployment" toggle controls, and it is off by
+# default — so `- ./openbao.hcl:/openbao/config/openbao.hcl` has no source to
+# bind. Docker's default is then to CREATE the missing source as an empty
+# DIRECTORY. OpenBao reads a directory as a config *directory*, finds no .hcl in
+# it, and exits with "a storage backend must be specified" — a message pointing
+# nowhere near the cause. It restart-loops, and the directory Docker created then
+# BLOCKS any corrected checkout from writing the real file, so fixing the path
+# alone cannot recover it. That cost two production deploys on 2026-07-26 and
+# needed an rmdir on the host between attempts.
+#
+# The obvious guard does not survive either: `create_host_path: false` in the long
+# bind syntax makes Docker refuse rather than invent a directory, but Coolify
+# NORMALISES the compose and rewrites long-syntax mounts to short form, silently
+# dropping that option (and `read_only` with it). Confirmed by reading the
+# generated docker-compose.yaml on the host.
+#
+# So the config travels inside the one artifact Coolify is guaranteed to
+# materialise: this file. Nothing here depends on a second file existing anywhere.
+#
+# NO variable interpolation anywhere, comments included — Coolify parses compose
+# text and auto-seeds a UI environment row for every dollar-brace reference it
+# finds (the 2026-07-21 incident stored guard message text AS VALUES and
+# re-injected duplicate rows on every deploy).
 #
 # Deployment, initialisation, unseal and backup: docs/openbao-deployment.md.
-# Nothing here initialises or unseals the server — both are deliberate human acts
-# (see the runbook), because the unseal shares must never live on the host they
-# unseal.
+# Nothing here initialises or unseals — both are deliberate human acts, because
+# the unseal shares must never live on the host they unseal.
 # =============================================================================
 
 services:
@@ -33,29 +55,59 @@ services:
     # every signing key is not a thing to discover after a restart.
     image: openbao/openbao:2.6.1
     restart: unless-stopped
-    # No IPC_LOCK: OpenBao 2.x dropped mlock, so the capability would be cargo
-    # cult. Keeping keys out of swap moved to the host — see the runbook.
-    command: ["server", "-config=/openbao/config/openbao.hcl"]
+    # Three things in the config below are load-bearing and were each learned by
+    # running the real image rather than by writing plausible HCL:
+    #
+    # · No `disable_mlock`. OpenBao 2.x dropped mlock support entirely and
+    #   REFUSES TO START if the setting appears at all. Keeping key material out
+    #   of swap is now the host's job — disable or encrypt swap, which the runbook
+    #   covers and which is not optional.
+    # · Storage at /openbao/file, not /openbao/data. The image runs as uid 100 and
+    #   ships /openbao/{config,file,logs} owned by that user, but no
+    #   /openbao/data — a named volume mounted at a path the image does not
+    #   contain is created root-owned, and the server dies on first boot with
+    #   "permission denied" opening the bolt file.
+    # · Raft rather than the file backend even for one node: adding the second and
+    #   third node later is then a join rather than a storage migration, and
+    #   signing SHOULD be highly available before a bank depends on it (DBK is due
+    #   10:00 T+1, five days a week).
+    command:
+      - sh
+      - -c
+      - |
+        cat > /openbao/config/openbao.hcl <<'HCL'
+        storage "raft" {
+          path    = "/openbao/file"
+          node_id = "openbao-1"
+        }
+
+        # TLS terminates at the reverse proxy on this host, so the listener is
+        # plaintext on the container network only. Two conditions come with that:
+        # the proxy MUST be on this host, and 8200/8201 MUST NOT be published.
+        # The application then reaches OpenBao over HTTPS at its public hostname
+        # with a public certificate, so there is no OPENBAO_CA_CERT to configure
+        # — and that path has never been exercised against a real private CA.
+        listener "tcp" {
+          address     = "0.0.0.0:8200"
+          tls_disable = true
+        }
+
+        # Both must be the address OTHER parties use, not the container's own.
+        # api_addr is what the PKI engine stamps into every certificate's CRL and
+        # OCSP URLs — get it wrong and an external validator cannot fetch the
+        # revocation list for a filed return, years after the fact.
+        api_addr     = "https://bao.aequoros.com"
+        cluster_addr = "https://bao.aequoros.com:8201"
+
+        ui = false
+
+        # Audit devices are enabled AFTER initialisation, never here: an audit
+        # device that cannot write makes OpenBao refuse every request, including
+        # the ones needed to fix it.
+        HCL
+        exec bao server -config=/openbao/config/openbao.hcl
     volumes:
-      # Integrated Raft storage. Chosen over the file backend even for a single
-      # node: adding the second and third node later is then a join rather than a
-      # storage migration, and signing SHOULD be highly available before a bank
-      # depends on it (DBK is due 10:00 T+1, five days a week).
-      # Mounted where the image already owns the directory — see openbao.hcl.
       - openbao-data:/openbao/file
-      # Long syntax with create_host_path: false ON PURPOSE. Docker's default is
-      # to CREATE a missing bind source as an empty directory, and OpenBao given
-      # a directory reads it as a config dir, finds no .hcl, and dies with
-      # "a storage backend must be specified" — restart-looping on a message that
-      # says nothing about the real cause. That cost a production deploy on
-      # 2026-07-26, when the Base Directory was /deploy rather than
-      # /deploy/openbao. Failing the deploy outright is the honest behaviour.
-      - type: bind
-        source: ./openbao.hcl
-        target: /openbao/config/openbao.hcl
-        read_only: true
-        bind:
-          create_host_path: false
     expose:
       - "8200"
     # Liveness, deliberately NOT readiness. `sealedcode=200&uninitcode=200` makes
@@ -77,10 +129,10 @@ services:
       retries: 3
       start_period: 10s
     environment:
-      # Literal, not a variable reference — see the header note about Coolify
-      # seeding a UI row for every dollar-brace it finds. This is the only value
-      # OpenBao needs from the environment, so the service takes NO .env file:
-      # the `bao` CLI defaults to HTTPS, and TLS terminates at the proxy.
+      # Literal, not a variable reference. The `bao` CLI defaults to HTTPS, which
+      # the healthcheck and every `docker exec … bao` would fail against a
+      # plaintext listener. This is the only value the service needs from the
+      # environment, so it takes NO .env file.
       BAO_ADDR: "http://127.0.0.1:8200"
 
 volumes:

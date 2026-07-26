@@ -9,7 +9,8 @@ itself decrypt is not a key under the signatory's sole control.
 It runs on its **own host**. If the application VPS is compromised, an attacker
 holds a scoped AppRole token, not key material.
 
-Artifacts: `deploy/openbao/docker-compose.openbao.yml`, `deploy/openbao/openbao.hcl`,
+Artifacts: `deploy/openbao/docker-compose.openbao.yml` (one file — the server
+config is inline, see its header for why) and
 `backend/scripts/bootstrap_openbao_pki.py`.
 
 ---
@@ -20,10 +21,10 @@ A small VPS that runs nothing else. Then:
 
 - **DNS** — point `bao.aequoros.com` at it.
 - **TLS** — let the reverse proxy terminate with a public certificate. This is
-  why `openbao.hcl` sets `tls_disable = true` on the listener: the proxy is on
-  the same host and the listener is never published. It also means the
-  application needs no `OPENBAO_CA_CERT`, which matters because that path has
-  never been exercised against a real private CA.
+  why the listener sets `tls_disable = true`: the proxy is on the same host and
+  the listener is never published. It also means the application needs no
+  `OPENBAO_CA_CERT`, which matters because that path has never been exercised
+  against a real private CA.
 - **Firewall** — allow 443 **only from the application VPS**. OpenBao publicly
   reachable is a materially worse position even behind TLS; there is no reason
   for anything but the API to talk to it.
@@ -44,9 +45,12 @@ A small VPS that runs nothing else. Then:
 Deploy through Coolify with Base Directory `/deploy/openbao` and Compose
 Location `/docker-compose.openbao.yml`.
 
-**No environment variables to set.** The service needs no `.env`: everything is
-in `openbao.hcl`, and the one value the CLI wants (`BAO_ADDR`) is a literal in
-the compose. A fresh deploy comes up **sealed and reporting healthy** — that is
+**No environment variables to set, and no second file.** The service needs no
+`.env`, and the server config is written inline by the container's command rather
+than bind-mounted — Coolify's Docker Compose build pack does not check the
+repository out onto the host, so a bind from the repo has no source and Docker
+silently creates an empty directory in its place. The compose header records the
+full failure mode. A fresh deploy comes up **sealed and reporting healthy** — that is
 intended. The healthcheck is liveness, not readiness, because an unhealthy
 container gets restarted and a restarting container can never be unsealed.
 
@@ -147,8 +151,8 @@ and download it: the signature block should carry the officer's name and their
 
 ## Backup
 
-Back up the Raft store. Note the path is `/openbao/file`, not `/openbao/data`:
-the image ships that directory owned by its runtime user, and a volume mounted
+Back up the Raft store. The path is `/openbao/file`, not `/openbao/data`: the
+image ships that directory owned by its runtime user, and a volume mounted
 anywhere else is created root-owned and the server cannot write to it.
 
 ```bash
