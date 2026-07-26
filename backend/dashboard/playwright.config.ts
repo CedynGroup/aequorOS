@@ -52,10 +52,20 @@ export default defineConfig({
         DATABASE_URL: `sqlite+pysqlite:///${E2E_DB}`,
         WORKER_DATABASE_URL: '',
         DEMO_SEED_ENABLED: '1',
+        // Signer identities need a pepper to derive; signing itself stays
+        // OFF so the hermetic stack exercises the surfaces and guards
+        // without an HSM.
+        SIGNER_ID_PEPPER: 'e2e-signer-pepper-not-production-000',
+        // Signing ON for the hermetic stack, backed by disposable self-signed
+        // software keys. The software backend refuses to start when APP_ENV is
+        // production, so this configuration cannot leak into a deployment.
+        ATTESTATION_SIGNING_ENABLED: '1',
+        SIGNING_BACKEND: 'software',
+        SIGNING_SOFTWARE_KEY_DIR: `${E2E_TMP}/signing-keys`,
         RUN_INPROCESS_WORKER: '0',
         AUTH_JWT_SECRET: 'e2e-backend-jwt-secret-not-production-000',
         SSO_INTERNAL_KEY: '',
-        CREDENTIAL_VAULT_MASTER_KEY: '',
+        CREDENTIAL_VAULT_MASTER_KEY: 'ZTJlLXZhdWx0LW1hc3Rlci1rZXktbm90LXByb2QtMDAwMDA=',
         CORS_ORIGINS: E2E_BASE_URL,
         APP_ENV: 'test',
       },

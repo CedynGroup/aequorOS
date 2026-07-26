@@ -1,15 +1,25 @@
 'use client';
 
 /**
- * Regulatory Reporting — Approvals (checker queue). Lists pending_approval
- * packages and hosts the decide panel. Decisions are attributed to the
- * signed-in user (the verified token); deciding on a package you generated
- * surfaces the backend's same-user 409 verbatim — that IS the maker-checker
- * rule.
+ * Regulatory Reporting — Approvals. This page is the QUEUE, not a decision
+ * surface.
+ *
+ * It used to offer an Approve button beside the signing ceremony, so a return
+ * could be approved by a checker who never signed the figures they approved (and
+ * signed by one who never approved). Those are one act now — recorded in one
+ * backend transaction by the signing workspace — so the queue's job is to route
+ * the reviewer into it, on the document, where both exits live: approve and sign,
+ * or send back for corrections with a note.
+ *
+ * The bare decide panel survives for exactly one case: a return whose signing
+ * policy an administrator has relaxed. There is no ceremony to route those to, so
+ * the bare decision is the whole of the checker act — and the backend refuses it
+ * for any return that does require signatures (`approval_requires_signature`).
  */
 
 import { useState } from 'react';
-import { CheckCircle2, Loader2, UserCheck, XCircle } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle2, Loader2, PenLine, UserCheck, XCircle } from 'lucide-react';
 import type { RegulatoryPackageSummaryRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import DataTable, { type Column } from '@/components/ui/DataTable';
@@ -22,11 +32,13 @@ import { useBankContext } from '@/components/shell/BankContext';
 import {
   useDecidePackageApproval,
   useOfficerNames,
+  usePackageAttestation,
   useRegulatoryPackage,
   useRegulatoryPackages,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, fmtTimestamp, shortId } from '@/lib/api/values';
-import { FAMILY_LABELS } from '@/components/submissions/shared';
+import { fmtDateUTC, fmtTimestamp, isoDate, shortId } from '@/lib/api/values';
+import { FAMILY_LABELS, returnsHref } from '@/components/submissions/shared';
+import { AttestationSummary } from '@/components/attestation/shared';
 
 export default function ApprovalsPage() {
   const { bank } = useBankContext();
@@ -117,7 +129,7 @@ export default function ApprovalsPage() {
           { label: 'Approvals' },
         ]}
         title="Approvals"
-        subtitle="Checker queue — no package reaches a submission channel without approval by a different officer than its maker"
+        subtitle="Checker queue — open a return to review it and approve and sign, or send it back with a note; no package reaches a channel without a different officer than its maker"
       />
 
       <div className="px-8 py-6 space-y-6">
@@ -173,6 +185,9 @@ function DecidePanel({
 }) {
   const decide = useDecidePackageApproval(bankId);
   const detailQuery = useRegulatoryPackage(bankId, pkg.id);
+  // For the selected package only — the summary payload carries no attestation
+  // state, so a queue column would be one request per row.
+  const attestationQuery = usePackageAttestation(bankId, pkg.id);
   const officerName = useOfficerNames();
   const [reason, setReason] = useState('');
 
@@ -180,12 +195,21 @@ function DecidePanel({
   const requestReason = detailQuery.data?.approvals.find(
     (approval) => approval.action === 'requested'
   )?.reason;
+  const attestation = attestationQuery.data ?? null;
+  // Strict until the policy is known: the platform default requires signatures,
+  // so an unread status must not fall back to offering the bare decision.
+  const signingRequired = attestation?.policy.requireSignature ?? true;
+  const reviewHref = `${returnsHref(
+    pkg.returnCode,
+    isoDate(pkg.reportingDate)
+  )}&sign=approver`;
 
   return (
     <SectionCard
       title={
         <span className="inline-flex items-center gap-2">
-          Decide — <span className="font-mono">{pkg.returnCode}</span>{' '}
+          {signingRequired ? 'Review' : 'Decide'} —{' '}
+          <span className="font-mono">{pkg.returnCode}</span>{' '}
           {fmtDateUTC(pkg.reportingDate)}{' '}
           <span className="font-mono text-caption text-slate tnum">
             v{pkg.version}
@@ -201,62 +225,97 @@ function DecidePanel({
           </p>
         )}
 
-        <div>
-          <label className="block text-caption font-medium text-navy mb-1.5">
-            Reason{' '}
-            <span className="font-normal text-slate">(required to reject)</span>
-          </label>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={2}
-            placeholder="e.g. Cross-checked HQLA stock against the buffer dashboard."
-            className="w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
-          />
-        </div>
+        {/* Attestation, read-only: what the preparer committed to. Deciding
+            happens on the document, not on a queue row. */}
+        {attestation && (
+          <div className="rounded border border-border-light bg-surface px-3.5 py-3">
+            <p className="text-micro font-medium uppercase tracking-wider text-slate">
+              Attestation
+            </p>
+            <div className="mt-2">
+              <AttestationSummary status={attestation} />
+            </div>
+          </div>
+        )}
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={decide.isPending}
-            onClick={() =>
-              decide.mutate({
-                packageId: pkg.id,
-                action: 'approved',
-                reason: reason.trim() || undefined,
-              })
-            }
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-          >
-            {decide.isPending ? (
-              <Loader2 size={13} className="animate-spin" aria-hidden />
-            ) : (
-              <CheckCircle2 size={13} aria-hidden />
-            )}
-            Approve
-          </button>
-          <button
-            type="button"
-            disabled={decide.isPending || rejectNeedsReason}
-            title={rejectNeedsReason ? 'A reason is required when rejecting.' : undefined}
-            onClick={() =>
-              decide.mutate({
-                packageId: pkg.id,
-                action: 'rejected',
-                reason: reason.trim(),
-              })
-            }
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-critical border border-critical/30 bg-critical-light/40 rounded-md hover:bg-critical-light disabled:opacity-60"
-          >
-            <XCircle size={13} aria-hidden />
-            Reject (rework)
-          </button>
-        </div>
+        {signingRequired ? (
+          <>
+            <Link
+              href={reviewHref}
+              data-testid="review-and-sign"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+            >
+              <PenLine size={13} aria-hidden />
+              Review and sign
+            </Link>
+            <p className="text-caption text-slate leading-relaxed">
+              Opens the return itself with the preparer&apos;s signature on it.
+              Approving and signing are one act recorded in one transaction, so
+              neither can exist without the other — and the same screen sends the
+              return back for corrections with a note if you have concerns.
+            </p>
+          </>
+        ) : (
+          <>
+            <div>
+              <label className="block text-caption font-medium text-navy mb-1.5">
+                Reason{' '}
+                <span className="font-normal text-slate">(required to reject)</span>
+              </label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={2}
+                placeholder="e.g. Cross-checked HQLA stock against the buffer dashboard."
+                className="w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
+              />
+            </div>
 
-        <p className="text-caption text-slate leading-relaxed">
-          Approving requires the approver role; the decision is recorded
-          against your login.
-        </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={decide.isPending}
+                onClick={() =>
+                  decide.mutate({
+                    packageId: pkg.id,
+                    action: 'approved',
+                    reason: reason.trim() || undefined,
+                  })
+                }
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+              >
+                {decide.isPending ? (
+                  <Loader2 size={13} className="animate-spin" aria-hidden />
+                ) : (
+                  <CheckCircle2 size={13} aria-hidden />
+                )}
+                Approve
+              </button>
+              <button
+                type="button"
+                disabled={decide.isPending || rejectNeedsReason}
+                title={rejectNeedsReason ? 'A reason is required when rejecting.' : undefined}
+                onClick={() =>
+                  decide.mutate({
+                    packageId: pkg.id,
+                    action: 'rejected',
+                    reason: reason.trim(),
+                  })
+                }
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-critical border border-critical/30 bg-critical-light/40 rounded-md hover:bg-critical-light disabled:opacity-60"
+              >
+                <XCircle size={13} aria-hidden />
+                Reject (rework)
+              </button>
+            </div>
+
+            <p className="text-caption text-slate leading-relaxed">
+              An administrator has relaxed signing for this return, so there is no
+              ceremony to route the decision through. Approving requires the approver
+              role; the decision is recorded against your login.
+            </p>
+          </>
+        )}
 
         {decide.error && (
           <ErrorPanel error={decide.error} title="Decision rejected" />

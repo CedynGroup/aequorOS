@@ -241,26 +241,79 @@ export function indicativePenaltyGhs(daysOverdue: number): {
 // them to the browser as a Blob (precedent: market-data downloadTemplate).
 // ---------------------------------------------------------------------------
 
+/**
+ * The two artifact endpoints, and why both exist.
+ *
+ * `regulatory-artifacts/{id}` serves the CANONICAL export — one row per kind,
+ * upserted, so it always resolves to the unsigned engine output.
+ * `regulatory-artifact-versions/{id}` serves one immutable archived revision,
+ * which after certification is the document carrying the officers' signatures.
+ * Callers pick deliberately: a version id is not an artifact id and the two
+ * cannot be substituted for each other.
+ */
+function artifactUrl(bankId: string, artifactId: string): string {
+  return `${apiBaseUrl}/banks/${bankId}/regulatory-artifacts/${artifactId}/download`;
+}
+
+function artifactVersionUrl(bankId: string, versionId: string): string {
+  return `${apiBaseUrl}/banks/${bankId}/regulatory-artifact-versions/${versionId}/download`;
+}
+
+async function fetchBytes(url: string): Promise<Response> {
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Artifact download failed (${response.status}).`);
+  }
+  return response;
+}
+
+/**
+ * The artifact's raw bytes, for a surface that renders them rather than saving
+ * them — the signing workspace displays the very PDF that will be signed, so it
+ * needs the file itself and not a browser download.
+ */
+export async function fetchArtifactBytes(
+  bankId: string,
+  artifactId: string
+): Promise<ArrayBuffer> {
+  return (await fetchBytes(artifactUrl(bankId, artifactId))).arrayBuffer();
+}
+
+/** The same, for one archived revision — the signed document an approver reviews. */
+export async function fetchArtifactVersionBytes(
+  bankId: string,
+  versionId: string
+): Promise<ArrayBuffer> {
+  return (await fetchBytes(artifactVersionUrl(bankId, versionId))).arrayBuffer();
+}
+
+async function saveAs(url: string, objectPath: string): Promise<void> {
+  const blob = await (await fetchBytes(url)).blob();
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = href;
+  anchor.download = objectPath.split('/').pop() ?? 'return-artifact';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(href);
+}
+
 export async function downloadArtifact(
   bankId: string,
   artifact: { id: string; objectPath: string }
 ): Promise<void> {
-  const response = await fetch(
-    `${apiBaseUrl}/banks/${bankId}/regulatory-artifacts/${artifact.id}/download`,
-    { headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` } }
-  );
-  if (!response.ok) {
-    throw new Error(`Artifact download failed (${response.status}).`);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = artifact.objectPath.split('/').pop() ?? 'return-artifact';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  return saveAs(artifactUrl(bankId, artifact.id), artifact.objectPath);
+}
+
+/** Download one archived revision — after certification, the filed document. */
+export async function downloadArtifactVersion(
+  bankId: string,
+  version: { id: string; objectPath: string }
+): Promise<void> {
+  return saveAs(artifactVersionUrl(bankId, version.id), version.objectPath);
 }
 
 /**

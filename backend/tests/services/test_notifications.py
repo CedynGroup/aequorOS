@@ -25,6 +25,7 @@ from app.services.sample_bank_seed import (
     seed_sample_bank,
 )
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.factories.attestation import relax_signing
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 ADMIN_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
@@ -214,6 +215,11 @@ def test_mark_read_and_mark_all_read_touch_only_visible_rows(db_session: Session
 def _seed_with_baseline_run(db: Session) -> None:
     seed_sample_bank(db)
     _ensure_role_users(db, DEMO_ORG_ID)
+    # This suite is about which notification reaches whom, and it drives the
+    # lifecycle with bare approval decisions. Approving and signing are one act
+    # for a return that requires signatures, so opt BSD3 out the way an
+    # administrator would rather than turn every emission test into a ceremony.
+    relax_signing(db, organization_id=DEMO_ORG_ID, return_code="BSD3")
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,

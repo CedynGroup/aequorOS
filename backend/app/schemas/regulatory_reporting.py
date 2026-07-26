@@ -6,6 +6,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+# The signing vocabulary is owned by the attestation contract; reusing the alias
+# keeps one enum on the wire rather than two that could drift apart.
+from app.schemas.attestation import SigningRole
+
 type ReturnFamily = Literal[
     "liquidity", "capital", "irrbb", "fx", "icaap_stress", "corporate", "large_exposures", "dbk"
 ]
@@ -95,6 +99,9 @@ class RegulatoryPackageSummaryRead(ClosedModel):
     generated_at: datetime
     validation_passed: bool | None
     notes: str | None
+    # Carried on the summary so History/Approvals can render an attestation
+    # column without an extra request per row.
+    attestation_state: str = "unsigned"
     # ORASS parity: revision stamped at submit (1.0/1.1), snapshot seal, and
     # supervisor comments from a reject/decline decision.
     submission_revision: str | None
@@ -308,6 +315,176 @@ class ResubmissionRequestListRead(ClosedModel):
 class RegulatoryArtifactListRead(ClosedModel):
     package_id: UUID
     artifacts: list[RegulatoryArtifactRead]
+
+
+class ArtifactVersionSignatureRead(ClosedModel):
+    """Who pinned an archived revision, from the signature record itself.
+
+    Enough to label a download honestly — the officer, the capacity, and the
+    moment — without the caller having to join the attestation status back onto
+    the version list.
+    """
+
+    signature_id: UUID
+    signing_role: SigningRole
+    signer_id: str
+    signer_display_name: str | None
+    officer_title: str | None
+    signed_at: datetime
+    attestation_cycle: int
+
+
+class RegulatoryArtifactVersionRead(ClosedModel):
+    """One immutable archived render or signed revision of a package artifact.
+
+    Distinct from :class:`RegulatoryArtifactRead`, which is the UPSERTED row per
+    kind and therefore always the unsigned base export. These rows are appended,
+    so the chain from that base through each officer's signature is readable.
+    """
+
+    id: UUID
+    package_id: UUID
+    kind: ArtifactKind
+    object_path: str
+    storage_version_id: str | None
+    checksum_sha256: str
+    size_bytes: int
+    created_at: datetime
+    #: None on the base export; the signature that covered these exact bytes
+    #: on every signed revision.
+    signed_by: ArtifactVersionSignatureRead | None
+    #: The newest archived version of this kind, signed or not.
+    is_latest: bool
+    #: THE document: what download resolves to and what submission files. True
+    #: on at most one version — the last signature of the current attestation
+    #: cycle — and on none at all while the return is unsigned.
+    is_filed: bool
+
+
+class RegulatoryArtifactVersionListRead(ClosedModel):
+    package_id: UUID
+    versions: list[RegulatoryArtifactVersionRead]
+
+
+class PackageVersionSignatureRead(ClosedModel):
+    """One signature on a version of the chain, live or withdrawn.
+
+    Distinct from :class:`ArtifactVersionSignatureRead`, which only ever names
+    the CURRENT cycle because it labels the document that gets filed. This one
+    spans every cycle: a void preserves its signatures rather than deleting
+    them, so a superseded version can hold signatures that no longer certify
+    anything. ``withdrawn`` is the difference, and it is carried here rather
+    than left to the caller to derive from two cycle numbers.
+    """
+
+    signature_id: UUID
+    signing_role: SigningRole
+    signer_id: str
+    signer_display_name: str | None
+    officer_title: str | None
+    signed_at: datetime
+    attestation_cycle: int
+    #: Signed under a cycle the package has since voided — evidence, never a
+    #: current certification.
+    withdrawn: bool
+
+
+class PackageVersionChainEntryRead(ClosedModel):
+    """One version of a supersession chain and everything it can still offer."""
+
+    package_id: UUID
+    version: int
+    status: PackageStatus
+    #: The one version that is not superseded, if any.
+    is_current: bool
+    attestation_state: str
+    attestation_cycle: int
+    voided_at: datetime | None
+    void_reason: str | None
+    reporting_date: date
+    basis: ReturnBasis
+    generated_at: datetime
+    generated_by: UUID
+    validation_passed: bool | None
+    submission_revision: str | None
+    snapshot_sha256: str | None
+    signatures: list[PackageVersionSignatureRead]
+    #: The upserted canonical exports (one per kind), and the append-only chain
+    #: including every signed revision — the same two surfaces the current
+    #: version's artifacts card resolves.
+    artifacts: list[RegulatoryArtifactRead]
+    artifact_versions: list[RegulatoryArtifactVersionRead]
+    #: False when this version was never exported. The figures comparison stays
+    #: available regardless — the snapshot is immutable and always present — so
+    #: this gates only the download affordances.
+    has_retrievable_files: bool
+
+
+class PackageVersionChainRead(ClosedModel):
+    bank_id: str
+    return_code: str
+    reporting_date: date
+    basis: ReturnBasis
+    current_package_id: UUID | None
+    #: Newest version first.
+    versions: list[PackageVersionChainEntryRead]
+
+
+type SnapshotLineChange = Literal["added", "removed", "changed"]
+type SnapshotSectionChange = Literal["added", "removed", "changed"]
+type SnapshotSectionOrigin = Literal["section", "totals"]
+
+
+class SnapshotLineDiffRead(ClosedModel):
+    """One line item that differs between two snapshots."""
+
+    code: str
+    description: str
+    change: SnapshotLineChange
+    base_value: str | None
+    target_value: str | None
+    #: target − base, present only when both sides parse as decimals.
+    delta: str | None
+    #: Movement as a percentage of the base, present only when base is non-zero.
+    delta_pct: str | None
+    #: The section's cross-footed total rather than one of its rows.
+    is_total: bool
+
+
+class SnapshotSectionDiffRead(ClosedModel):
+    code: str
+    title: str
+    origin: SnapshotSectionOrigin
+    change: SnapshotSectionChange
+    #: Only the lines that differ; identical figures are counted, not listed.
+    lines: list[SnapshotLineDiffRead]
+    unchanged_line_count: int
+
+
+class PackageComparisonSideRead(ClosedModel):
+    package_id: UUID
+    version: int
+    status: PackageStatus
+    reporting_date: date
+    basis: ReturnBasis
+    generated_at: datetime
+    snapshot_sha256: str | None
+    content_digest: str | None
+
+
+class PackageComparisonRead(ClosedModel):
+    """A line-item figures diff between two versions of the same return."""
+
+    base: PackageComparisonSideRead
+    target: PackageComparisonSideRead
+    identical: bool
+    changed_count: int
+    added_count: int
+    removed_count: int
+    #: Sections that differ, in the target's order, with base-only sections
+    #: appended. Sections whose every figure matches are omitted.
+    sections: list[SnapshotSectionDiffRead]
+    unchanged_section_count: int
 
 
 class EmailRecipientGuidanceRead(ClosedModel):

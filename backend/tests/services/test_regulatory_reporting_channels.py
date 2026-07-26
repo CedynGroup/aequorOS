@@ -41,6 +41,7 @@ from app.services.sample_bank_seed import (
     SAMPLE_BANK_ID,
     seed_sample_bank,
 )
+from tests.factories.attestation import relax_signing
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 CHECKER = TenantContext(
@@ -250,6 +251,13 @@ def exporter_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 def _seed_approved_package(db: Session) -> RegulatoryPackage:
     seed_sample_bank(db)
+    # This suite is about CHANNELS, not about who signed. Signing is required for
+    # every return by default, so opt this one return out the way an
+    # administrator would — rather than driving a two-officer ceremony through
+    # every channel test and turning them into attestation tests by accident.
+    # The gate itself is proved in tests/services/test_attestation_spine.py and
+    # in the Playwright lifecycle journey.
+    relax_signing(db, organization_id=DEMO_ORG_ID, return_code="BSD3")
     if db.scalar(select(User.id).where(User.id == CHECKER.actor_user_id)) is None:
         db.add(
             User(

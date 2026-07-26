@@ -23,10 +23,18 @@ PUBLIC_ID_LENGTH: Final = 8
 
 BANK_PUBLIC_ID_PREFIX: Final = "BK"
 ORGANIZATION_PUBLIC_ID_PREFIX: Final = "OR"
+#: Signer identities are 16 characters (80 bits), not 8 — they are minted
+#: per person rather than per institution, and they appear on filed
+#: documents, so collision headroom matters more than brevity.
+SIGNER_PUBLIC_ID_PREFIX: Final = "SGN"
+SIGNER_ID_LENGTH: Final = 16
 
 _PUBLIC_ID_PATTERN: Final = re.compile(
     rf"^(?:{BANK_PUBLIC_ID_PREFIX}|{ORGANIZATION_PUBLIC_ID_PREFIX})"
     rf"-[{CROCKFORD_ALPHABET}]{{{PUBLIC_ID_LENGTH}}}$"
+)
+_SIGNER_ID_PATTERN: Final = re.compile(
+    rf"^{SIGNER_PUBLIC_ID_PREFIX}-[{CROCKFORD_ALPHABET}]{{{SIGNER_ID_LENGTH}}}$"
 )
 
 
@@ -51,3 +59,25 @@ def is_public_id(value: str) -> bool:
 def normalize_public_id(value: str) -> str:
     """Canonical stored form: trimmed, uppercase."""
     return value.strip().upper()
+
+
+def crockford_encode(payload: bytes, length: int) -> str:
+    """Crockford base32 over ``payload``, truncated to ``length`` characters.
+
+    Bit-packed rather than byte-mapped so the full entropy of ``payload``
+    reaches the output: 16 characters carry 80 bits.
+    """
+    value = int.from_bytes(payload, "big")
+    bits = len(payload) * 8
+    chars: list[str] = []
+    for index in range(length):
+        shift = bits - 5 * (index + 1)
+        if shift < 0:  # pragma: no cover - callers size payload to length
+            raise ValueError("payload too short for the requested length")
+        chars.append(CROCKFORD_ALPHABET[(value >> shift) & 0x1F])
+    return "".join(chars)
+
+
+def is_signer_id(value: str) -> bool:
+    """True if the value is a well-formed signer identity (``SGN-…``)."""
+    return bool(_SIGNER_ID_PATTERN.fullmatch(value.strip().upper()))

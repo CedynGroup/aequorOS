@@ -1,3 +1,15 @@
+from app.models.attestation import (
+    AdoptedSignatureAppearance,
+    AttestationSignature,
+    PackageSignaturePlacement,
+    PackageSignatureRecipient,
+    RegulatoryArtifactVersion,
+    ReturnSignaturePlacement,
+    ReturnSigningPolicy,
+    SignerIdentity,
+    SignerKey,
+    SigningAuthorization,
+)
 from app.models.audit_event import AuditEvent
 from app.models.calculation import (
     CalculationForecastPeriod,
@@ -99,6 +111,8 @@ from app.models.temenos import TemenosConnection
 from app.models.user import User
 
 __all__ = [
+    "AdoptedSignatureAppearance",
+    "AttestationSignature",
     "AuditEvent",
     "Bank",
     "BankFinancialFact",
@@ -151,6 +165,14 @@ __all__ = [
     "Notification",
     "IntegrationKey",
     "Organization",
+    "PackageSignaturePlacement",
+    "PackageSignatureRecipient",
+    "RegulatoryArtifactVersion",
+    "ReturnSignaturePlacement",
+    "ReturnSigningPolicy",
+    "SignerIdentity",
+    "SignerKey",
+    "SigningAuthorization",
     "Outlet",
     "TemenosConnection",
     "TranslationFailure",

@@ -93,6 +93,12 @@ export interface RegulatoryPackageSummaryRead {
    * @type {string}
    * @memberof RegulatoryPackageSummaryRead
    */
+  attestationState?: string;
+  /**
+   *
+   * @type {string}
+   * @memberof RegulatoryPackageSummaryRead
+   */
   bankId: string;
   /**
    *
@@ -263,6 +269,8 @@ export function RegulatoryPackageSummaryReadFromJSONTyped(
   }
   return {
     ...json,
+    attestationState:
+      json["attestation_state"] == null ? undefined : json["attestation_state"],
     bankId: json["bank_id"],
     basis: ReturnBasisFromJSON(json["basis"]),
     createdAt: new Date(json["created_at"]),
@@ -300,6 +308,7 @@ export function RegulatoryPackageSummaryReadToJSONTyped(
   }
 
   return {
+    attestation_state: value["attestationState"],
     bank_id: value["bankId"],
     basis: ReturnBasisToJSON(value["basis"]),
     created_at: value["createdAt"].toISOString(),

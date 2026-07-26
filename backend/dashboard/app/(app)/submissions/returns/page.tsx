@@ -9,6 +9,12 @@
  * ORASS-parity resubmission workflow (request → grant/deny → regenerate the
  * corrected revision). Deep-linkable via ?code=&date= (the Calendar and
  * module pages link here).
+ *
+ * Attestation (docs/attestation_esignature.md) is a parallel, additive
+ * dimension on the package rather than a replacement for the lifecycle above:
+ * the preparer certifies and freezes, an approver certifies the identical
+ * frozen figures, and submission is gated on a complete attestation. The
+ * Attestation card owns those affordances.
  */
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
@@ -36,6 +42,7 @@ import type {
   ArtifactKind,
   ChannelCode,
   PackageStatus,
+  RegulatoryArtifactVersionRead,
   RegulatoryPackageRead,
   RegulatoryPackageSummaryRead,
   ResubmissionRequestRead,
@@ -43,7 +50,6 @@ import type {
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
 import CopyButton from '@/components/ui/CopyButton';
 import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
 import EmptyState from '@/components/ui/EmptyState';
@@ -55,7 +61,9 @@ import {
   useEmailFallbackInstructions,
   useExportRegulatoryPackage,
   useGenerateRegulatoryPackage,
+  usePackageArtifactVersions,
   usePackageArtifacts,
+  usePackageAttestation,
   usePollRegulatorySubmission,
   useRegulatoryPackage,
   useRegulatoryPackages,
@@ -75,13 +83,20 @@ import {
   PackageStatusPill,
   ResubmissionStatusPill,
   downloadArtifact,
+  downloadArtifactVersion,
   downloadEmailFallbackEml,
   fmtBytes,
 } from '@/components/submissions/shared';
 import LifecycleStepper from '@/components/submissions/LifecycleStepper';
+import PriorVersionsCard from '@/components/submissions/PriorVersionsCard';
 import SnapshotPreview from '@/components/submissions/SnapshotPreview';
 import ValidationPanel from '@/components/submissions/ValidationPanel';
 import EventsFeed from '@/components/submissions/EventsFeed';
+import AttestationPanel from '@/components/attestation/AttestationPanel';
+import {
+  AttestationStatePill,
+  outstandingSummary,
+} from '@/components/attestation/shared';
 import { regShort } from '@/lib/format';
 
 export default function ReturnsWorkspacePage() {
@@ -375,8 +390,15 @@ function PackageWorkspace({
   const submit = useSubmitRegulatoryPackage(bankId);
   const poll = usePollRegulatorySubmission(bankId);
   const artifactsQuery = usePackageArtifacts(bankId, summary.id);
+  // The append-only chain, which is where the SIGNED revisions live: the
+  // artifact list above is upserted per kind and therefore always names the
+  // unsigned export.
+  const versionsQuery = usePackageArtifactVersions(bankId, summary.id);
   const eventsQuery = useSubmissionEvents(bankId, summary.id);
   const resubmissionsQuery = useResubmissionRequests(bankId, summary.id);
+  // Shared with <AttestationPanel /> through the query cache — read here so the
+  // header pill and the Submit card can state the attestation gate honestly.
+  const attestationQuery = usePackageAttestation(bankId, summary.id);
 
   const defaultChannel = template?.defaultChannel ?? 'manual';
   const [channel, setChannel] = useState<ChannelCode>(defaultChannel);
@@ -412,7 +434,30 @@ function PackageWorkspace({
     Boolean(fallback) || channel === 'email'
   );
 
+  const attestation = attestationQuery.data ?? null;
+  // Driven by `canSubmit` and by nothing looser. The service computes it from the
+  // policy in force and the signatures on record; re-deriving it here from the
+  // policy flag or the attestation state is how a screen ends up offering Submit
+  // on an unsigned return. An unread status blocks too — a Submit button enabled
+  // because a query has not answered yet is the same defect with better luck.
+  const attestationBlocks = !attestation?.canSubmit;
+  // Until the policy is known, assume signatures are required: the platform
+  // default requires them, so the safe reading is the strict one.
+  const signingRequired = attestation?.policy.requireSignature ?? true;
+  const attestationBlockReason = !attestationBlocks
+    ? null
+    : attestation == null
+      ? 'Blocked: the attestation status could not be read, so the signatures cannot be confirmed.'
+      : `Blocked: this return is not fully certified. Outstanding — ${outstandingSummary(
+          attestation.outstanding
+        )}. See the Attestation card.`;
+
   const artifacts = artifactsQuery.data?.artifacts ?? [];
+  // At most one, and only once an officer has certified: the revision the last
+  // signature pinned. It is what submission files, so it is what Download has
+  // to hand over.
+  const filedVersion =
+    versionsQuery.data?.versions.find((version) => version.isFiled) ?? null;
   const resubmissions = resubmissionsQuery.data?.requests ?? [];
   const submissionRevision =
     pkg?.submissionRevision ?? summary.submissionRevision;
@@ -429,6 +474,13 @@ function PackageWorkspace({
   const handleDownload = (artifact: { id: string; objectPath: string }) => {
     setDownloadError(null);
     downloadArtifact(bankId, artifact).catch((error: unknown) =>
+      setDownloadError(error instanceof Error ? error.message : 'Download failed.')
+    );
+  };
+
+  const handleVersionDownload = (version: { id: string; objectPath: string }) => {
+    setDownloadError(null);
+    downloadArtifactVersion(bankId, version).catch((error: unknown) =>
       setDownloadError(error instanceof Error ? error.message : 'Download failed.')
     );
   };
@@ -451,6 +503,9 @@ function PackageWorkspace({
               v{summary.version}
             </span>
             <PackageStatusPill status={status} />
+            {attestation && (
+              <AttestationStatePill state={attestation.attestationState} />
+            )}
             {submissionRevision && (
               <span
                 title="Submission revision — resubmissions carry +0.1"
@@ -505,9 +560,13 @@ function PackageWorkspace({
               restored.
             </p>
           </div>
+          {/* Also a submission, so also gated: the re-upload sends the filed
+              document to the regulator, and every path that does reads the same
+              clearance rather than trusting the earlier submission. */}
           <button
             type="button"
-            disabled={submit.isPending}
+            disabled={submit.isPending || attestationBlocks}
+            title={attestationBlockReason ?? undefined}
             onClick={() =>
               submit.mutate({ packageId: summary.id, channel: 'orass_sandbox' })
             }
@@ -522,6 +581,16 @@ function PackageWorkspace({
           </button>
         </div>
       )}
+
+      {/* Certification — full width, above the read/act columns: the signing
+          ceremony is the gate everything downstream depends on. */}
+      <AttestationPanel
+        bankId={bankId}
+        packageId={summary.id}
+        returnLabel={`${summary.returnCode} · ${fmtDateUTC(summary.reportingDate)} v${summary.version}`}
+        packageStatus={status}
+        validationClean={report !== null && !validationBlocked}
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
         {/* Snapshot + validation (left, wide) */}
@@ -600,32 +669,58 @@ function PackageWorkspace({
         <div className="space-y-6 min-w-0">
           <SectionCard
             title="Approval"
-            subtitle="Maker-checker: a different officer decides on the Approvals tab"
+            subtitle={
+              signingRequired
+                ? 'Maker-checker: certifying as preparer is the request; a different officer approves and signs'
+                : 'Maker-checker: a different officer decides on the Approvals tab'
+            }
           >
-            <button
-              type="button"
-              disabled={!canRequestApproval || requestApproval.isPending}
-              onClick={() => requestApproval.mutate({ packageId: summary.id })}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            >
-              {requestApproval.isPending ? (
-                <Loader2 size={13} className="animate-spin" aria-hidden />
-              ) : (
-                <FileCheck2 size={13} aria-hidden />
-              )}
-              Request approval
-            </button>
-            <p className="mt-2 text-caption text-slate leading-relaxed">
-              {status === 'pending_approval'
-                ? 'Awaiting a checker decision — open the Approvals tab to decide as a second officer.'
-                : validationBlocked
-                ? 'Blocked: the latest validation report carries ERROR findings. Resolve and re-validate first.'
-                : status === 'generated' || report === null
-                ? 'Validate the package first; approval can only be requested for a validated package.'
-                : status === 'validated'
-                ? 'Validation passed — request approval to enter the maker-checker queue.'
-                : `Package is '${status}'.`}
-            </p>
+            {/* Where signatures are required, the preparer's certification IS the
+                request for approval — it freezes the figures and routes the return
+                to the officer they name. Offering a separate Request approval
+                button here would move the package out of 'validated', which is the
+                only status a preparer certification is accepted from, leaving a
+                return that neither officer can sign. */}
+            {signingRequired ? (
+              <p className="text-caption text-navy/85 leading-relaxed">
+                {status === 'pending_approval'
+                  ? 'Sent for approval by the preparer’s certification — the named approver reviews, then approves and signs in one act, or sends it back with a note.'
+                  : status === 'validated'
+                  ? 'Validation passed. Certify as preparer in the Attestation card above: that freezes the figures and sends the return to the approver you name.'
+                  : validationBlocked
+                  ? 'Blocked: the latest validation report carries ERROR findings. Resolve and re-validate first.'
+                  : status === 'generated' || report === null
+                  ? 'Validate the package first; certification is only accepted for a validated package.'
+                  : `Package is '${status}'.`}
+              </p>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={!canRequestApproval || requestApproval.isPending}
+                  onClick={() => requestApproval.mutate({ packageId: summary.id })}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+                >
+                  {requestApproval.isPending ? (
+                    <Loader2 size={13} className="animate-spin" aria-hidden />
+                  ) : (
+                    <FileCheck2 size={13} aria-hidden />
+                  )}
+                  Request approval
+                </button>
+                <p className="mt-2 text-caption text-slate leading-relaxed">
+                  {status === 'pending_approval'
+                    ? 'Awaiting a checker decision — open the Approvals tab to decide as a second officer.'
+                    : validationBlocked
+                    ? 'Blocked: the latest validation report carries ERROR findings. Resolve and re-validate first.'
+                    : status === 'generated' || report === null
+                    ? 'Validate the package first; approval can only be requested for a validated package.'
+                    : status === 'validated'
+                    ? 'Validation passed — request approval to enter the maker-checker queue.'
+                    : `Package is '${status}'.`}
+                </p>
+              </>
+            )}
             {requestApproval.error && (
               <div className="mt-3">
                 <ErrorPanel
@@ -666,35 +761,54 @@ function PackageWorkspace({
             {downloadError && (
               <p className="mt-2 text-caption text-critical">{downloadError}</p>
             )}
+            {filedVersion && (
+              <SignedReturnRow
+                version={filedVersion}
+                onDownload={() => handleVersionDownload(filedVersion)}
+              />
+            )}
             {artifacts.length > 0 ? (
-              <ul className="mt-3 space-y-2">
-                {artifacts.map((artifact) => (
-                  <li
-                    key={artifact.id}
-                    className="flex items-center gap-2 rounded border border-border-light bg-surface px-3 py-2"
-                  >
-                    <span className="font-mono text-caption font-medium text-navy uppercase">
-                      {artifact.kind}
-                    </span>
-                    <span className="font-mono text-micro text-slate tnum truncate">
-                      sha256 {shortId(artifact.checksumSha256, 12)}
-                    </span>
-                    <CopyButton text={artifact.checksumSha256} label="checksum" />
-                    <span className="ml-auto font-mono text-micro text-slate tnum whitespace-nowrap">
-                      {fmtBytes(artifact.sizeBytes)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleDownload(artifact)}
-                      aria-label={`Download ${artifact.kind} artifact`}
-                      className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+              <>
+                {filedVersion && (
+                  <p className="mt-4 text-micro font-medium uppercase tracking-wider text-slate">
+                    Pre-signature engine output
+                  </p>
+                )}
+                <ul className="mt-2 space-y-2">
+                  {artifacts.map((artifact) => (
+                    <li
+                      key={artifact.id}
+                      className="flex items-center gap-2 rounded border border-border-light bg-surface px-3 py-2"
                     >
-                      <Download size={11} aria-hidden />
-                      Download
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                      <span className="font-mono text-caption font-medium text-navy uppercase">
+                        {artifact.kind}
+                      </span>
+                      <span className="font-mono text-micro text-slate tnum truncate">
+                        sha256 {shortId(artifact.checksumSha256, 12)}
+                      </span>
+                      <CopyButton text={artifact.checksumSha256} label="checksum" />
+                      <span className="ml-auto font-mono text-micro text-slate tnum whitespace-nowrap">
+                        {fmtBytes(artifact.sizeBytes)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(artifact)}
+                        aria-label={`Download ${artifact.kind} artifact`}
+                        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                      >
+                        <Download size={11} aria-hidden />
+                        Download
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {filedVersion && (
+                  <p className="mt-2 text-caption text-slate leading-relaxed">
+                    Retained for provenance — what the engine rendered before
+                    anyone signed. It is never filed.
+                  </p>
+                )}
+              </>
             ) : (
               <p className="mt-3 text-caption text-slate">
                 No artifacts exported yet. Exports mint checksummed files in
@@ -732,7 +846,9 @@ function PackageWorkspace({
             <div className="mt-3 flex items-center gap-2">
               <button
                 type="button"
-                disabled={!canSubmit || submit.isPending}
+                data-testid="submit-package"
+                disabled={!canSubmit || attestationBlocks || submit.isPending}
+                title={attestationBlockReason ?? undefined}
                 onClick={() => submit.mutate({ packageId: summary.id, channel })}
                 className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
               >
@@ -757,6 +873,18 @@ function PackageWorkspace({
                 Poll status
               </button>
             </div>
+            {/* Named, not merely refused: an operator staring at a greyed-out
+                Submit needs to know which signature is missing, and the disabled
+                title alone is invisible to a touch device. */}
+            {attestationBlockReason && (
+              <p
+                data-testid="submit-blocked-reason"
+                className="mt-2 text-caption text-navy/85 leading-relaxed"
+              >
+                {attestationBlockReason} No return reaches a channel without every
+                signature the policy in force requires.
+              </p>
+            )}
             {!canSubmit && !canPoll && !canReupload && (
               <p className="mt-2 text-caption text-slate leading-relaxed">
                 {status === 'submitted'
@@ -818,7 +946,8 @@ function PackageWorkspace({
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
-                    disabled={submit.isPending}
+                    disabled={submit.isPending || attestationBlocks}
+                    title={attestationBlockReason ?? undefined}
                     onClick={() =>
                       submit.mutate({ packageId: summary.id, channel: 'email' })
                     }
@@ -859,31 +988,63 @@ function PackageWorkspace({
             latestSubmittedChannel={latestSubmitted?.channel ?? null}
           />
 
-          {priorVersions.length > 0 && (
-            <SectionCard
-              title="Prior versions"
-              subtitle="Superseded snapshots remain immutable history"
-              noPadding
-            >
-              <ul>
-                {priorVersions.map((prior) => (
-                  <li
-                    key={prior.id}
-                    className="flex items-center gap-3 px-5 py-2.5 border-b border-border-light last:border-b-0"
-                  >
-                    <span className="font-mono text-caption text-navy tnum">
-                      v{prior.version}
-                    </span>
-                    <StatusPill tone="slate">Superseded</StatusPill>
-                    <span className="ml-auto font-mono text-micro text-slate tnum">
-                      {fmtTimestamp(prior.generatedAt)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </SectionCard>
-          )}
+          <PriorVersionsCard bankId={bankId} packageId={summary.id} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The document, once officers have certified it.
+ *
+ * Given top billing rather than being one row among the exports, because it is
+ * the only one that is true: this revision carries the signatures, this revision
+ * is what the channel files, and the exports beneath it are the render that
+ * preceded it. Naming the signers here is the point — an operator downloading a
+ * return before a deadline needs to see whose signature they are sending, not
+ * infer it from a filename.
+ */
+function SignedReturnRow({
+  version,
+  onDownload,
+}: {
+  version: RegulatoryArtifactVersionRead;
+  onDownload: () => void;
+}) {
+  const signer = version.signedBy;
+  return (
+    <div className="mt-3 rounded border border-success/30 bg-success-light/40 px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <ShieldCheck size={13} className="text-success shrink-0" aria-hidden />
+        <span className="text-caption font-medium text-navy">
+          Signed return — filed to {regShort()}
+        </span>
+        <span className="ml-auto font-mono text-micro text-slate tnum whitespace-nowrap">
+          {fmtBytes(version.sizeBytes)}
+        </span>
+      </div>
+      {signer && (
+        <p className="mt-1 text-caption text-slate leading-relaxed">
+          Last signed by {signer.signerDisplayName ?? signer.signerId}
+          {signer.officerTitle ? ` — ${signer.officerTitle}` : ''} as{' '}
+          {signer.signingRole}, {fmtTimestamp(signer.signedAt)}.
+        </p>
+      )}
+      <div className="mt-2 flex items-center gap-2">
+        <span className="font-mono text-micro text-slate tnum truncate">
+          sha256 {shortId(version.checksumSha256, 12)}
+        </span>
+        <CopyButton text={version.checksumSha256} label="checksum" />
+        <button
+          type="button"
+          onClick={onDownload}
+          aria-label="Download signed return"
+          className="ml-auto inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-micro font-medium btn-primary"
+        >
+          <Download size={11} aria-hidden />
+          Download
+        </button>
       </div>
     </div>
   );

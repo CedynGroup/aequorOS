@@ -18,13 +18,19 @@ dependencies = [
   "openpyxl",
   "oracledb",
   "pandas",
+  # Direct import, not a reportlab leftover: attestation/appearance.py decodes and
+  # re-rasters an officer's drawn signature, and pyhanko embeds the result. Listed
+  # explicitly so the guarantee does not rest on another package's dependency tree.
+  "pillow",
   "psycopg[binary]",
   "pyarrow",
   "pydantic-settings",
+  "pyhanko[opentype]",
+  "pyhanko-certvalidator",
   "pyjwt[crypto]",
   "pyyaml",
   "rapidfuzz",
-  "reportlab",
+  "reportlab>=4.0,<5.1",  # pinned: deterministic bytes rely on invariant=1 (G12)
   "scikit-learn",
   "sqlalchemy",
   "torch",
@@ -35,6 +41,14 @@ dependencies = [
 # fixture tests run without them. Install when wiring a live source database:
 #   uv sync --extra db-direct
 [project.optional-dependencies]
+# Hardware signing custody (docs/attestation_esignature.md §3.4). The PKCS#11
+# driver is lazily imported inside app/services/attestation/signers.py, so the
+# default environment stays installable and the software/dev backend and its
+# tests run without an HSM. Install when wiring a real token/HSM:
+#   uv sync --extra hsm
+hsm = [
+  "python-pkcs11", # PKCS#11 binding pyhanko.sign.pkcs11 wraps (needs a vendor .so)
+]
 db-direct = [
   "pyodbc",     # ODBC + SQL Server (needs unixODBC / a system ODBC driver)
   "jaydebeapi", # generic JDBC via a bank-supplied JDBC driver jar
@@ -68,7 +82,7 @@ ignore = ["PLR2004"]
 [tool.basedpyright]
 pythonVersion = "3.13"
 typeCheckingMode = "standard"
-include = ["app", "tests", "alembic"]
+include = ["app", "tests", "alembic", "scripts"]
 exclude = [".venv"]
 reportAny = false
 reportExplicitAny = false

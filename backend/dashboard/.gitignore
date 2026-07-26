@@ -10,5 +10,6 @@
 *.tsbuildinfo
 next-env.d.ts
 e2e/.tmp/
+.next-dev/
 .next-e2e/
 .next-build/

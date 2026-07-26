@@ -27,20 +27,28 @@ accounts**: an unknown identity is rejected even with a valid token.
 | Client secret | issued alongside the client ID — **never email it**; your admin enters it directly in AequorOS (Settings → Authentication), where it is stored encrypted and can never be read back |
 | Allowed email domain(s) | `yourbank.com.gh` |
 
-**The redirect URI you must register in your IdP:**
+**The redirect URIs you must register in your IdP:**
 
 ```
 https://app.aequoros.com/api/auth/callback/sso
+https://app.aequoros.com/api/attestation/step-up/callback
 ```
 
 (Shown, with a copy button, in AequorOS → Settings → Authentication.)
+
+The first is sign-in. The second is **signing**: when an officer certifies a
+regulatory return, AequorOS sends them back to you for a fresh authentication
+(`prompt=login`, `max_age=0`) and records what your IdP asserts about it —
+`auth_time`, and `acr`/`amr` if you issue them — as evidence attached to the
+signature. Registering only the first URI leaves sign-in working and signing
+broken, so register both. Both use the same client, and no additional scopes.
 
 ## Step-by-step: Google Workspace
 
 1. In [Google Cloud Console](https://console.cloud.google.com) → APIs & Services →
    Credentials → **Create credentials → OAuth client ID**.
 2. Application type: **Web application**. Name: `AequorOS`.
-3. **Authorised redirect URIs**: add `https://app.aequoros.com/api/auth/callback/sso`.
+3. **Authorised redirect URIs**: add **both** URIs listed above.
 4. If prompted to configure the consent screen: User type **Internal** (restricts
    sign-in to your Workspace); scopes `openid`, `email`, `profile` only.
 5. Create → note the **Client ID** and **Client secret**.
@@ -54,7 +62,7 @@ https://app.aequoros.com/api/auth/callback/sso
    **App registrations → New registration**.
 2. Name `AequorOS`; supported account types: **Accounts in this organizational
    directory only**.
-3. Redirect URI: platform **Web**, value `https://app.aequoros.com/api/auth/callback/sso`.
+3. Redirect URI: platform **Web** — add **both** URIs listed above.
 4. Register → **Certificates & secrets → New client secret** (set a rotation
    reminder for its expiry) → note the secret **Value**.
 5. Overview page → note the **Application (client) ID** and **Directory (tenant) ID**.
@@ -62,7 +70,7 @@ https://app.aequoros.com/api/auth/callback/sso
 7. Enter issuer / client ID / secret in AequorOS **Settings → Authentication** as above.
 
 *Other OIDC IdPs (Okta, Ping, Keycloak, ForgeRock): register a Web/OIDC app with
-the same redirect URI and `openid email profile` scopes; the Issuer URL is your
+both redirect URIs and `openid email profile` scopes; the Issuer URL is your
 IdP's published issuer (it must serve
 `{issuer}/.well-known/openid-configuration`).*
 

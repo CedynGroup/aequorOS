@@ -1,4 +1,5 @@
 from app.services.regulatory_reporting.channels.base import (
+    FiledArtifact,
     SubmissionChannel,
     SubmissionPollStatus,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "ChannelError",
     "ChannelPreconditionError",
     "EmailFallbackChannel",
+    "FiledArtifact",
     "OrassApiChannel",
     "OrassSandboxChannel",
     "SubmissionChannel",

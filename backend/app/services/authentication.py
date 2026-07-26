@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -281,6 +282,27 @@ def _get_access_request(db: Session, organization_id: str, user_id: UUID) -> Use
     return user
 
 
+def _provision_signer_identity(db: Session, user: User) -> None:
+    """Mint the permanent signer identity when access is granted.
+
+    Best-effort: an unconfigured SIGNER_ID_PEPPER must not block onboarding a
+    user, and the signing path provisions lazily anyway. Failure is logged, not
+    raised (docs/attestation_esignature.md §2.4).
+    """
+    from app.api.deps import TenantContext  # noqa: PLC0415 - avoids an import cycle
+    from app.services.attestation.identity import (  # noqa: PLC0415
+        SignerIdentityError,
+        ensure_signer_identity,
+    )
+
+    try:
+        ensure_signer_identity(
+            db, TenantContext(organization_id=user.organization_id), user.id
+        )
+    except SignerIdentityError as exc:
+        logger.warning("signer identity not provisioned for {}: {}", user.id, exc)
+
+
 def approve_sso_access_request(
     db: Session, *, organization_id: str, user_id: UUID, role: str
 ) -> User:
@@ -291,6 +313,9 @@ def approve_sso_access_request(
     user.is_active = True
     db.commit()
     db.refresh(user)
+    # Access granted is the moment the signer identity should exist — before it
+    # is ever needed, so an operator can print a signer roster in advance.
+    _provision_signer_identity(db, user)
     return user
 
 

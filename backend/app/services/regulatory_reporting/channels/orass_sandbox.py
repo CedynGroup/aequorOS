@@ -22,12 +22,11 @@ from collections.abc import Sequence
 from typing import Any, Literal
 
 from app.core.ids import new_uuid7
-from app.models import (
-    RegulatoryPackage,
-    RegulatoryPackageArtifact,
-    RegulatorySubmissionEvent,
+from app.models import RegulatoryPackage, RegulatorySubmissionEvent
+from app.services.regulatory_reporting.channels.base import (
+    FiledArtifact,
+    SubmissionPollStatus,
 )
-from app.services.regulatory_reporting.channels.base import SubmissionPollStatus
 from app.services.regulatory_reporting.channels.errors import (
     ChannelDowntimeError,
     ChannelPreconditionError,
@@ -104,7 +103,7 @@ class OrassSandboxChannel:
     def submit(
         self,
         package: RegulatoryPackage,
-        artifacts: Sequence[RegulatoryPackageArtifact],
+        artifacts: Sequence[FiledArtifact],
     ) -> str:
         if self._config.get("downtime"):
             raise ChannelDowntimeError(

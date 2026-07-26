@@ -22,6 +22,12 @@ export interface MeResponse {
    * @type {string}
    * @memberof MeResponse
    */
+  authProvider: string;
+  /**
+   *
+   * @type {string}
+   * @memberof MeResponse
+   */
   displayName: string | null;
   /**
    *
@@ -88,6 +94,8 @@ export type MeResponseThemeEnum =
  * Check if a given object implements the MeResponse interface.
  */
 export function instanceOfMeResponse(value: object): value is MeResponse {
+  if (!("authProvider" in value) || value["authProvider"] === undefined)
+    return false;
   if (!("displayName" in value) || value["displayName"] === undefined)
     return false;
   if (!("email" in value) || value["email"] === undefined) return false;
@@ -114,6 +122,7 @@ export function MeResponseFromJSONTyped(
     return json;
   }
   return {
+    authProvider: json["auth_provider"],
     displayName: json["display_name"],
     email: json["email"],
     jobTitle: json["job_title"],
@@ -139,6 +148,7 @@ export function MeResponseToJSONTyped(
   }
 
   return {
+    auth_provider: value["authProvider"],
     display_name: value["displayName"],
     email: value["email"],
     job_title: value["jobTitle"],

@@ -37,6 +37,7 @@ from sqlalchemy.orm import Session
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/ on path
 
 from app.core.config import get_settings  # noqa: E402
+from app.services.public_ids import normalize_public_id  # noqa: E402
 
 DEMO_ORG_ID = UUID("11111111-1111-4111-8111-111111111111")
 SAMPLE_BANK_ID = UUID("77000000-0000-4000-8000-000000000001")
@@ -58,10 +59,20 @@ DATA_ENGINE_TABLES: tuple[str, ...] = (
 )
 
 
+def _deleted(result: object) -> int:
+    """Row count from a DML execute.
+
+    ``Session.execute`` is typed as returning ``Result``, but DML returns a
+    ``CursorResult`` which carries ``rowcount``; read it without asserting a
+    driver-specific type.
+    """
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
 def reset(
     session: Session,
-    org_id: UUID,
-    bank_id: UUID,
+    org_id: str,
+    bank_id: str,
     *,
     wipe_all_periods: bool = False,
 ) -> dict[str, int]:
@@ -84,7 +95,7 @@ def reset(
                 ),
                 params,
             )
-            deleted[table] = deleted.get(table, 0) + (result.rowcount or 0)
+            deleted[table] = deleted.get(table, 0) + _deleted(result)
 
     # 1. Periods created by data activation (facts tagged source=data_engine).
     period_rows = session.execute(
@@ -111,7 +122,7 @@ def reset(
                 ),
                 page,
             )
-            deleted[table] = deleted.get(table, 0) + (result.rowcount or 0)
+            deleted[table] = deleted.get(table, 0) + _deleted(result)
 
     # 2. Data Engine artifacts.
     for table in DATA_ENGINE_TABLES:
@@ -127,7 +138,7 @@ def reset(
                 "WHERE organization_id = :org AND bank_id = :bank"
             )
         result = session.execute(text(statement), params)
-        deleted[table] = deleted.get(table, 0) + (result.rowcount or 0)
+        deleted[table] = deleted.get(table, 0) + _deleted(result)
 
     deleted["_activation_periods_removed"] = len(period_ids)
     return deleted
@@ -186,8 +197,9 @@ def main() -> int:
     with Session(engine) as session:
         deleted = reset(
             session,
-            UUID(args.org_id),
-            UUID(args.bank_id),
+            # Platform IDs (OR-/BK-) since the 2026-07-24 identity epoch.
+            normalize_public_id(args.org_id),
+            normalize_public_id(args.bank_id),
             wipe_all_periods=args.wipe_all_periods,
         )
         session.commit()

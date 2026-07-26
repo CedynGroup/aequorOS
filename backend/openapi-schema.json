@@ -118,6 +118,164 @@
         ],
         "type": "string"
       },
+      "AdoptSignatureRequest": {
+        "additionalProperties": false,
+        "description": "Adopt (or re-adopt) the caller's own mark.\n\nExactly one kind's payload is required. Drawn bytes are re-rastered, stripped\nof metadata and re-encoded server-side before storage \u2014 the raw upload is\nnever persisted.",
+        "properties": {
+          "image_png_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Png Base64"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AppearanceKind"
+          },
+          "typed_font": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TypedSignatureFont"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "typed_name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typed Name"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "AdoptSignatureRequest",
+        "type": "object"
+      },
+      "AdoptedSignatureRead": {
+        "additionalProperties": false,
+        "description": "The caller's adopted mark. ``image_png_base64`` is normalised PNG bytes.",
+        "properties": {
+          "adopted": {
+            "title": "Adopted",
+            "type": "boolean"
+          },
+          "adopted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adopted At"
+          },
+          "available_fonts": {
+            "items": {
+              "$ref": "#/components/schemas/TypedSignatureFont"
+            },
+            "title": "Available Fonts",
+            "type": "array"
+          },
+          "image_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Height"
+          },
+          "image_png_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Png Base64"
+          },
+          "image_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Width"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppearanceKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signer_id": {
+            "title": "Signer Id",
+            "type": "string"
+          },
+          "typed_font": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TypedSignatureFont"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "typed_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typed Name"
+          }
+        },
+        "required": [
+          "adopted",
+          "signer_id",
+          "kind",
+          "image_png_base64",
+          "image_width",
+          "image_height",
+          "typed_name",
+          "typed_font",
+          "adopted_at",
+          "available_fonts"
+        ],
+        "title": "AdoptedSignatureRead",
+        "type": "object"
+      },
       "AlertItemRead": {
         "additionalProperties": false,
         "properties": {
@@ -178,6 +336,13 @@
         ],
         "type": "string"
       },
+      "AppearanceKind": {
+        "enum": [
+          "drawn",
+          "typed"
+        ],
+        "type": "string"
+      },
       "ApprovalAction": {
         "enum": [
           "requested",
@@ -200,6 +365,66 @@
           "pdf"
         ],
         "type": "string"
+      },
+      "ArtifactVersionSignatureRead": {
+        "additionalProperties": false,
+        "description": "Who pinned an archived revision, from the signature record itself.\n\nEnough to label a download honestly \u2014 the officer, the capacity, and the\nmoment \u2014 without the caller having to join the attestation status back onto\nthe version list.",
+        "properties": {
+          "attestation_cycle": {
+            "title": "Attestation Cycle",
+            "type": "integer"
+          },
+          "officer_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Officer Title"
+          },
+          "signature_id": {
+            "format": "uuid",
+            "title": "Signature Id",
+            "type": "string"
+          },
+          "signed_at": {
+            "format": "date-time",
+            "title": "Signed At",
+            "type": "string"
+          },
+          "signer_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signer Display Name"
+          },
+          "signer_id": {
+            "title": "Signer Id",
+            "type": "string"
+          },
+          "signing_role": {
+            "$ref": "#/components/schemas/SigningRole"
+          }
+        },
+        "required": [
+          "signature_id",
+          "signing_role",
+          "signer_id",
+          "signer_display_name",
+          "officer_title",
+          "signed_at",
+          "attestation_cycle"
+        ],
+        "title": "ArtifactVersionSignatureRead",
+        "type": "object"
       },
       "AssessmentCreate": {
         "properties": {
@@ -575,6 +800,231 @@
             "type": "null"
           }
         ]
+      },
+      "AttestationState": {
+        "enum": [
+          "unsigned",
+          "preparer_certified",
+          "fully_certified",
+          "void"
+        ],
+        "type": "string"
+      },
+      "AttestationStatusRead": {
+        "additionalProperties": false,
+        "properties": {
+          "attestation_cycle": {
+            "title": "Attestation Cycle",
+            "type": "integer"
+          },
+          "attestation_state": {
+            "$ref": "#/components/schemas/AttestationState"
+          },
+          "can_submit": {
+            "title": "Can Submit",
+            "type": "boolean"
+          },
+          "certification_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certification Digest"
+          },
+          "certified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certified At"
+          },
+          "fully_certified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fully Certified At"
+          },
+          "outstanding": {
+            "items": {
+              "$ref": "#/components/schemas/OutstandingSlotRead"
+            },
+            "title": "Outstanding",
+            "type": "array"
+          },
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/SigningPolicyRead"
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureRecipientRead"
+            },
+            "title": "Recipients",
+            "type": "array"
+          },
+          "signatures": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureRead"
+            },
+            "title": "Signatures",
+            "type": "array"
+          },
+          "void_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Void Reason"
+          },
+          "voided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided At"
+          }
+        },
+        "required": [
+          "package_id",
+          "attestation_state",
+          "attestation_cycle",
+          "certification_digest",
+          "certified_at",
+          "fully_certified_at",
+          "voided_at",
+          "void_reason",
+          "policy",
+          "outstanding",
+          "signatures",
+          "recipients",
+          "can_submit"
+        ],
+        "title": "AttestationStatusRead",
+        "type": "object"
+      },
+      "AwaitingSignatureListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AwaitingSignatureRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "AwaitingSignatureListRead",
+        "type": "object"
+      },
+      "AwaitingSignatureRead": {
+        "additionalProperties": false,
+        "description": "One return waiting on the calling user's signature.",
+        "properties": {
+          "attestation_state": {
+            "$ref": "#/components/schemas/AttestationState"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "notified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notified At"
+          },
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "package_status": {
+            "title": "Package Status",
+            "type": "string"
+          },
+          "package_version": {
+            "title": "Package Version",
+            "type": "integer"
+          },
+          "reporting_date": {
+            "format": "date",
+            "title": "Reporting Date",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "return_code": {
+            "title": "Return Code",
+            "type": "string"
+          },
+          "routing_order": {
+            "title": "Routing Order",
+            "type": "integer"
+          },
+          "signing_role": {
+            "$ref": "#/components/schemas/SigningRole"
+          }
+        },
+        "required": [
+          "package_id",
+          "bank_id",
+          "return_code",
+          "reporting_date",
+          "basis",
+          "package_version",
+          "package_status",
+          "attestation_state",
+          "signing_role",
+          "routing_order",
+          "requested_at",
+          "notified_at"
+        ],
+        "title": "AwaitingSignatureRead",
+        "type": "object"
       },
       "Backend": {
         "enum": [
@@ -1814,6 +2264,13 @@
         ],
         "title": "BehavioralProductEstimate",
         "type": "object"
+      },
+      "BindingClass": {
+        "enum": [
+          "engine_run",
+          "master_data"
+        ],
+        "type": "string"
       },
       "Body_uploadIngestionSource": {
         "properties": {
@@ -5349,6 +5806,180 @@
         ],
         "title": "CashflowHorizon",
         "type": "integer"
+      },
+      "CertificationPreviewRead": {
+        "additionalProperties": false,
+        "description": "Exactly what the signer is shown before committing.\n\nThe digest and the statement are both present because the UI must render\nwhat will actually be signed, not a paraphrase of it.",
+        "properties": {
+          "attestation_state": {
+            "$ref": "#/components/schemas/AttestationState"
+          },
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "binding_class": {
+            "$ref": "#/components/schemas/BindingClass"
+          },
+          "certification_digest": {
+            "title": "Certification Digest",
+            "type": "string"
+          },
+          "content_digest": {
+            "title": "Content Digest",
+            "type": "string"
+          },
+          "frozen_certification_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen Certification Digest"
+          },
+          "matches_frozen": {
+            "title": "Matches Frozen",
+            "type": "boolean"
+          },
+          "outstanding": {
+            "items": {
+              "$ref": "#/components/schemas/OutstandingSlotRead"
+            },
+            "title": "Outstanding",
+            "type": "array"
+          },
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/SigningPolicyRead"
+          },
+          "register_state_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Register State Digest"
+          },
+          "reporting_date": {
+            "format": "date",
+            "title": "Reporting Date",
+            "type": "string"
+          },
+          "return_code": {
+            "title": "Return Code",
+            "type": "string"
+          },
+          "signed_source_runs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Signed Source Runs",
+            "type": "array"
+          },
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          }
+        },
+        "required": [
+          "package_id",
+          "return_code",
+          "reporting_date",
+          "basis",
+          "attestation_state",
+          "binding_class",
+          "certification_digest",
+          "content_digest",
+          "register_state_digest",
+          "signed_source_runs",
+          "statement",
+          "policy",
+          "outstanding",
+          "frozen_certification_digest",
+          "matches_frozen"
+        ],
+        "title": "CertificationPreviewRead",
+        "type": "object"
+      },
+      "CertifyAndSendRequest": {
+        "additionalProperties": false,
+        "description": "Certify as the preparer AND nominate the remaining signers, in one act.\n\n``placements`` applies before the fields are created, so the preparer can\nplace both boxes and sign in a single request \u2014 the only order that works,\nsince the certification permits no new field afterwards. An EMPTY list means\n\"leave placement as it resolves\"; it does not clear an override, because\nclearing is a placement decision and belongs to the placement endpoint. It is\na plain list rather than an optional one so the generated client keeps\n``SignatureFieldPlacement`` as the element type \u2014 a nullable array degrades to\nan untyped one.",
+        "properties": {
+          "authorization_token": {
+            "title": "Authorization Token",
+            "type": "string"
+          },
+          "expected_certification_digest": {
+            "title": "Expected Certification Digest",
+            "type": "string"
+          },
+          "placements": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureFieldPlacement"
+            },
+            "title": "Placements",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureRecipientNomination"
+            },
+            "title": "Recipients",
+            "type": "array"
+          },
+          "signing_role": {
+            "$ref": "#/components/schemas/SigningRole"
+          }
+        },
+        "required": [
+          "signing_role",
+          "authorization_token",
+          "expected_certification_digest",
+          "recipients",
+          "reason"
+        ],
+        "title": "CertifyAndSendRequest",
+        "type": "object"
+      },
+      "CertifyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "authorization_token": {
+            "title": "Authorization Token",
+            "type": "string"
+          },
+          "expected_certification_digest": {
+            "title": "Expected Certification Digest",
+            "type": "string"
+          },
+          "signing_role": {
+            "$ref": "#/components/schemas/SigningRole"
+          }
+        },
+        "required": [
+          "signing_role",
+          "authorization_token",
+          "expected_certification_digest"
+        ],
+        "title": "CertifyRequest",
+        "type": "object"
       },
       "ChangeReason": {
         "maxLength": 2000,
@@ -15538,6 +16169,10 @@
       },
       "MeResponse": {
         "properties": {
+          "auth_provider": {
+            "title": "Auth Provider",
+            "type": "string"
+          },
           "display_name": {
             "anyOf": [
               {
@@ -15625,7 +16260,8 @@
           "locale",
           "timezone",
           "theme",
-          "role"
+          "role",
+          "auth_provider"
         ],
         "title": "MeResponse",
         "type": "object"
@@ -16394,6 +17030,24 @@
         "title": "OutletUpdate",
         "type": "object"
       },
+      "OutstandingSlotRead": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "role": {
+            "$ref": "#/components/schemas/SigningRole"
+          }
+        },
+        "required": [
+          "role",
+          "count"
+        ],
+        "title": "OutstandingSlotRead",
+        "type": "object"
+      },
       "PackageApprovalDecisionCreate": {
         "additionalProperties": false,
         "properties": {
@@ -16481,6 +17135,146 @@
         "title": "PackageApprovalRequestCreate",
         "type": "object"
       },
+      "PackageComparisonRead": {
+        "additionalProperties": false,
+        "description": "A line-item figures diff between two versions of the same return.",
+        "properties": {
+          "added_count": {
+            "title": "Added Count",
+            "type": "integer"
+          },
+          "base": {
+            "$ref": "#/components/schemas/PackageComparisonSideRead"
+          },
+          "changed_count": {
+            "title": "Changed Count",
+            "type": "integer"
+          },
+          "identical": {
+            "title": "Identical",
+            "type": "boolean"
+          },
+          "removed_count": {
+            "title": "Removed Count",
+            "type": "integer"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/SnapshotSectionDiffRead"
+            },
+            "title": "Sections",
+            "type": "array"
+          },
+          "target": {
+            "$ref": "#/components/schemas/PackageComparisonSideRead"
+          },
+          "unchanged_section_count": {
+            "title": "Unchanged Section Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "base",
+          "target",
+          "identical",
+          "changed_count",
+          "added_count",
+          "removed_count",
+          "sections",
+          "unchanged_section_count"
+        ],
+        "title": "PackageComparisonRead",
+        "type": "object"
+      },
+      "PackageComparisonSideRead": {
+        "additionalProperties": false,
+        "properties": {
+          "basis": {
+            "$ref": "#/components/schemas/ReturnBasis"
+          },
+          "content_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Digest"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "reporting_date": {
+            "format": "date",
+            "title": "Reporting Date",
+            "type": "string"
+          },
+          "snapshot_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Sha256"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PackageStatus"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "package_id",
+          "version",
+          "status",
+          "reporting_date",
+          "basis",
+          "generated_at",
+          "snapshot_sha256",
+          "content_digest"
+        ],
+        "title": "PackageComparisonSideRead",
+        "type": "object"
+      },
+      "PackageSignaturePlacementRequest": {
+        "additionalProperties": false,
+        "description": "Place this package's fields. An empty list clears the override.",
+        "properties": {
+          "placements": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureFieldPlacement"
+            },
+            "title": "Placements",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "placements",
+          "reason"
+        ],
+        "title": "PackageSignaturePlacementRequest",
+        "type": "object"
+      },
       "PackageSourceRunRead": {
         "additionalProperties": false,
         "properties": {
@@ -16559,6 +17353,273 @@
         "title": "PackageSubmitCreate",
         "type": "object"
       },
+      "PackageVersionChainEntryRead": {
+        "additionalProperties": false,
+        "description": "One version of a supersession chain and everything it can still offer.",
+        "properties": {
+          "artifact_versions": {
+            "items": {
+              "$ref": "#/components/schemas/RegulatoryArtifactVersionRead"
+            },
+            "title": "Artifact Versions",
+            "type": "array"
+          },
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/RegulatoryArtifactRead"
+            },
+            "title": "Artifacts",
+            "type": "array"
+          },
+          "attestation_cycle": {
+            "title": "Attestation Cycle",
+            "type": "integer"
+          },
+          "attestation_state": {
+            "title": "Attestation State",
+            "type": "string"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/ReturnBasis"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "generated_by": {
+            "format": "uuid",
+            "title": "Generated By",
+            "type": "string"
+          },
+          "has_retrievable_files": {
+            "title": "Has Retrievable Files",
+            "type": "boolean"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "reporting_date": {
+            "format": "date",
+            "title": "Reporting Date",
+            "type": "string"
+          },
+          "signatures": {
+            "items": {
+              "$ref": "#/components/schemas/PackageVersionSignatureRead"
+            },
+            "title": "Signatures",
+            "type": "array"
+          },
+          "snapshot_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Sha256"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PackageStatus"
+          },
+          "submission_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Revision"
+          },
+          "validation_passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Passed"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "void_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Void Reason"
+          },
+          "voided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided At"
+          }
+        },
+        "required": [
+          "package_id",
+          "version",
+          "status",
+          "is_current",
+          "attestation_state",
+          "attestation_cycle",
+          "voided_at",
+          "void_reason",
+          "reporting_date",
+          "basis",
+          "generated_at",
+          "generated_by",
+          "validation_passed",
+          "submission_revision",
+          "snapshot_sha256",
+          "signatures",
+          "artifacts",
+          "artifact_versions",
+          "has_retrievable_files"
+        ],
+        "title": "PackageVersionChainEntryRead",
+        "type": "object"
+      },
+      "PackageVersionChainRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/ReturnBasis"
+          },
+          "current_package_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Package Id"
+          },
+          "reporting_date": {
+            "format": "date",
+            "title": "Reporting Date",
+            "type": "string"
+          },
+          "return_code": {
+            "title": "Return Code",
+            "type": "string"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/PackageVersionChainEntryRead"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "return_code",
+          "reporting_date",
+          "basis",
+          "current_package_id",
+          "versions"
+        ],
+        "title": "PackageVersionChainRead",
+        "type": "object"
+      },
+      "PackageVersionSignatureRead": {
+        "additionalProperties": false,
+        "description": "One signature on a version of the chain, live or withdrawn.\n\nDistinct from :class:`ArtifactVersionSignatureRead`, which only ever names\nthe CURRENT cycle because it labels the document that gets filed. This one\nspans every cycle: a void preserves its signatures rather than deleting\nthem, so a superseded version can hold signatures that no longer certify\nanything. ``withdrawn`` is the difference, and it is carried here rather\nthan left to the caller to derive from two cycle numbers.",
+        "properties": {
+          "attestation_cycle": {
+            "title": "Attestation Cycle",
+            "type": "integer"
+          },
+          "officer_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Officer Title"
+          },
+          "signature_id": {
+            "format": "uuid",
+            "title": "Signature Id",
+            "type": "string"
+          },
+          "signed_at": {
+            "format": "date-time",
+            "title": "Signed At",
+            "type": "string"
+          },
+          "signer_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signer Display Name"
+          },
+          "signer_id": {
+            "title": "Signer Id",
+            "type": "string"
+          },
+          "signing_role": {
+            "$ref": "#/components/schemas/SigningRole"
+          },
+          "withdrawn": {
+            "title": "Withdrawn",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "signature_id",
+          "signing_role",
+          "signer_id",
+          "signer_display_name",
+          "officer_title",
+          "signed_at",
+          "attestation_cycle",
+          "withdrawn"
+        ],
+        "title": "PackageVersionSignatureRead",
+        "type": "object"
+      },
       "ParseResponse": {
         "properties": {
           "document_id": {
@@ -16628,6 +17689,321 @@
           "legal_entity"
         ],
         "type": "string"
+      },
+      "PlaceableRole": {
+        "enum": [
+          "preparer",
+          "approver"
+        ],
+        "type": "string"
+      },
+      "PlacementFieldType": {
+        "enum": [
+          "signature",
+          "initials",
+          "name",
+          "title",
+          "date_signed"
+        ],
+        "type": "string"
+      },
+      "PlacementFieldTypeRead": {
+        "additionalProperties": false,
+        "description": "One placeable kind and the smallest box it can be drawn in.\n\nServed rather than hardcoded in the client because the floors are DERIVED \u2014\nfrom the reference content each kind prints at the legibility floor \u2014 and a\nnumber duplicated in the browser would drift from the one that actually\nrefuses a placement.",
+        "properties": {
+          "field_type": {
+            "$ref": "#/components/schemas/PlacementFieldType"
+          },
+          "min_box_height": {
+            "title": "Min Box Height",
+            "type": "integer"
+          },
+          "min_box_width": {
+            "title": "Min Box Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "field_type",
+          "min_box_width",
+          "min_box_height"
+        ],
+        "title": "PlacementFieldTypeRead",
+        "type": "object"
+      },
+      "PlacementSource": {
+        "enum": [
+          "package",
+          "bank_template",
+          "organization_template",
+          "default"
+        ],
+        "type": "string"
+      },
+      "PolicyListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyRead"
+            },
+            "title": "Policies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "policies"
+        ],
+        "title": "PolicyListRead",
+        "type": "object"
+      },
+      "PolicyRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "distinct_signers": {
+            "title": "Distinct Signers",
+            "type": "boolean"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "require_signature": {
+            "title": "Require Signature",
+            "type": "boolean"
+          },
+          "require_signed_pdf": {
+            "title": "Require Signed Pdf",
+            "type": "boolean"
+          },
+          "required_attachments": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Attachments",
+            "type": "array"
+          },
+          "required_signatures": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureSlotRead"
+            },
+            "title": "Required Signatures",
+            "type": "array"
+          },
+          "return_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Code"
+          },
+          "return_family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy return family"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "return_code",
+          "basis",
+          "required_signatures",
+          "required_attachments",
+          "require_signature",
+          "require_signed_pdf",
+          "distinct_signers",
+          "effective_from",
+          "effective_to",
+          "reason",
+          "updated_by",
+          "updated_at"
+        ],
+        "title": "PolicyRead",
+        "type": "object"
+      },
+      "PolicyUpsertRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "enum": [
+                  "solo",
+                  "consolidated"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "distinct_signers": {
+            "default": true,
+            "title": "Distinct Signers",
+            "type": "boolean"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "require_signature": {
+            "default": true,
+            "title": "Require Signature",
+            "type": "boolean"
+          },
+          "require_signed_pdf": {
+            "default": false,
+            "title": "Require Signed Pdf",
+            "type": "boolean"
+          },
+          "required_attachments": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Attachments",
+            "type": "array"
+          },
+          "required_signatures": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureSlotRead"
+            },
+            "title": "Required Signatures",
+            "type": "array"
+          },
+          "return_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Code"
+          },
+          "return_family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy scope return family"
+          }
+        },
+        "required": [
+          "required_signatures",
+          "effective_from",
+          "reason"
+        ],
+        "title": "PolicyUpsertRequest",
+        "type": "object"
       },
       "PositionFacetValueRead": {
         "description": "One filterable value and how many current-generation rows carry it.",
@@ -17364,6 +18740,13 @@
         "title": "ReadinessResponse",
         "type": "object"
       },
+      "RecipientStatus": {
+        "enum": [
+          "pending",
+          "signed"
+        ],
+        "type": "string"
+      },
       "ReferenceMapping": {
         "description": "How one reference dataset is captured from one source table.\n\nReference rows are not translated field-by-field: the mapped table's rows\nare preserved as payload dicts (values stringified, dates ISO) under\n``dataset_kind``. ``fields`` optionally restricts which source columns are\nkept; empty keeps every column.",
         "properties": {
@@ -17496,6 +18879,109 @@
           "created_at"
         ],
         "title": "RegulatoryArtifactRead",
+        "type": "object"
+      },
+      "RegulatoryArtifactVersionListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/RegulatoryArtifactVersionRead"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "package_id",
+          "versions"
+        ],
+        "title": "RegulatoryArtifactVersionListRead",
+        "type": "object"
+      },
+      "RegulatoryArtifactVersionRead": {
+        "additionalProperties": false,
+        "description": "One immutable archived render or signed revision of a package artifact.\n\nDistinct from :class:`RegulatoryArtifactRead`, which is the UPSERTED row per\nkind and therefore always the unsigned base export. These rows are appended,\nso the chain from that base through each officer's signature is readable.",
+        "properties": {
+          "checksum_sha256": {
+            "title": "Checksum Sha256",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_filed": {
+            "title": "Is Filed",
+            "type": "boolean"
+          },
+          "is_latest": {
+            "title": "Is Latest",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ArtifactKind"
+          },
+          "object_path": {
+            "title": "Object Path",
+            "type": "string"
+          },
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "signed_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtifactVersionSignatureRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "storage_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Version Id"
+          }
+        },
+        "required": [
+          "id",
+          "package_id",
+          "kind",
+          "object_path",
+          "storage_version_id",
+          "checksum_sha256",
+          "size_bytes",
+          "created_at",
+          "signed_by",
+          "is_latest",
+          "is_filed"
+        ],
+        "title": "RegulatoryArtifactVersionRead",
         "type": "object"
       },
       "RegulatoryLineItemRead": {
@@ -17758,6 +19244,11 @@
             "title": "Approvals",
             "type": "array"
           },
+          "attestation_state": {
+            "default": "unsigned",
+            "title": "Attestation State",
+            "type": "string"
+          },
           "bank_id": {
             "title": "Bank Id",
             "type": "string"
@@ -17933,6 +19424,11 @@
       "RegulatoryPackageSummaryRead": {
         "additionalProperties": false,
         "properties": {
+          "attestation_state": {
+            "default": "unsigned",
+            "title": "Attestation State",
+            "type": "string"
+          },
           "bank_id": {
             "title": "Bank Id",
             "type": "string"
@@ -19520,6 +21016,52 @@
         "title": "ReportingSettingsRead",
         "type": "object"
       },
+      "ResolvedSignaturePlacementsRead": {
+        "additionalProperties": false,
+        "description": "The placements this package's fields will actually be created from.",
+        "properties": {
+          "editable": {
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "field_types": {
+            "items": {
+              "$ref": "#/components/schemas/PlacementFieldTypeRead"
+            },
+            "title": "Field Types",
+            "type": "array"
+          },
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "placements": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureFieldPlacement"
+            },
+            "title": "Placements",
+            "type": "array"
+          },
+          "return_code": {
+            "title": "Return Code",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PlacementSource"
+          }
+        },
+        "required": [
+          "package_id",
+          "return_code",
+          "source",
+          "placements",
+          "field_types",
+          "editable"
+        ],
+        "title": "ResolvedSignaturePlacementsRead",
+        "type": "object"
+      },
       "ResubmissionDecisionCreate": {
         "additionalProperties": false,
         "description": "Manual grant/deny for email/manual-channel submissions.",
@@ -20609,6 +22151,23 @@
         "title": "ScoreRead",
         "type": "object"
       },
+      "SendBackForCorrectionsRequest": {
+        "additionalProperties": false,
+        "description": "The reviewing approver's note. Required, because it is the instruction.\n\nSending a return back without saying what is wrong with it leaves the\npreparer guessing, so the note is not optional here even though a rejected\napproval decision accepts a longer free-text reason elsewhere.",
+        "properties": {
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "SendBackForCorrectionsRequest",
+        "type": "object"
+      },
       "ShareholderRights": {
         "enum": [
           "voting",
@@ -20844,6 +22403,750 @@
         "title": "ShareholdingUpdate",
         "type": "object"
       },
+      "SignatureFieldPlacement": {
+        "additionalProperties": false,
+        "description": "One placed box, in PDF user space (origin bottom-left).\n\nCoordinates are floats on the wire because a browser drag produces them, and\nare rounded to whole points server-side: sub-point precision in a signature\nbox carries no meaning, and storing it would invite two placements that differ\nonly in rounding.\n\n``field_index`` is READ-ONLY in practice: the service renumbers each\n``(role, kind)`` run from list order on every write, because the index exists\nonly to tell two boxes of one kind apart and a client that had to invent it\ncould collide them. It is on the model so the response can echo which field\non the document a box became.",
+        "properties": {
+          "field_index": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Field Index",
+            "type": "integer"
+          },
+          "field_type": {
+            "$ref": "#/components/schemas/PlacementFieldType",
+            "default": "signature"
+          },
+          "page_index": {
+            "minimum": 0.0,
+            "title": "Page Index",
+            "type": "integer"
+          },
+          "signing_role": {
+            "$ref": "#/components/schemas/PlaceableRole"
+          },
+          "x1": {
+            "title": "X1",
+            "type": "number"
+          },
+          "x2": {
+            "title": "X2",
+            "type": "number"
+          },
+          "y1": {
+            "title": "Y1",
+            "type": "number"
+          },
+          "y2": {
+            "title": "Y2",
+            "type": "number"
+          }
+        },
+        "required": [
+          "signing_role",
+          "page_index",
+          "x1",
+          "y1",
+          "x2",
+          "y2"
+        ],
+        "title": "SignatureFieldPlacement",
+        "type": "object"
+      },
+      "SignaturePlacementTemplateListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/SignaturePlacementTemplateRead"
+            },
+            "title": "Templates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "templates"
+        ],
+        "title": "SignaturePlacementTemplateListRead",
+        "type": "object"
+      },
+      "SignaturePlacementTemplateRead": {
+        "additionalProperties": false,
+        "description": "The reusable placement set for one ``(bank?, return_code)`` scope.",
+        "properties": {
+          "bank_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "placements": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureFieldPlacement"
+            },
+            "title": "Placements",
+            "type": "array"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "return_code": {
+            "title": "Return Code",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "bank_id",
+          "return_code",
+          "placements",
+          "reason",
+          "updated_by",
+          "updated_at"
+        ],
+        "title": "SignaturePlacementTemplateRead",
+        "type": "object"
+      },
+      "SignaturePlacementTemplateUpsertRequest": {
+        "additionalProperties": false,
+        "description": "Replace the placement set for one scope. Reason-required and audited.\n\nThe whole set is replaced rather than one role at a time because the two boxes\nare laid out relative to each other \u2014 a half-updated template could overlap\nwithout anyone having placed it that way.",
+        "properties": {
+          "bank_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "placements": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureFieldPlacement"
+            },
+            "title": "Placements",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "return_code": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Return Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "return_code",
+          "placements",
+          "reason"
+        ],
+        "title": "SignaturePlacementTemplateUpsertRequest",
+        "type": "object"
+      },
+      "SignatureRead": {
+        "additionalProperties": false,
+        "description": "A recorded signature. Everything needed to attribute it is here.",
+        "properties": {
+          "attestation_cycle": {
+            "title": "Attestation Cycle",
+            "type": "integer"
+          },
+          "auth_evidence": {
+            "additionalProperties": true,
+            "title": "Auth Evidence",
+            "type": "object"
+          },
+          "binding_class": {
+            "$ref": "#/components/schemas/BindingClass"
+          },
+          "certificate_sha256": {
+            "title": "Certificate Sha256",
+            "type": "string"
+          },
+          "certification_digest": {
+            "title": "Certification Digest",
+            "type": "string"
+          },
+          "content_digest": {
+            "title": "Content Digest",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "declared_at": {
+            "format": "date-time",
+            "title": "Declared At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "officer_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Officer Title"
+          },
+          "register_state_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Register State Digest"
+          },
+          "signature_method": {
+            "title": "Signature Method",
+            "type": "string"
+          },
+          "signed_source_runs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Signed Source Runs",
+            "type": "array"
+          },
+          "signer_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signer Display Name"
+          },
+          "signer_id": {
+            "title": "Signer Id",
+            "type": "string"
+          },
+          "signing_role": {
+            "$ref": "#/components/schemas/SigningRole"
+          },
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          },
+          "tsa_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tsa Time"
+          },
+          "tsa_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tsa Url"
+          }
+        },
+        "required": [
+          "id",
+          "signing_role",
+          "officer_title",
+          "signer_id",
+          "signer_display_name",
+          "binding_class",
+          "certification_digest",
+          "content_digest",
+          "register_state_digest",
+          "signed_source_runs",
+          "statement",
+          "signature_method",
+          "certificate_sha256",
+          "tsa_time",
+          "tsa_url",
+          "declared_at",
+          "auth_evidence",
+          "attestation_cycle",
+          "created_at"
+        ],
+        "title": "SignatureRead",
+        "type": "object"
+      },
+      "SignatureRecipientNomination": {
+        "additionalProperties": false,
+        "description": "One person put forward for one signing slot; list order is routing order.",
+        "properties": {
+          "signing_role": {
+            "$ref": "#/components/schemas/SigningRole"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signing_role",
+          "user_id"
+        ],
+        "title": "SignatureRecipientNomination",
+        "type": "object"
+      },
+      "SignatureRecipientRead": {
+        "additionalProperties": false,
+        "description": "A named person routed to fill one policy slot.",
+        "properties": {
+          "attestation_cycle": {
+            "title": "Attestation Cycle",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "notified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notified At"
+          },
+          "recipient_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Display Name"
+          },
+          "recipient_job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Job Title"
+          },
+          "recipient_signer_id": {
+            "title": "Recipient Signer Id",
+            "type": "string"
+          },
+          "recipient_user_id": {
+            "format": "uuid",
+            "title": "Recipient User Id",
+            "type": "string"
+          },
+          "routing_order": {
+            "title": "Routing Order",
+            "type": "integer"
+          },
+          "signed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signed At"
+          },
+          "signing_role": {
+            "$ref": "#/components/schemas/SigningRole"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RecipientStatus"
+          }
+        },
+        "required": [
+          "id",
+          "signing_role",
+          "recipient_user_id",
+          "recipient_signer_id",
+          "recipient_display_name",
+          "recipient_job_title",
+          "routing_order",
+          "status",
+          "notified_at",
+          "signed_at",
+          "attestation_cycle"
+        ],
+        "title": "SignatureRecipientRead",
+        "type": "object"
+      },
+      "SignatureRoutingUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Re-assign the outstanding signatures \u2014 for an unavailable nominee.",
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureRecipientNomination"
+            },
+            "title": "Recipients",
+            "type": "array"
+          }
+        },
+        "required": [
+          "recipients",
+          "reason"
+        ],
+        "title": "SignatureRoutingUpdateRequest",
+        "type": "object"
+      },
+      "SignatureSlotRead": {
+        "additionalProperties": false,
+        "properties": {
+          "min_count": {
+            "title": "Min Count",
+            "type": "integer"
+          },
+          "officer_titles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Officer Titles",
+            "type": "array"
+          },
+          "role": {
+            "$ref": "#/components/schemas/SigningRole"
+          }
+        },
+        "required": [
+          "role",
+          "min_count",
+          "officer_titles"
+        ],
+        "title": "SignatureSlotRead",
+        "type": "object"
+      },
+      "SignerIdentityRead": {
+        "additionalProperties": false,
+        "description": "The permanent signer identity. Opaque by design \u2014 it encodes nothing.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "has_active_key": {
+            "title": "Has Active Key",
+            "type": "boolean"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          },
+          "provisioned_at": {
+            "format": "date-time",
+            "title": "Provisioned At",
+            "type": "string"
+          },
+          "signer_id": {
+            "title": "Signer Id",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signer_id",
+          "user_id",
+          "display_name",
+          "job_title",
+          "provisioned_at",
+          "has_active_key"
+        ],
+        "title": "SignerIdentityRead",
+        "type": "object"
+      },
+      "SigningPolicyRead": {
+        "additionalProperties": false,
+        "properties": {
+          "distinct_signers": {
+            "title": "Distinct Signers",
+            "type": "boolean"
+          },
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id"
+          },
+          "require_signature": {
+            "title": "Require Signature",
+            "type": "boolean"
+          },
+          "require_signed_pdf": {
+            "title": "Require Signed Pdf",
+            "type": "boolean"
+          },
+          "required_attachments": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Attachments",
+            "type": "array"
+          },
+          "required_signatures": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureSlotRead"
+            },
+            "title": "Required Signatures",
+            "type": "array"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "policy_id",
+          "require_signature",
+          "require_signed_pdf",
+          "distinct_signers",
+          "required_attachments",
+          "required_signatures"
+        ],
+        "title": "SigningPolicyRead",
+        "type": "object"
+      },
+      "SigningRole": {
+        "enum": [
+          "preparer",
+          "approver",
+          "board",
+          "witness"
+        ],
+        "type": "string"
+      },
+      "SnapshotLineChange": {
+        "enum": [
+          "added",
+          "removed",
+          "changed"
+        ],
+        "type": "string"
+      },
+      "SnapshotLineDiffRead": {
+        "additionalProperties": false,
+        "description": "One line item that differs between two snapshots.",
+        "properties": {
+          "base_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Value"
+          },
+          "change": {
+            "$ref": "#/components/schemas/SnapshotLineChange"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "delta_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta Pct"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "is_total": {
+            "title": "Is Total",
+            "type": "boolean"
+          },
+          "target_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Value"
+          }
+        },
+        "required": [
+          "code",
+          "description",
+          "change",
+          "base_value",
+          "target_value",
+          "delta",
+          "delta_pct",
+          "is_total"
+        ],
+        "title": "SnapshotLineDiffRead",
+        "type": "object"
+      },
+      "SnapshotSectionChange": {
+        "enum": [
+          "added",
+          "removed",
+          "changed"
+        ],
+        "type": "string"
+      },
+      "SnapshotSectionDiffRead": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "$ref": "#/components/schemas/SnapshotSectionChange"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SnapshotLineDiffRead"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/SnapshotSectionOrigin"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unchanged_line_count": {
+            "title": "Unchanged Line Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "title",
+          "origin",
+          "change",
+          "lines",
+          "unchanged_line_count"
+        ],
+        "title": "SnapshotSectionDiffRead",
+        "type": "object"
+      },
+      "SnapshotSectionOrigin": {
+        "enum": [
+          "section",
+          "totals"
+        ],
+        "type": "string"
+      },
       "SsoAccessRequestApprove": {
         "description": "Approval is the authorization act \u2014 the admin explicitly picks the role.",
         "properties": {
@@ -21031,6 +23334,90 @@
           "enabled"
         ],
         "title": "SsoStatusResponse",
+        "type": "object"
+      },
+      "StepUpGrantedRead": {
+        "additionalProperties": false,
+        "description": "The single-use authorisation. The token is returned exactly once.",
+        "properties": {
+          "authorization_token": {
+            "title": "Authorization Token",
+            "type": "string"
+          },
+          "certification_digest": {
+            "title": "Certification Digest",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StepUpMethod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signing_role": {
+            "$ref": "#/components/schemas/SigningRole"
+          }
+        },
+        "required": [
+          "authorization_token",
+          "expires_at",
+          "certification_digest",
+          "signing_role",
+          "method"
+        ],
+        "title": "StepUpGrantedRead",
+        "type": "object"
+      },
+      "StepUpMethod": {
+        "enum": [
+          "oidc_reauth",
+          "password_reauth"
+        ],
+        "type": "string"
+      },
+      "StepUpRequest": {
+        "additionalProperties": false,
+        "description": "Re-authentication before signing.\n\nExactly one proof is required. Password re-entry serves password accounts;\nan OIDC id_token (obtained with prompt=login) serves SSO accounts.",
+        "properties": {
+          "id_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Token"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "signing_role": {
+            "$ref": "#/components/schemas/SigningRole"
+          }
+        },
+        "required": [
+          "signing_role"
+        ],
+        "title": "StepUpRequest",
         "type": "object"
       },
       "SubmissionEventListRead": {
@@ -21869,6 +24256,19 @@
         "title": "TranslationFailureRead",
         "type": "object"
       },
+      "TypedSignatureFont": {
+        "enum": [
+          "caveat",
+          "dancing_script",
+          "great_vibes",
+          "allura",
+          "times_italic",
+          "times_bold_italic",
+          "helvetica_oblique",
+          "courier_oblique"
+        ],
+        "type": "string"
+      },
       "UploadRequest": {
         "properties": {
           "byte_size": {
@@ -22024,6 +24424,122 @@
           "ERROR"
         ],
         "type": "string"
+      },
+      "VerificationCheckRead": {
+        "additionalProperties": false,
+        "description": "One of the five independent checks (docs \u00a73.5).",
+        "properties": {
+          "check": {
+            "title": "Check",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "check",
+          "passed",
+          "detail"
+        ],
+        "title": "VerificationCheckRead",
+        "type": "object"
+      },
+      "VerificationReportRead": {
+        "additionalProperties": false,
+        "properties": {
+          "chain_broken_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain Broken At"
+          },
+          "chain_ok": {
+            "title": "Chain Ok",
+            "type": "boolean"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/VerificationCheckRead"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "overall_passed": {
+            "title": "Overall Passed",
+            "type": "boolean"
+          },
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "reporting_date": {
+            "format": "date",
+            "title": "Reporting Date",
+            "type": "string"
+          },
+          "return_code": {
+            "title": "Return Code",
+            "type": "string"
+          },
+          "signatures": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureRead"
+            },
+            "title": "Signatures",
+            "type": "array"
+          },
+          "verified_at": {
+            "format": "date-time",
+            "title": "Verified At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "package_id",
+          "return_code",
+          "reporting_date",
+          "verified_at",
+          "overall_passed",
+          "checks",
+          "signatures",
+          "chain_ok",
+          "chain_broken_at"
+        ],
+        "title": "VerificationReportRead",
+        "type": "object"
+      },
+      "VoidAttestationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "VoidAttestationRequest",
+        "type": "object"
       },
       "WhatIfMetricComparisonRead": {
         "additionalProperties": false,
@@ -23307,6 +25823,742 @@
         "summary": "List Assessment Runs",
         "tags": [
           "assessments"
+        ]
+      }
+    },
+    "/api/v1/attestation/awaiting-my-signature": {
+      "get": {
+        "description": "Returns routed to the caller and still unsigned.",
+        "operationId": "listReturnsAwaitingMySignature",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AwaitingSignatureListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Returns Awaiting My Signature",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/attestation/my-signature-appearance": {
+      "get": {
+        "description": "The caller's adopted mark, plus the font choices available for a typed one.",
+        "operationId": "getMyAdoptedSignature",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdoptedSignatureRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get My Adopted Signature",
+        "tags": [
+          "attestation"
+        ]
+      },
+      "put": {
+        "description": "Adopt or re-adopt the caller's own signature mark.\n\nOnly the caller's own: a mark adopted on somebody else's behalf would be a\nsignature appearance its owner never chose. Drawn bytes are normalised\nserver-side before storage; the raw upload is never persisted.",
+        "operationId": "adoptMySignature",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdoptSignatureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdoptedSignatureRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Adopt My Signature",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/attestation/signature-placements": {
+      "get": {
+        "operationId": "listSignaturePlacementTemplates",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "return_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Return Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignaturePlacementTemplateListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Signature Placement Templates",
+        "tags": [
+          "attestation"
+        ]
+      },
+      "put": {
+        "description": "Author the reusable placement template for a return (optionally per bank).\n\nAdmin-only and reason-required, matching the signing-policy endpoints: this is\nthe default every future filing of that return inherits.",
+        "operationId": "upsertSignaturePlacementTemplate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignaturePlacementTemplateUpsertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignaturePlacementTemplateRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upsert Signature Placement Template",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/attestation/signer-identity": {
+      "get": {
+        "description": "The caller's own permanent signer identity, provisioning it if absent.",
+        "operationId": "getMySignerIdentity",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignerIdentityRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get My Signer Identity",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/attestation/signing-policies": {
+      "get": {
+        "operationId": "listSigningPolicies",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Signing Policies",
+        "tags": [
+          "attestation"
+        ]
+      },
+      "put": {
+        "description": "Configure who must sign which return.\n\nAdmin-only and reason-required: this is the control that decides whether a\nfiled return is properly attested, so changing it is itself an audited act.",
+        "operationId": "upsertSigningPolicy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyUpsertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upsert Signing Policy",
+        "tags": [
+          "attestation"
         ]
       }
     },
@@ -33038,6 +36290,107 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/regulatory-artifact-versions/{version_id}/download": {
+      "get": {
+        "description": "Stream one archived revision, with its checksum re-verified first.",
+        "operationId": "downloadRegulatoryArtifactVersion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Regulatory Artifact Version",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/regulatory-artifacts/{artifact_id}/download": {
       "get": {
         "description": "Stream one exported artifact from the outputs tier.",
@@ -33598,6 +36951,114 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/artifact-versions": {
+      "get": {
+        "description": "Every archived render and signed revision, oldest first.\n\nThe artifact list above is the upserted row per kind \u2014 always the unsigned\nbase export. This is the chain: the base, then one revision per officer,\neach naming the signature that pinned it.",
+        "operationId": "listPackageArtifactVersions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegulatoryArtifactVersionListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Package Artifact Versions",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/artifacts": {
       "get": {
         "description": "Persisted artifact list for a package (never session-local).",
@@ -33701,6 +37162,1424 @@
           }
         ],
         "summary": "List Package Artifacts",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation": {
+      "get": {
+        "description": "Who has signed, who must still sign, and whether submission is unlocked.",
+        "operationId": "getPackageAttestation",
+        "parameters": [
+          {
+            "description": "Institution ID (BK-XXXXXXXX).",
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution ID (BK-XXXXXXXX).",
+              "maxLength": 64,
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttestationStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Package Attestation",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/certify": {
+      "post": {
+        "description": "Record a signature.\n\nGated at ``analyst`` here because a preparer certification is an analyst\nact; the service additionally requires the ``approver`` role for an\napprover slot, so the checker gate is not weakened.",
+        "operationId": "certifyPackage",
+        "parameters": [
+          {
+            "description": "Institution ID (BK-XXXXXXXX).",
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution ID (BK-XXXXXXXX).",
+              "maxLength": 64,
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttestationStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Certify Package",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/certify-and-send": {
+      "post": {
+        "description": "Certify and nominate the remaining signers in one act.\n\nThe signature and the routing land in one transaction, so a nominee the\npolicy cannot accept takes the certification down with it \u2014 the alternative\nis a certified return sitting in nobody's queue.",
+        "operationId": "certifyAndSendPackage",
+        "parameters": [
+          {
+            "description": "Institution ID (BK-XXXXXXXX).",
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution ID (BK-XXXXXXXX).",
+              "maxLength": 64,
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertifyAndSendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttestationStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Certify And Send Package",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/placements": {
+      "get": {
+        "description": "Where this return's signature fields will be created, and from which source.",
+        "operationId": "getPackageSignaturePlacements",
+        "parameters": [
+          {
+            "description": "Institution ID (BK-XXXXXXXX).",
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution ID (BK-XXXXXXXX).",
+              "maxLength": 64,
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedSignaturePlacementsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Package Signature Placements",
+        "tags": [
+          "attestation"
+        ]
+      },
+      "put": {
+        "description": "Place this return's signature fields; an empty list falls back to the template.\n\nReason-required and audited: the placement decides where an officer's name and\npermanent signer ID appear on a document filed with the regulator.",
+        "operationId": "setPackageSignaturePlacements",
+        "parameters": [
+          {
+            "description": "Institution ID (BK-XXXXXXXX).",
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution ID (BK-XXXXXXXX).",
+              "maxLength": 64,
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackageSignaturePlacementRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedSignaturePlacementsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Package Signature Placements",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/preview": {
+      "get": {
+        "description": "Exactly what will be signed \u2014 digest, figures, and the statement.",
+        "operationId": "previewCertification",
+        "parameters": [
+          {
+            "description": "Institution ID (BK-XXXXXXXX).",
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution ID (BK-XXXXXXXX).",
+              "maxLength": 64,
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "signing_role",
+            "required": true,
+            "schema": {
+              "title": "Signing Role",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificationPreviewRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Certification",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/recipients": {
+      "put": {
+        "description": "Re-assign outstanding signatures \u2014 the escape hatch for an absent nominee.\n\nApprover-gated and reason-required, because moving a signature away from the\nperson it was sent to is a segregation-of-duties act, not an edit.",
+        "operationId": "updatePackageSignatureRouting",
+        "parameters": [
+          {
+            "description": "Institution ID (BK-XXXXXXXX).",
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution ID (BK-XXXXXXXX).",
+              "maxLength": 64,
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignatureRoutingUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttestationStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Package Signature Routing",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/send-back": {
+      "post": {
+        "description": "The reviewing approver's second exit: return it with a note, unsigned.\n\nApprover-gated for the same reason certifying as a checker is: this is a\nmaker-checker decision, recorded against the reviewer's login. The note and\nthe withdrawal of the frozen figures commit together \u2014 sending a return back\nwhile its figures stay frozen would leave a package nobody can correct.",
+        "operationId": "sendPackageBackForCorrections",
+        "parameters": [
+          {
+            "description": "Institution ID (BK-XXXXXXXX).",
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution ID (BK-XXXXXXXX).",
+              "maxLength": 64,
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBackForCorrectionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttestationStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Package Back For Corrections",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/step-up": {
+      "post": {
+        "description": "Prove presence now; receive a single-use authorisation bound to the figures.",
+        "operationId": "stepUpForSigning",
+        "parameters": [
+          {
+            "description": "Institution ID (BK-XXXXXXXX).",
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution ID (BK-XXXXXXXX).",
+              "maxLength": 64,
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepUpGrantedRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Step Up For Signing",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/verify": {
+      "get": {
+        "description": "Run every independent verification check and report each separately.",
+        "operationId": "verifyPackageAttestation",
+        "parameters": [
+          {
+            "description": "Institution ID (BK-XXXXXXXX).",
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution ID (BK-XXXXXXXX).",
+              "maxLength": 64,
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationReportRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Verify Package Attestation",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/void": {
+      "post": {
+        "description": "Withdraw the current attestation. Signatures are retained, never deleted.",
+        "operationId": "voidAttestation",
+        "parameters": [
+          {
+            "description": "Institution ID (BK-XXXXXXXX).",
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "description": "Institution ID (BK-XXXXXXXX).",
+              "maxLength": 64,
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidAttestationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttestationStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Void Attestation",
+        "tags": [
+          "attestation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/comparison": {
+      "get": {
+        "description": "Line-item figures diff: the path package is the base, ``against`` the target.\n\nComputed server-side against the two immutable snapshots, so it is\navailable for every version \u2014 including one that was never exported \u2014 and\nso the comparison an examiner is shown is the one the platform computed.",
+        "operationId": "comparePackageVersions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The package to compare against.",
+            "in": "query",
+            "name": "against",
+            "required": true,
+            "schema": {
+              "description": "The package to compare against.",
+              "format": "uuid",
+              "title": "Against",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageComparisonRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Compare Package Versions",
         "tags": [
           "regulatory-reporting"
         ]
@@ -35081,6 +39960,114 @@
           }
         ],
         "summary": "Validate Regulatory Package",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/version-chain": {
+      "get": {
+        "description": "The whole supersession chain, each version with what it can still offer.\n\nThe package list carries statuses and timestamps only, which cannot answer\nwhat is asked about a superseded filing: who certified it, which file went\nto the regulator, and whether any file survives at all. This adds the\nsignatures (withdrawn cycles flagged), both artifact surfaces, and the\n``has_retrievable_files`` verdict a never-exported version needs.",
+        "operationId": "getPackageVersionChain",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Package Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageVersionChainRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Package Version Chain",
         "tags": [
           "regulatory-reporting"
         ]

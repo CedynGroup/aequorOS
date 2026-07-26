@@ -6,7 +6,8 @@
  *     source of truth, managed under Governance → Institution Profile) plus
  *     platform reporting facts from the bank record
  *   · Appearance — real theme toggle (ThemeProvider)
- *   · Users & roles — static demo roster, clearly labeled
+ *   · Users & roles — the signed-in account, its access level, and its permanent
+ *     signer identity (SGN-…, monospace with a copy control — §2.5)
  *   · Data & compute — real service health, market-data connections, and the
  *     official-run schedule note (read-only)
  *   · About — engine versions and provenance from persisted regulatory runs
@@ -37,6 +38,7 @@ import {
   useCashflowHistory,
   useInstitutionProfile,
   useMarketDataConnections,
+  useMySignerIdentity,
 } from '@/lib/api/hooks';
 import { fmtRelative, labelize } from '@/lib/api/values';
 import { avatarColor, initialsFrom, roleLabel } from '@/lib/api/identity';
@@ -347,6 +349,7 @@ function UsersRolesPanel() {
             </StatusPill>
           </li>
         </ul>
+        <SignerIdentityRow />
         <p className="px-5 py-3 border-t border-border-light text-caption text-slate leading-relaxed">
           Roles are enforced server-side (admin · approver · analyst · viewer);
           viewer accounts are read-only. Team management for the institution is
@@ -354,6 +357,60 @@ function UsersRolesPanel() {
         </p>
       </CardBody>
     </Card>
+  );
+}
+
+/**
+ * Your permanent signer identity (docs/attestation_esignature.md §2.5).
+ *
+ * Presented in monospace with a copy control, exactly like the BK-/OR- platform
+ * IDs above, because it is the same kind of thing: an opaque, permanent
+ * identifier. It is what every signature you ever record is attributed to, and
+ * it survives your user row being deprovisioned — so it is the identifier an
+ * attribution question years from now actually turns on. The same string appears
+ * beneath the rendered signature block and stamped inside the signed PDF; §2.5
+ * requires all three to agree.
+ */
+function SignerIdentityRow() {
+  const identity = useMySignerIdentity();
+
+  if (identity.isLoading) {
+    return (
+      <div className="px-5 py-3 border-t border-border-light">
+        <SkeletonLine width="45%" />
+      </div>
+    );
+  }
+  // A viewer-only or service principal legitimately has no signer identity;
+  // failing quietly is right here — this card is not the place to explain why.
+  if (identity.error || !identity.data) return null;
+
+  return (
+    <div className="px-5 py-3 border-t border-border-light">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <IdField label="Signer ID" value={identity.data.signerId} wide={false} />
+        <div>
+          <dt className="text-micro font-medium uppercase tracking-wider text-slate">
+            Signing key
+          </dt>
+          <dd className="mt-1 flex items-center gap-2">
+            <StatusPill tone={identity.data.hasActiveKey ? 'success' : 'amber'}>
+              {identity.data.hasActiveKey ? 'Enrolled' : 'Not enrolled'}
+            </StatusPill>
+            <span className="text-caption text-slate">
+              provisioned {fmtRelative(identity.data.provisionedAt)}
+            </span>
+          </dd>
+        </div>
+      </dl>
+      {!identity.data.hasActiveKey && (
+        <p className="mt-2 text-caption text-slate leading-relaxed">
+          You hold a signer identity but no active signing key, so certification
+          is refused rather than recorded unsigned. An administrator enrols the
+          key.
+        </p>
+      )}
+    </div>
   );
 }
 

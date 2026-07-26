@@ -41,6 +41,7 @@ from app.models import (
 from app.schemas.regulatory_liquidity import Bsd3SummaryRowRead
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate, RegulatoryPackageRead
 from app.services import regulatory_capital, regulatory_liquidity
+from app.services.attestation import digests, register_state
 from app.services.audit import record_event
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
@@ -177,6 +178,17 @@ def generate_package(
         )
         db.flush()
 
+    # Attestation binding, sealed with the snapshot (docs/attestation_esignature.md
+    # §3.1). Every return gets a content_digest — snapshot_sha256 embeds
+    # metadata.generated_at and therefore seals a VERSION, not content (gap G13).
+    # Packs that bind no engine run additionally get the master-data provenance
+    # analogue, without which a signature over them would bind figures with
+    # nothing behind them (gap G16).
+    register_digest = (
+        digests.register_state_digest(register_state.register_state_rows(db, ctx, bank.id))
+        if not generated.source_runs
+        else None
+    )
     package = RegulatoryPackage(
         organization_id=ctx.organization_id,
         bank_id=bank.id,
@@ -195,6 +207,8 @@ def generate_package(
         generated_at=datetime.now(UTC),
         notes=payload.notes,
         snapshot_sha256=snapshot_content_hash(generated.snapshot),
+        content_digest=digests.content_digest(generated.snapshot),
+        register_state_digest=register_digest,
     )
     db.add(package)
     db.flush()
@@ -215,6 +229,8 @@ def generate_package(
             "version": package.version,
             "supersedes_id": (str(prior_current.id) if prior_current is not None else None),
             "source_runs": [entry["run_id"] for entry in generated.source_runs],
+            "content_digest": package.content_digest,
+            "register_state_digest": package.register_state_digest,
         },
     )
     db.commit()

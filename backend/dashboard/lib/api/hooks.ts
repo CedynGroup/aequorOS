@@ -7,7 +7,8 @@
  * periodId], ['cap-dashboard', bankId, periodId], ['reg-runs', bankId, ...],
  * ['reg-run', bankId, runId], ['bsd3'|'bsd2', bankId, periodId],
  * ['cashflow-forecast', bankId, horizon, mode], ['cashflow-history', bankId,
- * days]. Mutations invalidate the related read keys.
+ * days], ['attn-*', ...] (attestation). Mutations invalidate the related read
+ * keys.
  */
 
 import { useCallback } from 'react';
@@ -18,8 +19,10 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type {
+  AdoptSignatureRequest,
   ApprovalDecision,
   ArtifactKind,
+  AttestationStatusRead,
   BankLicenseCreate,
   BankLicenseUpdate,
   BankNameHistoryCreate,
@@ -29,6 +32,7 @@ import type {
   BehavioralApplyProduct,
   CashflowForecastMode,
   CashflowHorizon,
+  CertifyAndSendRequest,
   ChannelCode,
   ForecastRunCreate,
   InstitutionProfilePut,
@@ -37,12 +41,16 @@ import type {
   OutletCreate,
   OutletUpdate,
   PackageStatusFilter,
+  PolicyUpsertRequest,
   RegulatoryModule,
   RegulatoryScenarioCode,
   RelatedPartyCreate,
   RelatedPartyUpdate,
   ShareholdingCreate,
   ShareholdingUpdate,
+  SignatureFieldPlacement,
+  SignaturePlacementTemplateUpsertRequest,
+  SigningRole,
   TemenosBackfillRequest,
   TemenosConnectionCreate,
   TemenosConnectionUpdate,
@@ -51,6 +59,7 @@ import type {
 import {
   ApiError,
   apiCall,
+  attestationApi,
   banksApi,
   behavioralModelsApi,
   cashflowForecastApi,
@@ -1348,6 +1357,10 @@ const reportingInvalidatePrefixes = [
   'rr-packages',
   'rr-package',
   'rr-events',
+  // Certification appends a signed revision, so the version chain — and with it
+  // which document Download resolves to — changes without the artifact list
+  // moving at all.
+  'rr-artifact-versions',
 ];
 
 /** Deadline board: every registry obligation in the horizon with RAG + package. */
@@ -1558,6 +1571,85 @@ export function usePackageArtifacts(
   });
 }
 
+/**
+ * The append-only version chain for one package: the base export, then one
+ * archived revision per officer signature.
+ *
+ * Distinct from `usePackageArtifacts`, which reads the row that is upserted per
+ * kind and therefore always names the UNSIGNED export. Once a return is
+ * certified, the version flagged `isFiled` is the document — the one the
+ * regulator receives — and the base export is retained only as the
+ * pre-signature engine output.
+ */
+export function usePackageArtifactVersions(
+  bankId: string | undefined,
+  packageId: string | null | undefined
+) {
+  return useQuery({
+    queryKey: ['rr-artifact-versions', bankId, packageId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.listPackageArtifactVersions({
+          bankId: bankId!,
+          packageId: packageId!,
+        })
+      ),
+    enabled: Boolean(bankId && packageId),
+  });
+}
+
+/**
+ * The supersession chain, each version with its signatures, its files, and
+ * whether it has any file at all.
+ *
+ * `useRegulatoryPackages` already lists the versions, but only their statuses
+ * and timestamps — which cannot answer what is asked about a superseded
+ * filing. This is what the Prior-versions card renders.
+ */
+export function usePackageVersionChain(
+  bankId: string | undefined,
+  packageId: string | null | undefined
+) {
+  return useQuery({
+    queryKey: ['rr-version-chain', bankId, packageId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.getPackageVersionChain({
+          bankId: bankId!,
+          packageId: packageId!,
+        })
+      ),
+    enabled: Boolean(bankId && packageId),
+  });
+}
+
+/**
+ * The server-computed figures diff between two versions of one return.
+ *
+ * Fetched only once an operator opens a comparison (`enabled`), and never
+ * derived client-side: the diff an examiner is shown has to be the one the
+ * platform computed and can stand behind.
+ */
+export function useComparePackageVersions(
+  bankId: string | undefined,
+  packageId: string | null | undefined,
+  againstPackageId: string | null | undefined,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: ['rr-comparison', bankId, packageId, againstPackageId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.comparePackageVersions({
+          bankId: bankId!,
+          packageId: packageId!,
+          against: againstPackageId!,
+        })
+      ),
+    enabled: Boolean(enabled && bankId && packageId && againstPackageId),
+  });
+}
+
 /** Mint one export artifact (xlsx/csv/pdf); refreshes the persisted list. */
 export function useExportRegulatoryPackage(bankId: string | undefined) {
   const queryClient = useQueryClient();
@@ -1573,6 +1665,9 @@ export function useExportRegulatoryPackage(bankId: string | undefined) {
     onSuccess: (artifact) => {
       void queryClient.invalidateQueries({
         queryKey: ['rr-artifacts', bankId, artifact.packageId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['rr-artifact-versions', bankId, artifact.packageId],
       });
     },
   });
@@ -2141,6 +2236,539 @@ export function useRevokeIntegrationKey() {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['integration-keys'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Attestation & e-signature (docs/attestation_esignature.md §4.6).
+//
+// Query keys: ['attn-identity'], ['attn-status', bankId, packageId],
+// ['attn-preview', bankId, packageId, role], ['attn-verify', bankId, packageId],
+// ['attn-policies'].
+//
+// Certifying and voiding move the PACKAGE status too (validated →
+// pending_approval at T1, pending_approval → approved at T2, back to generated
+// on void), so those mutations invalidate the reporting reads as well as the
+// attestation ones — otherwise the workspace would show a stale lifecycle.
+// ---------------------------------------------------------------------------
+
+/** The caller's own permanent signer identity (provisioned on first read). */
+export function useMySignerIdentity(enabled = true) {
+  return useQuery({
+    queryKey: ['attn-identity'],
+    queryFn: () => apiCall(() => attestationApi.getMySignerIdentity()),
+    enabled,
+    // Permanent by design (§2.3) — no reason to re-fetch it on every mount.
+    staleTime: 30 * 60_000,
+  });
+}
+
+/** Who has signed, who must still sign, and whether submission is unlocked. */
+export function usePackageAttestation(
+  bankId: string | undefined,
+  packageId: string | null | undefined
+) {
+  return useQuery({
+    queryKey: ['attn-status', bankId, packageId],
+    queryFn: () =>
+      apiCall(() =>
+        attestationApi.getPackageAttestation({
+          bankId: bankId!,
+          packageId: packageId!,
+        })
+      ),
+    enabled: Boolean(bankId && packageId),
+  });
+}
+
+/**
+ * Exactly what will be signed. Never cached beyond the open ceremony: the
+ * digest the signer is shown is compared server-side at certify time, so a
+ * stale preview must surface as a refused signature, not a silent one.
+ */
+export function useCertificationPreview(
+  bankId: string | undefined,
+  packageId: string | null | undefined,
+  signingRole: SigningRole,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: ['attn-preview', bankId, packageId, signingRole],
+    queryFn: () =>
+      apiCall(() =>
+        attestationApi.previewCertification({
+          bankId: bankId!,
+          packageId: packageId!,
+          signingRole,
+        })
+      ),
+    enabled: Boolean(bankId && packageId) && enabled,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+}
+
+/**
+ * Step 1 of the ceremony: prove presence now, receive a single-use
+ * authorisation bound to (user, package, digest, role). Deliberately not
+ * cached and never retried — a re-authentication attempt is not idempotent.
+ */
+export function useStepUpForSigning(bankId: string | undefined) {
+  return useMutation({
+    mutationFn: ({
+      packageId,
+      signingRole,
+      password,
+      idToken,
+    }: {
+      packageId: string;
+      signingRole: SigningRole;
+      password?: string;
+      idToken?: string;
+    }) =>
+      apiCall(() =>
+        attestationApi.stepUpForSigning({
+          bankId: bankId!,
+          packageId,
+          stepUpRequest: {
+            signingRole,
+            password: password ?? null,
+            idToken: idToken ?? null,
+          },
+        })
+      ),
+  });
+}
+
+/**
+ * Step 2: spend the authorisation and record the signature.
+ * `expectedCertificationDigest` is the digest the browser rendered — the
+ * backend compares it, so a stale tab cannot certify figures nobody read.
+ */
+export function useCertifyPackage(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      packageId,
+      signingRole,
+      authorizationToken,
+      expectedCertificationDigest,
+    }: {
+      packageId: string;
+      signingRole: SigningRole;
+      authorizationToken: string;
+      expectedCertificationDigest: string;
+    }) =>
+      apiCall(() =>
+        attestationApi.certifyPackage({
+          bankId: bankId!,
+          packageId,
+          certifyRequest: {
+            signingRole,
+            authorizationToken,
+            expectedCertificationDigest,
+          },
+        })
+      ),
+    onSuccess: (status) => {
+      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
+      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
+      reportingInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/**
+ * Step 2, SSO variant: the authorisation was minted by the step-up callback and
+ * lives in an HttpOnly cookie, so it cannot be read here. The Next.js route
+ * `/api/attestation/certify` reads and spends it server-side and relays the risk
+ * service's verdict verbatim — including `details.error_code`, so the dialog
+ * branches on the same codes as the password path.
+ */
+export function useCertifyWithHeldAuthorization(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      packageId,
+      signingRole,
+      expectedCertificationDigest,
+    }: {
+      packageId: string;
+      signingRole: SigningRole;
+      expectedCertificationDigest: string;
+    }) => {
+      const response = await fetch('/api/attestation/certify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bankId: bankId!,
+          packageId,
+          signingRole,
+          expectedCertificationDigest,
+        }),
+      });
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const envelope = (body as { error?: unknown })?.error ?? body;
+        const shaped = (
+          envelope && typeof envelope === 'object' ? envelope : {}
+        ) as { code?: string; message?: string; details?: unknown };
+        const details = shaped.details as { error_code?: string; message?: string } | null;
+        throw new ApiError({
+          message:
+            details?.message ??
+            shaped.message ??
+            `Certification failed (${response.status}).`,
+          status: response.status,
+          code: shaped.code ?? null,
+          errorCode: details?.error_code ?? null,
+          details: shaped.details ?? null,
+        });
+      }
+      return body as AttestationStatusRead;
+    },
+    onSuccess: (status) => {
+      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
+      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
+      reportingInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/** Withdraw the current attestation. Signatures are retained, never deleted. */
+export function useVoidAttestation(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ packageId, reason }: { packageId: string; reason: string }) =>
+      apiCall(() =>
+        attestationApi.voidAttestation({
+          bankId: bankId!,
+          packageId,
+          voidAttestationRequest: { reason },
+        })
+      ),
+    onSuccess: (status) => {
+      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
+      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
+      reportingInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/**
+ * The reviewing approver's other exit: return the package with a note.
+ *
+ * One call, because the backend records the rejected decision AND withdraws the
+ * certification that froze the figures in one transaction — a return sent back
+ * with its figures still frozen is a return nobody can correct.
+ */
+export function useSendBackForCorrections(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ packageId, reason }: { packageId: string; reason: string }) =>
+      apiCall(() =>
+        attestationApi.sendPackageBackForCorrections({
+          bankId: bankId!,
+          packageId,
+          sendBackForCorrectionsRequest: { reason },
+        })
+      ),
+    onSuccess: (status) => {
+      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
+      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-awaiting'] });
+      reportingInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/**
+ * The five independent verification checks (§3.5). Opt-in rather than always-on:
+ * verification re-hashes artifacts and re-validates certificate chains, so it
+ * runs when a human asks for it.
+ */
+export function useVerifyPackageAttestation(
+  bankId: string | undefined,
+  packageId: string | null | undefined,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: ['attn-verify', bankId, packageId],
+    queryFn: () =>
+      apiCall(() =>
+        attestationApi.verifyPackageAttestation({
+          bankId: bankId!,
+          packageId: packageId!,
+        })
+      ),
+    enabled: Boolean(bankId && packageId) && enabled,
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The signing workspace: field placement, adopted marks, named routing.
+//
+// Query keys: ['attn-placements', bankId, packageId], ['attn-appearance'],
+// ['attn-awaiting'].
+// ---------------------------------------------------------------------------
+
+/**
+ * Where this return's signature fields will be created, and from which source
+ * (package override → bank template → org template → platform default).
+ * `editable` is false once a signature exists: the fields are part of the
+ * certified revision and the DocMDP policy forbids moving one afterwards.
+ */
+export function usePackageSignaturePlacements(
+  bankId: string | undefined,
+  packageId: string | null | undefined
+) {
+  return useQuery({
+    queryKey: ['attn-placements', bankId, packageId],
+    queryFn: () =>
+      apiCall(() =>
+        attestationApi.getPackageSignaturePlacements({
+          bankId: bankId!,
+          packageId: packageId!,
+        })
+      ),
+    enabled: Boolean(bankId && packageId),
+  });
+}
+
+/**
+ * Persist this package's field boxes. Reason-required and audited, because the
+ * placement decides where an officer's name and permanent signer ID appear on a
+ * document filed with the regulator.
+ *
+ * "Certify and send" carries the placement with it, so this is only used when
+ * the boxes have to survive something — the SSO redirect, where the browser
+ * that holds them is about to be navigated away.
+ */
+export function useSetPackageSignaturePlacements(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      packageId,
+      placements,
+      reason,
+    }: {
+      packageId: string;
+      placements: SignatureFieldPlacement[];
+      reason: string;
+    }) =>
+      apiCall(() =>
+        attestationApi.setPackageSignaturePlacements({
+          bankId: bankId!,
+          packageId,
+          packageSignaturePlacementRequest: { placements, reason },
+        })
+      ),
+    onSuccess: (resolved) => {
+      queryClient.setQueryData(
+        ['attn-placements', bankId, resolved.packageId],
+        resolved
+      );
+    },
+  });
+}
+
+/**
+ * Save this layout as the reusable template for a return code (optionally for
+ * one bank), so next month's filing opens with the boxes already on the lines.
+ *
+ * Admin-only server-side, like every other placement template write: the
+ * template decides where an officer's name and permanent signer ID print on
+ * every future filing of that return, not just this one.
+ */
+export function useUpsertSignaturePlacementTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SignaturePlacementTemplateUpsertRequest) =>
+      apiCall(() =>
+        attestationApi.upsertSignaturePlacementTemplate({
+          signaturePlacementTemplateUpsertRequest: payload,
+        })
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['attn-placements'] }),
+  });
+}
+
+/** The caller's own adopted mark — drawn or typed. Never anybody else's. */
+export function useMyAdoptedSignature(enabled = true) {
+  return useQuery({
+    queryKey: ['attn-appearance'],
+    queryFn: () => apiCall(() => attestationApi.getMyAdoptedSignature()),
+    enabled,
+  });
+}
+
+/** Adopt or re-adopt the mark. Drawn bytes are normalised server-side. */
+export function useAdoptMySignature() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: AdoptSignatureRequest) =>
+      apiCall(() =>
+        attestationApi.adoptMySignature({ adoptSignatureRequest: payload })
+      ),
+    onSuccess: (adopted) => {
+      queryClient.setQueryData(['attn-appearance'], adopted);
+    },
+  });
+}
+
+/**
+ * Certify AND name the remaining signers, in one transaction. A nominee the
+ * policy cannot accept takes the certification down with it — the alternative
+ * is a certified return sitting in nobody's queue.
+ */
+export function useCertifyAndSend(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      packageId,
+      ...request
+    }: CertifyAndSendRequest & { packageId: string }) =>
+      apiCall(() =>
+        attestationApi.certifyAndSendPackage({
+          bankId: bankId!,
+          packageId,
+          certifyAndSendRequest: request,
+        })
+      ),
+    onSuccess: (status) => {
+      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
+      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-placements'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-awaiting'] });
+      reportingInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/**
+ * The same act on the SSO path. The authorisation was minted by the step-up
+ * callback and lives in an HttpOnly cookie, so it cannot be read here — the
+ * Next.js route `/api/attestation/certify-and-send` reads and spends it
+ * server-side and relays the risk service's verdict verbatim, including
+ * `details.error_code`, so this branches on the same codes as the password path.
+ */
+export function useCertifyAndSendWithHeldAuthorization(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      packageId,
+      signingRole,
+      expectedCertificationDigest,
+      recipients,
+      placements,
+      reason,
+    }: Omit<CertifyAndSendRequest, 'authorizationToken'> & { packageId: string }) => {
+      const response = await fetch('/api/attestation/certify-and-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bankId: bankId!,
+          packageId,
+          signingRole,
+          expectedCertificationDigest,
+          recipients,
+          placements,
+          reason,
+        }),
+      });
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const envelope = (body as { error?: unknown })?.error ?? body;
+        const shaped = (
+          envelope && typeof envelope === 'object' ? envelope : {}
+        ) as { code?: string; message?: string; details?: unknown };
+        const details = shaped.details as { error_code?: string; message?: string } | null;
+        throw new ApiError({
+          message:
+            details?.message ??
+            shaped.message ??
+            `Certification failed (${response.status}).`,
+          status: response.status,
+          code: shaped.code ?? null,
+          errorCode: details?.error_code ?? null,
+          details: shaped.details ?? null,
+        });
+      }
+      return body as AttestationStatusRead;
+    },
+    onSuccess: (status) => {
+      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
+      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-placements'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-awaiting'] });
+      reportingInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/**
+ * Returns routed to the caller and still unsigned. Polled, because a signature
+ * request arrives from somebody else's action rather than from anything this
+ * browser did.
+ */
+export function useReturnsAwaitingMySignature(enabled = true) {
+  return useQuery({
+    queryKey: ['attn-awaiting'],
+    queryFn: () => apiCall(() => attestationApi.listReturnsAwaitingMySignature()),
+    enabled,
+    refetchInterval: 60_000,
+  });
+}
+
+/** Configured signing policies for the org (the built-in default is not a row). */
+export function useSigningPolicies(enabled = true) {
+  return useQuery({
+    queryKey: ['attn-policies'],
+    queryFn: () => apiCall(() => attestationApi.listSigningPolicies()),
+    enabled,
+  });
+}
+
+/**
+ * Create or supersede a signing policy. Reason-required and admin-only: this is
+ * the control that decides whether a filed return is properly attested, so
+ * changing it is itself an audited act. Policies are versioned by effective
+ * date rather than edited in place, so every attestation read invalidates too.
+ */
+export function useUpsertSigningPolicy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: PolicyUpsertRequest) =>
+      apiCall(() =>
+        attestationApi.upsertSigningPolicy({ policyUpsertRequest: payload })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['attn-policies'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-status'] });
+      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
     },
   });
 }

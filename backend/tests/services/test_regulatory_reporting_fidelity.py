@@ -47,6 +47,7 @@ from app.services.sample_bank_seed import (
     SAMPLE_BANK_ID,
     seed_sample_bank,
 )
+from tests.factories.attestation import relax_signing
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 CHECKER = TenantContext(
@@ -58,6 +59,11 @@ REPORTING_DATE = date(2026, 3, 31)
 
 def _seed_with_baseline_run(db: Session) -> None:
     seed_sample_bank(db)
+    # This suite is about REGULATOR DECISIONS (reject, decline, resubmission),
+    # not about who signed. Opt this return out of the platform's mandatory
+    # signing the way an administrator would; the gate is proved in
+    # tests/services/test_attestation_spine.py.
+    relax_signing(db, organization_id=DEMO_ORG_ID, return_code="BSD3")
     if db.scalar(select(User.id).where(User.id == CHECKER.actor_user_id)) is None:
         db.add(
             User(

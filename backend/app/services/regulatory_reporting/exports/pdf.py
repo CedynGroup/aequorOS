@@ -49,6 +49,25 @@ _BODY = _STYLES["BodyText"]
 _SMALL = ParagraphStyle("Small", parent=_STYLES["BodyText"], fontSize=8, leading=10)
 _CELL = ParagraphStyle("Cell", parent=_STYLES["BodyText"], fontSize=8, leading=10)
 _CELL_RIGHT = ParagraphStyle("CellRight", parent=_CELL, alignment=2)
+_FIELD_LABEL = ParagraphStyle(
+    "FieldLabel", parent=_CELL, fontSize=6.5, leading=8, textColor=colors.grey
+)
+
+#: The attestation block's four signing cells, in points, across the 18 mm text
+#: margins (595.28 − 2 × 51.02 = 493.2 pt). The signature column is the widest
+#: because it has to hold the whole signature stamp — its floor is
+#: ``pdf_signing.MIN_BOX_SIZES['signature']`` and this leaves generous room above
+#: it. The gutter is right-padding inside each cell, so a value never touches the
+#: neighbouring rule.
+_SIGNING_COLUMN_WIDTHS: tuple[float, ...] = (128, 128, 158, 79.2)
+_SIGNING_COLUMN_GUTTER = 8
+
+#: Clear vertical space above each rule. Sized for the signature stamp with room
+#: to spare, so an operator never has to enlarge the default box; the other three
+#: values are single lines and sit on the same rule.
+_SIGNING_ROW_HEIGHT = 48
+_SIGNING_LABEL_HEIGHT = 9
+_SIGNING_BLOCK_LEAD = 2 * mm
 
 
 def _invariant_canvas(*args: Any, **kwargs: Any) -> pdf_canvas.Canvas:
@@ -125,6 +144,48 @@ def _cover(rendered: RenderedReturn) -> list[Any]:
     return story
 
 
+def _signing_block() -> Table:
+    """The four cells one officer signs into: name, designation, signature, date.
+
+    Replaces a single 150 mm rule that ran under the whole "(name / designation /
+    signature / date)" wording. That rule asked for four things and gave one
+    undivided line to put them on, so the default field placement had nowhere to
+    land: the boxes ended up in the clear band *below* the block, and an operator
+    had to drag every field onto a line the template had not drawn.
+
+    The geometry is load-bearing, not cosmetic. ``pdf_signing.DEFAULT_PLACEMENTS``
+    is pinned to these columns and to :data:`_SIGNING_ROW_HEIGHT`, and
+    ``tests/services/test_attestation_pdf_signing.py`` measures the rendered page
+    to prove the two still agree — so changing a width here without moving the
+    placements fails a test rather than filing a return with a signature stamp
+    beside its line instead of on it.
+    """
+    labels = ("Name", "Designation", "Signature", "Date")
+    body = [
+        ["", "", "", ""],
+        [Paragraph(label, _FIELD_LABEL) for label in labels],
+    ]
+    table = Table(
+        body,
+        colWidths=list(_SIGNING_COLUMN_WIDTHS),
+        rowHeights=[_SIGNING_ROW_HEIGHT, _SIGNING_LABEL_HEIGHT],
+    )
+    table.setStyle(
+        TableStyle(
+            [
+                # One rule per cell, under the space the value is signed into.
+                ("LINEBELOW", (0, 0), (-1, 0), 0.75, colors.black),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), _SIGNING_COLUMN_GUTTER),
+                ("TOPPADDING", (0, 1), (-1, 1), 1.5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return table
+
+
 def _attestation(rendered: RenderedReturn) -> list[Any]:
     story: list[Any] = [
         PageBreak(),
@@ -134,10 +195,8 @@ def _attestation(rendered: RenderedReturn) -> list[Any]:
     for line in rendered.attestation_lines:
         story.append(Paragraph(line, _BODY))
         if line.endswith(": "):
-            story.append(Spacer(0, 2 * mm))
-            underscore = Table([[""]], colWidths=[150 * mm], rowHeights=[8 * mm])
-            underscore.setStyle(TableStyle([("LINEBELOW", (0, 0), (0, 0), 0.75, colors.black)]))
-            story.append(underscore)
+            story.append(Spacer(0, _SIGNING_BLOCK_LEAD))
+            story.append(_signing_block())
         story.append(Spacer(0, 4 * mm))
     return story
 

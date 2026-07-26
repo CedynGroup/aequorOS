@@ -27,12 +27,11 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from app.core.ids import new_uuid7
-from app.models import (
-    RegulatoryPackage,
-    RegulatoryPackageArtifact,
-    RegulatorySubmissionEvent,
+from app.models import RegulatoryPackage, RegulatorySubmissionEvent
+from app.services.regulatory_reporting.channels.base import (
+    FiledArtifact,
+    SubmissionPollStatus,
 )
-from app.services.regulatory_reporting.channels.base import SubmissionPollStatus
 from app.services.regulatory_reporting.channels.errors import ChannelPreconditionError
 
 EMAIL_PREFIX = "EMAIL-"
@@ -100,7 +99,7 @@ def build_subject(
     )
 
 
-def _attachment_entry(artifact: RegulatoryPackageArtifact) -> dict[str, Any]:
+def _attachment_entry(artifact: FiledArtifact) -> dict[str, Any]:
     return {
         "kind": artifact.kind,
         "filename": PurePosixPath(artifact.object_path).name,
@@ -112,7 +111,7 @@ def _attachment_entry(artifact: RegulatoryPackageArtifact) -> dict[str, Any]:
 
 def build_email_bundle(
     package: RegulatoryPackage,
-    artifacts: Sequence[RegulatoryPackageArtifact],
+    artifacts: Sequence[FiledArtifact],
     config: dict[str, Any] | None = None,
     institution_code_fallback: str | None = None,
 ) -> dict[str, Any]:
@@ -187,7 +186,7 @@ class EmailFallbackChannel:
     def submit(
         self,
         package: RegulatoryPackage,
-        artifacts: Sequence[RegulatoryPackageArtifact],
+        artifacts: Sequence[FiledArtifact],
     ) -> str:
         if package.status != "approved":
             raise ChannelPreconditionError(

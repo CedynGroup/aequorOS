@@ -34,8 +34,11 @@ from typing import Any
 
 import httpx
 
-from app.models import RegulatoryPackage, RegulatoryPackageArtifact
-from app.services.regulatory_reporting.channels.base import SubmissionPollStatus
+from app.models import RegulatoryPackage
+from app.services.regulatory_reporting.channels.base import (
+    FiledArtifact,
+    SubmissionPollStatus,
+)
 from app.services.regulatory_reporting.channels.errors import (
     ChannelDowntimeError,
     ChannelError,
@@ -172,7 +175,7 @@ class OrassApiChannel:
     def submit(
         self,
         package: RegulatoryPackage,
-        artifacts: Sequence[RegulatoryPackageArtifact],
+        artifacts: Sequence[FiledArtifact],
     ) -> str:
         if package.status not in _SUBMITTABLE_STATUSES:
             raise ChannelPreconditionError(

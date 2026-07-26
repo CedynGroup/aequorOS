@@ -78,6 +78,7 @@ def _me_response(user: User) -> MeResponse:
         # SQLAlchemy exposes String columns as the wider `str` type.
         theme=cast(Literal["light", "dark", "system"] | None, user.theme),
         role=user.role,
+        auth_provider=user.auth_provider,
     )
 
 

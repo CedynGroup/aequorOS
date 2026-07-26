@@ -2,26 +2,47 @@
  * Full-lifecycle submission journeys — the complete regulator conversation
  * driven through the real hermetic stack (no mocking):
  *
- *  1. approve → submit (ORASS sandbox, ack) → poll → Acknowledged + Rev 1.0
+ *  1. certify → approve and sign → submit (ORASS sandbox, ack) → poll →
+ *     Acknowledged + Rev 1.0
  *  2. downtime 409 → guided email fallback → pending re-upload → re-upload
  *     via ORASS once restored → poll → Acknowledged (BG/FMD/2026/07 flow)
  *  3. sandbox reject → poll → Rejected + supervisor comments (SIM-LQ-104)
  *     with the package reopened for regeneration
- *  4. institution register (seeded ORASS code) → LRT corporate pack generates
+ *  4. the reviewer's other exit — send back for corrections with a note, and the
+ *     return is unfrozen, unsigned and unsubmittable again
+ *  5. institution register (seeded ORASS code) → LRT corporate pack generates
+ *
+ * Every BSD3 journey now passes through the SIGNING CEREMONY for real, because
+ * signing is required for every return by default and an unsigned return must
+ * never be submittable. Relaxing the policy would have turned these three
+ * journeys green while deleting coverage of that gate, so instead the fixture
+ * users carry password hashes (scripts/e2e_bootstrap.py) and the journeys sign:
+ * the preparer places the fields, adopts a mark and certifies, and a separate
+ * approver session approves-and-signs in one act from the checker queue. That
+ * makes these the only tests in the suite covering the whole chain end to end.
+ *
+ * Note there is no "Request approval" step any more: for a return that requires
+ * signatures the preparer's certification IS the request — it freezes the figures
+ * and routes the return to the approver they name.
  *
  * Independence: each BSD3 journey claims its OWN reporting period (indices
- * 1..3 — index 0 stays with the pre-existing submission-lifecycle spec) and
+ * 1..4 — index 0 stays with the pre-existing submission-lifecycle spec) and
  * mints the liquidity baseline run BSD3 draws on, so no journey shares a
  * package version chain with another. Sandbox behavior is configured through
  * the API with the minted admin token (PUT channel-configs/orass_sandbox).
- * Maker-checker is exercised for real: the admin session generates/validates/
- * requests approval, a separate approver session decides.
  */
 
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import path from 'path';
 import { E2E_API_ORIGIN, E2E_TMP } from '../playwright.config';
 import { mintBackendToken } from './support/mint';
+import {
+  approveAndSignAsChecker,
+  certifyAsPreparer,
+  fmtDateGB,
+  returnsUrl,
+  sendBackAsChecker,
+} from './support/ceremony';
 
 const SAMPLE_BANK_ID = 'BK-SAMP0001';
 const adminState = path.join(E2E_TMP, 'admin.json');
@@ -56,7 +77,7 @@ async function api(
 let adminToken: string;
 
 /** One reporting date (ISO) per BSD3 journey — never the latest period. */
-const journeyDates = { ack: '', downtime: '', reject: '' };
+const journeyDates = { ack: '', downtime: '', reject: '', sendBack: '' };
 
 test.beforeAll(async () => {
   adminToken = await mintBackendToken('admin');
@@ -67,7 +88,12 @@ test.beforeAll(async () => {
   );
   const periods: { id: string; period_end: string }[] = listing.periods;
   // Newest first; [0] belongs to the legacy submission-lifecycle journeys.
-  const claims: (keyof typeof journeyDates)[] = ['ack', 'downtime', 'reject'];
+  const claims: (keyof typeof journeyDates)[] = [
+    'ack',
+    'downtime',
+    'reject',
+    'sendBack',
+  ];
   for (const [index, key] of claims.entries()) {
     const period = periods[index + 1];
     journeyDates[key] = String(period.period_end).slice(0, 10);
@@ -95,25 +121,13 @@ function setSandboxConfig(config: Record<string, unknown>): Promise<unknown> {
 // UI helpers
 // ---------------------------------------------------------------------------
 
-const returnsUrl = (code: string, date?: string) =>
-  `/submissions/returns?code=${code}${date ? `&date=${date}` : ''}`;
-
-/** Mirror of the dashboard's fmtDateUTC ("2026-02-28" → "28 Feb 2026"). */
-function fmtDateGB(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
 /**
- * Generate a fresh BSD3 package for `date` and walk it to pending_approval:
- * generate → validate (must pass — ERROR findings keep the approval request
- * locked, and that is a product bug this helper would surface) → request.
+ * Generate a fresh BSD3 package for `date` and validate it.
+ *
+ * Validation must pass — ERROR findings keep certification locked, and that is a
+ * product bug this helper would surface rather than paper over.
  */
-async function makeReadyForApproval(page: Page, date: string): Promise<void> {
+async function generateAndValidate(page: Page, date: string): Promise<void> {
   await page.goto(returnsUrl('BSD3', date));
   await expect(
     page.getByRole('heading', { name: /returns workspace/i })
@@ -126,33 +140,36 @@ async function makeReadyForApproval(page: Page, date: string): Promise<void> {
   const validate = page.getByRole('button', { name: 'Validate', exact: true });
   await expect(validate).toBeEnabled();
   await validate.click();
-
-  const requestApproval = page.getByRole('button', { name: 'Request approval' });
-  await expect(requestApproval).toBeEnabled();
-  await requestApproval.click();
-  await expect(page.getByText(/Awaiting a checker decision/)).toBeVisible();
+  await expect(page.getByText(/\bValidated\b/).first()).toBeVisible();
 }
 
-/** Decide the pending package as a different officer (approver session). */
-async function approveAsChecker(browser: Browser, date: string): Promise<void> {
-  const context = await browser.newContext({ storageState: approverState });
-  const page = await context.newPage();
-  await page.goto('/submissions/approvals');
-  const row = page.getByRole('row', { name: new RegExp(fmtDateGB(date)) });
-  await expect(row.first()).toBeVisible();
-  await row.first().click();
-  await page.getByRole('button', { name: 'Approve', exact: true }).click();
-  // On success the queue refetches empty and the decide panel unmounts with
-  // it (its transient "Decision recorded" note included) — the deterministic
-  // post-condition is the cleared checker queue.
-  await expect(page.getByText('Queue is clear')).toBeVisible();
-  await context.close();
+/**
+ * Walk a fresh BSD3 package all the way to `approved` — through the ceremony.
+ *
+ * Two officers, two sessions, as maker-checker requires: the admin session
+ * prepares and certifies, a separate approver session approves and signs. The
+ * approval decision is written by that signature, in the same transaction, so
+ * there is no separate approve step to perform afterwards.
+ */
+async function certifyAndApprove(
+  page: Page,
+  browser: Browser,
+  date: string
+): Promise<void> {
+  await generateAndValidate(page, date);
+  await certifyAsPreparer(page, 'BSD3', date);
+  await approveAndSignAsChecker(browser, approverState, date);
 }
 
-/** Submit the approved package through the ORASS sandbox channel. */
+/** Submit the approved, fully certified package through the ORASS sandbox. */
 async function submitViaSandbox(page: Page, date: string): Promise<void> {
   await page.goto(returnsUrl('BSD3', date));
-  const submit = page.getByRole('button', { name: 'Submit', exact: true });
+  // Cleared to submit is now a claim the screen makes only when the service
+  // says so — and it says so because both signatures are on record.
+  await expect(page.getByTestId('attestation-clearance').first()).toHaveText(
+    /^Cleared to submit$/i
+  );
+  const submit = page.getByTestId('submit-package');
   await expect(submit).toBeEnabled();
   await page.getByLabel('Channel').selectOption('orass_sandbox');
   await submit.click();
@@ -164,16 +181,18 @@ async function submitViaSandbox(page: Page, date: string): Promise<void> {
 
 test.describe('full lifecycle', () => {
   test.use({ storageState: adminState });
+  // Two real certifications per journey: pyHanko signs the document and the
+  // export engine re-renders it, and pdf.js renders it again in the browser.
+  test.describe.configure({ timeout: 300_000 });
 
-  test('journey 1: approve → submit → poll acknowledges with Rev 1.0', async ({
+  test('journey 1: certify → approve and sign → submit → poll acknowledges with Rev 1.0', async ({
     page,
     browser,
   }) => {
     const date = journeyDates.ack;
     await setSandboxConfig({ sandbox_behavior: 'ack' });
 
-    await makeReadyForApproval(page, date);
-    await approveAsChecker(browser, date);
+    await certifyAndApprove(page, browser, date);
     await submitViaSandbox(page, date);
 
     // Submission stamps the ORASS revision — 1.0 for a first submission.
@@ -194,8 +213,7 @@ test.describe('full lifecycle', () => {
     const date = journeyDates.downtime;
     await setSandboxConfig({ sandbox_behavior: 'ack', downtime: true });
 
-    await makeReadyForApproval(page, date);
-    await approveAsChecker(browser, date);
+    await certifyAndApprove(page, browser, date);
     await submitViaSandbox(page, date);
 
     // The structured channel_downtime 409 surfaces as the guided fallback
@@ -237,8 +255,7 @@ test.describe('full lifecycle', () => {
     const date = journeyDates.reject;
     await setSandboxConfig({ sandbox_behavior: 'reject' });
 
-    await makeReadyForApproval(page, date);
-    await approveAsChecker(browser, date);
+    await certifyAndApprove(page, browser, date);
     await submitViaSandbox(page, date);
 
     const poll = page.getByRole('button', { name: 'Poll status' });
@@ -266,7 +283,33 @@ test.describe('full lifecycle', () => {
     await setSandboxConfig({ sandbox_behavior: 'ack' });
   });
 
-  test('journey 4: institution register drives the LRT corporate pack', async ({
+  test('journey 4: the reviewer sends it back with a note, and it is unsubmittable again', async ({
+    page,
+    browser,
+  }) => {
+    const date = journeyDates.sendBack;
+    const note = 'Line 12 double-counts the placement maturing 2 April.';
+
+    await generateAndValidate(page, date);
+    await certifyAsPreparer(page, 'BSD3', date);
+    await sendBackAsChecker(browser, approverState, date, note);
+
+    // Back with the preparer, and genuinely correctable: the certification that
+    // froze the figures is withdrawn, the note is on the record, and nothing on
+    // the screen claims the return may be filed.
+    await page.goto(returnsUrl('BSD3', date));
+    await expect(page.getByText('Unsigned').first()).toBeVisible();
+    await expect(page.getByTestId('attestation-clearance').first()).toHaveText(
+      /^Not cleared to submit/i
+    );
+    await expect(page.getByTestId('submit-package')).toBeDisabled();
+    await expect(page.getByText(note).first()).toBeVisible();
+    // The preparer's signature is history, not deleted — the withdrawn cycle is
+    // named rather than silently dropped.
+    await expect(page.getByText(/retained in the append-only trail/i)).toBeVisible();
+  });
+
+  test('journey 5: institution register drives the LRT corporate pack', async ({
     page,
   }) => {
     await page.goto('/institution');

@@ -30,6 +30,7 @@ import { useBankContext } from '@/components/shell/BankContext';
 import {
   useOfficerNames,
   usePackageArtifacts,
+  usePackageAttestation,
   useRegulatoryPackage,
   useRegulatoryPackages,
   useResubmissionRequests,
@@ -47,6 +48,7 @@ import {
   fmtBytes,
 } from '@/components/submissions/shared';
 import EventsFeed from '@/components/submissions/EventsFeed';
+import { AttestationSummary } from '@/components/attestation/shared';
 
 const ALL = 'all';
 const PAGE_SIZE = 25;
@@ -307,6 +309,9 @@ function PackageRecord({
   const events = useSubmissionEvents(bankId, summary.id);
   const artifacts = usePackageArtifacts(bankId, summary.id);
   const resubmissions = useResubmissionRequests(bankId, summary.id);
+  // Fetched for the SELECTED package only: neither package payload carries the
+  // attestation state, so a table column would be one request per row.
+  const attestation = usePackageAttestation(bankId, summary.id);
   const officerName = useOfficerNames();
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
@@ -371,6 +376,25 @@ function PackageRecord({
             </p>
           </div>
         )}
+
+        {/* Attestation — the signature record for this exact version, including
+            voids, whose signatures are retained as history rather than deleted. */}
+        <div>
+          <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
+            Attestation
+          </p>
+          {attestation.isLoading ? (
+            <SkeletonCard />
+          ) : attestation.error ? (
+            <ErrorPanel
+              error={attestation.error}
+              onRetry={() => attestation.refetch()}
+              title="Could not load the attestation record"
+            />
+          ) : attestation.data ? (
+            <AttestationSummary status={attestation.data} />
+          ) : null}
+        </div>
 
         <AuditLog
           summary={summary}

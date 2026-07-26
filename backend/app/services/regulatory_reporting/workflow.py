@@ -6,9 +6,11 @@ Explicit allowed-transition table; every transition is audit-logged via
 from a different user than the package generator (409 otherwise).
 
 Channel dispatch (this wave): ``submit_package_via_channel`` resolves the
-channel (override or registry default), auto-exports an xlsx artifact through
-the lazy exporter seam when none exists, delegates to the concrete channel
-plugin, and records the outcome. ``poll_submission`` maps the latest
+channel (override or registry default), assembles the filing set (``_filing_set``
+— the signed revision once officers have certified, plus the registry's required
+template format, auto-exported through the lazy exporter seam when absent),
+delegates to the concrete channel plugin, and records the outcome — including
+exactly which files went. ``poll_submission`` maps the latest
 external_ref onto the regulator-side status and records regulator decisions.
 Downtime semantics (BoG Notice BG/FMD/2026/07): an email fallback submission
 carries ``{"pending_orass_reupload": true}`` and is deemed complete only
@@ -50,6 +52,7 @@ from app.schemas.regulatory_reporting import (
 )
 from app.services import institution_profile, notifications
 from app.services.audit import record_event
+from app.services.regulatory_reporting import artifact_versions
 from app.services.regulatory_reporting.channel_config import (
     channel_config_row,
     decrypt_channel_credentials,
@@ -59,6 +62,7 @@ from app.services.regulatory_reporting.channels import (
     ChannelError,
     ChannelPreconditionError,
     EmailFallbackChannel,
+    FiledArtifact,
     OrassApiChannel,
     OrassSandboxChannel,
     build_email_bundle,
@@ -224,16 +228,47 @@ def request_approval(
     return read_package(db, package)
 
 
-def decide_approval(
+def _notify_decision(
     db: Session,
     ctx: TenantContext,
-    bank_id: str,
-    package_id: UUID,
-    payload: PackageApprovalDecisionCreate,
-) -> RegulatoryPackageRead:
-    actor_user_id = require_actor(ctx)
-    get_bank_or_404(db, ctx, bank_id)
-    package = get_package_or_404(db, ctx, bank_id, package_id)
+    package: RegulatoryPackage,
+    *,
+    approved: bool,
+    reason: str | None,
+) -> None:
+    """Tell the maker what the checker decided (no commit).
+
+    Addressed to ``generated_by`` rather than to a role: an approval decision is
+    an answer to one officer's request, and the person who has to act on a
+    rework is the one who prepared it.
+    """
+    notifications.emit(
+        db,
+        ctx,
+        type="reporting.package.approved" if approved else "reporting.package.approval_rejected",
+        severity="info" if approved else "warning",
+        title=(
+            f"{package.return_code} {package.reporting_date.isoformat()} "
+            + ("approved" if approved else "returned for rework")
+        ),
+        body=(
+            f"Version {package.version} of {package.return_code} for "
+            f"{package.reporting_date.isoformat()} was "
+            + ("approved for submission." if approved else "rejected at approval.")
+            + (f" Reason: {reason}" if reason else "")
+        ),
+        entity_type="regulatory_package",
+        entity_id=package.id,
+        recipient_user_id=package.generated_by,
+    )
+
+
+def ensure_decidable(package: RegulatoryPackage, actor_user_id: UUID) -> None:
+    """The two guards every approval decision passes, whichever act carries it.
+
+    Extracted so the signing ceremony's approve-and-sign is subject to the SAME
+    maker-checker rule as the bare decision, rather than a second reading of it.
+    """
     if package.status != "pending_approval":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -250,6 +285,89 @@ def decide_approval(
                 "than the one who generated the package."
             ),
         )
+
+
+def _ensure_approval_is_not_the_signature(
+    db: Session, ctx: TenantContext, package: RegulatoryPackage
+) -> None:
+    """Refuse a bare approval when the approver's signature is what approves.
+
+    Without this the two halves of one act stay separable in the other
+    direction: a return could be approved for submission by a checker who never
+    signed the figures they approved. It is scoped to returns whose policy
+    actually requires a signature — an institution that has relaxed signing for
+    a return has no ceremony to route the decision through, and the bare
+    decision is then the whole of the checker act.
+    """
+    from app.services.attestation import workflow as attestation  # noqa: PLC0415 - import cycle
+
+    policy = attestation.package_policy(db, ctx, package)
+    if not policy.require_signature:
+        return
+    outstanding = attestation.outstanding_slots(
+        policy, attestation.current_signatures(db, ctx, package)
+    )
+    if not outstanding:
+        return
+    detail = ", ".join(f"{role} x{count}" for role, count in outstanding)
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "error_code": "approval_requires_signature",
+            "message": (
+                "This return requires signatures, so approving it and signing it are "
+                f"one act. Outstanding: {detail}. Approve and sign it from the signing "
+                "workspace, or send it back for corrections."
+            ),
+        },
+    )
+
+
+def record_certification_approval(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    *,
+    actor_user_id: UUID,
+    reason: str | None,
+) -> RegulatoryPackageApproval:
+    """The approval decision a checker's certification IS (no commit).
+
+    An approver's signature over the frozen figures and their approval of the
+    filing are one act, not two — so the decision row is written in the same
+    transaction as the signature. Called from the attestation workflow, which is
+    already where ``pending_approval -> approved`` happens, so the row and the
+    status can never disagree.
+
+    The status transition is deliberately NOT repeated here: the caller has
+    already moved it, and ``transition`` would refuse the ``validated ->
+    approved`` shape a single-slot policy produces.
+    """
+    approval = _add_approval(
+        db,
+        ctx,
+        package,
+        action="approved",
+        actor_user_id=actor_user_id,
+        reason=reason,
+    )
+    _notify_decision(db, ctx, package, approved=True, reason=reason)
+    return approval
+
+
+def decide_approval(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    package_id: UUID,
+    payload: PackageApprovalDecisionCreate,
+) -> RegulatoryPackageRead:
+    actor_user_id = require_actor(ctx)
+    get_bank_or_404(db, ctx, bank_id)
+    package = get_package_or_404(db, ctx, bank_id, package_id)
+    ensure_decidable(package, actor_user_id)
+    if payload.action == "approved":
+        _ensure_approval_is_not_the_signature(db, ctx, package)
     _add_approval(
         db,
         ctx,
@@ -259,29 +377,40 @@ def decide_approval(
         reason=payload.reason,
     )
     approved = payload.action == "approved"
-    notifications.emit(
-        db,
-        ctx,
-        type="reporting.package.approved" if approved else "reporting.package.approval_rejected",
-        severity="info" if approved else "warning",
-        title=(
-            f"{package.return_code} {package.reporting_date.isoformat()} "
-            + ("approved" if approved else "returned for rework")
-        ),
-        body=(
-            f"Version {package.version} of {package.return_code} for "
-            f"{package.reporting_date.isoformat()} was "
-            + ("approved for submission." if approved else "rejected at approval.")
-            + (f" Reason: {payload.reason}" if payload.reason else "")
-        ),
-        entity_type="regulatory_package",
-        entity_id=package.id,
-        recipient_user_id=package.generated_by,
-    )
-    new_status = "approved" if payload.action == "approved" else "generated"
+    _notify_decision(db, ctx, package, approved=approved, reason=payload.reason)
+    new_status = "approved" if approved else "generated"
     transition(db, ctx, package, new_status, details={"decision": payload.action})
     db.commit()
     return read_package(db, package)
+
+
+def send_back_for_corrections(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    *,
+    actor_user_id: UUID,
+    reason: str,
+) -> RegulatoryPackageApproval:
+    """The reviewing checker's other exit: return the package with a note (no commit).
+
+    Identical to a rejected decision — same row, same audit event, same
+    notification to the maker — because it IS one: "send back for corrections"
+    is what a rejection at approval has always meant. It is exposed as its own
+    act only so the reviewer can take it from the surface where they read the
+    figures, and so the note is required rather than optional.
+
+    No commit: the caller withdraws the attestation in the same transaction, and
+    a package returned for rework while its figures stay frozen would be a
+    package nobody can correct.
+    """
+    ensure_decidable(package, actor_user_id)
+    approval = _add_approval(
+        db, ctx, package, action="rejected", actor_user_id=actor_user_id, reason=reason
+    )
+    _notify_decision(db, ctx, package, approved=False, reason=reason)
+    transition(db, ctx, package, "generated", details={"decision": "rejected"})
+    return approval
 
 
 def add_submission_event(  # noqa: PLR0913
@@ -503,6 +632,83 @@ def _resolve_exporter() -> Exporter:
     return export_package
 
 
+def _filing_set(
+    db: Session, ctx: TenantContext, package: RegulatoryPackage, *, mint_missing: bool = True
+) -> tuple[list[FiledArtifact], dict[str, Any]]:
+    """What actually goes to the regulator, and the record of exactly what went.
+
+    Certification puts the officers' signatures ON the return document
+    (``attestation.artifact_signing``) and archives that revision as its own
+    immutable version. Until this existed, submission read
+    ``regulatory_package_artifacts`` — the upserted row that only ever names the
+    UNSIGNED export — so a fully certified return was filed with the Bank of
+    Ghana as the document nobody had signed. The signed revision replaces the
+    unsigned PDF here, and nowhere else does the choice get made.
+
+    The registry's ``filing_format`` rides ALONGSIDE the signed PDF rather than
+    being dropped for it. Whether ORASS accepts a PDF as the filing at all is
+    unconfirmed (docs/attestation_esignature.md §8 C1); silently replacing a
+    required template with a document format the portal may reject would turn a
+    signature improvement into a missed statutory deadline (Act 930 s.93(3)).
+
+    An uncertified package is unaffected: no signed revision exists, so the set
+    is the artifacts it already had, with the filing format auto-exported when
+    there are none — the operator's main path, unchanged.
+
+    ``mint_missing=False`` for the read-only preview of the same set: a GET that
+    renders the downtime email bundle must not mint an artifact as a side effect.
+    """
+    artifacts = _package_artifacts(db, package)
+    signed = artifact_versions.latest_signed_version(db, ctx, package)
+    filed: list[FiledArtifact] = [
+        artifact
+        for artifact in artifacts
+        if signed is None or artifact.kind != signed.version.kind
+    ]
+    detail: dict[str, Any] = {}
+    if signed is not None:
+        filed.insert(0, signed.version)
+        detail["signed_artifact_version_id"] = str(signed.version.id)
+        detail["signed_by"] = [
+            {
+                "signing_role": revision.signature.signing_role,
+                "signer_id": revision.signature.signer_id,
+                "signed_at": (
+                    revision.signature.tsa_time or revision.signature.declared_at
+                ).isoformat(),
+            }
+            for revision in artifact_versions.signed_revisions(db, ctx, package)
+        ]
+    definition = get_definition(package.return_code)
+    required = definition.filing_format if definition is not None else "xlsx"
+    exported: list[str] = []
+    if (
+        mint_missing
+        and required is not None
+        and required not in {artifact.kind for artifact in filed}
+    ):
+        # Minted only when the filing would otherwise not carry that format —
+        # which is also what keeps this away from a kind a live signature covers,
+        # since the signed revision is already IN ``filed`` under its own kind
+        # and re-export of a signed kind is refused (``exports._refuse_if_signed``).
+        exporter = _resolve_exporter()
+        filed.append(exporter(db, ctx, package, required))
+        exported.append(required)
+    if exported:
+        detail["auto_exported_kinds"] = exported
+    detail["filed_artifacts"] = [
+        {
+            "kind": artifact.kind,
+            "object_path": artifact.object_path,
+            "checksum_sha256": artifact.checksum_sha256,
+            "size_bytes": artifact.size_bytes,
+            "signed": signed is not None and artifact is signed.version,
+        }
+        for artifact in filed
+    ]
+    return filed, detail
+
+
 def _package_artifacts(db: Session, package: RegulatoryPackage) -> list[RegulatoryPackageArtifact]:
     return list(
         db.scalars(
@@ -612,6 +818,23 @@ def _load_channel_context(
     return dict(row.config), credentials
 
 
+def _ensure_attested(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> None:
+    """Attestation gate: no return reaches ANY channel — including the manual
+    record — without every signature its policy requires.
+
+    Lives in the service rather than the route so a future caller cannot bypass
+    it (docs/attestation_esignature.md §4.1 T5). When no signing policy is
+    configured the gate is a no-op, which is deliberate: the Bank of Ghana
+    requirements are unconfirmed and a guessed one must not block a statutory
+    filing.
+    """
+    from app.services.attestation.workflow import (  # noqa: PLC0415 - breaks an import cycle
+        ensure_submittable,
+    )
+
+    ensure_submittable(db, ctx, package)
+
+
 def _ensure_channel_submittable(
     db: Session, package: RegulatoryPackage, channel_code: str
 ) -> tuple[bool, str | None]:
@@ -671,6 +894,8 @@ def submit_package_via_channel(
 
     is_reupload, prior_email_ref = _ensure_channel_submittable(db, package, channel_code)
 
+    _ensure_attested(db, ctx, package)
+
     if channel_code == "manual":
         transition(db, ctx, package, "submitted", details={"channel": channel_code})
         add_submission_event(
@@ -685,12 +910,7 @@ def submit_package_via_channel(
         db.commit()
         return read_package(db, package)
 
-    artifacts = _package_artifacts(db, package)
-    auto_exported = False
-    if not artifacts:
-        exporter = _resolve_exporter()
-        artifacts = [exporter(db, ctx, package, "xlsx")]
-        auto_exported = True
+    artifacts, filing_detail = _filing_set(db, ctx, package)
 
     prior_events = _submission_events_asc(db, package)
     config, credentials = _load_channel_context(db, ctx, bank.id, channel_code)
@@ -738,8 +958,9 @@ def submit_package_via_channel(
         del credentials  # per-cycle retrieval: discard, never persist or log
 
     detail = dict(channel.last_detail)
-    if auto_exported:
-        detail["auto_exported_kinds"] = ["xlsx"]
+    # The filing record wins over the channel's own summary of it: what was
+    # sent is a fact about this submission, not a channel opinion.
+    detail.update(filing_detail)
     if credentials_present:
         detail["credentials_used"] = True  # fingerprint-level fact only
     transition_details: dict[str, Any] = {"channel": channel_code}
@@ -858,7 +1079,13 @@ def _next_submission_sequence(
 
 
 def _version_chain_ids(db: Session, package: RegulatoryPackage) -> list[UUID]:
-    """All package ids for this (bank, return_code, reporting_date) chain."""
+    """All package ids for this (bank, return_code, reporting_date, basis) chain.
+
+    ``basis`` belongs in the key because solo and consolidated are independent
+    current-version chains for the same return and reporting date (see
+    ``generation.generate_package``). Without it, a granted solo resubmission
+    bumped the consolidated return's ORASS revision too (gap G14).
+    """
     return list(
         db.scalars(
             select(RegulatoryPackage.id).where(
@@ -866,6 +1093,7 @@ def _version_chain_ids(db: Session, package: RegulatoryPackage) -> list[UUID]:
                 RegulatoryPackage.bank_id == package.bank_id,
                 RegulatoryPackage.return_code == package.return_code,
                 RegulatoryPackage.reporting_date == package.reporting_date,
+                RegulatoryPackage.basis == package.basis,
             )
         )
     )
@@ -1203,9 +1431,12 @@ def email_fallback_instructions(
     package = get_package_or_404(db, ctx, bank_id, package_id)
     row = channel_config_row(db, ctx, bank.id, "email")
     config = dict(row.config) if row is not None else {}
+    # The same set the channel would send, so the operator's .eml carries the
+    # signed return rather than the export it supersedes.
+    filed, _detail = _filing_set(db, ctx, package, mint_missing=False)
     bundle = build_email_bundle(
         package,
-        _package_artifacts(db, package),
+        filed,
         config,
         institution_code_fallback=institution_profile.orass_institution_code(db, ctx, bank.id),
     )

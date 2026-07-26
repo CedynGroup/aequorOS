@@ -17,6 +17,18 @@ export const E2E_ORG_ID = 'OR-DEM00001';
 export const E2E_JWT_SECRET = 'e2e-backend-jwt-secret-not-production-000';
 export const E2E_AUTH_SECRET = 'e2e-nextauth-secret-not-production-000';
 
+/**
+ * The step-up password every e2e signer re-authenticates with.
+ *
+ * Signing requires proof of presence NOW, and a minted session token carries no
+ * password behind it — so `scripts/e2e_bootstrap.py` gives each fixture user this
+ * hash and the ceremony runs for real instead of being skipped or unlocked by
+ * relaxing the signing policy. The two values must agree; the constant lives in
+ * both files rather than in shared config because the bootstrap runs in Python
+ * before this process reads anything.
+ */
+export const E2E_PASSWORD = 'e2e-step-up-password-not-production-000';
+
 export const E2E_USERS: Record<string, { id: string; roles: string[] }> = {
   admin: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', roles: ['admin'] },
   approver: { id: 'eeeeeeee-2222-4eee-8eee-eeeeeeeeeee2', roles: ['approver'] },

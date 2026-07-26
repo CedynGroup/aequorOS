@@ -336,8 +336,8 @@ export default function AddSourcePanel({
       {step === 'schedule' && (
         <div className="space-y-4">
           <p className="text-body text-slate">
-            When should AequorOS refresh this data? Defaults follow each category's
-            standard cadence; adjust per category as needed.
+            When should AequorOS refresh this data? Defaults follow each
+            category&apos;s standard cadence; adjust per category as needed.
           </p>
           {selectedCategories.length === 0 && (
             <p className="text-body text-slate">No scopes selected yet.</p>

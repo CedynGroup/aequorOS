@@ -64,13 +64,22 @@ function AuthenticationPanelInner() {
   // Lazily seed the form from the fetched connection; afterwards user edits win.
   const draft = form ?? toForm(connection);
 
-  const redirectUri = useMemo(
-    () =>
-      typeof window !== 'undefined'
-        ? `${window.location.origin}/api/auth/callback/sso`
-        : '/api/auth/callback/sso',
-    []
-  );
+  /**
+   * Two redirect URIs, both on the same client: sign-in, and the signing
+   * ceremony's step-up re-authentication. Registering only the first leaves
+   * sign-in working and certification broken, which is a confusing failure to
+   * debug — so both are shown here, together, with the reason each exists.
+   */
+  const redirectUris = useMemo(() => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return [
+      { path: '/api/auth/callback/sso', purpose: 'Sign-in' },
+      {
+        path: '/api/attestation/step-up/callback',
+        purpose: 'Re-authentication when certifying a return',
+      },
+    ].map((entry) => ({ ...entry, uri: `${origin}${entry.path}` }));
+  }, []);
 
   const save = useMutation({
     mutationFn: async (payload: FormState) =>
@@ -136,14 +145,29 @@ function AuthenticationPanelInner() {
           >
             <div>
               <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                Redirect URI — register this in your IdP
+                Redirect URIs — register both in your IdP
               </p>
-              <div className="mt-1 flex items-center gap-2">
-                <code className="font-mono text-caption text-navy break-all">
-                  {redirectUri}
-                </code>
-                <CopyButton text={redirectUri} label="Redirect URI" className="shrink-0" />
-              </div>
+              <ul className="mt-1 space-y-1.5">
+                {redirectUris.map((entry) => (
+                  <li key={entry.path}>
+                    <div className="flex items-center gap-2">
+                      <code className="font-mono text-caption text-navy break-all">
+                        {entry.uri}
+                      </code>
+                      <CopyButton
+                        text={entry.uri}
+                        label={`${entry.purpose} redirect URI`}
+                        className="shrink-0"
+                      />
+                    </div>
+                    <p className="text-micro text-slate">{entry.purpose}</p>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-caption text-slate leading-relaxed">
+                Both use this same client. Registering only the first leaves sign-in
+                working while certifying a return fails at re-authentication.
+              </p>
             </div>
 
             <label className="block">

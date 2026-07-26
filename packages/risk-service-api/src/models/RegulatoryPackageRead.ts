@@ -120,6 +120,12 @@ export interface RegulatoryPackageRead {
    * @type {string}
    * @memberof RegulatoryPackageRead
    */
+  attestationState?: string;
+  /**
+   *
+   * @type {string}
+   * @memberof RegulatoryPackageRead
+   */
   bankId: string;
   /**
    *
@@ -317,6 +323,8 @@ export function RegulatoryPackageReadFromJSONTyped(
     approvals: (json["approvals"] as Array<any>).map(
       PackageApprovalReadFromJSON,
     ),
+    attestationState:
+      json["attestation_state"] == null ? undefined : json["attestation_state"],
     bankId: json["bank_id"],
     basis: ReturnBasisFromJSON(json["basis"]),
     createdAt: new Date(json["created_at"]),
@@ -362,6 +370,7 @@ export function RegulatoryPackageReadToJSONTyped(
     approvals: (value["approvals"] as Array<any>).map(
       PackageApprovalReadToJSON,
     ),
+    attestation_state: value["attestationState"],
     bank_id: value["bankId"],
     basis: ReturnBasisToJSON(value["basis"]),
     created_at: value["createdAt"].toISOString(),

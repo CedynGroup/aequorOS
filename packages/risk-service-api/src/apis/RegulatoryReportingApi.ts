@@ -19,10 +19,13 @@ import type {
   ErrorResponse,
   PackageApprovalDecisionCreate,
   PackageApprovalRequestCreate,
+  PackageComparisonRead,
   PackageStatusFilter,
   PackageSubmitCreate,
+  PackageVersionChainRead,
   RegulatoryArtifactListRead,
   RegulatoryArtifactRead,
+  RegulatoryArtifactVersionListRead,
   RegulatoryPackageCreate,
   RegulatoryPackageListRead,
   RegulatoryPackageRead,
@@ -52,14 +55,20 @@ import {
   PackageApprovalDecisionCreateToJSON,
   PackageApprovalRequestCreateFromJSON,
   PackageApprovalRequestCreateToJSON,
+  PackageComparisonReadFromJSON,
+  PackageComparisonReadToJSON,
   PackageStatusFilterFromJSON,
   PackageStatusFilterToJSON,
   PackageSubmitCreateFromJSON,
   PackageSubmitCreateToJSON,
+  PackageVersionChainReadFromJSON,
+  PackageVersionChainReadToJSON,
   RegulatoryArtifactListReadFromJSON,
   RegulatoryArtifactListReadToJSON,
   RegulatoryArtifactReadFromJSON,
   RegulatoryArtifactReadToJSON,
+  RegulatoryArtifactVersionListReadFromJSON,
+  RegulatoryArtifactVersionListReadToJSON,
   RegulatoryPackageCreateFromJSON,
   RegulatoryPackageCreateToJSON,
   RegulatoryPackageListReadFromJSON,
@@ -87,6 +96,12 @@ import {
   SubmissionPollReadFromJSON,
   SubmissionPollReadToJSON,
 } from "../models/index";
+
+export interface ComparePackageVersionsRequest {
+  bankId: string;
+  packageId: string;
+  against: string;
+}
 
 export interface CreateRegulatoryPackageRequest {
   bankId: string;
@@ -116,6 +131,11 @@ export interface DownloadRegulatoryArtifactRequest {
   artifactId: string;
 }
 
+export interface DownloadRegulatoryArtifactVersionRequest {
+  bankId: string;
+  versionId: string;
+}
+
 export interface ExportRegulatoryPackageRequest {
   bankId: string;
   packageId: string;
@@ -132,6 +152,11 @@ export interface GetEmailFallbackInstructionsRequest {
   packageId: string;
 }
 
+export interface GetPackageVersionChainRequest {
+  bankId: string;
+  packageId: string;
+}
+
 export interface GetRegulatoryPackageRequest {
   bankId: string;
   packageId: string;
@@ -139,6 +164,11 @@ export interface GetRegulatoryPackageRequest {
 
 export interface GetReportingSettingsRequest {
   bankId: string;
+}
+
+export interface ListPackageArtifactVersionsRequest {
+  bankId: string;
+  packageId: string;
 }
 
 export interface ListPackageArtifactsRequest {
@@ -220,6 +250,89 @@ export interface ValidateRegulatoryPackageRequest {
  *
  */
 export class RegulatoryReportingApi extends runtime.BaseAPI {
+  /**
+   * Line-item figures diff: the path package is the base, ``against`` the target.  Computed server-side against the two immutable snapshots, so it is available for every version — including one that was never exported — and so the comparison an examiner is shown is the one the platform computed.
+   * Compare Package Versions
+   */
+  async comparePackageVersionsRaw(
+    requestParameters: ComparePackageVersionsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PackageComparisonRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling comparePackageVersions().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling comparePackageVersions().',
+      );
+    }
+
+    if (requestParameters["against"] == null) {
+      throw new runtime.RequiredError(
+        "against",
+        'Required parameter "against" was null or undefined when calling comparePackageVersions().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["against"] != null) {
+      queryParameters["against"] = requestParameters["against"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/comparison`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PackageComparisonReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Line-item figures diff: the path package is the base, ``against`` the target.  Computed server-side against the two immutable snapshots, so it is available for every version — including one that was never exported — and so the comparison an examiner is shown is the one the platform computed.
+   * Compare Package Versions
+   */
+  async comparePackageVersions(
+    requestParameters: ComparePackageVersionsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PackageComparisonRead> {
+    const response = await this.comparePackageVersionsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Create Regulatory Package
    */
@@ -600,6 +713,75 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * Stream one archived revision, with its checksum re-verified first.
+   * Download Regulatory Artifact Version
+   */
+  async downloadRegulatoryArtifactVersionRaw(
+    requestParameters: DownloadRegulatoryArtifactVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<void>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling downloadRegulatoryArtifactVersion().',
+      );
+    }
+
+    if (requestParameters["versionId"] == null) {
+      throw new runtime.RequiredError(
+        "versionId",
+        'Required parameter "versionId" was null or undefined when calling downloadRegulatoryArtifactVersion().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-artifact-versions/{version_id}/download`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"version_id"}}`,
+            encodeURIComponent(String(requestParameters["versionId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.VoidApiResponse(response);
+  }
+
+  /**
+   * Stream one archived revision, with its checksum re-verified first.
+   * Download Regulatory Artifact Version
+   */
+  async downloadRegulatoryArtifactVersion(
+    requestParameters: DownloadRegulatoryArtifactVersionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<void> {
+    await this.downloadRegulatoryArtifactVersionRaw(
+      requestParameters,
+      initOverrides,
+    );
+  }
+
+  /**
    * Export Regulatory Package
    */
   async exportRegulatoryPackageRaw(
@@ -823,6 +1005,78 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * The whole supersession chain, each version with what it can still offer.  The package list carries statuses and timestamps only, which cannot answer what is asked about a superseded filing: who certified it, which file went to the regulator, and whether any file survives at all. This adds the signatures (withdrawn cycles flagged), both artifact surfaces, and the ``has_retrievable_files`` verdict a never-exported version needs.
+   * Get Package Version Chain
+   */
+  async getPackageVersionChainRaw(
+    requestParameters: GetPackageVersionChainRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PackageVersionChainRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getPackageVersionChain().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling getPackageVersionChain().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/version-chain`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PackageVersionChainReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The whole supersession chain, each version with what it can still offer.  The package list carries statuses and timestamps only, which cannot answer what is asked about a superseded filing: who certified it, which file went to the regulator, and whether any file survives at all. This adds the signatures (withdrawn cycles flagged), both artifact surfaces, and the ``has_retrievable_files`` verdict a never-exported version needs.
+   * Get Package Version Chain
+   */
+  async getPackageVersionChain(
+    requestParameters: GetPackageVersionChainRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PackageVersionChainRead> {
+    const response = await this.getPackageVersionChainRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Get Regulatory Package
    */
   async getRegulatoryPackageRaw(
@@ -946,6 +1200,78 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<ReportingSettingsRead> {
     const response = await this.getReportingSettingsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Every archived render and signed revision, oldest first.  The artifact list above is the upserted row per kind — always the unsigned base export. This is the chain: the base, then one revision per officer, each naming the signature that pinned it.
+   * List Package Artifact Versions
+   */
+  async listPackageArtifactVersionsRaw(
+    requestParameters: ListPackageArtifactVersionsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<RegulatoryArtifactVersionListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listPackageArtifactVersions().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling listPackageArtifactVersions().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/artifact-versions`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      RegulatoryArtifactVersionListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Every archived render and signed revision, oldest first.  The artifact list above is the upserted row per kind — always the unsigned base export. This is the chain: the base, then one revision per officer, each naming the signature that pinned it.
+   * List Package Artifact Versions
+   */
+  async listPackageArtifactVersions(
+    requestParameters: ListPackageArtifactVersionsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<RegulatoryArtifactVersionListRead> {
+    const response = await this.listPackageArtifactVersionsRaw(
       requestParameters,
       initOverrides,
     );
