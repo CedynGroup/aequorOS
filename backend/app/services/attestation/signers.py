@@ -4,14 +4,20 @@
 `cryptography` has no PKCS#11 backend, and in production the private key must
 never enter this process at all. So the raw signing operation sits behind a
 deliberately narrow port — one method to sign a digest, one to fetch the
-certificate — with three implementations of very different trustworthiness:
+certificate — with four implementations of very different trustworthiness:
 
 ===========  ==========================================================
 backend      custody
 ===========  ==========================================================
+``openbao``  Production, and the one this platform ships with. Keys live
+             in a self-hosted OpenBao Transit mount, created
+             non-exportable; we hold an AppRole credential and a key
+             name. Implemented in ``attestation.openbao``.
 ``pkcs11``   Production. Key generated inside the HSM/token with
              ``CKA_SENSITIVE=true`` / ``CKA_EXTRACTABLE=false``; we hold
              a label, never key material. Requires the ``hsm`` extra.
+             **Written but never executed** — no token exists to run it
+             against, so treat its correctness as unproven.
 ``kms``      Alternative production backend. **Not built** — the stub
              raises rather than pretend, see :class:`KmsRawSigner`.
 ``software`` Dev/test ONLY. A sealed key on the application host, which
@@ -20,7 +26,7 @@ backend      custody
              production (§3.3, legal register L1).
 ===========  ==========================================================
 
-Two invariants hold across all three:
+Two invariants hold across all four:
 
 * **No key material in the database.** ``signer_keys`` stores a ``key_ref``,
   the issued certificate and metadata; nothing else. The soft-key store is a
@@ -789,6 +795,13 @@ def get_raw_signer(settings: Settings | None = None) -> RawSigner:
     resolved = settings if settings is not None else get_settings()
     attestation = resolved.attestation
     backend = str(attestation.signing_backend).strip().lower()
+    if backend == "openbao":
+        # Imported here, not at module scope: attestation.openbao imports the
+        # port and the typed errors from this module, so a top-level import
+        # would be circular.
+        from app.services.attestation.openbao import build_openbao_signer  # noqa: PLC0415
+
+        return build_openbao_signer(resolved)
     if backend == "pkcs11":
         return Pkcs11RawSigner(
             module_path=attestation.pkcs11_module_path or "",
@@ -803,7 +816,8 @@ def get_raw_signer(settings: Settings | None = None) -> RawSigner:
     if backend == "software":
         return SoftwareRawSigner(settings=resolved)
     raise SignerBackendUnavailable(
-        f"Unknown SIGNING_BACKEND={backend!r}; expected 'pkcs11', 'kms' or 'software'."
+        f"Unknown SIGNING_BACKEND={backend!r}; expected 'openbao', 'pkcs11', 'kms' "
+        "or 'software'."
     )
 
 

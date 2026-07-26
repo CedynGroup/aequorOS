@@ -11,7 +11,7 @@ from app.core.errors import (
     UnhandledExceptionMiddleware,
     register_exception_handlers,
 )
-from app.core.logging import configure_logging
+from app.core.logging import configure_logging, logger
 from app.core.request_id import RequestIdMiddleware
 from app.worker import start_inprocess_worker
 
@@ -21,31 +21,66 @@ def generate_operation_id(route: APIRoute) -> str:
     return parts[0] + "".join(part.title() for part in parts[1:])
 
 
-def _require_signing_in_production(settings: Settings) -> None:
-    """A production deployment that cannot sign cannot file. Say so at boot.
+def _warn_if_signing_unconfigured(settings: Settings) -> None:
+    """Log the signing gap at startup. Do NOT refuse to boot.
 
-    Signing is required by default, so an unset ``SIGNER_ID_PEPPER`` or
-    ``ATTESTATION_SIGNING_ENABLED`` means every statutory return is unfilable.
-    That must surface when the container starts, not when an officer opens a
-    return on the morning it is due. Non-production keeps running so a developer
-    can work on unrelated things; the API reports the same gap per request.
+    An earlier version raised here, and that was disproportionate: on
+    2026-07-26 a production deploy with no ``SIGNER_ID_PEPPER`` took down
+    liquidity, FX, Basel and treasury — every capability unrelated to filing —
+    and left nobody able to sign in and relax the signing policy, which is the
+    documented way out. The guard removed the escape hatch it pointed at.
+
+    The property worth keeping is "nobody discovers this at a filing deadline",
+    and two narrower mechanisms already provide it: ``/health/ready`` fails, so
+    a deploy or an orchestrator's health check surfaces it immediately, and the
+    filing path itself refuses via ``ensure_signing_configured`` with a message
+    naming the settings. Neither costs anything to a deployment that is not
+    filing today.
     """
-    if settings.app.app_env != "production":
-        return
     gaps = settings.attestation.signing_readiness_gaps()
     if gaps:
-        msg = (
-            "Regulatory returns require signatures, so this deployment cannot "
-            f"file anything until {' and '.join(gaps)} is configured. Set them, "
-            "or configure a signature-optional signing policy per return."
+        logger.bind(app_env=settings.app.app_env, missing=gaps).warning(
+            "Attestation signing is not configured, so no regulatory return can "
+            "be certified or filed. Every other capability is unaffected."
         )
-        raise RuntimeError(msg)
+
+
+def _warn_if_trust_is_unanchored(settings: Settings) -> None:
+    """Say out loud when signatures will be verified against their own chain.
+
+    An OpenBao deployment issues every officer certificate from its PKI mount,
+    so an institutional root EXISTS — and if nobody points
+    ``ATTESTATION_TRUST_ROOTS`` at it, verification silently falls back to the
+    chain each signature carries. That still proves the certificate was issued
+    by the authority it names; it does not prove the authority is one the
+    institution recognises, and the two are easy to confuse from a green report.
+    The verifier reports the difference (``trust_anchor: embedded_chain``) and
+    this makes sure an operator hears it before an examiner does.
+
+    A warning, not a refusal: unlike a missing signing key this does not stop a
+    return being filed, and taking the API down over it would repeat the mistake
+    ``_warn_if_signing_unconfigured`` documents. ``scripts/bootstrap_openbao_pki.py``
+    writes the anchor file and prints the line to set.
+    """
+    attestation = settings.attestation
+    if attestation.signing_backend != "openbao" or attestation.trust_roots_configured:
+        return
+    logger.bind(
+        pki_mount=attestation.openbao_pki_mount, missing="ATTESTATION_TRUST_ROOTS"
+    ).warning(
+        "Officer certificates are issued by the OpenBao PKI mount, but "
+        "ATTESTATION_TRUST_ROOTS is unset: verification will anchor on the chain "
+        "each signature carries rather than on the institution's own root, and "
+        "signed PDFs cannot embed long-term validation material. Run "
+        "scripts/bootstrap_openbao_pki.py --trust-roots <path> to write the anchor."
+    )
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.logging.log_level)
-    _require_signing_in_production(settings)
+    _warn_if_signing_unconfigured(settings)
+    _warn_if_trust_is_unanchored(settings)
 
     app = FastAPI(
         title=settings.app.app_name,

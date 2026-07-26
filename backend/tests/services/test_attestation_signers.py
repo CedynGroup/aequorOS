@@ -605,10 +605,15 @@ def test_an_unsupported_algorithm_is_refused(db_session: Session) -> None:
         service.issue(signer_id=SIGNER_ID, algorithm="ed25519")
 
 
-def test_self_signed_enrolment_is_refused_on_a_non_software_backend(
+def test_self_signed_enrolment_is_refused_on_a_backend_that_cannot_generate(
     db_session: Session,
 ) -> None:
-    """We cannot generate a key inside someone else's HSM from here."""
+    """We cannot generate a key inside someone else's HSM from here.
+
+    The software store and OpenBao Transit both can — each mints the key in its
+    own custody — so the refusal is about backends that hold key material we
+    have no way to create, not about "not software".
+    """
     _seed_identity(db_session, signer_id=SIGNER_ID, org_id=ORG_1, user_id=USER_1)
     service = SignerKeyService(
         db_session,
@@ -616,7 +621,7 @@ def test_self_signed_enrolment_is_refused_on_a_non_software_backend(
         signer=Pkcs11RawSigner(module_path="/opt/vendor/pkcs11.so"),
     )
 
-    with pytest.raises(SignerKeyError, match="only available on the software backend"):
+    with pytest.raises(SignerKeyError, match="software and OpenBao backends"):
         service.issue(signer_id=SIGNER_ID)
 
 

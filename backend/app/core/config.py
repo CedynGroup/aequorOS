@@ -4,12 +4,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AppEnv = Literal["local", "test", "staging", "production"]
 StorageBackend = Literal["s3"]
-SigningBackend = Literal["software", "pkcs11", "kms"]
+SigningBackend = Literal["software", "pkcs11", "kms", "openbao"]
 
 SETTINGS_CONFIG = SettingsConfigDict(
     env_file=".env",
@@ -103,12 +103,41 @@ class AttestationSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
     signer_id_pepper: str | None = Field(default=None, alias="SIGNER_ID_PEPPER")
-    #: pkcs11 | kms | software. "software" is refused when APP_ENV=prod.
+    #: openbao | pkcs11 | kms | software. "software" is refused when APP_ENV=prod;
+    #: "openbao" is the production backend this deployment actually ships with.
     signing_backend: SigningBackend = Field(default="software", alias="SIGNING_BACKEND")
     pkcs11_module_path: str | None = Field(default=None, alias="PKCS11_MODULE_PATH")
     pkcs11_token_label: str | None = Field(default=None, alias="PKCS11_TOKEN_LABEL")
     pkcs11_slot: int | None = Field(default=None, alias="PKCS11_SLOT")
     pkcs11_user_pin: str | None = Field(default=None, alias="PKCS11_USER_PIN")
+    #: Self-hosted OpenBao (Linux Foundation fork of HashiCorp Vault) reached over
+    #: its HTTP API — the Transit engine signs, the key never leaves the server
+    #: (app/services/attestation/openbao.py).
+    openbao_addr: str | None = Field(default=None, alias="OPENBAO_ADDR")
+    #: AppRole credentials. The secret id is a CREDENTIAL: it is never logged,
+    #: never put in an exception message, and never written to an audit event.
+    openbao_role_id: str | None = Field(default=None, alias="OPENBAO_ROLE_ID")
+    openbao_secret_id: str | None = Field(default=None, alias="OPENBAO_SECRET_ID")
+    openbao_transit_mount: str = Field(default="transit", alias="OPENBAO_TRANSIT_MOUNT")
+    #: The ISSUING PKI mount (the intermediate CA) every officer certificate is
+    #: signed by, and its role. There is no self-signing fallback: a deployment
+    #: whose mount or role is absent fails enrolment loudly rather than storing a
+    #: certificate that chains to nothing. Both are created by
+    #: scripts/bootstrap_openbao_pki.py, whose defaults these match.
+    openbao_pki_mount: str = Field(default="pki-int", alias="OPENBAO_PKI_MOUNT")
+    openbao_pki_role: str = Field(default="aequoros-signer", alias="OPENBAO_PKI_ROLE")
+    #: Sent as X-Vault-Namespace when set. OpenBao 2.x has namespaces, so an
+    #: unset-but-named namespace is a 404 rather than a silently ignored header —
+    #: leave this unset unless the server actually defines one.
+    openbao_namespace: str | None = Field(default=None, alias="OPENBAO_NAMESPACE")
+    #: PEM CA bundle used to verify the OpenBao server's TLS certificate. A
+    #: self-hosted OpenBao normally presents a private CA's certificate, and the
+    #: alternative to configuring the CA is disabling verification — which would
+    #: make the signing channel interceptable. There is deliberately no
+    #: "insecure" switch.
+    openbao_ca_cert: str | None = Field(default=None, alias="OPENBAO_CA_CERT")
+    #: Explicit and finite: a hung OpenBao must not hold a signing request open.
+    openbao_timeout_seconds: float = Field(default=10.0, alias="OPENBAO_TIMEOUT_SECONDS")
     #: Sealed soft-key store for the DEV/TEST backend. On disk, never in the
     #: database: signer_keys holds custody metadata only (§3.4).
     software_key_dir: Path = Field(
@@ -138,6 +167,11 @@ class AttestationSettings(BaseSettings):
         "pkcs11_user_pin",
         "kms_provider",
         "kms_key_id",
+        "openbao_addr",
+        "openbao_role_id",
+        "openbao_secret_id",
+        "openbao_namespace",
+        "openbao_ca_cert",
         mode="before",
     )
     @classmethod
@@ -145,6 +179,27 @@ class AttestationSettings(BaseSettings):
         if value is not None and not value.strip():
             return None
         return value
+
+    @field_validator("openbao_transit_mount", mode="before")
+    @classmethod
+    def normalize_transit_mount(cls, value: str | None) -> str:
+        """An empty mount would build ``/v1//sign/…`` and 404 at signing time."""
+        if value is None or not str(value).strip():
+            return "transit"
+        return str(value).strip().strip("/")
+
+    @field_validator("openbao_pki_mount", "openbao_pki_role", mode="before")
+    @classmethod
+    def normalize_pki_path(cls, value: str | None, info: ValidationInfo) -> str:
+        """Blank reads as "unset", which means the documented default.
+
+        Same reason as the transit mount: an empty string would build a URL that
+        404s at enrolment, and a deployment that left the variable in its .env
+        with no value means "I did not configure this", not "use no mount".
+        """
+        if value is None or not str(value).strip():
+            return "pki-int" if info.field_name == "openbao_pki_mount" else "aequoros-signer"
+        return str(value).strip().strip("/")
 
     @property
     def identities_available(self) -> bool:
@@ -164,13 +219,42 @@ class AttestationSettings(BaseSettings):
         return self.signing_enabled and self.identities_available
 
     def signing_readiness_gaps(self) -> list[str]:
-        """The specific settings that must be supplied before signing works."""
+        """The specific settings that must be supplied before signing works.
+
+        Backend credentials belong here for the same reason ``SIGNER_ID_PEPPER``
+        does: with ``SIGNING_BACKEND=openbao`` and no address or AppRole, the
+        ceremony fails at the moment an officer presses sign, which is the
+        latest and worst moment to learn it. ``/health/ready`` and
+        ``ensure_signing_configured`` both read this list, so a deploy surfaces
+        the gap instead of a filing deadline doing it.
+
+        Only the SELECTED backend is checked. An unset ``OPENBAO_ADDR`` on a
+        pkcs11 deployment is not a gap, it is an unused setting.
+        """
         gaps: list[str] = []
         if not self.signing_enabled:
             gaps.append("ATTESTATION_SIGNING_ENABLED")
         if not self.identities_available:
             gaps.append("SIGNER_ID_PEPPER")
+        if self.signing_backend == "openbao":
+            if self.openbao_addr is None:
+                gaps.append("OPENBAO_ADDR")
+            if self.openbao_role_id is None:
+                gaps.append("OPENBAO_ROLE_ID")
+            if self.openbao_secret_id is None:
+                gaps.append("OPENBAO_SECRET_ID")
         return gaps
+
+    @property
+    def trust_roots_configured(self) -> bool:
+        """Whether an institutional anchor was named at all.
+
+        Deliberately not "whether it loads": callers that need the anchors call
+        :meth:`load_trust_roots`, which fails loudly on a bad path. This answers
+        the different question the startup warning asks — has anybody told this
+        deployment what its root is — without touching the filesystem.
+        """
+        return self.trust_roots_path is not None
 
     def load_trust_roots(self) -> list[bytes]:
         """Configured PEM trust anchors, or an empty list.

@@ -82,6 +82,19 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # so boolean switches are blanked with "0".
     monkeypatch.setenv("SIGNER_ID_PEPPER", "")
     monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
+    # Same guard for the OpenBao backend's endpoint and AppRole: a developer who
+    # points their .env at a live OpenBao would otherwise flip the tests that
+    # assert "this deployment cannot sign" into the configured branch. The
+    # OpenBao suite sets these itself, from OPENBAO_TEST_ADDR.
+    monkeypatch.setenv("OPENBAO_ADDR", "")
+    monkeypatch.setenv("OPENBAO_ROLE_ID", "")
+    monkeypatch.setenv("OPENBAO_SECRET_ID", "")
+    # Pinned rather than blanked — the third blanking value: a Literal field
+    # rejects "" outright, so hermeticity here means naming the default. It
+    # matters because signing_readiness_gaps() branches on the backend, and
+    # /health/ready reads that list; a developer's SIGNING_BACKEND=openbao would
+    # otherwise add gaps to suites that have nothing to do with signing.
+    monkeypatch.setenv("SIGNING_BACKEND", "software")
     get_settings.cache_clear()
     get_engine.cache_clear()
     yield
