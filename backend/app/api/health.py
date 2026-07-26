@@ -60,6 +60,25 @@ def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResp
             detail="Storage is not configured.",
         )
 
+    # Signing is required for every return by default, so a production deployment
+    # that cannot sign cannot file. This check is what makes that visible at
+    # deploy time. `create_app` used to raise instead, which took the whole API
+    # down over an unrelated capability and locked out the very administrator who
+    # could have relaxed the policy — see `_warn_if_signing_unconfigured`.
+    #
+    # Only production: local and test deployments legitimately run without a
+    # signing key, and failing their readiness probe would be noise.
+    signing_gaps = settings.attestation.signing_readiness_gaps()
+    if signing_gaps and settings.app.app_env == "production":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Attestation signing is not configured "
+                f"({' and '.join(signing_gaps)}), so no regulatory return can be "
+                "certified or filed. Other capabilities are unaffected."
+            ),
+        )
+
     return ReadinessResponse(
         service=settings.app.app_name,
         environment=settings.app.app_env,

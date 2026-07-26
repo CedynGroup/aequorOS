@@ -14,15 +14,21 @@ def test_create_app() -> None:
     assert app.title == "risk-service"
 
 
-def test_production_refuses_to_start_when_it_cannot_sign(
+def test_production_still_starts_when_it_cannot_sign(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A production deployment that cannot sign cannot file — fail at boot.
+    """An unconfigured signing key must not take the whole platform down.
 
-    Signing is required for every return by default, so an unset pepper or
-    disabled signing means no statutory return can leave the platform. The
-    operator must learn that when the container starts, not when an officer
-    opens a return on the morning it is due.
+    This asserts the absence of a guard that used to be here, so it needs its
+    reason recorded. `create_app` raised on this condition until 2026-07-26,
+    when a production deploy without `SIGNER_ID_PEPPER` crash-looped the API:
+    liquidity, FX, Basel and treasury all went down over a capability none of
+    them use, and no administrator could sign in to relax the signing policy —
+    the documented way out. The guard removed the escape hatch it pointed at.
+
+    "Nobody discovers this at a filing deadline" is preserved by two narrower
+    mechanisms, each with its own test: `/health/ready` fails in production, and
+    the filing path refuses via `ensure_signing_configured`.
     """
     monkeypatch.setenv("APP_ENV", "production")
     # setenv("") not delenv: deleting lets pydantic-settings read the value
@@ -31,32 +37,79 @@ def test_production_refuses_to_start_when_it_cannot_sign(
     monkeypatch.setenv("SIGNER_ID_PEPPER", "")
     get_settings.cache_clear()
 
-    with pytest.raises(RuntimeError) as excinfo:
-        create_app()
-
-    # The message must name the settings — "misconfigured" is not actionable.
-    assert "ATTESTATION_SIGNING_ENABLED" in str(excinfo.value)
-    assert "SIGNER_ID_PEPPER" in str(excinfo.value)
+    assert create_app().title == "risk-service"
     get_settings.cache_clear()
 
 
-def test_non_production_still_starts_without_signing_configured(
+def test_an_openbao_deployment_with_no_trust_anchor_says_so_at_startup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Developers work on unrelated things without a signing key.
+    """An institutional root exists on this backend; only the pointer is missing.
 
-    The gap is still reported per request by the submission gate
-    (`signing_not_configured`), so it is surfaced rather than hidden — it just
-    does not stop the process from starting outside production.
+    Every officer certificate is issued by the OpenBao PKI mount, so with
+    `ATTESTATION_TRUST_ROOTS` unset the verifier falls back to the chain each
+    signature carries and reports `trust_anchor: "embedded_chain"` — issued by
+    the authority it names, which is NOT the same as issued by an authority the
+    institution recognises. A green report makes the two easy to confuse, so an
+    operator is told before an examiner is. A warning, not a refusal: it does not
+    stop a return being filed, and taking the API down over it would repeat the
+    2026-07-26 outage above.
     """
-    monkeypatch.setenv("APP_ENV", "staging")
-    # setenv("") not delenv: deleting lets pydantic-settings read the value
-    # back out of a developer's .env (see tests/conftest.py).
+    from loguru import logger  # noqa: PLC0415
+
+    monkeypatch.setenv("SIGNING_BACKEND", "openbao")
+    monkeypatch.setenv("ATTESTATION_TRUST_ROOTS", "")
+    # `configure_logging` resets loguru's handlers, which would drop the sink
+    # below before anything could be written to it.
+    monkeypatch.setattr("app.main.configure_logging", lambda level: None)
+    get_settings.cache_clear()
+
+    records: list[str] = []
+    sink_id = logger.add(lambda message: records.append(str(message)), level="WARNING")
+    try:
+        create_app()
+    finally:
+        logger.remove(sink_id)
+        get_settings.cache_clear()
+
+    assert any("ATTESTATION_TRUST_ROOTS" in record for record in records)
+
+
+def test_ready_fails_in_production_when_signing_is_unconfigured(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Readiness is what surfaces the gap at deploy time now.
+
+    It has to name the missing settings and say the blast radius is limited to
+    filing, because the operator reading it is deciding whether to roll back.
+    """
+    monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
     monkeypatch.setenv("SIGNER_ID_PEPPER", "")
     get_settings.cache_clear()
 
-    assert create_app().title == "risk-service"
+    response = db_client.get("/api/health/ready")
+
+    assert response.status_code == 503
+    message = response.json()["error"]["message"]
+    assert "ATTESTATION_SIGNING_ENABLED" in message
+    assert "SIGNER_ID_PEPPER" in message
+    assert "unaffected" in message
+    get_settings.cache_clear()
+
+
+def test_ready_ignores_the_signing_gap_outside_production(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A developer without a signing key has a healthy service, not a red probe."""
+    monkeypatch.setenv("APP_ENV", "staging")
+    monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
+    monkeypatch.setenv("SIGNER_ID_PEPPER", "")
+    get_settings.cache_clear()
+
+    assert db_client.get("/api/health/ready").status_code == 200
     get_settings.cache_clear()
 
 

@@ -25,12 +25,39 @@ function decodeJwt(token: string): Record<string, unknown> {
   return JSON.parse(json) as Record<string, unknown>;
 }
 
+/**
+ * Marks a sign-in failure as "the service could not answer", not "these
+ * credentials are wrong".
+ *
+ * On 2026-07-26 the production API crash-looped and every attempt to sign in
+ * read "Invalid email or password" — the operator was told their password was
+ * wrong while the backend was not running at all. A 502 from the proxy, a
+ * refused connection and a genuine 401 all collapsed into one `null` here.
+ */
+export class AuthServiceUnavailable extends Error {
+  constructor(detail: string) {
+    super(`service_unavailable: ${detail}`);
+    this.name = 'AuthServiceUnavailable';
+  }
+}
+
 async function backendTokens(path: string, body: unknown) {
-  const res = await fetch(`${apiOrigin}/api/v1/auth/${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${apiOrigin}/api/v1/auth/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (cause) {
+    // DNS failure, refused connection, TLS error, timeout — nothing to do with
+    // what the user typed.
+    throw new AuthServiceUnavailable(cause instanceof Error ? cause.message : 'unreachable');
+  }
+  // 5xx is the service failing; only a 4xx is a statement about the credentials.
+  if (res.status >= 500) {
+    throw new AuthServiceUnavailable(`status ${res.status}`);
+  }
   if (!res.ok) return null;
   return (await res.json()) as { access_token: string; refresh_token: string };
 }

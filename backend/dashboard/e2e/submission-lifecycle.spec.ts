@@ -146,3 +146,38 @@ test.describe('submission pipeline', () => {
     await viewer.close();
   });
 });
+
+/**
+ * The login screen must not blame the operator for an outage.
+ *
+ * On 2026-07-26 the production API crash-looped and every sign-in attempt read
+ * "Invalid email or password" — the operator was told their password was wrong
+ * while the backend was not running. `backendTokens` collapsed a 5xx, a refused
+ * connection and a genuine 401 into one null.
+ *
+ * NextAuth distinguishes them: a rejected credential is `CredentialsSignin`, an
+ * unreachable backend is `Configuration` (verified against a dev server pointed
+ * at a closed port). This asserts the credential branch — the half that can be
+ * driven hermetically — so a change that reverts to one message for both is
+ * caught here rather than in production.
+ */
+test.describe('sign-in failures', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('a rejected password says so, and does not claim an outage', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByLabel('Email').fill('e2e.analyst@aequoros.example');
+    await page.getByLabel('Password').fill('deliberately-wrong-not-the-fixture-password');
+    await page.getByRole('button', { name: /^Sign in/ }).click();
+
+    // Scoped to the form: Next's route announcer also carries role="alert"
+    // and is empty, which silently swallows a bare getByRole('alert').
+    await expect(
+      page.locator('form p[role="alert"]')
+    ).toHaveText('Invalid email or password.');
+    // The outage copy must NOT appear for a credential rejection: the backend
+    // answered, so telling the operator the service is unreachable would be the
+    // same defect in the opposite direction.
+    await expect(page.getByText(/could not reach the aequoros service/i)).toHaveCount(0);
+  });
+});

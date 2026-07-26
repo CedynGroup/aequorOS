@@ -1,0 +1,75 @@
+# =============================================================================
+# OpenBao — the signing key store and certificate authority for attestation.
+#
+# Runs on its OWN host, not beside the API. That separation is the point: if the
+# application VPS is compromised (it terminates public traffic, so it is the more
+# exposed surface) the attacker holds an AppRole token with a scoped policy, not
+# key material. They can ask OpenBao to sign, which is loud and auditable, rather
+# than walking off with a key.
+#
+# OpenBao is the Linux Foundation fork of HashiCorp Vault, taken from the last
+# MPL-2.0 release. The licence is why it is here rather than Vault: BUSL restricts
+# offering the software as a competing service, which is a question a commercial
+# product should not have to answer for every bank's procurement review.
+#
+# Coolify: Base Directory /deploy/openbao, Compose Location
+# /docker-compose.openbao.yml.
+#
+# NO variable interpolation anywhere in this file, comments included. Coolify
+# parses compose text and auto-seeds a UI environment row for every dollar-brace
+# reference it finds — the 2026-07-21 incident stored guard message text AS
+# VALUES and re-injected duplicate rows on every deploy until the resource had to
+# be recreated. Referencing nothing gives the parser nothing to seed.
+#
+# Deployment, initialisation, unseal and backup: docs/openbao-deployment.md.
+# Nothing here initialises or unseals the server — both are deliberate human acts
+# (see the runbook), because the unseal shares must never live on the host they
+# unseal.
+# =============================================================================
+
+services:
+  openbao:
+    # Pinned, never "latest": an unattended major upgrade of the store that holds
+    # every signing key is not a thing to discover after a restart.
+    image: openbao/openbao:2.6.1
+    restart: unless-stopped
+    # No IPC_LOCK: OpenBao 2.x dropped mlock, so the capability would be cargo
+    # cult. Keeping keys out of swap moved to the host — see the runbook.
+    command: ["server", "-config=/openbao/config/openbao.hcl"]
+    volumes:
+      # Integrated Raft storage. Chosen over the file backend even for a single
+      # node: adding the second and third node later is then a join rather than a
+      # storage migration, and signing SHOULD be highly available before a bank
+      # depends on it (DBK is due 10:00 T+1, five days a week).
+      # Mounted where the image already owns the directory — see openbao.hcl.
+      - openbao-data:/openbao/file
+      - ./openbao.hcl:/openbao/config/openbao.hcl:ro
+    expose:
+      - "8200"
+    # Liveness, deliberately NOT readiness. `sealedcode=200&uninitcode=200` makes
+    # a sealed or uninitialised server report healthy, because both are states a
+    # human resolves rather than container failures — and an unhealthy container
+    # gets restarted, which would make it impossible to ever unseal. Every fresh
+    # deploy starts sealed, so the naive check (`bao status`, which exits
+    # non-zero while sealed) deadlocks the first deploy.
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - -O
+        - /dev/null
+        - http://127.0.0.1:8200/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      # Literal, not a variable reference — see the header note about Coolify
+      # seeding a UI row for every dollar-brace it finds. This is the only value
+      # OpenBao needs from the environment, so the service takes NO .env file:
+      # the `bao` CLI defaults to HTTPS, and TLS terminates at the proxy.
+      BAO_ADDR: "http://127.0.0.1:8200"
+
+volumes:
+  openbao-data:

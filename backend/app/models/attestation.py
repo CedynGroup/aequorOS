@@ -65,7 +65,7 @@ SIGNATURE_METHODS: tuple[str, ...] = (
     "detached_rsa_pss_sha256",
 )
 SIGNER_KEY_STATUSES: tuple[str, ...] = ("active", "rotated", "revoked")
-SIGNER_KEY_BACKENDS: tuple[str, ...] = ("pkcs11", "kms", "software")
+SIGNER_KEY_BACKENDS: tuple[str, ...] = ("pkcs11", "kms", "software", "openbao")
 APPEARANCE_KINDS: tuple[str, ...] = ("drawn", "typed")
 #: Keys, not font names — the catalogue that resolves each one to a bundled
 #: OFL script face or a PDF standard-14 face is

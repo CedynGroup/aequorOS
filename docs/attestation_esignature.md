@@ -624,6 +624,130 @@ CA requires it) — configurable per signer key, recorded in
 | **Revocation** | On deprovisioning or suspected compromise: revoke via CA (CRL/OCSP) and disable the key object. Past signatures survive because PAdES B-LTA embeds a trusted timestamp proving the signature predates revocation, plus the validation material as it stood. |
 | **Custody of the HSM credential** | The PKCS#11 PIN lives in the existing encrypted vault pattern (`CREDENTIAL_VAULT_MASTER_KEY`), retrieved per operation and discarded — the same discipline already used for market-data and ORASS credentials. |
 
+#### The OpenBao Transit backend (`SIGNING_BACKEND=openbao`)
+
+The custody backend a deployment actually ships with, and the only one that has
+run in production shape (`app/services/attestation/openbao.py`; as-built delta
+**D15**). Self-hosted OpenBao — the Linux Foundation's MPL-2.0 fork of
+HashiCorp Vault — on a dedicated host, one Transit key per officer, created
+`exportable=false` / `allow_plaintext_backup=false`. The API has no operation
+that returns a private key, so this process holds an AppRole credential and a
+key NAME and nothing else.
+
+| Setting | Meaning |
+|---|---|
+| `OPENBAO_ADDR` | Base URL of the OpenBao server, e.g. `https://bao.internal:8200`. Required. |
+| `OPENBAO_ROLE_ID` | AppRole role id. Required. |
+| `OPENBAO_SECRET_ID` | AppRole secret id. **A credential** — never logged, never in an exception message, never in an audit event (asserted in `tests/services/test_attestation_openbao.py`). Required. |
+| `OPENBAO_TRANSIT_MOUNT` | Transit mount path. Default `transit`. |
+| `OPENBAO_NAMESPACE` | Sent as `X-Vault-Namespace`. OpenBao 2.x **has** namespaces, so naming one that does not exist is a 404 — leave unset unless the server defines it. |
+| `OPENBAO_CA_CERT` | Path to the PEM CA bundle that verifies the server's TLS certificate. A self-hosted OpenBao normally presents a private CA's certificate. There is deliberately no "skip verification" switch. |
+| `OPENBAO_TIMEOUT_SECONDS` | Per-request timeout. Default `10`. |
+| `OPENBAO_PKI_MOUNT` | The **issuing** PKI mount (the intermediate CA) every officer certificate is signed by. Default `pki-int`. |
+| `OPENBAO_PKI_ROLE` | The PKI role issuance goes through. Default `aequoros-signer`. |
+
+All three required settings are reported by `signing_readiness_gaps()`, so
+`/health/ready` fails and `ensure_signing_configured` refuses the filing path
+when any is missing — the gap surfaces at deploy time rather than at a deadline.
+
+**Key naming** is `aequoros-<organization_id>-<signer_id>-<nonce>`: tenant-
+prefixed so an ACL policy scopes one tenant with a trailing glob
+(`path "transit/sign/aequoros-OR-XXXXXXXX-*"`) without Enterprise namespaces,
+and nonce-suffixed so a rotation never reuses a retired name. Hyphens, not
+slashes: Transit's own route matches `^keys/(?P<name>\w(([\w-.]+)?\w)?)$` and
+admits none.
+
+**On the wire.** Signing is `POST {addr}/v1/{mount}/sign/{key}` with
+`{"input": b64(digest), "prehashed": true, "hash_algorithm": "sha2-256",
+"marshaling_algorithm": "asn1"}` — ASN.1/DER because that is what CMS and
+`cryptography` read; the `jws` alternative is a url-safe raw `(r, s)` pair
+neither can. The response is `data.signature = "vault:v<n>:<base64>"` (OpenBao
+keeps HashiCorp's wire prefix), stripped and decoded to raw DER. RSA keys send
+`signature_algorithm: "pss"` and `salt_length: "hash"` instead, so both custody
+backends emit the same shape. Authentication is `POST /v1/auth/approle/login`;
+the resulting token is cached, renewed before its lease expires, and re-minted
+once on a 403 — a dead token and a policy denial look identical on the wire, so
+the retry is what tells them apart.
+
+#### Certificates — issued by the PKI engine, never self-signed
+
+An earlier revision assembled the certificate locally and signed it *through*
+the Transit key. That produced a certificate genuinely the key's own and
+**self-signed**: verifiable, chaining to nothing, trusted by nobody (L4). It is
+gone. `OpenBaoPkiIssuer` now submits a CSR to the PKI mount and files what comes
+back — there is no self-signing branch left on this backend, because a
+deployment that asked for CA-issued certificates and silently got self-signed
+ones would misstate its trust story exactly the way `get_raw_signer` refuses to.
+
+**The CSR problem.** A CSR must be signed by the private key to prove
+possession, and Transit will not release it; `cryptography` has no
+external-signing path for `CertificateSigningRequestBuilder`. So the
+`CertificationRequestInfo` (subject, SubjectPublicKeyInfo from the Transit public
+key, no attributes) is built with `asn1crypto`, its DER hashed with SHA-256, and
+that digest signed through the same `sign_digest` the detached attestation uses.
+The assembled `CertificationRequest` is then **parsed back and verified** — the
+signature must check against the embedded public key, and that key must be the
+one OpenBao holds — before anything is submitted. RSA keys carry explicit
+`RSASSA-PSS-params` (SHA-256/MGF1-SHA-256/salt 32): a bare `rsassa_pss` OID means
+SHA-1 with a 20-byte salt (RFC 4055), which a lenient CA might well accept.
+
+**Where the signer id lives.** Subject `serialNumber` (X.520 2.5.4.5), sent as
+the `serial_number` parameter and pinned by the role's
+`allowed_serial_numbers=["SGN-*"]`. Chosen over a SAN `otherName` because it is
+the X.520 slot for a registered identifier, `signer_subject()` already uses it,
+every `openssl x509` dump prints it — and, decisively, because the CA can
+*constrain* it: a role that has not been granted the pattern refuses the request
+rather than issuing a certificate nobody can attribute. OpenBao composes the
+subject from the role plus the request (not from the CSR), so the issued
+certificate is re-read and the id checked before it is stored.
+
+**Issuance** is `POST {addr}/v1/{pki_mount}/sign/{role}` — role-constrained
+rather than `sign-verbatim`, so the CA and not the application decides key usage
+(`digitalSignature` + `nonRepudiation`), lifetime, and which subjects are
+acceptable. `data.ca_chain` is re-ordered locally leaf-ward and stored in
+`signer_keys.certificate_chain_pem`; a chain that does not actually issue the
+certificate fails the enrolment. The leaf and its issuers are also filed against
+the Transit key (`set-certificate`), so the mount stays self-describing.
+
+**Revocation** is `POST {addr}/v1/{pki_mount}/revoke` with the certificate's
+colon-hex serial, derived from the certificate rather than remembered from
+issuance. It runs *before* the `signer_keys` row is touched and its failure
+aborts the transaction: a row that says `revoked` while the certificate still
+verifies is theatre, and "does the departed officer's certificate still check
+out?" is the question an auditor actually asks. The audit event records what the
+CA did — `revoked`, `unknown_to_ca` (a certificate this mount never issued, e.g.
+one enrolled from the bank's own CA), or `no_ca` (the development soft-key
+backend).
+
+**Trust anchoring.** The verifier's anchors come from `ATTESTATION_TRUST_ROOTS`,
+a path an operator populates — *not* from a startup fetch, so verification is
+deterministic and works with OpenBao unreachable. The one manual link is closed
+by the bootstrap script: `--trust-roots <path>` writes the root the issuing
+mount chains to, resolved by the same code path as
+`OpenBaoPkiIssuer.trust_anchor()`, and prints the line to set. If it is left
+unset, `create_app` logs a warning naming the setting, and the verifier reports
+`trust_anchor: embedded_chain` — the distinction between "issued by the
+authority it names" and "issued by an authority this institution recognises"
+stays visible rather than being quietly assumed.
+
+**Operational setup.** None of this exists on a fresh server and none of it can
+be created by the application's AppRole. `scripts/bootstrap_openbao_pki.py`
+mounts the root and issuing PKI engines, generates the root (10y) and the
+intermediate (5y), creates the signing role, configures AIA/CRL/OCSP URLs on
+both mounts, writes the AppRole's ACL policy (`--key-prefix` scopes it to one
+tenant on a shared server), and writes the trust anchor. It is idempotent and
+never regenerates a root. The test suite runs it against the CI OpenBao rather
+than imitating it, so the script cannot rot while the suite stays green.
+
+**PAdES.** `artifact_signing._profile` is unchanged, and now reaches its top
+rung. It steps down to B-B without an RFC 3161 authority and to B-T without
+trust roots, because embedded validation material needs something to build
+against; under self-signed enrolment the top rung was unreachable in principle
+(no institutional root to configure, and no CRL/OCSP endpoint on a self-signed
+leaf for LTV material to be collected from). With a CA that publishes both,
+B-LTA delivers what it claims, and `PadesProfile.require_deliverable` still
+refuses any profile the inputs cannot actually produce.
+
 ### 3.5 Verification — designed with equal rigour to signing
 
 `verify_attestation(package_id) -> AttestationVerificationReport` performs five
@@ -997,6 +1121,7 @@ earlier section's detail.
 | D11 | §2.5 fixes four evidential lines; §3.2 gives each role one box whose 185×61 floor is derived from fitting them | **DocuSign's stamp anatomy at every accepted size.** The role label straddles the frame's top rule, the adopted mark takes the middle band, and the permanent signer ID is printed beneath it — always. The floor is re-derived from fitting all three (`pdf_signing._signature_minimum`, 78×32 pt) and a smaller box is refused with those elements named. A box past `DETAIL_MIN_WIDTH`/`DETAIL_MIN_HEIGHT` adds the name/designation and timestamp rows underneath, so a layout saved when the boxes were 240×80 keeps the fuller block | D10 demoted 185×61 from a refusal to a threshold and let a smaller box print the mark alone, on the reasoning that the identity travelled in the placed text fields and in the signature dictionary's `/Name`. Both are true; neither is enough. The ordinary case — a field dropped on the form's ruled line — filed a bare squiggle: nothing printed on the page said it was a digital signature or whose it was, and an examiner holding the paper has neither the form fields' provenance nor a PDF parser. The identifier is the one thing the stamp exists to carry, so it is now what the floor is derived from |
 | D12 | D8: "No true script typeface is offered: embedding one is a font-licensing decision" | **Four script faces are bundled and embedded** (`app/services/attestation/fonts/`, SIL Open Font License 1.1, licence text committed beside each `.ttf`): Caveat, Dancing Script, Great Vibes, Allura. They reach the page as pyHanko-subsetted embedded fonts, and the dashboard previews them from the same files via `next/font/local` — one copy, both consumers. The base-14 four are kept, offered as "typeset", so a deployment stripped of `fonts/` can still stamp; a face whose file is missing is refused at adoption rather than substituted | The licensing decision was made, not avoided: the OFL permits redistribution and embedding, which is exactly what a filed PDF does. The old answer produced marks that were slanted body text — nobody reads "Times Italic" as a signature, which is the mark's whole job. Every bundled face must be on a 1000-unit em grid: pyHanko writes raw font-unit advances into the CIDFont `/W` array, which PDF reads as thousandths of an em, so a 2048-unit face (Sacramento, Parisienne) stamps with its letters flung apart. Asserted in `tests/services/test_attestation_typed_fonts.py` |
 | D13 | §3.2 has no view on the return template's own attestation block | **The block rules the four cells it asks for.** `exports/pdf.py._signing_block` draws a labelled Name / Designation / Signature / Date row per officer, and `DEFAULT_PLACEMENTS` is pinned to those cells — eight boxes, not two — with the pairing asserted against the rendered page. The derived text fields declare an empty `/MK /BG` and `/BC`, a zero-width `/BS`, and `ReadOnly` | The template printed one undivided 150 mm rule under wording asking for four things, so the default placement had nothing to land on and sat in the empty band below the block; the founder had to drag every field onto a return we designed. The widget flags are the other half: readers tint form fields, and a filed return showing grey boxes behind an officer's name reads as a half-finished web form. Changing the template affects FUTURE exports only — signing never re-renders (G12) — which `test_an_artifact_signed_with_the_pre_stamp_layout_still_passes_every_check` holds to |
+| D15 | §3.4 offers two production custody backends: PKCS#11 and cloud KMS | **A third, and the only working one: OpenBao Transit** (`SIGNING_BACKEND=openbao`, §3.4). Per-officer non-exportable Transit keys, AppRole auth, ASN.1-marshalled prehashed signing, and a pyHanko `ExternalSigner` subclass that routes the PDF path through the same `sign_digest`. Permitted in production, unlike `software`. Certificates come from **OpenBao's PKI engine** over a CSR whose `CertificationRequestInfo` is assembled with `asn1crypto` and signed through that same `sign_digest` — `cryptography` cannot build a CSR for a key it does not hold. Revocation publishes to the mount's CRL in the same transaction as the row. There is no self-signing path on this backend | Production could not produce a signature at all: `software` refuses to initialise when `APP_ENV` is production, `pkcs11` had never executed because no token exists, `kms` is a documented stub that raises. Signing is required for every return by default, so "cannot sign" meant "cannot file". OpenBao is self-hosted, so no key leaves the country (L8 does not arise) and no vendor holds the officers' keys. Its correctness is not asserted from the code: the suite runs against a REAL server — an `openbao/openbao` dev container in CI, gated on `OPENBAO_TEST_ADDR` the way Postgres tests gate on `TEST_DATABASE_URL` — and drives the full `signing.certify` ceremony, so limitation 3's "written but never executed" does not apply to this backend |
 | D14 | §3.5 checks 1–2 validate with pyHanko's default revision-diff policy | **One allowance is switched off** (`verify.attestation_diff_policy`): `allow_in_place_appearance_stream_changes`. `pdf_signing` never rewrites an appearance stream in place — every filled value gets a fresh stream object — so the allowance can only produce a false positive | And it did. pyHanko skips a field only when its appearance stream's last change *equals* the revision being diffed from, rather than is *not later than* it, so every field the preparer filled reads as an in-place update once any revision exists after the approver's signature. PAdES B-LTA always appends one (the DSS, then the document timestamp), so a fully signed return with placed name/designation/date fields reported `docmdp_ok = False` against a document nobody had touched. Switching the allowance off is strictly stricter: a real in-place rewrite is now refused rather than whitelisted |
 
 ### Honest limitations of the built system
@@ -1042,12 +1167,26 @@ must not be represented as working:
    retroactively poison past signatures (§3.4, L12).
 3. **The PKCS#11 signing path is not exercised.** `python-pkcs11` is an opt-in
    extra and no SoftHSM is present, so only the missing-extra error path is
-   tested. The software backend refuses to initialise when `APP_ENV` is
-   production, so production signing requires HSM wiring that has not run.
+   tested. Treat its correctness as unknown.
+
+   This is no longer the *production* story, though. **OpenBao Transit
+   (`SIGNING_BACKEND=openbao`) is exercised against a real server** — CI runs an
+   `openbao/openbao` dev container as a job service and the suite drives the
+   full ceremony through it (D15, §3.4), and certificates are issued by its PKI
+   engine against a mount the suite bootstraps with the shipped operational
+   script. What is still unproven there is the deployment, not the code: no
+   dedicated OpenBao host has been stood up, no AppRole has been issued to a
+   bank, and TLS against a private CA has been configured but never tested
+   against one. Whether an *internal* PKI suffices, or an accredited provider is
+   required, remains **L4** — but that is now a choice of CA rather than a
+   missing capability.
 4. **Verification trust anchoring is optional.** With `ATTESTATION_TRUST_ROOTS`
    unset the verifier anchors on the chain the signature carries and reports
    `trust_anchor: "embedded_chain"` — internal consistency, **not** proof of
-   issuance by an authority the institution recognises.
+   issuance by an authority the institution recognises. `create_app` logs a
+   warning naming the setting when the OpenBao backend is configured and the
+   anchor is not, because on that backend an institutional root definitely
+   exists and only the pointer to it is missing.
 5. **Certificate path validation in the detached check is issuance-only** —
    chain building, issuer signatures, validity windows. No name constraints, no
    policy tree, no CRL/OCSP. Revocation-aware validation happens only in the

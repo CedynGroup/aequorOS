@@ -30,6 +30,31 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # The attestation signing backend. Without a real server the OpenBao tests
+      # skip themselves, and "written but never executed" is exactly the state
+      # the PKCS#11 backend is in — so CI runs one. Dev mode is unsealed with a
+      # known root token, which is what the suite provisions its AppRole with;
+      # it is in-memory and dies with the job.
+      openbao:
+        image: openbao/openbao:2.6.1
+        env:
+          BAO_DEV_ROOT_TOKEN_ID: aequoros-ci-root
+          BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+          BAO_ADDR: http://127.0.0.1:8200
+        ports:
+          - "8200:8200"
+        options: >-
+          --cap-add=IPC_LOCK
+          --health-cmd "bao status -address=http://127.0.0.1:8200 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Ungates tests/services/test_attestation_openbao.py against the service
+      # container above. Absent (a developer's machine), those tests skip and the
+      # rest of the suite is unaffected.
+      OPENBAO_TEST_ADDR: http://127.0.0.1:8200
+      OPENBAO_TEST_TOKEN: aequoros-ci-root
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v3

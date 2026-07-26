@@ -24,7 +24,25 @@ export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean
     const result = await signIn('credentials', { email, password, redirect: false });
     setPending(false);
     if (result?.error) {
-      setError('Invalid email or password.');
+      // `CredentialsSignin` is the ONLY code that means the backend looked at
+      // these credentials and refused them (authorize returned null). Anything
+      // else — a thrown AuthServiceUnavailable, a 5xx, a refused connection —
+      // is the service failing, and must not be reported as a bad password.
+      //
+      // On 2026-07-26 the production API was crash-looping and this screen told
+      // the operator their password was wrong. Telling someone their credentials
+      // are invalid when the service is down sends them to reset a password that
+      // was never checked. Verified against a dev server pointed at a closed
+      // port: an unreachable backend yields `Configuration`, a rejected password
+      // yields `CredentialsSignin` — so the two are genuinely distinguishable
+      // here, and this must not be collapsed back into one message.
+      setError(
+        result.error === 'CredentialsSignin'
+          ? 'Invalid email or password.'
+          : 'Could not reach the AequorOS service, so your sign-in could not be checked. ' +
+            'This is not a problem with your credentials — try again shortly, or contact ' +
+            'your administrator if it persists.'
+      );
       return;
     }
     router.push(callbackUrl);
