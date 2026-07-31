@@ -1,11 +1,19 @@
 /**
  * Playwright e2e for the submission pipeline (plan W7.5).
  *
- * Boots a fully hermetic stack: the FastAPI backend on a disposable sqlite
- * file (demo seeding enabled — the e2e fixture path, never production) and
- * the Next.js dev server wired to it. Global setup bootstraps tenant rows,
- * seeds the sample bank through the API, runs a liquidity baseline, and
- * mints per-role session cookies — no real credentials anywhere.
+ * Boots the FastAPI backend on a disposable sqlite file (demo seeding enabled
+ * — the e2e fixture path, never production) and the Next.js dev server wired
+ * to it. Global setup bootstraps tenant rows, seeds the sample bank through
+ * the API, runs a liquidity baseline, and mints per-role session cookies — no
+ * real credentials anywhere.
+ *
+ * Hermetic EXCEPT object storage. This file used to claim "fully hermetic",
+ * which was wrong and cost a long diagnosis: validated packages persist their
+ * artifacts to S3/MinIO and the backend has no filesystem mode, so the suite
+ * silently depends on S3_* reaching it from the untracked backend/.env. That
+ * is why it passes on a developer machine and fails in a fresh clone, a git
+ * worktree, or CI. e2e/global-setup.ts now refuses to start without it rather
+ * than letting seven journeys time out one at a time.
  *
  * Run: pnpm e2e   (first run: npx playwright install chromium)
  */
