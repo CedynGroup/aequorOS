@@ -61,7 +61,7 @@ db-direct = [
 dev = [
   "basedpyright",
   "httpx",
-  "openapi-generator-cli[jdk4py]~=7.13.0",
+  "openapi-generator-cli[jdk4py]>=7.13,<7.25",
   "pre-commit==4.6.1",
   "pytest",
   "ruff",
