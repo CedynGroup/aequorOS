@@ -43,7 +43,22 @@ permissions:
 
 jobs:
   review:
-    if: github.event.pull_request.draft == false
+    # Dependabot is excluded because this job CANNOT work on its PRs. GitHub
+    # runs Dependabot-triggered workflows against a separate secret store, so
+    # `secrets.ANTHROPIC_API_KEY` resolves to an empty string and the action
+    # exits non-zero — the run log says "Secret source: Dependabot". Every
+    # Dependabot PR opened since 2026-07-24 therefore showed a red check while
+    # `risk-service` and `gitleaks` both passed, which trained the eye to treat
+    # a red PR as normal.
+    #
+    # The fix is exclusion, not adding the key to the Dependabot secret store:
+    # that would hand an API key to a workflow triggered by external dependency
+    # metadata, and a senior-engineer review of a version-number bump earns
+    # nothing anyway. Dependency PRs are still gated by gitleaks (the required
+    # check) and the full risk-service suite.
+    if: >-
+      github.event.pull_request.draft == false
+      && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -117,10 +117,7 @@ export default function IrrSensitivityPage() {
           <>
             <SectionCard
               title="EVE by scenario"
-              subtitle={`Base EVE ${fmtCurrency(num(m.eveBaseGhs))} · Tier 1 ${fmtCurrency(
-                num(m.tier1Ghs),
-                'GHS'
-              )} · supervisory limit ${eveLimit}% of Tier 1`}
+              subtitle={`Base EVE ${fmtCurrency(num(m.eveBaseGhs))} · Tier 1 ${fmtCurrency(num(m.tier1Ghs))} · supervisory limit ${eveLimit}% of Tier 1`}
               noPadding
               computedAt={computedAt}
               runBadge={runBadge}
@@ -143,10 +140,7 @@ export default function IrrSensitivityPage() {
 
             <SectionCard
               title="Earnings at Risk (EaR)"
-              subtitle={`Twelve-month ΔNII under ±200bp parallel shocks · Base NII ${fmtCurrency(
-                num(m.niiBaseGhs),
-                'GHS'
-              )}`}
+              subtitle={`Twelve-month ΔNII under ±200bp parallel shocks · Base NII ${fmtCurrency(num(m.niiBaseGhs))}`}
               noPadding
               computedAt={computedAt}
               runBadge={runBadge}

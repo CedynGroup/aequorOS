@@ -31,3 +31,22 @@ def regulator_short(db: Session, bank: Bank) -> str:
     """Short regulator form for display, e.g. "BoG"."""
     row = get_jurisdiction(db, bank)
     return row.regulator_short if row is not None else FALLBACK_REGULATOR_SHORT
+
+
+def base_currency(bank: Bank) -> str:
+    """The bank's reporting currency, normalised — e.g. "GHS", "NGN".
+
+    There is deliberately no fallback. ``banks.currency`` is NOT NULL and
+    carries no default, so an unset value means the creation path skipped a
+    required decision; substituting one here is how a Nigerian bank ends up
+    reporting in cedis. Narrative and unit labels must resolve through this
+    rather than writing a currency literal.
+    """
+    code = (bank.currency or "").strip().upper()
+    if not code:
+        msg = (
+            f"Bank {bank.id} has no reporting currency. It is required at "
+            "creation and must match the jurisdiction's currency_code."
+        )
+        raise ValueError(msg)
+    return code

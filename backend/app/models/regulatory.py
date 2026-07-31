@@ -51,9 +51,15 @@ class Bank(TimestampMixin, Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     short_name: Mapped[str] = mapped_column(String(80), nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), default="GHS", nullable=False)
+    # Both are REQUIRED at creation and carry no default. Independent defaults
+    # ("GHS" and "GH") were a multi-country trap: they could silently disagree,
+    # so a bank created with jurisdiction_code="NG" kept reporting in cedis.
+    # The reporting currency belongs to the jurisdiction — resolve it from the
+    # registry (jurisdictions.currency_code) at the creation site rather than
+    # defaulting here, where the registry is not reachable.
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
     jurisdiction_code: Mapped[str] = mapped_column(
-        String(8), ForeignKey("jurisdictions.code"), default="GH", nullable=False
+        String(8), ForeignKey("jurisdictions.code"), nullable=False
     )
     license_type: Mapped[str] = mapped_column(String(40), nullable=False)
     # DNS-safe identifier used in storage bucket names

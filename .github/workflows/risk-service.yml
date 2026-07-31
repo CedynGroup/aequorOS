@@ -84,5 +84,13 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql+psycopg://risk_service_test:risk_service_test@localhost:5432/risk_service
         run: mise run risk-service:test-postgres-migrations
+
+      # Row-lock and advisory-lock coverage. Without this step the tests run
+      # nowhere: SQLite skips them on the hermetic run above, and CI previously
+      # gave a Postgres URL only to the migrations step.
+      - name: Test Postgres concurrency locks
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://risk_service_test:risk_service_test@localhost:5432/risk_service
+        run: mise run risk-service:test-postgres-locks
       - name: Typecheck generated API client
         run: mise run risk-service:api-typecheck

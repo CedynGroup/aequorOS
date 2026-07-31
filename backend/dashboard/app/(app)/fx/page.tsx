@@ -130,10 +130,7 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
         <KpiStat
           label="Net open position"
           value={fmtCurrency(num(m.nopGhs))}
-          hint={`Long ${fmtCurrency(num(m.sumLongGhs))} · Short ${fmtCurrency(
-            num(m.sumShortGhs),
-            'GHS'
-          )}`}
+          hint={`Long ${fmtCurrency(num(m.sumLongGhs))} · Short ${fmtCurrency(num(m.sumShortGhs))}`}
         />
         <KpiStat
           label="Tier 1 capital"
@@ -218,10 +215,7 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
             <SplitStat
               label="Net (CCY)"
               value={fmtNum(selectedSplit.netCcy)}
-              hint={`= assets − liabilities + derivatives · ${fmtCurrencySigned(
-                num(selectedPosition.netGhs),
-                'GHS'
-              )} at spot ${num(selectedPosition.spotGhs).toFixed(4)}`}
+              hint={`= assets − liabilities + derivatives · ${fmtCurrencySigned(num(selectedPosition.netGhs))} at spot ${num(selectedPosition.spotGhs).toFixed(4)}`}
             />
           </div>
         </SectionCard>

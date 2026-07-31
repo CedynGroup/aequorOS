@@ -72,7 +72,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryValidationRead,
 )
 from app.services.audit import record_event
-from app.services.jurisdictions import regulator_name
+from app.services.jurisdictions import base_currency, regulator_name
 from app.services.live_block import live_block
 from app.services.live_types import (
     LiveModuleResult,
@@ -258,7 +258,9 @@ def get_liquidity_dashboard(
                 severity=severity,  # type: ignore[arg-type]
                 message=message,
             )
-            for rule_code, passed, severity, message in _validation_rows(lcr, nsfr, params)
+            for rule_code, passed, severity, message in _validation_rows(
+                lcr, nsfr, params, base_currency(bank)
+            )
         ]
         stored = False
 
@@ -489,7 +491,7 @@ def _create_and_execute(
             )
         lcr = compute_lcr(engine_facts, engine_params)
         nsfr = compute_nsfr(engine_facts, engine_params)
-        _persist_success(db, ctx, run, lcr, nsfr, engine_params)
+        _persist_success(db, ctx, run, lcr, nsfr, engine_params, base_currency(bank))
     except LiquidityRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
     except MissingParameterError as exc:
@@ -549,6 +551,7 @@ def _persist_success(  # noqa: PLR0913
     lcr: LcrResult,
     nsfr: NsfrResult,
     params: LiquidityParams,
+    currency: str,
 ) -> None:
     run.metrics = {
         "lcr_pct": str(lcr.lcr_pct),
@@ -598,7 +601,7 @@ def _persist_success(  # noqa: PLR0913
             )
         )
     for position, (rule_code, passed, severity, message) in enumerate(
-        _validation_rows(lcr, nsfr, params), start=1
+        _validation_rows(lcr, nsfr, params, currency), start=1
     ):
         db.add(
             RegulatoryValidation(
@@ -665,7 +668,7 @@ def _persist_failure(
 
 
 def _validation_rows(
-    lcr: LcrResult, nsfr: NsfrResult, params: LiquidityParams
+    lcr: LcrResult, nsfr: NsfrResult, params: LiquidityParams, currency: str
 ) -> tuple[tuple[str, bool, str, str], ...]:
     lcr_min = _pct_text(params.lcr_min_pct)
     amber_floor = _pct_text(params.lcr_amber_floor_pct)
@@ -679,13 +682,14 @@ def _validation_rows(
     if lcr.inflow_cap_applied:
         cap_message = (
             f"The {_pct_text(params.inflow_cap_pct)}% inflow cap bound: gross inflows of "
-            f"{lcr.gross_inflows_total} GHS were capped at {lcr.capped_inflows_total} GHS."
+            f"{lcr.gross_inflows_total} {currency} were capped at "
+            f"{lcr.capped_inflows_total} {currency}."
         )
     else:
         cap_message = (
             f"The {_pct_text(params.inflow_cap_pct)}% inflow cap did not bind: gross inflows "
-            f"of {lcr.gross_inflows_total} GHS are below the cap of "
-            f"{lcr.inflow_cap_amount} GHS."
+            f"of {lcr.gross_inflows_total} {currency} are below the cap of "
+            f"{lcr.inflow_cap_amount} {currency}."
         )
     return (
         (
@@ -921,7 +925,9 @@ def compute_live(
         "rsf_total_ghs": str(nsfr.rsf_total),
     }
     status = worst_status(lcr.status, nsfr.status)
-    findings = findings_from_validations(_validation_rows(lcr, nsfr, params), status)
+    findings = findings_from_validations(
+        _validation_rows(lcr, nsfr, params, base_currency(bank)), status
+    )
     return LiveModuleResult(
         metrics=metrics,
         status=status,

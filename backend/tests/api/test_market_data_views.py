@@ -31,6 +31,8 @@ def _seed_bank(session: Session) -> str:
         organization_id=ORG_1,
         name="Market Data Views Test Bank",
         short_name="MDVB",
+        currency="GHS",
+        jurisdiction_code="GH",
         license_type="universal",
     )
     session.add(bank)

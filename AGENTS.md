@@ -216,6 +216,22 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   citations, the GHS ’000 unit convention in `SnapshotPreview`/`lib/templates.ts`,
   and the `sample_bank_seed` test fixture. Return families per jurisdiction are the
   unbuilt half (product.md §Phase 5 item 0).
+  **`banks.currency` and `banks.jurisdiction_code` are REQUIRED and carry no
+  defaults** (2026-07-31). They previously defaulted to `"GHS"`/`"GH"`
+  independently, so they could silently disagree — a bank created with
+  `jurisdiction_code="NG"` kept reporting in cedis. Backend code resolves the unit
+  through `jurisdictions.base_currency(bank)`, which deliberately has no fallback:
+  an unset currency is a skipped decision at the creation site, not a Ghanaian
+  bank. Never write a currency literal into bank-facing narrative — the guard suite
+  `tests/services/test_jurisdiction_neutrality.py` scans the calculation modules for
+  exactly that and is the cheapest place to catch the regression. On the dashboard,
+  `fmtCurrency(value)` uses the active jurisdiction; passing a second argument
+  OVERRIDES it, which is how eight call sites came to be pinned to `'GHS'` (a
+  prettier line-wrap added the literal). Pass the second argument only when the
+  currency is genuinely not the bank's own.
+  Note there is **no bank-creation path** outside `sample_bank_seed`: ingestion
+  requires the bank to exist (`_get_bank_or_404`), so onboarding a non-Ghana
+  institution needs that path built, not just these leaks fixed.
 
 ## Maintaining this file
 

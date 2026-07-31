@@ -37,6 +37,15 @@ description = "Run risk service Postgres-backed Alembic migration tests"
 dir = "backend"
 run = "mise run risk-service:test-postgres-migrations"
 
+# Every risk-service task must exist in BOTH this file and backend/mise.toml:
+# CI invokes `mise run` from the repository root, so a task defined only in the
+# backend file resolves to "task not found" there while working perfectly in a
+# local `cd backend` shell.
+[tasks."risk-service:test-postgres-locks"]
+description = "Run risk service Postgres-only concurrency tests"
+dir = "backend"
+run = "mise run risk-service:test-postgres-locks"
+
 [tasks."risk-service:lint"]
 description = "Run risk service Ruff checks"
 dir = "backend"

@@ -114,6 +114,8 @@ def test_record_and_read_consumption_roundtrip(db_session) -> None:
         organization_id=ORG_1,
         name="Quota Test Bank",
         short_name="QTB",
+        currency="GHS",
+        jurisdiction_code="GH",
         license_type="universal",
     )
     db_session.add(bank)
@@ -137,6 +139,8 @@ def test_record_consumption_tracks_pull_count(db_session) -> None:
         organization_id=ORG_1,
         name="Pull Count Bank",
         short_name="PCB",
+        currency="GHS",
+        jurisdiction_code="GH",
         license_type="universal",
     )
     db_session.add(bank)

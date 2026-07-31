@@ -31,7 +31,23 @@
 # Note: the spec catalog for the GHS curve intentionally omits the 36- and
 # 84-month standard tenors (§5.2); the supported entry preserves that exactly.
 
-# --- Supported: verified against spec §7.2 -----------------------------------
+# --- Supported: structure from spec §7.2; identifiers NOT yet live-confirmed --
+#
+# Read the enablement note above carefully for these three. "supported: true"
+# here means the adapter dispatches them and the shape is settled — it does NOT
+# mean the RICs have been confirmed against a live LSEG service. They were taken
+# from docs/market_data_adapter.md §7.2, which introduces its own RIC block as an
+# "Illustrative excerpt". An earlier version of this header claimed they were
+# "verified against spec §7.2"; that was circular — the catalog cited the spec as
+# its authority and the spec calls its content an example.
+#
+# GH1M= / USDGHS=R / GH= follow plausible RIC conventions and may well be right.
+# They have simply never been proven, and no market data has ever been pulled
+# with them (MARKET_DATA_PULL_ENABLED is off; every test is fixture-backed).
+#
+# Confirming these three is the first task of the LSEG trial — the shortest
+# round-trip that proves the whole pipe (docs/lseg_trial_scope.md §5, week 1).
+# Until then, treat "we already pull these" as a claim to establish, not to make.
 
 YIELD_CURVE_GHS:
   rics:
@@ -170,6 +186,26 @@ FX_SPOT_USD_NGN:
   verification:
     doc: >-
       Confirm the USD/NGN spot RIC in the LSEG Data Platform and the
+      TR.MidPrice field.
+    field: "TR.MidPrice"
+    quota_units_per_pull: 1
+
+FX_SPOT_USD_KES:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/KES spot RIC in the LSEG Data Platform and the
+      TR.MidPrice field.
+    field: "TR.MidPrice"
+    quota_units_per_pull: 1
+
+FX_SPOT_USD_ZAR:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/ZAR spot RIC in the LSEG Data Platform and the
       TR.MidPrice field.
     field: "TR.MidPrice"
     quota_units_per_pull: 1

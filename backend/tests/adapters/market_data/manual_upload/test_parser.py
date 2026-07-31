@@ -137,13 +137,17 @@ def test_unsupported_issuer_is_a_problem_not_a_crash() -> None:
 
 
 def test_unsupported_fx_pair_and_index_code_are_problems() -> None:
+    # TZS, not KES: Kenya is a seeded jurisdiction and gained FX_SPOT_USD_KES on
+    # 2026-07-31 so its banks could ingest their own spot rate. The case under
+    # test is a currency with no scope at all, which has to be one outside the
+    # registry or the test stops testing anything.
     fx_content = (
         "base_currency,quote_currency,rate_type,tenor_months,rate,as_of_date\n"
-        f"USD,KES,spot,,132.50,{AS_OF}\n"
+        f"USD,TZS,spot,,2650.00,{AS_OF}\n"
     ).encode()
     parsed = parse_upload(fx_content, "fx.csv")
     assert parsed.scopes == {}
-    assert "no scope FX_SPOT_USD_KES exists" in parsed.problems[0].message
+    assert "no scope FX_SPOT_USD_TZS exists" in parsed.problems[0].message
 
     macro_content = (
         "index_code,value,scenario,horizon_months,as_of_date\n"
