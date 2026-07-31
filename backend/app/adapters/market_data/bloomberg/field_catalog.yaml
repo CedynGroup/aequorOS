@@ -33,7 +33,17 @@
 # security or introduces a better data source, update here; downstream canonical
 # records remain unchanged in shape.
 
-# --- Supported: verified against spec §6.2 -----------------------------------
+# --- Supported: structure from spec §6.2; identifiers NOT yet live-confirmed --
+#
+# Same caveat as the Refinitiv catalog. "supported: true" means the adapter
+# dispatches these and the shape is settled — not that the securities have been
+# confirmed against a live Bloomberg service. They come from
+# docs/market_data_adapter.md §6.2, which labels its own block an "Illustrative
+# excerpt", so the previous "verified against spec §6.2" was circular.
+#
+# GHGGB1M Index / USDGHS Curncy / GHANA Govt follow plausible conventions and may
+# well be right; they have never been proven, and no market data has been pulled
+# with them (MARKET_DATA_PULL_ENABLED is off; every test is fixture-backed).
 
 YIELD_CURVE_GHS:
   data_source: BVAL
@@ -179,6 +189,26 @@ FX_SPOT_USD_NGN:
   verification:
     doc: >-
       Confirm the USD/NGN spot currency security in Bloomberg FX / WCRS <GO>
+      and the PX_LAST field.
+    field: "PX_LAST"
+    quota_units_per_pull: 1
+
+FX_SPOT_USD_KES:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/KES spot currency security in Bloomberg FX / WCRS <GO>
+      and the PX_LAST field.
+    field: "PX_LAST"
+    quota_units_per_pull: 1
+
+FX_SPOT_USD_ZAR:
+  supported: false
+  verification_required: true
+  verification:
+    doc: >-
+      Confirm the USD/ZAR spot currency security in Bloomberg FX / WCRS <GO>
       and the PX_LAST field.
     field: "PX_LAST"
     quota_units_per_pull: 1

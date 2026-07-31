@@ -79,6 +79,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
 )
 from app.services.audit import record_event
+from app.services.jurisdictions import base_currency
 from app.services.live_block import live_block
 from app.services.live_types import (
     LiveModuleResult,
@@ -219,7 +220,9 @@ def get_fx_dashboard(
                 severity=severity,  # type: ignore[arg-type]
                 message=message,
             )
-            for rule_code, passed, severity, message in _validation_rows(analysis)
+            for rule_code, passed, severity, message in _validation_rows(
+                analysis, base_currency(bank)
+            )
         ]
         stored = False
 
@@ -291,7 +294,7 @@ def _create_and_execute(
     run_id = run.id
     try:
         analysis = _run_analysis(db, ctx, bank, period, facts, active)
-        _persist_success(db, ctx, run, analysis)
+        _persist_success(db, ctx, run, analysis, base_currency(bank))
     except FxRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
     except MissingParameterError as exc:
@@ -395,7 +398,7 @@ def _run_analysis(  # noqa: PLR0913
 
 
 def _persist_success(
-    db: Session, ctx: TenantContext, run: RegulatoryRun, analysis: _FxAnalysis
+    db: Session, ctx: TenantContext, run: RegulatoryRun, analysis: _FxAnalysis, currency: str
 ) -> None:
     run.metrics = _metrics_payload(analysis)
 
@@ -456,7 +459,7 @@ def _persist_success(
         )
 
     for position, (rule_code, passed, severity, message) in enumerate(
-        _validation_rows(analysis), start=1
+        _validation_rows(analysis, currency), start=1
     ):
         db.add(
             RegulatoryValidation(
@@ -592,7 +595,9 @@ def _metrics_payload(analysis: _FxAnalysis) -> dict[str, Any]:
     }
 
 
-def _validation_rows(analysis: _FxAnalysis) -> tuple[tuple[str, bool, str, str], ...]:
+def _validation_rows(
+    analysis: _FxAnalysis, currency: str
+) -> tuple[tuple[str, bool, str, str], ...]:
     nop = analysis.nop
     aggregate_limit = _pct_text(nop.aggregate_limit_pct)
     single_limit = _pct_text(nop.single_limit_pct)
@@ -613,8 +618,9 @@ def _validation_rows(analysis: _FxAnalysis) -> tuple[tuple[str, bool, str, str],
         "IFRS 9 dual effectiveness test (R-squared >= 80% and dollar-offset within 80-125%)."
     )
     stressed_message = (
-        f"The cedi-crisis stressed VaR of {_ghs_text(analysis.stressed_var)} GHS "
-        f"(vs a base VaR of {_ghs_text(analysis.var.portfolio_var)} GHS) is disclosed."
+        f"The crisis-scenario stressed VaR of {_money_text(analysis.stressed_var)} "
+        f"{currency} (vs a base VaR of {_money_text(analysis.var.portfolio_var)} "
+        f"{currency}) is disclosed."
     )
     return (
         ("nop_within_aggregate_limit", nop.within_aggregate_limit, "error", nop_message),
@@ -898,7 +904,7 @@ def compute_live(
         "tier1_ghs": str(metrics.tier1_ghs),
     }
     status = worst_status(metrics.nop_status, metrics.single_ccy_status)
-    findings = findings_from_validations(_validation_rows(analysis), status)
+    findings = findings_from_validations(_validation_rows(analysis, base_currency(bank)), status)
     return LiveModuleResult(
         metrics=live_metrics,
         status=status,
@@ -1134,7 +1140,7 @@ def _pct_text(value: Decimal) -> str:
     return format(value.normalize(), "f")
 
 
-def _ghs_text(value: Decimal) -> str:
+def _money_text(value: Decimal) -> str:
     return format(value, "f")
 
 

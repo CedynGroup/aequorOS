@@ -265,10 +265,7 @@ export default function CapitalStructurePage() {
                   items={data.at1Components}
                   deductions={[]}
                   description="Going-concern capital"
-                  footnote={`Tier 1 = CET1 + AT1 = ${fmtCurrencyFull(
-                    num(data.tier1CapitalGhs),
-                    'GHS'
-                  )}.`}
+                  footnote={`Tier 1 = CET1 + AT1 = ${fmtCurrencyFull(num(data.tier1CapitalGhs))}.`}
                 />
                 <TierBlock
                   title="Tier 2"

@@ -155,6 +155,8 @@ def test_encrypted_db_vault_roundtrip(db_session) -> None:
         organization_id=ORG_1,
         name="Vault Test Bank",
         short_name="VTB",
+        currency="GHS",
+        jurisdiction_code="GH",
         license_type="universal",
     )
     db_session.add(bank)

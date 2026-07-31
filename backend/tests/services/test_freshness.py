@@ -110,6 +110,8 @@ def test_freshness_without_any_period_is_not_stale(db_session: Session) -> None:
         organization_id=ORG_1,
         name="Bare Bank Ltd",
         short_name="BARE",
+        currency="GHS",
+        jurisdiction_code="GH",
         license_type="universal",
     )
     db_session.add(bank)

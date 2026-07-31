@@ -133,14 +133,20 @@ class DatabaseDirectConnection(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     read_replicas: Mapped[list[str]] = mapped_column(
         JSON, default=list, server_default=sql_text("'[]'"), nullable=False
     )
+    # server_default is `true`, not `1`: Postgres refuses an integer default on a
+    # boolean column ("is of type boolean but default expression is of type
+    # integer") and CREATE TABLE fails outright. sqlite accepts both, so the
+    # divergence was invisible in the hermetic suite. Migration 202607170010 —
+    # the DDL that actually built the production table — already uses `true`;
+    # these three columns were the only place the model disagreed with it.
     prefer_read_replica: Mapped[bool] = mapped_column(
-        Boolean, default=True, server_default=sql_text("1"), nullable=False
+        Boolean, default=True, server_default=sql_text("true"), nullable=False
     )
     tls_enabled: Mapped[bool] = mapped_column(
-        Boolean, default=True, server_default=sql_text("1"), nullable=False
+        Boolean, default=True, server_default=sql_text("true"), nullable=False
     )
     tls_verify_server_certificate: Mapped[bool] = mapped_column(
-        Boolean, default=True, server_default=sql_text("1"), nullable=False
+        Boolean, default=True, server_default=sql_text("true"), nullable=False
     )
     query_timeout_seconds: Mapped[int] = mapped_column(
         Integer, default=300, server_default=sql_text("300"), nullable=False

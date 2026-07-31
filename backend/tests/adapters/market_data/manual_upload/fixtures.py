@@ -49,6 +49,8 @@ SPOT_RATES: dict[tuple[str, str], float] = {
     ("EUR", "GHS"): 13.90,
     ("GBP", "GHS"): 16.20,
     ("USD", "NGN"): 1450.00,
+    ("USD", "KES"): 132.50,
+    ("USD", "ZAR"): 18.40,
 }
 
 # USD/GHS forward points per tenor.

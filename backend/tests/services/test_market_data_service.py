@@ -36,6 +36,8 @@ def _bank(db_session: Session) -> Bank:
         organization_id=ORG_1,
         name="Market Data Test Bank",
         short_name="MDTB",
+        currency="GHS",
+        jurisdiction_code="GH",
         license_type="universal",
     )
     db_session.add(bank)

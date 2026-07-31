@@ -38,6 +38,18 @@ run = "uv run pytest"
 description = "Run Postgres-backed Alembic migration tests; requires TEST_DATABASE_URL"
 run = "uv run pytest tests/db/test_postgres_migrations.py"
 
+# The concurrency tests guard row locks and advisory locks, which SQLite cannot
+# express — they self-skip ("PostgreSQL row locks are required for concurrency
+# coverage") on the hermetic run. Until 2026-07-31 CI passed TEST_DATABASE_URL
+# only to the migrations task, so these ran in NO environment: green locally
+# because skipped, green in CI because never invoked. Running them found a
+# Boolean column with an integer server_default that made CREATE TABLE fail on
+# Postgres outright, plus four tests comparing the String(40) audit_events.
+# entity_id against UUID objects. Requires TEST_DATABASE_URL.
+[tasks."risk-service:test-postgres-locks"]
+description = "Run the Postgres-only concurrency tests; requires TEST_DATABASE_URL"
+run = "uv run pytest tests/api/test_liquidity.py tests/api/test_scenarios.py tests/api/test_calculations.py"
+
 [tasks."risk-service:lint"]
 description = "Run Ruff checks"
 run = "uv run ruff check ."

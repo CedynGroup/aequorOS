@@ -144,10 +144,7 @@ export function fxLimits(data: FxDashboardRead | undefined): LimitRow[] {
         : 'crit',
       unit: '%',
       computedAt,
-      detail: `${position.side === 'long' ? 'Long' : 'Short'} ${fmtCurrencySigned(
-        num(position.netGhs),
-        'GHS'
-      )}`,
+      detail: `${position.side === 'long' ? 'Long' : 'Short'} ${fmtCurrencySigned(num(position.netGhs))}`,
     });
   }
   return rows;

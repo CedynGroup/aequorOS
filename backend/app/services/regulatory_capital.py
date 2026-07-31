@@ -79,7 +79,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
 )
 from app.services.audit import record_event
-from app.services.jurisdictions import regulator_name
+from app.services.jurisdictions import base_currency, regulator_name
 from app.services.live_block import live_block
 from app.services.live_types import (
     LiveModuleResult,
@@ -209,7 +209,7 @@ def get_capital_dashboard(
                 message=message,
             )
             for rule_code, passed, severity, message in _validation_rows(
-                ratios, engine_params, None
+                ratios, engine_params, None, base_currency(bank)
             )
         ]
         stored = False
@@ -306,7 +306,9 @@ def get_bsd2_preview(
     tier2_rows = [
         Bsd2RowRead(
             row_code=f"6.{index}",
-            description=_tier2_row_description(line, cap_pct, metrics["credit_rwa_ghs"]),
+            description=_tier2_row_description(
+                line, cap_pct, metrics["credit_rwa_ghs"], base_currency(bank)
+            ),
             amount=line.weighted_amount,
         )
         for index, line in enumerate(tier2_components, start=1)
@@ -437,7 +439,7 @@ def _create_and_execute(
         if scenario_code == BASELINE_SCENARIO:
             rwa = compute_rwa(engine_facts, engine_params)
             ratios = compute_capital_ratios(engine_facts, rwa, engine_params)
-            _persist_success(db, ctx, run, rwa, ratios, engine_params, None)
+            _persist_success(db, ctx, run, rwa, ratios, engine_params, None, base_currency(bank))
         else:
             if not shocks:
                 raise CapitalRunError(
@@ -446,7 +448,9 @@ def _create_and_execute(
                     {"scenario_code": scenario_code},
                 )
             stress = run_capital_stress(scenario_code, engine_facts, engine_params, shocks)
-            _persist_success(db, ctx, run, stress.rwa, stress.ratios, engine_params, stress)
+            _persist_success(
+                db, ctx, run, stress.rwa, stress.ratios, engine_params, stress, base_currency(bank)
+            )
     except CapitalRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
     except MissingParameterError as exc:
@@ -507,6 +511,7 @@ def _persist_success(  # noqa: PLR0913
     ratios: CapitalRatiosResult,
     params: CapitalParams,
     stress: CapitalStressResult | None,
+    currency: str,
 ) -> None:
     metrics: dict[str, Any] = {
         "car_pct": str(ratios.car_pct),
@@ -610,7 +615,7 @@ def _persist_success(  # noqa: PLR0913
             )
         )
     for position, (rule_code, passed, severity, message) in enumerate(
-        _validation_rows(ratios, params, stress), start=1
+        _validation_rows(ratios, params, stress, currency), start=1
     ):
         db.add(
             RegulatoryValidation(
@@ -675,7 +680,10 @@ def _persist_failure(db: Session, ctx: TenantContext, run_id: UUID, error: Capit
 
 
 def _validation_rows(
-    ratios: CapitalRatiosResult, params: CapitalParams, stress: CapitalStressResult | None
+    ratios: CapitalRatiosResult,
+    params: CapitalParams,
+    stress: CapitalStressResult | None,
+    currency: str,
 ) -> tuple[tuple[str, bool, str, str], ...]:
     ratio_checks = (
         ("car_above_minimum", "CAR", ratios.car_pct, params.car_min_pct),
@@ -705,14 +713,14 @@ def _validation_rows(
     if ratios.gp_cap_applied:
         gp_message = (
             f"The Tier 2 general provisions cap of {cap_pct}% of credit RWA bound: provisions "
-            f"of {ratios.general_provisions_amount} GHS were capped at "
-            f"{ratios.general_provisions_cap} GHS."
+            f"of {ratios.general_provisions_amount} {currency} were capped at "
+            f"{ratios.general_provisions_cap} {currency}."
         )
     else:
         gp_message = (
             f"The Tier 2 general provisions cap of {cap_pct}% of credit RWA did not bind: "
-            f"provisions of {ratios.general_provisions_amount} GHS are within the cap of "
-            f"{ratios.general_provisions_cap} GHS."
+            f"provisions of {ratios.general_provisions_amount} {currency} are within the cap of "
+            f"{ratios.general_provisions_cap} {currency}."
         )
     rows.append(("tier2_gp_cap_applied", True, "info", gp_message))
     if stress is not None:
@@ -1020,7 +1028,9 @@ def compute_live(
     status = worst_status(
         ratios.car_status, ratios.tier1_status, ratios.cet1_status, ratios.leverage_status
     )
-    findings = findings_from_validations(_validation_rows(ratios, params, None), status)
+    findings = findings_from_validations(
+        _validation_rows(ratios, params, None, base_currency(bank)), status
+    )
     return LiveModuleResult(
         metrics=metrics,
         status=status,
@@ -1086,16 +1096,17 @@ def _weighted_rows(lines: list[CapitalLineRead], *, prefix: str) -> list[Bsd2Wei
     ]
 
 
-def _tier2_row_description(line: CapitalLineRead, cap_pct: Decimal, credit_rwa: Decimal) -> str:
+def _tier2_row_description(
+    line: CapitalLineRead, cap_pct: Decimal, credit_rwa: Decimal, currency: str
+) -> str:
     if line.line_code != _GP_LINE_CODE:
         return line.description
     cap_amount = money(credit_rwa * cap_pct / _HUNDRED)
     exposure = line.exposure_amount if line.exposure_amount is not None else line.weighted_amount
     bound = line.weighted_amount < exposure
     return (
-        f"General Provisions (Tier 2 cap {_pct_text(cap_pct)}% of credit RWA = {cap_amount} GHS; "
-        + ("cap bound" if bound else "cap not binding")
-        + ")"
+        f"General Provisions (Tier 2 cap {_pct_text(cap_pct)}% of credit RWA "
+        f"= {cap_amount} {currency}; " + ("cap bound" if bound else "cap not binding") + ")"
     )
 
 

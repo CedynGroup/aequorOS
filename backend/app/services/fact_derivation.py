@@ -201,6 +201,7 @@ from app.models import (
     CanonicalProduct,
     CanonicalReferenceRow,
 )
+from app.services import jurisdictions
 from app.services.market_data import (
     CurveView,
     get_fx_spot,
@@ -228,8 +229,6 @@ _FX_RETURN_WINDOW = 250
 # A canonical FX spot history replaces the legacy reference-row history for a
 # currency only when it is deep enough to feed a meaningful VaR return series.
 _MARKET_FX_HISTORY_MIN_OBSERVATIONS = 30
-# The base currency all module FX facts are expressed against.
-_BASE_CURRENCY = "GHS"
 _DEFAULT_CCF_PCT = Decimal("50")
 _DEFAULT_NMD_CORE_PCT = Decimal("50")
 _DEFAULT_NMD_DURATION_MONTHS = Decimal("12")
@@ -512,7 +511,7 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         )
     ).all()
 
-    base_currency = (bank.currency or _BASE_CURRENCY).strip().upper()
+    base_currency = jurisdictions.base_currency(bank)
     positions = [
         _position_row(snapshot, position, product, counterparty, base_currency)
         for snapshot, position, product, counterparty in rows
@@ -599,7 +598,7 @@ def _load_market_data(
     series replace ``fx_rates_historical`` per currency. Everything absent
     falls back to the legacy reference rows.
     """
-    base_ccy = (bank.currency or _BASE_CURRENCY).strip().upper()
+    base_ccy = jurisdictions.base_currency(bank)
     market_curve = get_yield_curve(db, ctx.organization_id, bank.id, base_ccy, as_of)
     market_spots: dict[str, Decimal] = {}
     market_fx_history: dict[str, list[tuple[date, Decimal]]] = {}
@@ -1564,7 +1563,11 @@ def _derive_fx_hedges(canonical: _Canonical, groups: list[GroupResult]) -> list[
         category = hedge_id if hedge_id not in used_categories else row.source_reference
         used_categories.add(category)
         instrument = _hedge_instrument(attributes.get("instrument"), hedge_id, warnings)
-        pair = str(attributes.get("currency_pair") or f"{row.currency}/GHS").strip().upper()
+        pair = (
+            str(attributes.get("currency_pair") or f"{row.currency}/{canonical.base_currency}")
+            .strip()
+            .upper()
+        )
         rate = _dec_or_none(attributes.get("contract_rate")) or _ZERO
         mtm = _dec(attributes.get("mtm_ghs"), _ZERO)
         r2 = _dec_or_none(attributes.get("prospective_r2"))
@@ -1582,7 +1585,8 @@ def _derive_fx_hedges(canonical: _Canonical, groups: list[GroupResult]) -> list[
                 category=category,
                 amount=mtm,
                 derived_from="FX_HEDGE position: sell-leg notional with IFRS 9 "
-                "effectiveness measures; amount is the hedge MtM in GHS",
+                "effectiveness measures; amount is the hedge MtM in "
+                f"{canonical.base_currency}",
                 attributes={
                     "hedge_id": hedge_id,
                     "instrument": instrument,
@@ -2070,9 +2074,12 @@ def _derive_ftp_curve(
             GroupResult(
                 group="ftp_curve_point",
                 status="skipped",
-                note="No GHS yield curve was ingested; FTP runs will fail without a "
-                "transfer curve.",
-                warnings=["ftp_curve_point could not be derived — no GHS yield curve."],
+                note=f"No {canonical.base_currency} yield curve was ingested; FTP runs "
+                "will fail without a transfer curve.",
+                warnings=[
+                    "ftp_curve_point could not be derived — no "
+                    f"{canonical.base_currency} yield curve."
+                ],
             )
         )
         return [], None

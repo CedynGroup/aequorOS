@@ -342,7 +342,9 @@ def test_liquidity_review_rolls_back_when_audit_event_fails(
         assert persisted_finding is not None
         assert persisted_finding.status == "open"
         event_types = set(
-            session.scalars(select(AuditEvent.event_type).where(AuditEvent.entity_id == finding_id))
+            session.scalars(
+                select(AuditEvent.event_type).where(AuditEvent.entity_id == str(finding_id))
+            )
         )
     assert "finding.status_changed" not in event_types
     assert "liquidity_finding.reviewed" not in event_types
@@ -512,7 +514,9 @@ def test_liquidity_review_rejects_findings_not_owned_by_workflow(
         )
         event_types = set(
             session.scalars(
-                select(AuditEvent.event_type).where(AuditEvent.entity_id.in_(finding_ids))
+                select(AuditEvent.event_type).where(
+                    AuditEvent.entity_id.in_([str(fid) for fid in finding_ids])
+                )
             )
         )
     assert len(persisted) == len(finding_ids)
@@ -585,7 +589,7 @@ def test_liquidity_review_rejects_terminal_findings(db_client: TestClient) -> No
         assert (
             session.scalar(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id == finding_id,
+                    AuditEvent.entity_id == str(finding_id),
                     AuditEvent.event_type == "liquidity_finding.reviewed",
                 )
             )
@@ -631,7 +635,7 @@ def test_liquidity_review_rejects_archived_scenario_findings(
         assert (
             session.scalar(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id == finding_id,
+                    AuditEvent.entity_id == str(finding_id),
                     AuditEvent.event_type == "liquidity_finding.reviewed",
                 )
             )
@@ -707,7 +711,7 @@ def test_liquidity_review_cannot_overwrite_concurrent_supersession(
         assert (
             verification_session.scalar(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id == finding_id,
+                    AuditEvent.entity_id == str(finding_id),
                     AuditEvent.event_type == "liquidity_finding.reviewed",
                 )
             )
@@ -787,7 +791,7 @@ def test_liquidity_review_cannot_commit_after_concurrent_scenario_archive(
         assert (
             verification_session.scalar(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id == finding_id,
+                    AuditEvent.entity_id == str(finding_id),
                     AuditEvent.event_type == "liquidity_finding.reviewed",
                 )
             )
@@ -843,7 +847,7 @@ def test_generic_finding_update_rejects_liquidity_workflow_findings(
         generic_review_events = list(
             session.scalars(
                 select(AuditEvent).where(
-                    AuditEvent.entity_id.in_((UUID(older_finding_id), UUID(current_finding_id))),
+                    AuditEvent.entity_id.in_((older_finding_id, current_finding_id)),
                     AuditEvent.event_type.in_(
                         ("finding.status_changed", "liquidity_finding.reviewed")
                     ),
