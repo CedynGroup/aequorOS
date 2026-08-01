@@ -52,8 +52,8 @@ export default function OpengraphImage() {
             Treasury and ALM infrastructure for African banks.
           </div>
           <div style={{ color: '#CADCFC', fontSize: '30px', maxWidth: '900px' }}>
-            Connected to your core. Auditable end to end. MVP live — onboarding
-            pilot banks.
+            Connected to your core. Auditable end to end. Live product —
+            onboarding pilot banks.
           </div>
         </div>
       </div>

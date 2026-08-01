@@ -2,6 +2,10 @@
 
 Pre-seed fintech marketing site — Treasury and ALM infrastructure for African banks.
 
+**Product proof:** live UI captures under `public/images/product/` (sourced from
+`docs/collateral/screenshots/`). There is no public login-gated demo domain;
+product interface is shown on-site at `/product#product-ui`.
+
 ## Stack
 
 - Next.js 14 (App Router)
@@ -32,27 +36,35 @@ Open http://localhost:3000.
 app/
   layout.tsx         # fonts, metadata, Nav + Footer
   page.tsx           # Home (/)
-  product/page.tsx   # /product
+  product/page.tsx   # /product (+ #product-ui gallery)
   company/page.tsx   # /company
   contact/page.tsx   # /contact
+  investors/page.tsx # /investors
   globals.css
 components/
   Navigation.tsx
   Footer.tsx
   Button.tsx
-  Card.tsx
-  SectionLabel.tsx
-  StatCard.tsx
+  ProductFrame.tsx   # browser-chrome product capture
+  ProductGallery.tsx # interactive public UI tour
+  FeatureScreenGrid.tsx
   ModuleCard.tsx
   ContactForm.tsx
-public/images/       # founder.jpg, og-image.png, favicon.ico
+  ...
+lib/
+  product-screens.ts # screenshot catalog + captions
+  team.ts
+public/images/
+  founder.jpg, dela.jpg
+  product/*.png      # live product UI captures
 ```
 
 ## Assets
 
-- `public/images/founder.jpg` — headshot of Eric Inkoom Danso (already in place)
-- `public/images/og-image.png` — 1200x630 social share image (to add)
-- Favicon is served from `app/icon.svg` + `app/apple-icon.svg` (monogram "A")
+- `public/images/founder.jpg` / `dela.jpg` — team headshots
+- `public/images/product/*.png` — product UI captures (refresh from `docs/collateral/screenshots/`)
+- Favicon: `app/icon.svg` + `app/icon.png` + `app/apple-icon.png`
+- Open Graph: `app/opengraph-image.tsx` (generated)
 
 ## Contact form (Resend)
 

@@ -1,7 +1,11 @@
 import Link from 'next/link';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 
-type Variant = 'primary' | 'secondary' | 'primary-on-dark';
+type Variant =
+  | 'primary'
+  | 'secondary'
+  | 'primary-on-dark'
+  | 'secondary-on-light';
 
 const base =
   'inline-flex items-center justify-center rounded-md px-6 py-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2';
@@ -13,6 +17,8 @@ const variants: Record<Variant, string> = {
     'bg-accent text-navy-deep hover:bg-accent/90 focus-visible:ring-offset-navy-deep',
   secondary:
     'border border-white text-white hover:bg-white hover:text-navy-deep focus-visible:ring-offset-navy-deep',
+  'secondary-on-light':
+    'border border-navy/20 text-navy hover:border-navy hover:bg-navy hover:text-white focus-visible:ring-offset-white',
 };
 
 type CommonProps = {
