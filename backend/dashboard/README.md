@@ -4,7 +4,9 @@ An interactive click-through prototype of the AequorOS Treasury and ALM platform
 built per the AequorOS Figma Design Brief. Used for investor presentations and
 bank treasurer validation interviews.
 
-**Target deployment:** `demo.aequoros.com`
+**Target deployment:** `app.aequoros.com` (authenticated product). Public product
+UI for marketing/compliance is shown on `aequoros.com/product` — there is no
+separate `demo.aequoros.com` marketing domain.
 
 ---
 
@@ -106,24 +108,21 @@ npm run dev
 # http://localhost:3001
 ```
 
-(Marketing site runs on 3000; demo runs on 3001 to allow side-by-side.)
+(Marketing site runs on 3000; dashboard runs on 3001 to allow side-by-side.)
 
-## Deploy to demo.aequoros.com
+## Deploy to app.aequoros.com
 
-Treat as a separate Vercel project from the marketing site.
+Treat as a separate Vercel/Coolify project from the marketing site.
 
-1. Push the `dashboard/` directory to its own repo (or import the monorepo
-   and set the root directory to `dashboard`).
-2. In Vercel, **New Project** → import the repo → set Framework to Next.js,
-   Root Directory `dashboard`.
-3. Build command: `npm run build`. Output: default. Install: `npm install`.
-4. After first deploy: **Project Settings → Domains → Add `demo.aequoros.com`**.
-5. At your DNS registrar, add the CNAME record Vercel shows you (typically
-   `cname.vercel-dns.com`).
-6. Wait for verification (minutes), then the site is live.
+1. Import the monorepo and set the root directory to `backend/dashboard`
+   (or the path your pack expects).
+2. Framework: Next.js. Build: `npm run build` (or the monorepo script you use).
+3. After deploy: bind **`app.aequoros.com`** (not a separate demo subdomain).
+4. Authenticated clients use Client Login on the marketing site → this origin.
 
-The site is `noindex`'d by default (see `app/layout.tsx`) so it stays out of
-search engines until you explicitly remove the robots block.
+Do not reintroduce `demo.aequoros.com` as a public product proof path — it
+redirected to login and failed external compliance filters. Product proof for
+public reviewers lives on the marketing site with static UI captures.
 
 ## Project structure
 

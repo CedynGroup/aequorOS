@@ -5,7 +5,7 @@ import { LinkButton } from '@/components/Button';
 export const metadata: Metadata = {
   title: 'Investor Materials — AequorOS',
   description:
-    'Access the AequorOS pitch deck and financial model. We are raising a $1.25M seed round to take our live MVP into its first pilot banks — Treasury and ALM infrastructure for African banks.',
+    'Access the AequorOS pitch deck and financial model. We are raising a $500K seed for 10–12 months of runway to onboard 1–2 pilot banks — Treasury and ALM infrastructure for African banks.',
 };
 
 const materials = [
@@ -21,7 +21,7 @@ const materials = [
     label: 'FINANCIAL MODEL',
     title: 'Five-Year Financial Model',
     description:
-      'Revenue projections, unit economics, headcount plan, and 18-month use-of-funds breakdown.',
+      'Revenue projections, unit economics, headcount plan, and 10–12 month use-of-funds breakdown.',
     fileType: 'Excel',
     href: process.env.NEXT_PUBLIC_INVESTOR_FINANCIAL_MODEL_URL ?? '#',
   },
@@ -36,15 +36,14 @@ export default function InvestorsPage() {
           <div className="max-w-3xl">
             <SectionLabel>INVESTOR MATERIALS</SectionLabel>
             <h1 className="mt-6 font-serif font-bold text-white text-4xl md:text-5xl lg:text-6xl leading-[1.1]">
-              We are raising a $1.25M seed round.
+              We are raising a $500K seed round.
             </h1>
             <p className="mt-8 text-ice-blue text-lg md:text-xl leading-relaxed max-w-[600px]">
               AequorOS builds cloud-native Treasury and ALM infrastructure for
-              mid-tier African banks. The MVP is live: a source-agnostic data
-              engine that connects to Oracle/FLEXCUBE, Snowflake, Temenos T24, an
-              API, or a file upload, with automated liquidity, capital, and
-              regulatory reporting end to end. Our seed round takes it from
-              working product into its first cohort of pilot banks.
+              mid-tier African banks. The product is live — Data Engine through
+              six ALM engines and Bank of Ghana regulatory returns, with the
+              working interface shown publicly on this site. This raise funds
+              10–12 months of runway to land and run 1–2 design-partner banks.
             </p>
           </div>
         </div>
@@ -118,9 +117,15 @@ export default function InvestorsPage() {
           <SectionLabel>THE RAISE</SectionLabel>
           <div className="mt-8 grid gap-6 md:grid-cols-3">
             {[
-              { stat: '$1.25M', label: 'Seed round target' },
-              { stat: '18 months', label: 'Runway to first 5 pilot banks' },
-              { stat: 'MVP live', label: 'Current stage · onboarding pilots' },
+              { stat: '$500K', label: 'Seed round target' },
+              {
+                stat: '10–12 mo',
+                label: 'Runway to land and support 1–2 pilot banks',
+              },
+              {
+                stat: 'Product live',
+                label: 'Current stage · onboarding design partners',
+              },
             ].map(({ stat, label }) => (
               <div
                 key={label}

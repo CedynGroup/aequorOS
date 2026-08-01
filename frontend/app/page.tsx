@@ -1,42 +1,59 @@
 import SectionLabel from '@/components/SectionLabel';
 import StatCard from '@/components/StatCard';
+import ProductFrame from '@/components/ProductFrame';
+import FeatureScreenGrid from '@/components/FeatureScreenGrid';
 import { LinkButton } from '@/components/Button';
+import {
+  heroScreen,
+  homepageFeatureScreens,
+} from '@/lib/product-screens';
 
 export default function HomePage() {
   return (
     <>
-      {/* 1.1 Hero */}
-      <section className="bg-navy-deep text-white min-h-[85vh] flex items-center">
-        <div className="max-w-7xl mx-auto w-full px-6 md:px-12 lg:px-16 py-20">
-          <div className="max-w-[1200px]">
+      {/* Hero — product-first */}
+      <section className="bg-navy-deep text-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pt-16 md:pt-20 lg:pt-24 pb-12 md:pb-16">
+          <div className="max-w-3xl">
             <SectionLabel>BUILT FOR AFRICA · PILOTING IN GHANA</SectionLabel>
-            <h1 className="mt-6 font-serif font-bold text-white text-5xl md:text-6xl lg:text-7xl leading-[1.05] tracking-tight max-w-4xl">
+            <h1 className="mt-6 font-serif font-bold text-white text-4xl md:text-5xl lg:text-6xl leading-[1.05] tracking-tight">
               Treasury and ALM infrastructure for African banks.
             </h1>
-            <p className="mt-8 text-ice-blue text-lg md:text-xl leading-relaxed max-w-[620px]">
-              AequorOS is a cloud-native platform that automates balance sheet
-              management, regulatory capital and liquidity reporting, and risk
-              modeling for mid-tier banks across Africa — connected directly to
-              the core banking systems they already run.
+            <p className="mt-6 text-ice-blue text-lg md:text-xl leading-relaxed max-w-[620px]">
+              Cloud-native balance sheet management, regulatory capital and
+              liquidity reporting, and risk modeling — connected to the cores
+              mid-tier banks already run.
             </p>
-            <div className="mt-10 flex flex-col sm:flex-row gap-4">
+            <div className="mt-8 flex flex-col sm:flex-row gap-4">
               <LinkButton href="/contact" variant="primary-on-dark">
-                Request a pilot
+                Request a demo
               </LinkButton>
-              <LinkButton href="/product" variant="secondary">
-                See the platform
+              <LinkButton href="/product#product-ui" variant="secondary">
+                See the product
               </LinkButton>
             </div>
-            <p className="mt-8 text-sm text-ice-blue/70">
-              MVP live · connects to Oracle/FLEXCUBE, Snowflake, Temenos T24, a
-              direct API, or a file upload · liquidity, capital, and regulatory
-              returns generated end to end.
+            <p className="mt-6 text-sm text-ice-blue/70">
+              Live platform · Data Engine, six ALM engines, and BoG regulatory
+              returns · onboarding pilot banks
+            </p>
+          </div>
+
+          <div className="mt-12 md:mt-14 max-w-5xl">
+            <ProductFrame
+              screen={heroScreen}
+              priority
+              tone="dark"
+              sizes="(max-width: 1024px) 100vw, 1024px"
+            />
+            <p className="mt-4 text-sm text-ice-blue/60">
+              {heroScreen.title} — working product UI on a synthetic mid-tier
+              bank profile (Ghana pilot).
             </p>
           </div>
         </div>
       </section>
 
-      {/* 1.2 The Problem */}
+      {/* Problem */}
       <section className="bg-white">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
@@ -45,29 +62,26 @@ export default function HomePage() {
               <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
                 African banks manage billions in assets using spreadsheets.
               </h2>
-              <div className="mt-8 space-y-6 text-text-primary text-base md:text-lg leading-relaxed">
+              <div className="mt-8 space-y-5 text-text-primary text-base md:text-lg leading-relaxed">
                 <p>
                   Mid-tier banks across Ghana, Nigeria, Kenya, and South Africa
-                  run Asset-Liability Management on manual Excel workbooks and
-                  quarterly Big 4 consulting engagements. Global vendors like
-                  MORS, SS&amp;C Algorithmics, and Finastra price at $50,000 to
-                  $200,000 per year and take six to eighteen months to
-                  implement. For the 200+ banks that sit between global Tier 1
-                  institutions and village cooperatives, these solutions are
-                  out of reach.
+                  still run Asset-Liability Management on Excel workbooks and
+                  quarterly Big 4 engagements. Global ALM vendors price at
+                  $50–200K+ per year and take six to eighteen months to
+                  implement — out of reach for the banks that sit between Tier 1
+                  institutions and village cooperatives.
                 </p>
                 <p>
-                  Meanwhile, Basel III compliance is tightening, local
-                  currencies are volatile, and central banks are demanding more
-                  sophisticated stress testing, ILAAP submissions, and monthly
-                  prudential reporting. The gap between what regulators expect
-                  and what banks can deliver is widening.
+                  Meanwhile Basel III is tightening, local currencies are
+                  volatile, and central banks demand real stress testing and
+                  monthly prudential reporting. The gap between what regulators
+                  expect and what banks can deliver is widening.
                 </p>
               </div>
             </div>
             <div className="space-y-4">
               <StatCard
-                number="$200-400K"
+                number="$200–400K"
                 label="Annual Big 4 consulting spend per bank on stress testing and Basel compliance"
               />
               <StatCard
@@ -75,47 +89,60 @@ export default function HomePage() {
                 label="Deadline for monthly prudential submissions to the Bank of Ghana, our pilot regulator"
               />
               <StatCard
-                number="$50-200K+"
-                label="Annual cost of global ALM vendors, unaffordable for mid-tier banks"
+                number="$50–200K+"
+                label="Annual cost of global ALM vendors — priced for Tier 1, not mid-tier budgets"
               />
             </div>
           </div>
         </div>
       </section>
 
-      {/* 1.3 What's live now — proof */}
+      {/* Product proof — public UI, no login */}
+      <section className="bg-soft-bg" id="product-proof">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
+          <div className="max-w-3xl">
+            <SectionLabel>THE PRODUCT</SectionLabel>
+            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
+              A launched platform — not a waitlist.
+            </h2>
+            <p className="mt-5 text-text-muted text-lg leading-relaxed">
+              From core data to regulatory return on one governed path. Every
+              screen below is the working product interface.
+            </p>
+          </div>
+          <div className="mt-12">
+            <FeatureScreenGrid screens={homepageFeatureScreens} />
+          </div>
+        </div>
+      </section>
+
+      {/* What's live */}
       <section className="bg-navy text-white">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
           <div className="max-w-3xl">
             <SectionLabel>WHAT&apos;S LIVE TODAY</SectionLabel>
             <h2 className="mt-6 font-serif font-bold text-white text-3xl md:text-4xl leading-tight">
-              A working platform, running the full pipeline today.
+              Connect. Calculate. Report. Automatically.
             </h2>
-            <p className="mt-5 text-ice-blue text-lg leading-relaxed">
-              The MVP runs end to end: connect to a bank&apos;s own data
-              sources, normalize messy real-world data into an auditable
-              canonical model, calculate, and report — automatically, on every
-              accepted data load.
-            </p>
           </div>
 
           <div className="mt-12 grid gap-px bg-white/10 rounded-lg overflow-hidden md:grid-cols-2">
             {[
               {
-                title: 'One engine, many sources',
-                body: 'The Data Engine connects to the systems a bank already runs — Oracle/FLEXCUBE, Snowflake, Temenos T24, a direct API, or a simple file upload — normalizes and de-duplicates the data, and lands it in an auditable canonical model. Each institution’s data is mapped to that model, so unusual sources are configured, not re-engineered.',
+                title: 'Data Engine',
+                body: 'Pull from Oracle/FLEXCUBE, Snowflake, Temenos T24, a secure API, or file upload. Normalize into an auditable canonical model — configured per bank, not hard-coded into the product.',
               },
               {
-                title: 'Calculations that recompute on every load',
-                body: 'Accepted data automatically triggers liquidity, capital, interest-rate, FX, FTP, and balance-sheet calculations — deterministic and regulator-defensible, with every figure traceable back to the source input that produced it.',
+                title: 'Six ALM engines',
+                body: 'Liquidity, capital, interest-rate risk, FX, FTP, and balance-sheet forecasting recompute on every accepted load — deterministic where regulators need them to be.',
               },
               {
-                title: 'Regulatory returns, generated',
-                body: 'Bank of Ghana BSD prudential returns are produced from the platform in Bank of Ghana return formats and exported to Excel, CSV, or PDF — no re-keying, no parallel spreadsheet. Ghana is our pilot; other African regulators run on the same engine.',
+                title: 'Regulatory returns',
+                body: 'Bank of Ghana BSD prudential returns generated in regulator formats and exported to Excel, CSV, or PDF. Ghana is the pilot; other African regulators share the same engine.',
               },
               {
-                title: 'Auditable by construction',
-                body: 'Immutable snapshots, full data lineage, and value-based reproducibility, so a past submission can be reproduced exactly — the thing a bank examiner actually asks for.',
+                title: 'Audit by construction',
+                body: 'Immutable snapshots, full lineage, and value-based reproducibility so a past submission can be reproduced exactly — examiner-ready evidence, not a reconstructed spreadsheet.',
               },
             ].map((item) => (
               <div key={item.title} className="bg-navy p-8">
@@ -130,49 +157,43 @@ export default function HomePage() {
           </div>
           <div className="mt-10">
             <LinkButton href="/product" variant="primary-on-dark">
-              See how it works
+              Explore the platform
             </LinkButton>
           </div>
         </div>
       </section>
 
-      {/* 1.4 The Solution */}
-      <section className="bg-soft-bg">
+      {/* Why AequorOS */}
+      <section className="bg-white">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
           <div className="max-w-3xl">
             <SectionLabel>WHY AEQUOROS</SectionLabel>
             <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              Cloud-native ALM, purpose-built for Africa.
+              Built for mid-tier African banks — not adapted from Tier 1.
             </h2>
-            <p className="mt-5 text-text-muted text-lg leading-relaxed">
-              One platform for the core Treasury and Risk workflows, on a single
-              auditable data spine. Machine learning where it measurably
-              improves forecasting; deterministic and auditable everywhere a
-              regulator needs it to be.
-            </p>
           </div>
 
           <div className="mt-12 grid md:grid-cols-3 gap-8">
             {[
               {
                 num: '01',
-                title: 'Affordable',
-                body: 'SaaS pricing roughly 90% below global vendors. Built to be economically accessible for the mid-tier banks that dominate African financial markets.',
+                title: 'Priced for this market',
+                body: 'SaaS economics for mid-tier budgets — a fraction of global ALM licenses that were never designed for this segment.',
               },
               {
                 num: '02',
-                title: 'Rapidly deployed',
-                body: 'Weeks, not the six-to-eighteen months legacy vendors take. Bank of Ghana return templates are built today; Nigeria (CBN) and South Africa (SARB) follow on the same engine.',
+                title: 'Deployed in weeks',
+                body: 'Not six-to-eighteen-month programs. BoG return templates ship today; Nigeria (CBN) and South Africa (SARB) follow on the same engine.',
               },
               {
                 num: '03',
-                title: 'Built for this market',
-                body: 'Direct integration with the cores African banks actually run — Oracle/FLEXCUBE, Temenos T24, Snowflake, or any SQL database (Finacle on the roadmap). Behavioral models tuned per institution. Regulatory reporting in each central bank’s formats.',
+                title: 'Built for local reality',
+                body: 'Cores African banks actually run, behavioral models tuned per institution, and reporting in each central bank’s formats — not a European template with a currency flag.',
               },
             ].map((col) => (
               <div
                 key={col.num}
-                className="bg-white border border-border-light rounded-lg p-8 border-t-[3px] border-t-accent"
+                className="bg-soft-bg border border-border-light rounded-lg p-8 border-t-[3px] border-t-accent"
               >
                 <p className="font-serif text-accent text-6xl leading-none">
                   {col.num}
@@ -189,8 +210,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 1.5 Why Now */}
-      <section className="bg-white">
+      {/* Why now */}
+      <section className="bg-soft-bg">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
           <div className="max-w-3xl">
             <SectionLabel>WHY NOW</SectionLabel>
@@ -204,17 +225,17 @@ export default function HomePage() {
               {
                 num: '01',
                 title: 'Regulatory tightening',
-                body: 'Central banks across the continent now expect ILAAP with stress testing, monthly capital calculations, and LCR/NSFR reporting — the Bank of Ghana among the first. Mid-tier banks are being asked for the same rigor as Tier 1 institutions, but with Excel as their primary tool.',
+                body: 'Central banks now expect ILAAP with stress testing, monthly capital calculations, and LCR/NSFR — with mid-tier banks held to Tier 1 rigor while still on Excel.',
               },
               {
                 num: '02',
                 title: 'Macroeconomic stress',
-                body: 'Persistent currency depreciation across the Ghanaian cedi, Nigerian naira, and other regional currencies. Inflation spikes of 20% or more. Rising sovereign yields. Banks need real-time risk management capability, not quarterly consulting reports.',
+                body: 'Persistent currency depreciation, inflation spikes, and rising sovereign yields mean banks need continuous risk management — not a quarterly consulting snapshot.',
               },
               {
                 num: '03',
-                title: 'AI maturity',
-                body: 'Machine-learning approaches now measurably outperform static methods in cash-flow forecasting and behavioral modeling, and cloud infrastructure has made enterprise-grade modeling deployable at SaaS prices for the first time. AequorOS applies ML where it earns its place, and keeps the regulatory calculations deterministic.',
+                title: 'Infrastructure finally fits',
+                body: 'Cloud and modern data stacks make enterprise-grade ALM deployable at SaaS prices. AequorOS keeps regulatory calculations deterministic and examiner-defensible.',
               },
             ].map((row) => (
               <div
@@ -238,23 +259,26 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 1.6 Closing CTA */}
+      {/* Closing CTA */}
       <section className="bg-navy-deep text-white">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-20 md:py-24">
           <div className="max-w-[800px] mx-auto text-center">
-            <SectionLabel>PILOT PROGRAM</SectionLabel>
+            <SectionLabel>TALK TO US</SectionLabel>
             <h2 className="mt-6 font-serif font-bold text-white text-3xl md:text-4xl leading-tight">
-              We&apos;re onboarding a first cohort of pilot banks.
+              Ready for a walkthrough on a bank like yours?
             </h2>
             <p className="mt-6 text-ice-blue text-lg leading-relaxed">
-              If you&apos;re a Treasury or Risk leader at a mid-tier African
-              bank — or an advisor who wants to help build this — we want to work
-              with a small number of design-partner banks. We respond to every
-              serious inquiry.
+              Thirty minutes with a Treasury or Risk leader: Data Engine, live
+              calculations, and regulatory returns. We&apos;re onboarding a first
+              cohort of design-partner banks and respond to every serious
+              inquiry.
             </p>
-            <div className="mt-10 flex justify-center">
+            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
               <LinkButton href="/contact" variant="primary-on-dark">
-                Request a pilot
+                Request a demo
+              </LinkButton>
+              <LinkButton href="/product#product-ui" variant="secondary">
+                Browse the product UI
               </LinkButton>
             </div>
           </div>

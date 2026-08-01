@@ -2,12 +2,15 @@ import type { Metadata } from 'next';
 import { Check } from 'lucide-react';
 import SectionLabel from '@/components/SectionLabel';
 import ModuleCard from '@/components/ModuleCard';
+import ProductFrame from '@/components/ProductFrame';
+import ProductGallery from '@/components/ProductGallery';
 import { LinkButton } from '@/components/Button';
+import { heroScreen, screenById } from '@/lib/product-screens';
 
 export const metadata: Metadata = {
   title: 'Product — AequorOS',
   description:
-    'A working Treasury and ALM platform for African banks: a source-agnostic Data Engine that connects to Oracle/FLEXCUBE, Snowflake, Temenos T24, an API, or file upload, automated liquidity, capital, and balance-sheet calculations, and regulatory reporting — auditable end to end.',
+    'Live Treasury and ALM platform for African banks: Data Engine, liquidity, capital, IRRBB, FX, FTP, forecasting, and Bank of Ghana regulatory returns — with the working product interface shown publicly.',
 };
 
 const modules = [
@@ -15,43 +18,55 @@ const modules = [
     number: '01',
     name: 'Liquidity Risk',
     description:
-      'LCR, NSFR, and cash-flow forecasting at the portfolio and institution level, recalculated automatically as new data lands.',
-    ai: 'LSTM cash-flow forecasting and per-institution behavioral models for non-maturity deposits and prepayment, trained on each bank’s own history.',
+      'LCR, NSFR, and cash-flow forecasting at portfolio and institution level, recalculated automatically as new data lands.',
+    detail:
+      'Shock-scenario liquidity stress on the same engine. ML cash-flow views are labeled separately from regulatory ratios.',
+    screenId: 'liquidity',
   },
   {
     number: '02',
     name: 'Regulatory Capital',
     description:
-      'RWA calculations under the Basel III standardized approach, capital pressure indicators, and pre-built Bank of Ghana BSD prudential returns.',
-    ai: 'Automated validation against regulatory thresholds and submission-ready report generation.',
+      'RWA under the Basel III standardized approach, capital stack and ratios, and pre-built Bank of Ghana BSD prudential returns.',
+    detail:
+      'CET1 / Tier 1 / CAR headroom against regulatory floors, with multi-quarter capital stress paths.',
+    screenId: 'basel',
   },
   {
     number: '03',
     name: 'Balance Sheet Forecasting',
     description:
-      'Multi-year balance-sheet projection and scenario planning against macro assumptions, run as immutable, reproducible snapshots.',
-    ai: 'Deterministic and fully reproducible — projections are re-derived from reviewed scenario assumptions and canonical inputs. Strategic capital-allocation optimization is on the roadmap.',
+      'Multi-year projection and scenario planning against macro assumptions, run as immutable, reproducible snapshots.',
+    detail:
+      'What-if lab re-runs the real regulatory engines under shock — base vs stressed paths with breach flags.',
+    screenId: 'forecasting-whatif',
   },
   {
     number: '04',
     name: 'Interest Rate Risk',
     description:
-      'Repricing-gap and duration analysis, economic value of equity (EVE), and Earnings-at-Risk across the full Basel IRRBB scenario set, with interest-rate-swap decomposition — deterministic and fully auditable.',
-    ai: 'Hedging optimization under volatile rate environments is on the roadmap.',
+      'Repricing-gap and duration analysis, EVE, and Earnings-at-Risk across the full Basel IRRBB scenario set.',
+    detail:
+      'Interest-rate-swap decomposition included. Deterministic and fully auditable for examiner review.',
+    screenId: 'irr',
   },
   {
     number: '05',
     name: 'Funds Transfer Pricing',
     description:
-      'Transfer-pricing curves, non-maturity-deposit behavioral modeling, and product- and branch-level profitability analysis.',
-    ai: 'Behavioral-model calibration from historical transaction data, per institution.',
+      'Matched-maturity transfer-pricing curves, NMD behavioral modeling, and product- and branch-level profitability.',
+    detail:
+      'Core/volatile deposit splits driven by reviewed behavioral duration — not folklore spreads.',
+    screenId: 'ftp',
   },
   {
     number: '06',
     name: 'FX Risk',
     description:
-      'Net-open-position monitoring against limits, historical-simulation and stressed VaR, and IFRS 9 hedge-effectiveness testing for regional currency pairs (cedi, naira, and more).',
-    ai: 'Machine-learning currency models for regional pairs are on the roadmap.',
+      'Net-open-position monitoring against limits, historical-simulation and stressed VaR, and IFRS 9 hedge-effectiveness testing.',
+    detail:
+      'Regional currency pairs and BoG-style single-currency and aggregate NOP limits.',
+    screenId: 'fx',
   },
 ];
 
@@ -59,17 +74,17 @@ const steps = [
   {
     n: '1',
     title: 'Connect',
-    body: 'A source-agnostic Data Engine connects directly to the systems you already run — Oracle/FLEXCUBE, Snowflake, Temenos T24, a direct API, or a file upload. Each institution’s data is mapped to the canonical model, so an unusual source is configured for your bank, not hard-coded into the product.',
+    body: 'The Data Engine connects to systems you already run — Oracle/FLEXCUBE, Snowflake, Temenos T24, a secure API, or file upload. Each institution maps to the canonical model; unusual sources are configured, not hard-coded.',
   },
   {
     n: '2',
     title: 'Calculate',
-    body: 'The engine normalizes real-world data into an auditable canonical model, then runs liquidity, capital, and balance-sheet calculations automatically. Deterministic and regulator-defensible where it must be; machine learning where it measurably improves forecasting.',
+    body: 'Accepted loads normalize into an auditable model and trigger liquidity, capital, IRR, FX, FTP, and forecasting. Deterministic where regulation demands it; ML only where it improves forecasting and is clearly labeled.',
   },
   {
     n: '3',
     title: 'Report',
-    body: 'ALCO reports, calculation outputs, and Bank of Ghana BSD returns are generated in the return formats your bank and central bank use, export-ready to Excel, CSV, and PDF — every figure traceable back to the source input that produced it.',
+    body: 'ALCO outputs and Bank of Ghana BSD returns export to Excel, CSV, and PDF — every figure traceable to the source input that produced it.',
   },
 ];
 
@@ -90,27 +105,47 @@ const security = [
 ];
 
 export default function ProductPage() {
+  const dataEngine = screenById('data-engine')!;
+  const submissions = screenById('submissions')!;
+  const lineage = screenById('positions-lineage')!;
+
   return (
     <>
-      {/* 2.1 Product Hero */}
+      {/* Hero */}
       <section className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-24 lg:py-28">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20">
           <div className="max-w-4xl">
             <SectionLabel>THE PLATFORM</SectionLabel>
             <h1 className="mt-6 font-serif font-bold text-navy text-4xl md:text-5xl lg:text-6xl leading-[1.1]">
               From your core to your regulator, in one platform.
             </h1>
             <p className="mt-8 text-text-muted text-lg leading-relaxed max-w-[720px]">
-              AequorOS covers the Treasury and Risk workflows a modern bank runs
-              on — ingestion, ALM calculation, and regulatory reporting — built
-              on a single auditable data spine. Banks adopt the full platform or
-              start with the workflows most critical to their operations.
+              Ingestion, ALM calculation, and regulatory reporting on a single
+              auditable data spine. Banks adopt the full platform or start with
+              the workflows most critical to their operations.
             </p>
+            <div className="mt-8 flex flex-col sm:flex-row gap-4">
+              <LinkButton href="/contact" variant="primary">
+                Request a demo
+              </LinkButton>
+              <LinkButton href="#product-ui" variant="secondary-on-light">
+                Browse product UI
+              </LinkButton>
+            </div>
+          </div>
+          <div className="mt-12 max-w-5xl">
+            <ProductFrame
+              screen={heroScreen}
+              priority
+              tone="light"
+              showCaption
+              sizes="(max-width: 1024px) 100vw, 1024px"
+            />
           </div>
         </div>
       </section>
 
-      {/* 2.2 The Data Engine — the differentiator */}
+      {/* Data Engine */}
       <section className="bg-navy-deep text-white">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
@@ -122,68 +157,93 @@ export default function ProductPage() {
               <div className="mt-6 space-y-5 text-ice-blue text-base md:text-lg leading-relaxed">
                 <p>
                   Most of the work in bank ALM is getting messy core-banking
-                  data into a clean, trustworthy shape. AequorOS does this with a
-                  source-agnostic Data Engine: it connects to a bank’s own
-                  systems, normalizes and de-duplicates the data, resolves
-                  references, and lands everything in an auditable canonical
-                  model — then triggers the downstream calculations
-                  automatically.
+                  data into a clean, trustworthy shape. AequorOS does this with
+                  a source-agnostic Data Engine: connect, normalize,
+                  de-duplicate, resolve references, land an auditable canonical
+                  model — then trigger downstream calculations automatically.
                 </p>
                 <p>
-                  Banks connect the sources they already have — a core-banking
-                  database, a data warehouse, an API, or a file drop — and the
-                  engine maps each institution’s data to the canonical model.
                   Where a source is unusual, the mapping is configured for that
-                  bank; it is never hard-coded into the product.
+                  bank. It is never hard-coded into the product.
                 </p>
               </div>
-            </div>
-            <div className="rounded-lg bg-white/5 border border-white/10 p-8">
-              <ul className="space-y-5">
+              <ul className="mt-8 space-y-4">
                 {[
                   'Direct database pull from Oracle/FLEXCUBE, Snowflake, SQL Server, or generic JDBC/ODBC',
                   'Temenos T24 adapter today; Finacle on the roadmap',
                   'File upload and API push for any source',
-                  'Per-institution mapping — customizable to a bank’s own data, no custom code in the product',
-                  'Normalization, deduplication, and reference resolution',
+                  'Per-institution mapping — no custom product forks',
                   'Immutable canonical model with end-to-end lineage',
                   'Automatic recalculation on every accepted data load',
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-3">
-                    <Check size={20} className="text-accent shrink-0 mt-0.5" aria-hidden />
+                    <Check
+                      size={20}
+                      className="text-accent shrink-0 mt-0.5"
+                      aria-hidden
+                    />
                     <span className="text-white leading-relaxed">{item}</span>
                   </li>
                 ))}
               </ul>
             </div>
+            <ProductFrame
+              screen={dataEngine}
+              tone="dark"
+              showCaption={false}
+              sizes="(max-width: 1024px) 100vw, 560px"
+            />
           </div>
         </div>
       </section>
 
-      {/* 2.3 The Modules */}
+      {/* Modules with UI */}
       <section className="bg-soft-bg">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
           <div className="max-w-3xl">
             <SectionLabel>THE WORKFLOWS</SectionLabel>
             <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              The Treasury and Risk workflows, on one spine.
+              Six engines on one live spine.
             </h2>
             <p className="mt-5 text-text-muted text-lg leading-relaxed">
-              Liquidity, capital, balance-sheet forecasting, interest-rate risk,
-              FTP, and FX all run on the same live pipeline today, sharing one
-              auditable canonical data model.
+              Liquidity, capital, forecasting, interest-rate risk, FTP, and FX
+              share one auditable canonical model — each with its working
+              product interface below.
             </p>
           </div>
           <div className="mt-12 grid gap-6 md:gap-8 md:grid-cols-2">
             {modules.map((m) => (
-              <ModuleCard key={m.number} {...m} />
+              <ModuleCard
+                key={m.number}
+                number={m.number}
+                name={m.name}
+                description={m.description}
+                detail={m.detail}
+                screen={screenById(m.screenId)}
+              />
             ))}
           </div>
         </div>
       </section>
 
-      {/* 2.4 How It Works */}
+      {/* Submissions + lineage proof */}
       <section className="bg-white">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
+          <div className="max-w-3xl">
+            <SectionLabel>REGULATORY &amp; AUDIT</SectionLabel>
+            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
+              Returns you can defend. Lineage you can show.
+            </h2>
+          </div>
+          <div className="mt-12 grid gap-10 lg:grid-cols-2">
+            <ProductFrame screen={submissions} tone="light" showCaption />
+            <ProductFrame screen={lineage} tone="light" showCaption />
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="bg-soft-bg">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
           <div className="max-w-3xl">
             <SectionLabel>HOW IT WORKS</SectionLabel>
@@ -210,7 +270,28 @@ export default function ProductPage() {
         </div>
       </section>
 
-      {/* 2.5 Technical Foundation */}
+      {/* Interactive product UI gallery — public proof */}
+      <section
+        id="product-ui"
+        className="bg-white scroll-mt-20"
+      >
+        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
+          <div className="max-w-3xl mb-10">
+            <SectionLabel>PRODUCT INTERFACE</SectionLabel>
+            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
+              Browse the working product — no login required.
+            </h2>
+            <p className="mt-5 text-text-muted text-lg leading-relaxed">
+              Captures from the live platform on a synthetic mid-tier African
+              universal bank profile (Ghana pilot). This is the product surface
+              Treasury and Risk teams evaluate in a demo.
+            </p>
+          </div>
+          <ProductGallery />
+        </div>
+      </section>
+
+      {/* Technical foundation */}
       <section className="bg-soft-bg">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
           <div className="max-w-3xl">
@@ -228,8 +309,14 @@ export default function ProductPage() {
               <ul className="mt-6 space-y-4">
                 {infrastructure.map((item) => (
                   <li key={item} className="flex items-start gap-3">
-                    <Check size={20} className="text-accent shrink-0 mt-0.5" aria-hidden />
-                    <span className="text-text-primary leading-relaxed">{item}</span>
+                    <Check
+                      size={20}
+                      className="text-accent shrink-0 mt-0.5"
+                      aria-hidden
+                    />
+                    <span className="text-text-primary leading-relaxed">
+                      {item}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -242,8 +329,14 @@ export default function ProductPage() {
               <ul className="mt-6 space-y-4">
                 {security.map((item) => (
                   <li key={item} className="flex items-start gap-3">
-                    <Check size={20} className="text-accent shrink-0 mt-0.5" aria-hidden />
-                    <span className="text-text-primary leading-relaxed">{item}</span>
+                    <Check
+                      size={20}
+                      className="text-accent shrink-0 mt-0.5"
+                      aria-hidden
+                    />
+                    <span className="text-text-primary leading-relaxed">
+                      {item}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -252,47 +345,21 @@ export default function ProductPage() {
         </div>
       </section>
 
-      {/* 2.6 See it live */}
-      <section className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pb-16 md:pb-20 lg:pb-24">
-          <div className="border border-border-light border-l-4 border-l-accent rounded-lg p-8 md:p-10 grid lg:grid-cols-[2fr,1fr] gap-8 items-center">
-            <div>
-              <SectionLabel>SEE IT LIVE</SectionLabel>
-              <h2 className="mt-4 font-serif font-bold text-navy text-2xl md:text-3xl leading-tight">
-                Walk through the working platform.
-              </h2>
-              <p className="mt-4 text-text-primary text-base md:text-lg leading-relaxed max-w-2xl">
-                A guided demo of the data engine, ALM calculations, and
-                regulatory reporting, running on a mid-tier African universal
-                bank profile (Ghana pilot) with synthetic data. Built for
-                Treasury and Risk teams evaluating workflow, reporting, and
-                auditability.
-              </p>
-            </div>
-            <div className="flex lg:justify-end">
-              <LinkButton href="https://demo.aequoros.com" variant="primary" external>
-                Open the demo
-              </LinkButton>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 2.7 Closing CTA */}
+      {/* Closing CTA */}
       <section className="bg-navy-deep text-white">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-20 md:py-24">
           <div className="max-w-[800px] mx-auto text-center">
             <h2 className="font-serif font-bold text-white text-3xl md:text-4xl leading-tight">
-              Ready to run it on your bank&apos;s data?
+              Ready to run it on your bank&apos;s questions?
             </h2>
             <p className="mt-6 text-ice-blue text-lg leading-relaxed">
-              We&apos;re onboarding a small first cohort of pilot banks. If
-              you&apos;re a Treasury or Risk leader, we&apos;d like to work with
-              you.
+              Book a 30-minute walkthrough with a Treasury or Risk leader. We
+              walk the live platform — Data Engine, calculations, and regulatory
+              returns — against the workflows your bank actually runs.
             </p>
             <div className="mt-10 flex justify-center">
               <LinkButton href="/contact" variant="primary-on-dark">
-                Request a pilot
+                Request a demo
               </LinkButton>
             </div>
           </div>

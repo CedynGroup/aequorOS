@@ -22,12 +22,12 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'AequorOS — Treasury and ALM infrastructure for African banks',
   description:
-    'Cloud-native balance sheet management, regulatory capital reporting, and risk modeling for mid-tier banks across sub-Saharan Africa.',
+    'Live cloud-native Treasury and ALM platform for mid-tier African banks — Data Engine, liquidity, capital, risk, and Bank of Ghana regulatory returns. Product interface public; onboarding pilot banks.',
   metadataBase: new URL('https://aequoros.com'),
   openGraph: {
     title: 'AequorOS — Treasury and ALM infrastructure for African banks',
     description:
-      'A working, cloud-native Treasury and ALM platform for mid-tier African banks — connected to the core, auditable end to end. MVP live; onboarding pilot banks.',
+      'Working product for mid-tier African banks: connect core systems, run ALM engines, generate auditable regulatory returns. Browse the product interface — no login required.',
     type: 'website',
     url: 'https://aequoros.com',
     siteName: 'AequorOS',
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'AequorOS — Treasury and ALM infrastructure for African banks',
     description:
-      'A working, cloud-native Treasury and ALM platform for mid-tier African banks. MVP live; onboarding pilot banks.',
+      'Live Treasury and ALM platform for African banks. Product interface public; onboarding pilot banks.',
   },
   // Explicit order so the crisp SVG is the primary favicon (Next's file
   // convention otherwise links only the PNG). PNG stays as a raster fallback.

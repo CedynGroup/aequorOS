@@ -37,6 +37,14 @@ export default function Footer() {
             </li>
             <li>
               <Link
+                href="/product#product-ui"
+                className="hover:text-accent transition-colors"
+              >
+                Product interface
+              </Link>
+            </li>
+            <li>
+              <Link
                 href="/company"
                 className="hover:text-accent transition-colors"
               >
@@ -48,7 +56,7 @@ export default function Footer() {
                 href="/contact"
                 className="hover:text-accent transition-colors"
               >
-                Contact
+                Request a demo
               </Link>
             </li>
             <li>
@@ -58,16 +66,6 @@ export default function Footer() {
               >
                 Investors
               </Link>
-            </li>
-            <li>
-              <a
-                href="https://demo.aequoros.com"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-accent transition-colors"
-              >
-                Platform demo
-              </a>
             </li>
           </ul>
         </div>
@@ -95,6 +93,17 @@ export default function Footer() {
               >
                 <Linkedin size={16} className="text-accent" />
                 linkedin.com/in/eidanso
+              </a>
+            </li>
+            <li>
+              <a
+                href="https://linkedin.com/in/delaanthonio"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 hover:text-accent transition-colors"
+              >
+                <Linkedin size={16} className="text-accent" />
+                linkedin.com/in/delaanthonio
               </a>
             </li>
             <li className="inline-flex items-center gap-2 text-ice-blue/80">
