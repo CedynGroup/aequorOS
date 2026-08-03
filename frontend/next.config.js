@@ -10,7 +10,7 @@ const nextConfig = {
     ],
   },
   // The client dashboard is a separate deployment on its own subdomain
-  // (app.aequoros.com). "Client Login" links there directly — no proxy/rewrite
+  // (bank.aequoros.com). "Client Login" links there directly — no proxy/rewrite
   // from the marketing app is needed. (Auth callbacks and the sign-in page all
   // live on the dashboard's own origin.)
 };
