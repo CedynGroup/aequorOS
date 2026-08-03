@@ -51,7 +51,7 @@ export default function ProductFrame({
               tone === 'dark' ? 'bg-white/5' : 'bg-white border border-border-light'
             }`}
           >
-            app.aequoros.com · {screen.label}
+            bank.aequoros.com · {screen.label}
           </span>
         </div>
         <Image

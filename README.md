@@ -12,7 +12,7 @@ aequorOS/
 │   ├── app/                  #   FastAPI service: all engines (IRR, Liquidity, FX,
 │   │                         #   Basel, FTP, Forecasting), app/ml LSTM, Data Engine,
 │   │                         #   Postgres + RLS tenancy, BoG submissions
-│   ├── dashboard/            #   the product UI (Next.js) → app.aequoros.com
+│   ├── dashboard/            #   the product UI (Next.js) → bank.aequoros.com
 │   ├── alembic/ tests/ scripts/ docker-compose.yml
 ├── frontend/                 # ── MARKETING SITE (Next.js) ── aequoros.com pages
 ├── packages/
@@ -22,7 +22,7 @@ aequorOS/
 ```
 
 Three deployables: `frontend` → Vercel (aequoros.com) · `backend/dashboard` → Vercel
-(app.aequoros.com, Root Directory `backend/dashboard`) · `backend` → container host
+(bank.aequoros.com, Root Directory `backend/dashboard`) · `backend` → container host
 (API incl. ML + Postgres + MinIO; the Docker image excludes `dashboard/`).
 
 ## Prerequisites
