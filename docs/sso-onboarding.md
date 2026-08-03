@@ -30,8 +30,8 @@ accounts**: an unknown identity is rejected even with a valid token.
 **The redirect URIs you must register in your IdP:**
 
 ```
-https://app.aequoros.com/api/auth/callback/sso
-https://app.aequoros.com/api/attestation/step-up/callback
+https://bank.aequoros.com/api/auth/callback/sso
+https://bank.aequoros.com/api/attestation/step-up/callback
 ```
 
 (Shown, with a copy button, in AequorOS → Settings → Authentication.)
@@ -95,7 +95,7 @@ is what authorizes a person.
 ## Testing
 
 1. AequorOS admin: Settings → Authentication → Save with *Enable SSO* ticked.
-2. Open `https://app.aequoros.com/login` in a private window — a **Sign in with
+2. Open `https://bank.aequoros.com/login` in a private window — a **Sign in with
    SSO** button appears (within a minute of enabling).
 3. Sign in with a work account that has been provisioned in AequorOS → lands on
    the dashboard.

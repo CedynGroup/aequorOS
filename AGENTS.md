@@ -8,6 +8,24 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   storage.md, temenos_adapter.md) govern domain detail; product.md governs order;
   code wins over both. Phase numbers are per-document — cite `doc.md §N Phase X`,
   never a bare "Phase 2".
+- **Subdomains are product SEGMENTS, not environments (2026-08-03).** The
+  authenticated bank product is `bank.aequoros.com` (renamed from the neutral
+  `app.` while there were still zero SSO customers — the migration cost is
+  re-registering two OIDC redirect URIs with every bank's IT department, so it
+  only ever gets more expensive). `corp.aequoros.com` is reserved for corporate
+  treasury. Marketing stays on the apex, `api.` is the backend, `bao.` is
+  OpenBao. The segments are genuinely different products over shared engines,
+  not one app with a flag: of the six modules, FTP, Basel capital and IRRBB do
+  not transfer to a corporate at all, liquidity transfers in name only (LCR/NSFR
+  are Basel ratios, corporate liquidity is cash and covenant headroom), and the
+  whole regulatory spine — BoG return families, ORASS, filing attestation — is
+  bank-only. The reusable value lives in `app/domain/*`, which is pure and must
+  stay that way. When the corporate entity lands, make it a SIBLING of `banks`
+  (a `CO-` platform id alongside `BK-`/`OR-`), never a nullable-heavy `banks`
+  row — a corporate has no licence, no jurisdiction regulator, no return family.
+  Changing the host touches `AUTH_URL`, `CORS_ORIGINS`, and `NEXT_PUBLIC_LOGIN_URL`
+  on BOTH Coolify apps; the last is a **build arg** inlined at compile time, so
+  it needs a rebuild, not a restart.
 - **Coolify compose apps: never use dollar-brace variable interpolation in deploy compose
   files** (2026-07-21 incident: Coolify parses compose text — comments included — and
   auto-seeds a UI env row per reference; with required-with-message guards it stored the

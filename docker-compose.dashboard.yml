@@ -10,7 +10,7 @@
 #   • Build Pack:              Docker Compose
 #   • Base Directory:          /                     (repo root)
 #   • Docker Compose Location: /docker-compose.dashboard.yml
-#   • Domain:                  https://app.aequoros.com → service `dashboard`
+#   • Domain:                  https://bank.aequoros.com → service `dashboard`
 #                              (container port 3000)
 #   • Env vars: NEXT_PUBLIC_* are BUILD-time (inlined into the client bundle;
 #     Coolify passes UI env vars as --build-arg for compose builds) and MUST

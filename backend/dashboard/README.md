@@ -4,7 +4,7 @@ An interactive click-through prototype of the AequorOS Treasury and ALM platform
 built per the AequorOS Figma Design Brief. Used for investor presentations and
 bank treasurer validation interviews.
 
-**Target deployment:** `app.aequoros.com` (authenticated product). Public product
+**Target deployment:** `bank.aequoros.com` (authenticated product). Public product
 UI for marketing/compliance is shown on `aequoros.com/product` — there is no
 separate `demo.aequoros.com` marketing domain.
 
@@ -110,14 +110,14 @@ npm run dev
 
 (Marketing site runs on 3000; dashboard runs on 3001 to allow side-by-side.)
 
-## Deploy to app.aequoros.com
+## Deploy to bank.aequoros.com
 
 Treat as a separate Vercel/Coolify project from the marketing site.
 
 1. Import the monorepo and set the root directory to `backend/dashboard`
    (or the path your pack expects).
 2. Framework: Next.js. Build: `npm run build` (or the monorepo script you use).
-3. After deploy: bind **`app.aequoros.com`** (not a separate demo subdomain).
+3. After deploy: bind **`bank.aequoros.com`** (not a separate demo subdomain).
 4. Authenticated clients use Client Login on the marketing site → this origin.
 
 Do not reintroduce `demo.aequoros.com` as a public product proof path — it
