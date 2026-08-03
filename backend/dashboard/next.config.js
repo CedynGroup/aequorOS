@@ -23,7 +23,7 @@ const nextConfig = {
   // keeps deploys deterministic and off the interactive eslint-setup path.
   // Type-checking still runs.
   eslint: { ignoreDuringBuilds: true },
-  // The dashboard owns the root of its own origin (production: app.aequoros.com;
+  // The dashboard owns the root of its own origin (production: bank.aequoros.com;
   // dev: localhost:3001), so there is NO path prefix by default. Only set
   // NEXT_PUBLIC_BASE_PATH (e.g. /dashboard) if the app is ever path-mounted behind
   // another domain — leave it unset for the subdomain deployment.
