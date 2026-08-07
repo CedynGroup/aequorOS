@@ -18,6 +18,7 @@ export * from "./InstitutionProfileApi";
 export * from "./IntegrationKeysApi";
 export * from "./JobsApi";
 export * from "./LiquidityApi";
+export * from "./LiquidityThresholdsApi";
 export * from "./LiveEngineApi";
 export * from "./MarketDataApi";
 export * from "./NotificationsApi";

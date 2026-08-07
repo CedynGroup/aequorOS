@@ -15,14 +15,17 @@
  * @export
  * @interface Value
  */
-export type Value = string | number | null;
+export type Value = string | number | boolean | null;
 
 /**
  * Check if a given object implements the Value interface.
  */
 export function instanceOfValue(value: unknown): value is Value {
   return (
-    typeof value === "string" || typeof value === "number" || value === null
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null
   );
 }
 

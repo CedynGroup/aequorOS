@@ -15250,6 +15250,278 @@
         ],
         "type": "string"
       },
+      "LiquidityThresholdHistoryRead": {
+        "description": "One recorded generation \u2014 the Board-approval evidence trail.",
+        "properties": {
+          "approval_timestamp": {
+            "format": "date-time",
+            "title": "Approval Timestamp",
+            "type": "string"
+          },
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "institution_class": {
+            "enum": [
+              "bank",
+              "sdi"
+            ],
+            "title": "Institution Class",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "threshold_code": {
+            "title": "Threshold Code",
+            "type": "string"
+          },
+          "threshold_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Threshold Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "threshold_code",
+          "institution_class",
+          "threshold_pct",
+          "effective_from",
+          "effective_to",
+          "approved_by",
+          "approval_timestamp",
+          "notes"
+        ],
+        "title": "LiquidityThresholdHistoryRead",
+        "type": "object"
+      },
+      "LiquidityThresholdRead": {
+        "description": "One resolved threshold: the Board's value, or the directive's floor.",
+        "properties": {
+          "approval_timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Timestamp"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "institution_class": {
+            "enum": [
+              "bank",
+              "sdi"
+            ],
+            "title": "Institution Class",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "source": {
+            "enum": [
+              "board_register",
+              "regulatory_default"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "threshold_code": {
+            "title": "Threshold Code",
+            "type": "string"
+          },
+          "threshold_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Threshold Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "threshold_code",
+          "institution_class",
+          "threshold_pct",
+          "source"
+        ],
+        "title": "LiquidityThresholdRead",
+        "type": "object"
+      },
+      "LiquidityThresholdRegisterRead": {
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/LiquidityThresholdHistoryRead"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "jurisdiction_code": {
+            "title": "Jurisdiction Code",
+            "type": "string"
+          },
+          "thresholds": {
+            "items": {
+              "$ref": "#/components/schemas/LiquidityThresholdRead"
+            },
+            "title": "Thresholds",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "jurisdiction_code",
+          "as_of_date",
+          "thresholds",
+          "history"
+        ],
+        "title": "LiquidityThresholdRegisterRead",
+        "type": "object"
+      },
+      "LiquidityThresholdUpdate": {
+        "description": "A Board-approved threshold generation.\n\n``approved_by`` names the approving authority (Board minute reference or\nofficer); ``reason`` is the audit narrative. Codes not present keep their\ncurrent resolution.",
+        "properties": {
+          "approved_by": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Approved By",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "institution_class": {
+            "default": "bank",
+            "enum": [
+              "bank",
+              "sdi"
+            ],
+            "title": "Institution Class",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "thresholds": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ]
+            },
+            "minProperties": 1,
+            "title": "Thresholds",
+            "type": "object"
+          }
+        },
+        "required": [
+          "effective_from",
+          "approved_by",
+          "thresholds",
+          "reason"
+        ],
+        "title": "LiquidityThresholdUpdate",
+        "type": "object"
+      },
       "LiquidityTrendPointRead": {
         "additionalProperties": false,
         "properties": {
@@ -18031,7 +18303,16 @@
               "balance",
               "interest_rate",
               "ifrs9_stage",
-              "behavioral_maturity_months"
+              "behavioral_maturity_months",
+              "encumbered",
+              "encumbrance_reason",
+              "owning_entity",
+              "asset_location",
+              "operational_purpose",
+              "redeemable_within_two_days",
+              "pledged_as_collateral",
+              "lien_reference",
+              "deposit_account_type"
             ],
             "title": "Field",
             "type": "string"
@@ -18051,6 +18332,9 @@
               },
               {
                 "type": "number"
+              },
+              {
+                "type": "boolean"
               },
               {
                 "type": "null"
@@ -18074,6 +18358,17 @@
             "title": "As Of Date",
             "type": "string"
           },
+          "asset_location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Location"
+          },
           "balance": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Balance",
@@ -18089,6 +18384,39 @@
               }
             ],
             "title": "Behavioral Maturity Months"
+          },
+          "deposit_account_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Account Type"
+          },
+          "encumbered": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encumbered"
+          },
+          "encumbrance_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encumbrance Reason"
           },
           "enrichment_provenance": {
             "additionalProperties": true,
@@ -18123,15 +18451,70 @@
             ],
             "title": "Interest Rate"
           },
+          "lien_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lien Reference"
+          },
           "lineage_id": {
             "format": "uuid",
             "title": "Lineage Id",
             "type": "string"
           },
+          "operational_purpose": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operational Purpose"
+          },
+          "owning_entity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owning Entity"
+          },
+          "pledged_as_collateral": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pledged As Collateral"
+          },
           "position_id": {
             "format": "uuid",
             "title": "Position Id",
             "type": "string"
+          },
+          "redeemable_within_two_days": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redeemable Within Two Days"
           },
           "superseded_snapshot_id": {
             "anyOf": [
@@ -33046,6 +33429,225 @@
         "summary": "Update Bank License",
         "tags": [
           "institution-profile"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/liquidity-thresholds": {
+      "get": {
+        "operationId": "getLiquidityThresholdRegister",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiquidityThresholdRegisterRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Liquidity Threshold Register",
+        "tags": [
+          "liquidity-thresholds"
+        ]
+      },
+      "put": {
+        "operationId": "updateLiquidityThresholdRegister",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiquidityThresholdUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiquidityThresholdRegisterRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Liquidity Threshold Register",
+        "tags": [
+          "liquidity-thresholds"
         ]
       }
     },

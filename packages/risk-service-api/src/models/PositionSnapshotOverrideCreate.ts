@@ -53,6 +53,15 @@ export const PositionSnapshotOverrideCreateFieldEnum = {
   InterestRate: "interest_rate",
   Ifrs9Stage: "ifrs9_stage",
   BehavioralMaturityMonths: "behavioral_maturity_months",
+  Encumbered: "encumbered",
+  EncumbranceReason: "encumbrance_reason",
+  OwningEntity: "owning_entity",
+  AssetLocation: "asset_location",
+  OperationalPurpose: "operational_purpose",
+  RedeemableWithinTwoDays: "redeemable_within_two_days",
+  PledgedAsCollateral: "pledged_as_collateral",
+  LienReference: "lien_reference",
+  DepositAccountType: "deposit_account_type",
 } as const;
 export type PositionSnapshotOverrideCreateFieldEnum =
   (typeof PositionSnapshotOverrideCreateFieldEnum)[keyof typeof PositionSnapshotOverrideCreateFieldEnum];
