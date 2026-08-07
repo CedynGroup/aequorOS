@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.ingestion.constants import (
     CounterpartyType,
+    DepositAccountType,
     ExtractionMode,
     GlAccountClass,
     PositionType,
@@ -228,6 +229,9 @@ class CounterpartyData(BaseModel):
     rating: str | None = None
     rating_source: str | None = None
     group_reference: str | None = None
+    # Residency relative to the bank's jurisdiction (LMTD Narrow Liquid
+    # Assets legs). None = not stated by the source.
+    resident: bool | None = None
     external_identifiers: dict[str, Any] = Field(default_factory=dict)
     attributes: dict[str, Any] = Field(default_factory=dict)
 
@@ -267,6 +271,17 @@ class PositionData(BaseModel):
     rate_index: str | None = None
     rate_spread: Decimal | None = None
     ifrs9_stage: int | None = None
+    # BoG liquidity-directive classification fields (LMTD/LRMD 2026). All
+    # optional: None = not stated; consumers treat None conservatively.
+    encumbered: bool | None = None
+    encumbrance_reason: str | None = None
+    owning_entity: str | None = None
+    asset_location: str | None = None
+    operational_purpose: bool | None = None
+    redeemable_within_two_days: bool | None = None
+    pledged_as_collateral: bool | None = None
+    lien_reference: str | None = None
+    deposit_account_type: DepositAccountType | None = None
     attributes: dict[str, Any] = Field(default_factory=dict)
 
 

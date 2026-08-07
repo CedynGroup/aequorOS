@@ -334,24 +334,41 @@ _LMT_TEMPLATE = ReturnTemplate(
         *_liquidity_sections(lmt_subset=True),
         SectionLayout(
             section_code="maturity_ladder",
-            layout_id="lmt_maturity_ladder_partial",
+            layout_id="lmt_maturity_ladder_table2",
             sheet_title="Contractual Maturity Mismatch",
             columns=(
-                ColumnSpec("code", "Bucket", "text"),
-                ColumnSpec("assets_ghs", "Assets (GHS '000)", "ghs"),
-                ColumnSpec("liabilities_ghs", "Liabilities (GHS '000)", "ghs"),
-                ColumnSpec("value", "Mismatch (GHS '000)", "ghs"),
-                ColumnSpec("cumulative_gap_ghs", "Cumulative Mismatch (GHS '000)", "ghs"),
+                ColumnSpec("description", "Contractual Balance Sheet Mismatch", "text"),
+                ColumnSpec("code", "#", "text"),
+                ColumnSpec("value", "Total", "ghs"),
+                ColumnSpec("next_day_ghs", "Next Day", "ghs"),
+                ColumnSpec("d2_7_ghs", "2 - 7 days", "ghs"),
+                ColumnSpec("d8_14_ghs", "8 - 14 days", "ghs"),
+                ColumnSpec("d15_1m_ghs", "15 days to 1 mth", "ghs"),
+                ColumnSpec("m1_2_ghs", "1 - 2 mths", "ghs"),
+                ColumnSpec("m2_3_ghs", "2 - 3 mths", "ghs"),
+                ColumnSpec("m3_6_ghs", "3 - 6 mths", "ghs"),
+                ColumnSpec("m6_9_ghs", "6 - 9 mths", "ghs"),
+                ColumnSpec("m9_12_ghs", "9 mths - 1 yr", "ghs"),
+                ColumnSpec("y1_2_ghs", "1 - 2 yrs", "ghs"),
+                ColumnSpec("y2_3_ghs", "2 - 3 yrs", "ghs"),
+                ColumnSpec("y3_5_ghs", "3 - 5 yrs", "ghs"),
+                ColumnSpec("y5_plus_ghs", "> 5 yrs", "ghs"),
+                ColumnSpec("non_contractual_ghs", "Non-contractual", "ghs"),
             ),
-            fidelity="PARTIAL",
+            fidelity="CONFIRMED",
             source_citation=f"{_LMTD_CITATION} — Table 2 Contractual Cash Flow Mismatch",
             notes=(
-                "Condensed bucket set (overnight / 2-7d / 8-30d / 1-3m / 3-6m / 6-12m / "
-                ">1y + non-contractual) derived from canonical contractual maturities; "
-                "the published Table 2 carries 15 columns and an off-balance block the "
-                "canonical data does not yet fill. Positions without a stated maturity "
-                "report in the separate non-contractual row (Table 2's final column), "
-                "never in overnight.",
+                "Full published grid: rows 1-17 (assets/liabilities categories, "
+                "stable vs volatile deposits, on-balance mismatch + cumulative, and "
+                "the off-balance block rows 12-17) x the 13 dated buckets + Total + "
+                "Non-contractual. Deposits split on the ingested deposit_account_type "
+                "(volatile = current + call, LMTD para 5); derivative-family "
+                "instruments split by carrying-value sign; OBS rows classify on "
+                "attributes['obs_category'] with documented defaults (commitments to "
+                "row 15, LC/guarantees to row 17). Bucket bounds are calendar-"
+                "approximate day counts. Positions without a stated maturity report "
+                "in the Non-contractual column, never in Next Day; the cumulative "
+                "row runs across dated buckets only, as printed.",
             ),
             optional=True,
         ),
@@ -400,16 +417,17 @@ _LMT_TEMPLATE = ReturnTemplate(
         ),
     ),
     notes=(
-        "Retires TODO(RR-6): beyond the LCR-by-significant-currency subset (Table 11 "
-        "taxonomy, aggregate currency), the return now carries a contractual "
-        "maturity-mismatch ladder (condensed Table 2), top-10 depositor funding "
-        "concentration (Table 5 subset) and available HQLA-classified assets (Table 9 "
-        "subset) derived from canonical data. Tool sections appear only when their "
-        "underlying data exists — empty grids are never fabricated.",
+        "Beyond the LCR subset (Table 11 taxonomy, aggregate currency), the return "
+        "carries the FULL published Table 2 contractual maturity-mismatch grid "
+        "(17 rows x 15 columns, CONFIRMED — rebuilt 2026-08-07 from the LMTD "
+        "appendix), top-10 depositor funding concentration (Table 5 subset) and "
+        "available HQLA-classified assets (Table 9 subset) derived from canonical "
+        "data. Tool sections appear only when their underlying data exists — empty "
+        "grids are never fabricated.",
         "LMTD Appendix Tables 1 (BOG Prudential Ratios), 3-4, 6-8 and 10 remain "
-        "unfilled: the canonical data honestly carries no prudential-ratio series, "
-        "collateral re-hypothecation, significant-currency split or horizon-bucketed "
-        "depositor data yet.",
+        "unfilled pending their Phase-2 build slices (docs/lmtd_gap_analysis.md); "
+        "Table 5 still reports the Top-10 subset pending the >1%-of-assets + "
+        "Top-20/Top-100 rebuild.",
         _T_MINUS_1_NOTE,
     ),
 )

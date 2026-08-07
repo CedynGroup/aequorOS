@@ -203,6 +203,7 @@ ingestion. Fetch them at
 | `rating` | string | no | External rating. |
 | `rating_source` | string | no | Rating agency. |
 | `group_reference` | string | no | Group / parent counterparty reference. |
+| `resident` | boolean | no | Residency relative to the reporting institution's jurisdiction (liquidity-directive classification). Accepts `true`/`false`, `0`/`1`, `"Y"`/`"N"`, `"yes"`/`"no"`. |
 | `external_identifiers` | object | no | e.g. `{"tin": "…", "lei": "…"}` — preserved verbatim. |
 | `attributes` | object | no | Free-form extras. |
 
@@ -237,6 +238,15 @@ ingestion. Fetch them at
 | `rate_index` | string | no | e.g. `GHREF`. |
 | `rate_spread` | number | no | Decimal fraction. |
 | `ifrs9_stage` | integer | no | 1, 2, or 3. |
+| `encumbered` | boolean | no | Asset tied to legal/regulatory/contractual restrictions preventing sale, transfer or pledge (BoG liquidity-directive definition). Unset = treated as unencumbered. Boolean fields accept `true`/`false`, `0`/`1`, `"Y"`/`"N"`, `"yes"`/`"no"`. |
+| `encumbrance_reason` | string | no | What the asset is pledged to (e.g. `"BoG repo"`, `"margin"`). |
+| `owning_entity` | string | no | Legal entity / affiliate owning the asset (collateral management). |
+| `asset_location` | string | no | Where the asset is held (e.g. `"CSD"`) — the unencumbered-assets register's Location column. |
+| `operational_purpose` | boolean | no | Correspondent balance held for operational purposes and readily withdrawable. |
+| `redeemable_within_two_days` | boolean | no | Marketable and redeemable within two working days. |
+| `pledged_as_collateral` | boolean | no | Deposit pledged to secure a credit facility (drives the concentration-netting rule). |
+| `lien_reference` | string | no | Source reference of the facility the deposit secures. |
+| `deposit_account_type` | enum | no | `CURRENT`, `CALL`, `SAVINGS`, `FIXED`, `OTHER` — classifies deposits for the liquidity monitoring tables (volatile = current + call). |
 | `attributes` | object | no | Instrument specifics (hedge pair, contract rate, MtM, swap legs, ECL, branch, …) — preserved verbatim and used by module fact derivation. |
 
 ### 3.5 Reference datasets

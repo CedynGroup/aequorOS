@@ -194,6 +194,8 @@ class _CanonicalSeeder:
         maturity: date | None = None,
         ifrs9_stage: int | None = None,
         currency: str = "GHS",
+        deposit_account_type: str | None = None,
+        encumbered: bool | None = None,
         extra_attributes: dict[str, Any] | None = None,
     ) -> None:
         position = CanonicalPosition(
@@ -217,6 +219,8 @@ class _CanonicalSeeder:
                 balance=Decimal(str(balance_ghs)),
                 contractual_maturity=maturity,
                 ifrs9_stage=ifrs9_stage,
+                deposit_account_type=deposit_account_type,
+                encumbered=encumbered,
                 attributes=attributes,
             )
         )
@@ -526,23 +530,61 @@ def test_le_409_without_canonical_positions(db_session: Session) -> None:
 
 
 def _seed_lmt_book(db: Session) -> None:
+    """A book exercising every Table 2 mechanism (as-of 2026-03-31).
+
+    Advances 15 days out (row 2, 15d-1mth), a security in 1-2 yrs (row 3), a
+    derivative asset and a derivative liability (sign split rows 3/8), a
+    volatile CALL deposit (row 7, non-contractual), a stable FIXED deposit
+    45 days out (row 6, 1-2 mths), an unclassified deposit (stable by
+    complement, non-contractual), an undrawn commitment (row 15 default),
+    an LC classified via obs_category (row 16) and a bare guarantee
+    (row 17 default, balance fallback, non-contractual).
+    """
     seeder = _CanonicalSeeder(db)
     depositor_a = seeder.counterparty("CP/DEP-A", "Kanda Pensions Trust", "NBFI")
     depositor_b = seeder.counterparty("CP/DEP-B", "Osu Manufacturing Ltd", "CORPORATE")
     seeder.position("LOAN/L1", "LOAN", Decimal("8000000"), maturity=date(2026, 4, 15))
     seeder.position("SEC/S1", "SECURITY_HOLDING", Decimal("5000000"), maturity=date(2027, 6, 30))
-    seeder.position("DEP/A", "DEPOSIT", Decimal("6000000"), counterparty=depositor_a)
+    seeder.position(
+        "SWAP/D1", "DERIVATIVE", Decimal("-400000"), maturity=date(2026, 9, 30)
+    )  # liability MTM → row 8, 6-9 mths
+    seeder.position(
+        "SWAP/D2", "DERIVATIVE", Decimal("250000"), maturity=date(2026, 6, 30)
+    )  # asset MTM → row 3, 2-3 mths
+    seeder.position(
+        "DEP/A",
+        "DEPOSIT",
+        Decimal("6000000"),
+        counterparty=depositor_a,
+        deposit_account_type="CALL",  # volatile (row 7)
+    )
     seeder.position(
         "DEP/B",
         "DEPOSIT",
         Decimal("3000000"),
         counterparty=depositor_b,
         maturity=date(2026, 5, 15),
+        deposit_account_type="FIXED",  # stable (row 6), 1-2 mths
     )
-    seeder.position("DEP/ANON", "DEPOSIT", Decimal("1000000"))
+    seeder.position("DEP/ANON", "DEPOSIT", Decimal("1000000"))  # unclassified → stable
+    seeder.position(
+        "COMMIT/C1",
+        "COMMITMENT_UNDRAWN",
+        Decimal("0"),
+        maturity=date(2026, 12, 31),
+        extra_attributes={"notional_ghs": "2000000"},  # default → row 15, 9m-1yr
+    )
+    seeder.position(
+        "LCG/G1",
+        "LC_GUARANTEE",
+        Decimal("0"),
+        maturity=date(2026, 4, 5),
+        extra_attributes={"notional_ghs": "900000", "obs_category": "letter_of_credit"},
+    )  # row 16, 2-7 days
+    seeder.position("LCG/G2", "LC_GUARANTEE", Decimal("600000"))  # default → row 17, NC
 
 
-def test_lmt_carries_ladder_concentration_and_unencumbered_sections(
+def test_lmt_carries_ladder_concentration_and_unencumbered_sections(  # noqa: PLR0915 - one linear pass over the printed grid
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
     seed_sample_bank(db_session)
@@ -554,25 +596,42 @@ def test_lmt_carries_ladder_concentration_and_unencumbered_sections(
     assert {"maturity_ladder", "funding_concentration", "unencumbered_assets"} <= set(sections)
 
     ladder = {row["code"]: row for row in sections["maturity_ladder"]["rows"]}
-    assert set(ladder) == {
-        "overnight",
-        "2-7d",
-        "8-30d",
-        "1-3m",
-        "3-6m",
-        "6-12m",
-        ">1y",
-        "non_contractual",
-    }
-    assert Decimal(ladder["8-30d"]["assets_ghs"]) == Decimal("8000000")  # loan, 15 days out
-    assert Decimal(ladder["1-3m"]["liabilities_ghs"]) == Decimal("3000000")  # 45-day deposit
-    assert Decimal(ladder[">1y"]["assets_ghs"]) == Decimal("5000000")  # 2027 security
-    # Undated deposits report non-contractual (Table 2's final column), never overnight.
-    assert Decimal(ladder["non_contractual"]["liabilities_ghs"]) == Decimal("7000000")
-    assert "cumulative_gap_ghs" not in ladder["non_contractual"]
+    assert set(ladder) == {str(n) for n in range(1, 18)}  # the printed rows 1-17
+
+    # Category placement across the published buckets.
+    assert Decimal(ladder["2"]["d15_1m_ghs"]) == Decimal("8000000")  # loan, 15 days out
+    assert Decimal(ladder["3"]["y1_2_ghs"]) == Decimal("5000000")  # 2027 security
+    assert Decimal(ladder["3"]["m2_3_ghs"]) == Decimal("250000")  # derivative asset MTM
+    assert Decimal(ladder["8"]["m6_9_ghs"]) == Decimal("400000")  # derivative liability, abs
+    assert Decimal(ladder["6"]["m1_2_ghs"]) == Decimal("3000000")  # stable FIXED, 45 days
+    # Undated positions report non-contractual, never Next Day.
+    assert Decimal(ladder["6"]["non_contractual_ghs"]) == Decimal("1000000")  # unclassified
+    assert Decimal(ladder["7"]["non_contractual_ghs"]) == Decimal("6000000")  # CALL deposit
+    assert Decimal(ladder["7"]["next_day_ghs"]) == Decimal("0")
+
+    # Derived rows: 1 = 2+3+4, 5 = 6+7+8+9, 10 = 1-5 (Total column = `value`).
+    assert Decimal(ladder["1"]["value"]) == Decimal("13250000")
+    assert Decimal(ladder["5"]["value"]) == Decimal("10400000")
+    assert Decimal(ladder["10"]["value"]) == Decimal("2850000")
+
+    # Cumulative row 11 runs across dated buckets only: by 9m-1yr it has seen
+    # +8.0M -3.0M +0.25M -0.4M; the non-contractual cell stays blank as printed.
+    assert Decimal(ladder["11"]["m9_12_ghs"]) == Decimal("4850000")
+    assert Decimal(ladder["11"]["value"]) == Decimal("9850000")  # through >5 yrs
+    assert "non_contractual_ghs" not in ladder["11"]
+
+    # Off-balance block: 15 (commitment default), 16 (obs_category LC),
+    # 17 (guarantee default, balance fallback), 14 = 15+16+17, 12 = 13+14.
+    assert Decimal(ladder["15"]["m9_12_ghs"]) == Decimal("2000000")
+    assert Decimal(ladder["16"]["d2_7_ghs"]) == Decimal("900000")
+    assert Decimal(ladder["17"]["non_contractual_ghs"]) == Decimal("600000")
+    assert Decimal(ladder["13"]["value"]) == Decimal("0")
+    assert Decimal(ladder["14"]["value"]) == Decimal("3500000")
+    assert Decimal(ladder["12"]["value"]) == Decimal("3500000")
+
     total = sections["maturity_ladder"]["total"]
-    assert total["equals_sum_of_rows"] is True
-    assert Decimal(total["value"]) == Decimal("3000000")  # 13M assets - 10M liabilities
+    assert total["equals_sum_of_rows"] is False  # a grid, not a summable column
+    assert Decimal(total["value"]) == Decimal("2850000")  # on-balance mismatch
 
     concentration = sections["funding_concentration"]["rows"]
     assert [(row["description"], row["value"]) for row in concentration] == [
@@ -587,7 +646,7 @@ def test_lmt_carries_ladder_concentration_and_unencumbered_sections(
     assert all(row["hqla_level"] == "L1" for row in unencumbered)
 
     totals = {row["code"]: row["value"] for row in package.snapshot["totals"]}
-    assert Decimal(totals["contractual_gap_total_ghs"]) == Decimal("3000000")
+    assert Decimal(totals["on_balance_mismatch_total_ghs"]) == Decimal("2850000")
     assert Decimal(totals["top10_depositor_share_pct"]) == Decimal("90")
 
     # The unattributed deposit is counted in the total but flagged as unrankable.

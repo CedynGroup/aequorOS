@@ -595,6 +595,61 @@ class TestManualOverride:
         by_reference = {item["source_reference"]: item for item in current}
         assert by_reference[position["source_reference"]]["snapshot_id"] == overridden["id"]
 
+    def test_lmtd_classification_overrides_round_trip(
+        self, db_client: TestClient, tmp_path: Path
+    ) -> None:
+        """The LMTD/LRMD classification fields take the audited override path.
+
+        Onboarding reality for the liquidity directives: treasury marks a bond
+        encumbered or types a deposit account by hand before the first LMT
+        filing, and each correction must supersede with provenance like any
+        other snapshot field.
+        """
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        start_batch(db_client, bank_id, fixtures.build_well_formed(tmp_path / "bank.xlsx"))
+        position = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+        ).json()["positions"][0]
+        url = f"/api/v1/banks/{bank_id}/position-snapshots/{position['snapshot_id']}/override"
+
+        first = db_client.post(
+            url,
+            headers=headers(),
+            json={
+                "field": "encumbered",
+                "value": "true",
+                "reason": "Pledged under BoG repo facility per treasury register.",
+            },
+        )
+        assert first.status_code == 200, first.text
+        overridden = first.json()
+        assert overridden["encumbered"] is True
+        assert overridden["enrichment_provenance"]["encumbered"]["source"] == "MANUAL_OVERRIDE"
+
+        second = db_client.post(
+            f"/api/v1/banks/{bank_id}/position-snapshots/{overridden['id']}/override",
+            headers=headers(),
+            json={
+                "field": "deposit_account_type",
+                "value": "call",  # lowercase in, canonical uppercase out
+                "reason": "Classified from account-opening documents.",
+            },
+        )
+        assert second.status_code == 200, second.text
+        assert second.json()["deposit_account_type"] == "CALL"
+
+        rejected = db_client.post(
+            f"/api/v1/banks/{bank_id}/position-snapshots/{second.json()['id']}/override",
+            headers=headers(),
+            json={
+                "field": "deposit_account_type",
+                "value": "cheque",
+                "reason": "Typo test.",
+            },
+        )
+        assert rejected.status_code == 422
+
     def test_superseded_snapshot_cannot_be_overridden(
         self, db_client: TestClient, tmp_path: Path
     ) -> None:

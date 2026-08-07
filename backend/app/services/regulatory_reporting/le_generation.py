@@ -96,23 +96,63 @@ _SOVEREIGN_CATEGORY_PREFIX = "SOVEREIGN"
 _LE_THRESHOLD_FRACTION = Decimal("0.10")  # large exposure = ≥10% of NOF (¶11)
 _TOP_EXPOSURES_CAP = 100  # Template 2: top-100 exposures
 
-# LMTD-derived contractual maturity ladder (condensed bucket set — the
-# published Table 2 carries 15 columns; these buckets follow the plan spec
-# and the fact_derivation repricing day-bounds). Undated positions land in
-# the separate non-contractual bucket (Table 2's final column), never in
-# overnight.
-_LADDER_BUCKETS: tuple[tuple[str, str, int | None], ...] = (
-    ("overnight", "Overnight", 1),
-    ("2-7d", "2-7 days", 7),
-    ("8-30d", "8-30 days", 30),
-    ("1-3m", "1-3 months", 91),
-    ("3-6m", "3-6 months", 182),
-    ("6-12m", "6-12 months", 365),
-    (">1y", "Over 1 year", None),
+# LMTD Table 2 (Contractual Cash Flow Mismatch) — the FULL published bucket
+# set: 13 dated columns + non-contractual (built 2026-08-07, replacing the
+# condensed 7-bucket ladder whose aggregation was lossy). Upper bounds are
+# calendar-approximate day counts (months ≈ 30/31-day steps, years ≈ 365);
+# undated positions land in the separate non-contractual column, never in
+# Next Day. Keys double as snapshot-row extras and template column ids.
+_TABLE2_BUCKETS: tuple[tuple[str, str, int | None], ...] = (
+    ("next_day_ghs", "Next Day", 1),
+    ("d2_7_ghs", "2 - 7 days", 7),
+    ("d8_14_ghs", "8 - 14 days", 14),
+    ("d15_1m_ghs", "15 days to 1 mth", 30),
+    ("m1_2_ghs", "1 - 2 mths", 61),
+    ("m2_3_ghs", "2 - 3 mths", 91),
+    ("m3_6_ghs", "3 - 6 mths", 182),
+    ("m6_9_ghs", "6 - 9 mths", 273),
+    ("m9_12_ghs", "9 mths - 1 yr", 365),
+    ("y1_2_ghs", "1 - 2 yrs", 730),
+    ("y2_3_ghs", "2 - 3 yrs", 1095),
+    ("y3_5_ghs", "3 - 5 yrs", 1825),
+    ("y5_plus_ghs", "> 5 yrs", None),
 )
-_NON_CONTRACTUAL_BUCKET = ("non_contractual", "Non-contractual (no stated maturity)")
-_LADDER_ASSET_TYPES = ("LOAN", "SECURITY_HOLDING", "INTERBANK_PLACEMENT", "CASH", "OTHER_ASSET")
-_LADDER_LIABILITY_TYPES = ("DEPOSIT", "INTERBANK_BORROWING", "OTHER_LIABILITY")
+_NON_CONTRACTUAL_BUCKET = ("non_contractual_ghs", "Non-contractual")
+
+# Table 2 row taxonomy: canonical position types → published row categories.
+# Derivative-family instruments split by carrying-value sign (MTM asset →
+# row 3, MTM liability → row 8) because the canonical model stores one
+# signed balance per instrument, not separate legs.
+_T2_ADVANCES = ("LOAN",)
+_T2_DERIVATIVE_FAMILY = ("DERIVATIVE", "FX_HEDGE", "INTEREST_RATE_SWAP")
+_T2_OTHER_ASSETS = ("CASH", "INTERBANK_PLACEMENT", "OTHER_ASSET")
+_T2_OTHER_LIABILITIES = ("INTERBANK_BORROWING", "OTHER_LIABILITY")
+_T2_OFF_BALANCE = ("LC_GUARANTEE", "COMMITMENT_UNDRAWN")
+_TABLE2_POSITION_TYPES = (
+    *_T2_ADVANCES,
+    "SECURITY_HOLDING",
+    *_T2_DERIVATIVE_FAMILY,
+    *_T2_OTHER_ASSETS,
+    "DEPOSIT",
+    *_T2_OTHER_LIABILITIES,
+    *_T2_OFF_BALANCE,
+)
+# LMTD ¶5: Volatile Liabilities = all demand deposits (current and call).
+# Stable = the complement; an unclassified deposit reports as stable/OTHER
+# and is flagged at the ingestion gate (lmtd_classification_coverage).
+_VOLATILE_DEPOSIT_TYPES = ("CURRENT", "CALL")
+# Off-balance-sheet sub-rows (Table 2 rows 13/15/16/17). Sources that
+# distinguish OBS instruments set attributes["obs_category"]; without it,
+# undrawn commitments default to row 15 (irrevocable lending facilities)
+# and LC/guarantee positions to row 17 (indemnities and guarantees) — the
+# dominant category in Ghanaian OBS books. Row 16 fills only when the
+# source names its letters of credit.
+_OBS_CATEGORY_ROWS = {
+    "obs_vehicle_facility": "13",
+    "lending_facility": "15",
+    "letter_of_credit": "16",
+    "guarantee": "17",
+}
 _TOP_DEPOSITORS = 10
 
 
@@ -157,6 +197,20 @@ class _CanonicalRow:
     counterparty_tin: str
     issuer: str | None
     regulatory_category: str | None
+    # LMTD/LRMD 2026 classification fields (canonical epoch 2026-08-07).
+    notional_ghs: Decimal | None
+    deposit_account_type: str | None
+    obs_category: str | None
+    encumbered: bool | None
+    encumbrance_reason: str | None
+    owning_entity: str | None
+    asset_location: str | None
+    operational_purpose: bool | None
+    redeemable_within_two_days: bool | None
+    pledged_as_collateral: bool | None
+    lien_reference: str | None
+    counterparty_resident: bool | None
+    counterparty_rating: str | None
 
 
 def _group_reference(counterparty: CanonicalCounterparty) -> str | None:
@@ -220,9 +274,12 @@ def _load_canonical_rows(
                 balance_ghs = _ZERO
                 has_ghs_value = False
         notional_ghs = _dec_or_none(attributes.get("notional_ghs"))
+        if notional_ghs is None and position.currency == base_currency:
+            notional_ghs = _dec_or_none(snapshot.notional)
         ccf = _dec_or_none(attributes.get("credit_conversion_factor"))
         undrawn = notional_ghs * ccf if notional_ghs is not None and ccf is not None else _ZERO
         issuer = attributes.get("issuer")
+        obs_category = attributes.get("obs_category")
         rows.append(
             _CanonicalRow(
                 position_type=position.position_type,
@@ -244,6 +301,21 @@ def _load_canonical_rows(
                 counterparty_tin=_counterparty_tin(counterparty) if counterparty else "",
                 issuer=str(issuer) if issuer else None,
                 regulatory_category=(product.regulatory_category if product is not None else None),
+                notional_ghs=notional_ghs,
+                deposit_account_type=snapshot.deposit_account_type,
+                obs_category=str(obs_category) if obs_category else None,
+                encumbered=snapshot.encumbered,
+                encumbrance_reason=snapshot.encumbrance_reason,
+                owning_entity=snapshot.owning_entity,
+                asset_location=snapshot.asset_location,
+                operational_purpose=snapshot.operational_purpose,
+                redeemable_within_two_days=snapshot.redeemable_within_two_days,
+                pledged_as_collateral=snapshot.pledged_as_collateral,
+                lien_reference=snapshot.lien_reference,
+                counterparty_resident=(
+                    counterparty.resident if counterparty is not None else None
+                ),
+                counterparty_rating=counterparty.rating if counterparty is not None else None,
             )
         )
     return rows
@@ -579,70 +651,155 @@ def _maturity_bucket(maturity: date | None, as_of: date) -> str:
     if maturity is None:
         return _NON_CONTRACTUAL_BUCKET[0]
     days = (maturity - as_of).days
-    for code, _, upper in _LADDER_BUCKETS:
+    for code, _, upper in _TABLE2_BUCKETS:
         if upper is None or days <= upper:
             return code
-    return _LADDER_BUCKETS[-1][0]
+    return _TABLE2_BUCKETS[-1][0]
+
+
+_BUCKET_CODES = tuple(code for code, _, _ in _TABLE2_BUCKETS)
+_ALL_BUCKET_CODES = (*_BUCKET_CODES, _NON_CONTRACTUAL_BUCKET[0])
+
+# Table 2's printed rows, in filing order. Derived rows (1, 5, 10, 11, 12,
+# 14) are computed from the category rows; the rest accumulate positions.
+_TABLE2_ROW_LABELS: tuple[tuple[str, str], ...] = (
+    ("1", "Contractual maturity of assets (items 2 to 4)"),
+    ("2", "Advances"),
+    ("3", "Trading, hedging and other investment instruments"),
+    ("4", "Other assets"),
+    ("5", "Contractual maturity of liabilities (items 6 to 9)"),
+    ("6", "Stable deposits"),
+    ("7", "Volatile deposits"),
+    ("8", "Trading and hedging instruments"),
+    ("9", "Other liabilities"),
+    ("10", "On-balance sheet contractual mismatch (item 1 less item 5)"),
+    ("11", "Cumulative on-balance sheet contractual mismatch"),
+    ("12", "Off-balance sheet exposure to liquidity risk, of which:"),
+    ("13", "Liquidity facilities provided to off-balance-sheet vehicles"),
+    ("14", "Undrawn commitments (items 15 to 17)"),
+    ("15", "Unutilised portion of irrevocable lending facilities"),
+    ("16", "Unutilised portion of irrevocable letters of credit"),
+    ("17", "Indemnities and guarantees"),
+)
+
+_Vector = dict[str, Decimal]
+
+
+def _vector() -> _Vector:
+    return dict.fromkeys(_ALL_BUCKET_CODES, _ZERO)
+
+
+def _vector_sum(*vectors: _Vector) -> _Vector:
+    out = _vector()
+    for vec in vectors:
+        for code in _ALL_BUCKET_CODES:
+            out[code] += vec[code]
+    return out
+
+
+def _vector_sub(left: _Vector, right: _Vector) -> _Vector:
+    return {code: left[code] - right[code] for code in _ALL_BUCKET_CODES}
+
+
+def _table2_row_for(row: _CanonicalRow) -> tuple[str, Decimal] | None:  # noqa: PLR0911 - one return per printed row category
+    """(printed row number, contribution amount) for one canonical position.
+
+    Classification is deterministic and documented — never heuristic:
+    on-balance categories map from ``position_type`` (with the derivative
+    sign split), deposits split stable/volatile on ``deposit_account_type``,
+    and OBS sub-rows follow ``attributes["obs_category"]`` with documented
+    per-type defaults. Amounts: on-balance rows use the GHS balance; OBS
+    rows use the GHS notional (the unutilised amount itself, not a
+    CCF-weighted capital equivalent), falling back to balance.
+    """
+    kind = row.position_type
+    if kind in _T2_ADVANCES:
+        return "2", row.balance_ghs
+    if kind == "SECURITY_HOLDING":
+        return "3", row.balance_ghs
+    if kind in _T2_DERIVATIVE_FAMILY:
+        if row.balance_ghs < _ZERO:
+            return "8", -row.balance_ghs
+        return "3", row.balance_ghs
+    if kind in _T2_OTHER_ASSETS:
+        return "4", row.balance_ghs
+    if kind == "DEPOSIT":
+        account_type = (row.deposit_account_type or "").upper()
+        if account_type in _VOLATILE_DEPOSIT_TYPES:
+            return "7", row.balance_ghs
+        return "6", row.balance_ghs
+    if kind in _T2_OTHER_LIABILITIES:
+        return "9", row.balance_ghs
+    if kind in _T2_OFF_BALANCE:
+        amount = row.notional_ghs if row.notional_ghs is not None else row.balance_ghs
+        category = (row.obs_category or "").strip().lower()
+        target = _OBS_CATEGORY_ROWS.get(category)
+        if target is None:
+            target = "15" if kind == "COMMITMENT_UNDRAWN" else "17"
+        return target, amount
+    return None
+
+
+def _table2_snapshot_row(number: str, label: str, vector: _Vector) -> dict[str, Any]:
+    total = sum((vector[code] for code in _ALL_BUCKET_CODES), _ZERO)
+    return snapshot_row(
+        number, label, total, **{code: str(vector[code]) for code in _ALL_BUCKET_CODES}
+    )
 
 
 def _ladder_section(rows: list[_CanonicalRow], as_of: date) -> tuple[dict[str, Any], Decimal]:
-    assets: dict[str, Decimal] = {}
-    liabilities: dict[str, Decimal] = {}
+    """LMTD Table 2 — the full 17-row × 15-column published grid."""
+    accumulated: dict[str, _Vector] = {number: _vector() for number, _ in _TABLE2_ROW_LABELS}
     for row in rows:
-        bucket = _maturity_bucket(row.contractual_maturity, as_of)
-        if row.position_type in _LADDER_ASSET_TYPES:
-            assets[bucket] = assets.get(bucket, _ZERO) + row.balance_ghs
-        else:
-            liabilities[bucket] = liabilities.get(bucket, _ZERO) + row.balance_ghs
+        target = _table2_row_for(row)
+        if target is None:
+            continue
+        number, amount = target
+        accumulated[number][_maturity_bucket(row.contractual_maturity, as_of)] += amount
 
-    ladder_rows: list[dict[str, Any]] = []
-    cumulative = _ZERO
-    for code, label, _ in _LADDER_BUCKETS:
-        asset_total = assets.get(code, _ZERO)
-        liability_total = liabilities.get(code, _ZERO)
-        gap = asset_total - liability_total
-        cumulative += gap
-        ladder_rows.append(
-            snapshot_row(
-                code,
-                f"Contractual mismatch — {label}",
-                gap,
-                assets_ghs=str(asset_total),
-                liabilities_ghs=str(liability_total),
-                cumulative_gap_ghs=str(cumulative),
+    vectors = accumulated
+    vectors["1"] = _vector_sum(vectors["2"], vectors["3"], vectors["4"])
+    vectors["5"] = _vector_sum(vectors["6"], vectors["7"], vectors["8"], vectors["9"])
+    vectors["10"] = _vector_sub(vectors["1"], vectors["5"])
+    vectors["14"] = _vector_sum(vectors["15"], vectors["16"], vectors["17"])
+    # Row 12 is "of which" 13 + 14; a source can additionally book other OBS
+    # liquidity exposures straight to row 12 via obs_category in the future —
+    # today it is exactly the sum of its sub-rows.
+    vectors["12"] = _vector_sum(vectors["13"], vectors["14"])
+
+    labels = dict(_TABLE2_ROW_LABELS)
+    table_rows: list[dict[str, Any]] = []
+    on_balance_mismatch_total = _ZERO
+    for number, label in _TABLE2_ROW_LABELS:
+        if number == "11":
+            # Cumulative mismatch runs across dated buckets only; the
+            # non-contractual column sits outside the run (kept blank, as on
+            # the printed form).
+            cumulative = _ZERO
+            extras: dict[str, str] = {}
+            for code in _BUCKET_CODES:
+                cumulative += vectors["10"][code]
+                extras[code] = str(cumulative)
+            table_rows.append(snapshot_row(number, labels[number], cumulative, **extras))
+            continue
+        table_rows.append(_table2_snapshot_row(number, label, vectors[number]))
+        if number == "10":
+            on_balance_mismatch_total = sum(
+                (vectors["10"][code] for code in _ALL_BUCKET_CODES), _ZERO
             )
-        )
-    nc_code, nc_label = _NON_CONTRACTUAL_BUCKET
-    nc_assets = assets.get(nc_code, _ZERO)
-    nc_liabilities = liabilities.get(nc_code, _ZERO)
-    # The non-contractual column sits outside the dated cumulative run
-    # (LMTD Table 2 keeps it as a separate final column).
-    ladder_rows.append(
-        snapshot_row(
-            nc_code,
-            f"Contractual mismatch — {nc_label}",
-            nc_assets - nc_liabilities,
-            assets_ghs=str(nc_assets),
-            liabilities_ghs=str(nc_liabilities),
-        )
-    )
-    bucket_codes = [*(code for code, _, _ in _LADDER_BUCKETS), nc_code]
-    total_gap = sum(
-        (assets.get(code, _ZERO) - liabilities.get(code, _ZERO) for code in bucket_codes),
-        _ZERO,
-    )
+
     section = snapshot_section(
         "maturity_ladder",
         "Contractual Maturity Mismatch",
-        ladder_rows,
+        table_rows,
         snapshot_total(
-            "contractual_gap_total_ghs",
-            "Total contractual mismatch (assets − liabilities)",
-            total_gap,
-            equals_sum_of_rows=True,
+            "on_balance_mismatch_total_ghs",
+            "On-balance sheet contractual mismatch — total (item 1 less item 5)",
+            on_balance_mismatch_total,
+            equals_sum_of_rows=False,
         ),
     )
-    return section, total_gap
+    return section, on_balance_mismatch_total
 
 
 def _funding_concentration_section(
@@ -745,10 +902,17 @@ def _unencumbered_assets_section(
 
 _LMT_TOOL_NOTES = [
     (
-        "Maturity ladder: condensed bucket set (overnight / 2-7d / 8-30d / 1-3m / "
-        "3-6m / 6-12m / >1y + non-contractual) derived from canonical contractual "
-        "maturities; the published Table 2 carries 15 columns and an off-balance "
-        "block the canonical data does not yet fill."
+        "Maturity ladder: the full published Table 2 grid — 17 rows x 15 columns "
+        "(13 dated buckets + Total + Non-contractual). Deposits split stable/"
+        "volatile on the ingested deposit_account_type (volatile = current + call "
+        "per LMTD para 5; unclassified deposits report as stable and are flagged "
+        "at the ingestion gate). Derivative-family instruments split by carrying-"
+        "value sign (asset MTM to row 3, liability MTM to row 8). Off-balance "
+        "rows 13/15/16/17 classify on attributes['obs_category'] with documented "
+        "defaults (undrawn commitments to row 15, LC/guarantees to row 17); "
+        "amounts are unutilised notionals, not CCF-weighted equivalents. Bucket "
+        "bounds are calendar-approximate day counts; undated positions report "
+        "non-contractual, never Next Day."
     ),
     (
         "Funding concentration: top-10 depositors by canonical counterparty; the "
@@ -770,17 +934,15 @@ def _build_lmt_tool_block(
     totals: list[dict[str, Any]] = []
     findings: list[dict[str, str]] = []
 
-    ladder_rows = _load_canonical_rows(
-        db, ctx, bank, period.period_end, (*_LADDER_ASSET_TYPES, *_LADDER_LIABILITY_TYPES)
-    )
+    ladder_rows = _load_canonical_rows(db, ctx, bank, period.period_end, _TABLE2_POSITION_TYPES)
     if ladder_rows:
-        ladder_section, total_gap = _ladder_section(ladder_rows, period.period_end)
+        ladder_section, mismatch_total = _ladder_section(ladder_rows, period.period_end)
         sections.append(ladder_section)
         totals.append(
             snapshot_row(
-                "contractual_gap_total_ghs",
-                "Total contractual mismatch",
-                total_gap,
+                "on_balance_mismatch_total_ghs",
+                "On-balance sheet contractual mismatch (item 1 less item 5)",
+                mismatch_total,
                 unit="ghs",
             )
         )

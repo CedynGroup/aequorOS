@@ -67,6 +67,72 @@ def build_well_formed(path: Path) -> Path:
     return path
 
 
+def build_lmtd_classified(path: Path) -> Path:
+    """Deposits and securities carrying the BoG liquidity-directive columns.
+
+    Exercises the LMTD/LRMD classification fields the way a bank's extract
+    actually spells them: Y/N flags, mixed-case account types, and a
+    counterparty residency column.
+    """
+    workbook = Workbook()
+
+    customers = _active_sheet(workbook)
+    customers.title = "Customers"
+    customers.append(["CustomerId", "CustomerName", "Segment", "Country", "Resident"])
+    customers.append(["C-101", "Accra Textiles Ltd", "CORP", "GH", "Y"])
+    customers.append(["C-102", "Frankfurt Corr Bank", "BANK", "DE", "N"])
+
+    deposits = workbook.create_sheet("Deposits")
+    deposits.append(
+        [
+            "AccountRef",
+            "Type",
+            "Ccy",
+            "Balance",
+            "Customer",
+            "AcctType",
+            "PledgedFlag",
+            "LienRef",
+        ]
+    )
+    deposits.append(["DP-1001", "DEPOSIT", "GHS", 500000, "C-101", "Curr", "N", None])
+    deposits.append(["DP-1002", "DEPOSIT", "GHS", 750000, "C-101", "Fixed", "Y", "LN-0009"])
+
+    securities = workbook.create_sheet("Securities")
+    securities.append(
+        [
+            "AccountRef",
+            "Type",
+            "Ccy",
+            "Balance",
+            "Encumbered",
+            "EncReason",
+            "Owner",
+            "Location",
+            "TwoDayRedeem",
+        ]
+    )
+    securities.append(
+        ["SEC-2001", "SECURITY_HOLDING", "GHS", 2000000, "No", None, "Head Office", "CSD", "Yes"]
+    )
+    securities.append(
+        [
+            "SEC-2002",
+            "SECURITY_HOLDING",
+            "GHS",
+            1000000,
+            "Yes",
+            "Repo pledge",
+            "Head Office",
+            "CSD",
+            "No",
+        ]
+    )
+
+    workbook.save(path)
+    return path
+
+
 def build_merged_headers(path: Path) -> Path:
     """A title banner merged across the top, blank spacer, then the table."""
     workbook = Workbook()

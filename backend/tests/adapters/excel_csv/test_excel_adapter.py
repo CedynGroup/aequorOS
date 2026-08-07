@@ -142,6 +142,92 @@ class TestWellFormedTranslation:
         assert product.regulatory_category == "CORPORATE_LOAN_UNRATED_100RW"
 
 
+LMTD_MAPPING = MappingConfig(
+    field_mappings={
+        "counterparty": EntityMapping(
+            source_table="Customers",
+            fields={
+                "source_reference": "CustomerId",
+                "name": "CustomerName",
+                "counterparty_type": "Segment",
+                "country_code": "Country",
+                "resident": "Resident",
+            },
+        ),
+        "position": EntityMapping(
+            source_table="Deposits",
+            source_table_aliases=["Securities"],
+            fields={
+                "source_reference": "AccountRef",
+                "position_type": "Type",
+                "currency": "Ccy",
+                "balance": "Balance",
+                "counterparty_reference": "Customer",
+                "deposit_account_type": "AcctType",
+                "pledged_as_collateral": "PledgedFlag",
+                "lien_reference": "LienRef",
+                "encumbered": "Encumbered",
+                "encumbrance_reason": "EncReason",
+                "owning_entity": "Owner",
+                "asset_location": "Location",
+                "redeemable_within_two_days": "TwoDayRedeem",
+            },
+        ),
+    },
+    enum_mappings={
+        "counterparty_type": {"CORP": "CORPORATE", "BANK": "BANK_OECD"},
+        "deposit_account_type": {"Curr": "CURRENT", "Fixed": "FIXED"},
+    },
+)
+
+
+class TestLmtdClassificationTranslation:
+    """The BoG liquidity-directive fields survive extract → translate intact."""
+
+    def test_lmtd_fields_translate_with_bank_spellings(self, tmp_path: Path) -> None:
+        adapter = ExcelCsvAdapter()
+        config = AdapterConfig(
+            location=str(fixtures.build_lmtd_classified(tmp_path / "lmtd.xlsx")),
+            options={
+                "entity_tables": {
+                    "counterparty": "Customers",
+                    "position": ["Deposits", "Securities"],
+                }
+            },
+        )
+        extraction = adapter.extract(config, fixtures.AS_OF, ["counterparty", "position"])
+        records = adapter.translate(extraction, LMTD_MAPPING)
+
+        assert not records.failures, [f.error_message for f in records.failures]
+        assert len(records.positions) == 4
+
+        by_ref = {p.source_reference: p for p in records.positions}
+        current = by_ref["DP-1001"]
+        assert current.deposit_account_type == "CURRENT"  # "Curr" via enum mapping
+        assert current.pledged_as_collateral is False  # "N"
+        assert current.lien_reference is None
+
+        pledged = by_ref["DP-1002"]
+        assert pledged.deposit_account_type == "FIXED"
+        assert pledged.pledged_as_collateral is True  # "Y"
+        assert pledged.lien_reference == "LN-0009"
+
+        free = by_ref["SEC-2001"]
+        assert free.encumbered is False  # "No"
+        assert free.redeemable_within_two_days is True  # "Yes"
+        assert free.owning_entity == "Head Office"
+        assert free.asset_location == "CSD"
+        # Columns absent from the Securities sheet stay unset, not defaulted.
+        assert free.deposit_account_type is None
+
+        repo = by_ref["SEC-2002"]
+        assert repo.encumbered is True
+        assert repo.encumbrance_reason == "Repo pledge"
+
+        residents = {c.source_reference: c.resident for c in records.counterparties}
+        assert residents == {"C-101": True, "C-102": False}
+
+
 class TestDirtyPatterns:
     def test_merged_title_banner_does_not_hide_the_table(self, tmp_path: Path) -> None:
         adapter = ExcelCsvAdapter()

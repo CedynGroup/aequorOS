@@ -100,6 +100,15 @@ CounterpartyType = Literal[
 RATE_TYPES: tuple[str, ...] = ("FIXED", "FLOATING")
 RateType = Literal["FIXED", "FLOATING"]
 
+# Deposit account taxonomy for the BoG liquidity directives (LMTD 2026 ¶5):
+# "Volatile Liabilities" = all demand deposits (CURRENT and CALL accounts),
+# and current/call/savings accounts are deemed by their nature to mature
+# within one year regardless of any stated maturity. The classification is
+# carried on the position snapshot so both rules derive from data, not from
+# product-code heuristics.
+DEPOSIT_ACCOUNT_TYPES: tuple[str, ...] = ("CURRENT", "CALL", "SAVINGS", "FIXED", "OTHER")
+DepositAccountType = Literal["CURRENT", "CALL", "SAVINGS", "FIXED", "OTHER"]
+
 GL_ACCOUNT_CLASSES: tuple[str, ...] = (
     "ASSET",
     "LIABILITY",
