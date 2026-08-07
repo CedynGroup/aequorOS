@@ -63,8 +63,11 @@ from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
+    ParamLiquidityThreshold,
 )
 from app.services import regulatory_capital, regulatory_liquidity
+from app.services.liquidity_thresholds import BANK_MINIMUM_PCT as _TABLE1_BANK_MINIMUM_PCT
+from app.services.params import get_active_params
 from app.services.regulatory_reporting.generation import (
     MODULE_CAPITAL,
     MODULE_LIQUIDITY,
@@ -154,6 +157,60 @@ _OBS_CATEGORY_ROWS = {
     "guarantee": "17",
 }
 _TOP_DEPOSITORS = 10
+
+# --- LMTD Table 1: BOG Prudential Ratios (tool (a); built 2026-08-07) ------
+#
+# Six inputs (LMTD ¶5 definitions) for the reporting and previous month, and
+# eight ratios compared against the Board threshold register
+# (ParamLiquidityThreshold) with the directive's published bank minimums as
+# the regulatory floor when no Board row exists. ¶9 makes these BINDING
+# compliance ratios for SDIs; for banks they are monitoring tools.
+_TABLE1_RATIOS: tuple[tuple[str, str, str, str], ...] = (
+    ("narrow_to_volatile", "Narrow Liquid Assets to Volatile Liabilities", "narrow", "volatile"),
+    ("broad_to_volatile", "Broad Liquid Assets to Volatile Liabilities", "broad", "volatile"),
+    (
+        "narrow_to_short_term",
+        "Narrow Liquid Assets to Short Term Liabilities",
+        "narrow",
+        "short_term",
+    ),
+    (
+        "broad_to_short_term",
+        "Broad Liquid Assets to Short Term Liabilities",
+        "broad",
+        "short_term",
+    ),
+    (
+        "narrow_to_total_deposits",
+        "Narrow Liquid Assets to Total Deposits",
+        "narrow",
+        "total_deposits",
+    ),
+    (
+        "broad_to_total_deposits",
+        "Broad Liquid Assets to Total Deposits",
+        "broad",
+        "total_deposits",
+    ),
+    ("narrow_to_total_assets", "Narrow Liquid Assets to Total Assets", "narrow", "total_assets"),
+    ("broad_to_total_assets", "Broad Liquid Assets to Total Assets", "broad", "total_assets"),
+)
+_TABLE1_INPUT_LABELS: tuple[tuple[str, str], ...] = (
+    ("narrow", "Narrow Liquid Assets"),
+    ("broad", "Broad Liquid Assets"),
+    ("volatile", "Volatile liabilities"),
+    ("total_deposits", "Total Deposits"),
+    ("short_term", "Short-term liabilities"),
+    ("total_assets", "Total Assets"),
+)
+_ONE_YEAR_DAYS = 365
+_BANK_COUNTERPARTY_TYPES = ("BANK_OECD", "BANK_NON_OECD")
+# LMTD ¶5 short-term liabilities (a): current, call and savings accounts are
+# by their nature assessed to mature within one year, regardless of any
+# stated maturity — behavioural/NMD lives must never leak into this rule.
+_SHORT_TERM_BY_NATURE = ("CURRENT", "CALL", "SAVINGS")
+_EQUITY_CATEGORY_PREFIX = "EQUITY"
+_TOTAL_ASSET_TYPES = ("LOAN", "SECURITY_HOLDING", "CASH", "INTERBANK_PLACEMENT", "OTHER_ASSET")
 
 
 def _conflict_409(error_code: str, message: str) -> HTTPException:
@@ -802,6 +859,227 @@ def _ladder_section(rows: list[_CanonicalRow], as_of: date) -> tuple[dict[str, A
     return section, on_balance_mismatch_total
 
 
+def _within_one_year(maturity: date | None, as_of: date) -> bool:
+    return maturity is not None and (maturity - as_of).days <= _ONE_YEAR_DAYS
+
+
+def _unencumbered(row: _CanonicalRow) -> bool:
+    """NULL is treated as unencumbered — the backward-compatible reading; the
+    lmtd_classification_coverage ingestion rule surfaces the gap."""
+    return row.encumbered is not True
+
+
+def _is_sovereign_security(row: _CanonicalRow) -> bool:
+    return row.position_type == "SECURITY_HOLDING" and (
+        (row.regulatory_category or "").startswith(_SOVEREIGN_CATEGORY_PREFIX)
+    )
+
+
+def _narrow_liquid_amount(  # noqa: PLR0911 - one return per directive leg
+    row: _CanonicalRow, as_of: date
+) -> Decimal:
+    """LMTD ¶5 Narrow Liquid Assets, leg by leg, conservatively.
+
+    Legs: (a) vault notes and coins — CASH without a counterparty link;
+    (b) unencumbered non-resident correspondent balances held for operational
+    purposes — CASH with a non-resident bank counterparty flagged
+    operational_purpose; (c) placements with non-resident FIs rated AAA;
+    (d) balances at the central bank — CASH with a CENTRAL_BANK counterparty;
+    (e) unencumbered sovereign/central-bank bills ≤1yr; (f) other ≤1yr
+    securities redeemable within two working days, unencumbered, not already
+    counted under (e); (g) claims on other domestic banks — placements with
+    resident bank counterparties. Every leg requires its positive signal;
+    unknown residency or purpose is never assumed — understating liquid
+    assets is the only safe direction for a prudential ratio.
+    """
+    kind = row.position_type
+    cp_type = row.counterparty_type
+    is_bank_cp = cp_type in _BANK_COUNTERPARTY_TYPES
+    if kind == "CASH":
+        if cp_type is None:
+            return row.balance_ghs  # (a) vault cash
+        if cp_type == "CENTRAL_BANK":
+            return row.balance_ghs  # (d) balances at the central bank
+        if (
+            is_bank_cp
+            and row.counterparty_resident is False
+            and row.operational_purpose is True
+            and _unencumbered(row)
+        ):
+            return row.balance_ghs  # (b) operational correspondent balances
+        if is_bank_cp and row.counterparty_resident is True:
+            return row.balance_ghs  # (g) claims on other domestic banks
+        return _ZERO
+    if kind == "INTERBANK_PLACEMENT" and is_bank_cp:
+        if row.counterparty_resident is False and (row.counterparty_rating or "").startswith(
+            "AAA"
+        ):
+            return row.balance_ghs  # (c) AAA non-resident FI placements
+        if row.counterparty_resident is True:
+            return row.balance_ghs  # (g) claims on other domestic banks
+        return _ZERO
+    if kind == "SECURITY_HOLDING" and _unencumbered(row) and _within_one_year(
+        row.contractual_maturity, as_of
+    ):
+        if _is_sovereign_security(row):
+            return row.balance_ghs  # (e) GoG/BoG bills ≤ 1 yr
+        if row.redeemable_within_two_days is True:
+            return row.balance_ghs  # (f) two-working-day redeemables
+    return _ZERO
+
+
+def _table1_inputs(rows: list[_CanonicalRow], as_of: date) -> dict[str, Decimal]:
+    """The six Table 1 inputs from the canonical book (LMTD ¶5 definitions)."""
+    inputs = {key: _ZERO for key, _ in _TABLE1_INPUT_LABELS}
+    equities = _ZERO
+    for row in rows:
+        narrow = _narrow_liquid_amount(row, as_of)
+        inputs["narrow"] += narrow
+        # Broad = Narrow + unencumbered GoG bonds > 1 yr (marketable, freely
+        # transferable) + GSE-listed equities capped at 10% of total liquid
+        # assets (cap applied after the loop).
+        if narrow == _ZERO and _is_sovereign_security(row) and _unencumbered(row):
+            inputs["broad"] += row.balance_ghs
+        if (
+            row.position_type == "SECURITY_HOLDING"
+            and _unencumbered(row)
+            and (row.regulatory_category or "").startswith(_EQUITY_CATEGORY_PREFIX)
+        ):
+            equities += row.balance_ghs
+
+        if row.position_type == "DEPOSIT":
+            inputs["total_deposits"] += row.balance_ghs
+            account_type = (row.deposit_account_type or "").upper()
+            if account_type in _VOLATILE_DEPOSIT_TYPES:
+                inputs["volatile"] += row.balance_ghs
+            if account_type in _SHORT_TERM_BY_NATURE or _within_one_year(
+                row.contractual_maturity, as_of
+            ):
+                inputs["short_term"] += row.balance_ghs
+        elif row.position_type in _T2_OTHER_LIABILITIES and _within_one_year(
+            row.contractual_maturity, as_of
+        ):
+            inputs["short_term"] += row.balance_ghs
+        elif row.position_type in _T2_OFF_BALANCE and _within_one_year(
+            row.contractual_maturity, as_of
+        ):
+            # ¶5 short-term liabilities (d): contingent liabilities ≤ 1 yr.
+            amount = row.notional_ghs if row.notional_ghs is not None else row.balance_ghs
+            inputs["short_term"] += amount
+
+        if row.position_type in _TOTAL_ASSET_TYPES or (
+            row.position_type in _T2_DERIVATIVE_FAMILY and row.balance_ghs > _ZERO
+        ):
+            inputs["total_assets"] += row.balance_ghs
+
+    inputs["broad"] += inputs["narrow"]
+    # GSE equities cap: E ≤ 10% of total liquid assets, total including the
+    # capped equities themselves → E_capped = min(E, other_broad / 9).
+    if equities > _ZERO:
+        inputs["broad"] += min(equities, inputs["broad"] / Decimal("9"))
+    return inputs
+
+
+def _table1_thresholds(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> dict[str, tuple[Decimal, str]]:
+    """Ratio floor per code: Board register row when one is active, else the
+    directive's published bank minimum (the regulatory floor)."""
+    resolved: dict[str, tuple[Decimal, str]] = {
+        code: (minimum, "regulatory_default")
+        for code, minimum in _TABLE1_BANK_MINIMUM_PCT.items()
+    }
+    jurisdiction = (bank.jurisdiction_code or "GH").strip().upper()
+    for row in get_active_params(
+        db, ctx.organization_id, jurisdiction, ParamLiquidityThreshold, as_of
+    ):
+        if row.institution_class == "bank" and row.threshold_code in resolved:
+            resolved[row.threshold_code] = (Decimal(str(row.threshold_pct)), "board_register")
+    return resolved
+
+
+def _previous_period_end(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> date | None:
+    return db.scalar(
+        select(BankReportingPeriod.period_end)
+        .where(
+            BankReportingPeriod.organization_id == ctx.organization_id,
+            BankReportingPeriod.bank_id == bank.id,
+            BankReportingPeriod.period_end < period.period_end,
+        )
+        .order_by(BankReportingPeriod.period_end.desc())
+        .limit(1)
+    )
+
+
+def _prudential_ratio_sections(
+    current: dict[str, Decimal],
+    previous: dict[str, Decimal] | None,
+    thresholds: dict[str, tuple[Decimal, str]],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], int]:
+    """LMTD Table 1 as two blocks: GHS inputs, then the percentage grid."""
+    input_rows: list[dict[str, Any]] = []
+    for key, label in _TABLE1_INPUT_LABELS:
+        extras: dict[str, str] = {}
+        if previous is not None:
+            extras["previous_month_ghs"] = str(previous[key])
+        input_rows.append(snapshot_row(key, label, current[key], **extras))
+
+    ratio_rows: list[dict[str, Any]] = []
+    findings: list[dict[str, str]] = []
+    breaches = 0
+    for code, label, numerator_key, denominator_key in _TABLE1_RATIOS:
+        minimum, threshold_source = thresholds[code]
+        denominator = current[denominator_key]
+        extras = {
+            "threshold_min_pct": str(minimum),
+            "threshold_source": threshold_source,
+        }
+        if previous is not None and previous[denominator_key] > _ZERO:
+            extras["previous_month_pct"] = str(
+                _pct_of(previous[numerator_key], previous[denominator_key])
+            )
+        if denominator <= _ZERO:
+            extras["status"] = "not_computable"
+            ratio_rows.append(snapshot_row(code, label, _ZERO, **extras))
+            continue
+        ratio = _pct_of(current[numerator_key], denominator)
+        below = ratio < minimum
+        extras["status"] = "below_minimum" if below else "ok"
+        ratio_rows.append(snapshot_row(code, label, ratio, **extras))
+        if below:
+            breaches += 1
+            findings.append(
+                _finding(
+                    "lmt.prudential_ratio_below_minimum",
+                    "WARNING",
+                    f"{label}: {ratio}% is below the {minimum}% floor "
+                    f"({threshold_source.replace('_', ' ')}).",
+                )
+            )
+
+    sections = [
+        snapshot_section(
+            "prudential_ratio_inputs",
+            "BOG Prudential Ratios",
+            input_rows,
+            snapshot_total(
+                "narrow_liquid_assets_ghs",
+                "Narrow Liquid Assets",
+                current["narrow"],
+                equals_sum_of_rows=False,
+            ),
+        ),
+        snapshot_section(
+            "prudential_ratio_percentages",
+            "BOG Prudential Ratios (%)",
+            ratio_rows,
+        ),
+    ]
+    return sections, findings, breaches
+
+
 def _funding_concentration_section(
     deposit_rows: list[_CanonicalRow],
 ) -> tuple[dict[str, Any] | None, Decimal, Decimal, list[dict[str, str]]]:
@@ -902,6 +1180,18 @@ def _unencumbered_assets_section(
 
 _LMT_TOOL_NOTES = [
     (
+        "Prudential ratios (Table 1): six inputs computed leg-by-leg from the "
+        "canonical book per the LMTD para 5 definitions, eight ratios against "
+        "the Board threshold register (regulatory published minimums where no "
+        "Board row is active). Classification is conservative: a leg counts "
+        "only on its positive signal (residency, operational purpose, two-day "
+        "redeemability, encumbrance), never by assumption. Current/call/"
+        "savings deposits are short-term by nature regardless of stated "
+        "maturity; behavioural lives never enter these ratios. Previous-month "
+        "column reports only when a prior period's canonical book exists — "
+        "never fabricated."
+    ),
+    (
         "Maturity ladder: the full published Table 2 grid — 17 rows x 15 columns "
         "(13 dated buckets + Total + Non-contractual). Deposits split stable/"
         "volatile on the ingested deposit_account_type (volatile = current + call "
@@ -936,6 +1226,47 @@ def _build_lmt_tool_block(
 
     ladder_rows = _load_canonical_rows(db, ctx, bank, period.period_end, _TABLE2_POSITION_TYPES)
     if ladder_rows:
+        # Table 1 — BOG Prudential Ratios (tool (a), first in the appendix).
+        current_inputs = _table1_inputs(ladder_rows, period.period_end)
+        previous_inputs: dict[str, Decimal] | None = None
+        previous_end = _previous_period_end(db, ctx, bank, period)
+        if previous_end is not None:
+            previous_rows = _load_canonical_rows(
+                db, ctx, bank, previous_end, _TABLE2_POSITION_TYPES
+            )
+            if previous_rows:
+                previous_inputs = _table1_inputs(previous_rows, previous_end)
+        thresholds = _table1_thresholds(db, ctx, bank, period.period_end)
+        ratio_sections, ratio_findings, breaches = _prudential_ratio_sections(
+            current_inputs, previous_inputs, thresholds
+        )
+        sections.extend(ratio_sections)
+        findings.extend(ratio_findings)
+        totals.append(
+            snapshot_row(
+                "narrow_liquid_assets_ghs",
+                "Narrow Liquid Assets",
+                current_inputs["narrow"],
+                unit="ghs",
+            )
+        )
+        totals.append(
+            snapshot_row(
+                "broad_liquid_assets_ghs",
+                "Broad Liquid Assets",
+                current_inputs["broad"],
+                unit="ghs",
+            )
+        )
+        totals.append(
+            snapshot_row(
+                "prudential_ratio_breaches",
+                "Prudential ratios below their floor",
+                breaches,
+                unit="count",
+            )
+        )
+
         ladder_section, mismatch_total = _ladder_section(ladder_rows, period.period_end)
         sections.append(ladder_section)
         totals.append(

@@ -402,6 +402,8 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "outflows",
             "inflows",
             "lcr_summary",
+            "prudential_ratio_inputs",
+            "prudential_ratio_percentages",
             "maturity_ladder",
             "funding_concentration",
             "unencumbered_assets",

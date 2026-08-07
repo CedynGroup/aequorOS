@@ -333,6 +333,51 @@ _LMT_TEMPLATE = ReturnTemplate(
     sections=(
         *_liquidity_sections(lmt_subset=True),
         SectionLayout(
+            section_code="prudential_ratio_inputs",
+            layout_id="lmt_prudential_inputs_table1",
+            sheet_title="BOG Prudential Ratios",
+            columns=(
+                ColumnSpec("description", "Amounts in GHS '000", "text"),
+                ColumnSpec("value", "Reporting Month", "ghs"),
+                ColumnSpec("previous_month_ghs", "Previous Month", "ghs"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LMTD_CITATION} — Table 1 BOG Prudential Ratios",
+            notes=(
+                "Six inputs computed from the canonical book per the LMTD para 5 "
+                "definitions (Narrow/Broad Liquid Assets leg by leg, Volatile "
+                "liabilities = current + call deposits, short-term liabilities "
+                "with the contractual-by-nature rule). Previous Month renders "
+                "only when a prior period's canonical book exists.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="prudential_ratio_percentages",
+            layout_id="lmt_prudential_percentages_table1",
+            sheet_title="BOG Prudential Ratios (%)",
+            columns=(
+                ColumnSpec("description", "Percentage", "text"),
+                ColumnSpec("value", "Reporting Month", "pct"),
+                ColumnSpec("previous_month_pct", "Previous Month", "pct"),
+                ColumnSpec("threshold_min_pct", "Floor (%)", "pct"),
+                ColumnSpec("threshold_source", "Floor Source", "text"),
+                ColumnSpec("status", "Status", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LMTD_CITATION} — Table 1 BOG Prudential Ratios",
+            notes=(
+                "The printed form carries the first three columns; Floor/Source/"
+                "Status are supervisory annotations from the Board threshold "
+                "register (LMTD para 11(b), ParamLiquidityThreshold) with the "
+                "directive's published bank minimums as the regulatory default. "
+                "Ratios with a zero denominator report status not_computable "
+                "rather than a fabricated percentage. Para 9 note: for SDIs "
+                "these are binding compliance ratios, not monitoring tools.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
             section_code="maturity_ladder",
             layout_id="lmt_maturity_ladder_table2",
             sheet_title="Contractual Maturity Mismatch",
@@ -424,10 +469,11 @@ _LMT_TEMPLATE = ReturnTemplate(
         "available HQLA-classified assets (Table 9 subset) derived from canonical "
         "data. Tool sections appear only when their underlying data exists — empty "
         "grids are never fabricated.",
-        "LMTD Appendix Tables 1 (BOG Prudential Ratios), 3-4, 6-8 and 10 remain "
-        "unfilled pending their Phase-2 build slices (docs/lmtd_gap_analysis.md); "
-        "Table 5 still reports the Top-10 subset pending the >1%-of-assets + "
-        "Top-20/Top-100 rebuild.",
+        "LMTD Appendix Tables 3-4, 6-8 and 10 remain unfilled pending their "
+        "Phase-2 build slices (docs/lmtd_gap_analysis.md); Table 5 still reports "
+        "the Top-10 subset pending the >1%-of-assets + Top-20/Top-100 rebuild. "
+        "Table 1 (BOG Prudential Ratios) is CONFIRMED as of 2026-08-07, "
+        "computed against the Board threshold register.",
         _T_MINUS_1_NOTE,
     ),
 )

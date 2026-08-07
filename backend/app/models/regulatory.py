@@ -262,3 +262,38 @@ class ParamCapitalThreshold(RegulatoryParameterMixin, Base):
     # Numeric(12, 6) rather than Numeric(9, 6): threshold values such as the
     # 1250 (12.5x expressed as a percent) RWA multiplier exceed Numeric(9, 6).
     value_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+
+
+class ParamLiquidityThreshold(RegulatoryParameterMixin, Base):
+    """LMTD 2026 ¶11(b)–(e): the Board-set internal threshold register.
+
+    The Board must set internal thresholds for the six liquidity monitoring
+    tools at least annually; the mixin's ``approved_by``/``approval_timestamp``
+    plus the effective-dated generations ARE the Board-approval evidence an
+    examiner asks for ("show me your Board-approved thresholds"). Ratio floors
+    for Table 1 live here first; mismatch and concentration limits join as
+    their tools land. ``institution_class`` matters because ¶9 makes these
+    binding compliance ratios for SDIs while remaining monitoring tools for
+    banks — same register, different consequence.
+    """
+
+    __tablename__ = "param_liquidity_threshold"
+    __table_args__ = (
+        CheckConstraint(
+            "institution_class IN ('bank', 'sdi')",
+            name="ck_param_liquidity_threshold_institution_class",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "institution_class",
+            "threshold_code",
+            "effective_from",
+            name="uq_param_liquidity_threshold_scope",
+        ),
+    )
+
+    institution_class: Mapped[str] = mapped_column(String(8), default="bank", nullable=False)
+    threshold_code: Mapped[str] = mapped_column(String(60), nullable=False)
+    threshold_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)

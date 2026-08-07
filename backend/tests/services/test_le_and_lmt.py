@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.db.base import utc_now
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -39,6 +40,7 @@ from app.models import (
     CanonicalProduct,
     IngestionBatch,
     LineageRecord,
+    ParamLiquidityThreshold,
     ParamStressShock,
     RegulatoryPackage,
     RegulatoryRun,
@@ -158,6 +160,8 @@ class _CanonicalSeeder:
         *,
         group_reference: str | None = None,
         tin: str | None = None,
+        rating: str | None = None,
+        resident: bool | None = None,
     ) -> CanonicalCounterparty:
         row = CanonicalCounterparty(
             **self.common,
@@ -165,6 +169,8 @@ class _CanonicalSeeder:
             name=name,
             counterparty_type=counterparty_type,
             group_reference=group_reference,
+            rating=rating,
+            resident=resident,
             external_identifiers={"tin": tin} if tin else {},
         )
         self.db.add(row)
@@ -196,6 +202,8 @@ class _CanonicalSeeder:
         currency: str = "GHS",
         deposit_account_type: str | None = None,
         encumbered: bool | None = None,
+        operational_purpose: bool | None = None,
+        redeemable_within_two_days: bool | None = None,
         extra_attributes: dict[str, Any] | None = None,
     ) -> None:
         position = CanonicalPosition(
@@ -221,6 +229,8 @@ class _CanonicalSeeder:
                 ifrs9_stage=ifrs9_stage,
                 deposit_account_type=deposit_account_type,
                 encumbered=encumbered,
+                operational_purpose=operational_purpose,
+                redeemable_within_two_days=redeemable_within_two_days,
                 attributes=attributes,
             )
         )
@@ -669,6 +679,146 @@ def test_lmt_carries_ladder_concentration_and_unencumbered_sections(  # noqa: PL
     assert "Contractual Maturity Mismatch" in workbook.sheetnames
     assert "Concentration of Funding" in workbook.sheetnames
     assert "Available Unencumbered Assets" in workbook.sheetnames
+
+
+def _seed_table1_book(db: Session) -> None:
+    """A book exercising every LMTD ¶5 Narrow/Broad classification leg.
+
+    Narrow = 2.0 vault + 3.0 BoG + 1.0 operational correspondent + 4.0 AAA
+    non-resident placement + 2.5 domestic-bank claim + 5.0 sovereign bill
+    ≤1yr + 0.8 two-day redeemable = 18.3M. Broad adds the 6.0M GoG bond >1yr
+    and equities capped at other-broad/9 (3.0M holding → 2.7M) = 27.0M.
+    The encumbered 1.0M bill counts in neither. Volatile 10.0M; total
+    deposits 27.0M; short-term 26.5M (by-nature 18.0 + 4.0 short fixed +
+    3.0 interbank + 1.5 contingent); total assets 28.3M.
+    """
+    seeder = _CanonicalSeeder(db)
+    bog = seeder.counterparty("CP/BOG", "Central Bank", "CENTRAL_BANK")
+    corr_de = seeder.counterparty(
+        "CP/CORR-DE", "Frankfurt Corr Bank", "BANK_OECD", resident=False
+    )
+    aaa_bank = seeder.counterparty(
+        "CP/AAA", "Zurich Prime Bank", "BANK_OECD", rating="AAA", resident=False
+    )
+    local_bank = seeder.counterparty("CP/GH-BANK", "Volta Bank", "BANK_NON_OECD", resident=True)
+    tbill = seeder.product("SEC.GOG.TBILL", "SOVEREIGN_GOG_TBILL_0RW")
+    bond = seeder.product("SEC.GOG.BOND", "SOVEREIGN_GOG_BOND_0RW")
+    equity = seeder.product("SEC.GSE.EQ", "EQUITY_GSE_LISTED")
+
+    seeder.position("CASH/VAULT", "CASH", Decimal("2000000"))  # leg (a)
+    seeder.position("CASH/BOG", "CASH", Decimal("3000000"), counterparty=bog)  # leg (d)
+    seeder.position(
+        "CASH/CORR", "CASH", Decimal("1000000"), counterparty=corr_de, operational_purpose=True
+    )  # leg (b)
+    seeder.position("IBP/AAA", "INTERBANK_PLACEMENT", Decimal("4000000"), counterparty=aaa_bank)
+    seeder.position("IBP/GH", "INTERBANK_PLACEMENT", Decimal("2500000"), counterparty=local_bank)
+    seeder.position(
+        "SEC/TBILL", "SECURITY_HOLDING", Decimal("5000000"), product=tbill,
+        maturity=date(2026, 9, 30),
+    )  # leg (e)
+    seeder.position(
+        "SEC/TBILL-ENC", "SECURITY_HOLDING", Decimal("1000000"), product=tbill,
+        maturity=date(2026, 9, 30), encumbered=True,
+    )  # excluded: encumbered
+    seeder.position(
+        "SEC/MDB", "SECURITY_HOLDING", Decimal("800000"),
+        maturity=date(2026, 12, 31), redeemable_within_two_days=True,
+    )  # leg (f)
+    seeder.position(
+        "SEC/GOGBOND", "SECURITY_HOLDING", Decimal("6000000"), product=bond,
+        maturity=date(2030, 6, 30),
+    )  # broad only
+    seeder.position("SEC/EQ", "SECURITY_HOLDING", Decimal("3000000"), product=equity)
+    seeder.position(
+        "DEP/CUR", "DEPOSIT", Decimal("10000000"), deposit_account_type="CURRENT"
+    )  # volatile + by-nature short-term
+    seeder.position(
+        "DEP/SAV", "DEPOSIT", Decimal("8000000"), deposit_account_type="SAVINGS"
+    )  # stable, by-nature short-term
+    seeder.position(
+        "DEP/FIX-LONG", "DEPOSIT", Decimal("5000000"), deposit_account_type="FIXED",
+        maturity=date(2028, 3, 31),
+    )  # NOT short-term
+    seeder.position(
+        "DEP/FIX-SHORT", "DEPOSIT", Decimal("4000000"), deposit_account_type="FIXED",
+        maturity=date(2026, 6, 30),
+    )  # short-term by maturity
+    seeder.position(
+        "IBB/1", "INTERBANK_BORROWING", Decimal("3000000"), maturity=date(2026, 4, 30)
+    )
+    seeder.position(
+        "LCG/ST", "LC_GUARANTEE", Decimal("0"), maturity=date(2026, 8, 31),
+        extra_attributes={"notional_ghs": "1500000"},
+    )  # contingent ≤ 1 yr
+
+
+def test_lmt_table1_prudential_ratios(db_session: Session) -> None:
+    seed_sample_bank(db_session)
+    _run_liquidity_baseline(db_session)
+    _seed_table1_book(db_session)
+
+    package = _generate(db_session, "LMT")
+    sections = _sections(package)
+    assert {"prudential_ratio_inputs", "prudential_ratio_percentages"} <= set(sections)
+
+    inputs = {row["code"]: row for row in sections["prudential_ratio_inputs"]["rows"]}
+    assert Decimal(inputs["narrow"]["value"]) == Decimal("18300000")
+    assert Decimal(inputs["broad"]["value"]) == Decimal("27000000")  # equity capped at 2.7M
+    assert Decimal(inputs["volatile"]["value"]) == Decimal("10000000")
+    assert Decimal(inputs["total_deposits"]["value"]) == Decimal("27000000")
+    assert Decimal(inputs["short_term"]["value"]) == Decimal("26500000")
+    assert Decimal(inputs["total_assets"]["value"]) == Decimal("28300000")
+    # No prior canonical book: the Previous Month column is absent, not zero.
+    assert "previous_month_ghs" not in inputs["narrow"]
+
+    ratios = {row["code"]: row for row in sections["prudential_ratio_percentages"]["rows"]}
+    assert len(ratios) == 8
+    assert Decimal(ratios["narrow_to_volatile"]["value"]) == Decimal("183")
+    assert Decimal(ratios["broad_to_volatile"]["value"]) == Decimal("270")
+    assert Decimal(ratios["broad_to_total_deposits"]["value"]) == Decimal("100")
+    assert all(row["status"] == "ok" for row in ratios.values())
+    assert all(row["threshold_source"] == "regulatory_default" for row in ratios.values())
+    assert Decimal(ratios["narrow_to_volatile"]["threshold_min_pct"]) == Decimal("80")
+
+    totals = {row["code"]: row["value"] for row in package.snapshot["totals"]}
+    assert Decimal(totals["narrow_liquid_assets_ghs"]) == Decimal("18300000")
+    assert Decimal(totals["broad_liquid_assets_ghs"]) == Decimal("27000000")
+    assert totals["prudential_ratio_breaches"] == "0"
+
+
+def test_lmt_table1_uses_board_register_floor(db_session: Session) -> None:
+    """A Board-adopted floor above the observed ratio flips it to a breach."""
+    seed_sample_bank(db_session)
+    _run_liquidity_baseline(db_session)
+    _seed_table1_book(db_session)
+    db_session.add(
+        ParamLiquidityThreshold(
+            organization_id=DEMO_ORG_ID,
+            jurisdiction_code="GH",
+            institution_class="bank",
+            threshold_code="narrow_to_volatile",
+            threshold_pct=Decimal("200"),
+            effective_from=date(2026, 1, 1),
+            approved_by="Board minute 2026-03",
+            approval_timestamp=utc_now(),
+        )
+    )
+    db_session.flush()
+
+    package = _generate(db_session, "LMT")
+    sections = _sections(package)
+    ratios = {row["code"]: row for row in sections["prudential_ratio_percentages"]["rows"]}
+    row = ratios["narrow_to_volatile"]
+    assert row["threshold_source"] == "board_register"
+    assert Decimal(row["threshold_min_pct"]) == Decimal("200")
+    assert row["status"] == "below_minimum"  # 183% < the Board's 200% floor
+
+    totals = {item["code"]: item["value"] for item in package.snapshot["totals"]}
+    assert totals["prudential_ratio_breaches"] == "1"
+    findings = package.snapshot["metadata"]["generation_findings"]
+    assert any(
+        item["rule"] == "lmt.prudential_ratio_below_minimum" for item in findings
+    ), findings
 
 
 def test_lmt_without_canonical_positions_omits_position_tools(db_session: Session) -> None:
