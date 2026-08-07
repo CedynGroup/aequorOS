@@ -1080,6 +1080,210 @@ def _prudential_ratio_sections(
     return sections, findings, breaches
 
 
+# --- Significant currency (LMTD ¶30/¶41; built 2026-08-07) -----------------
+#
+# A currency is significant when liabilities denominated in it are ≥ 5% of
+# total liabilities. (¶36 uses a different denominator — total available
+# unencumbered collateral — for Table 9C; both live here so the two are never
+# conflated.) Amounts are cedi equivalents throughout ("Values in Cedi" on
+# the printed forms), i.e. the ingested balance_ghs conversions.
+_SIGNIFICANT_CURRENCY_THRESHOLD = Decimal("0.05")
+# Table 11's printed columns are fixed: Cedi | USD | Pound | Euro | Others.
+# Ghana-factual literals are the documented exception inside BoG return
+# artifacts; the "cedi" column maps to the bank's base currency.
+_TABLE11_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("cedi_ghs", "Cedi"),
+    ("usd_ghs", "USD"),
+    ("pound_ghs", "Pound"),
+    ("euro_ghs", "Euro"),
+    ("others_ghs", "Others"),
+)
+_TABLE11_ISO = {"USD": "usd_ghs", "GBP": "pound_ghs", "EUR": "euro_ghs"}
+_THIRTY_DAYS = 30
+_LCR_INFLOW_CAP = Decimal("0.75")
+
+
+def _is_t2_liability(row: _CanonicalRow) -> bool:
+    target = _table2_row_for(row)
+    return target is not None and target[0] in ("6", "7", "8", "9")
+
+
+def _is_t2_asset(row: _CanonicalRow) -> bool:
+    target = _table2_row_for(row)
+    return target is not None and target[0] in ("2", "3", "4")
+
+
+def _liabilities_by_currency(rows: list[_CanonicalRow]) -> dict[str, Decimal]:
+    totals: dict[str, Decimal] = {}
+    for row in rows:
+        target = _table2_row_for(row)
+        if target is not None and target[0] in ("6", "7", "8", "9"):
+            totals[row.currency] = totals.get(row.currency, _ZERO) + target[1]
+    return totals
+
+
+def _significant_currencies(rows: list[_CanonicalRow]) -> list[str]:
+    """Currencies whose liabilities are ≥ 5% of total liabilities, largest first."""
+    by_currency = _liabilities_by_currency(rows)
+    total = sum(by_currency.values(), _ZERO)
+    if total <= _ZERO:
+        return []
+    return [
+        currency
+        for currency, amount in sorted(by_currency.items(), key=lambda kv: (-kv[1], kv[0]))
+        if amount / total >= _SIGNIFICANT_CURRENCY_THRESHOLD
+    ]
+
+
+def _table6_section(rows: list[_CanonicalRow]) -> tuple[dict[str, Any] | None, int]:
+    """LMTD Table 6 — assets and liabilities per significant currency."""
+    significant = _significant_currencies(rows)
+    if not significant:
+        return None, 0
+    total_liabilities = sum(_liabilities_by_currency(rows).values(), _ZERO)
+    assets_by_ccy: dict[str, Decimal] = {}
+    liabilities_by_ccy: dict[str, Decimal] = {}
+    for row in rows:
+        target = _table2_row_for(row)
+        if target is None:
+            continue
+        number, amount = target
+        if number in ("2", "3", "4"):
+            assets_by_ccy[row.currency] = assets_by_ccy.get(row.currency, _ZERO) + amount
+        elif number in ("6", "7", "8", "9"):
+            liabilities_by_ccy[row.currency] = (
+                liabilities_by_ccy.get(row.currency, _ZERO) + amount
+            )
+
+    section_rows: list[dict[str, Any]] = []
+    total_mismatch = _ZERO
+    for currency in significant:
+        assets = assets_by_ccy.get(currency, _ZERO)
+        liabilities = liabilities_by_ccy.get(currency, _ZERO)
+        mismatch = assets - liabilities
+        total_mismatch += mismatch
+        extras = {
+            "assets_ghs": str(assets),
+            "liabilities_ghs": str(liabilities),
+            "mismatch_pct_total_liabilities": (
+                str(_pct_of(mismatch, total_liabilities))
+                if total_liabilities > _ZERO
+                else "0"
+            ),
+        }
+        section_rows.append(snapshot_row(currency, currency, mismatch, **extras))
+    section = snapshot_section(
+        "assets_liabilities_by_currency",
+        "List of Assets and Liabilities by Significant Currencies",
+        section_rows,
+        snapshot_total(
+            "currency_mismatch_total_ghs",
+            "Total mismatch across significant currencies",
+            total_mismatch,
+            equals_sum_of_rows=True,
+        ),
+    )
+    return section, len(significant)
+
+
+def _table11_column(currency: str, base_currency: str) -> str:
+    if currency == base_currency:
+        return "cedi_ghs"
+    return _TABLE11_ISO.get(currency, "others_ghs")
+
+
+def _table11_section(  # noqa: PLR0914 - one linear grid assembly
+    rows: list[_CanonicalRow], as_of: date, base_currency: str
+) -> dict[str, Any]:
+    """LMTD Table 11 — LCR by significant currency (fixed five columns).
+
+    Honest calibration posture, documented on the template: HQLA Level 1 is
+    computed from canonical classification (cash-family + unencumbered
+    sovereign securities); Levels 2A/2B report zero because the canonical
+    model carries no L2 taxonomy — never invented. Outflows take the most
+    conservative contractual basis (liabilities maturing ≤ 30 days plus
+    demand deposits in full) pending the unpublished LCR Directive's run-off
+    calibration; inflows are contractual asset maturities ≤ 30 days subject
+    to the Basel 75% cap. Net cash outflow is computed (1)−(2) — the printed
+    form's "(2-1)" label inverts the LCR and is carried as a documented
+    deviation, not reproduced.
+    """
+    column_keys = [key for key, _ in _TABLE11_COLUMNS]
+    zero = dict.fromkeys(column_keys, _ZERO)
+    l1 = dict(zero)
+    outflow = dict(zero)
+    inflow = dict(zero)
+    for row in rows:
+        column = _table11_column(row.currency, base_currency)
+        days = (
+            (row.contractual_maturity - as_of).days
+            if row.contractual_maturity is not None
+            else None
+        )
+        # HQLA Level 1: cash-family legs + unencumbered sovereign securities.
+        if row.position_type == "CASH" or _is_sovereign_security(row) and _unencumbered(row):
+            l1[column] += row.balance_ghs
+        # Contractual 30-day outflows: maturing liabilities + demand deposits.
+        target = _table2_row_for(row)
+        if target is not None and target[0] in ("6", "7", "8", "9"):
+            account_type = (row.deposit_account_type or "").upper()
+            if account_type in _VOLATILE_DEPOSIT_TYPES or (
+                days is not None and days <= _THIRTY_DAYS
+            ):
+                outflow[column] += target[1]
+        # Contractual 30-day inflows: maturing assets (never HQLA double-count).
+        elif (
+            target is not None
+            and target[0] in ("2", "3", "4")
+            and days is not None
+            and days <= _THIRTY_DAYS
+            and row.position_type != "CASH"
+            and not _is_sovereign_security(row)
+        ):
+            inflow[column] += target[1]
+
+    def _grid_row(
+        code: str, label: str, values: dict[str, Decimal], total: Decimal | None = None
+    ) -> dict[str, Any]:
+        row_total = total if total is not None else sum(values.values(), _ZERO)
+        return snapshot_row(
+            code, label, row_total, **{key: str(values[key]) for key in column_keys}
+        )
+
+    capped_inflow = {
+        key: min(inflow[key], (outflow[key] * _LCR_INFLOW_CAP)) for key in column_keys
+    }
+    net = {key: outflow[key] - capped_inflow[key] for key in column_keys}
+    ratio: dict[str, Decimal] = {}
+    for key in column_keys:
+        ratio[key] = _pct_of(l1[key], net[key]) if net[key] > _ZERO else _ZERO
+    aggregate_l1 = sum(l1.values(), _ZERO)
+    aggregate_net = sum(net.values(), _ZERO)
+    aggregate_ratio = _pct_of(aggregate_l1, aggregate_net) if aggregate_net > _ZERO else _ZERO
+
+    section_rows = [
+        _grid_row("stock_of_hqla", "Stock of HQLA", l1),
+        _grid_row("level_1", "Level 1", l1),
+        _grid_row("level_2a", "Level 2A", dict(zero)),
+        _grid_row("level_2b", "Level 2B", dict(zero)),
+        _grid_row("total_adjusted_hqla", "A) Total adjusted HQLA", l1),
+        _grid_row("total_cash_outflow", "Total Cash outflow (1)", outflow),
+        _grid_row("total_cash_inflow", "Total Cash inflow (2)", capped_inflow),
+        _grid_row("net_cash_outflow", "B) Net Cash Outflow (1-2)", net),
+        _grid_row(
+            "lcr_pct",
+            "Liquidity Coverage Ratio (LCR) (A/B*100)",
+            ratio,
+            total=aggregate_ratio,
+        ),
+    ]
+    return snapshot_section(
+        "lcr_by_currency",
+        "LCR by Significant Currency",
+        section_rows,
+    )
+
+
 def _funding_concentration_section(
     deposit_rows: list[_CanonicalRow],
 ) -> tuple[dict[str, Any] | None, Decimal, Decimal, list[dict[str, str]]]:
@@ -1192,6 +1396,17 @@ _LMT_TOOL_NOTES = [
         "never fabricated."
     ),
     (
+        "Significant currency (Tables 6 and 11): a currency is significant when "
+        "liabilities in it are >= 5% of total liabilities (LMTD para 30/41); all "
+        "amounts are cedi equivalents from ingested conversions. Table 11 keeps "
+        "the printed fixed columns (Cedi/USD/Pound/Euro/Others); Level 2A/2B "
+        "report zero because the canonical model carries no L2 taxonomy; "
+        "outflows take the most conservative contractual basis (maturing <= 30d "
+        "+ demand deposits in full) pending the unpublished LCR Directive "
+        "calibration; the printed form's Net Cash Outflow '(2-1)' label inverts "
+        "the LCR and is implemented as (1-2) — a documented deviation."
+    ),
+    (
         "Maturity ladder: the full published Table 2 grid — 17 rows x 15 columns "
         "(13 dated buckets + Total + Non-contractual). Deposits split stable/"
         "volatile on the ingested deposit_account_type (volatile = current + call "
@@ -1277,6 +1492,21 @@ def _build_lmt_tool_block(
                 unit="ghs",
             )
         )
+
+        # Tables 6 and 11 — the significant-currency splits.
+        table6, significant_count = _table6_section(ladder_rows)
+        if table6 is not None:
+            sections.append(table6)
+            totals.append(
+                snapshot_row(
+                    "significant_currencies",
+                    "Significant currencies (liabilities >= 5% of total)",
+                    significant_count,
+                    unit="count",
+                )
+            )
+        base_currency = (bank.currency or "GHS").strip().upper()
+        sections.append(_table11_section(ladder_rows, period.period_end, base_currency))
 
     deposit_rows = [row for row in ladder_rows if row.position_type == "DEPOSIT"]
     concentration, total_deposits, top_share_pct, deposit_findings = _funding_concentration_section(

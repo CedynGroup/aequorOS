@@ -418,6 +418,62 @@ _LMT_TEMPLATE = ReturnTemplate(
             optional=True,
         ),
         SectionLayout(
+            section_code="assets_liabilities_by_currency",
+            layout_id="lmt_currency_mismatch_table6",
+            sheet_title="Assets and Liabilities by Significant Currency",
+            columns=(
+                ColumnSpec("code", "Name of Significant Currency", "text"),
+                ColumnSpec("assets_ghs", "Assets", "ghs"),
+                ColumnSpec("liabilities_ghs", "Liabilities", "ghs"),
+                ColumnSpec("value", "Mismatch (2-3)", "ghs"),
+                ColumnSpec(
+                    "mismatch_pct_total_liabilities",
+                    "Mismatch as a Percentage of Total Liabilities",
+                    "pct",
+                ),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_LMTD_CITATION} — Table 6 List of Assets and Liabilities by "
+                "Significant Currencies"
+            ),
+            notes=(
+                "A currency is significant when liabilities denominated in it are "
+                ">= 5% of total liabilities (LMTD para 30/41); rows are the "
+                "significant currencies, largest liability base first; amounts are "
+                "cedi equivalents from ingested conversions.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="lcr_by_currency",
+            layout_id="lmt_lcr_by_currency_table11",
+            sheet_title="LCR by Significant Currency",
+            columns=(
+                ColumnSpec("description", "LCR by Significant Currency", "text"),
+                ColumnSpec("cedi_ghs", "Cedi", "ghs"),
+                ColumnSpec("usd_ghs", "USD", "ghs"),
+                ColumnSpec("pound_ghs", "Pound", "ghs"),
+                ColumnSpec("euro_ghs", "Euro", "ghs"),
+                ColumnSpec("others_ghs", "Others", "ghs"),
+                ColumnSpec("value", "All Currencies", "ghs"),
+            ),
+            fidelity="PARTIAL",
+            source_citation=f"{_LMTD_CITATION} — Table 11 LCR by Significant Currency",
+            notes=(
+                "Printed fixed columns (Cedi/USD/Pound/Euro/Others), values in cedi "
+                "equivalents. Calibration posture, stated not hidden: HQLA Level 1 "
+                "from canonical classification; Levels 2A/2B zero (no canonical L2 "
+                "taxonomy — never invented); outflows on the most conservative "
+                "contractual basis (maturing <= 30 days + demand deposits in full) "
+                "pending the unpublished LCR Directive's run-off calibration; "
+                "inflows contractual <= 30 days under the Basel 75% cap. The "
+                "printed form labels Net Cash Outflow '(2-1)', which inverts the "
+                "LCR; implemented as (1-2) and recorded as a deviation.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
             section_code="funding_concentration",
             layout_id="lmt_funding_concentration_partial",
             sheet_title="Concentration of Funding",
@@ -469,11 +525,12 @@ _LMT_TEMPLATE = ReturnTemplate(
         "available HQLA-classified assets (Table 9 subset) derived from canonical "
         "data. Tool sections appear only when their underlying data exists — empty "
         "grids are never fabricated.",
-        "LMTD Appendix Tables 3-4, 6-8 and 10 remain unfilled pending their "
+        "LMTD Appendix Tables 3-4, 7-8 and 10 remain unfilled pending their "
         "Phase-2 build slices (docs/lmtd_gap_analysis.md); Table 5 still reports "
         "the Top-10 subset pending the >1%-of-assets + Top-20/Top-100 rebuild. "
-        "Table 1 (BOG Prudential Ratios) is CONFIRMED as of 2026-08-07, "
-        "computed against the Board threshold register.",
+        "Tables 1, 2 and 6 are CONFIRMED as of 2026-08-07; Table 11 renders the "
+        "full published per-currency grid with a documented conservative "
+        "calibration pending the unpublished LCR Directive.",
         _T_MINUS_1_NOTE,
     ),
 )

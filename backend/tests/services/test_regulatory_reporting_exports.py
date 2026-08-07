@@ -405,6 +405,8 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "prudential_ratio_inputs",
             "prudential_ratio_percentages",
             "maturity_ladder",
+            "assets_liabilities_by_currency",
+            "lcr_by_currency",
             "funding_concentration",
             "unencumbered_assets",
         },

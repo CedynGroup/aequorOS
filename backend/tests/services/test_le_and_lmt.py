@@ -821,6 +821,94 @@ def test_lmt_table1_uses_board_register_floor(db_session: Session) -> None:
     ), findings
 
 
+def _seed_currency_book(db: Session) -> None:
+    """Four currencies, all significant (>= 5% of the 16.0M liability base).
+
+    Liabilities: 10.0M GHS CALL (volatile demand), 4.0M-equivalent USD fixed
+    maturing in 20 days, 1.1M GBP CURRENT, 0.9M EUR borrowing beyond 30 days.
+    Assets: 8.0M GHS HQLA (6.0M sovereign bill + 2.0M vault cash), a 3.0M USD
+    loan maturing in 15 days (the only 30-day inflow), 0.7M EUR security.
+    All amounts are ingested cedi equivalents (balance_ghs).
+    """
+    seeder = _CanonicalSeeder(db)
+    tbill = seeder.product("SEC.GOG.TBILL.C", "SOVEREIGN_GOG_TBILL_0RW")
+    seeder.position("CCY/DEP-GHS", "DEPOSIT", Decimal("10000000"), deposit_account_type="CALL")
+    seeder.position(
+        "CCY/DEP-USD", "DEPOSIT", Decimal("4000000"), currency="USD",
+        deposit_account_type="FIXED", maturity=date(2026, 4, 20),
+        extra_attributes={"balance_ghs": "4000000"},
+    )
+    seeder.position(
+        "CCY/DEP-GBP", "DEPOSIT", Decimal("1100000"), currency="GBP",
+        deposit_account_type="CURRENT",
+        extra_attributes={"balance_ghs": "1100000"},
+    )
+    seeder.position(
+        "CCY/IBB-EUR", "INTERBANK_BORROWING", Decimal("900000"), currency="EUR",
+        maturity=date(2026, 10, 31),
+        extra_attributes={"balance_ghs": "900000"},
+    )
+    seeder.position(
+        "CCY/TBILL", "SECURITY_HOLDING", Decimal("6000000"), product=tbill,
+        maturity=date(2026, 9, 30),
+    )
+    seeder.position("CCY/VAULT", "CASH", Decimal("2000000"))
+    seeder.position(
+        "CCY/LOAN-USD", "LOAN", Decimal("3000000"), currency="USD",
+        maturity=date(2026, 4, 15),
+        extra_attributes={"balance_ghs": "3000000"},
+    )
+    seeder.position(
+        "CCY/SEC-EUR", "SECURITY_HOLDING", Decimal("700000"), currency="EUR",
+        maturity=date(2027, 6, 30),
+        extra_attributes={"balance_ghs": "700000"},
+    )
+
+
+def test_lmt_significant_currency_tables(db_session: Session) -> None:
+    seed_sample_bank(db_session)
+    _run_liquidity_baseline(db_session)
+    _seed_currency_book(db_session)
+
+    package = _generate(db_session, "LMT")
+    sections = _sections(package)
+    assert {"assets_liabilities_by_currency", "lcr_by_currency"} <= set(sections)
+
+    # Table 6 — rows ordered by liability base, all four >= 5% of 16.0M.
+    table6 = sections["assets_liabilities_by_currency"]["rows"]
+    assert [row["code"] for row in table6] == ["GHS", "USD", "GBP", "EUR"]
+    by_ccy = {row["code"]: row for row in table6}
+    assert Decimal(by_ccy["GHS"]["assets_ghs"]) == Decimal("8000000")
+    assert Decimal(by_ccy["GHS"]["liabilities_ghs"]) == Decimal("10000000")
+    assert Decimal(by_ccy["GHS"]["value"]) == Decimal("-2000000")  # mismatch (2-3)
+    assert Decimal(by_ccy["GHS"]["mismatch_pct_total_liabilities"]) == Decimal("-12.5")
+    assert Decimal(by_ccy["USD"]["value"]) == Decimal("-1000000")
+    assert Decimal(by_ccy["EUR"]["value"]) == Decimal("-200000")
+    total = sections["assets_liabilities_by_currency"]["total"]
+    assert Decimal(total["value"]) == Decimal("-4300000")
+
+    # Table 11 — fixed printed columns, per-currency LCR components.
+    table11 = {row["code"]: row for row in sections["lcr_by_currency"]["rows"]}
+    assert Decimal(table11["level_1"]["cedi_ghs"]) == Decimal("8000000")
+    assert Decimal(table11["level_1"]["usd_ghs"]) == Decimal("0")
+    assert Decimal(table11["level_2a"]["cedi_ghs"]) == Decimal("0")  # no L2 taxonomy
+    assert Decimal(table11["total_cash_outflow"]["cedi_ghs"]) == Decimal("10000000")
+    assert Decimal(table11["total_cash_outflow"]["usd_ghs"]) == Decimal("4000000")
+    assert Decimal(table11["total_cash_outflow"]["pound_ghs"]) == Decimal("1100000")
+    assert Decimal(table11["total_cash_outflow"]["euro_ghs"]) == Decimal("0")
+    # USD inflow: 3.0M contractual, capped at 75% of the 4.0M outflow.
+    assert Decimal(table11["total_cash_inflow"]["usd_ghs"]) == Decimal("3000000")
+    assert Decimal(table11["net_cash_outflow"]["usd_ghs"]) == Decimal("1000000")
+    # Net is (1)-(2): the printed (2-1) label is a recorded deviation.
+    assert Decimal(table11["net_cash_outflow"]["cedi_ghs"]) == Decimal("10000000")
+    assert Decimal(table11["lcr_pct"]["cedi_ghs"]) == Decimal("80")
+    # Aggregate column: 8.0M L1 over 12.1M net outflow.
+    assert Decimal(table11["lcr_pct"]["value"]) == Decimal("66.1157")
+
+    totals = {row["code"]: row["value"] for row in package.snapshot["totals"]}
+    assert totals["significant_currencies"] == "4"
+
+
 def test_lmt_without_canonical_positions_omits_position_tools(db_session: Session) -> None:
     seed_sample_bank(db_session)
     _run_liquidity_baseline(db_session)
