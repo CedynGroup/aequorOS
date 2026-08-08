@@ -17,6 +17,7 @@ from app.features.manage_capital import router as capital_router
 from app.features.manage_documents import router as documents_router
 from app.features.manage_institution_profile import router as institution_profile_router
 from app.features.manage_integration_keys import router as integration_keys_router
+from app.features.manage_liquidity_cfp import router as liquidity_cfp_router
 from app.features.manage_liquidity_thresholds import router as liquidity_thresholds_router
 from app.features.manage_live_engine import router as live_engine_router
 from app.features.manage_market_data_connections import router as market_data_connections_router
@@ -57,6 +58,7 @@ v1_router.include_router(push_router)
 v1_router.include_router(database_direct_connections_router)
 v1_router.include_router(regulatory_liquidity_router)
 v1_router.include_router(liquidity_thresholds_router)
+v1_router.include_router(liquidity_cfp_router)
 v1_router.include_router(reverse_stress_router)
 v1_router.include_router(regulatory_capital_router)
 v1_router.include_router(regulatory_irr_router)

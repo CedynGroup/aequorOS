@@ -62,6 +62,11 @@ from app.models.institution_profile import (
 )
 from app.models.integration_key import IntegrationKey
 from app.models.jurisdiction import Jurisdiction
+from app.models.liquidity_cfp import (
+    CfpActivationEvent,
+    ContingencyFundingPlan,
+    LiquidityEwiIndicator,
+)
 from app.models.live import LiveFinding, LiveMetric
 from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
 from app.models.notification import Notification
@@ -71,9 +76,9 @@ from app.models.regulatory import (
     BankFinancialFact,
     BankReportingPeriod,
     ParamCapitalThreshold,
+    ParamLcrRunoffRate,
     ParamLiquidityHaircut,
     ParamLiquidityThreshold,
-    ParamLcrRunoffRate,
     ParamNsfrWeight,
     ParamRiskWeight,
     ParamStressShock,
@@ -164,6 +169,9 @@ __all__ = [
     "DatabaseDirectConnection",
     "MarketDataConnection",
     "MarketDataQuotaUsage",
+    "CfpActivationEvent",
+    "ContingencyFundingPlan",
+    "LiquidityEwiIndicator",
     "Notification",
     "IntegrationKey",
     "Organization",
