@@ -407,6 +407,8 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "maturity_ladder",
             "assets_liabilities_by_currency",
             "lcr_by_currency",
+            "maturity_of_exposures",
+            "deposit_funding_concentration",
             "funding_concentration",
             "unencumbered_assets",
         },

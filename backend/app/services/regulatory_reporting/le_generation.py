@@ -64,6 +64,7 @@ from app.models import (
     CanonicalPositionSnapshot,
     CanonicalProduct,
     ParamLiquidityThreshold,
+    RelatedParty,
 )
 from app.services import regulatory_capital, regulatory_liquidity
 from app.services.liquidity_thresholds import BANK_MINIMUM_PCT as _TABLE1_BANK_MINIMUM_PCT
@@ -268,6 +269,9 @@ class _CanonicalRow:
     lien_reference: str | None
     counterparty_resident: bool | None
     counterparty_rating: str | None
+    # Table 8 negotiable-paper convention + counterparty-side related hint.
+    funding_instrument: str | None
+    counterparty_related_hint: bool
 
 
 def _group_reference(counterparty: CanonicalCounterparty) -> str | None:
@@ -373,9 +377,29 @@ def _load_canonical_rows(
                     counterparty.resident if counterparty is not None else None
                 ),
                 counterparty_rating=counterparty.rating if counterparty is not None else None,
+                funding_instrument=(
+                    str(attributes["funding_instrument"]).strip().lower()
+                    if attributes.get("funding_instrument")
+                    else None
+                ),
+                counterparty_related_hint=_counterparty_related_hint(counterparty),
             )
         )
     return rows
+
+
+def _counterparty_related_hint(counterparty: CanonicalCounterparty | None) -> bool:
+    """True when the SOURCE marks the counterparty related/intragroup."""
+    if counterparty is None:
+        return False
+    attributes = counterparty.attributes or {}
+    for key in ("related_party", "intragroup"):
+        value = attributes.get(key)
+        if isinstance(value, bool) and value:
+            return True
+        if isinstance(value, str) and value.strip().lower() in ("true", "yes", "y", "1"):
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -1284,60 +1308,425 @@ def _table11_section(  # noqa: PLR0914 - one linear grid assembly
     )
 
 
-def _funding_concentration_section(
-    deposit_rows: list[_CanonicalRow],
-) -> tuple[dict[str, Any] | None, Decimal, Decimal, list[dict[str, str]]]:
-    total_deposits = sum((row.balance_ghs for row in deposit_rows), _ZERO)
-    by_counterparty: dict[UUID, dict[str, Any]] = {}
-    unattributed = _ZERO
-    for row in deposit_rows:
-        if row.counterparty_id is None:
-            unattributed += row.balance_ghs
-            continue
-        entry = by_counterparty.setdefault(
-            row.counterparty_id,
-            {
-                "name": row.counterparty_name or str(row.counterparty_id),
-                "type": row.counterparty_type or "",
-                "amount": _ZERO,
-            },
+# --- Concentration of funding: Tables 5, 7 and 8 (rebuilt 2026-08-07) ------
+#
+# Table 5's selection rule is the directive's, not "Top N by size": every
+# connected counterparty (Large Exposures Directive grouping, footnote 4)
+# providing funding of MORE THAN 1% of Total Assets, plus Top-20/Top-100
+# depositor totals with the ¶23 netting rule (deposits pledged to secure a
+# facility deducted from both the numerator and the total-deposit
+# denominator). Table 7 uses ¶31's five horizons; Table 8 uses its own nine
+# printed buckets — the ¶31-vs-template discrepancy is recorded, and we build
+# to the templates because those are what gets filed.
+_SIGNIFICANT_FUNDING_FRACTION = Decimal("0.01")
+_TOP20 = 20
+_TOP100 = 100
+_FIVE_YEARS_DAYS = 1825
+_FI_COUNTERPARTY_TYPES = ("BANK_OECD", "BANK_NON_OECD", "NBFI")
+_GOV_COUNTERPARTY_TYPES = ("SOVEREIGN", "GOVERNMENT_ENTITY", "CENTRAL_BANK")
+_NEGOTIABLE_PAPER = "negotiable_paper"
+_TABLE7_BUCKETS: tuple[tuple[str, str, int | None], ...] = (
+    ("m_lt1_ghs", "<1", 30),
+    ("m1_3_ghs", "1 - 3", 91),
+    ("m3_6_ghs", "3 - 6", 182),
+    ("m6_12_ghs", "6 - 12", 365),
+    ("m_gt12_ghs", ">12", None),
+)
+_TABLE8_BUCKETS: tuple[tuple[str, str, int | None], ...] = (
+    ("next_day_ghs", "Next day", 1),
+    ("d2_7_ghs", "2 to 7 days", 7),
+    ("d8_1m_ghs", "8 days to 1 month", 30),
+    ("m1_2_ghs", "1 to 2 months", 61),
+    ("m2_3_ghs", "2 to 3 months", 91),
+    ("m3_6_ghs", "3 to 6 months", 182),
+    ("m6_12_ghs", "6 to 12 months", 365),
+    ("m_gt12_ghs", "> 12 months", None),
+)
+
+
+@dataclass
+class _FundingEntity:
+    """One funding provider: a single counterparty or a connected group."""
+
+    key: str
+    name: str
+    related: bool
+    is_financial: bool = False
+    is_government: bool = False
+    funding: Decimal = _ZERO
+    deposits: Decimal = _ZERO
+    pledged_deposits: Decimal = _ZERO
+    rows: list[_CanonicalRow] = field(default_factory=list)
+
+
+def _normalized_name(name: str) -> str:
+    return " ".join(name.strip().lower().split())
+
+
+def _related_party_names(db: Session, ctx: TenantContext, bank: Bank) -> frozenset[str]:
+    names = db.scalars(
+        select(RelatedParty.full_name).where(
+            RelatedParty.organization_id == ctx.organization_id,
+            RelatedParty.bank_id == bank.id,
         )
-        entry["amount"] += row.balance_ghs
+    ).all()
+    return frozenset(_normalized_name(name) for name in names)
+
+
+def _funding_entities(
+    rows: list[_CanonicalRow], related_names: frozenset[str]
+) -> tuple[dict[str, _FundingEntity], Decimal, list[dict[str, str]]]:
+    """Aggregate liability rows into connected funding entities.
+
+    Related/intragroup = the source's own flag on the counterparty OR a
+    normalized-name match against the institution's related-party register
+    (the W4 governance build) — both documented, neither inferred.
+    """
+    entities: dict[str, _FundingEntity] = {}
+    unattributed = _ZERO
+    for row in rows:
+        target = _table2_row_for(row)
+        if target is None or target[0] not in ("6", "7", "8", "9"):
+            continue
+        amount = target[1]
+        if row.counterparty_id is None:
+            unattributed += amount
+            continue
+        key = row.counterparty_group or f"cp:{row.counterparty_id}"
+        name = (
+            f"Group: {row.counterparty_group}"
+            if row.counterparty_group
+            else (row.counterparty_name or str(row.counterparty_id))
+        )
+        entity = entities.setdefault(
+            _normalized_name(key),
+            _FundingEntity(key=key, name=name, related=False),
+        )
+        entity.funding += amount
+        entity.rows.append(row)
+        if row.counterparty_related_hint or (
+            row.counterparty_name is not None
+            and _normalized_name(row.counterparty_name) in related_names
+        ):
+            entity.related = True
+        if row.counterparty_type in _FI_COUNTERPARTY_TYPES:
+            entity.is_financial = True
+        if row.counterparty_type in _GOV_COUNTERPARTY_TYPES:
+            entity.is_government = True
+        if row.position_type == "DEPOSIT":
+            entity.deposits += amount
+            if row.pledged_as_collateral is True:
+                entity.pledged_deposits += amount
 
     findings: list[dict[str, str]] = []
     if unattributed > _ZERO:
         findings.append(
             _finding(
-                "lmt.unattributed_deposits",
+                "lmt.unattributed_funding",
                 "INFO",
-                f"Deposits of {unattributed} GHS carry no counterparty link; they are "
-                "included in total deposit liabilities but cannot be ranked by "
-                "depositor.",
+                f"Funding of {unattributed} GHS carries no counterparty link; it is "
+                "included in totals but cannot be attributed to a provider for the "
+                "concentration tables.",
             )
         )
-    if not by_counterparty or total_deposits <= _ZERO:
-        return None, total_deposits, _ZERO, findings
+    return entities, unattributed, findings
 
-    ranked = sorted(by_counterparty.values(), key=lambda entry: (-entry["amount"], entry["name"]))
-    top = ranked[:_TOP_DEPOSITORS]
-    top_total = sum((entry["amount"] for entry in top), _ZERO)
+
+def _netted_pct(top: list[_FundingEntity], total_deposits: Decimal) -> Decimal:
+    """¶23: pledged deposits leave both the numerator and the denominator."""
+    top_deposits = sum((entity.deposits for entity in top), _ZERO)
+    pledged = sum((entity.pledged_deposits for entity in top), _ZERO)
+    denominator = total_deposits - pledged
+    if denominator <= _ZERO:
+        return _ZERO
+    return _pct_of(top_deposits - pledged, denominator)
+
+
+def _funding_concentration_section(  # noqa: PLR0914 - one linear table assembly
+    entities: dict[str, _FundingEntity],
+    total_assets: Decimal,
+    total_liabilities: Decimal,
+    total_deposits: Decimal,
+) -> tuple[dict[str, Any] | None, dict[str, Decimal], list[_FundingEntity]]:
+    """LMTD Table 5 — funding from significant counterparties (> 1% of assets)."""
+    if not entities:
+        return None, {}, []
+    ranked = sorted(entities.values(), key=lambda e: (-e.funding, e.name))
+    threshold = total_assets * _SIGNIFICANT_FUNDING_FRACTION
+    significant = [entity for entity in ranked if entity.funding > threshold]
+    by_deposits = sorted(entities.values(), key=lambda e: (-e.deposits, e.name))
+    top20 = [entity for entity in by_deposits[:_TOP20] if entity.deposits > _ZERO]
+    top100 = [entity for entity in by_deposits[:_TOP100] if entity.deposits > _ZERO]
+    top20_total = sum((entity.deposits for entity in top20), _ZERO)
+    top100_total = sum((entity.deposits for entity in top100), _ZERO)
+
     rows = [
         snapshot_row(
             str(index),
-            entry["name"],
-            entry["amount"],
-            pct_total_deposits=str(_pct_of(entry["amount"], total_deposits)),
-            counterparty_type=entry["type"],
+            entity.name,
+            entity.funding,
+            pct_total_liabilities=(
+                str(_pct_of(entity.funding, total_liabilities))
+                if total_liabilities > _ZERO
+                else "0"
+            ),
+            related_party="Yes" if entity.related else "No",
         )
-        for index, entry in enumerate(top, start=1)
+        for index, entity in enumerate(significant, start=1)
     ]
+    significant_total = sum((entity.funding for entity in significant), _ZERO)
+    rows.append(
+        snapshot_row("total", "Total", significant_total, related_party="", unit="ghs")
+    )
+    rows.append(
+        snapshot_row(
+            "top20_total",
+            "Total for Top 20 counterparties (depositors)",
+            top20_total,
+            unit="ghs",
+        )
+    )
+    rows.append(
+        snapshot_row(
+            "top100_total",
+            "Total for Top 100 counterparties (depositors)",
+            top100_total,
+            unit="ghs",
+        )
+    )
+    top20_pct = _netted_pct(top20, total_deposits)
+    top100_pct = _netted_pct(top100, total_deposits)
+    rows.append(
+        snapshot_row(
+            "top20_pct_of_deposits",
+            "Total 20 deposits as a percentage of total deposits",
+            top20_pct,
+            unit="pct",
+        )
+    )
+    rows.append(
+        snapshot_row(
+            "top100_pct_of_deposits",
+            "Total 100 deposits as a percentage of total deposits",
+            top100_pct,
+            unit="pct",
+        )
+    )
     section = snapshot_section(
         "funding_concentration",
-        "Concentration of Funding (Top 10 Depositors)",
+        "Funding Liabilities Sourced from Significant Counterparties",
         rows,
-        snapshot_total("total_deposits_ghs", "Total deposit liabilities", total_deposits),
+        snapshot_total(
+            "significant_funding_total_ghs",
+            "Total funding from significant counterparties (> 1% of Total Assets)",
+            significant_total,
+        ),
     )
-    return section, total_deposits, _pct_of(top_total, total_deposits), findings
+    metrics = {
+        "top20_total": top20_total,
+        "top100_total": top100_total,
+        "top20_pct": top20_pct,
+        "top100_pct": top100_pct,
+    }
+    return section, metrics, significant
+
+
+def _bucket_for(
+    row: _CanonicalRow, as_of: date, buckets: tuple[tuple[str, str, int | None], ...]
+) -> str:
+    """Concentration-table bucketing with documented undated rules.
+
+    Demand-natured deposits (current/call/savings) and cash are callable on
+    demand → the shortest bucket; any other undated position reports in the
+    longest bucket — a maturity is never fabricated.
+    """
+    maturity = row.contractual_maturity
+    if maturity is None:
+        account_type = (row.deposit_account_type or "").upper()
+        on_demand = (
+            row.position_type == "CASH"
+            or (row.position_type == "DEPOSIT" and account_type in _SHORT_TERM_BY_NATURE)
+        )
+        return buckets[0][0] if on_demand else buckets[-1][0]
+    days = (maturity - as_of).days
+    for code, _, upper in buckets:
+        if upper is None or days <= upper:
+            return code
+    return buckets[-1][0]
+
+
+def _bucket_vector(
+    rows: list[_CanonicalRow],
+    as_of: date,
+    buckets: tuple[tuple[str, str, int | None], ...],
+    *,
+    amount_of: Any = None,
+) -> dict[str, Decimal]:
+    vector: dict[str, Decimal] = {code: _ZERO for code, _, _ in buckets}
+    for row in rows:
+        amount = amount_of(row) if amount_of is not None else row.balance_ghs
+        if amount is None:
+            continue
+        vector[_bucket_for(row, as_of, buckets)] += amount
+    return vector
+
+
+def _grid_bucket_row(
+    code: str,
+    label: str,
+    vector: dict[str, Decimal],
+    buckets: tuple[tuple[str, str, int | None], ...],
+) -> dict[str, Any]:
+    total = sum(vector.values(), _ZERO)
+    return snapshot_row(
+        code, label, total, **{key: str(vector[key]) for key, _, _ in buckets}
+    )
+
+
+def _table7_section(
+    rows: list[_CanonicalRow],
+    entities: dict[str, _FundingEntity],
+    significant: list[_FundingEntity],
+    as_of: date,
+) -> dict[str, Any]:
+    """LMTD Table 7 — time buckets of maturity of exposures (five horizons)."""
+    by_deposits = sorted(entities.values(), key=lambda e: (-e.deposits, e.name))
+    top20 = [entity for entity in by_deposits[:_TOP20] if entity.deposits > _ZERO]
+    section_rows: list[dict[str, Any]] = []
+
+    top20_deposit_rows = [
+        row
+        for entity in top20
+        for row in entity.rows
+        if row.position_type == "DEPOSIT"
+    ]
+    section_rows.append(
+        _grid_bucket_row(
+            "A",
+            "A. Top 20 Depositors",
+            _bucket_vector(top20_deposit_rows, as_of, _TABLE7_BUCKETS),
+            _TABLE7_BUCKETS,
+        )
+    )
+
+    b_total = {code: _ZERO for code, _, _ in _TABLE7_BUCKETS}
+    for index, entity in enumerate(significant, start=1):
+        vector = _bucket_vector(entity.rows, as_of, _TABLE7_BUCKETS)
+        for code, _, _unused in _TABLE7_BUCKETS:
+            b_total[code] += vector[code]
+        section_rows.append(
+            _grid_bucket_row(f"B{index}", entity.name, vector, _TABLE7_BUCKETS)
+        )
+    section_rows.append(
+        _grid_bucket_row(
+            "B_total", "B. Funding from Significant Counterparties — Total",
+            b_total, _TABLE7_BUCKETS,
+        )
+    )
+
+    significant_ccys = _significant_currencies(rows)
+    c_total = {code: _ZERO for code, _, _ in _TABLE7_BUCKETS}
+    d_total = {code: _ZERO for code, _, _ in _TABLE7_BUCKETS}
+    for currency in significant_ccys:
+        ccy_assets = [r for r in rows if r.currency == currency and _is_t2_asset(r)]
+        ccy_liabilities = [
+            r for r in rows if r.currency == currency and _is_t2_liability(r)
+        ]
+        asset_vector = _bucket_vector(ccy_assets, as_of, _TABLE7_BUCKETS)
+        liability_vector = _bucket_vector(ccy_liabilities, as_of, _TABLE7_BUCKETS)
+        for code, _, _unused in _TABLE7_BUCKETS:
+            c_total[code] += asset_vector[code]
+            d_total[code] += liability_vector[code]
+        section_rows.append(
+            _grid_bucket_row(f"C_{currency}", f"Assets — {currency}", asset_vector, _TABLE7_BUCKETS)
+        )
+        section_rows.append(
+            _grid_bucket_row(
+                f"D_{currency}", f"Liabilities — {currency}", liability_vector, _TABLE7_BUCKETS
+            )
+        )
+    section_rows.append(
+        _grid_bucket_row(
+            "C_total", "C. Assets by Significant Currency — Total", c_total, _TABLE7_BUCKETS
+        )
+    )
+    section_rows.append(
+        _grid_bucket_row(
+            "D_total", "D. Liabilities by Significant Currency — Total", d_total, _TABLE7_BUCKETS
+        )
+    )
+    return snapshot_section(
+        "maturity_of_exposures",
+        "Time Buckets of Maturity of Exposures",
+        section_rows,
+    )
+
+
+def _table8_section(
+    rows: list[_CanonicalRow],
+    entities: dict[str, _FundingEntity],
+    as_of: date,
+) -> dict[str, Any]:
+    """LMTD Table 8 — concentration of deposit funding (nine printed buckets)."""
+    by_deposits = sorted(entities.values(), key=lambda e: (-e.deposits, e.name))
+    top20_dep = [e for e in by_deposits[:_TOP20] if e.deposits > _ZERO]
+    financial = sorted(
+        (e for e in entities.values() if e.is_financial), key=lambda e: (-e.funding, e.name)
+    )[:_TOP20]
+    government = sorted(
+        (e for e in entities.values() if e.is_government), key=lambda e: (-e.funding, e.name)
+    )[:_TOP20]
+    associates_rows = [
+        row for entity in entities.values() if entity.related for row in entity.rows
+    ]
+    top20_dep_rows = [
+        row for e in top20_dep for row in e.rows if row.position_type == "DEPOSIT"
+    ]
+    financial_rows = [row for e in financial for row in e.rows]
+    government_rows = [row for e in government for row in e.rows]
+    paper_rows = [
+        row
+        for row in rows
+        if _is_t2_liability(row) and row.funding_instrument == _NEGOTIABLE_PAPER
+    ]
+    paper_short = [
+        row
+        for row in paper_rows
+        if row.contractual_maturity is not None
+        and (row.contractual_maturity - as_of).days <= _ONE_YEAR_DAYS
+    ]
+    paper_long = [
+        row
+        for row in paper_rows
+        if row.contractual_maturity is not None
+        and (row.contractual_maturity - as_of).days > _FIVE_YEARS_DAYS
+    ]
+
+    blocks: tuple[tuple[str, str, list[_CanonicalRow]], ...] = (
+        ("associates", "Funding from associates of the reporting financial institution",
+         associates_rows),
+        ("top20_depositors", "Twenty largest depositors", top20_dep_rows),
+        ("top20_financial", "Twenty largest financial institutions funding balances",
+         financial_rows),
+        ("top20_government", "Twenty largest government and parastatals funding balances",
+         government_rows),
+        ("negotiable_paper", "Negotiable paper funding instruments", paper_rows),
+        ("negotiable_paper_lte_12m",
+         "of which: issued for a period not exceeding twelve months", paper_short),
+        ("negotiable_paper_gt_5y", "of which: issued for a period exceeding five years",
+         paper_long),
+    )
+    section_rows = [
+        _grid_bucket_row(
+            code, label, _bucket_vector(block, as_of, _TABLE8_BUCKETS), _TABLE8_BUCKETS
+        )
+        for code, label, block in blocks
+    ]
+    return snapshot_section(
+        "deposit_funding_concentration",
+        "Concentration of Deposit Funding",
+        section_rows,
+    )
 
 
 def _unencumbered_assets_section(
@@ -1420,9 +1809,19 @@ _LMT_TOOL_NOTES = [
         "non-contractual, never Next Day."
     ),
     (
-        "Funding concentration: top-10 depositors by canonical counterparty; the "
-        "published Table 5 asks Top 20 and Top 100 — the derivation reports what "
-        "the ingested counterparty links support."
+        "Funding concentration (Tables 5/7/8): significant counterparty = "
+        "connected group (Large Exposures grouping) providing funding of more "
+        "than 1% of Total Assets — the directive's population, not Top-N. "
+        "Top-20/Top-100 percentages apply the para-23 netting rule: deposits "
+        "pledged to secure a facility leave both numerator and denominator. "
+        "Related/intragroup = the source's own counterparty flag or a name "
+        "match against the institution's related-party register — never "
+        "inferred. Table 7 uses para-31's five horizons; Table 8 uses its nine "
+        "printed buckets (the para-31 discrepancy is recorded as a directive "
+        "question). Undated demand-natured funding reports in the shortest "
+        "bucket, other undated in the longest — maturities are never invented. "
+        "Table 8 negotiable paper fills from the documented "
+        "attributes['funding_instrument'] = 'negotiable_paper' convention."
     ),
     (
         "Available unencumbered assets: HQLA-classified securities facts; the "
@@ -1508,26 +1907,49 @@ def _build_lmt_tool_block(
         base_currency = (bank.currency or "GHS").strip().upper()
         sections.append(_table11_section(ladder_rows, period.period_end, base_currency))
 
-    deposit_rows = [row for row in ladder_rows if row.position_type == "DEPOSIT"]
-    concentration, total_deposits, top_share_pct, deposit_findings = _funding_concentration_section(
-        deposit_rows
-    )
-    findings.extend(deposit_findings)
-    if concentration is not None:
-        sections.append(concentration)
-        totals.append(
-            snapshot_row(
-                "total_deposits_ghs", "Total deposit liabilities", total_deposits, unit="ghs"
-            )
+        # Tables 5, 7, 8 — funding concentration on the directive's rules.
+        related_names = _related_party_names(db, ctx, bank)
+        entities, _unattributed, funding_findings = _funding_entities(
+            ladder_rows, related_names
         )
-        totals.append(
-            snapshot_row(
-                "top10_depositor_share_pct",
-                "Top-10 depositor share of total deposits",
-                top_share_pct,
-                unit="pct",
-            )
+        findings.extend(funding_findings)
+        total_liabilities = sum(_liabilities_by_currency(ladder_rows).values(), _ZERO)
+        concentration, metrics, significant = _funding_concentration_section(
+            entities,
+            current_inputs["total_assets"],
+            total_liabilities,
+            current_inputs["total_deposits"],
         )
+        if concentration is not None:
+            sections.append(concentration)
+            sections.append(
+                _table7_section(ladder_rows, entities, significant, period.period_end)
+            )
+            sections.append(_table8_section(ladder_rows, entities, period.period_end))
+            totals.append(
+                snapshot_row(
+                    "total_deposits_ghs",
+                    "Total deposit liabilities",
+                    current_inputs["total_deposits"],
+                    unit="ghs",
+                )
+            )
+            totals.append(
+                snapshot_row(
+                    "top20_deposits_pct",
+                    "Top-20 deposits as % of total deposits (net of pledged, para 23)",
+                    metrics["top20_pct"],
+                    unit="pct",
+                )
+            )
+            totals.append(
+                snapshot_row(
+                    "top100_deposits_pct",
+                    "Top-100 deposits as % of total deposits (net of pledged, para 23)",
+                    metrics["top100_pct"],
+                    unit="pct",
+                )
+            )
 
     unencumbered, unencumbered_total = _unencumbered_assets_section(db, ctx, bank, period)
     if unencumbered is not None:

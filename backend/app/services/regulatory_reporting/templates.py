@@ -475,23 +475,86 @@ _LMT_TEMPLATE = ReturnTemplate(
         ),
         SectionLayout(
             section_code="funding_concentration",
-            layout_id="lmt_funding_concentration_partial",
-            sheet_title="Concentration of Funding",
+            layout_id="lmt_funding_concentration_table5",
+            sheet_title="Funding from Significant Counterparties",
             columns=(
-                ColumnSpec("code", "Rank", "text"),
-                ColumnSpec("description", "Depositor", "text"),
-                ColumnSpec("counterparty_type", "Counterparty Type", "text"),
-                ColumnSpec("value", "Deposits (GHS '000)", "ghs"),
-                ColumnSpec("pct_total_deposits", "% of Total Deposits", "pct"),
+                ColumnSpec("code", "#", "text"),
+                ColumnSpec(
+                    "description",
+                    "Name of Significant Counterparty (1% of Total Assets)",
+                    "text",
+                ),
+                ColumnSpec("value", "Amount of Funding", "ghs"),
+                ColumnSpec("pct_total_liabilities", "Percentage of Total Liabilities", "pct"),
+                ColumnSpec("related_party", "Intragroup or related parties (Yes or No)", "text"),
             ),
-            fidelity="PARTIAL",
-            source_citation=f"{_LMTD_CITATION} — Table 5 Funding from Significant Counterparties",
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_LMTD_CITATION} — Table 5 Funding Liabilities Sourced from "
+                "Significant Counterparties"
+            ),
             notes=(
-                "Top-10 depositors by canonical counterparty from DEPOSIT positions; "
-                "the published Table 5 asks Top 20 and Top 100 and Tables 7-8 add "
-                "maturity horizons the canonical counterparty links do not yet fill. "
-                "Deposits without a counterparty link count in the total but cannot "
-                "be ranked.",
+                "Selection is the directive's rule: connected counterparties "
+                "(Large Exposures grouping) whose funding exceeds 1% of Total "
+                "Assets — a population, not a Top-N cut. The Top-20/Top-100 "
+                "totals and percentage rows apply para-23's netting (pledged "
+                "deposits leave both numerator and denominator). The related-"
+                "party flag comes from the source's counterparty flag or the "
+                "institution's related-party register.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="maturity_of_exposures",
+            layout_id="lmt_maturity_of_exposures_table7",
+            sheet_title="Time Buckets of Maturity of Exposures",
+            columns=(
+                ColumnSpec("description", "Item", "text"),
+                ColumnSpec("m_lt1_ghs", "<1", "ghs"),
+                ColumnSpec("m1_3_ghs", "1 - 3", "ghs"),
+                ColumnSpec("m3_6_ghs", "3 - 6", "ghs"),
+                ColumnSpec("m6_12_ghs", "6 - 12", "ghs"),
+                ColumnSpec("m_gt12_ghs", ">12", "ghs"),
+                ColumnSpec("value", "Total", "ghs"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LMTD_CITATION} — Table 7 Time Buckets of Maturity of Exposures",
+            notes=(
+                "Blocks as printed: A Top-20 depositors, B funding from each "
+                "significant counterparty, C assets and D liabilities by "
+                "significant currency — across para-31's five month horizons. "
+                "Undated demand-natured positions report in <1 month; other "
+                "undated in >12 — a maturity is never fabricated.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="deposit_funding_concentration",
+            layout_id="lmt_deposit_concentration_table8",
+            sheet_title="Concentration of Deposit Funding",
+            columns=(
+                ColumnSpec("description", "Concentration of deposit funding", "text"),
+                ColumnSpec("value", "Total", "ghs"),
+                ColumnSpec("next_day_ghs", "Next day", "ghs"),
+                ColumnSpec("d2_7_ghs", "2 to 7 days", "ghs"),
+                ColumnSpec("d8_1m_ghs", "8 days to 1 month", "ghs"),
+                ColumnSpec("m1_2_ghs", "1 to 2 months", "ghs"),
+                ColumnSpec("m2_3_ghs", "2 to 3 months", "ghs"),
+                ColumnSpec("m3_6_ghs", "3 to 6 months", "ghs"),
+                ColumnSpec("m6_12_ghs", "6 to 12 months", "ghs"),
+                ColumnSpec("m_gt12_ghs", "> 12 months", "ghs"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LMTD_CITATION} — Table 8 Concentration of Deposit Funding",
+            notes=(
+                "Rows as printed: associates funding, twenty largest depositors, "
+                "twenty largest financial-institution balances, twenty largest "
+                "government/parastatal balances, and negotiable paper funding "
+                "instruments with the two of-which sub-rows. Built to the printed "
+                "nine buckets; para 31 names five — the discrepancy is a recorded "
+                "question to the regulator, and the filed template wins. "
+                "Negotiable paper fills from the documented "
+                "attributes['funding_instrument'] convention.",
             ),
             optional=True,
         ),
@@ -525,12 +588,12 @@ _LMT_TEMPLATE = ReturnTemplate(
         "available HQLA-classified assets (Table 9 subset) derived from canonical "
         "data. Tool sections appear only when their underlying data exists — empty "
         "grids are never fabricated.",
-        "LMTD Appendix Tables 3-4, 7-8 and 10 remain unfilled pending their "
-        "Phase-2 build slices (docs/lmtd_gap_analysis.md); Table 5 still reports "
-        "the Top-10 subset pending the >1%-of-assets + Top-20/Top-100 rebuild. "
-        "Tables 1, 2 and 6 are CONFIRMED as of 2026-08-07; Table 11 renders the "
-        "full published per-currency grid with a documented conservative "
-        "calibration pending the unpublished LCR Directive.",
+        "LMTD Appendix Tables 3, 4 and 10 remain unfilled pending the collateral "
+        "slice (docs/lmtd_gap_analysis.md); Table 9 still renders the 3-column "
+        "subset pending the haircut schedule. Tables 1, 2, 5, 6, 7 and 8 are "
+        "CONFIRMED as of 2026-08-07; Table 11 renders the full published "
+        "per-currency grid with a documented conservative calibration pending "
+        "the unpublished LCR Directive.",
         _T_MINUS_1_NOTE,
     ),
 )

@@ -44,6 +44,7 @@ from app.models import (
     ParamStressShock,
     RegulatoryPackage,
     RegulatoryRun,
+    RelatedParty,
 )
 from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
@@ -202,6 +203,7 @@ class _CanonicalSeeder:
         currency: str = "GHS",
         deposit_account_type: str | None = None,
         encumbered: bool | None = None,
+        pledged_as_collateral: bool | None = None,
         operational_purpose: bool | None = None,
         redeemable_within_two_days: bool | None = None,
         extra_attributes: dict[str, Any] | None = None,
@@ -229,6 +231,7 @@ class _CanonicalSeeder:
                 ifrs9_stage=ifrs9_stage,
                 deposit_account_type=deposit_account_type,
                 encumbered=encumbered,
+                pledged_as_collateral=pledged_as_collateral,
                 operational_purpose=operational_purpose,
                 redeemable_within_two_days=redeemable_within_two_days,
                 attributes=attributes,
@@ -643,13 +646,17 @@ def test_lmt_carries_ladder_concentration_and_unencumbered_sections(  # noqa: PL
     assert total["equals_sum_of_rows"] is False  # a grid, not a summable column
     assert Decimal(total["value"]) == Decimal("2850000")  # on-balance mismatch
 
-    concentration = sections["funding_concentration"]["rows"]
-    assert [(row["description"], row["value"]) for row in concentration] == [
-        ("Kanda Pensions Trust", "6000000"),
-        ("Osu Manufacturing Ltd", "3000000"),
-    ]
-    assert Decimal(concentration[0]["pct_total_deposits"]) == Decimal("60")
-    assert Decimal(sections["funding_concentration"]["total"]["value"]) == Decimal("10000000")
+    concentration = {row["code"]: row for row in sections["funding_concentration"]["rows"]}
+    # Both depositors exceed 1% of the 13.25M asset base — the directive's
+    # population rule, not a Top-N cut.
+    assert concentration["1"]["description"] == "Kanda Pensions Trust"
+    assert Decimal(concentration["1"]["value"]) == Decimal("6000000")
+    assert Decimal(concentration["1"]["pct_total_liabilities"]) == Decimal("57.6923")
+    assert concentration["1"]["related_party"] == "No"
+    assert concentration["2"]["description"] == "Osu Manufacturing Ltd"
+    assert Decimal(concentration["top20_total"]["value"]) == Decimal("9000000")
+    assert Decimal(concentration["top20_pct_of_deposits"]["value"]) == Decimal("90")
+    assert {"maturity_of_exposures", "deposit_funding_concentration"} <= set(sections)
 
     unencumbered = sections["unencumbered_assets"]["rows"]
     assert unencumbered, "seeded HQLA-classified securities facts must appear"
@@ -657,11 +664,11 @@ def test_lmt_carries_ladder_concentration_and_unencumbered_sections(  # noqa: PL
 
     totals = {row["code"]: row["value"] for row in package.snapshot["totals"]}
     assert Decimal(totals["on_balance_mismatch_total_ghs"]) == Decimal("2850000")
-    assert Decimal(totals["top10_depositor_share_pct"]) == Decimal("90")
+    assert Decimal(totals["top20_deposits_pct"]) == Decimal("90")
 
     # The unattributed deposit is counted in the total but flagged as unrankable.
     findings = package.snapshot["metadata"]["generation_findings"]
-    assert any(item["rule"] == "lmt.unattributed_deposits" for item in findings)
+    assert any(item["rule"] == "lmt.unattributed_funding" for item in findings)
 
     read = validation.validate_package(db_session, MAKER, SAMPLE_BANK_ID, package.id)
     assert read.status == "validated", read.validation_report
@@ -677,7 +684,8 @@ def test_lmt_carries_ladder_concentration_and_unencumbered_sections(  # noqa: PL
             payload = stream.read()
     workbook = load_workbook(io.BytesIO(payload))
     assert "Contractual Maturity Mismatch" in workbook.sheetnames
-    assert "Concentration of Funding" in workbook.sheetnames
+    # xlsx sheet titles truncate at 31 characters.
+    assert any(name.startswith("Funding from Significant") for name in workbook.sheetnames)
     assert "Available Unencumbered Assets" in workbook.sheetnames
 
 
@@ -907,6 +915,95 @@ def test_lmt_significant_currency_tables(db_session: Session) -> None:
 
     totals = {row["code"]: row["value"] for row in package.snapshot["totals"]}
     assert totals["significant_currencies"] == "4"
+
+
+def test_lmt_funding_concentration_netting_related_and_tables_7_8(
+    db_session: Session,
+) -> None:
+    """Tables 5/7/8 mechanics: para-23 netting, related-party flags, blocks.
+
+    Book: assets = one 50.0M loan (1% threshold = 0.5M). Depositors — a
+    related pensions group (8.0M call, of which 2.0M pledged to secure a
+    facility), a resident bank (5.0M fixed at 60 days), a government agency
+    (4.0M fixed at 200 days), and an anonymous 1.0M. A 3.0M negotiable-paper
+    note at 9 months fills Table 8's instrument rows.
+    """
+    seed_sample_bank(db_session)
+    _run_liquidity_baseline(db_session)
+    db_session.add(
+        RelatedParty(
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            party_type="legal_entity",
+            full_name="Akosombo Pensions Ltd",
+            status="active",
+        )
+    )
+    db_session.flush()
+
+    seeder = _CanonicalSeeder(db_session)
+    related_cp = seeder.counterparty("CP/REL", "Akosombo Pensions Ltd", "CORPORATE")
+    bank_cp = seeder.counterparty("CP/BANK", "Volta Interbank Ltd", "BANK_NON_OECD")
+    gov_cp = seeder.counterparty("CP/GOV", "Cocoa Board Agency", "GOVERNMENT_ENTITY")
+    seeder.position("LN/BIG", "LOAN", Decimal("50000000"), maturity=date(2029, 3, 31))
+    seeder.position(
+        "DEP/REL-A", "DEPOSIT", Decimal("6000000"), counterparty=related_cp,
+        deposit_account_type="CALL",
+    )
+    seeder.position(
+        "DEP/REL-B", "DEPOSIT", Decimal("2000000"), counterparty=related_cp,
+        deposit_account_type="CALL", pledged_as_collateral=True,
+    )
+    seeder.position(
+        "DEP/BANK", "DEPOSIT", Decimal("5000000"), counterparty=bank_cp,
+        deposit_account_type="FIXED", maturity=date(2026, 5, 30),  # 60 days
+    )
+    seeder.position(
+        "DEP/GOV", "DEPOSIT", Decimal("4000000"), counterparty=gov_cp,
+        deposit_account_type="FIXED", maturity=date(2026, 10, 17),  # 200 days
+    )
+    seeder.position("DEP/ANON", "DEPOSIT", Decimal("1000000"))
+    seeder.position(
+        "NP/1", "OTHER_LIABILITY", Decimal("3000000"), maturity=date(2026, 12, 31),
+        extra_attributes={"funding_instrument": "negotiable_paper"},
+    )
+
+    package = _generate(db_session, "LMT")
+    sections = _sections(package)
+
+    # Table 5: all three attributed depositors exceed 1% of 50.0M assets.
+    concentration = {row["code"]: row for row in sections["funding_concentration"]["rows"]}
+    assert concentration["1"]["description"] == "Akosombo Pensions Ltd"
+    assert concentration["1"]["related_party"] == "Yes"  # register name match
+    assert concentration["2"]["related_party"] == "No"
+    # Netting (para 23): attributed top-20 deposits are 17.0M gross; the
+    # 2.0M pledged leaves BOTH sides — (17-2) / (18-2) = 93.75%.
+    assert Decimal(concentration["top20_total"]["value"]) == Decimal("17000000")
+    assert Decimal(concentration["top20_pct_of_deposits"]["value"]) == Decimal("93.75")
+
+    totals = {row["code"]: row["value"] for row in package.snapshot["totals"]}
+    assert Decimal(totals["top20_deposits_pct"]) == Decimal("93.75")
+
+    # Table 7: block A places the call deposits in <1 month (on demand), the
+    # 60-day fixed in 1-3 months and the 200-day fixed in 6-12 months.
+    table7 = {row["code"]: row for row in sections["maturity_of_exposures"]["rows"]}
+    assert Decimal(table7["A"]["m_lt1_ghs"]) == Decimal("8000000")
+    assert Decimal(table7["A"]["m1_3_ghs"]) == Decimal("5000000")
+    assert Decimal(table7["A"]["m6_12_ghs"]) == Decimal("4000000")
+    assert Decimal(table7["A"]["value"]) == Decimal("17000000")
+    assert Decimal(table7["B_total"]["value"]) == Decimal("17000000")
+
+    # Table 8: associates = the related group's gross deposits; FI and
+    # government blocks pick their counterparty types; negotiable paper
+    # lands in 6-12 months with the <=12m of-which row filled.
+    table8 = {row["code"]: row for row in sections["deposit_funding_concentration"]["rows"]}
+    assert Decimal(table8["associates"]["value"]) == Decimal("8000000")
+    assert Decimal(table8["associates"]["next_day_ghs"]) == Decimal("8000000")  # both CALL
+    assert Decimal(table8["top20_financial"]["value"]) == Decimal("5000000")
+    assert Decimal(table8["top20_government"]["value"]) == Decimal("4000000")
+    assert Decimal(table8["negotiable_paper"]["m6_12_ghs"]) == Decimal("3000000")
+    assert Decimal(table8["negotiable_paper_lte_12m"]["value"]) == Decimal("3000000")
+    assert Decimal(table8["negotiable_paper_gt_5y"]["value"]) == Decimal("0")
 
 
 def test_lmt_without_canonical_positions_omits_position_tools(db_session: Session) -> None:
