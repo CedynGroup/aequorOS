@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { ThresholdsValue } from "./ThresholdsValue";
+import type { HaircutsValue } from "./HaircutsValue";
 import {
-  ThresholdsValueFromJSON,
-  ThresholdsValueFromJSONTyped,
-  ThresholdsValueToJSON,
-  ThresholdsValueToJSONTyped,
-} from "./ThresholdsValue";
+  HaircutsValueFromJSON,
+  HaircutsValueFromJSONTyped,
+  HaircutsValueToJSON,
+  HaircutsValueToJSONTyped,
+} from "./HaircutsValue";
 
 /**
  * A Board-approved threshold generation.
@@ -61,10 +61,10 @@ export interface LiquidityThresholdUpdate {
   reason: string;
   /**
    *
-   * @type {{ [key: string]: ThresholdsValue; }}
+   * @type {{ [key: string]: HaircutsValue; }}
    * @memberof LiquidityThresholdUpdate
    */
-  thresholds: { [key: string]: ThresholdsValue };
+  thresholds: { [key: string]: HaircutsValue };
 }
 
 /**
@@ -113,7 +113,7 @@ export function LiquidityThresholdUpdateFromJSONTyped(
       json["institution_class"] == null ? undefined : json["institution_class"],
     notes: json["notes"] == null ? undefined : json["notes"],
     reason: json["reason"],
-    thresholds: mapValues(json["thresholds"], ThresholdsValueFromJSON),
+    thresholds: mapValues(json["thresholds"], HaircutsValueFromJSON),
   };
 }
 
@@ -137,6 +137,6 @@ export function LiquidityThresholdUpdateToJSONTyped(
     institution_class: value["institutionClass"],
     notes: value["notes"],
     reason: value["reason"],
-    thresholds: mapValues(value["thresholds"], ThresholdsValueToJSON),
+    thresholds: mapValues(value["thresholds"], HaircutsValueToJSON),
   };
 }

@@ -16,6 +16,8 @@ from fastapi import APIRouter, Query
 
 from app.api.deps import ApproverTenant, DbSession, Tenant
 from app.schemas.liquidity_thresholds import (
+    LiquidityHaircutScheduleRead,
+    LiquidityHaircutUpdate,
     LiquidityThresholdRegisterRead,
     LiquidityThresholdUpdate,
 )
@@ -51,3 +53,32 @@ def update_liquidity_threshold_register(
     ctx: ApproverTenant,
 ) -> LiquidityThresholdRegisterRead:
     return liquidity_thresholds.update_register(db, ctx, bank_id, payload)
+
+
+@router.get(
+    "/banks/{bank_id}/liquidity-haircuts",
+    response_model=LiquidityHaircutScheduleRead,
+    operation_id="getLiquidityHaircutSchedule",
+)
+def get_liquidity_haircut_schedule(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+    as_of: Annotated[date | None, Query()] = None,
+) -> LiquidityHaircutScheduleRead:
+    resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
+    return liquidity_thresholds.get_haircut_schedule(db, ctx, bank_id, resolved_as_of)
+
+
+@router.put(
+    "/banks/{bank_id}/liquidity-haircuts",
+    response_model=LiquidityHaircutScheduleRead,
+    operation_id="updateLiquidityHaircutSchedule",
+)
+def update_liquidity_haircut_schedule(
+    bank_id: str,
+    payload: LiquidityHaircutUpdate,
+    db: DbSession,
+    ctx: ApproverTenant,
+) -> LiquidityHaircutScheduleRead:
+    return liquidity_thresholds.update_haircut_schedule(db, ctx, bank_id, payload)

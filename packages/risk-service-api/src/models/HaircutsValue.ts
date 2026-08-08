@@ -13,36 +13,36 @@
 /**
  *
  * @export
- * @interface ThresholdsValue
+ * @interface HaircutsValue
  */
-export type ThresholdsValue = number | string;
+export type HaircutsValue = number | string;
 
 /**
- * Check if a given object implements the ThresholdsValue interface.
+ * Check if a given object implements the HaircutsValue interface.
  */
-export function instanceOfThresholdsValue(
+export function instanceOfHaircutsValue(
   value: unknown,
-): value is ThresholdsValue {
+): value is HaircutsValue {
   return typeof value === "number" || typeof value === "string";
 }
 
-export function ThresholdsValueFromJSON(json: any): ThresholdsValue {
-  return ThresholdsValueFromJSONTyped(json, false);
+export function HaircutsValueFromJSON(json: any): HaircutsValue {
+  return HaircutsValueFromJSONTyped(json, false);
 }
 
-export function ThresholdsValueFromJSONTyped(
+export function HaircutsValueFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): ThresholdsValue {
+): HaircutsValue {
   return json;
 }
 
-export function ThresholdsValueToJSON(json: any): ThresholdsValue {
-  return ThresholdsValueToJSONTyped(json, false);
+export function HaircutsValueToJSON(json: any): HaircutsValue {
+  return HaircutsValueToJSONTyped(json, false);
 }
 
-export function ThresholdsValueToJSONTyped(
-  value?: ThresholdsValue | null,
+export function HaircutsValueToJSONTyped(
+  value?: HaircutsValue | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   return value;

@@ -13,21 +13,37 @@
 import * as runtime from "../runtime";
 import type {
   ErrorResponse,
+  LiquidityHaircutScheduleRead,
+  LiquidityHaircutUpdate,
   LiquidityThresholdRegisterRead,
   LiquidityThresholdUpdate,
 } from "../models/index";
 import {
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
+  LiquidityHaircutScheduleReadFromJSON,
+  LiquidityHaircutScheduleReadToJSON,
+  LiquidityHaircutUpdateFromJSON,
+  LiquidityHaircutUpdateToJSON,
   LiquidityThresholdRegisterReadFromJSON,
   LiquidityThresholdRegisterReadToJSON,
   LiquidityThresholdUpdateFromJSON,
   LiquidityThresholdUpdateToJSON,
 } from "../models/index";
 
+export interface GetLiquidityHaircutScheduleRequest {
+  bankId: string;
+  asOf?: Date | null;
+}
+
 export interface GetLiquidityThresholdRegisterRequest {
   bankId: string;
   asOf?: Date | null;
+}
+
+export interface UpdateLiquidityHaircutScheduleRequest {
+  bankId: string;
+  liquidityHaircutUpdate: LiquidityHaircutUpdate;
 }
 
 export interface UpdateLiquidityThresholdRegisterRequest {
@@ -39,6 +55,70 @@ export interface UpdateLiquidityThresholdRegisterRequest {
  *
  */
 export class LiquidityThresholdsApi extends runtime.BaseAPI {
+  /**
+   * Get Liquidity Haircut Schedule
+   */
+  async getLiquidityHaircutScheduleRaw(
+    requestParameters: GetLiquidityHaircutScheduleRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<LiquidityHaircutScheduleRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getLiquidityHaircutSchedule().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["asOf"] != null) {
+      queryParameters["as_of"] = (requestParameters["asOf"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/liquidity-haircuts`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      LiquidityHaircutScheduleReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Get Liquidity Haircut Schedule
+   */
+  async getLiquidityHaircutSchedule(
+    requestParameters: GetLiquidityHaircutScheduleRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<LiquidityHaircutScheduleRead> {
+    const response = await this.getLiquidityHaircutScheduleRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Get Liquidity Threshold Register
    */
@@ -97,6 +177,76 @@ export class LiquidityThresholdsApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<LiquidityThresholdRegisterRead> {
     const response = await this.getLiquidityThresholdRegisterRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Update Liquidity Haircut Schedule
+   */
+  async updateLiquidityHaircutScheduleRaw(
+    requestParameters: UpdateLiquidityHaircutScheduleRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<LiquidityHaircutScheduleRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling updateLiquidityHaircutSchedule().',
+      );
+    }
+
+    if (requestParameters["liquidityHaircutUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "liquidityHaircutUpdate",
+        'Required parameter "liquidityHaircutUpdate" was null or undefined when calling updateLiquidityHaircutSchedule().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/liquidity-haircuts`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: LiquidityHaircutUpdateToJSON(
+          requestParameters["liquidityHaircutUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      LiquidityHaircutScheduleReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Update Liquidity Haircut Schedule
+   */
+  async updateLiquidityHaircutSchedule(
+    requestParameters: UpdateLiquidityHaircutScheduleRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<LiquidityHaircutScheduleRead> {
+    const response = await this.updateLiquidityHaircutScheduleRaw(
       requestParameters,
       initOverrides,
     );

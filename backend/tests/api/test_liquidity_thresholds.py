@@ -126,3 +126,69 @@ def test_validation_and_authorization_guards(db_client: TestClient) -> None:
 
     foreign = db_client.get(URL.format(bank_id=bank_id), headers=headers(ORG_2))
     assert foreign.status_code == 404
+
+
+HAIRCUT_URL = "/api/v1/banks/{bank_id}/liquidity-haircuts"
+
+
+def test_haircut_schedule_lifecycle(db_client: TestClient) -> None:
+    bank_id = seed_bank(db_client)
+    empty = db_client.get(HAIRCUT_URL.format(bank_id=bank_id), headers=headers())
+    assert empty.status_code == 200, empty.text
+    assert empty.json()["haircuts"] == []
+
+    first = db_client.put(
+        HAIRCUT_URL.format(bank_id=bank_id),
+        headers=headers(roles=("approver",)),
+        json={
+            "effective_from": "2026-04-01",
+            "approved_by": "ALCO review 2026-04",
+            "haircuts": {"sovereign": "10", "EQUITY_GSE": "35.5"},
+            "reason": "Annual liquidity-value review (LRMD para 62(b)).",
+        },
+    )
+    assert first.status_code == 200, first.text
+    active = {row["asset_class"]: row for row in first.json()["haircuts"]}
+    assert set(active) == {"SOVEREIGN", "EQUITY_GSE"}  # classes normalize upper
+    assert Decimal(active["SOVEREIGN"]["haircut_pct"]) == Decimal("10")
+    assert active["SOVEREIGN"]["approved_by"] == "ALCO review 2026-04"
+
+    revised = db_client.put(
+        HAIRCUT_URL.format(bank_id=bank_id),
+        headers=headers(roles=("approver",)),
+        json={
+            "effective_from": "2026-07-01",
+            "approved_by": "ALCO review 2026-07",
+            "haircuts": {"SOVEREIGN": "12"},
+            "reason": "Mid-year stress reassessment (para 62(c)).",
+        },
+    )
+    assert revised.status_code == 200, revised.text
+    history = revised.json()["history"]
+    sovereign_rows = [row for row in history if row["asset_class"] == "SOVEREIGN"]
+    assert len(sovereign_rows) == 2
+    assert {row["effective_to"] for row in sovereign_rows} == {"2026-07-01", None}
+
+    out_of_range = db_client.put(
+        HAIRCUT_URL.format(bank_id=bank_id),
+        headers=headers(roles=("approver",)),
+        json={
+            "effective_from": "2026-08-01",
+            "approved_by": "x",
+            "haircuts": {"SOVEREIGN": "120"},
+            "reason": "bad",
+        },
+    )
+    assert out_of_range.status_code == 422
+
+    analyst = db_client.put(
+        HAIRCUT_URL.format(bank_id=bank_id),
+        headers=headers(roles=("analyst",)),
+        json={
+            "effective_from": "2026-08-01",
+            "approved_by": "x",
+            "haircuts": {"SOVEREIGN": "15"},
+            "reason": "analyst attempt",
+        },
+    )
+    assert analyst.status_code == 403

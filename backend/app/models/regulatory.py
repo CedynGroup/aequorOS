@@ -297,3 +297,33 @@ class ParamLiquidityThreshold(RegulatoryParameterMixin, Base):
     threshold_code: Mapped[str] = mapped_column(String(60), nullable=False)
     threshold_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ParamLiquidityHaircut(RegulatoryParameterMixin, Base):
+    """LRMD 2026 ¶60–63: the institution's internal liquidity-value schedule.
+
+    Estimated haircuts per asset class, re-assessed at least annually by
+    Senior Management (¶62(b)) — the mixin's approval evidence and
+    effective-dated generations carry that review trail. LMTD Table 9's
+    "Estimated Haircut (%)" and "Monetized Value of Collateral" columns
+    resolve from here: an asset class with no active row reports a zero
+    haircut with the gap noted on the template, never an invented number.
+    ``asset_class`` matches against the position's product
+    ``regulatory_category`` by longest prefix, so a bank can calibrate
+    broadly ("SOVEREIGN") or precisely ("SOVEREIGN_GOG_TBILL").
+    """
+
+    __tablename__ = "param_liquidity_haircut"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "asset_class",
+            "effective_from",
+            name="uq_param_liquidity_haircut_scope",
+        ),
+    )
+
+    asset_class: Mapped[str] = mapped_column(String(80), nullable=False)
+    haircut_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)

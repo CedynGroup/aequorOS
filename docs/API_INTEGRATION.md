@@ -247,7 +247,26 @@ ingestion. Fetch them at
 | `pledged_as_collateral` | boolean | no | Deposit pledged to secure a credit facility (drives the concentration-netting rule). |
 | `lien_reference` | string | no | Source reference of the facility the deposit secures. |
 | `deposit_account_type` | enum | no | `CURRENT`, `CALL`, `SAVINGS`, `FIXED`, `OTHER` — classifies deposits for the liquidity monitoring tables (volatile = current + call). |
-| `attributes` | object | no | Instrument specifics (hedge pair, contract rate, MtM, swap legs, ECL, branch, …) — preserved verbatim and used by module fact derivation. |
+| `attributes` | object | no | Instrument specifics (hedge pair, contract rate, MtM, swap legs, ECL, branch, …) — preserved verbatim and used by module fact derivation. Documented liquidity-directive conventions below. |
+
+**Liquidity-directive attribute conventions.** The Liquidity Monitoring Tools
+return reads these documented `attributes` keys when present (all optional;
+sections that depend on them render only when a source supplies the data):
+
+| Attribute key | Type | Feeds | Description |
+| --- | --- | --- | --- |
+| `obs_category` | string | Table 2 rows 13/15/16/17 | `lending_facility`, `letter_of_credit`, `guarantee`, or `obs_vehicle_facility`. Defaults: undrawn commitments → lending facilities; LC/guarantees → indemnities and guarantees. |
+| `funding_instrument` | string | Table 8 | `negotiable_paper` marks a liability as a negotiable paper funding instrument. |
+| `collateral_instrument` | string | Table 4 | Display name of collateral received against this position. |
+| `collateral_asset_class` | string | Table 10 | `loans_advances`, `equity`, `debt_government`, `debt_financial`, `debt_nonfinancial`, or `other`. |
+| `collateral_received_ghs` | number | Tables 4, 10 | Fair value of collateral received, available for encumbrance (cedi equivalent). |
+| `collateral_rehypothecable` | boolean | Table 4 | Whether the received collateral can be re-pledged. |
+| `collateral_rehypothecated_ghs` | number | Table 4 | Amount already re-pledged. |
+| `collateral_unavailable_ghs` | number | Table 10 | Nominal of collateral received NOT available for encumbrance. |
+| `collateral_group_issued` | boolean | Table 10 | Collateral issued by other entities of the reporting group. |
+| `collateral_bog_eligible` | boolean | Table 10 | Collateral eligible for central-bank standing facilities. |
+| `own_debt_available_ghs` | number | Table 10 | Own debt securities issued, available for encumbrance. |
+| `own_debt_unavailable_ghs` | number | Table 10 | Own debt securities issued, not available for encumbrance. |
 
 ### 3.5 Reference datasets
 

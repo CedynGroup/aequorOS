@@ -61,3 +61,33 @@ class LiquidityThresholdUpdate(BaseModel):
     thresholds: dict[str, Decimal] = Field(min_length=1)
     reason: str = Field(min_length=1)
     notes: str | None = None
+
+
+class LiquidityHaircutRead(BaseModel):
+    """One liquidity-value row of the LRMD ¶60–63 schedule."""
+
+    asset_class: str
+    haircut_pct: Decimal
+    effective_from: date
+    effective_to: date | None
+    approved_by: str
+    approval_timestamp: datetime
+    notes: str | None
+
+
+class LiquidityHaircutScheduleRead(BaseModel):
+    bank_id: str
+    jurisdiction_code: str
+    as_of_date: date
+    haircuts: list[LiquidityHaircutRead]
+    history: list[LiquidityHaircutRead]
+
+
+class LiquidityHaircutUpdate(BaseModel):
+    """A reviewed liquidity-value generation (asset class → haircut %)."""
+
+    effective_from: date
+    approved_by: str = Field(min_length=1, max_length=120)
+    haircuts: dict[str, Decimal] = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    notes: str | None = None

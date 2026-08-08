@@ -344,18 +344,17 @@ def test_lmt_return_exports_lcr_subset_and_data_backed_tools(
     artifact = export_package(db_session, MAKER, package, "xlsx")
     payload = _read_output(db_session, storage, artifact.object_path)
     workbook = load_workbook(io.BytesIO(payload))
-    # Metadata + the four LCR-subset sections + the HQLA-fact-backed
-    # unencumbered-assets tool + provenance. The NSFR sheets stay absent, and
-    # with no canonical position data seeded here the maturity-ladder and
-    # funding-concentration tools are honestly absent too (plan W6.3: tool
-    # sections render only when their underlying data exists).
+    # Metadata + the four LCR-subset sections + provenance. The NSFR sheets
+    # stay absent, and with no canonical position data seeded here every
+    # position-derived tool — including Table 9, canonical-based as of
+    # P2-6 — is honestly absent (plan W6.3: tool sections render only when
+    # their underlying data exists).
     assert workbook.sheetnames == [
         "Return Metadata",
         "Stock of HQLA",
         "Cash Outflows (30 days)",
         "Cash Inflows (30 days)",
         "Liquidity Coverage Ratio Summar",
-        "Available Unencumbered Assets",
         "Fidelity & Provenance",
     ]
     assert artifact.object_path.endswith("/LMT.xlsx")
@@ -405,6 +404,9 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "prudential_ratio_inputs",
             "prudential_ratio_percentages",
             "maturity_ladder",
+            "items_no_contractual_maturity",
+            "collateral_rehypothecation",
+            "collateral_received",
             "assets_liabilities_by_currency",
             "lcr_by_currency",
             "maturity_of_exposures",

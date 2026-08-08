@@ -418,58 +418,46 @@ _LMT_TEMPLATE = ReturnTemplate(
             optional=True,
         ),
         SectionLayout(
-            section_code="assets_liabilities_by_currency",
-            layout_id="lmt_currency_mismatch_table6",
-            sheet_title="Assets and Liabilities by Significant Currency",
+            section_code="items_no_contractual_maturity",
+            layout_id="lmt_no_maturity_table3",
+            sheet_title="Items with No Contractual Maturity",
             columns=(
-                ColumnSpec("code", "Name of Significant Currency", "text"),
-                ColumnSpec("assets_ghs", "Assets", "ghs"),
-                ColumnSpec("liabilities_ghs", "Liabilities", "ghs"),
-                ColumnSpec("value", "Mismatch (2-3)", "ghs"),
+                ColumnSpec("code", "#", "text"),
                 ColumnSpec(
-                    "mismatch_pct_total_liabilities",
-                    "Mismatch as a Percentage of Total Liabilities",
-                    "pct",
+                    "description",
+                    "Name of Instrument/investments/Item without contractual maturity",
+                    "text",
                 ),
+                ColumnSpec("value", "Amount (GHS'000)", "ghs"),
             ),
             fidelity="CONFIRMED",
             source_citation=(
-                f"{_LMTD_CITATION} — Table 6 List of Assets and Liabilities by "
-                "Significant Currencies"
+                f"{_LMTD_CITATION} — Table 3 Information on Investments and Items "
+                "with No Contractual Maturity"
             ),
             notes=(
-                "A currency is significant when liabilities denominated in it are "
-                ">= 5% of total liabilities (LMTD para 30/41); rows are the "
-                "significant currencies, largest liability base first; amounts are "
-                "cedi equivalents from ingested conversions.",
+                "Non-contractual positions excluding deposits (whose undated "
+                "treatment lives in Table 2 rows 6-7), itemized by instrument.",
             ),
             optional=True,
         ),
         SectionLayout(
-            section_code="lcr_by_currency",
-            layout_id="lmt_lcr_by_currency_table11",
-            sheet_title="LCR by Significant Currency",
+            section_code="collateral_rehypothecation",
+            layout_id="lmt_rehypothecation_table4",
+            sheet_title="Customer Collateral Received",
             columns=(
-                ColumnSpec("description", "LCR by Significant Currency", "text"),
-                ColumnSpec("cedi_ghs", "Cedi", "ghs"),
-                ColumnSpec("usd_ghs", "USD", "ghs"),
-                ColumnSpec("pound_ghs", "Pound", "ghs"),
-                ColumnSpec("euro_ghs", "Euro", "ghs"),
-                ColumnSpec("others_ghs", "Others", "ghs"),
-                ColumnSpec("value", "All Currencies", "ghs"),
+                ColumnSpec("code", "#", "text"),
+                ColumnSpec("description", "Name of Instrument", "text"),
+                ColumnSpec("total_amounts_ghs", "Total Amounts (A)", "ghs"),
+                ColumnSpec("hypothecated_ghs", "Amounts already hypothecated (B)", "ghs"),
+                ColumnSpec("value", "Amount Available C = (A-B)", "ghs"),
             ),
-            fidelity="PARTIAL",
-            source_citation=f"{_LMTD_CITATION} — Table 11 LCR by Significant Currency",
+            fidelity="CONFIRMED",
+            source_citation=f"{_LMTD_CITATION} — Table 4 Customer Collateral Received",
             notes=(
-                "Printed fixed columns (Cedi/USD/Pound/Euro/Others), values in cedi "
-                "equivalents. Calibration posture, stated not hidden: HQLA Level 1 "
-                "from canonical classification; Levels 2A/2B zero (no canonical L2 "
-                "taxonomy — never invented); outflows on the most conservative "
-                "contractual basis (maturing <= 30 days + demand deposits in full) "
-                "pending the unpublished LCR Directive's run-off calibration; "
-                "inflows contractual <= 30 days under the Basel 75% cap. The "
-                "printed form labels Net Cash Outflow '(2-1)', which inverts the "
-                "LCR; implemented as (1-2) and recorded as a deviation.",
+                "Customer collateral which can be re-hypothecated, from the "
+                "documented collateral_* position-attribute conventions; renders "
+                "only when a source supplies re-hypothecable collateral.",
             ),
             optional=True,
         ),
@@ -501,6 +489,34 @@ _LMT_TEMPLATE = ReturnTemplate(
                 "deposits leave both numerator and denominator). The related-"
                 "party flag comes from the source's counterparty flag or the "
                 "institution's related-party register.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="assets_liabilities_by_currency",
+            layout_id="lmt_currency_mismatch_table6",
+            sheet_title="Assets and Liabilities by Significant Currency",
+            columns=(
+                ColumnSpec("code", "Name of Significant Currency", "text"),
+                ColumnSpec("assets_ghs", "Assets", "ghs"),
+                ColumnSpec("liabilities_ghs", "Liabilities", "ghs"),
+                ColumnSpec("value", "Mismatch (2-3)", "ghs"),
+                ColumnSpec(
+                    "mismatch_pct_total_liabilities",
+                    "Mismatch as a Percentage of Total Liabilities",
+                    "pct",
+                ),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_LMTD_CITATION} — Table 6 List of Assets and Liabilities by "
+                "Significant Currencies"
+            ),
+            notes=(
+                "A currency is significant when liabilities denominated in it are "
+                ">= 5% of total liabilities (LMTD para 30/41); rows are the "
+                "significant currencies, largest liability base first; amounts are "
+                "cedi equivalents from ingested conversions.",
             ),
             optional=True,
         ),
@@ -560,25 +576,87 @@ _LMT_TEMPLATE = ReturnTemplate(
         ),
         SectionLayout(
             section_code="unencumbered_assets",
-            layout_id="lmt_unencumbered_assets_partial",
+            layout_id="lmt_unencumbered_assets_table9",
             sheet_title="Available Unencumbered Assets",
             columns=(
-                ColumnSpec("code", "Item", "text"),
+                ColumnSpec("code", "S/No.", "text"),
                 ColumnSpec("description", "Description", "text"),
-                ColumnSpec("hqla_level", "HQLA Level", "text"),
-                ColumnSpec("value", "Value (GHS '000)", "ghs"),
+                ColumnSpec("asset_type", "Asset Type & Nature", "text"),
+                ColumnSpec("location", "Location", "text"),
+                ColumnSpec("value", "Value in Cedi ('000)", "ghs"),
+                ColumnSpec("haircut_pct", "Estimated Haircut (%)", "pct"),
+                ColumnSpec("monetized_value_ghs", "Monetized Value of Collateral", "ghs"),
             ),
-            fidelity="PARTIAL",
+            fidelity="CONFIRMED",
             source_citation=(
                 f"{_LMTD_CITATION} — Table 9 Statement of Available Unencumbered Assets"
             ),
             notes=(
-                "HQLA-classified securities facts; the canonical model carries no "
-                "encumbrance flags, secondary-market haircuts or monetised values, so "
-                "those Table 9 columns are omitted rather than invented.",
+                "All seven printed columns and three sections: A secondary-market "
+                "marketable (non-sovereign), B BoG standing-facility eligible, C by "
+                "significant currency (para-36 denominator: 5% of total available "
+                "unencumbered collateral). Haircuts and monetized values resolve "
+                "from the institution's LRMD para-60-63 liquidity-value schedule; "
+                "an uncalibrated asset class reports haircut_source=unset with a "
+                "zero haircut rather than an invented number.",
             ),
             optional=True,
         ),
+        SectionLayout(
+            section_code="collateral_received",
+            layout_id="lmt_collateral_received_table10",
+            sheet_title="Collateral Received",
+            columns=(
+                ColumnSpec("description", "Collateral received by the reporting bank", "text"),
+                ColumnSpec("value", "Fair value available for encumbrance — Total", "ghs"),
+                ColumnSpec("group_issued_ghs", "Issued by other entities of the group", "ghs"),
+                ColumnSpec("bog_eligible_ghs", "BOG eligible", "ghs"),
+                ColumnSpec("unavailable_ghs", "Nominal not available for encumbrance", "ghs"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_LMTD_CITATION} — Table 10 Collateral received by the reporting "
+                "financial institution"
+            ),
+            notes=(
+                "Rows as printed (loans and advances, equity, the three debt-"
+                "security issuer classes, other collateral, own debt securities, "
+                "grand total), filled from the documented collateral_* / "
+                "own_debt_* position-attribute conventions "
+                "(docs/API_INTEGRATION.md section 3.4). The section renders only "
+                "when a source supplies collateral data.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="lcr_by_currency",
+            layout_id="lmt_lcr_by_currency_table11",
+            sheet_title="LCR by Significant Currency",
+            columns=(
+                ColumnSpec("description", "LCR by Significant Currency", "text"),
+                ColumnSpec("cedi_ghs", "Cedi", "ghs"),
+                ColumnSpec("usd_ghs", "USD", "ghs"),
+                ColumnSpec("pound_ghs", "Pound", "ghs"),
+                ColumnSpec("euro_ghs", "Euro", "ghs"),
+                ColumnSpec("others_ghs", "Others", "ghs"),
+                ColumnSpec("value", "All Currencies", "ghs"),
+            ),
+            fidelity="PARTIAL",
+            source_citation=f"{_LMTD_CITATION} — Table 11 LCR by Significant Currency",
+            notes=(
+                "Printed fixed columns (Cedi/USD/Pound/Euro/Others), values in cedi "
+                "equivalents. Calibration posture, stated not hidden: HQLA Level 1 "
+                "from canonical classification; Levels 2A/2B zero (no canonical L2 "
+                "taxonomy — never invented); outflows on the most conservative "
+                "contractual basis (maturing <= 30 days + demand deposits in full) "
+                "pending the unpublished LCR Directive's run-off calibration; "
+                "inflows contractual <= 30 days under the Basel 75% cap. The "
+                "printed form labels Net Cash Outflow '(2-1)', which inverts the "
+                "LCR; implemented as (1-2) and recorded as a deviation.",
+            ),
+            optional=True,
+        ),
+
     ),
     notes=(
         "Beyond the LCR subset (Table 11 taxonomy, aggregate currency), the return "
@@ -588,12 +666,12 @@ _LMT_TEMPLATE = ReturnTemplate(
         "available HQLA-classified assets (Table 9 subset) derived from canonical "
         "data. Tool sections appear only when their underlying data exists — empty "
         "grids are never fabricated.",
-        "LMTD Appendix Tables 3, 4 and 10 remain unfilled pending the collateral "
-        "slice (docs/lmtd_gap_analysis.md); Table 9 still renders the 3-column "
-        "subset pending the haircut schedule. Tables 1, 2, 5, 6, 7 and 8 are "
-        "CONFIRMED as of 2026-08-07; Table 11 renders the full published "
-        "per-currency grid with a documented conservative calibration pending "
-        "the unpublished LCR Directive.",
+        "All eleven LMTD appendix tables render as of 2026-08-07. Tables 1-3 "
+        "and 5-10 are CONFIRMED against the published forms; Tables 4 and 10 "
+        "fill from the documented collateral attribute conventions and render "
+        "only when a source supplies the data; Table 11 renders the full "
+        "published per-currency grid with a documented conservative "
+        "calibration pending the unpublished LCR Directive.",
         _T_MINUS_1_NOTE,
     ),
 )

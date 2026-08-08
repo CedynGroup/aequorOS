@@ -40,6 +40,7 @@ from app.models import (
     CanonicalProduct,
     IngestionBatch,
     LineageRecord,
+    ParamLiquidityHaircut,
     ParamLiquidityThreshold,
     ParamStressShock,
     RegulatoryPackage,
@@ -658,9 +659,14 @@ def test_lmt_carries_ladder_concentration_and_unencumbered_sections(  # noqa: PL
     assert Decimal(concentration["top20_pct_of_deposits"]["value"]) == Decimal("90")
     assert {"maturity_of_exposures", "deposit_funding_concentration"} <= set(sections)
 
-    unencumbered = sections["unencumbered_assets"]["rows"]
-    assert unencumbered, "seeded HQLA-classified securities facts must appear"
-    assert all(row["hqla_level"] == "L1" for row in unencumbered)
+    # Table 9: the unencumbered security itemizes in section A (non-sovereign,
+    # secondary-market marketable) with no calibrated haircut yet.
+    unencumbered = {row["code"]: row for row in sections["unencumbered_assets"]["rows"]}
+    assert Decimal(unencumbered["A1"]["value"]) == Decimal("5000000")
+    assert unencumbered["A1"]["haircut_source"] == "unset"
+    assert Decimal(unencumbered["A1"]["monetized_value_ghs"]) == Decimal("5000000")
+    assert Decimal(unencumbered["A_total"]["value"]) == Decimal("5000000")
+    assert Decimal(unencumbered["C_GHS"]["value"]) == Decimal("5000000")
 
     totals = {row["code"]: row["value"] for row in package.snapshot["totals"]}
     assert Decimal(totals["on_balance_mismatch_total_ghs"]) == Decimal("2850000")
@@ -1006,6 +1012,112 @@ def test_lmt_funding_concentration_netting_related_and_tables_7_8(
     assert Decimal(table8["negotiable_paper_gt_5y"]["value"]) == Decimal("0")
 
 
+def test_lmt_collateral_and_no_maturity_tables(db_session: Session) -> None:
+    """Tables 3, 4, 9 (with a calibrated haircut) and 10.
+
+    Book: a sovereign bond (BoG-eligible, section 9B, haircut 10% from the
+    schedule), an equity holding (section 9A, uncalibrated), an undated
+    equity position for Table 3, and a loan carrying received customer
+    collateral (re-hypothecable government paper, partly re-pledged, partly
+    unavailable) plus own debt securities for Table 10.
+    """
+    seed_sample_bank(db_session)
+    _run_liquidity_baseline(db_session)
+    db_session.add(
+        ParamLiquidityHaircut(
+            organization_id=DEMO_ORG_ID,
+            jurisdiction_code="GH",
+            asset_class="SOVEREIGN",
+            haircut_pct=Decimal("10"),
+            effective_from=date(2026, 1, 1),
+            approved_by="ALCO review 2026-01",
+            approval_timestamp=utc_now(),
+        )
+    )
+    db_session.flush()
+
+    seeder = _CanonicalSeeder(db_session)
+    bond = seeder.product("SEC.GOG.BOND.T9", "SOVEREIGN_GOG_BOND_0RW")
+    equity = seeder.product("SEC.GSE.EQ.T9", "EQUITY_GSE_LISTED")
+    seeder.position(
+        "T9/BOND", "SECURITY_HOLDING", Decimal("4000000"), product=bond,
+        maturity=date(2029, 6, 30),
+    )
+    seeder.position(
+        "T9/EQ", "SECURITY_HOLDING", Decimal("1000000"), product=equity,
+    )  # undated equity → Table 3 row too
+    seeder.position(
+        "T4/LOAN", "LOAN", Decimal("9000000"), maturity=date(2027, 3, 31),
+        extra_attributes={
+            "collateral_instrument": "GoG bonds received",
+            "collateral_asset_class": "debt_government",
+            "collateral_received_ghs": "6000000",
+            "collateral_rehypothecable": "yes",
+            "collateral_rehypothecated_ghs": "2500000",
+            "collateral_unavailable_ghs": "500000",
+            "collateral_bog_eligible": "yes",
+        },
+    )
+    seeder.position(
+        "T10/OWN", "OTHER_LIABILITY", Decimal("0"), maturity=date(2028, 1, 1),
+        extra_attributes={
+            "own_debt_available_ghs": "1200000",
+            "own_debt_unavailable_ghs": "300000",
+        },
+    )
+
+    package = _generate(db_session, "LMT")
+    sections = _sections(package)
+    assert {
+        "items_no_contractual_maturity",
+        "collateral_rehypothecation",
+        "unencumbered_assets",
+        "collateral_received",
+    } <= set(sections)
+
+    # Table 3: only the undated equity (deposits excluded by rule).
+    table3 = sections["items_no_contractual_maturity"]["rows"]
+    assert [(row["description"], row["value"]) for row in table3] == [
+        ("SEC.GSE.EQ.T9", "1000000")
+    ]
+
+    # Table 4: A=6.0M, B=2.5M, C=3.5M.
+    table4 = sections["collateral_rehypothecation"]["rows"]
+    (entry,) = table4
+    assert entry["description"] == "GoG bonds received"
+    assert Decimal(entry["total_amounts_ghs"]) == Decimal("6000000")
+    assert Decimal(entry["hypothecated_ghs"]) == Decimal("2500000")
+    assert Decimal(entry["value"]) == Decimal("3500000")
+    total4 = sections["collateral_rehypothecation"]["total"]
+    assert Decimal(total4["value"]) == Decimal("3500000")
+
+    # Table 9: bond → section B with the calibrated 10% haircut; equity → A.
+    table9 = {row["code"]: row for row in sections["unencumbered_assets"]["rows"]}
+    assert Decimal(table9["B1"]["value"]) == Decimal("4000000")
+    assert table9["B1"]["haircut_source"] == "schedule"
+    assert Decimal(table9["B1"]["haircut_pct"]) == Decimal("10")
+    assert Decimal(table9["B1"]["monetized_value_ghs"]) == Decimal("3600000")
+    assert Decimal(table9["A1"]["value"]) == Decimal("1000000")
+    assert table9["A1"]["haircut_source"] == "unset"
+    # Section C aggregates A∪B by significant currency with monetized values.
+    assert Decimal(table9["C_GHS"]["value"]) == Decimal("5000000")
+    assert Decimal(table9["C_GHS"]["monetized_value_ghs"]) == Decimal("4600000")
+
+    # Table 10: government-debt class row + own debt + grand total.
+    table10 = {row["code"]: row for row in sections["collateral_received"]["rows"]}
+    gov = table10["debt_government"]
+    assert Decimal(gov["value"]) == Decimal("6000000")
+    assert Decimal(gov["bog_eligible_ghs"]) == Decimal("6000000")
+    assert Decimal(gov["group_issued_ghs"]) == Decimal("0")
+    assert Decimal(gov["unavailable_ghs"]) == Decimal("500000")
+    own = table10["own_debt"]
+    assert Decimal(own["value"]) == Decimal("1200000")
+    assert Decimal(own["unavailable_ghs"]) == Decimal("300000")
+    grand = table10["grand_total"]
+    assert Decimal(grand["value"]) == Decimal("7200000")
+    assert Decimal(grand["unavailable_ghs"]) == Decimal("800000")
+
+
 def test_lmt_without_canonical_positions_omits_position_tools(db_session: Session) -> None:
     seed_sample_bank(db_session)
     _run_liquidity_baseline(db_session)
@@ -1015,7 +1127,8 @@ def test_lmt_without_canonical_positions_omits_position_tools(db_session: Sessio
     # absent; the HQLA-fact tool still renders from the seeded facts.
     assert "maturity_ladder" not in sections
     assert "funding_concentration" not in sections
-    assert "unencumbered_assets" in sections
+    # Table 9 is canonical-based as of P2-6: absent without positions.
+    assert "unencumbered_assets" not in sections
     assert {"hqla", "outflows", "inflows", "lcr_summary"} <= set(sections)
 
 

@@ -25,9 +25,12 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
-from app.models import Bank, ParamLiquidityThreshold
+from app.models import Bank, ParamLiquidityHaircut, ParamLiquidityThreshold
 from app.schemas.liquidity_thresholds import (
     InstitutionClass,
+    LiquidityHaircutRead,
+    LiquidityHaircutScheduleRead,
+    LiquidityHaircutUpdate,
     LiquidityThresholdHistoryRead,
     LiquidityThresholdRead,
     LiquidityThresholdRegisterRead,
@@ -220,3 +223,120 @@ def update_register(
     )
     db.commit()
     return get_register(db, ctx, bank_id, payload.effective_from)
+
+
+def get_haircut_schedule(
+    db: Session, ctx: TenantContext, bank_id: str, as_of: date
+) -> LiquidityHaircutScheduleRead:
+    """The active liquidity-value schedule (LRMD ¶60–63) plus history."""
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    jurisdiction = _jurisdiction(bank)
+    active = [
+        LiquidityHaircutRead(
+            asset_class=row.asset_class,
+            haircut_pct=Decimal(str(row.haircut_pct)),
+            effective_from=row.effective_from,
+            effective_to=row.effective_to,
+            approved_by=row.approved_by,
+            approval_timestamp=row.approval_timestamp,
+            notes=row.notes,
+        )
+        for row in get_active_params(
+            db, ctx.organization_id, jurisdiction, ParamLiquidityHaircut, as_of
+        )
+    ]
+    history_rows = db.scalars(
+        select(ParamLiquidityHaircut)
+        .where(
+            ParamLiquidityHaircut.organization_id == ctx.organization_id,
+            ParamLiquidityHaircut.jurisdiction_code == jurisdiction,
+        )
+        .order_by(ParamLiquidityHaircut.asset_class, ParamLiquidityHaircut.effective_from.desc())
+    ).all()
+    history = [
+        LiquidityHaircutRead(
+            asset_class=row.asset_class,
+            haircut_pct=Decimal(str(row.haircut_pct)),
+            effective_from=row.effective_from,
+            effective_to=row.effective_to,
+            approved_by=row.approved_by,
+            approval_timestamp=row.approval_timestamp,
+            notes=row.notes,
+        )
+        for row in history_rows
+    ]
+    return LiquidityHaircutScheduleRead(
+        bank_id=bank.id,
+        jurisdiction_code=jurisdiction,
+        as_of_date=as_of,
+        haircuts=sorted(active, key=lambda item: item.asset_class),
+        history=history,
+    )
+
+
+def update_haircut_schedule(
+    db: Session, ctx: TenantContext, bank_id: str, payload: LiquidityHaircutUpdate
+) -> LiquidityHaircutScheduleRead:
+    """Record a reviewed liquidity-value generation (LRMD ¶62(b) evidence)."""
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    jurisdiction = _jurisdiction(bank)
+    out_of_range = sorted(
+        asset_class
+        for asset_class, pct in payload.haircuts.items()
+        if pct < 0 or pct > Decimal("100")
+    )
+    if out_of_range:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Haircut percentages must be within [0, 100]: {', '.join(out_of_range)}.",
+        )
+
+    now = utc_now()
+    for asset_class, pct in payload.haircuts.items():
+        normalized = asset_class.strip().upper()
+        open_rows = db.scalars(
+            select(ParamLiquidityHaircut).where(
+                ParamLiquidityHaircut.organization_id == ctx.organization_id,
+                ParamLiquidityHaircut.jurisdiction_code == jurisdiction,
+                ParamLiquidityHaircut.asset_class == normalized,
+                ParamLiquidityHaircut.effective_to.is_(None),
+            )
+        ).all()
+        for row in open_rows:
+            if row.effective_from >= payload.effective_from:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"{normalized}: an open generation effective {row.effective_from} "
+                        "already starts on or after the requested effective date."
+                    ),
+                )
+            row.effective_to = payload.effective_from
+        db.add(
+            ParamLiquidityHaircut(
+                organization_id=ctx.organization_id,
+                jurisdiction_code=jurisdiction,
+                asset_class=normalized,
+                haircut_pct=pct,
+                effective_from=payload.effective_from,
+                approved_by=payload.approved_by,
+                approval_timestamp=now,
+                notes=payload.notes,
+            )
+        )
+    db.flush()
+    record_event(
+        db,
+        ctx,
+        event_type="liquidity_haircuts.updated",
+        entity_type="param_liquidity_haircut",
+        entity_id=bank.id,
+        details={
+            "effective_from": payload.effective_from.isoformat(),
+            "approved_by": payload.approved_by,
+            "asset_classes": sorted(cls.strip().upper() for cls in payload.haircuts),
+            "reason": payload.reason,
+        },
+    )
+    db.commit()
+    return get_haircut_schedule(db, ctx, bank_id, payload.effective_from)
