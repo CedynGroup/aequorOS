@@ -10,6 +10,7 @@ const tabs = [
   { href: '/liquidity/nsfr', label: 'NSFR' },
   { href: '/liquidity/forecast', label: 'Cash Flow Forecast' },
   { href: '/liquidity/stress', label: 'Stress' },
+  { href: '/liquidity/monitoring', label: 'Monitoring Tools' },
   { href: '/liquidity/cfp', label: 'CFP' },
 ];
 

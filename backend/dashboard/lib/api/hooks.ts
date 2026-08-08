@@ -66,8 +66,11 @@ import {
   forecastingApi,
   institutionProfileApi,
   integrationKeysApi,
+  liquidityCfpApi,
+  liquidityThresholdsApi,
   isApiError,
   jobsApi,
+  reverseStressApi,
   liveEngineApi,
   marketDataApi,
   notificationsApi,
@@ -2772,3 +2775,96 @@ export function useUpsertSigningPolicy() {
     },
   });
 }
+
+// --- Phase 2: EWI / CFP / threshold registers / reverse stress -------------
+
+export function useEwiDashboard(bankId: string | undefined, periodId: string | undefined) {
+  return useQuery({
+    queryKey: ['ewi-dashboard', bankId, periodId],
+    queryFn: () =>
+      apiCall(() =>
+        liquidityCfpApi.getLiquidityEwiDashboard({
+          bankId: bankId!,
+          reportingPeriodId: periodId!,
+        })
+      ),
+    enabled: Boolean(bankId && periodId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useCfpSummary(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['cfp-summary', bankId],
+    queryFn: () => apiCall(() => liquidityCfpApi.getContingencyFundingPlan({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useCfpEvents(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['cfp-events', bankId],
+    queryFn: () =>
+      apiCall(() => liquidityCfpApi.listContingencyFundingPlanEvents({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useLiquidityThresholdRegister(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['liq-thresholds', bankId],
+    queryFn: () =>
+      apiCall(() => liquidityThresholdsApi.getLiquidityThresholdRegister({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useLiquidityHaircutSchedule(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['liq-haircuts', bankId],
+    queryFn: () =>
+      apiCall(() => liquidityThresholdsApi.getLiquidityHaircutSchedule({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useLatestReverseStress(
+  bankId: string | undefined,
+  periodId: string | undefined
+) {
+  return useQuery({
+    queryKey: ['reverse-stress', bankId, periodId],
+    queryFn: async () => {
+      try {
+        return await apiCall(() =>
+          reverseStressApi.getLatestReverseStress({
+            bankId: bankId!,
+            reportingPeriodId: periodId!,
+          })
+        );
+      } catch (error) {
+        // No frontier run yet is a normal state, not an error banner.
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+    enabled: Boolean(bankId && periodId),
+  });
+}
+
+export function useRunReverseStress(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (periodId: string) =>
+      apiCall(() =>
+        reverseStressApi.runReverseStress({
+          bankId: bankId!,
+          reverseStressRunCreate: { reportingPeriodId: periodId },
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['reverse-stress'] });
+    },
+  });
+}
+

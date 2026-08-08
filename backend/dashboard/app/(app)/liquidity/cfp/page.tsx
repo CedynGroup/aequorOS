@@ -1,208 +1,129 @@
 'use client';
 
 import Link from 'next/link';
-import { LifeBuoy, Zap } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import RunBadge from '@/components/ui/RunBadge';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
-import IllustrativeBadge from '@/components/liquidity/IllustrativeBadge';
-import { runComputedAt, runThresholds } from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
-import { useLiquidityDashboard, useRegulatoryRun } from '@/lib/api/hooks';
-import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
-import { fmtPct, regShort } from '@/lib/format';
+import { useCfpEvents, useCfpSummary, useEwiDashboard } from '@/lib/api/hooks';
+import { fmtDateUTC } from '@/lib/api/values';
+import { regShort } from '@/lib/format';
+import type { EwiEvaluationRead } from '@aequoros/risk-service-api';
 
-type IndicatorRow = {
-  indicator: string;
-  basis: string;
-  current: string;
-  watchTrigger: string;
-  actionTrigger: string;
-  tone: StatusTone;
-  toneLabel?: string;
+// Server-side EWI states (LRMD ¶28(e)–(f)): values, Board trigger levels and
+// RAG classifications all come from the engine — nothing is derived here.
+const STATUS_TONE: Record<string, StatusTone> = {
+  normal: 'success',
+  watch: 'amber',
+  action: 'critical',
+  unconfigured: 'slate',
+  no_data: 'slate',
 };
 
-const indicatorColumns: Column<IndicatorRow>[] = [
+const STATUS_LABEL: Record<string, string> = {
+  normal: 'Normal',
+  watch: 'Watch',
+  action: 'Action',
+  unconfigured: 'Unconfigured',
+  no_data: 'No data',
+};
+
+const ESCALATION_COPY: Record<string, { label: string; status: 'ok' | 'warn' | 'crit' }> = {
+  normal: { label: 'Business as usual', status: 'ok' },
+  heightened_monitoring: { label: 'Heightened monitoring', status: 'warn' },
+  escalation: { label: 'Escalation — action trigger breached', status: 'crit' },
+  cfp_active: { label: 'CFP ACTIVE', status: 'crit' },
+};
+
+function fmtValue(indicator: EwiEvaluationRead): string {
+  if (indicator.value === null || indicator.value === undefined) return '—';
+  const value = Number(indicator.value);
+  if (indicator.unit === 'count') return String(Math.round(value));
+  if (indicator.unit === 'days') return `${value.toFixed(0)} days`;
+  return `${value.toFixed(2)}%`;
+}
+
+function fmtThreshold(indicator: EwiEvaluationRead, level: unknown): string {
+  if (level === null || level === undefined) return 'Not set';
+  const op = indicator.direction === 'below' ? '<' : '≥';
+  const value = Number(level);
+  const unit = indicator.unit === 'count' ? '' : indicator.unit === 'days' ? ' days' : '%';
+  return `${op} ${value}${unit}`;
+}
+
+const indicatorColumns: Column<EwiEvaluationRead>[] = [
   {
-    key: 'indicator',
+    key: 'name',
     header: 'Early-warning indicator',
-    width: '30%',
+    width: '32%',
     render: (r) => (
       <div>
-        <p className="font-medium text-navy">{r.indicator}</p>
-        <p className="text-caption text-slate">{r.basis}</p>
+        <p className="font-medium text-navy">{r.name}</p>
+        <p className="text-caption text-slate">{r.metricBasis}</p>
+        {r.recoveryPlanReference ? (
+          <p className="text-caption text-slate/80">
+            Recovery plan: {String(r.recoveryPlanReference)}
+          </p>
+        ) : null}
       </div>
     ),
   },
+  { key: 'current', header: 'Current', numeric: true, render: (r) => fmtValue(r) },
   {
-    key: 'current',
-    header: 'Current',
+    key: 'prior',
+    header: 'Prior period',
     numeric: true,
-    render: (r) => r.current,
+    render: (r) =>
+      r.priorValue === null || r.priorValue === undefined
+        ? '—'
+        : fmtValue({ ...r, value: r.priorValue }),
   },
   {
     key: 'watch',
     header: 'Watch trigger',
     numeric: true,
-    render: (r) => r.watchTrigger,
+    render: (r) => fmtThreshold(r, r.watchThreshold),
   },
   {
     key: 'action',
     header: 'Action trigger',
     numeric: true,
-    render: (r) => r.actionTrigger,
+    render: (r) => fmtThreshold(r, r.actionThreshold),
   },
   {
     key: 'status',
     header: 'Status',
     align: 'right',
-    render: (r) => <StatusPill tone={r.tone}>{r.toneLabel}</StatusPill>,
+    render: (r) => (
+      <div className="flex flex-col items-end gap-1">
+        <StatusPill tone={STATUS_TONE[r.status] ?? 'slate'}>
+          {STATUS_LABEL[r.status] ?? r.status}
+        </StatusPill>
+        {r.detail ? (
+          <span className="text-caption text-slate text-right max-w-[220px]">{r.detail}</span>
+        ) : null}
+      </div>
+    ),
   },
 ];
-
-/** Escalation-playbook framework content — illustrative, not engine output. */
-const PLAYBOOK_STAGES = [
-  {
-    stage: 'Stage 0 — Business as usual',
-    trigger: 'All early-warning indicators green.',
-    actions:
-      'Standard daily liquidity monitoring; monthly ALCO review of the indicator table above.',
-    owner: 'Treasury middle office',
-  },
-  {
-    stage: 'Stage 1 — Heightened monitoring',
-    trigger:
-      'Any indicator amber (e.g. LCR between the red floor and the regulatory minimum) or a stress scenario projecting a breach.',
-    actions:
-      'Move to daily ALCO reporting, refresh the funding-source inventory, pre-position collateral, restrict discretionary asset growth.',
-    owner: 'Head of Treasury',
-  },
-  {
-    stage: 'Stage 2 — CFP activation',
-    trigger:
-      'Any indicator red (LCR or NSFR below the regulatory minimum) on an actual reporting basis.',
-    actions:
-      'Convene the crisis funding committee, draw contingent funding lines, execute the asset-liquidation ladder starting with Level 1 HQLA, daily cash-flow forecasting at desk level.',
-    owner: 'CFO / ALCO chair',
-  },
-  {
-    stage: 'Stage 3 — Regulatory notification',
-    trigger:
-      'A confirmed regulatory-minimum breach or CFP measures insufficient within the survival horizon.',
-    actions:
-      'Notify the central bank banking-supervision department, file the remediation plan, activate recovery-plan funding options.',
-    owner: 'CEO / Board risk committee',
-  },
-] as const;
 
 export default function ContingencyFundingPlan() {
   const { bank, period } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
 
-  const dashboard = useLiquidityDashboard(bankId, periodId);
-  const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
+  const ewis = useEwiDashboard(bankId, periodId);
+  const cfp = useCfpSummary(bankId);
+  const events = useCfpEvents(bankId);
 
-  const data = dashboard.data;
-  const run = latestRun.data;
-  const thresholds = runThresholds(run);
-  const lcrMin = thresholds['lcr_min'] ?? 100;
-  const lcrRedFloor = thresholds['lcr_amber_floor'] ?? 90;
-  const nsfrMin = thresholds['nsfr_min'] ?? 100;
-  const nsfrRedFloor = thresholds['nsfr_amber_floor'] ?? nsfrMin;
-
-  const lcr = num(data?.metrics.lcrPct);
-  const nsfr = num(data?.metrics.nsfrPct);
-
-  const failedErrors = (data?.validations ?? []).filter(
-    (v) => !v.passed && v.severity === 'error'
-  );
-  const failedWarnings = (data?.validations ?? []).filter(
-    (v) => !v.passed && v.severity === 'warning'
-  );
-  const allLevel1 = data?.validations.find(
-    (v) => v.ruleCode === 'hqla_all_level1'
-  );
-
-  const indicatorRows: IndicatorRow[] = data
-    ? [
-        {
-          indicator: 'Liquidity Coverage Ratio',
-          basis: 'Reported LCR for the current period',
-          current: fmtPct(lcr, 2),
-          watchTrigger: `< ${lcrMin.toFixed(0)}%`,
-          actionTrigger: `< ${lcrRedFloor.toFixed(0)}%`,
-          tone: statusTone(data.metrics.lcrStatus),
-        },
-        {
-          indicator: 'Net Stable Funding Ratio',
-          basis: 'Reported NSFR for the current period',
-          current: fmtPct(nsfr, 2),
-          watchTrigger: `< ${nsfrMin.toFixed(0)}%`,
-          actionTrigger:
-            nsfrRedFloor < nsfrMin
-              ? `< ${nsfrRedFloor.toFixed(0)}%`
-              : `< ${nsfrMin.toFixed(0)}%`,
-          tone: statusTone(data.metrics.nsfrStatus),
-        },
-        {
-          indicator: 'Hard validation breaches',
-          basis: 'Failed error-severity regulatory rules',
-          current: String(failedErrors.length),
-          watchTrigger: '≥ 1 warning',
-          actionTrigger: '≥ 1 error',
-          tone:
-            failedErrors.length > 0
-              ? 'critical'
-              : failedWarnings.length > 0
-              ? 'amber'
-              : 'success',
-          toneLabel:
-            failedErrors.length > 0
-              ? 'Action'
-              : failedWarnings.length > 0
-              ? 'Watch'
-              : 'Clear',
-        },
-        {
-          indicator: 'LCR amber zone',
-          basis: `Between the ${lcrRedFloor.toFixed(0)}% red floor and the ${lcrMin.toFixed(0)}% minimum`,
-          current: lcr >= lcrMin ? 'Outside' : lcr >= lcrRedFloor ? 'Inside' : 'Below floor',
-          watchTrigger: 'Inside zone',
-          actionTrigger: 'Below floor',
-          tone:
-            lcr >= lcrMin ? 'success' : lcr >= lcrRedFloor ? 'amber' : 'critical',
-          toneLabel:
-            lcr >= lcrMin ? 'Clear' : lcr >= lcrRedFloor ? 'Watch' : 'Action',
-        },
-        {
-          indicator: 'HQLA quality',
-          basis: 'Share of buffer held in Level 1 assets',
-          current: allLevel1?.passed ? 'All Level 1' : 'Includes < Level 1',
-          watchTrigger: 'Any < Level 1',
-          actionTrigger: 'Sustained < Level 1 reliance',
-          tone: allLevel1?.passed ? 'success' : 'amber',
-          toneLabel: allLevel1?.passed ? 'Clear' : 'Watch',
-        },
-      ]
-    : [];
-
-  const activeStage =
-    failedErrors.length > 0 ||
-    data?.metrics.lcrStatus === 'red' ||
-    data?.metrics.nsfrStatus === 'red'
-      ? 2
-      : data?.metrics.lcrStatus === 'amber' ||
-        data?.metrics.nsfrStatus === 'amber' ||
-        failedWarnings.length > 0
-      ? 1
-      : 0;
-
-  const computedAt = runComputedAt(run);
+  const dashboard = ewis.data;
+  const approved = cfp.data?.approved ?? null;
+  const escalation = dashboard
+    ? ESCALATION_COPY[dashboard.escalationState] ?? ESCALATION_COPY.normal
+    : ESCALATION_COPY.normal;
 
   return (
     <>
@@ -213,177 +134,116 @@ export default function ContingencyFundingPlan() {
           { label: 'CFP' },
         ]}
         title="Contingency Funding Plan"
-        subtitle="Early-warning indicators on live regulatory data · ILAAP escalation framework"
+        subtitle={`Server-side EWI framework (LRMD ¶28) · CFP lifecycle with ${regShort()} ¶74 notification`}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
-        action={run ? <RunBadge run={run} /> : undefined}
       />
 
       <QueryBoundary
-        isLoading={dashboard.isLoading}
-        error={dashboard.error}
-        onRetry={() => dashboard.refetch()}
+        isLoading={ewis.isLoading}
+        error={ewis.error}
+        onRetry={() => ewis.refetch()}
       >
-        {data && (
+        {dashboard && (
           <div className="px-8 py-6 space-y-6">
-            {/* Posture summary */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <KpiStat
-                label="CFP posture"
-                value={`Stage ${activeStage}`}
-                status={activeStage >= 2 ? 'crit' : activeStage === 1 ? 'warn' : 'ok'}
+                label="Escalation state"
+                value={escalation.label}
+                status={escalation.status}
+                hint="Computed server-side from indicator states"
+              />
+              <KpiStat
+                label="Indicators at action"
+                value={String(
+                  dashboard.indicators.filter((entry) => entry.status === 'action').length
+                )}
+                status={
+                  dashboard.indicators.some((entry) => entry.status === 'action')
+                    ? 'crit'
+                    : 'ok'
+                }
+                hint={`${dashboard.indicators.filter((entry) => entry.status === 'watch').length} at watch`}
+              />
+              <KpiStat
+                label="Board-approved CFP"
+                value={approved ? `v${approved.version}` : 'None'}
+                status={approved ? (approved.approvalOverdue ? 'warn' : 'ok') : 'crit'}
                 hint={
-                  activeStage === 0
-                    ? 'Business as usual'
-                    : activeStage === 1
-                    ? 'Heightened monitoring'
-                    : 'CFP activation criteria met'
+                  approved
+                    ? approved.approvalOverdue
+                      ? 'Annual re-approval overdue (¶71)'
+                      : `Approval valid to ${approved.approvalExpiresAt ? fmtDateUTC(new Date(String(approved.approvalExpiresAt))) : '—'}`
+                    : 'Approve a plan before activation is possible'
                 }
               />
               <KpiStat
-                label="LCR"
-                value={fmtPct(lcr, 2)}
-                status={
-                  data.metrics.lcrStatus === 'red'
-                    ? 'crit'
-                    : data.metrics.lcrStatus === 'amber'
-                    ? 'warn'
-                    : 'ok'
-                }
-                hint={`Floors ${lcrRedFloor.toFixed(0)}% / ${lcrMin.toFixed(0)}%`}
-              />
-              <KpiStat
-                label="NSFR"
-                value={fmtPct(nsfr, 2)}
-                status={
-                  data.metrics.nsfrStatus === 'red'
-                    ? 'crit'
-                    : data.metrics.nsfrStatus === 'amber'
-                    ? 'warn'
-                    : 'ok'
-                }
-                hint={`${regShort()} minimum ${nsfrMin.toFixed(0)}%`}
-              />
-              <KpiStat
-                label="Failed validations"
-                value={`${failedErrors.length + failedWarnings.length}`}
-                status={
-                  failedErrors.length > 0
-                    ? 'crit'
-                    : failedWarnings.length > 0
-                    ? 'warn'
-                    : 'ok'
-                }
-                hint={`${failedErrors.length} error · ${failedWarnings.length} warning`}
+                label="CFP activation"
+                value={dashboard.cfpActive ? 'ACTIVE' : 'Not active'}
+                status={dashboard.cfpActive ? 'crit' : 'ok'}
+                hint={`Activation notifies ${regShort()} (LRMD ¶74)`}
               />
             </div>
 
-            {/* Early-warning indicators — REAL data */}
             <SectionCard
               title="Early-warning indicators"
-              subtitle={`Current values from the regulatory engine, evaluated against the active ${regShort()} thresholds`}
+              subtitle="The eight directive starter indicators plus any Board additions — values, trigger levels and states computed by the engine"
               noPadding
-              computedAt={computedAt}
-              runBadge={run ? <RunBadge run={run} /> : undefined}
               footer={
                 <span>
-                  {data.stored
-                    ? 'Stored baseline run'
-                    : 'Live computation — run baseline on the Cockpit to persist'}
-                  {' · '}
-                  <Link href="/liquidity/stress" className="text-action hover:underline">
-                    View stressed ratios
+                  Trigger levels are Board configuration with approval evidence; an
+                  indicator without levels shows Unconfigured rather than an invented
+                  classification. {' '}
+                  <Link href="/liquidity/monitoring" className="text-action hover:underline">
+                    Monitoring tools & threshold register
                   </Link>
                 </span>
               }
             >
-              <DataTable columns={indicatorColumns} rows={indicatorRows} />
+              <DataTable columns={indicatorColumns} rows={dashboard.indicators} />
             </SectionCard>
 
-            {/* Escalation playbook — framework content */}
             <SectionCard
-              title="Escalation playbook"
-              subtitle="Staged response framework mapped to the indicator states above"
-              actions={<IllustrativeBadge />}
+              title="Activation log"
+              subtitle="¶74 events — each carries the EWI snapshot at event time and the regulator-notification evidence"
               noPadding
               footer={
                 <span>
-                  Playbook stages, actions, and owners are framework
-                  illustrations — adopt and calibrate through ALCO governance
-                  before operational use. Indicator states driving the current
-                  stage are live data.
+                  Activation and de-escalation are approver-gated Board acts recorded
+                  append-only; the plan document itself (¶72(a)–(g) contents) is
+                  maintained through the CFP API workspace.
                 </span>
               }
             >
-              <ul className="divide-y divide-border-light">
-                {PLAYBOOK_STAGES.map((stage, i) => {
-                  const isActive = i === activeStage;
-                  return (
-                    <li
-                      key={stage.stage}
-                      className={`px-5 py-4 flex items-start gap-4 ${
-                        isActive ? 'bg-warning-light/30' : ''
-                      }`}
-                    >
-                      <span
-                        className={`mt-0.5 inline-flex items-center justify-center w-8 h-8 rounded-full shrink-0 ${
-                          isActive
-                            ? 'bg-warning text-white'
-                            : 'bg-surface text-slate'
-                        }`}
-                        aria-hidden
+              {events.data && events.data.events.length > 0 ? (
+                <ul className="divide-y divide-border-light">
+                  {events.data.events.map((event) => (
+                    <li key={event.id} className="px-5 py-4 flex items-start gap-4">
+                      <StatusPill
+                        tone={event.eventType === 'activated' ? 'critical' : 'success'}
                       >
-                        {i === 3 ? <LifeBuoy size={15} /> : i === 2 ? <Zap size={15} /> : i}
-                      </span>
+                        {event.eventType === 'activated' ? 'Activated' : 'De-escalated'}
+                      </StatusPill>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-body font-medium text-navy">
-                            {stage.stage}
-                          </p>
-                          {isActive && (
-                            <StatusPill tone={i >= 2 ? 'critical' : i === 1 ? 'amber' : 'success'}>
-                              Current posture
-                            </StatusPill>
-                          )}
-                        </div>
-                        <p className="mt-1 text-caption text-slate leading-relaxed">
-                          <span className="font-medium text-navy/80">Trigger:</span>{' '}
-                          {stage.trigger}
-                        </p>
-                        <p className="mt-1 text-caption text-slate leading-relaxed">
-                          <span className="font-medium text-navy/80">Actions:</span>{' '}
-                          {stage.actions}
+                        <p className="text-body text-navy">{event.reason}</p>
+                        <p className="mt-1 text-caption text-slate">
+                          CFP v{event.cfpVersion} · {fmtDateUTC(event.createdAt)}
+                          {event.approvalOverdue
+                            ? ' · Board approval was overdue at event time (¶71)'
+                            : ''}
+                          {event.regulatorNotificationId
+                            ? ' · regulator-notification recorded'
+                            : ''}
                         </p>
                       </div>
-                      <span className="shrink-0 text-caption text-slate whitespace-nowrap">
-                        {stage.owner}
-                      </span>
                     </li>
-                  );
-                })}
-              </ul>
-            </SectionCard>
-
-            {/* Governance note */}
-            <SectionCard
-              title="Governance"
-              subtitle="How this page relates to the ILAAP"
-              actions={<IllustrativeBadge />}
-            >
-              <div className="text-body text-navy/85 leading-relaxed space-y-3">
-                <p>
-                  The CFP is the operational arm of the ILAAP: early-warning
-                  indicators are monitored on every reporting period, stress
-                  results on the Stress tab test the plan&apos;s adequacy, and the
-                  BSD-3 submission evidences the reported position. Indicator
-                  thresholds shown here are the active {regShort()} parameter set
-                  snapshotted into the latest baseline run.
+                  ))}
+                </ul>
+              ) : (
+                <p className="px-5 py-6 text-body text-slate">
+                  No activation events. The CFP has never been triggered for this
+                  institution.
                 </p>
-                <p>
-                  Review cadence, committee composition, and funding-source
-                  inventories are institution-specific and must be maintained
-                  in the board-approved CFP document.
-                </p>
-              </div>
+              )}
             </SectionCard>
           </div>
         )}

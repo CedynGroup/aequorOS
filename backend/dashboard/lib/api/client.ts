@@ -8,6 +8,8 @@
 
 import {
   IntegrationKeysApi,
+  LiquidityCfpApi,
+  LiquidityThresholdsApi,
   AttestationApi,
   AuthApi,
   BanksApi,
@@ -20,6 +22,7 @@ import {
   LiveEngineApi,
   MarketDataApi,
   NotificationsApi,
+  ReverseStressApi,
   OrganizationApi,
   RegulatoryCapitalApi,
   RegulatoryFtpApi,
@@ -86,6 +89,9 @@ export const institutionProfileApi = new InstitutionProfileApi(configuration);
 export const organizationApi = new OrganizationApi(configuration);
 export const notificationsApi = new NotificationsApi(configuration);
 export const integrationKeysApi = new IntegrationKeysApi(configuration);
+export const liquidityCfpApi = new LiquidityCfpApi(configuration);
+export const liquidityThresholdsApi = new LiquidityThresholdsApi(configuration);
+export const reverseStressApi = new ReverseStressApi(configuration);
 
 /**
  * Normalized error surfaced to the UI. `status` is the HTTP status code,
