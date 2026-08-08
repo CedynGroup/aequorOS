@@ -61,7 +61,7 @@ def test_activation_derives_facts_and_runs_all_six_modules(db_client: TestClient
     assert runs["ftp"]["headline"].startswith("portfolio NIM ")
     assert runs["forecast"]["headline"].startswith("avg ROE ")
     # 4 liquidity + 4 capital + 7 IRR + 4 FX + 3 FTP scenarios, 1 forecast run.
-    assert runs["liquidity"]["scenarios_succeeded"] == 4
+    assert runs["liquidity"]["scenarios_succeeded"] == 5  # + usd_funding_stress
     assert runs["irr"]["scenarios_succeeded"] == 7
     assert runs["forecast"]["scenarios_succeeded"] == 1
 
@@ -106,7 +106,7 @@ def test_reactivation_rebuilds_facts_and_appends_new_runs(db_client: TestClient)
         headers=headers(),
         params={"module": "liquidity", "reporting_period_id": second["reporting_period_id"]},
     ).json()
-    assert runs["total"] == 8  # 4 scenarios x 2 activations
+    assert runs["total"] == 10  # 5 scenarios x 2 activations
 
 
 def test_activation_without_calculations_only_derives(db_client: TestClient) -> None:

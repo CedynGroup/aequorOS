@@ -13,7 +13,9 @@ from app.schemas.live import LiveModuleView
 type RegulatoryModule = Literal[
     "liquidity", "capital", "forecast", "optimizer", "whatif", "irr", "fx", "ftp"
 ]
-type LiquidityScenarioCode = Literal["baseline", "idiosyncratic", "market_wide", "combined"]
+type LiquidityScenarioCode = Literal[
+    "baseline", "idiosyncratic", "market_wide", "combined", "usd_funding_stress"
+]
 type CapitalScenarioCode = Literal["baseline", "mild", "moderate", "severe"]
 type IrrScenarioCode = Literal[
     "baseline",
@@ -32,6 +34,7 @@ type RegulatoryScenarioCode = Literal[
     "idiosyncratic",
     "market_wide",
     "combined",
+    "usd_funding_stress",
     "mild",
     "moderate",
     "severe",
@@ -87,7 +90,7 @@ type RegulatoryValidationSeverity = Literal["error", "warning", "info"]
 
 
 MODULE_SCENARIO_CODES: dict[str, tuple[str, ...]] = {
-    "liquidity": ("baseline", "idiosyncratic", "market_wide", "combined"),
+    "liquidity": ("baseline", "idiosyncratic", "market_wide", "combined", "usd_funding_stress"),
     "capital": ("baseline", "mild", "moderate", "severe"),
 }
 
@@ -230,6 +233,11 @@ class LiquidityMetricsRead(ClosedModel):
     net_outflows_30d_ghs: Decimal
     asf_total_ghs: Decimal
     rsf_total_ghs: Decimal
+    # Phase 2 item 2 (2026-08-07): FX funding-mismatch headlines; None on
+    # runs stored before the currency-gap layer existed.
+    fx_funding_gap_ghs: Decimal | None = None
+    fx_share_of_liabilities_pct: Decimal | None = None
+    stressed_fx_funding_gap_ghs: Decimal | None = None
 
 
 class LiquidityDashboardLineRead(ClosedModel):

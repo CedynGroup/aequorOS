@@ -15194,6 +15194,30 @@
             "title": "Asf Total Ghs",
             "type": "string"
           },
+          "fx_funding_gap_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Funding Gap Ghs"
+          },
+          "fx_share_of_liabilities_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Share Of Liabilities Pct"
+          },
           "hqla_total_ghs": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Hqla Total Ghs",
@@ -15224,6 +15248,18 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Rsf Total Ghs",
             "type": "string"
+          },
+          "stressed_fx_funding_gap_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stressed Fx Funding Gap Ghs"
           }
         },
         "required": [
@@ -15274,7 +15310,8 @@
           "baseline",
           "idiosyncratic",
           "market_wide",
-          "combined"
+          "combined",
+          "usd_funding_stress"
         ],
         "type": "string"
       },
@@ -20476,6 +20513,7 @@
           "idiosyncratic",
           "market_wide",
           "combined",
+          "usd_funding_stress",
           "mild",
           "moderate",
           "severe",

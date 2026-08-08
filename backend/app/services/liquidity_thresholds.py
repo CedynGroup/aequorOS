@@ -52,6 +52,11 @@ BANK_MINIMUM_PCT: dict[str, Decimal] = {
     "broad_to_total_assets": Decimal("50"),
 }
 
+# Limit-shaped codes the Board may adopt beyond the Table 1 ratio floors.
+# No regulatory default exists for these: absent a Board row, no check runs
+# (LMTD para 11(c)-(e) are Board obligations, not published calibrations).
+EXTRA_THRESHOLD_CODES = ("currency_mismatch_limit_pct",)
+
 _INSTITUTION_CLASSES = ("bank", "sdi")
 
 
@@ -108,6 +113,22 @@ def get_register(
                 )
             )
 
+    for (klass, code), row in sorted(active_rows.items()):
+        if klass == "bank" and code in EXTRA_THRESHOLD_CODES:
+            thresholds.append(
+                LiquidityThresholdRead(
+                    threshold_code=code,
+                    institution_class="bank",
+                    threshold_pct=Decimal(str(row.threshold_pct)),
+                    source="board_register",
+                    effective_from=row.effective_from,
+                    effective_to=row.effective_to,
+                    approved_by=row.approved_by,
+                    approval_timestamp=row.approval_timestamp,
+                    notes=row.notes,
+                )
+            )
+
     history_rows = db.scalars(
         select(ParamLiquidityThreshold)
         .where(
@@ -159,7 +180,9 @@ def update_register(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"institution_class must be one of {_INSTITUTION_CLASSES}.",
         )
-    unknown = sorted(set(payload.thresholds) - set(BANK_MINIMUM_PCT))
+    unknown = sorted(
+        set(payload.thresholds) - set(BANK_MINIMUM_PCT) - set(EXTRA_THRESHOLD_CODES)
+    )
     if unknown:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

@@ -19,6 +19,7 @@ export const RegulatoryScenarioCode = {
   Idiosyncratic: "idiosyncratic",
   MarketWide: "market_wide",
   Combined: "combined",
+  UsdFundingStress: "usd_funding_stress",
   Mild: "mild",
   Moderate: "moderate",
   Severe: "severe",

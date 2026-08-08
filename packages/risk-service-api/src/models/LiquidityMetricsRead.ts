@@ -11,6 +11,27 @@
  */
 
 import { mapValues } from "../runtime";
+import type { FxFundingGapGhs } from "./FxFundingGapGhs";
+import {
+  FxFundingGapGhsFromJSON,
+  FxFundingGapGhsFromJSONTyped,
+  FxFundingGapGhsToJSON,
+  FxFundingGapGhsToJSONTyped,
+} from "./FxFundingGapGhs";
+import type { FxShareOfLiabilitiesPct } from "./FxShareOfLiabilitiesPct";
+import {
+  FxShareOfLiabilitiesPctFromJSON,
+  FxShareOfLiabilitiesPctFromJSONTyped,
+  FxShareOfLiabilitiesPctToJSON,
+  FxShareOfLiabilitiesPctToJSONTyped,
+} from "./FxShareOfLiabilitiesPct";
+import type { StressedFxFundingGapGhs } from "./StressedFxFundingGapGhs";
+import {
+  StressedFxFundingGapGhsFromJSON,
+  StressedFxFundingGapGhsFromJSONTyped,
+  StressedFxFundingGapGhsToJSON,
+  StressedFxFundingGapGhsToJSONTyped,
+} from "./StressedFxFundingGapGhs";
 import type { LiquidityRatioStatus } from "./LiquidityRatioStatus";
 import {
   LiquidityRatioStatusFromJSON,
@@ -31,6 +52,18 @@ export interface LiquidityMetricsRead {
    * @memberof LiquidityMetricsRead
    */
   asfTotalGhs: string;
+  /**
+   *
+   * @type {FxFundingGapGhs}
+   * @memberof LiquidityMetricsRead
+   */
+  fxFundingGapGhs?: FxFundingGapGhs;
+  /**
+   *
+   * @type {FxShareOfLiabilitiesPct}
+   * @memberof LiquidityMetricsRead
+   */
+  fxShareOfLiabilitiesPct?: FxShareOfLiabilitiesPct;
   /**
    *
    * @type {string}
@@ -73,6 +106,12 @@ export interface LiquidityMetricsRead {
    * @memberof LiquidityMetricsRead
    */
   rsfTotalGhs: string;
+  /**
+   *
+   * @type {StressedFxFundingGapGhs}
+   * @memberof LiquidityMetricsRead
+   */
+  stressedFxFundingGapGhs?: StressedFxFundingGapGhs;
 }
 
 /**
@@ -114,6 +153,14 @@ export function LiquidityMetricsReadFromJSONTyped(
   return {
     ...json,
     asfTotalGhs: json["asf_total_ghs"],
+    fxFundingGapGhs:
+      json["fx_funding_gap_ghs"] == null
+        ? undefined
+        : FxFundingGapGhsFromJSON(json["fx_funding_gap_ghs"]),
+    fxShareOfLiabilitiesPct:
+      json["fx_share_of_liabilities_pct"] == null
+        ? undefined
+        : FxShareOfLiabilitiesPctFromJSON(json["fx_share_of_liabilities_pct"]),
     hqlaTotalGhs: json["hqla_total_ghs"],
     lcrPct: json["lcr_pct"],
     lcrStatus: LiquidityRatioStatusFromJSON(json["lcr_status"]),
@@ -121,6 +168,10 @@ export function LiquidityMetricsReadFromJSONTyped(
     nsfrPct: json["nsfr_pct"],
     nsfrStatus: LiquidityRatioStatusFromJSON(json["nsfr_status"]),
     rsfTotalGhs: json["rsf_total_ghs"],
+    stressedFxFundingGapGhs:
+      json["stressed_fx_funding_gap_ghs"] == null
+        ? undefined
+        : StressedFxFundingGapGhsFromJSON(json["stressed_fx_funding_gap_ghs"]),
   };
 }
 
@@ -138,6 +189,10 @@ export function LiquidityMetricsReadToJSONTyped(
 
   return {
     asf_total_ghs: value["asfTotalGhs"],
+    fx_funding_gap_ghs: FxFundingGapGhsToJSON(value["fxFundingGapGhs"]),
+    fx_share_of_liabilities_pct: FxShareOfLiabilitiesPctToJSON(
+      value["fxShareOfLiabilitiesPct"],
+    ),
     hqla_total_ghs: value["hqlaTotalGhs"],
     lcr_pct: value["lcrPct"],
     lcr_status: LiquidityRatioStatusToJSON(value["lcrStatus"]),
@@ -145,5 +200,8 @@ export function LiquidityMetricsReadToJSONTyped(
     nsfr_pct: value["nsfrPct"],
     nsfr_status: LiquidityRatioStatusToJSON(value["nsfrStatus"]),
     rsf_total_ghs: value["rsfTotalGhs"],
+    stressed_fx_funding_gap_ghs: StressedFxFundingGapGhsToJSON(
+      value["stressedFxFundingGapGhs"],
+    ),
   };
 }

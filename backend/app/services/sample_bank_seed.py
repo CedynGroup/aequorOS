@@ -484,11 +484,26 @@ _LIQUIDITY_COMBINED: dict[str, str] = {
     "hqla_securities_haircut_pct": "8",
     "rsf:securities_weight_override": "10",
 }
+_LIQUIDITY_USD_FUNDING: dict[str, str] = {
+    # Cedi-depreciation-coupled FX funding stress (Phase 2 item 2; the 30%
+    # magnitude follows the 2022-23 cedi window the FX stressed-VaR already
+    # calibrates on). Wholesale/corporate run-offs uplift because FX funding
+    # is predominantly wholesale; the depreciation itself is applied by the
+    # per-currency gap layer, not the fact engine.
+    "fx_depreciation_pct": "30",
+    "runoff:wholesale_operational": "40",
+    "runoff:wholesale_non_op_sme": "60",
+    "runoff:wholesale_non_op_corporate": "100",
+    "runoff:committed_corporate": "50",
+    "inflow_multiplier": "0.80",
+    "hqla_securities_haircut_pct": "5",
+}
 _STRESS_SHOCKS: dict[str, dict[str, dict[str, str]]] = {
     "liquidity": {
         "idiosyncratic": _LIQUIDITY_IDIOSYNCRATIC,
         "market_wide": _LIQUIDITY_MARKET_WIDE,
         "combined": _LIQUIDITY_COMBINED,
+        "usd_funding_stress": _LIQUIDITY_USD_FUNDING,
     },
     "capital": {
         "mild": {

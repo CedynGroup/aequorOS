@@ -41,6 +41,11 @@ SHOCK_HQLA_SECURITIES_HAIRCUT = "hqla_securities_haircut_pct"
 SHOCK_RSF_SECURITIES_OVERRIDE = "rsf:securities_weight_override"
 SHOCK_RUNOFF_PREFIX = "runoff:"
 SHOCK_ASF_PREFIX = "asf:"
+# Consumed by the per-currency gap layer (compute_currency_gaps), not the
+# fact-based LCR/NSFR — the facts carry no currency dimension. apply_shocks
+# accepts it so a scenario can couple cedi depreciation with run-off uplifts
+# without tripping the unsupported-shock guard.
+SHOCK_FX_DEPRECIATION = "fx_depreciation_pct"
 
 
 class MissingParameterError(Exception):
@@ -301,6 +306,8 @@ def apply_liquidity_stress(
         elif shock_key == SHOCK_RSF_SECURITIES_OVERRIDE:
             for category in RSF_SECURITIES_CATEGORIES:
                 rsf_weights[category] = shock_value
+        elif shock_key == SHOCK_FX_DEPRECIATION:
+            continue  # applied by compute_currency_gaps, not the fact engine
         else:
             raise UnsupportedShockError(scenario_code, shock_key)
 
@@ -357,3 +364,106 @@ def _sorted(facts: Iterable[LiquidityFact]) -> tuple[LiquidityFact, ...]:
 
 def _describe(category: str) -> str:
     return category.replace("_", " ").title().replace("Bog", "BoG").replace("Gog", "GoG")
+
+
+@dataclass(frozen=True)
+class CurrencyGap:
+    """Per-currency contractual liquidity gap across the five LMTD horizons."""
+
+    currency: str
+    assets: tuple[Decimal, ...]
+    liabilities: tuple[Decimal, ...]
+    net: tuple[Decimal, ...]
+    cumulative: tuple[Decimal, ...]
+    assets_total: Decimal
+    liabilities_total: Decimal
+    net_total: Decimal
+    stressed_liabilities_total: Decimal
+    stressed_net_total: Decimal
+
+
+@dataclass(frozen=True)
+class CurrencyGapResult:
+    """FRM 16-17 per-currency gaps + FX funding-mismatch metrics.
+
+    ``fx_depreciation_pct`` scales the cedi value of NON-base-currency
+    liabilities (a depreciation raises what FX funding costs in cedi terms);
+    base-currency figures never move. Deterministic Decimal arithmetic only.
+    """
+
+    gaps: tuple[CurrencyGap, ...]
+    fx_assets_total: Decimal
+    fx_liabilities_total: Decimal
+    fx_funding_gap: Decimal
+    fx_share_of_liabilities_pct: Decimal
+    stressed_fx_liabilities_total: Decimal
+    stressed_fx_funding_gap: Decimal
+    fx_depreciation_pct: Decimal
+
+
+def compute_currency_gaps(
+    ladders: dict[str, dict[str, list[Decimal]]],
+    base_currency: str,
+    fx_depreciation_pct: Decimal = _ZERO,
+) -> CurrencyGapResult:
+    """Per-currency contractual gaps with an FX-depreciation overlay.
+
+    ``ladders``: currency → {"assets": [...], "liabilities": [...]} across the
+    five LMTD horizons, in cedi equivalents. Currencies are processed in
+    sorted order so results are canonical regardless of input ordering.
+    """
+    factor = (Decimal("100") + fx_depreciation_pct) / Decimal("100")
+    gaps: list[CurrencyGap] = []
+    fx_assets = fx_liabilities = stressed_fx_liabilities = _ZERO
+    total_liabilities = _ZERO
+    for currency in sorted(ladders):
+        ladder = ladders[currency]
+        assets = tuple(Decimal(str(value)) for value in ladder.get("assets", []))
+        liabilities = tuple(Decimal(str(value)) for value in ladder.get("liabilities", []))
+        net = tuple(a - b for a, b in zip(assets, liabilities, strict=True))
+        cumulative: list[Decimal] = []
+        running = _ZERO
+        for value in net:
+            running += value
+            cumulative.append(running)
+        assets_total = sum(assets, _ZERO)
+        liabilities_total = sum(liabilities, _ZERO)
+        is_base = currency == base_currency
+        stressed_liabilities_total = (
+            liabilities_total if is_base else money(liabilities_total * factor)
+        )
+        gaps.append(
+            CurrencyGap(
+                currency=currency,
+                assets=assets,
+                liabilities=liabilities,
+                net=net,
+                cumulative=tuple(cumulative),
+                assets_total=assets_total,
+                liabilities_total=liabilities_total,
+                net_total=assets_total - liabilities_total,
+                stressed_liabilities_total=stressed_liabilities_total,
+                stressed_net_total=assets_total - stressed_liabilities_total,
+            )
+        )
+        total_liabilities += liabilities_total
+        if not is_base:
+            fx_assets += assets_total
+            fx_liabilities += liabilities_total
+            stressed_fx_liabilities += stressed_liabilities_total
+
+    fx_share = (
+        ratio_pct(fx_liabilities / total_liabilities * Decimal("100"))
+        if total_liabilities > _ZERO
+        else _ZERO
+    )
+    return CurrencyGapResult(
+        gaps=tuple(gaps),
+        fx_assets_total=fx_assets,
+        fx_liabilities_total=fx_liabilities,
+        fx_funding_gap=fx_assets - fx_liabilities,
+        fx_share_of_liabilities_pct=fx_share,
+        stressed_fx_liabilities_total=stressed_fx_liabilities,
+        stressed_fx_funding_gap=fx_assets - stressed_fx_liabilities,
+        fx_depreciation_pct=fx_depreciation_pct,
+    )
