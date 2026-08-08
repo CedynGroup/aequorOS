@@ -1250,6 +1250,152 @@ _ICAAP_STRESS_TEMPLATE = ReturnTemplate(
 )
 
 # ---------------------------------------------------------------------------
+# Stress Test Output Report pack (product.md §Phase 2 item 6)
+# ---------------------------------------------------------------------------
+
+_STRESS_PACK_CITATION = (
+    "Stress Testing Guideline (Feb 2026) ¶¶24–27 — results reported to Board and "
+    "senior management with remedial actions; the output-report structure is "
+    "AequorOS's own standardized Board/ALCO artifact, not a published BoG template"
+)
+
+_STRESS_PACK_TEMPLATE = ReturnTemplate(
+    template_id="aeq-stress-pack-v1",
+    return_code="STRESS-PACK",
+    title="Stress Test Output Report pack",
+    fidelity="REPRESENTATIVE",
+    source_citation=_STRESS_PACK_CITATION,
+    attestation_lines=BOARD_ATTESTATION_LINES,
+    sections=(
+        SectionLayout(
+            section_code="traffic_lights",
+            layout_id="stress_traffic_lights_representative",
+            sheet_title="Stress Outcome Traffic Lights",
+            columns=(
+                _CODE,
+                _ITEM,
+                ColumnSpec("value", "Value", "auto"),
+                ColumnSpec("threshold", "Threshold", "auto"),
+                ColumnSpec("status", "Status", "text"),
+                ColumnSpec("module", "Module", "text"),
+                ColumnSpec("scenario_code", "Scenario", "text"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — values, thresholds and green/amber/red "
+                "classifications are the engines' stored headline metric results, "
+                "re-tabulated without reclassification"
+            ),
+        ),
+        SectionLayout(
+            section_code="ratio_evolution",
+            layout_id="stress_ratio_evolution_representative",
+            sheet_title="Capital Ratio Evolution Under Stress",
+            columns=(
+                ColumnSpec("code", "Scenario / Quarter", "text"),
+                _ITEM,
+                ColumnSpec("value", "CAR (%)", "pct"),
+                ColumnSpec("cet1_ratio_pct", "CET1 (%)", "pct"),
+                ColumnSpec("tier1_ratio_pct", "Tier 1 (%)", "pct"),
+                ColumnSpec("leverage_ratio_pct", "Leverage (%)", "pct"),
+                ColumnSpec("total_rwa_ghs", "Total RWA (GHS '000)", "ghs"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — quarterly path from each stored "
+                "capital-stress run"
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="pro_forma_capital",
+            layout_id="stress_pro_forma_representative",
+            sheet_title="Pro-Forma Capital (Stress End-State)",
+            columns=(
+                ColumnSpec("code", "Scenario", "text"),
+                _ITEM,
+                ColumnSpec("value", "Total Capital (GHS '000)", "ghs"),
+                ColumnSpec("cet1_capital_ghs", "CET1 Capital (GHS '000)", "ghs"),
+                ColumnSpec("tier1_capital_ghs", "Tier 1 Capital (GHS '000)", "ghs"),
+                ColumnSpec("total_rwa_ghs", "Total RWA (GHS '000)", "ghs"),
+                ColumnSpec("end_car_pct", "End CAR (%)", "pct"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — final-quarter capital stack per stored "
+                "capital-stress run"
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="attribution",
+            layout_id="stress_attribution_representative",
+            sheet_title="Scenario Attribution vs Baseline",
+            columns=(
+                _CODE,
+                _ITEM,
+                ColumnSpec("value", "Impact (pp)", "pct"),
+                ColumnSpec("baseline_pct", "Baseline (%)", "pct"),
+                ColumnSpec("stressed_pct", "Stressed (%)", "pct"),
+                ColumnSpec("scenario_code", "Scenario", "text"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — scenario-minus-baseline deltas over the "
+                "same canonical book (both runs anchor to the baseline input hash)"
+            ),
+        ),
+        SectionLayout(
+            section_code="reverse_stress_frontier",
+            layout_id="stress_reverse_frontier_representative",
+            sheet_title="Reverse-Stress Frontier",
+            columns=(
+                _CODE,
+                _ITEM,
+                ColumnSpec("value", "Severity Multiplier (x)", "number"),
+                ColumnSpec("breached", "Breached", "text"),
+                ColumnSpec("floor_pct", "Floor (%)", "pct"),
+                ColumnSpec("ratio_at_breach_pct", "Ratio at Breach (%)", "pct"),
+                ColumnSpec("scenario_code", "Scenario Scaled", "text"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — frontier from the latest stored "
+                "reverse-stress run (bisection over both engines); absent until "
+                "one exists"
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="recommended_actions",
+            layout_id="stress_recommended_actions_representative",
+            sheet_title="Recommended Actions",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Recommended Action", "text"),
+                ColumnSpec("value", "Reference Level", "auto"),
+                ColumnSpec("scenario_code", "Scenario", "text"),
+                ColumnSpec("module", "Module", "text"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — the capital engine's fired trigger "
+                "actions plus deterministic funding-remediation lines for "
+                "amber/red liquidity ratios"
+            ),
+            optional=True,
+        ),
+    ),
+    notes=(
+        "Board/ALCO artifact (event-driven, no BoG filing deadline): every figure "
+        "re-tabulates stored engine runs — the pack computes nothing itself, so "
+        "each number traces to a run input hash in source_runs.",
+        "Mixed units: traffic-light and action rows carry their own unit field "
+        "(pct/ghs) and render via auto columns.",
+    ),
+)
+
+# ---------------------------------------------------------------------------
 # LRT corporate return packs (plan W5) — event-driven master-data packs
 # ---------------------------------------------------------------------------
 
@@ -1649,6 +1795,7 @@ TEMPLATES: dict[str, ReturnTemplate] = {
         _DBK_DAILY_TEMPLATE,
         _LE_TEMPLATE,
         _ICAAP_STRESS_TEMPLATE,
+        _STRESS_PACK_TEMPLATE,
         _LRT_PROFILE_TEMPLATE,
         _LRT_OUTLET_TEMPLATE,
         _LRT_PARTY_TEMPLATE,

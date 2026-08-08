@@ -27,7 +27,15 @@ from typing import Literal
 
 type FidelityGrade = Literal["CONFIRMED", "PARTIAL", "REPRESENTATIVE"]
 type ReturnFamily = Literal[
-    "liquidity", "capital", "irrbb", "fx", "icaap_stress", "corporate", "large_exposures", "dbk"
+    "liquidity",
+    "capital",
+    "irrbb",
+    "fx",
+    "icaap_stress",
+    "corporate",
+    "large_exposures",
+    "dbk",
+    "stress",
 ]
 type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual", "daily"]
 type ChannelCode = Literal["orass_sandbox", "email", "manual"]
@@ -316,6 +324,30 @@ REGISTRY: dict[str, ReturnDefinition] = {
             template_id="bog-icaap-stress-v1",
             fidelity="REPRESENTATIVE",
             default_channel="manual",
+        ),
+        ReturnDefinition(
+            code="STRESS-PACK",
+            family="stress",
+            title="Stress Test Output Report pack",
+            directive_citation=(
+                "Stress Testing Guideline (Feb 2026) ¶¶24–27 — stress-test results "
+                "must be reported to Board and senior management with remedial "
+                "actions; the standardized output-report structure (traffic lights, "
+                "pro-forma capital, ratio evolution, attribution, recommended "
+                "actions, reverse-stress frontier) is AequorOS's own artifact "
+                "(product.md §Phase 2 item 6), not a published BoG template."
+            ),
+            # Event-driven: this is a Board/ALCO artifact generated on demand
+            # after the stress engines run — no BoG filing deadline exists for
+            # it (the regulator sees stress results inside ICAAP-STRESS). The
+            # nominal frequency/deadline only satisfy the package row shape.
+            frequency="quarterly",
+            deadline_rule=quarterly_days_after(30),
+            generator="stress_pack",
+            template_id="aeq-stress-pack-v1",
+            fidelity="REPRESENTATIVE",
+            default_channel="manual",
+            event_driven=True,
         ),
         # --- LRT corporate return packs (plan W5) --------------------------
         # Event-driven (event_driven=True): the calendar never expands them

@@ -394,6 +394,15 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
         # from the FX engine's baseline run (gap G5).
         "dbk": {"nop_by_currency", "nop_aggregate", "contingents"},
         "icaap_stress": {"forecast_summary", "forecast_path", "stress_summary"},
+        # Phase 2 item 6: the Board/ALCO stress pack re-tabulates stored runs.
+        "stress_pack": {
+            "traffic_lights",
+            "ratio_evolution",
+            "pro_forma_capital",
+            "attribution",
+            "reverse_stress_frontier",
+            "recommended_actions",
+        },
         # W6: the LMT return = the liquidity LCR subset + three canonical-data
         # monitoring tools; LE-MONTHLY = the five Large Exposures templates.
         "lmt": {

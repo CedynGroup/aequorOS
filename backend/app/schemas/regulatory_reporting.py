@@ -11,7 +11,15 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.schemas.attestation import SigningRole
 
 type ReturnFamily = Literal[
-    "liquidity", "capital", "irrbb", "fx", "icaap_stress", "corporate", "large_exposures", "dbk"
+    "liquidity",
+    "capital",
+    "irrbb",
+    "fx",
+    "icaap_stress",
+    "corporate",
+    "large_exposures",
+    "dbk",
+    "stress",
 ]
 type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual", "daily"]
 type ReturnBasis = Literal["solo", "consolidated"]

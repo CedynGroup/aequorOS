@@ -48,6 +48,9 @@ REGISTRY_CODES = {
     "LE-MONTHLY",
 }
 CORPORATE_CODES = {"LRT-PROFILE", "LRT-OUTLET", "LRT-PARTY", "LRT-CAPITAL", "LRT-PRODUCT"}
+# Phase 2 item 6: the stress pack is likewise event-driven (Board/ALCO
+# artifact, no BoG deadline) — registered, but never a calendar obligation.
+STRESS_CODES = {"STRESS-PACK"}
 
 
 def _seed_latest_period(db_client: TestClient) -> dict[str, Any]:
@@ -521,7 +524,7 @@ def test_return_templates_expose_registry_with_fidelity(db_client: TestClient) -
     templates = {item["code"]: item for item in response.json()["templates"]}
     # The registry (and hence the templates endpoint) also carries the
     # event-driven corporate LRT packs; only the calendar excludes them.
-    assert set(templates) == REGISTRY_CODES | CORPORATE_CODES
+    assert set(templates) == REGISTRY_CODES | CORPORATE_CODES | STRESS_CODES
     assert templates["BSD3"]["fidelity"] == "PARTIAL"
     assert templates["BSD3"]["default_channel"] == "orass_sandbox"
     assert templates["BSD3"]["regulator"] == "BOG"
