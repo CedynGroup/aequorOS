@@ -6,6 +6,7 @@ from app.api.health import router as health_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.database_connections import router as database_direct_connections_router
 from app.features.bulk_update_cases import router as bulk_update_cases_router
+from app.features.examiner_surfaces import router as examiner_router
 from app.features.generate_case_reports import router as case_reports_router
 from app.features.ingest_data import router as ingestion_router
 from app.features.list_case_taxonomy import router as case_taxonomy_router
@@ -63,6 +64,7 @@ v1_router.include_router(liquidity_thresholds_router)
 v1_router.include_router(liquidity_cfp_router)
 v1_router.include_router(credit_params_router)
 v1_router.include_router(capital_plan_router)
+v1_router.include_router(examiner_router)
 v1_router.include_router(reverse_stress_router)
 v1_router.include_router(regulatory_capital_router)
 v1_router.include_router(regulatory_irr_router)

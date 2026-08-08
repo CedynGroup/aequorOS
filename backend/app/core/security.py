@@ -29,8 +29,11 @@ if TYPE_CHECKING:
     from jwt import PyJWKClient
 
 # Roles, most- to least-privileged. `admin` manages users/config; `approver` is the
-# maker-checker second signer; `analyst` runs calculations + mutations; `viewer` reads.
-ROLES: tuple[str, ...] = ("admin", "approver", "analyst", "viewer")
+# maker-checker second signer; `analyst` runs calculations + mutations; `examiner`
+# is the supervisory read-only role (Phase 2 item 7: reads everything incl. the
+# examiner surfaces, mutates nothing — every mutation gate sits at analyst or
+# above); `viewer` reads the standard surfaces only.
+ROLES: tuple[str, ...] = ("admin", "approver", "analyst", "examiner", "viewer")
 _ROLE_RANK = {role: rank for rank, role in enumerate(ROLES)}
 
 TokenType = Literal["access", "refresh"]
