@@ -23,6 +23,7 @@ export const ReturnFamily = {
   Corporate: "corporate",
   LargeExposures: "large_exposures",
   Dbk: "dbk",
+  Stress: "stress",
 } as const;
 export type ReturnFamily = (typeof ReturnFamily)[keyof typeof ReturnFamily];
 

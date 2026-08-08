@@ -33,12 +33,12 @@ from app.models import (
 from app.schemas.capital_plan import (
     CapitalPlanApprove,
     CapitalPlanContent,
+    CapitalPlanProjectionRead,
+    CapitalPlanProjectionScenario,
+    CapitalPlanProjectionYear,
     CapitalPlanPut,
     CapitalPlanRead,
     CapitalPlanSummaryRead,
-    CapitalProjectionRead,
-    CapitalProjectionScenario,
-    CapitalProjectionYear,
     IlaapRefreshCreate,
     IlaapSnapshotListRead,
     IlaapSnapshotRead,
@@ -150,7 +150,7 @@ def _pillar1_min(db: Session, ctx: TenantContext, bank: Bank) -> Decimal | None:
 
 def _projection(
     db: Session, ctx: TenantContext, bank: Bank, content: CapitalPlanContent | None
-) -> CapitalProjectionRead | None:
+) -> CapitalPlanProjectionRead | None:
     runs = _forecast_runs(db, ctx, bank)
     pillar1 = _pillar1_min(db, ctx, bank)
     if not runs or pillar1 is None:
@@ -160,14 +160,14 @@ def _projection(
         _ZERO,
     )
     requirement = pillar1 + pillar2
-    scenarios: list[CapitalProjectionScenario] = []
+    scenarios: list[CapitalPlanProjectionScenario] = []
     for run in runs:
-        years: list[CapitalProjectionYear] = []
+        years: list[CapitalPlanProjectionYear] = []
         for entry in run.metrics.get("path", []):
             car_raw = entry.get("car_pct")
             car = Decimal(str(car_raw)) if car_raw is not None else None
             years.append(
-                CapitalProjectionYear(
+                CapitalPlanProjectionYear(
                     year=int(entry["year"]),
                     period_label=str(entry["period_label"]),
                     car_pct=car,
@@ -176,7 +176,7 @@ def _projection(
             )
         min_car_raw = run.metrics.get("min_car_pct")
         scenarios.append(
-            CapitalProjectionScenario(
+            CapitalPlanProjectionScenario(
                 scenario_code=run.scenario_code,
                 run_id=run.id,
                 input_hash=run.input_hash,
@@ -184,7 +184,7 @@ def _projection(
                 min_car_pct=Decimal(str(min_car_raw)) if min_car_raw is not None else None,
             )
         )
-    return CapitalProjectionRead(
+    return CapitalPlanProjectionRead(
         pillar1_min_pct=pillar1,
         pillar2_addon_pct=pillar2,
         total_requirement_pct=requirement,

@@ -23,12 +23,12 @@ from app.api.deps import TenantContext
 from app.models import BankReportingPeriod, User
 from app.schemas.capital_plan import (
     CapitalPlanApprove,
-    CapitalPlanContent,
+    CapitalPlanContentInput,
     CapitalPlanPut,
-    CapitalTrigger,
+    CapitalTriggerInput,
     IlaapRefreshCreate,
     ManagementAction,
-    Pillar2AddOn,
+    Pillar2AddOnInput,
 )
 from app.schemas.forecasting import ForecastRunCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
@@ -74,15 +74,15 @@ def _ensure_checker(db: Session) -> None:
         db.commit()
 
 
-def _content() -> CapitalPlanContent:
-    return CapitalPlanContent(
+def _content() -> CapitalPlanContentInput:
+    return CapitalPlanContentInput(
         pillar2_addons=[
-            Pillar2AddOn(
+            Pillar2AddOnInput(
                 risk_type="Credit concentration",
                 add_on_pct_rwa=Decimal("1.5"),
                 rationale="Top-20 obligor concentration above internal appetite.",
             ),
-            Pillar2AddOn(
+            Pillar2AddOnInput(
                 risk_type="IRRBB",
                 add_on_pct_rwa=Decimal("0.5"),
                 rationale="EVE sensitivity near the supervisory outlier threshold.",
@@ -96,7 +96,7 @@ def _content() -> CapitalPlanContent:
             )
         ],
         trigger_framework=[
-            CapitalTrigger(
+            CapitalTriggerInput(
                 metric_code="car_pct",
                 early_warning_level=Decimal("16"),
                 action_level=Decimal("14.5"),

@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Value } from "./Value";
+import type { Value1 } from "./Value1";
 import {
-  ValueFromJSON,
-  ValueFromJSONTyped,
-  ValueToJSON,
-  ValueToJSONTyped,
-} from "./Value";
+  Value1FromJSON,
+  Value1FromJSONTyped,
+  Value1ToJSON,
+  Value1ToJSONTyped,
+} from "./Value1";
 
 /**
  *
@@ -39,10 +39,10 @@ export interface PositionSnapshotOverrideCreate {
   reason: string;
   /**
    *
-   * @type {Value}
+   * @type {Value1}
    * @memberof PositionSnapshotOverrideCreate
    */
-  value: Value | null;
+  value: Value1 | null;
 }
 
 /**
@@ -94,7 +94,7 @@ export function PositionSnapshotOverrideCreateFromJSONTyped(
   return {
     field: json["field"],
     reason: json["reason"],
-    value: ValueFromJSON(json["value"]),
+    value: Value1FromJSON(json["value"]),
   };
 }
 
@@ -115,6 +115,6 @@ export function PositionSnapshotOverrideCreateToJSONTyped(
   return {
     field: value["field"],
     reason: value["reason"],
-    value: ValueToJSON(value["value"]),
+    value: Value1ToJSON(value["value"]),
   };
 }

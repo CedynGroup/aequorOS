@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Description } from "./Description";
+import type { Description1 } from "./Description1";
 import {
-  DescriptionFromJSON,
-  DescriptionFromJSONTyped,
-  DescriptionToJSON,
-  DescriptionToJSONTyped,
-} from "./Description";
+  Description1FromJSON,
+  Description1FromJSONTyped,
+  Description1ToJSON,
+  Description1ToJSONTyped,
+} from "./Description1";
 
 /**
  *
@@ -27,10 +27,10 @@ import {
 export interface ScenarioUpdate {
   /**
    *
-   * @type {Description}
+   * @type {Description1}
    * @memberof ScenarioUpdate
    */
-  description?: Description;
+  description?: Description1;
   /**
    *
    * @type {string}
@@ -71,7 +71,7 @@ export function ScenarioUpdateFromJSONTyped(
     description:
       json["description"] == null
         ? undefined
-        : DescriptionFromJSON(json["description"]),
+        : Description1FromJSON(json["description"]),
     name: json["name"] == null ? undefined : json["name"],
     reason: json["reason"],
   };
@@ -90,7 +90,7 @@ export function ScenarioUpdateToJSONTyped(
   }
 
   return {
-    description: DescriptionToJSON(value["description"]),
+    description: Description1ToJSON(value["description"]),
     name: value["name"],
     reason: value["reason"],
   };

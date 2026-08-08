@@ -11,6 +11,20 @@
  */
 
 import { mapValues } from "../runtime";
+import type { LtpBufferCostPct } from "./LtpBufferCostPct";
+import {
+  LtpBufferCostPctFromJSON,
+  LtpBufferCostPctFromJSONTyped,
+  LtpBufferCostPctToJSON,
+  LtpBufferCostPctToJSONTyped,
+} from "./LtpBufferCostPct";
+import type { LtpTotalChargeGhs } from "./LtpTotalChargeGhs";
+import {
+  LtpTotalChargeGhsFromJSON,
+  LtpTotalChargeGhsFromJSONTyped,
+  LtpTotalChargeGhsToJSON,
+  LtpTotalChargeGhsToJSONTyped,
+} from "./LtpTotalChargeGhs";
 import type { FtpStatus } from "./FtpStatus";
 import {
   FtpStatusFromJSON,
@@ -31,6 +45,18 @@ export interface FtpMetricsRead {
    * @memberof FtpMetricsRead
    */
   blendedAssignedFtpPct: string;
+  /**
+   *
+   * @type {LtpBufferCostPct}
+   * @memberof FtpMetricsRead
+   */
+  ltpBufferCostPct?: LtpBufferCostPct;
+  /**
+   *
+   * @type {LtpTotalChargeGhs}
+   * @memberof FtpMetricsRead
+   */
+  ltpTotalChargeGhs?: LtpTotalChargeGhs;
   /**
    *
    * @type {string}
@@ -183,6 +209,14 @@ export function FtpMetricsReadFromJSONTyped(
   return {
     ...json,
     blendedAssignedFtpPct: json["blended_assigned_ftp_pct"],
+    ltpBufferCostPct:
+      json["ltp_buffer_cost_pct"] == null
+        ? undefined
+        : LtpBufferCostPctFromJSON(json["ltp_buffer_cost_pct"]),
+    ltpTotalChargeGhs:
+      json["ltp_total_charge_ghs"] == null
+        ? undefined
+        : LtpTotalChargeGhsFromJSON(json["ltp_total_charge_ghs"]),
     minProductMarginPct: json["min_product_margin_pct"],
     nmdCoreMaxPct: json["nmd_core_max_pct"],
     nmdCoreMinPct: json["nmd_core_min_pct"],
@@ -213,6 +247,8 @@ export function FtpMetricsReadToJSONTyped(
 
   return {
     blended_assigned_ftp_pct: value["blendedAssignedFtpPct"],
+    ltp_buffer_cost_pct: LtpBufferCostPctToJSON(value["ltpBufferCostPct"]),
+    ltp_total_charge_ghs: LtpTotalChargeGhsToJSON(value["ltpTotalChargeGhs"]),
     min_product_margin_pct: value["minProductMarginPct"],
     nmd_core_max_pct: value["nmdCoreMaxPct"],
     nmd_core_min_pct: value["nmdCoreMinPct"],

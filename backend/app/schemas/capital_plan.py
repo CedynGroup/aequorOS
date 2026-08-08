@@ -45,32 +45,50 @@ class CapitalPlanContent(ClosedModel):
     trigger_framework: list[CapitalTrigger] = Field(default_factory=list)
 
 
-class CapitalProjectionYear(ClosedModel):
+class CapitalPlanProjectionYear(ClosedModel):
     year: int
     period_label: str
     car_pct: Decimal | None = None
     headroom_pp: Decimal | None = None
 
 
-class CapitalProjectionScenario(ClosedModel):
+class CapitalPlanProjectionScenario(ClosedModel):
     scenario_code: str
     run_id: UUID
     input_hash: str
-    years: list[CapitalProjectionYear]
+    years: list[CapitalPlanProjectionYear]
     min_car_pct: Decimal | None = None
 
 
-class CapitalProjectionRead(ClosedModel):
+class CapitalPlanProjectionRead(ClosedModel):
     """Assembled at read time from stored forecast runs — never stale."""
 
     pillar1_min_pct: Decimal
     pillar2_addon_pct: Decimal
     total_requirement_pct: Decimal
-    scenarios: list[CapitalProjectionScenario]
+    scenarios: list[CapitalPlanProjectionScenario]
+
+
+# Write-side variants with their own component names: sharing a
+# Decimal-bearing model between request and response makes FastAPI split it
+# into hyphenated "-Input"/"-Output" components, which the generated-client
+# patcher cannot key (the RelatedPartyRoleInput precedent).
+class Pillar2AddOnInput(Pillar2AddOn):
+    pass
+
+
+class CapitalTriggerInput(CapitalTrigger):
+    pass
+
+
+class CapitalPlanContentInput(ClosedModel):
+    pillar2_addons: list[Pillar2AddOnInput] = Field(default_factory=list)
+    management_actions: list[ManagementAction] = Field(default_factory=list)
+    trigger_framework: list[CapitalTriggerInput] = Field(default_factory=list)
 
 
 class CapitalPlanPut(ClosedModel):
-    content: CapitalPlanContent
+    content: CapitalPlanContentInput
     reason: str = Field(min_length=1, max_length=2000)
 
 
@@ -120,7 +138,7 @@ class IlaapRefreshCreate(ClosedModel):
 class CapitalPlanSummaryRead(ClosedModel):
     current: CapitalPlanRead | None = None
     approved: CapitalPlanRead | None = None
-    projection: CapitalProjectionRead | None = None
+    projection: CapitalPlanProjectionRead | None = None
     latest_ilaap: IlaapSnapshotRead | None = None
 
 
