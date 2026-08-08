@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.domain.liquidity.engine import (
     SHOCK_FX_DEPRECIATION,
+    SHOCK_NMD_RUNOFF_PREFIX,
     CurrencyGapResult,
     LcrResult,
     LiquidityComputationError,
@@ -31,11 +32,13 @@ from app.domain.liquidity.engine import (
     LiquidityParams,
     MissingParameterError,
     NsfrResult,
+    StressedLadder,
     UnsupportedShockError,
     apply_liquidity_stress,
     compute_currency_gaps,
     compute_lcr,
     compute_nsfr,
+    compute_stressed_ladder,
 )
 from app.models import (
     Bank,
@@ -514,8 +517,8 @@ def _create_and_execute(
         currency_gaps = compute_currency_gaps(
             {
                 currency: {
-                    "assets": [Decimal(v) for v in ladder["assets"]],
-                    "liabilities": [Decimal(v) for v in ladder["liabilities"]],
+                    "assets": _ladder_lists(ladder, "assets"),
+                    "liabilities": _ladder_lists(ladder, "liabilities"),
                 }
                 for currency, ladder in currency_ladders.items()
             },
@@ -523,9 +526,30 @@ def _create_and_execute(
             shocks.get(SHOCK_FX_DEPRECIATION, Decimal(0)),
         )
         mismatch_limit = _currency_mismatch_limit(db, ctx, bank, period.period_end)
+        runoff_schedule = {
+            int(key.removeprefix(SHOCK_NMD_RUNOFF_PREFIX).removeprefix("h")): value
+            for key, value in shocks.items()
+            if key.startswith(SHOCK_NMD_RUNOFF_PREFIX)
+        }
+        stressed_ladder: tuple[StressedLadder, ...] = ()
+        if runoff_schedule:
+            stressed_ladder = compute_stressed_ladder(
+                {
+                    currency: {
+                        "assets": _ladder_lists(ladder, "assets"),
+                        "liabilities": _ladder_lists(ladder, "liabilities"),
+                    }
+                    for currency, ladder in currency_ladders.items()
+                },
+                {
+                    currency: Decimal(str(ladder.get("demand_liabilities", "0")))
+                    for currency, ladder in currency_ladders.items()
+                },
+                runoff_schedule,
+            )
         _persist_success(
             db, ctx, run, lcr, nsfr, engine_params, base_currency(bank),
-            currency_gaps, mismatch_limit,
+            currency_gaps, mismatch_limit, stressed_ladder,
         )
     except LiquidityRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
@@ -589,6 +613,7 @@ def _persist_success(  # noqa: PLR0913, PLR0915
     currency: str,
     currency_gaps: CurrencyGapResult,
     mismatch_limit: Decimal | None,
+    stressed_ladder: tuple[StressedLadder, ...] = (),
 ) -> None:
     run.metrics = {
         "lcr_pct": str(lcr.lcr_pct),
@@ -617,6 +642,20 @@ def _persist_success(  # noqa: PLR0913, PLR0915
             for gap in currency_gaps.gaps
         ],
     }
+    if stressed_ladder:
+        # LRMD para 50-54: the behaviourally-modified stress ladder.
+        run.metrics["stressed_ladder"] = [
+            {
+                "currency": entry.currency,
+                "contractual_liabilities": [str(v) for v in entry.contractual_liabilities],
+                "stressed_liabilities": [str(v) for v in entry.stressed_liabilities],
+                "stressed_net": [str(v) for v in entry.stressed_net],
+                "stressed_cumulative": [str(v) for v in entry.stressed_cumulative],
+                "demand_deposits": str(entry.demand_deposits),
+                "stable_core": str(entry.stable_core),
+            }
+            for entry in stressed_ladder
+        ]
     metric_rows: tuple[tuple[str, Decimal, str, Decimal | None, str], ...] = (
         ("lcr_pct", lcr.lcr_pct, "pct", params.lcr_min_pct, lcr.status),
         ("nsfr_pct", nsfr.nsfr_pct, "pct", params.nsfr_min_pct, nsfr.status),
@@ -1194,7 +1233,7 @@ def _ladder_bucket_index(
 
 def _currency_ladders(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
-) -> dict[str, dict[str, list[str]]]:
+) -> dict[str, dict[str, list[str] | str]]:
     records = db.execute(
         select(CanonicalPositionSnapshot, CanonicalPosition)
         .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
@@ -1240,16 +1279,29 @@ def _currency_ladders(
         )
         ladder = ladders.setdefault(
             position.currency,
-            {"assets": [Decimal(0)] * buckets, "liabilities": [Decimal(0)] * buckets},
+            {
+                "assets": [Decimal(0)] * buckets,
+                "liabilities": [Decimal(0)] * buckets,
+                "demand": [Decimal(0)],
+            },
         )
         ladder[side][index] += amount
+        if kind == "DEPOSIT" and on_demand:
+            ladder["demand"][0] += amount
     return {
         currency: {
             "assets": [str(value) for value in ladder["assets"]],
             "liabilities": [str(value) for value in ladder["liabilities"]],
+            "demand_liabilities": str(ladder["demand"][0]),
         }
         for currency, ladder in sorted(ladders.items())
     }
+
+
+def _ladder_lists(ladder: dict[str, list[str] | str], key: str) -> list[Decimal]:
+    values = ladder.get(key, [])
+    assert isinstance(values, list)  # demand_liabilities is the only scalar key
+    return [Decimal(value) for value in values]
 
 
 def _currency_mismatch_limit(
@@ -1285,7 +1337,7 @@ def _build_snapshot(  # noqa: PLR0913
     facts: list[BankFinancialFact],
     active: _ActiveLiquidityParams,
     shocks: dict[str, Decimal],
-    currency_ladders: dict[str, dict[str, list[str]]],
+    currency_ladders: dict[str, dict[str, list[str] | str]],
 ) -> dict[str, Any]:
     return {
         "schema_version": INPUT_SCHEMA_VERSION,

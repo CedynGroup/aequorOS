@@ -46,6 +46,13 @@ SHOCK_ASF_PREFIX = "asf:"
 # accepts it so a scenario can couple cedi depreciation with run-off uplifts
 # without tripping the unsupported-shock guard.
 SHOCK_FX_DEPRECIATION = "fx_depreciation_pct"
+# Behavioural run-off schedule for demand-natured deposits under stress
+# (LRMD para 50-54): nmd_runoff:h1..h4 = the percentage of non-maturity
+# deposits assumed to flee in each of the first four horizons; the
+# remainder is the stable core reporting beyond 12 months. Calibration
+# comes from the reviewed behavioural assumptions (the NMD-duration GBM
+# via the apply-as-assumptions seam) — the engine never invents lives.
+SHOCK_NMD_RUNOFF_PREFIX = "nmd_runoff:"
 
 
 class MissingParameterError(Exception):
@@ -306,8 +313,10 @@ def apply_liquidity_stress(
         elif shock_key == SHOCK_RSF_SECURITIES_OVERRIDE:
             for category in RSF_SECURITIES_CATEGORIES:
                 rsf_weights[category] = shock_value
-        elif shock_key == SHOCK_FX_DEPRECIATION:
-            continue  # applied by compute_currency_gaps, not the fact engine
+        elif shock_key == SHOCK_FX_DEPRECIATION or shock_key.startswith(
+            SHOCK_NMD_RUNOFF_PREFIX
+        ):
+            continue  # applied by the currency-gap / stressed-ladder layer
         else:
             raise UnsupportedShockError(scenario_code, shock_key)
 
@@ -467,3 +476,67 @@ def compute_currency_gaps(
         stressed_fx_funding_gap=fx_assets - stressed_fx_liabilities,
         fx_depreciation_pct=fx_depreciation_pct,
     )
+
+
+@dataclass(frozen=True)
+class StressedLadder:
+    """LRMD ¶50: contractual flows combined with behavioural NMD run-off."""
+
+    currency: str
+    contractual_liabilities: tuple[Decimal, ...]
+    stressed_liabilities: tuple[Decimal, ...]
+    stressed_net: tuple[Decimal, ...]
+    stressed_cumulative: tuple[Decimal, ...]
+    demand_deposits: Decimal
+    stable_core: Decimal
+
+
+def compute_stressed_ladder(
+    ladders: dict[str, dict[str, list[Decimal]]],
+    demand_by_currency: dict[str, Decimal],
+    runoff_schedule: dict[int, Decimal],
+) -> tuple[StressedLadder, ...]:
+    """Behaviourally-modified stress ladder (LRMD ¶50–54).
+
+    Contractually, demand-natured deposits sit entirely in the first horizon.
+    Under the reviewed behavioural schedule, ``runoff_schedule[i]`` percent of
+    them flee in horizon ``i`` (1-based, horizons 1–4) and the remainder is
+    the stable core reporting beyond 12 months. Assets stay contractual —
+    ¶51's conservatism (later inflows, earlier outflows) is encoded in the
+    schedule's calibration, not manufactured here.
+    """
+    results: list[StressedLadder] = []
+    for currency in sorted(ladders):
+        ladder = ladders[currency]
+        liabilities = [Decimal(str(v)) for v in ladder.get("liabilities", [])]
+        assets = [Decimal(str(v)) for v in ladder.get("assets", [])]
+        horizons = len(liabilities)
+        demand = demand_by_currency.get(currency, _ZERO)
+        stressed = list(liabilities)
+        stressed[0] -= demand
+        fled_total = _ZERO
+        for horizon, pct in sorted(runoff_schedule.items()):
+            if 1 <= horizon <= horizons - 1:
+                fled = money(demand * pct / _HUNDRED)
+                stressed[horizon - 1] += fled
+                fled_total += fled
+        stable_core = demand - fled_total
+        stressed[-1] += stable_core
+        net = [a - b for a, b in zip(assets, stressed, strict=True)]
+        cumulative: list[Decimal] = []
+        running = _ZERO
+        for value in net:
+            running += value
+            cumulative.append(running)
+        results.append(
+            StressedLadder(
+                currency=currency,
+                contractual_liabilities=tuple(liabilities),
+                stressed_liabilities=tuple(stressed),
+                stressed_net=tuple(net),
+                stressed_cumulative=tuple(cumulative),
+                demand_deposits=demand,
+                stable_core=stable_core,
+            )
+        )
+    return tuple(results)

@@ -163,3 +163,45 @@ def test_board_currency_mismatch_limit_produces_validation_rows(
     assert usd.passed is False
     assert usd.severity == "warning"
     assert "60" in usd.message and "10" in usd.message
+
+
+def test_stressed_behavioural_ladder_redistributes_demand_deposits(
+    db_session: Session,
+) -> None:
+    """LRMD ¶50–54: the usd_funding_stress schedule (h1=30%, h2=10%) moves
+    the 8.0M GHS CALL book from all-in-horizon-1 to [2.4M, 0.8M, 0, 0,
+    4.8M stable core]; the USD fixed deposit is not demand-natured and its
+    contractual placement never moves."""
+    seed_sample_bank(db_session)
+    _seed_fx_book(db_session)
+
+    baseline = _run(db_session, "baseline")
+    stored_baseline = db_session.scalar(
+        select(RegulatoryRun).where(RegulatoryRun.id == baseline.id)
+    )
+    assert stored_baseline is not None
+    # Baseline carries no behavioural schedule → no stressed ladder block.
+    assert "stressed_ladder" not in stored_baseline.metrics
+    assert stored_baseline.inputs["currency_ladders"]["GHS"]["demand_liabilities"] == "8000000"
+
+    run = _run(db_session, "usd_funding_stress")
+    stored = db_session.scalar(select(RegulatoryRun).where(RegulatoryRun.id == run.id))
+    assert stored is not None
+    ladder = {entry["currency"]: entry for entry in stored.metrics["stressed_ladder"]}
+
+    ghs = ladder["GHS"]
+    assert Decimal(ghs["demand_deposits"]) == Decimal("8000000")
+    assert [Decimal(v) for v in ghs["stressed_liabilities"]] == [
+        Decimal("2400000.0000"),
+        Decimal("800000.0000"),
+        Decimal("0"),
+        Decimal("0"),
+        Decimal("4800000.0000"),
+    ]
+    assert Decimal(ghs["stable_core"]) == Decimal("4800000.0000")
+
+    usd = ladder["USD"]
+    assert Decimal(usd["demand_deposits"]) == Decimal("0")
+    assert [Decimal(v) for v in usd["stressed_liabilities"]] == [
+        Decimal(v) for v in usd["contractual_liabilities"]
+    ]

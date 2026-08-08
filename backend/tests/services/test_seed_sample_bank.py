@@ -31,7 +31,7 @@ EXPECTED_FACTS = 1308
 # 176 = the long-standing 167 plus the two BoG GHS ±450 bp IRRBB parallel
 # shock rows (plan W6.4; IRRBB Guideline Feb 2026 Appendix II–III).
 # shocks, plus the seven usd_funding_stress liquidity shocks (Phase 2 item 2).
-EXPECTED_PARAMS = 176
+EXPECTED_PARAMS = 181
 OTHER_ASSETS_FLOOR = Decimal("40000000")
 
 
@@ -197,7 +197,7 @@ def test_parameter_seed_counts_and_values(db_session: Session) -> None:
     assert _count(db_session, ParamCapitalThreshold) == 28
     # 101 = the long-standing 99 plus the two BoG GHS ±450 bp IRRBB parallel
     # shock rows (plan W6.4; IRRBB Guideline Feb 2026 Appendix II–III).
-    assert _count(db_session, ParamStressShock) == 108  # + usd_funding_stress
+    assert _count(db_session, ParamStressShock) == 113  # + usd stress + NMD run-off
 
     rwa_multiplier = db_session.scalar(
         select(ParamCapitalThreshold).where(

@@ -456,6 +456,11 @@ _LIQUIDITY_IDIOSYNCRATIC: dict[str, str] = {
     "runoff:committed_corporate": "50",
     "inflow_multiplier": "0.75",
     "hqla_securities_haircut_pct": "0",
+    # LRMD para 50-54 behavioural NMD run-off (calibrate from the reviewed
+    # NMD-duration assumptions; these are the demo-book defaults).
+    "nmd_runoff:h1": "25",
+    "nmd_runoff:h2": "10",
+    "nmd_runoff:h3": "5",
     "asf:retail_deposits_stable": "90",
     "asf:retail_deposits_less_stable": "80",
     "asf:wholesale_operational": "40",
@@ -497,6 +502,8 @@ _LIQUIDITY_USD_FUNDING: dict[str, str] = {
     "runoff:committed_corporate": "50",
     "inflow_multiplier": "0.80",
     "hqla_securities_haircut_pct": "5",
+    "nmd_runoff:h1": "30",
+    "nmd_runoff:h2": "10",
 }
 _STRESS_SHOCKS: dict[str, dict[str, dict[str, str]]] = {
     "liquidity": {
