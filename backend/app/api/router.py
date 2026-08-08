@@ -14,6 +14,7 @@ from app.features.list_taxonomy import router as taxonomy_router
 from app.features.manage_attestation import router as attestation_router
 from app.features.manage_banks import router as banks_router
 from app.features.manage_capital import router as capital_router
+from app.features.manage_capital_plan import router as capital_plan_router
 from app.features.manage_credit_params import router as credit_params_router
 from app.features.manage_documents import router as documents_router
 from app.features.manage_institution_profile import router as institution_profile_router
@@ -61,6 +62,7 @@ v1_router.include_router(regulatory_liquidity_router)
 v1_router.include_router(liquidity_thresholds_router)
 v1_router.include_router(liquidity_cfp_router)
 v1_router.include_router(credit_params_router)
+v1_router.include_router(capital_plan_router)
 v1_router.include_router(reverse_stress_router)
 v1_router.include_router(regulatory_capital_router)
 v1_router.include_router(regulatory_irr_router)

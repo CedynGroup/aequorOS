@@ -90,13 +90,16 @@ def test_run_all_ftp_scenarios_persists_three_runs_with_golden_metrics(  # noqa:
     snapshot = baseline["inputs"]
     assert snapshot["module"] == "ftp"
     assert snapshot["as_of_date"] == "2026-03-31"
+    # off_balance joined the FTP snapshot for the LTP contingent-liquidity
+    # charge (Phase 2 item 11): the two seeded committed-facility families.
     assert {fact["fact_group"] for fact in snapshot["facts"]} == {
         "ftp_curve_point",
         "ftp_product",
         "ftp_branch",
         "ftp_nmd",
+        "off_balance",
     }
-    assert len(snapshot["facts"]) == 26
+    assert len(snapshot["facts"]) == 28
     assert set(snapshot["parameters"]) == {"thresholds", "stress_overlays_bps"}
 
     metrics = baseline["metrics"]
@@ -173,6 +176,38 @@ def test_run_all_ftp_scenarios_persists_three_runs_with_golden_metrics(  # noqa:
     )
     assert fetched.status_code == 200
     assert fetched.json()["input_hash"] == baseline["input_hash"]
+
+
+def test_ltp_contingent_charge_prices_committed_facilities(db_client: TestClient) -> None:
+    """Phase 2 item 11 (LRMD ¶78–79): the LTP block charges each committed
+    facility family for its expected stressed draw (the liquidity combined
+    scenario's runoff — ¶48(b)) at the FTP curve's 1Y-minus-overnight carry."""
+    period = _seed_latest_period(db_client)
+    batch = _run_all(db_client, period["id"])
+    metrics = batch["runs"][0]["metrics"]
+
+    carry = Decimal(metrics["ltp_buffer_cost_pct"])
+    assert carry > 0  # the seeded curve is upward-sloping
+    items = {item["line_code"]: item for item in metrics["ltp_items"]}
+    assert set(items) == {"committed_retail", "committed_corporate"}
+    retail = items["committed_retail"]
+    corporate = items["committed_corporate"]
+    # Seeded undrawn 80M / 240M; combined-scenario draws 20% / 50%.
+    assert Decimal(retail["undrawn_amount_ghs"]) == Decimal("80000000.0000")
+    assert Decimal(retail["expected_draw_pct"]) == Decimal("20")
+    assert Decimal(corporate["expected_draw_pct"]) == Decimal("50")
+    for item in (retail, corporate):
+        expected = (
+            Decimal(item["undrawn_amount_ghs"])
+            * Decimal(item["expected_draw_pct"])
+            / 100
+            * carry
+            / 100
+        ).quantize(Decimal("0.0001"))
+        assert Decimal(item["annual_charge_ghs"]) == expected
+    assert Decimal(metrics["ltp_total_charge_ghs"]) == Decimal(
+        retail["annual_charge_ghs"]
+    ) + Decimal(corporate["annual_charge_ghs"])
 
 
 def test_ftp_input_hash_is_scoped_to_ftp_facts(db_client: TestClient) -> None:

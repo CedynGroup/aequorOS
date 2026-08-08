@@ -30,6 +30,7 @@ from app.models.canonical import (
     CanonicalYieldCurvePoint,
 )
 from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
+from app.models.capital_plan import CapitalPlan, IlaapSnapshot
 from app.models.database_connection import DatabaseDirectConnection
 from app.models.financial import (
     FinancialAccount,
@@ -143,6 +144,8 @@ __all__ = [
     "CapitalIndicator",
     "CapitalProjection",
     "CapitalProjectionFinding",
+    "CapitalPlan",
+    "IlaapSnapshot",
     "CalculationForecastPeriod",
     "CalculationRun",
     "LiquidityAnalysisResult",
