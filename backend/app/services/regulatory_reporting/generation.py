@@ -1263,6 +1263,34 @@ def _stress_recommended_actions(
     return rows
 
 
+def _generate_template_pending(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    definition: ReturnDefinition,
+) -> GeneratedReturn:
+    """Honest refusal for returns whose BoG form is not yet published.
+
+    The obligation is real (it sits in the registry and the calendar), but
+    the standing order is to obtain the official form, never infer it — so
+    generation names the gap instead of fabricating a layout (product.md
+    §Phase 2 items 12/14).
+    """
+    _ = (db, ctx, bank, period)
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "error_code": "template_pending",
+            "message": (
+                f"The official form for {definition.code} has not been obtained "
+                "yet; this return cannot be generated until the regulator's "
+                "template is registered (the layout is never inferred)."
+            ),
+        },
+    )
+
+
 def _generate_stress_pack(
     db: Session,
     ctx: TenantContext,
@@ -1422,6 +1450,7 @@ _GENERATORS = {
     "fx": _generate_fx,
     "icaap_stress": _generate_icaap_stress,
     "stress_pack": _generate_stress_pack,
+    "template_pending": _generate_template_pending,
     **LRT_GENERATORS,
     **LE_GENERATORS,
     **DBK_GENERATORS,

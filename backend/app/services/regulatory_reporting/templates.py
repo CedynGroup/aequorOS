@@ -1396,6 +1396,48 @@ _STRESS_PACK_TEMPLATE = ReturnTemplate(
 )
 
 # ---------------------------------------------------------------------------
+# Template-gated returns (Phase 2 items 12/14) — real obligations whose BoG
+# forms are unpublished. Zero sections by design: the layout is never
+# inferred, and generation refuses with error_code "template_pending".
+# ---------------------------------------------------------------------------
+
+_BSD_MONTHLY_TEMPLATE = ReturnTemplate(
+    template_id="bog-bsd-monthly-pending",
+    return_code="BSD-MONTHLY",
+    title="Monthly BSD Prudential Pack (Balance Sheet + P&L)",
+    fidelity="REPRESENTATIVE",
+    source_citation=(
+        "BoG monthly BSD prudential returns — official layout not yet obtained; "
+        "the form is acquired, never inferred (validation register)"
+    ),
+    sections=(),
+    notes=(
+        "Registered so the monthly obligation appears in the compliance calendar; "
+        "generation is gated until the official BoG form is registered.",
+    ),
+)
+
+_LAS_QUARTERLY_TEMPLATE = ReturnTemplate(
+    template_id="bog-las-quarterly-pending",
+    return_code="LAS-QUARTERLY",
+    title="Quarterly Liquidity Adequacy Statement (LAS)",
+    fidelity="REPRESENTATIVE",
+    source_citation=(
+        "LRMD 2026 ¶12 — quarterly Board LAS, ILAAP-supported; no published "
+        "template, and the Board-level signer convention is an open question "
+        "(lrmd_gap_analysis.md §9 Q12)"
+    ),
+    attestation_lines=BOARD_ATTESTATION_LINES,
+    sections=(),
+    notes=(
+        "Registered so the quarterly obligation appears in the compliance calendar; "
+        "generation is gated until the official form is registered. The quarterly "
+        "ILAAP snapshot (capital-plan workspace) is the prepared substance this "
+        "filing will draw on.",
+    ),
+)
+
+# ---------------------------------------------------------------------------
 # LRT corporate return packs (plan W5) — event-driven master-data packs
 # ---------------------------------------------------------------------------
 
@@ -1796,6 +1838,8 @@ TEMPLATES: dict[str, ReturnTemplate] = {
         _LE_TEMPLATE,
         _ICAAP_STRESS_TEMPLATE,
         _STRESS_PACK_TEMPLATE,
+        _BSD_MONTHLY_TEMPLATE,
+        _LAS_QUARTERLY_TEMPLATE,
         _LRT_PROFILE_TEMPLATE,
         _LRT_OUTLET_TEMPLATE,
         _LRT_PARTY_TEMPLATE,

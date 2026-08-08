@@ -229,11 +229,12 @@ def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
     ``app/``, and it seals ``content_digest`` unconditionally — so proving every
     registered return dispatches through it proves all of them are sealed,
     without seeding an engine run per return. Count pinned so a new return
-    family must consciously join this guard (14 = the original thirteen +
-    STRESS-PACK, Phase 2 item 6).
+    family must consciously join this guard (16 = the original thirteen +
+    STRESS-PACK (item 6) + the two template-gated obligations BSD-MONTHLY /
+    LAS-QUARTERLY (items 12/14, generation refused until the forms land)).
     """
     generators = generation._GENERATORS  # pyright: ignore[reportPrivateUsage]
-    assert len(REGISTRY) == 14
+    assert len(REGISTRY) == 16
     for definition in REGISTRY.values():
         assert definition.generator in generators, definition.code
 
