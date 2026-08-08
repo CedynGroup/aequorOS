@@ -1367,3 +1367,80 @@ def _require_actor(ctx: TenantContext) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="X-User-Id header is required."
         )
+
+
+def capital_breach_multiplier(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    scenario_code: str = "severe",
+) -> dict[str, Any]:
+    """Reverse stress (Phase 2 item 4): the smallest severity multiplier k at
+    which the four-quarter CET1 path breaches the CET1 minimum.
+
+    k scales the named capital scenario's quarterly credit losses and RWA
+    growth linearly and moves the FX RWA multiplier from 1 toward its shocked
+    value; quarterly income is NOT scaled (income does not rise with
+    severity). Deterministic bisection to 0.05 precision over k in (0, 5].
+    """
+    facts = _load_facts(db, ctx, bank, period)
+    if not facts:
+        raise CapitalRunError(
+            "financial_facts_missing",
+            "The reporting period has no financial facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    active = _load_active_params(db, ctx, bank, period.period_end)
+    engine_params = _engine_params(active)
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    shocks = _load_shocks(db, ctx, bank, scenario_code, period.period_end)
+    if not shocks:
+        raise CapitalRunError(
+            "missing_parameter",
+            f"No capital stress shocks are configured for scenario '{scenario_code}'.",
+            {"scenario_code": scenario_code},
+        )
+    one = Decimal("1")
+
+    def scaled_shocks(k: Decimal) -> dict[str, Decimal]:
+        return {
+            "quarterly_rwa_growth_pct": shocks["quarterly_rwa_growth_pct"] * k,
+            "quarterly_income_m": shocks["quarterly_income_m"],
+            "quarterly_credit_loss_m": shocks["quarterly_credit_loss_m"] * k,
+            "fx_rwa_multiplier": one + (shocks["fx_rwa_multiplier"] - one) * k,
+        }
+
+    def worst_cet1_at(k: Decimal) -> Decimal:
+        result = run_capital_stress(scenario_code, engine_facts, engine_params, scaled_shocks(k))
+        return min(quarter.cet1_ratio for quarter in result.path)
+
+    minimum = engine_params.cet1_min_pct
+    k_max = Decimal("5")
+    precision = Decimal("0.05")
+    baseline_cet1 = worst_cet1_at(Decimal("0"))
+    if worst_cet1_at(k_max) >= minimum:
+        return {
+            "breached": False,
+            "scenario_code": scenario_code,
+            "cet1_min_pct": str(minimum),
+            "baseline_worst_cet1_pct": str(baseline_cet1),
+            "worst_cet1_at_k_max_pct": str(worst_cet1_at(k_max)),
+            "k_max": str(k_max),
+        }
+    low, high = Decimal("0"), k_max
+    while high - low > precision:
+        mid = (low + high) / 2
+        if worst_cet1_at(mid) < minimum:
+            high = mid
+        else:
+            low = mid
+    frontier = high.quantize(precision)
+    return {
+        "breached": True,
+        "scenario_code": scenario_code,
+        "cet1_min_pct": str(minimum),
+        "baseline_worst_cet1_pct": str(baseline_cet1),
+        "breach_multiplier": str(frontier),
+        "worst_cet1_at_breach_pct": str(worst_cet1_at(frontier)),
+    }

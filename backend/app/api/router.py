@@ -42,6 +42,7 @@ from app.features.run_regulatory_ftp import router as regulatory_ftp_router
 from app.features.run_regulatory_fx import router as regulatory_fx_router
 from app.features.run_regulatory_irr import router as regulatory_irr_router
 from app.features.run_regulatory_liquidity import router as regulatory_liquidity_router
+from app.features.run_reverse_stress import router as reverse_stress_router
 from app.features.track_jobs import router as jobs_router
 
 api_router = APIRouter()
@@ -56,6 +57,7 @@ v1_router.include_router(push_router)
 v1_router.include_router(database_direct_connections_router)
 v1_router.include_router(regulatory_liquidity_router)
 v1_router.include_router(liquidity_thresholds_router)
+v1_router.include_router(reverse_stress_router)
 v1_router.include_router(regulatory_capital_router)
 v1_router.include_router(regulatory_irr_router)
 v1_router.include_router(regulatory_fx_router)

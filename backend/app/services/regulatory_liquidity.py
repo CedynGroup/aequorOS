@@ -1549,3 +1549,99 @@ def _require_actor(ctx: TenantContext) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="X-User-Id header is required."
         )
+
+
+def liquidity_breach_multiplier(  # noqa: PLR0914 - one bounded frontier search
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    scenario_code: str = "combined",
+) -> dict[str, Any]:
+    """Reverse stress (Phase 2 item 4): the smallest severity multiplier k at
+    which the LCR breaches its minimum, scaling the named scenario's shocks.
+
+    k interpolates between baseline parameters (k=0) and the configured
+    scenario (k=1), extrapolating beyond: run-off rates move linearly from
+    the base rate toward the shocked rate (capped at 100), the inflow
+    multiplier from 1 toward the shocked multiplier (floored at 0), and the
+    HQLA haircut linearly (capped at 100). Behavioural/FX keys do not enter
+    the LCR and are excluded. Deterministic bisection to 0.05 precision over
+    k in (0, 5]; inline computation, no stored runs per probe.
+    """
+    facts = _load_facts(db, ctx, bank, period)
+    if not facts:
+        raise LiquidityRunError(
+            "financial_facts_missing",
+            "The reporting period has no financial facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    active = _load_active_params(db, ctx, bank, period.period_end)
+    shocks = _load_shocks(db, ctx, bank, scenario_code, period.period_end)
+    if not shocks:
+        raise LiquidityRunError(
+            "missing_parameter",
+            f"No liquidity stress shocks are configured for scenario '{scenario_code}'.",
+            {"scenario_code": scenario_code},
+        )
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_params = _engine_params(active)
+    hundred = Decimal("100")
+    one = Decimal("1")
+
+    def scaled_shocks(k: Decimal) -> dict[str, Decimal]:
+        scaled: dict[str, Decimal] = {}
+        for key, value in shocks.items():
+            if key.startswith("runoff:"):
+                base = engine_params.outflow_rates.get(key.removeprefix("runoff:"), _ZERO)
+                scaled[key] = min(hundred, max(_ZERO, base + (value - base) * k))
+            elif key == "inflow_multiplier":
+                scaled[key] = max(_ZERO, one + (value - one) * k)
+            elif key == "hqla_securities_haircut_pct":
+                scaled[key] = min(hundred, max(_ZERO, value * k))
+            elif key.startswith("asf:") or key == "rsf:securities_weight_override":
+                scaled[key] = value  # NSFR shocks do not move the LCR frontier
+            # fx_depreciation_pct / nmd_runoff:* never reach the fact engine.
+        return scaled
+
+    def lcr_at(k: Decimal) -> Decimal | None:
+        stressed_facts, stressed_params = apply_liquidity_stress(
+            scenario_code, engine_facts, engine_params, scaled_shocks(k)
+        )
+        try:
+            return compute_lcr(stressed_facts, stressed_params).lcr_pct
+        except LiquidityComputationError:
+            return None  # degenerate (net outflow <= 0): treated as no breach
+
+    minimum = engine_params.lcr_min_pct
+    k_max = Decimal("5")
+    precision = Decimal("0.05")
+    lcr_max = lcr_at(k_max)
+    baseline_lcr = lcr_at(_ZERO)
+    if lcr_max is None or lcr_max >= minimum:
+        return {
+            "breached": False,
+            "scenario_code": scenario_code,
+            "lcr_min_pct": str(minimum),
+            "baseline_lcr_pct": str(baseline_lcr) if baseline_lcr is not None else None,
+            "lcr_at_k_max_pct": str(lcr_max) if lcr_max is not None else None,
+            "k_max": str(k_max),
+        }
+    low, high = _ZERO, k_max
+    while high - low > precision:
+        mid = (low + high) / 2
+        value = lcr_at(mid)
+        if value is not None and value < minimum:
+            high = mid
+        else:
+            low = mid
+    frontier = high.quantize(precision)
+    frontier_lcr = lcr_at(frontier)
+    return {
+        "breached": True,
+        "scenario_code": scenario_code,
+        "lcr_min_pct": str(minimum),
+        "baseline_lcr_pct": str(baseline_lcr) if baseline_lcr is not None else None,
+        "breach_multiplier": str(frontier),
+        "lcr_at_breach_pct": str(frontier_lcr) if frontier_lcr is not None else None,
+    }
