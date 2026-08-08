@@ -74,6 +74,23 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   against the primary database, never add seeding paths to the UI, and never re-add
   seed CLI scripts.
 
+- **Phase 2 (product.md §Phase 2) is fully built (2026-08-08).** All 11 LMTD
+  appendix tables; per-currency gaps + `usd_funding_stress` (snapshot
+  `bank-facts-v3`); server-side EWI/CFP with the ¶74 notification
+  (`/banks/{id}/liquidity/ewis|cfp`); reverse stress (module
+  `reverse_stress`); STRESS-PACK return (family `stress`, event-driven);
+  IFRS 9 ECL (`app/domain/capital/ecl.py`; active only when `ecl_exposure`
+  facts AND the `ecl-assumptions` register exist — otherwise the ingested-
+  provisions path is byte-identical) + CRM haircuts (`crm_collateral` facts,
+  Basel ¶151 code defaults + `crm-haircuts` register); ICAAP capital plan +
+  quarterly ILAAP snapshots; examiner role (ladder position analyst >
+  examiner > viewer — reads everything, no mutation gate admits it);
+  BSD-MONTHLY / LAS-QUARTERLY are registry+calendar REAL but generate
+  `template_pending` until the official forms land (never infer a BoG
+  layout). The executable completion proof is
+  `tests/services/test_phase2_full_report_proof.py` — every registered
+  return generates + exports (or refuses by design) over the full official-
+  run sweep; keep it green.
 - Scenario resources live under `/api/v1/cases/{case_id}/scenarios`. Calculation
   readiness requires every active scenario to contain growth, expenses,
   cash-flow timing, credit-usage, and repayment-behavior assumptions, with each

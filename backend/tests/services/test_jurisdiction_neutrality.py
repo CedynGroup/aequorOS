@@ -32,6 +32,17 @@ _CURRENCY_NEUTRAL_MODULES = (
     "app/services/regulatory_fx.py",
     "app/services/regulatory_irr.py",
     "app/services/fact_derivation.py",
+    # Phase 2 calculation/workflow modules join the guard (2026-08-08):
+    # narrative in these must resolve currency/regulator through the
+    # jurisdiction services, never a literal.
+    "app/services/liquidity_ewi.py",
+    "app/services/liquidity_cfp.py",
+    "app/services/liquidity_thresholds.py",
+    "app/services/credit_params.py",
+    "app/services/capital_plan.py",
+    "app/services/reverse_stress.py",
+    "app/services/examiner_mode.py",
+    "app/domain/capital/ecl.py",
 )
 
 # ISO 4217 codes for the jurisdictions the registry seeds, plus the majors the
