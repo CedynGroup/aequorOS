@@ -103,7 +103,7 @@ class BankFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "'lcr_inflow', 'market_risk', 'operational_income', 'capital_component', "
             "'deposit_behavior', 'irr_position', 'irr_swap', 'fx_position', "
             "'fx_return_history', 'fx_hedge', 'ftp_curve_point', 'ftp_product', "
-            "'ftp_branch', 'ftp_nmd')",
+            "'ftp_branch', 'ftp_nmd', 'ecl_exposure', 'crm_collateral')",
             name="ck_bank_financial_facts_fact_group",
         ),
         ForeignKeyConstraint(
@@ -325,5 +325,61 @@ class ParamLiquidityHaircut(RegulatoryParameterMixin, Base):
     )
 
     asset_class: Mapped[str] = mapped_column(String(80), nullable=False)
+    haircut_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ParamEclAssumption(RegulatoryParameterMixin, Base):
+    """IFRS 9 PD/LGD assumptions per segment + stage (Phase 2 item 8).
+
+    ``segment`` matches the loan family's fact category, with ``ALL`` as the
+    fallback; stage 1 rows carry the 12-month PD, stage 2 the lifetime PD,
+    and stage 3 rows contribute only their LGD (PD is 100% by definition for
+    credit-impaired exposures). The mixin's approval evidence is the model
+    committee / Board trail an auditor asks for.
+    """
+
+    __tablename__ = "param_ecl_assumption"
+    __table_args__ = (
+        CheckConstraint("stage IN (1, 2, 3)", name="ck_param_ecl_assumption_stage"),
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "segment",
+            "stage",
+            "effective_from",
+            name="uq_param_ecl_assumption_scope",
+        ),
+    )
+
+    segment: Mapped[str] = mapped_column(String(60), nullable=False)
+    stage: Mapped[int] = mapped_column(Integer, nullable=False)
+    pd_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    lgd_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ParamCrmHaircut(RegulatoryParameterMixin, Base):
+    """Supervisory haircuts per CRM collateral class (Phase 2 item 9).
+
+    Basel II comprehensive-approach supervisory haircuts (¶151 table) for
+    collateral recognized against credit exposures. Distinct from
+    ``ParamLiquidityHaircut`` (the LRMD liquidity-value schedule): a class
+    with no active row gets ZERO recognition in credit RWA — a haircut is
+    never invented for an unknown collateral type.
+    """
+
+    __tablename__ = "param_crm_haircut"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "collateral_class",
+            "effective_from",
+            name="uq_param_crm_haircut_scope",
+        ),
+    )
+
+    collateral_class: Mapped[str] = mapped_column(String(80), nullable=False)
     haircut_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

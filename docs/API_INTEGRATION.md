@@ -268,6 +268,17 @@ sections that depend on them render only when a source supplies the data):
 | `own_debt_available_ghs` | number | Table 10 | Own debt securities issued, available for encumbrance. |
 | `own_debt_unavailable_ghs` | number | Table 10 | Own debt securities issued, not available for encumbrance. |
 
+Credit-risk-mitigation conventions on **LOAN** positions (consumed by the
+capital module's CRM recognition; the supervisory haircut comes from the
+bank's `crm-haircuts` register, never from the payload):
+
+| Attribute key | Type | Consumed by | Meaning |
+|---|---|---|---|
+| `crm_collateral_ghs` | number | Credit RWA (CRM) | Eligible collateral value (cedi equivalent) pledged against the loan. |
+| `crm_collateral_class` | string | Credit RWA (CRM) | Collateral class the haircut register keys on (e.g. `CASH`, `GOLD`, `SOVEREIGN_DEBT`, `CORPORATE_DEBT`). Required alongside the value. |
+| `crm_guarantee_ghs` | number | Credit RWA (CRM) | Eligible guarantee amount covering the loan. |
+| `crm_guarantor_class` | string | Credit RWA (CRM) | Guarantor class the haircut register keys on. Required alongside the value. |
+
 ### 3.5 Reference datasets
 
 Reference rows have **no fixed schema**: each row is preserved verbatim as a

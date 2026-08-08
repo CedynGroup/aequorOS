@@ -430,6 +430,8 @@ def derive_facts(
     )
     facts.extend(_fact(bank, period, spec) for spec in balance_sheet)
     facts.extend(_fact(bank, period, spec) for spec in _derive_loan_exposure(loan_rows, groups))
+    facts.extend(_fact(bank, period, spec) for spec in _derive_ecl_exposure(loan_rows, groups))
+    facts.extend(_fact(bank, period, spec) for spec in _derive_crm_collateral(loan_rows, groups))
     facts.extend(
         _fact(bank, period, spec)
         for spec in _derive_securities(securities_split, cash_amounts, groups)
@@ -1085,6 +1087,72 @@ def _derive_loan_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) 
         for category, (amount, code) in sorted(totals.items())
     ]
     groups.append(GroupResult(group="loan_exposure", status="derived", rows=len(specs)))
+    return specs
+
+
+def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -> list[_FactSpec]:
+    """Staged EAD buckets for the IFRS 9 ECL engine (Phase 2 item 8).
+
+    Emits ``"<family>:stage<n>"`` rows only for loans carrying an ingested
+    IFRS 9 stage — an unstaged book derives nothing, and the capital engine
+    then falls back to ingested provisions rather than modeling on air.
+    """
+    totals: dict[str, Decimal] = {}
+    for loan in loan_rows:
+        stage = loan.row.ifrs9_stage
+        if stage is None:
+            continue
+        key = f"{loan.category}:stage{stage}"
+        totals[key] = totals.get(key, _ZERO) + loan.row.balance_ghs
+    specs = [
+        _FactSpec(
+            fact_group="ecl_exposure",
+            category=category,
+            amount=amount,
+            derived_from="LOAN positions by family and ingested IFRS 9 stage",
+        )
+        for category, amount in sorted(totals.items())
+    ]
+    if specs:
+        groups.append(GroupResult(group="ecl_exposure", status="derived", rows=len(specs)))
+    return specs
+
+
+def _derive_crm_collateral(
+    loan_rows: list[_LoanRow], groups: list[GroupResult]
+) -> list[_FactSpec]:
+    """CRM collateral/guarantee values per loan family + class (item 9).
+
+    Reads the documented ``crm_collateral_ghs``/``crm_collateral_class`` and
+    ``crm_guarantee_ghs``/``crm_guarantor_class`` attribute conventions
+    (docs/API_INTEGRATION.md §3.4); the supervisory haircut is applied by the
+    capital engine from the effective-dated ``param_crm_haircut`` schedule,
+    never here.
+    """
+    totals: dict[str, Decimal] = {}
+    for loan in loan_rows:
+        attributes = loan.row.attributes
+        for value_key, class_key in (
+            ("crm_collateral_ghs", "crm_collateral_class"),
+            ("crm_guarantee_ghs", "crm_guarantor_class"),
+        ):
+            value = _dec_or_none(attributes.get(value_key))
+            collateral_class = attributes.get(class_key)
+            if value is None or value <= _ZERO or not collateral_class:
+                continue
+            key = f"{loan.category}:{str(collateral_class).upper()}"
+            totals[key] = totals.get(key, _ZERO) + value
+    specs = [
+        _FactSpec(
+            fact_group="crm_collateral",
+            category=category,
+            amount=amount,
+            derived_from="LOAN crm_collateral_*/crm_guarantee_* attribute conventions",
+        )
+        for category, amount in sorted(totals.items())
+    ]
+    if specs:
+        groups.append(GroupResult(group="crm_collateral", status="derived", rows=len(specs)))
     return specs
 
 
