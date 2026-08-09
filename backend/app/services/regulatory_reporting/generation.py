@@ -74,6 +74,10 @@ MODULE_CAPITAL = "capital"
 MODULE_IRR = "irr"
 MODULE_FX = "fx"
 MODULE_FORECAST = "forecast"
+# The ICAAP data companion consumes 5-year forecast runs only. Desk runs may
+# carry other horizons (persisted as ``inputs.horizon_years``; absent == 5),
+# and must never displace the regulatory 5-year projection here.
+_ICAAP_FORECAST_HORIZON_YEARS = 5
 
 _FORECAST_SUMMARY_FIELDS = (
     "avg_roe_pct",
@@ -974,17 +978,24 @@ def _generate_icaap_stress(
     period: BankReportingPeriod,
     definition: ReturnDefinition,
 ) -> GeneratedReturn:
-    forecast_run = db.scalar(
-        select(RegulatoryRun)
-        .where(
-            RegulatoryRun.organization_id == ctx.organization_id,
-            RegulatoryRun.bank_id == bank.id,
-            RegulatoryRun.reporting_period_id == period.id,
-            RegulatoryRun.module == MODULE_FORECAST,
-            RegulatoryRun.status == "succeeded",
-        )
-        .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
-        .limit(1)
+    forecast_run = next(
+        (
+            run
+            for run in db.scalars(
+                select(RegulatoryRun)
+                .where(
+                    RegulatoryRun.organization_id == ctx.organization_id,
+                    RegulatoryRun.bank_id == bank.id,
+                    RegulatoryRun.reporting_period_id == period.id,
+                    RegulatoryRun.module == MODULE_FORECAST,
+                    RegulatoryRun.status == "succeeded",
+                )
+                .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
+            )
+            if run.inputs.get("horizon_years", _ICAAP_FORECAST_HORIZON_YEARS)
+            == _ICAAP_FORECAST_HORIZON_YEARS
+        ),
+        None,
     )
     if forecast_run is None:
         raise HTTPException(

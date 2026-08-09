@@ -289,6 +289,89 @@ def test_unknown_bank_and_period_return_404(db_client: TestClient) -> None:
     )
 
 
+def _ear_analysis(
+    db_client: TestClient,
+    period_id: str,
+    horizon_months: int,
+    delta_bp: int,
+    request_headers: dict[str, str] | None = None,
+) -> Any:
+    return db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/irr/ear-analysis",
+        headers=request_headers or headers(),
+        params={
+            "reporting_period_id": period_id,
+            "horizon_months": horizon_months,
+            "delta_bp": delta_bp,
+        },
+    )
+
+
+def test_ear_analysis_generalizes_horizon_and_persists_nothing(db_client: TestClient) -> None:
+    period = _seed_latest_period(db_client)
+
+    # N=12 reproduces the regulatory formula on the same canonical gap.
+    twelve = _ear_analysis(db_client, period["id"], 12, 200)
+    assert twelve.status_code == 200, twelve.text
+    body = twelve.json()
+    assert body["bank_id"] == str(SAMPLE_BANK_ID)
+    assert body["reporting_period_id"] == period["id"]
+    assert body["horizon_months"] == 12
+    assert body["delta_bp"] == 200
+    assert Decimal(body["ear_up"]) == Decimal("-7450600")
+    assert Decimal(body["ear_down"]) == Decimal("7450600")
+    assert Decimal(body["cumulative_gap_within_horizon"]) == Decimal("-370000000")
+    assert "12 months" in body["basis"]
+
+    # N=6 drops the 6-12m bucket and re-weights the residuals (hand-derived in
+    # tests/domain/test_irr_engine.py::test_ear_six_month_horizon_hand_derived).
+    six = _ear_analysis(db_client, period["id"], 6, 200)
+    assert six.status_code == 200, six.text
+    body = six.json()
+    assert Decimal(body["ear_up"]) == Decimal("-6801200")
+    assert Decimal(body["ear_down"]) == Decimal("6801200")
+    # 6-12m (+70M) leaves the horizon: cumulative gap moves from -370M to -440M.
+    assert Decimal(body["cumulative_gap_within_horizon"]) == Decimal("-440000000")
+
+    # The analysis endpoint writes nothing: no regulatory runs exist yet.
+    listed = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
+        headers=headers(),
+        params={"module": "irr"},
+    )
+    assert listed.status_code == 200
+    assert listed.json()["total"] == 0
+
+    # And the official 12m ±200bp run metrics are byte-identical to the goldens.
+    baseline = _run_all(db_client, period["id"])["runs"][0]
+    assert Decimal(baseline["metrics"]["ear_up_200_ghs"]) == Decimal("-7450600")
+    assert Decimal(baseline["metrics"]["ear_down_200_ghs"]) == Decimal("7450600")
+
+
+def test_ear_analysis_validates_horizon_and_delta(db_client: TestClient) -> None:
+    period = _seed_latest_period(db_client)
+    for horizon_months, delta_bp in (
+        (0, 200),  # horizon below 1 month
+        (61, 200),  # horizon above 60 months
+        (12, 10),  # shock below ±25 bp
+        (12, 999),  # shock above ±500 bp
+        (12, 130),  # shock off the 25 bp grid
+        (12, 0),  # no shock at all
+    ):
+        response = _ear_analysis(db_client, period["id"], horizon_months, delta_bp)
+        assert response.status_code == 422, response.text
+        details = response.json()["error"]["details"]
+        assert details["error_code"] in ("invalid_ear_horizon", "invalid_ear_delta_bp")
+
+    # Negative shocks on the grid are valid and mirror the positive direction.
+    negative = _ear_analysis(db_client, period["id"], 12, -200)
+    assert negative.status_code == 200, negative.text
+    assert Decimal(negative.json()["ear_up"]) == Decimal("7450600")
+
+    # Tenant isolation matches the other IRR endpoints.
+    assert _ear_analysis(db_client, period["id"], 12, 200, headers(ORG_2)).status_code == 404
+
+
 def test_regulatory_irr_endpoints_are_tenant_isolated(db_client: TestClient) -> None:
     period = _seed_latest_period(db_client)
     _run_all(db_client, period["id"])

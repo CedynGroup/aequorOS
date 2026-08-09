@@ -13440,6 +13440,13 @@
               }
             ]
           },
+          "horizon_years": {
+            "default": 5,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Forecast Horizon Years",
+            "type": "integer"
+          },
           "reporting_period_id": {
             "format": "uuid",
             "title": "Reporting Period Id",
@@ -16450,6 +16457,60 @@
         "title": "IrrDashboardRead",
         "type": "object"
       },
+      "IrrEarAnalysisRead": {
+        "additionalProperties": false,
+        "description": "Pure desk EaR analysis over a caller-chosen horizon \u2014 never persisted.\n\nThe regulatory figures stay the stored 12-month \u00b1200 bp run metrics; this\nread is the generalized engine formula evaluated on the same canonical gap.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "cumulative_gap_within_horizon": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cumulative Gap Within Horizon",
+            "type": "string"
+          },
+          "delta_bp": {
+            "title": "Delta Bp",
+            "type": "integer"
+          },
+          "ear_down": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ear Down",
+            "type": "string"
+          },
+          "ear_up": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ear Up",
+            "type": "string"
+          },
+          "horizon_months": {
+            "title": "Horizon Months",
+            "type": "integer"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "reporting_period_id",
+          "horizon_months",
+          "delta_bp",
+          "ear_up",
+          "ear_down",
+          "cumulative_gap_within_horizon",
+          "basis"
+        ],
+        "title": "IrrEarAnalysisRead",
+        "type": "object"
+      },
       "IrrEveScenarioRead": {
         "additionalProperties": false,
         "properties": {
@@ -18321,6 +18382,77 @@
         "title": "LiveModuleView",
         "type": "object"
       },
+      "LiveSnapshotListRead": {
+        "additionalProperties": false,
+        "description": "Daily ladder for one bank+module, oldest first.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "module": {
+            "title": "Module",
+            "type": "string"
+          },
+          "snapshots": {
+            "items": {
+              "$ref": "#/components/schemas/LiveSnapshotRead"
+            },
+            "title": "Snapshots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "module",
+          "days",
+          "snapshots"
+        ],
+        "title": "LiveSnapshotListRead",
+        "type": "object"
+      },
+      "LiveSnapshotRead": {
+        "additionalProperties": false,
+        "description": "One day's close (or today's live edge) for a module.",
+        "properties": {
+          "computed_at": {
+            "format": "date-time",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "title": "Metrics",
+            "type": "object"
+          },
+          "module": {
+            "title": "Module",
+            "type": "string"
+          },
+          "snapshot_date": {
+            "format": "date",
+            "title": "Snapshot Date",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "snapshot_date",
+          "module",
+          "metrics",
+          "status",
+          "computed_at"
+        ],
+        "title": "LiveSnapshotRead",
+        "type": "object"
+      },
       "LiveStatus": {
         "enum": [
           "green",
@@ -19313,7 +19445,6 @@
           "entity_id": {
             "anyOf": [
               {
-                "format": "uuid",
                 "type": "string"
               },
               {
@@ -28777,6 +28908,201 @@
         "title": "WhatIfYearDeltaRead",
         "type": "object"
       },
+      "WindowAnalyticsRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/WindowDailyStatRead"
+            },
+            "title": "Daily",
+            "type": "array"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "period_count": {
+            "title": "Period Count",
+            "type": "integer"
+          },
+          "ratios": {
+            "items": {
+              "$ref": "#/components/schemas/WindowRatioStatRead"
+            },
+            "title": "Ratios",
+            "type": "array"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "start_date",
+          "end_date",
+          "period_count",
+          "ratios",
+          "daily"
+        ],
+        "title": "WindowAnalyticsRead",
+        "type": "object"
+      },
+      "WindowDailyStatRead": {
+        "additionalProperties": false,
+        "description": "Daily-snapshot aggregate for one module's primary metric.",
+        "properties": {
+          "avg": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Avg",
+            "type": "string"
+          },
+          "day_count": {
+            "title": "Day Count",
+            "type": "integer"
+          },
+          "max": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Max",
+            "type": "string"
+          },
+          "metric_key": {
+            "title": "Metric Key",
+            "type": "string"
+          },
+          "min": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Min",
+            "type": "string"
+          },
+          "module": {
+            "title": "Module",
+            "type": "string"
+          }
+        },
+        "required": [
+          "module",
+          "metric_key",
+          "day_count",
+          "min",
+          "avg",
+          "max"
+        ],
+        "title": "WindowDailyStatRead",
+        "type": "object"
+      },
+      "WindowRatio": {
+        "enum": [
+          "lcr_pct",
+          "nsfr_pct",
+          "car_pct",
+          "cet1_ratio_pct"
+        ],
+        "type": "string"
+      },
+      "WindowRatioModule": {
+        "enum": [
+          "liquidity",
+          "capital"
+        ],
+        "type": "string"
+      },
+      "WindowRatioPointRead": {
+        "additionalProperties": false,
+        "description": "One reporting period's resolved ratio value inside the window.",
+        "properties": {
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "stored": {
+            "title": "Stored",
+            "type": "boolean"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "period_end",
+          "value",
+          "stored"
+        ],
+        "title": "WindowRatioPointRead",
+        "type": "object"
+      },
+      "WindowRatioStatRead": {
+        "additionalProperties": false,
+        "description": "A ratio's per-period series plus its window statistics.\n\nOnly ratios that resolved at least one point appear in the payload, so\nevery statistic is always computable (no nullable stats).",
+        "properties": {
+          "avg": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Avg",
+            "type": "string"
+          },
+          "change": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Change",
+            "type": "string"
+          },
+          "end_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "End Value",
+            "type": "string"
+          },
+          "max": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Max",
+            "type": "string"
+          },
+          "min": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Min",
+            "type": "string"
+          },
+          "module": {
+            "$ref": "#/components/schemas/WindowRatioModule"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/WindowRatioPointRead"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "ratio": {
+            "$ref": "#/components/schemas/WindowRatio"
+          },
+          "start_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Start Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ratio",
+          "module",
+          "points",
+          "start_value",
+          "end_value",
+          "change",
+          "avg",
+          "min",
+          "max"
+        ],
+        "title": "WindowRatioStatRead",
+        "type": "object"
+      },
       "WorkbenchModule": {
         "enum": [
           "liquidity",
@@ -31945,6 +32271,124 @@
         "summary": "Get Bank Alerts",
         "tags": [
           "live-engine"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/analytics/window": {
+      "get": {
+        "description": "Engine-computed analytics over [start_date, end_date]: per-period ratio\nseries (stored baseline runs first, inline fallback), window statistics,\nand daily-snapshot aggregates per module.",
+        "operationId": "computeWindowAnalytics",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Start Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "End Date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowAnalyticsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Compute Window Analytics",
+        "tags": [
+          "window-analytics"
         ]
       }
     },
@@ -38010,6 +38454,134 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/irr/ear-analysis": {
+      "get": {
+        "description": "Pure desk analysis: generalized-horizon EaR on the canonical gap \u2014 writes nothing.\n\nThe stored regulatory runs keep the 12-month \u00b1200 bp figures; bounds are\nvalidated in the service (1..60 months, \u00b125..\u00b1500 bp on the 25 bp grid).",
+        "operationId": "computeEarAnalysis",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reporting_period_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Reporting Period Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "horizon_months",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "title": "Horizon Months",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delta_bp",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "title": "Delta Bp",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IrrEarAnalysisRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Compute Ear Analysis",
+        "tags": [
+          "regulatory-irr"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/irr/run-all-scenarios": {
       "post": {
         "operationId": "runAllIrrScenarios",
@@ -39822,6 +40394,126 @@
         "summary": "Run All Liquidity Scenarios",
         "tags": [
           "regulatory-liquidity"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/live-snapshots": {
+      "get": {
+        "description": "Plane-2 daily ladder: past days are EOD closes, today is the live edge.",
+        "operationId": "listLiveSnapshots",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "module",
+            "required": true,
+            "schema": {
+              "pattern": "^(liquidity|capital|irr|fx|ftp|forecast)$",
+              "title": "Module",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 45,
+              "maximum": 120,
+              "minimum": 2,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveSnapshotListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Live Snapshots",
+        "tags": [
+          "live-engine"
         ]
       }
     },

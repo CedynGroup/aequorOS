@@ -176,6 +176,67 @@ def test_create_base_forecast_run_persists_projection_and_outputs(  # noqa: PLR0
     assert fetched.json()["input_hash"] == run["input_hash"]
 
 
+def test_forecast_horizon_years_controls_the_path_length(db_client: TestClient) -> None:
+    period = _seed_latest_period(db_client)
+
+    # Default (nothing passed) stays the 5-year projection with no snapshot key,
+    # so unchanged inputs keep reproducing the pre-horizon input_hash.
+    default_run = _create_forecast_run(db_client, period["id"], "base")
+    assert [row["year"] for row in default_run["path"]] == [0, 1, 2, 3, 4, 5]
+    assert "horizon_years" not in default_run["inputs"]
+
+    three = db_client.post(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs",
+        headers=headers(),
+        json={
+            "reporting_period_id": period["id"],
+            "scenario_code": "base",
+            "horizon_years": 3,
+        },
+    )
+    assert three.status_code == 201, three.text
+    run = three.json()
+    assert run["status"] == "succeeded"
+    assert [row["year"] for row in run["path"]] == [0, 1, 2, 3]
+    assert run["path"][0]["period_label"] == "2026-03"
+    assert run["path"][3]["period_label"] == "2029-03"
+    # Provenance: the non-default horizon is persisted in the run inputs and
+    # therefore participates in the input hash.
+    assert run["inputs"]["horizon_years"] == 3
+    assert run["input_hash"] != default_run["input_hash"]
+    # Year-by-year mechanics are horizon-independent: the shared years match.
+    assert run["path"][:4] == default_run["path"][:4]
+    # The summary's final-year fields read from the run's own last year.
+    assert run["summary"]["year5_car_pct"] == default_run["path"][3]["car_pct"]
+
+    # An explicit 5 is the same projection; only the snapshot provenance differs.
+    explicit = db_client.post(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs",
+        headers=headers(),
+        json={
+            "reporting_period_id": period["id"],
+            "scenario_code": "base",
+            "horizon_years": 5,
+        },
+    )
+    assert explicit.status_code == 201, explicit.text
+    assert explicit.json()["input_hash"] == default_run["input_hash"]
+    assert explicit.json()["path"] == default_run["path"]
+
+    # Bounds are schema-enforced.
+    for horizon in (0, 11):
+        rejected = db_client.post(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs",
+            headers=headers(),
+            json={
+                "reporting_period_id": period["id"],
+                "scenario_code": "base",
+                "horizon_years": horizon,
+            },
+        )
+        assert rejected.status_code == 422, rejected.text
+
+
 def test_custom_scenario_requires_assumptions_then_resolves_partial_override(
     db_client: TestClient,
 ) -> None:

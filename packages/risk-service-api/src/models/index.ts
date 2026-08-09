@@ -507,6 +507,7 @@ export * from "./IntegrationKeyRead";
 export * from "./IntegrationKeyRevokeRequest";
 export * from "./IrrDashboardLatestRunId";
 export * from "./IrrDashboardRead";
+export * from "./IrrEarAnalysisRead";
 export * from "./IrrEveScenarioRead";
 export * from "./IrrGapBucketRead";
 export * from "./IrrMetricsRead";

@@ -251,6 +251,7 @@ def create_forecast_run(
         active=active,
         assumptions=assumptions,
         overrides=payload.assumptions,
+        horizon_years=payload.horizon_years,
     )
     run = _create_run_row(db, ctx, bank, period, MODULE_FORECAST, payload.scenario_code, snapshot)
 
@@ -265,8 +266,8 @@ def create_forecast_run(
                 engine_facts,
                 params,
                 assumptions,
-                PROJECTION_YEARS,
-                period_labels=_period_labels(period),
+                payload.horizon_years,
+                period_labels=_period_labels(period, payload.horizon_years),
             )
             _persist_forecast_success(db, ctx, run, projection, params)
         except HTTPException:
@@ -919,10 +920,10 @@ def _engine_params(active: _ActiveForecastParams) -> ForecastParams:
     return ForecastParams(liquidity=liquidity, capital=capital)
 
 
-def _period_labels(period: BankReportingPeriod) -> list[str]:
+def _period_labels(period: BankReportingPeriod, years: int = PROJECTION_YEARS) -> list[str]:
     end = period.period_end
     return [period.label] + [
-        f"{end.year + offset:04d}-{end.month:02d}" for offset in range(1, PROJECTION_YEARS + 1)
+        f"{end.year + offset:04d}-{end.month:02d}" for offset in range(1, years + 1)
     ]
 
 
@@ -937,6 +938,7 @@ def _build_snapshot(  # noqa: PLR0913
     assumptions: ForecastAssumptions | None,
     overrides: ForecastAssumptionsUpdate | None,
     shock: dict[str, Decimal] | None = None,
+    horizon_years: int = PROJECTION_YEARS,
 ) -> dict[str, Any]:
     snapshot: dict[str, Any] = {
         "schema_version": INPUT_SCHEMA_VERSION,
@@ -994,6 +996,11 @@ def _build_snapshot(  # noqa: PLR0913
     }
     if shock is not None:
         snapshot["shock"] = _stringified(shock)
+    # Provenance for non-default horizons only: the default-horizon snapshot
+    # stays byte-identical to every pre-horizon run, so unchanged inputs keep
+    # reproducing the same immutable input_hash across the upgrade.
+    if horizon_years != PROJECTION_YEARS:
+        snapshot["horizon_years"] = horizon_years
     return snapshot
 
 

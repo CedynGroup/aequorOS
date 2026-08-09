@@ -430,15 +430,29 @@ def run_irr_scenarios(
     )
 
 
-def compute_ear(gap_result: GapResult, delta_bp: Decimal) -> Decimal:
-    """ΔNII = Σ Gap_i · (Δbp/10000) · (12 − months_i)/12 over the ≤12m buckets."""
+def compute_ear(
+    gap_result: GapResult, delta_bp: Decimal, horizon_months: Decimal | int = 12
+) -> Decimal:
+    """ΔNII = Σ Gap_i · (Δbp/10000) · (N − months_i)/N over the buckets inside N months.
+
+    ``horizon_months`` (N) defaults to the regulatory 12-month horizon, which is
+    arithmetically identical to the historical fixed-12m formula (no standard
+    bucket midpoint falls at exactly twelve months, and a midpoint AT the
+    horizon carries a zero residual either way) — official runs must keep the
+    default. Desk analyses may pass any positive N; a bucket participates when
+    its midpoint reprices strictly inside the horizon, weighted by the residual
+    ``(N − months_i)/N`` it spends at the shocked rate.
+    """
+    horizon = Decimal(horizon_months)
+    if horizon <= _ZERO:
+        raise IrrComputationError("The EaR horizon must be a positive number of months.")
     delta_rate = delta_bp / _TEN_THOUSAND
     total = _ZERO
     for bucket in gap_result.buckets:
-        if not bucket.within_12m:
-            continue
         months = bucket.midpoint_years * _TWELVE
-        residual = (_TWELVE - months) / _TWELVE
+        if months >= horizon:
+            continue
+        residual = (horizon - months) / horizon
         total += bucket.gap * delta_rate * residual
     return money(total)
 

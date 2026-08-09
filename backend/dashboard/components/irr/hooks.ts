@@ -6,7 +6,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { apiCall, regulatoryLiquidityApi } from '@/lib/api/client';
+import { apiCall, regulatoryIrrApi, regulatoryLiquidityApi } from '@/lib/api/client';
 
 
 /**
@@ -31,5 +31,32 @@ export function useIrrRuns(
         })
       ),
     enabled: Boolean(bankId),
+  });
+}
+
+/**
+ * Pure desk EaR analysis over a caller-chosen forward horizon — the backend
+ * evaluates the generalized engine formula on the canonical gap and persists
+ * nothing. The regulatory 12-month ±200bp figures on stored runs never move.
+ */
+export function useEarAnalysis(
+  bankId: string | undefined,
+  periodId: string | undefined,
+  horizonMonths: number,
+  deltaBp: number,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: ['irr-ear-analysis', bankId, periodId, horizonMonths, deltaBp],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryIrrApi.computeEarAnalysis({
+          bankId: bankId!,
+          reportingPeriodId: periodId!,
+          horizonMonths,
+          deltaBp,
+        })
+      ),
+    enabled: Boolean(bankId && periodId) && enabled,
   });
 }

@@ -15,9 +15,7 @@ from decimal import ROUND_HALF_UP, Decimal
 import pytest
 
 from app.domain.irr.engine import (
-    IrrPosition as P,
-)
-from app.domain.irr.engine import (
+    IrrComputationError,
     MissingParameterError,
     UnsupportedShockError,
     compute_duration,
@@ -26,6 +24,9 @@ from app.domain.irr.engine import (
     compute_gap,
     compute_nii,
     run_irr_scenarios,
+)
+from app.domain.irr.engine import (
+    IrrPosition as P,
 )
 
 M = Decimal("1000000")
@@ -193,6 +194,51 @@ def test_ear_golden() -> None:
     assert ear_up == Decimal("-7450600")
     assert ear_down == Decimal("7450600")
     assert ear_up == -ear_down
+
+
+def test_ear_default_horizon_equals_explicit_twelve_months() -> None:
+    # The generalized signature with N=12 must reproduce the legacy fixed-12m
+    # value exactly — the official runs pass nothing and stay on this path.
+    gap = compute_gap(_positions())
+    legacy_up = compute_ear(gap, Decimal("200"))
+    legacy_down = compute_ear(gap, Decimal("-200"))
+    assert compute_ear(gap, Decimal("200"), 12) == legacy_up == Decimal("-7450600")
+    assert compute_ear(gap, Decimal("-200"), Decimal("12")) == legacy_down
+    assert compute_ear(gap, Decimal("200"), Decimal("12")) == legacy_up
+
+
+def test_ear_six_month_horizon_hand_derived() -> None:
+    # ΔNII(N=6) = Σ gap_i * 0.02 * (6 - m_i)/6 over the five buckets whose
+    # midpoint reprices inside six months (m_i = midpoint years x 12):
+    #   overnight m=0.036: -170 * 0.02 * 5.964/6 = -3.3796M
+    #   1-7d      m=0.168:  +60 * 0.02 * 5.832/6 = +1.1664M
+    #   8-30d     m=0.72:  -110 * 0.02 * 5.28/6  = -1.9360M
+    #   1-3m      m=2.04:  -190 * 0.02 * 3.96/6  = -2.5080M
+    #   3-6m      m=4.56:   -30 * 0.02 * 1.44/6  = -0.1440M
+    # (6-12m has m=9 >= 6 and is excluded.) Total = -6.8012M.
+    gap = compute_gap(_positions())
+    ear_up = compute_ear(gap, Decimal("200"), 6)
+    ear_down = compute_ear(gap, Decimal("-200"), 6)
+    assert ear_up == Decimal("-6801200")
+    assert ear_down == Decimal("6801200")
+    assert ear_up == -ear_down
+
+
+def test_ear_twenty_four_month_horizon_includes_the_1_3y_bucket() -> None:
+    # N=24 admits the 1-3y bucket (m=22.8 < 24, residual 1.2/24 = 0.05) and
+    # re-weights the six ≤12m buckets to (24 - m)/24:
+    #   -170*0.02*0.9985 + 60*0.02*0.993 - 110*0.02*0.97 - 190*0.02*0.915
+    #   - 30*0.02*0.81 + 70*0.02*0.625 + 170*0.02*0.05 = -7.2553M.
+    gap = compute_gap(_positions())
+    assert compute_ear(gap, Decimal("200"), 24) == Decimal("-7255300")
+
+
+def test_ear_non_positive_horizon_raises() -> None:
+    gap = compute_gap(_positions())
+    with pytest.raises(IrrComputationError):
+        compute_ear(gap, Decimal("200"), 0)
+    with pytest.raises(IrrComputationError):
+        compute_ear(gap, Decimal("200"), Decimal("-6"))
 
 
 def test_base_nii_golden() -> None:
