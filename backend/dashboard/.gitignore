@@ -10,6 +10,8 @@
 *.tsbuildinfo
 next-env.d.ts
 e2e/.tmp/
+/test-results/
+/playwright-report/
 .next-dev/
 .next-e2e/
 .next-build/

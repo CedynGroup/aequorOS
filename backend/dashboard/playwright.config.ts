@@ -74,6 +74,9 @@ export default defineConfig({
         // software keys. The software backend refuses to start when APP_ENV is
         // production, so this configuration cannot leak into a deployment.
         ATTESTATION_SIGNING_ENABLED: '1',
+        // The requirement must hold regardless of the developer's .env —
+        // the ceremony specs assert the signature gate.
+        ATTESTATION_ESIGN_REQUIRED: '1',
         SIGNING_BACKEND: 'software',
         SIGNING_SOFTWARE_KEY_DIR: `${E2E_TMP}/signing-keys`,
         RUN_INPROCESS_WORKER: '0',
