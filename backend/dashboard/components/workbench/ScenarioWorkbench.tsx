@@ -10,6 +10,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import { Lock } from 'lucide-react';
 import SectionCard from '@/components/ui/SectionCard';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import QueryBoundary from '@/components/ui/QueryBoundary';
@@ -35,6 +36,8 @@ import type {
 } from '@aequoros/risk-service-api';
 
 export type MetricSpec = {
+  /** False for metrics where an increase is adverse (outflows, gaps). */
+  higherIsBetter?: boolean;
   key: string;
   label: string;
   kind: 'pct' | 'ghs' | 'number';
@@ -63,10 +66,18 @@ function fmtMetric(spec: MetricSpec, raw: string | undefined): string {
   return value.toLocaleString();
 }
 
-function refFor(entry: ScenarioCatalogueEntryRead): ScenarioRefIn {
-  return entry.kind === 'system'
-    ? { kind: 'system', code: entry.code }
-    : { kind: 'custom', scenarioId: entry.scenarioId ?? undefined };
+function refFor(
+  entry: ScenarioCatalogueEntryRead,
+  overrides?: Record<string, string>
+): ScenarioRefIn {
+  const cleaned = Object.fromEntries(
+    Object.entries(overrides ?? {}).filter(([, v]) => v.trim() !== '')
+  );
+  const base: ScenarioRefIn =
+    entry.kind === 'system'
+      ? { kind: 'system', code: entry.code }
+      : { kind: 'custom', scenarioId: entry.scenarioId ?? undefined };
+  return Object.keys(cleaned).length > 0 ? { ...base, overrides: cleaned } : base;
 }
 
 function entryKey(entry: ScenarioCatalogueEntryRead): string {
@@ -108,12 +119,16 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
   const [editorError, setEditorError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisRunRead | null>(null);
   const [saveName, setSaveName] = useState('');
+  // Per-run shock tweaks keyed by entryKey → shock key → raw input. Transient:
+  // sent as ScenarioRefIn.overrides, never persisted to the scenario.
+  const [overrides, setOverrides] = useState<Record<string, Record<string, string>>>({});
 
   const entries = useMemo(
     () => catalogue.data?.scenarios ?? [],
     [catalogue.data]
   );
   const selectedEntries = entries.filter((entry) => selected.has(entryKey(entry)));
+  const primarySpec = metrics.find((m) => m.key === primaryMetric);
 
   const toggle = (entry: ScenarioCatalogueEntryRead) => {
     const key = entryKey(entry);
@@ -183,7 +198,7 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
     if (!periodId || selectedEntries.length === 0) return;
     const outcome = await runAnalysis.mutateAsync({
       reportingPeriodId: periodId,
-      scenarios: selectedEntries.map(refFor),
+      scenarios: selectedEntries.map((entry) => refFor(entry, overrides[entryKey(entry)])),
     });
     setAnalysis(outcome);
   };
@@ -193,7 +208,7 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
     await saveAnalysis.mutateAsync({
       reportingPeriodId: periodId,
       name: saveName.trim(),
-      scenarios: selectedEntries.map(refFor),
+      scenarios: selectedEntries.map((entry) => refFor(entry, overrides[entryKey(entry)])),
     });
     setSaveName('');
   };
@@ -254,7 +269,7 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-body font-medium text-navy">{entry.name}</p>
-                      <StatusPill tone={entry.kind === 'system' ? 'slate' : 'action'}>
+                      <StatusPill tone={entry.kind === 'system' ? 'action' : 'slate'}>
                         {entry.kind === 'system' ? 'Regulatory' : 'Desk'}
                       </StatusPill>
                       {!entry.configured && (
@@ -269,8 +284,51 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
                         ? 'No shocks — current positions as they stand'
                         : `${shockCount} shock parameter${shockCount === 1 ? '' : 's'}`}
                     </p>
+                    {selected.has(key) && shockCount > 0 && (
+                      <div className="mt-2 rounded-md border border-border-light bg-surface-alt px-3 py-2 space-y-1.5">
+                        <p className="text-micro font-medium uppercase tracking-wider text-slate">
+                          Adjust for this run
+                        </p>
+                        {Object.entries(entry.shocks).map(([shockKey, shockValue]) => (
+                          <label
+                            key={shockKey}
+                            className="flex items-center justify-between gap-3"
+                          >
+                            <span className="font-mono text-caption text-slate truncate">
+                              {shockKey}
+                            </span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder={String(shockValue)}
+                              value={overrides[key]?.[shockKey] ?? ''}
+                              onChange={(e) =>
+                                setOverrides((current) => ({
+                                  ...current,
+                                  [key]: { ...current[key], [shockKey]: e.target.value },
+                                }))
+                              }
+                              className="w-24 rounded border border-border-light bg-surface px-2 py-1 text-right font-mono text-caption text-navy tnum placeholder:text-slate-light"
+                              aria-label={`Override ${shockKey} for this run`}
+                            />
+                          </label>
+                        ))}
+                        <p className="text-micro text-slate-light">
+                          Transient — applies to this analysis only, the scenario is unchanged.
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {entry.kind === 'system' && (
+                      <span
+                        className="text-slate-light"
+                        title="Regulatory scenario — parameters are governed; duplicate to adjust"
+                        aria-label="Locked regulatory scenario"
+                      >
+                        <Lock size={12} aria-hidden />
+                      </span>
+                    )}
                     <button
                       type="button"
                       className="text-caption text-action hover:underline"
@@ -450,15 +508,15 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
           <div className="overflow-x-auto">
             <table className="w-full text-body">
               <thead>
-                <tr className="border-b border-border-light text-caption text-slate">
-                  <th className="px-5 py-3 text-left font-medium">Scenario</th>
+                <tr className="border-b border-border text-micro font-medium uppercase tracking-wider text-slate bg-surface">
+                  <th className="px-5 py-3 text-left">Scenario</th>
                   {metrics.map((spec) => (
-                    <th key={spec.key} className="px-5 py-3 text-right font-medium">
+                    <th key={spec.key} className="px-5 py-3 text-right">
                       {spec.label}
                     </th>
                   ))}
-                  <th className="px-5 py-3 text-right font-medium">Δ vs first</th>
-                  <th className="px-5 py-3 text-right font-medium">Status</th>
+                  <th className="px-5 py-3 text-right">Δ vs first</th>
+                  <th className="px-5 py-3 text-right">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-light">
@@ -489,7 +547,17 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
                         {delta === null || result === baselineResult ? (
                           <span className="text-slate">—</span>
                         ) : (
-                          <span className={delta < 0 ? 'text-critical' : 'text-success'}>
+                          <span
+                            className={
+                              (primarySpec?.higherIsBetter ?? true)
+                                ? delta < 0
+                                  ? 'text-critical'
+                                  : 'text-success'
+                                : delta > 0
+                                ? 'text-critical'
+                                : 'text-success'
+                            }
+                          >
                             {delta > 0 ? '+' : ''}
                             {delta.toFixed(2)}
                           </span>

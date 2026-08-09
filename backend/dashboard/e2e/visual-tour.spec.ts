@@ -88,15 +88,18 @@ const ROUTES = [
 
 test.describe('visual tour', () => {
   test.skip(!process.env.VISUAL_TOUR, 'set VISUAL_TOUR=1 to capture');
-  test.use({ storageState: path.join(E2E_TMP, 'admin.json') });
+  test.use({
+    storageState: path.join(E2E_TMP, 'admin.json'),
+    colorScheme: 'dark',
+  });
 
   test('captures every route', async ({ page }) => {
     test.setTimeout(ROUTES.length * 20_000);
     mkdirSync(OUT, { recursive: true });
     for (const route of ROUTES) {
       await page.goto(route, { waitUntil: 'networkidle' }).catch(() => {});
-      // settle skeletons / charts
-      await page.waitForTimeout(600);
+      // settle bank profile fetch, skeletons and chart animations
+      await page.waitForTimeout(1600);
       const name = route === '/' ? 'home' : route.slice(1).replaceAll('/', '__');
       await page.screenshot({
         path: path.join(OUT, `${name}.png`),

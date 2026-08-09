@@ -61,11 +61,11 @@
 
   /* Charts — full values, consumed as var(--chart-N) by recharts/SVG */
   --chart-1: #5B9BFF;
-  --chart-2: #2DD4BF;
-  --chart-3: #A78BFA;
+  --chart-2: #A78BFA;
+  --chart-3: #34D399;
   --chart-4: #FBBF24;
   --chart-5: #FB7185;
-  --chart-6: #22D3EE;
+  --chart-6: #2DD4BF;
   --chart-grid: rgba(150, 170, 200, 0.14);
 
   /* Elevation */
@@ -111,11 +111,11 @@
 
   /* Slightly deepened for a white background */
   --chart-1: #3B82F6;
-  --chart-2: #0D9488;
-  --chart-3: #7C3AED;
+  --chart-2: #7C3AED;
+  --chart-3: #059669;
   --chart-4: #D97706;
   --chart-5: #E11D48;
-  --chart-6: #0891B2;
+  --chart-6: #0D9488;
   --chart-grid: rgba(10, 37, 64, 0.08);
 
   --shadow-card: 0 1px 2px rgba(10, 37, 64, 0.04), 0 1px 3px rgba(10, 37, 64, 0.06);
