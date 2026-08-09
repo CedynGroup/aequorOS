@@ -18,6 +18,12 @@ dependencies = [
   "openpyxl",
   "oracledb",
   "pandas",
+  # Market-desk PDF sources (app/services/market_desk/sources): pypdf-style
+  # extraction emits BoG auction tables column-major (row association lost) and
+  # the APR-of-banks PDF positions glyphs individually on three of its nine
+  # table pages — parsing needs character geometry (pdfplumber.page.chars),
+  # which pypdf does not expose.
+  "pdfplumber",
   # Direct import, not a reportlab leftover: attestation/appearance.py decodes and
   # re-rasters an officer's drawn signature, and pyhanko embeds the result. Listed
   # explicitly so the guarantee does not rest on another package's dependency tree.

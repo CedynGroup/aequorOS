@@ -13,6 +13,12 @@ Four seams, mirroring the spec's governance split:
   canonical market-data store through the adapter seam (§2 desk-as-vendor).
 """
 
-from app.services.market_desk import determinations, observations, publication, register
+from app.services.market_desk import (
+    determinations,
+    observations,
+    publication,
+    register,
+    sources,
+)
 
-__all__ = ["determinations", "observations", "publication", "register"]
+__all__ = ["determinations", "observations", "publication", "register", "sources"]
