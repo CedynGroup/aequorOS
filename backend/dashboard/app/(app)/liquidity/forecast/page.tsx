@@ -236,7 +236,7 @@ export default function CashFlowForecast() {
                       <span className="w-3 h-0.5 bg-action/15" /> 95% CI band
                     </span>
                   )}
-                  <span className="ml-auto">All values in GHS millions</span>
+                  <span className="ml-auto">All values in {currencyCode()} millions</span>
                 </>
               }
             >

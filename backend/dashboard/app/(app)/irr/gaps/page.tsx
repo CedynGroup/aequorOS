@@ -80,27 +80,13 @@ export default function IrrGapsPage() {
             key: 'gap',
             header: 'Period gap',
             numeric: true,
-            render: (r) => {
-              const v = num(r.gapGhs);
-              return (
-                <span className={v < 0 ? 'text-warning font-medium' : undefined}>
-                  {fmtCurrencySigned(v)}
-                </span>
-              );
-            },
+            render: (r) => fmtCurrencySigned(num(r.gapGhs)),
           },
           {
             key: 'cum',
             header: 'Cumulative gap',
             numeric: true,
-            render: (r) => {
-              const v = num(r.cumulativeGapGhs);
-              return (
-                <span className={v < 0 ? 'text-warning font-medium' : undefined}>
-                  {fmtCurrencySigned(v)}
-                </span>
-              );
-            },
+            render: (r) => fmtCurrencySigned(num(r.cumulativeGapGhs)),
           },
           {
             key: 'window',

@@ -12,7 +12,6 @@ import {
 } from 'recharts';
 import {
   CHART_GRID,
-  CHART_OK,
   axisProps,
   chartTooltipProps,
   seriesColor,
@@ -78,7 +77,7 @@ export default function VarWaterfall({
 
   const fill = (step: Step): string =>
     step.kind === 'benefit'
-      ? CHART_OK
+      ? seriesColor(2)
       : step.kind === 'total'
       ? seriesColor(1)
       : seriesColor(0);

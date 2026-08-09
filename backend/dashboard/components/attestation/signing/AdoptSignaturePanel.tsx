@@ -155,6 +155,12 @@ function DrawPad({
     context.lineWidth = 4;
     context.lineCap = 'round';
     context.lineJoin = 'round';
+    // Deliberately a concrete hex, NOT rgb(var(--heading)): canvas colors
+    // cannot resolve CSS variables, and the exported PNG's exact pixels are
+    // what the service stamps onto the (white) filed page — theme-following
+    // ink adopted in dark mode would file a near-white, unreadable mark. The
+    // pad below is bg-white in both themes precisely so this dark ink stays
+    // visible while drawing.
     context.strokeStyle = '#0A2540';
   }, []);
 

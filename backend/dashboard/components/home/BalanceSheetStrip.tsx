@@ -3,7 +3,7 @@
 /**
  * Big-4 balance-sheet strip: total assets, deposits, loans, and capital base
  * summed from the effective period's canonical facts (display grouping only —
- * no client-side regulatory math), formatted as compact GHS.
+ * no client-side regulatory math), formatted as compact base currency.
  */
 
 import type { BankReportingPeriodRead } from '@aequoros/risk-service-api';

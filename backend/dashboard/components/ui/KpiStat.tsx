@@ -79,7 +79,7 @@ export default function KpiStat({
             <span />
           )}
           {hint && (
-            <span className="text-caption text-slate truncate">{hint}</span>
+            <span className="text-caption text-slate">{hint}</span>
           )}
         </div>
       )}

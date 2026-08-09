@@ -14,7 +14,7 @@ import { useBankContext } from '@/components/shell/BankContext';
 import { useLiquidityDashboard, useRegulatoryRun } from '@/lib/api/hooks';
 import { fmtDateUTC, num } from '@/lib/api/values';
 import { CHART_SERIES, seriesColor } from '@/lib/chartTheme';
-import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
+import { currencyCode, fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
 type BufferRow = {
   code: string;
@@ -26,7 +26,9 @@ type BufferRow = {
   isTotal?: boolean;
 };
 
-const columns: Column<BufferRow>[] = [
+// Built at render time so the header picks up the active jurisdiction's
+// currency (module-level constants evaluate before the binding).
+const bufferColumns = (): Column<BufferRow>[] => [
   {
     key: 'instrument',
     header: 'Instrument',
@@ -35,7 +37,7 @@ const columns: Column<BufferRow>[] = [
   },
   {
     key: 'mv',
-    header: 'Market value (GHS)',
+    header: `Market value (${currencyCode()})`,
     numeric: true,
     render: (r) =>
       r.marketValueGHS === null ? '—' : fmtCurrency(r.marketValueGHS),
@@ -236,7 +238,7 @@ export default function LiquidityBuffer() {
               }
             >
               <DataTable
-                columns={columns}
+                columns={bufferColumns()}
                 rows={[
                   ...rows,
                   {

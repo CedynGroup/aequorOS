@@ -18,10 +18,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import {
-  CHART_ACCENT,
   CHART_AXIS,
-  CHART_CRIT,
-  CHART_OK,
   axisProps,
   chartTooltipProps,
   seriesColor,
@@ -55,20 +52,22 @@ export default function CapitalWaterfallChart({
 }) {
   const cet1Net = cet1Gross - deductions;
   const tier1 = cet1Net + at1;
+  // Categorical palette throughout — the steps are capital-stack categories,
+  // not compliance states, so status colors stay out of this chart.
   const steps: Step[] = [
     {
       name: 'CET1 components',
       base: 0,
       delta: cet1Gross,
       signed: cet1Gross,
-      color: CHART_ACCENT,
+      color: seriesColor(0),
     },
     {
       name: 'Deductions',
       base: cet1Net,
       delta: deductions,
       signed: -deductions,
-      color: CHART_CRIT,
+      color: seriesColor(3),
     },
     {
       name: 'AT1',
@@ -89,7 +88,7 @@ export default function CapitalWaterfallChart({
       base: 0,
       delta: total,
       signed: total,
-      color: CHART_OK,
+      color: seriesColor(4),
     },
   ];
 

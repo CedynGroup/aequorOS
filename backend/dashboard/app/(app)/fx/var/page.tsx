@@ -12,14 +12,14 @@ import TrendChart from '@/components/fx/charts/TrendChart';
 import ScenarioStrip from '@/components/fx/ScenarioStrip';
 import { fxRunParameters } from '@/components/fx/params';
 import { num } from '@/lib/api/values';
-import { fmtCurrency, fmtCurrencySigned, fmtPct } from '@/lib/format';
+import { fmtCurrency, fmtCurrencySigned, fmtPct, currencyCode } from '@/lib/format';
 
 export default function FxVarPage() {
   return (
     <FxModuleFrame
       crumb="VaR & Stress"
       title="FX Value at Risk & Stress"
-      subtitle="Historical-simulation VaR · diversification decomposition · cedi-crisis stressed VaR"
+      subtitle="Historical-simulation VaR · diversification decomposition · currency-crisis stressed VaR"
     >
       {(ctx) => <VarBody ctx={ctx} />}
     </FxModuleFrame>
@@ -51,16 +51,16 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
   }));
 
   const stressedNote = params?.crisis
-    ? `Historical VaR re-run on the 2022–23 cedi-crisis slice of the return history ` +
+    ? `Historical VaR re-run on the currency-crisis slice of the return history ` +
       `(observations ${params.crisis.windowStart}–${params.crisis.windowEnd}), scaled by a ` +
       `+${(params.crisis.correlationUplift * 100).toFixed(0)}% correlation uplift.`
-    : 'Historical VaR re-run on the 2022–23 cedi-crisis slice of the return history with a supervisory correlation uplift — persist a run to surface the exact window parameters.';
+    : 'Historical VaR re-run on the currency-crisis slice of the return history with a supervisory correlation uplift — persist a run to surface the exact window parameters.';
 
   const columns: Column<FxStandaloneVarRead>[] = [
     { key: 'ccy', header: 'Currency', render: (r) => r.currency, width: '22%' },
     {
       key: 'net',
-      header: 'Net position (GHS)',
+      header: `Net position (${currencyCode()})`,
       numeric: true,
       render: (r) => fmtCurrencySigned(num(r.netGhs)),
     },
@@ -105,7 +105,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
           value={fmtCurrency(stressed)}
           status="warn"
           hint={
-            upliftRatio > 0 ? `${upliftRatio.toFixed(2)}× base VaR` : 'Cedi-crisis calibration'
+            upliftRatio > 0 ? `${upliftRatio.toFixed(2)}× base VaR` : 'Currency-crisis calibration'
           }
         />
       </div>
@@ -135,7 +135,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
         <div className="xl:col-span-2 flex flex-col gap-6">
           <div className="card p-5 border-l-4 border-l-warning flex flex-col gap-2">
             <p className="text-caption font-medium text-slate uppercase tracking-wider">
-              Cedi-crisis stressed VaR
+              Currency-crisis stressed VaR
             </p>
             <p className="font-mono text-kpi text-navy tnum">
               {fmtCurrency(stressed)}
@@ -167,7 +167,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
 
       <SectionCard
         title="Depreciation scenario NOP"
-        subtitle="Aggregate NOP under the persisted cedi depreciation shocks"
+        subtitle="Aggregate NOP under the persisted depreciation shocks"
       >
         <ScenarioStrip
           scenarios={data.scenarios}
@@ -185,7 +185,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
             data={varTrend}
             valueLabel="Portfolio VaR"
             format={(v) => fmtCurrency(v)}
-            colorIndex={1}
+            colorIndex={0}
           />
         </ChartFrame>
       )}

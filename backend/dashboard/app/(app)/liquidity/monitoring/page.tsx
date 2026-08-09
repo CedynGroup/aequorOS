@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { Percent } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
+import EmptyState from '@/components/ui/EmptyState';
 import StatusPill from '@/components/ui/StatusPill';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
@@ -183,10 +185,13 @@ export default function MonitoringTools() {
               {haircuts.data && haircuts.data.haircuts.length > 0 ? (
                 <DataTable columns={haircutColumns} rows={haircuts.data.haircuts} />
               ) : (
-                <p className="px-5 py-6 text-body text-slate">
-                  No haircut rows adopted yet — Table 9 reports zero haircuts with the
-                  gap noted on the template rather than an invented number.
-                </p>
+                <div className="p-5">
+                  <EmptyState
+                    Icon={Percent}
+                    title="No haircut rows adopted yet"
+                    description="Table 9 reports zero haircuts with the gap noted on the template rather than an invented number. Adopted rows appear here once Senior Management reviews the schedule."
+                  />
+                </div>
               )}
             </SectionCard>
 

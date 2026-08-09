@@ -167,7 +167,9 @@ export default function ContingencyFundingPlan() {
               <KpiStat
                 label="Board-approved CFP"
                 value={approved ? `v${approved.version}` : 'None'}
-                status={approved ? (approved.approvalOverdue ? 'warn' : 'ok') : 'crit'}
+                // No approved plan is an absence-of-data state, not a breach —
+                // neutral card, no status edge.
+                status={approved ? (approved.approvalOverdue ? 'warn' : 'ok') : undefined}
                 hint={
                   approved
                     ? approved.approvalOverdue

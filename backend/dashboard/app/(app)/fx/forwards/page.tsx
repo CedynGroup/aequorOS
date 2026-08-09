@@ -10,6 +10,7 @@ import DataTable, { type Column } from '@/components/ui/DataTable';
 import FxModuleFrame, { type FxFrameContext } from '@/components/fx/FxModuleFrame';
 import ForwardCurve, { type ForwardPoint } from '@/components/fx/charts/ForwardCurve';
 import { num } from '@/lib/api/values';
+import { currencyCode } from '@/lib/format';
 
 export default function FxForwardsPage() {
   return (
@@ -36,10 +37,15 @@ function ForwardsBody({ ctx }: { ctx: FxFrameContext }) {
   const forwardPoints: ForwardPoint[] = [];
 
   const spotColumns: Column<FxCurrencyPositionRead>[] = [
-    { key: 'ccy', header: 'Pair', render: (r) => `${r.currency}/GHS`, width: '24%' },
+    {
+      key: 'ccy',
+      header: 'Pair',
+      render: (r) => `${r.currency}/${currencyCode()}`,
+      width: '24%',
+    },
     {
       key: 'spot',
-      header: 'Period-end spot (GHS)',
+      header: `Period-end spot (${currencyCode()})`,
       numeric: true,
       render: (r) => num(r.spotGhs).toFixed(4),
     },
@@ -68,7 +74,7 @@ function ForwardsBody({ ctx }: { ctx: FxFrameContext }) {
                 { key: 'tenor', header: 'Tenor', render: (r: ForwardPoint) => r.tenorLabel },
                 {
                   key: 'outright',
-                  header: 'Outright (GHS)',
+                  header: `Outright (${currencyCode()})`,
                   numeric: true,
                   render: (r: ForwardPoint) => r.outright.toFixed(4),
                 },
@@ -96,7 +102,7 @@ function ForwardsBody({ ctx }: { ctx: FxFrameContext }) {
 
       <SectionCard
         title="Spot reference"
-        subtitle="Period-end GHS fixes used by the NOP engine — from the FX dashboard payload"
+        subtitle={`Period-end ${currencyCode()} fixes used by the NOP engine — from the FX dashboard payload`}
         noPadding
         footer={<span>Forward outrights will be monitored against these fixes.</span>}
       >

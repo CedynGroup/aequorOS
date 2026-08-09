@@ -53,7 +53,7 @@ import {
   useForecastRuns,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, isoDate, labelize, num, statusTone } from '@/lib/api/values';
-import { fmtCurrency, fmtPct, fmtPctSigned, regShort } from '@/lib/format';
+import { currencyCode, fmtCurrency, fmtPct, fmtPctSigned, regShort } from '@/lib/format';
 import { seriesColor } from '@/lib/chartTheme';
 
 const PRESET_SCENARIOS: { code: ForecastScenarioCode; label: string }[] = [
@@ -364,7 +364,7 @@ function RunDashboard({
         <ChartFrame
           className="xl:col-span-2"
           title="Asset composition"
-          subtitle="Loans, securities, and cash across the horizon · GHS millions"
+          subtitle={`Loans, securities, and cash across the horizon · ${currencyCode()} millions`}
           height={320}
         >
           <BalanceSheetProjectionChart data={compositionData} height={320} />
@@ -519,7 +519,7 @@ function WaterfallSection({ run }: { run: ForecastRunRead }) {
             Net change
             <DeltaBadge
               value={netChange / 1_000_000}
-              suffix="M GHS"
+              suffix={`M ${currencyCode()}`}
               decimals={1}
             />
           </span>

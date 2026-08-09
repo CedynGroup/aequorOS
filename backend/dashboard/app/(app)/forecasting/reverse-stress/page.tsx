@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { Target } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
+import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useLatestReverseStress, useRunReverseStress } from '@/lib/api/hooks';
@@ -42,7 +44,7 @@ export default function ReverseStress() {
       <PageHeader
         breadcrumbs={[
           { label: 'Modules', href: '/' },
-          { label: 'Forecasting', href: '/forecasting' },
+          { label: 'Balance Sheet Forecasting', href: '/forecasting' },
           { label: 'Reverse Stress' },
         ]}
         title="Reverse Stress Testing"
@@ -51,7 +53,7 @@ export default function ReverseStress() {
         action={
           <button
             type="button"
-            className="rounded-md bg-action px-4 py-2 text-body font-medium text-white hover:bg-action/90 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
             disabled={!bankId || !periodId || run.isPending}
             onClick={() => periodId && run.mutate(periodId)}
           >
@@ -120,19 +122,21 @@ export default function ReverseStress() {
               </SectionCard>
             </>
           ) : (
-            <SectionCard
-              title="No frontier computed yet"
-              subtitle="Run reverse stress to search the breach frontier for this reporting period"
-            >
-              <p className="text-body text-slate leading-relaxed">
-                The search scales the combined liquidity scenario (run-offs, inflow
-                haircuts, HQLA haircuts) and the severe capital scenario (credit
-                losses, RWA growth, FX RWA) by bisection until the LCR floor or the
-                four-quarter CET1 minimum breaks, then reports the multiplier and the
-                ratio at breach. Both engines need a succeeded baseline for the
-                current reporting period.
-              </p>
-            </SectionCard>
+            <EmptyState
+              Icon={Target}
+              title="No reverse-stress frontier yet"
+              description="The search scales the combined liquidity scenario (run-offs, inflow haircuts, HQLA haircuts) and the severe capital scenario (credit losses, RWA growth, FX RWA) by bisection until the LCR floor or the four-quarter CET1 minimum breaks, then reports the multiplier and the ratio at breach. Both engines need a succeeded baseline for the current reporting period."
+              action={
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+                  disabled={!bankId || !periodId || run.isPending}
+                  onClick={() => periodId && run.mutate(periodId)}
+                >
+                  {run.isPending ? 'Searching frontier…' : 'Run reverse stress'}
+                </button>
+              }
+            />
           )}
         </div>
       </QueryBoundary>

@@ -101,7 +101,7 @@ export default function TrendChart({
                 ? {
                     value: thresholdLabel,
                     position: 'insideTopRight',
-                    fontSize: 10,
+                    fontSize: 11,
                     fill: CHART_CRIT,
                   }
                 : undefined

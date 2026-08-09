@@ -16,7 +16,7 @@ export default function RunProvenance({
   return (
     <div className="flex items-center gap-3 flex-wrap text-caption text-slate">
       {createdAt && (
-        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-border-light bg-surface font-mono text-[10px] tnum">
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-border-light bg-surface font-mono text-micro tnum">
           <Clock size={11} aria-hidden />
           computed {fmtTimestamp(createdAt)}
         </span>

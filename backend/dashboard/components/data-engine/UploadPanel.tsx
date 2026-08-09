@@ -125,7 +125,7 @@ export default function UploadPanel() {
             type="date"
             value={asOfDate}
             onChange={(event) => setAsOfDate(event.target.value)}
-            className="px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+            className="px-3 py-1.5 rounded border border-border bg-surface-raised text-body text-navy font-mono"
           />
         </div>
         <button

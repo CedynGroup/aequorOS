@@ -7,7 +7,8 @@
  * sensitivity built from the latest succeeded run per preset scenario.
  */
 
-import { TrendingUp } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, TrendingUp } from 'lucide-react';
 import type { ForecastRunRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
@@ -76,6 +77,15 @@ export default function NiiForecastPage() {
               Icon={TrendingUp}
               title="No succeeded forecast runs yet"
               description="The NII trajectory reads the per-year net-interest-income field on a persisted forecast run. Run a forecast from the Balance Sheet tab to populate this view."
+              action={
+                <Link
+                  href="/forecasting"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+                >
+                  Run a forecast
+                  <ArrowRight size={13} aria-hidden />
+                </Link>
+              }
             />
           ) : (
             <NiiDashboard primary={primary} runsByScenario={runsByScenario} />

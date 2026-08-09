@@ -7,7 +7,7 @@ export const FX_SCENARIO_LABELS: Record<string, string> = {
   baseline: 'Baseline',
   mild_depreciation: 'Mild depreciation',
   severe_depreciation: 'Severe depreciation',
-  cedi_crisis: 'Cedi crisis',
+  cedi_crisis: 'Currency crisis',
 };
 
 export function fxScenarioLabel(code: string): string {
@@ -51,7 +51,7 @@ export default function ScenarioStrip({
               </StatusPill>
             </div>
             <p className="text-micro text-slate uppercase tracking-wider">
-              {shock === 0 ? 'No shock' : `Cedi depreciation ${fmtPct(shock, 1)}`}
+              {shock === 0 ? 'No shock' : `Depreciation ${fmtPct(shock, 1)}`}
             </p>
             <p className="font-mono text-h2 text-navy tnum">
               {fmtPct(pct, 2)}

@@ -28,7 +28,7 @@ import {
   indicativePenaltyGhs,
   returnsHref,
 } from '@/components/submissions/shared';
-import { centralBankName } from '@/lib/format';
+import { centralBankName, fmtInt } from '@/lib/format';
 
 const HORIZON_OPTIONS = [3, 6, 12];
 
@@ -266,13 +266,11 @@ export default function RegulatoryCalendarPage() {
                           </span>
                         </p>
                         <p className="mt-0.5 text-caption text-navy/80 tnum">
-                          Up to GH¢{penalty.baseGhs.toLocaleString('en-GB')} (500
-                          units) on the institution and responsible officers,
-                          plus GH¢{penalty.dailyGhs.toLocaleString('en-GB')}/day
-                          (50 units) ×{' '}
+                          Up to GH¢{fmtInt(penalty.baseGhs)} (500 units) on the
+                          institution and responsible officers, plus GH¢
+                          {fmtInt(penalty.dailyGhs)}/day (50 units) ×{' '}
                           <span className="font-mono">{days}</span> days ≈ GH¢
-                          {penalty.runningGhs.toLocaleString('en-GB')} running —
-                          indicative.
+                          {fmtInt(penalty.runningGhs)} running — indicative.
                         </p>
                       </div>
                     </li>

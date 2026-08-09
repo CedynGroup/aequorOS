@@ -12,7 +12,7 @@
  */
 
 import Link from 'next/link';
-import { ArrowUpRight, BookOpen, Brain } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, BookOpen, Brain } from 'lucide-react';
 import type {
   ForecastRunRead,
   ForecastScenarioListRead,
@@ -83,6 +83,15 @@ export default function AssumptionsPage() {
               Icon={BookOpen}
               title="No succeeded forecast runs yet"
               description="The registry shows the assumption set persisted on a run. Run a forecast from the Balance Sheet tab to populate it."
+              action={
+                <Link
+                  href="/forecasting"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+                >
+                  Run a forecast
+                  <ArrowRight size={13} aria-hidden />
+                </Link>
+              }
             />
           ) : runQuery.data ? (
             <ResolvedSection

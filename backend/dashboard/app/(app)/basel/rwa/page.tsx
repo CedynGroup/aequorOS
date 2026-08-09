@@ -1,6 +1,7 @@
 'use client';
 
-import { Layers } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Layers } from 'lucide-react';
 import type { CapitalLineRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
@@ -18,7 +19,7 @@ import {
 } from '@/lib/api/hooks';
 import { fmtDateUTC, num, shortId } from '@/lib/api/values';
 import { seriesColor } from '@/lib/chartTheme';
-import { fmtCurrency, regShort } from '@/lib/format';
+import { currencyCode, fmtCurrency, regShort } from '@/lib/format';
 
 type Row = {
   item: string;
@@ -46,7 +47,7 @@ function rwaColumns(
     { key: 'item', header: itemHeader, render: (r) => r.item, width: '44%' },
     {
       key: 'exposure',
-      header: 'Exposure (GHS)',
+      header: `Exposure (${currencyCode()})`,
       numeric: true,
       render: (r) =>
         r.exposureGHS === null ? '—' : fmtCurrency(r.exposureGHS),
@@ -126,6 +127,15 @@ export default function RWABreakdown() {
             Icon={Layers}
             title="Awaiting period results"
             description="The full risk-weighted asset detail is produced with this period's stored results and appears here automatically once they are computed."
+            action={
+              <Link
+                href="/data-engine"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+              >
+                Open Data Engine
+                <ArrowRight size={13} aria-hidden />
+              </Link>
+            }
           />
         </div>
       ) : (
@@ -226,7 +236,7 @@ export default function RWABreakdown() {
                 }
               >
                 <DataTable
-                  columns={rwaColumns('Exposure class', 'Risk weight', 'RWA (GHS)')}
+                  columns={rwaColumns('Exposure class', 'Risk weight', `RWA (${currencyCode()})`)}
                   rows={[
                     ...creditRows,
                     {
@@ -248,7 +258,7 @@ export default function RWABreakdown() {
                   noPadding
                 >
                   <DataTable
-                    columns={rwaColumns('Line', 'Charge rate', 'Amount (GHS)')}
+                    columns={rwaColumns('Line', 'Charge rate', `Amount (${currencyCode()})`)}
                     rows={[
                       ...marketRows,
                       {
@@ -269,7 +279,7 @@ export default function RWABreakdown() {
                   noPadding
                 >
                   <DataTable
-                    columns={rwaColumns('Line', 'Alpha', 'Amount (GHS)')}
+                    columns={rwaColumns('Line', 'Alpha', `Amount (${currencyCode()})`)}
                     rows={[
                       ...operationalRows,
                       {

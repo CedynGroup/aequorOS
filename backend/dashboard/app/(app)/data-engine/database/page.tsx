@@ -13,6 +13,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Database, Loader2, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import EmptyState from '@/components/ui/EmptyState';
 import { useBankContext } from '@/components/shell/BankContext';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
 import { useDatabaseConnections } from '@/lib/api/database-direct';
@@ -80,16 +81,21 @@ export default function DatabaseDirectPage() {
               Loading database connections…
             </div>
           ) : rows.length === 0 && !adding ? (
-            <div className="card p-8 text-center space-y-2">
-              <p className="text-body text-navy font-medium">
-                No database connected yet
-              </p>
-              <p className="text-caption text-slate max-w-lg mx-auto">
-                Connect a read-only reporting replica. Test reachability, discover the
-                source schema for mapping, then sync — the canonical model and every
-                module behave identically to a file upload.
-              </p>
-            </div>
+            <EmptyState
+              Icon={Database}
+              title="No database connected yet"
+              description="Connect a read-only reporting replica. Test reachability, discover the source schema for mapping, then sync — the canonical model and every module behave identically to a file upload."
+              action={
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+                >
+                  <Plus size={13} aria-hidden />
+                  Connect a database
+                </button>
+              }
+            />
           ) : (
             <div className="grid grid-cols-1 gap-4">
               {rows.map((connection) => (

@@ -100,7 +100,7 @@ export default function MarginBars({
             label={{
               value: `Floor ${floorPct.toFixed(1)}%`,
               position: 'insideTopRight',
-              fontSize: 10,
+              fontSize: 11,
               fill: CHART_CRIT,
             }}
           />

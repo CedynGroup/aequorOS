@@ -16,6 +16,7 @@ import {
   chartTooltipProps,
   seriesColor,
 } from '@/lib/chartTheme';
+import { currencyCode } from '@/lib/format';
 
 export type ForwardPoint = {
   tenorLabel: string;
@@ -50,7 +51,7 @@ export default function ForwardCurve({
           {...chartTooltipProps}
           formatter={(value: number | string) => [
             Number(value).toFixed(4),
-            'Forward outright (GHS)',
+            `Forward outright (${currencyCode()})`,
           ]}
         />
         <Line

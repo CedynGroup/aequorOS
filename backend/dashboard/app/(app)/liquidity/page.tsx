@@ -22,7 +22,7 @@ import {
   useRegulatoryRun,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
-import { fmtCurrency, fmtPct, regShort, centralBankName } from '@/lib/format';
+import { currencyCode, fmtCurrency, fmtPct, regShort, centralBankName } from '@/lib/format';
 
 type LineRow = {
   item: string;
@@ -46,7 +46,7 @@ function lineColumns(rateHeader: string, weightedHeader: string): Column<LineRow
     { key: 'item', header: 'Category', render: (r) => r.item, width: '46%' },
     {
       key: 'balance',
-      header: 'Balance (GHS)',
+      header: `Balance (${currencyCode()})`,
       numeric: true,
       render: (r) =>
         r.balanceGHS === null ? '—' : fmtCurrency(r.balanceGHS),

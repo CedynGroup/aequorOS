@@ -11,9 +11,10 @@
  */
 
 import { useState } from 'react';
-import { Plus, UploadCloud, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { LineChart, Plus, UploadCloud, FileSpreadsheet, Loader2 } from 'lucide-react';
 import type { MarketDataUploadRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
+import EmptyState from '@/components/ui/EmptyState';
 import { useBankContext } from '@/components/shell/BankContext';
 import { isApiError } from '@/lib/api/client';
 import {
@@ -67,15 +68,21 @@ export default function MarketDataPage() {
               Loading market data sources…
             </div>
           ) : rows.length === 0 && !adding ? (
-            <div className="card p-8 text-center space-y-2">
-              <p className="text-body text-navy font-medium">
-                No market data sources connected yet
-              </p>
-              <p className="text-caption text-slate">
-                Connect Bloomberg or LSEG, or use manual upload below —
-                calculations consume the same canonical scopes either way.
-              </p>
-            </div>
+            <EmptyState
+              Icon={LineChart}
+              title="No market data sources connected yet"
+              description="Connect Bloomberg or LSEG, or use manual upload below — calculations consume the same canonical scopes either way."
+              action={
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+                >
+                  <Plus size={13} aria-hidden />
+                  Connect a source
+                </button>
+              }
+            />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {rows.map((connection) => (
@@ -125,7 +132,7 @@ function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
                 key={kind}
                 type="button"
                 onClick={() => void downloadTemplate(kind)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption text-navy border border-line rounded-md hover:bg-surface"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption text-navy border border-border rounded-md hover:bg-surface"
               >
                 <FileSpreadsheet size={13} aria-hidden />
                 {label}
@@ -133,7 +140,7 @@ function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
             ))}
           </div>
         </div>
-        <div className="border-t border-line pt-5">
+        <div className="border-t border-border-light pt-5">
           <p className="text-body text-navy font-medium">2. Upload the filled file</p>
           <p className="text-caption text-slate mb-3">
             Multi-sheet workbooks are supported (one scope category per sheet).
@@ -153,7 +160,7 @@ function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
                 type="file"
                 accept=".xlsx,.csv"
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                className="block text-caption text-navy file:mr-3 file:px-3 file:py-1.5 file:border file:border-line file:rounded-md file:bg-surface file:text-caption file:text-navy"
+                className="block text-caption text-navy file:mr-3 file:px-3 file:py-1.5 file:border file:border-border file:rounded-md file:bg-surface-raised file:text-caption file:font-medium file:text-navy hover:file:bg-surface"
               />
             </label>
             <label className="block">
@@ -162,7 +169,7 @@ function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
                 type="date"
                 value={asOfDate}
                 onChange={(event) => setAsOfDate(event.target.value)}
-                className="px-3 py-1.5 text-caption text-navy border border-line rounded-md"
+                className="px-3 py-1.5 text-caption text-navy bg-surface-raised border border-border rounded-md"
               />
             </label>
             <button
@@ -186,7 +193,7 @@ function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
             </p>
           )}
           {result && (
-            <div className="mt-4 rounded-md border border-line bg-surface px-4 py-3 space-y-1">
+            <div className="mt-4 rounded-md border border-border-light bg-surface px-4 py-3 space-y-1">
               <p className="text-caption text-navy font-medium">
                 Batch {result.status.replaceAll('_', ' ')} —{' '}
                 {result.canonicalRecordsProduced} canonical records across{' '}
@@ -194,7 +201,7 @@ function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
               </p>
               <p className="text-caption text-slate">{result.scopes.join(', ')}</p>
               {result.warnings.map((warning) => (
-                <p key={warning} className="text-caption text-amber-700">
+                <p key={warning} className="text-caption text-warning">
                   {warning}
                 </p>
               ))}

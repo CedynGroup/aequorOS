@@ -43,7 +43,7 @@ import {
   useForecastScenarios,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, fmtTimestamp, num, shortId } from '@/lib/api/values';
-import { fmtCurrency, fmtPct } from '@/lib/format';
+import { currencyCode, fmtCurrency, fmtPct } from '@/lib/format';
 
 type FormValues = Record<AssumptionKey, number>;
 
@@ -721,7 +721,7 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
                       {row.isCurrency ? (
                         <DeltaBadge
                           value={(row.b - row.a) / 1_000_000}
-                          suffix="M GHS"
+                          suffix={`M ${currencyCode()}`}
                           decimals={1}
                         />
                       ) : (
@@ -771,7 +771,7 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
                       ) : metric.isCurrency ? (
                         <DeltaBadge
                           value={(vb - va) / 1_000_000}
-                          suffix="M GHS"
+                          suffix={`M ${currencyCode()}`}
                           decimals={1}
                         />
                       ) : (

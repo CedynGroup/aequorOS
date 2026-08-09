@@ -9,13 +9,27 @@
 
 import Link from 'next/link';
 import { ArrowRight, GitCommitHorizontal } from 'lucide-react';
-import type { BankReportingPeriodRead } from '@aequoros/risk-service-api';
+import type {
+  BankReportingPeriodRead,
+  LiveModule,
+} from '@aequoros/risk-service-api';
 import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
 import { SkeletonLine } from '@/components/ui/Skeleton';
 import { useBankFreshness } from '@/lib/api/hooks';
 import { fmtRelative, shortId } from '@/lib/api/values';
 import { LIVE_MODULE_LABELS } from '@/components/live/moduleDisplay';
+
+/** Short labels for the 6-up grid cells — the full LIVE_MODULE_LABELS
+ * truncate to "CA…"/"INT…" at these widths. */
+const SHORT_MODULE_LABELS: Record<LiveModule, string> = {
+  liquidity: 'Liquidity',
+  capital: 'Capital',
+  irr: 'IRR',
+  fx: 'FX',
+  ftp: 'FTP',
+  forecast: 'Forecast',
+};
 
 export default function FreshnessStrip({
   bankId,
@@ -75,8 +89,11 @@ export default function FreshnessStrip({
           {modules.map((m) => (
             <div key={m.module} className="bg-surface-raised px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-micro uppercase tracking-wider text-slate truncate">
-                  {LIVE_MODULE_LABELS[m.module]}
+                <p
+                  className="text-micro uppercase tracking-wider text-slate"
+                  title={LIVE_MODULE_LABELS[m.module]}
+                >
+                  {SHORT_MODULE_LABELS[m.module] ?? LIVE_MODULE_LABELS[m.module]}
                 </p>
                 <StatusPill
                   tone={m.isStale ? 'amber' : 'compliant'}

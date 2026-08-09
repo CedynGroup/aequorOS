@@ -19,7 +19,7 @@ import Sparkline from '@/components/ui/Sparkline';
 import StatusPill from '@/components/ui/StatusPill';
 import EmptyState from '@/components/ui/EmptyState';
 import ValidationList from '@/components/ui/ValidationList';
-import { fmtRelative, num, statusTone } from '@/lib/api/values';
+import { num, statusTone } from '@/lib/api/values';
 import { fmtCurrency, fmtCurrencySigned, fmtPct, regShort } from '@/lib/format';
 
 function kpiStatus(status: string): KpiStatus | undefined {
@@ -80,12 +80,10 @@ export default function IrrOverviewPage() {
           cumulative: num(g.cumulativeGapGhs),
         }));
 
-        const live = data.live ?? null;
-
         return (
           <>
             {/* KPI row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               <KpiStat
                 label="Worst ΔEVE / Tier 1"
                 value={fmtPct(worstPct, 2)}
@@ -123,18 +121,6 @@ export default function IrrOverviewPage() {
                 value={fmtCurrencySigned(earWorst)}
                 status={earWorst < 0 ? 'warn' : 'ok'}
                 hint={`+200bp ${fmtCurrencySigned(earUp)} · −200bp ${fmtCurrencySigned(earDown)}`}
-              />
-              <KpiStat
-                label="Live engine"
-                value={live ? live.status.toUpperCase() : data.stored ? 'STORED' : 'INLINE'}
-                status={live ? kpiStatus(live.status) : undefined}
-                hint={
-                  live
-                    ? `recomputed ${fmtRelative(live.computedAt)}`
-                    : data.stored
-                    ? 'from the latest stored results'
-                    : 'computed live from current positions'
-                }
               />
             </div>
 

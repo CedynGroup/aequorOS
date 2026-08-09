@@ -66,10 +66,15 @@ export default function BaselOverview() {
     : [];
 
   const carTrend = (data?.trend ?? []).map((p) => num(p.carPct));
-  const carDelta =
-    carTrend.length >= 2
-      ? carTrend[carTrend.length - 1] - carTrend[carTrend.length - 2]
+  const tier1Trend = (data?.trend ?? []).map((p) => num(p.tier1RatioPct));
+  const cet1Trend = (data?.trend ?? []).map((p) => num(p.cet1RatioPct));
+  const periodDelta = (series: number[]): number | undefined =>
+    series.length >= 2
+      ? series[series.length - 1] - series[series.length - 2]
       : undefined;
+  const carDelta = periodDelta(carTrend);
+  const tier1Delta = periodDelta(tier1Trend);
+  const cet1Delta = periodDelta(cet1Trend);
   const hasInlineTrendPoints = (data?.trend ?? []).some((p) => !p.stored);
   const compliantCount = carTrend.filter((v) => v >= carMin).length;
 
@@ -129,6 +134,8 @@ export default function BaselOverview() {
                 value={num(data.metrics.tier1RatioPct).toFixed(2)}
                 unit="%"
                 status={kpiStatus(data.metrics.tier1Status)}
+                delta={tier1Delta}
+                sparkline={<Sparkline data={tier1Trend} />}
                 hint={
                   tier1Min !== null
                     ? `Regulatory minimum ${tier1Min.toFixed(1)}%`
@@ -140,6 +147,8 @@ export default function BaselOverview() {
                 value={num(data.metrics.cet1RatioPct).toFixed(2)}
                 unit="%"
                 status={kpiStatus(data.metrics.cet1Status)}
+                delta={cet1Delta}
+                sparkline={<Sparkline data={cet1Trend} />}
                 hint={
                   cet1Min !== null
                     ? `Regulatory minimum ${cet1Min.toFixed(1)}%`

@@ -35,9 +35,9 @@ import {
 } from './pulse';
 
 const EDGE_STYLE: Record<Traffic, string> = {
-  green: 'inset 2px 0 0 rgb(var(--ok))',
-  amber: 'inset 2px 0 0 rgb(var(--warn))',
-  red: 'inset 2px 0 0 rgb(var(--crit))',
+  green: 'inset 3px 0 0 rgb(var(--ok))',
+  amber: 'inset 3px 0 0 rgb(var(--warn))',
+  red: 'inset 3px 0 0 rgb(var(--crit))',
 };
 
 const SPARK_COLOR: Record<Traffic | 'na', string> = {

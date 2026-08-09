@@ -1,6 +1,7 @@
 'use client';
 
-import { Layers } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Layers } from 'lucide-react';
 import type { CapitalLineRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
@@ -131,6 +132,15 @@ export default function CapitalStructurePage() {
             Icon={Layers}
             title="Awaiting period results"
             description="The tiered capital breakdown is produced with this period's stored results and appears here automatically once they are computed."
+            action={
+              <Link
+                href="/data-engine"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+              >
+                Open Data Engine
+                <ArrowRight size={13} aria-hidden />
+              </Link>
+            }
           />
         </div>
       ) : (

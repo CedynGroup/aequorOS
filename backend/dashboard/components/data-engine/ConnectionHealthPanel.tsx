@@ -4,22 +4,37 @@
  * Connection health — the one screen a bank's IT team reads when a feed breaks.
  * Aggregates every configured data-source connection (core database-direct,
  * Temenos T24, market-data vendors) with its live status, last successful sync,
- * credential expiry, and a plain-language remediation hint. Read-only; fixing
- * happens in each integration's own tab.
+ * credential expiry, and a plain-language remediation hint. Per-row Test runs
+ * the source's read-only reachability probe; fixing still happens in each
+ * integration's own tab.
  */
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { Activity } from 'lucide-react';
+import { Activity, Loader2 } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import EmptyState from '@/components/ui/EmptyState';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { SkeletonLine } from '@/components/ui/Skeleton';
 import { useBankContext } from '@/components/shell/BankContext';
-import { useDatabaseConnections } from '@/lib/api/database-direct';
-import { useMarketDataConnections, useTemenosConnections } from '@/lib/api/hooks';
+import { isApiError } from '@/lib/api/client';
+import {
+  useDatabaseConnections,
+  useTestDatabaseConnection,
+} from '@/lib/api/database-direct';
+import {
+  useMarketDataConnections,
+  useTemenosConnections,
+  useTestMarketDataConnection,
+  useTestTemenosConnection,
+} from '@/lib/api/hooks';
 import { fmtRelative, labelize } from '@/lib/api/values';
+
+type SourceKind = 'database' | 'temenos' | 'market-data';
 
 interface HealthRow {
   id: string;
+  source: SourceKind;
   kind: string;
   href: string;
   name: string;
@@ -29,6 +44,11 @@ interface HealthRow {
   credentialExpiresAt: Date | null;
   validationError: string | null;
 }
+
+type TestOutcome =
+  | { state: 'running' }
+  | { state: 'passed'; detail: string }
+  | { state: 'failed'; detail: string };
 
 /** Generated models vary between Date and ISO-string for timestamps — normalize. */
 function asDate(value: Date | string | null | undefined): Date | null {
@@ -80,11 +100,57 @@ export default function ConnectionHealthPanel() {
   const temenos = useTemenosConnections(bank?.id);
   const marketData = useMarketDataConnections(bank?.id);
 
+  // Read-only reachability probes — the same test endpoints the source tabs use.
+  const testDatabase = useTestDatabaseConnection(bank?.id);
+  const testTemenos = useTestTemenosConnection(bank?.id);
+  const testMarketData = useTestMarketDataConnection(bank?.id);
+  const [tests, setTests] = useState<Record<string, TestOutcome>>({});
+
+  const runTest = async (row: HealthRow) => {
+    const key = `${row.source}-${row.id}`;
+    setTests((prev) => ({ ...prev, [key]: { state: 'running' } }));
+    try {
+      let outcome: TestOutcome;
+      if (row.source === 'database') {
+        const result = await testDatabase.mutateAsync(row.id);
+        outcome = result.reachable
+          ? {
+              state: 'passed',
+              detail: `Reachable${
+                result.latencyMs != null ? ` · ${result.latencyMs} ms` : ''
+              }`,
+            }
+          : {
+              state: 'failed',
+              detail: result.error ?? 'Connection test failed.',
+            };
+      } else {
+        const result =
+          row.source === 'temenos'
+            ? await testTemenos.mutateAsync(row.id)
+            : await testMarketData.mutateAsync(row.id);
+        outcome = result.success
+          ? { state: 'passed', detail: 'Test pull succeeded.' }
+          : { state: 'failed', detail: result.error ?? 'Test pull failed.' };
+      }
+      setTests((prev) => ({ ...prev, [key]: outcome }));
+    } catch (error) {
+      setTests((prev) => ({
+        ...prev,
+        [key]: {
+          state: 'failed',
+          detail: isApiError(error) ? error.message : 'Connection test failed.',
+        },
+      }));
+    }
+  };
+
   const loading = dbDirect.isLoading || temenos.isLoading || marketData.isLoading;
 
   const rows: HealthRow[] = [
     ...(dbDirect.data?.connections ?? []).map((c) => ({
       id: c.id,
+      source: 'database' as const,
       kind: `Core database · ${labelize(c.backend)}`,
       href: '/data-engine/database',
       name: c.displayName,
@@ -96,6 +162,7 @@ export default function ConnectionHealthPanel() {
     })),
     ...(temenos.data?.connections ?? []).map((c) => ({
       id: c.id,
+      source: 'temenos' as const,
       kind: `Core banking · ${labelize(c.coreSystem)}`,
       href: '/data-engine/t24',
       name: c.displayName,
@@ -107,6 +174,7 @@ export default function ConnectionHealthPanel() {
     })),
     ...(marketData.data?.connections ?? []).map((c) => ({
       id: c.id,
+      source: 'market-data' as const,
       kind: `Market data · ${labelize(c.vendor)}`,
       href: '/data-engine/market-data',
       name: c.displayName,
@@ -140,15 +208,27 @@ export default function ConnectionHealthPanel() {
             <SkeletonLine width="50%" />
           </div>
         ) : rows.length === 0 ? (
-          <p className="px-5 py-4 text-body text-slate">
-            No data-source connections configured yet. Set one up in the Database,
-            T24, or Market data tab — uploads via Excel &amp; CSV work without a
-            connection.
-          </p>
+          <div className="p-5">
+            <EmptyState
+              Icon={Activity}
+              title="No data-source connections yet"
+              description="Set one up in the Database, T24, or Market data tab — uploads via Excel & CSV work without a connection."
+              action={
+                <Link
+                  href="/data-engine/database"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+                >
+                  Connect a data source
+                </Link>
+              }
+            />
+          </div>
         ) : (
           <ul className="divide-y divide-border-light">
             {rows.map((row) => {
               const hint = remediation(row);
+              const test = tests[`${row.source}-${row.id}`];
+              const testing = test?.state === 'running';
               return (
                 <li key={`${row.kind}-${row.id}`} className="px-5 py-3">
                   <div className="flex items-center gap-3">
@@ -174,7 +254,27 @@ export default function ConnectionHealthPanel() {
                     <StatusPill tone={tone(row.status)} className="shrink-0">
                       {labelize(row.status)}
                     </StatusPill>
+                    <button
+                      type="button"
+                      onClick={() => void runTest(row)}
+                      disabled={testing}
+                      className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:opacity-50 disabled:pointer-events-none"
+                    >
+                      {testing && (
+                        <Loader2 size={11} className="animate-spin" aria-hidden />
+                      )}
+                      Test
+                    </button>
                   </div>
+                  {test && test.state !== 'running' && (
+                    <p
+                      className={`mt-2 ml-7 text-caption leading-relaxed ${
+                        test.state === 'passed' ? 'text-success' : 'text-critical'
+                      }`}
+                    >
+                      {test.detail}
+                    </p>
+                  )}
                   {hint && (
                     <p className="mt-2 ml-7 text-caption text-warning leading-relaxed">
                       {hint}

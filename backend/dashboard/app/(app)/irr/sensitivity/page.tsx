@@ -77,14 +77,7 @@ export default function IrrSensitivityPage() {
             key: 'delta',
             header: 'ΔEVE',
             numeric: true,
-            render: (r) => {
-              const v = num(r.deltaEveGhs);
-              return (
-                <span className={v < 0 ? 'text-critical font-medium' : undefined}>
-                  {fmtCurrencySigned(v)}
-                </span>
-              );
-            },
+            render: (r) => fmtCurrencySigned(num(r.deltaEveGhs)),
           },
           {
             key: 'pct',
