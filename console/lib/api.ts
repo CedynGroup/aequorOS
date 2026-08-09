@@ -7,8 +7,9 @@
  * this is the only file to fix.
  *
  * Wire types mirror backend/app/schemas/operator.py (TenantRead,
- * ProvisioningResultRead, TenantActivityRead, DataEngineConnectionRead) —
- * verified against that file on 2026-08-09.
+ * ProvisioningResultRead, TenantActivityRead, DataEngineConnectionRead) and
+ * backend/app/schemas/market_desk.py (the Desk* models) — verified against
+ * those files on 2026-08-09.
  *
  * Conventions:
  * - Wire types are snake_case and are used AS-IS throughout the UI. There is
@@ -193,6 +194,246 @@ export interface HealthResponse {
 }
 
 // --------------------------------------------------------------------------
+// Markets Desk wire types (snake_case, mirroring backend/app/schemas/market_desk.py)
+//
+// The desk is AequorOS' own market research operation (staff surface under
+// /operator/v1/desk): methodology register (Track 2), observations with the
+// manual-entry fallback, Track-1 determinations, and publication fan-out.
+// --------------------------------------------------------------------------
+
+/** DeskObservationCreate.unit — a backend Literal, closed on both sides. */
+export type DeskObservationUnit = 'pct' | 'rate' | 'ghs' | 'index';
+
+// status is a service-owned vocabulary ("draft" | "approved" | …) — typed as
+// string so a new state renders instead of breaking the register.
+export interface DeskMethodology {
+  id: string;
+  methodology_code: string;
+  version: number;
+  status: string;
+  /** The full versioned parameter set (spec §5) — shape is methodology-defined. */
+  parameters: Record<string, unknown>;
+  change_rationale: string;
+  proposed_by: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  effective_from: string | null; // date
+  created_at: string;
+}
+
+export interface DeskMethodologiesResponse {
+  methodologies: DeskMethodology[];
+  total: number;
+}
+
+export interface DeskMethodologyCreateRequest {
+  methodology_code: string;
+  parameters: Record<string, unknown>;
+  change_rationale: string;
+}
+
+export interface DeskMethodologyProposeRequest {
+  parameters: Record<string, unknown>;
+  change_rationale: string;
+}
+
+export interface DeskMethodologyApproveRequest {
+  effective_from: string; // date
+}
+
+export interface DeskObservation {
+  id: string;
+  /** Set when the observation came from an ingested capture; null for manual entry. */
+  capture_id: string | null;
+  series_code: string;
+  as_of_date: string; // date
+  /** Decimal on the backend — serialized as a JSON string, keep it a string. */
+  value: string;
+  unit: string;
+  attributes: Record<string, unknown>;
+  quality_flags: unknown[];
+  /** Operator email for manual entries; null for parser-written rows. */
+  entered_by: string | null;
+  /** Non-null means a later row superseded this one (append-only corrections). */
+  superseded_by: string | null;
+  created_at: string;
+}
+
+export interface DeskObservationsResponse {
+  observations: DeskObservation[];
+  total: number;
+}
+
+export interface DeskObservationCreateRequest {
+  series_code: string;
+  as_of_date: string; // date
+  /** Sent as a string to preserve decimal precision end to end. */
+  value: string;
+  unit: DeskObservationUnit;
+  attributes?: Record<string, unknown>;
+  quality_flags?: string[];
+}
+
+export interface DeskCapture {
+  id: string;
+  source_key: string;
+  captured_at: string;
+  as_of_date: string; // date
+  source_url: string | null;
+  content_sha256: string;
+  storage_path: string | null;
+  parser_version: string;
+  status: string;
+  parse_error: string | null;
+  created_by: string;
+}
+
+export interface DeskCapturesResponse {
+  captures: DeskCapture[];
+  total: number;
+}
+
+// ---- determination derived values / QA results ----------------------------
+// The wire fields are dict[str, Any]; the shapes below are the ones produced
+// by backend/app/services/market_desk/calculation.py::run_pipeline. Every
+// field is optional so an evolved pipeline renders degraded, never crashes.
+
+export interface DeskCurvePoint {
+  tenor_months?: number;
+  rate_pct?: string;
+}
+
+export interface DeskCurveBlock {
+  curve_type?: string;
+  points?: DeskCurvePoint[];
+  nodes?: { tenor_years?: string; value_pct?: string }[];
+  definition?: Record<string, unknown>;
+  digest?: string;
+  /** Present (with empty points) when the curve could not be built. */
+  build_error?: string;
+  // AGD-only extras (synthetic discounting proxy disclosure).
+  quote_basis?: string;
+  overnight_anchor_pct?: string;
+  basis?: Record<string, unknown>;
+  disclosure?: string;
+}
+
+export interface DeskRateEntry {
+  value?: string;
+  unit?: string;
+  /** pass_through | windowed | derived (methodology series treatment). */
+  treatment?: string;
+  source_series?: string[];
+  as_of?: string;
+  staleness_flag?: boolean;
+  detail?: Record<string, unknown>;
+}
+
+export interface DeskDerivedValues {
+  qa_passed?: boolean;
+  curves?: Record<string, DeskCurveBlock>;
+  rates?: Record<string, DeskRateEntry>;
+  reference_rates?: Record<string, string>;
+  fx?: Record<string, unknown>;
+  fx_rates?: Record<string, string>;
+}
+
+export interface DeskForwardQa {
+  min_forward?: string;
+  positivity_required?: boolean;
+  positivity_pass?: boolean;
+  slope_sign_changes?: number;
+  total_variation_ratio?: string;
+  oscillation_tolerance?: string;
+  oscillation_pass?: boolean;
+  passed?: boolean;
+}
+
+export interface DeskGrrCheck {
+  status?: string;
+  reference_month?: string;
+  published_pct?: string;
+  reconstructed_pct?: string;
+  gap_pp?: string;
+  tolerance_pp?: string;
+  inputs?: Record<string, unknown>;
+}
+
+export interface DeskQaFlag {
+  series?: string;
+  flag?: string;
+  detail?: string;
+}
+
+export interface DeskQaResults {
+  qa_passed?: boolean;
+  /** Hard pre-publish gates: gate name -> "pass" | "fail". */
+  gates?: Record<string, string>;
+  forward_qa?: DeskForwardQa | null;
+  nss_fallback_used?: boolean;
+  overnight_spread?: Record<string, unknown>;
+  cointegration_diagnostic?: Record<string, unknown>;
+  grr_check?: DeskGrrCheck;
+  flags?: DeskQaFlag[];
+}
+
+export interface DeskDetermination {
+  id: string;
+  cob_date: string; // date
+  methodology_code: string;
+  methodology_version: number;
+  /** Value-based, id-free observation entries ({series_code, as_of_date, value}). */
+  input_snapshot: unknown[];
+  input_digest: string;
+  /** Empty object until the draft is computed. */
+  derived_values: DeskDerivedValues;
+  qa_results: DeskQaResults;
+  // draft -> pending_review -> approved -> published; rejected; corrections
+  // create a NEW draft carrying supersedes_id. Typed string for forward compat.
+  status: string;
+  prepared_by: string;
+  reviewed_by: string | null;
+  review_note: string | null;
+  published_at: string | null;
+  supersedes_id: string | null;
+  created_at: string;
+}
+
+export interface DeskDeterminationsResponse {
+  determinations: DeskDetermination[];
+  total: number;
+}
+
+export interface DeskDeterminationCreateRequest {
+  cob_date: string; // date
+  /** Defaults to the register's default code (AEQ-GHS-CURVES) when omitted. */
+  methodology_code?: string;
+}
+
+// Wire is list[Any]; entries as produced by services/market_desk/publication.py.
+export interface DeskPublicationResult {
+  bank_id?: string;
+  ingestion_batch_id?: string;
+  status?: string;
+  error?: string;
+}
+
+export interface DeskPublication {
+  id: string;
+  determination_id: string;
+  published_by: string;
+  published_at: string;
+  /** complete | partial | failed (per-bank failures are the contract, not an error). */
+  status: string;
+  results: DeskPublicationResult[];
+}
+
+export interface DeskPublicationsResponse {
+  publications: DeskPublication[];
+  total: number;
+}
+
+// --------------------------------------------------------------------------
 // Core request helper
 // --------------------------------------------------------------------------
 
@@ -259,7 +500,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 }
 
 // --------------------------------------------------------------------------
-// Endpoints (the five operator API calls)
+// Endpoints (the operator API calls)
 // --------------------------------------------------------------------------
 
 /** GET /operator/health — unauthenticated reachability probe. */
@@ -287,6 +528,205 @@ export function listDataEngines(): Promise<DataEnginesResponse> {
 /** POST /operator/v1/tenants — run the provisioning saga. Returns the step record either way. */
 export function provisionTenant(body: ProvisionTenantRequest): Promise<ProvisionTenantResponse> {
   return request<ProvisionTenantResponse>('/operator/v1/tenants', { method: 'POST', body });
+}
+
+// --------------------------------------------------------------------------
+// Markets Desk endpoints (backend/app/operator/features/desk.py)
+// --------------------------------------------------------------------------
+
+const DESK = '/operator/v1/desk';
+
+function query(params: Record<string, string | boolean | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') search.set(key, String(value));
+  }
+  const text = search.toString();
+  return text ? `?${text}` : '';
+}
+
+/** GET /desk/methodologies — the methodology register, optionally one code. */
+export function listDeskMethodologies(
+  methodologyCode?: string,
+): Promise<DeskMethodologiesResponse> {
+  return request<DeskMethodologiesResponse>(
+    `${DESK}/methodologies${query({ methodology_code: methodologyCode })}`,
+  );
+}
+
+/** POST /desk/methodologies — register a NEW methodology code at v1 (draft). 201. */
+export function createDeskMethodology(
+  body: DeskMethodologyCreateRequest,
+): Promise<DeskMethodology> {
+  return request<DeskMethodology>(`${DESK}/methodologies`, { method: 'POST', body });
+}
+
+/**
+ * POST /desk/methodologies/ensure-default — idempotent bootstrap of the
+ * AEQ-GHS-CURVES v1 draft. Approval still happens through Track 2.
+ */
+export function ensureDefaultDeskMethodology(): Promise<DeskMethodology> {
+  return request<DeskMethodology>(`${DESK}/methodologies/ensure-default`, { method: 'POST' });
+}
+
+/** POST /desk/methodologies/{code}/versions — Track 2: draft version+1 with a rationale. 201. */
+export function proposeDeskMethodologyVersion(
+  methodologyCode: string,
+  body: DeskMethodologyProposeRequest,
+): Promise<DeskMethodology> {
+  return request<DeskMethodology>(
+    `${DESK}/methodologies/${encodeURIComponent(methodologyCode)}/versions`,
+    { method: 'POST', body },
+  );
+}
+
+/**
+ * POST /desk/methodologies/{code}/versions/{version}/approve — Track-2
+ * approval (dual control: 422 when the approver is the proposer).
+ */
+export function approveDeskMethodologyVersion(
+  methodologyCode: string,
+  version: number,
+  body: DeskMethodologyApproveRequest,
+): Promise<DeskMethodology> {
+  return request<DeskMethodology>(
+    `${DESK}/methodologies/${encodeURIComponent(methodologyCode)}/versions/${version}/approve`,
+    { method: 'POST', body },
+  );
+}
+
+/**
+ * GET /desk/observations — series_code and as_of_date are EXACT-match
+ * backend filters; prefix/range narrowing is done client-side.
+ */
+export function listDeskObservations(opts?: {
+  seriesCode?: string;
+  asOfDate?: string;
+  includeSuperseded?: boolean;
+}): Promise<DeskObservationsResponse> {
+  return request<DeskObservationsResponse>(
+    `${DESK}/observations${query({
+      series_code: opts?.seriesCode,
+      as_of_date: opts?.asOfDate,
+      include_superseded: opts?.includeSuperseded ? true : undefined,
+    })}`,
+  );
+}
+
+/**
+ * POST /desk/observations — the manual-entry fallback (spec §3): a
+ * first-class observation with operator provenance; a re-entry for the same
+ * (series, as-of) supersedes append-only. 201.
+ */
+export function createDeskObservation(
+  body: DeskObservationCreateRequest,
+): Promise<DeskObservation> {
+  return request<DeskObservation>(`${DESK}/observations`, { method: 'POST', body });
+}
+
+/** GET /desk/captures — raw source captures, newest first, optionally one source. */
+export function listDeskCaptures(sourceKey?: string): Promise<DeskCapturesResponse> {
+  return request<DeskCapturesResponse>(`${DESK}/captures${query({ source_key: sourceKey })}`);
+}
+
+/** GET /desk/determinations — newest COB first, optional cob_date/status filters. */
+export function listDeskDeterminations(opts?: {
+  cobDate?: string;
+  status?: string;
+}): Promise<DeskDeterminationsResponse> {
+  return request<DeskDeterminationsResponse>(
+    `${DESK}/determinations${query({ cob_date: opts?.cobDate, status: opts?.status })}`,
+  );
+}
+
+/** GET /desk/determinations/{id} — one determination with snapshot, results, QA. */
+export function getDeskDetermination(determinationId: string): Promise<DeskDetermination> {
+  return request<DeskDetermination>(
+    `${DESK}/determinations/${encodeURIComponent(determinationId)}`,
+  );
+}
+
+/**
+ * POST /desk/determinations — open a draft bound to the ACTIVE methodology
+ * version. 409 when no approved methodology is effective for the COB date or
+ * no observations exist on or before it. 201.
+ */
+export function createDeskDetermination(
+  body: DeskDeterminationCreateRequest,
+): Promise<DeskDetermination> {
+  return request<DeskDetermination>(`${DESK}/determinations`, { method: 'POST', body });
+}
+
+/** POST /desk/determinations/{id}/compute — run the §5 pipeline on a DRAFT (409 otherwise). */
+export function computeDeskDetermination(determinationId: string): Promise<DeskDetermination> {
+  return request<DeskDetermination>(
+    `${DESK}/determinations/${encodeURIComponent(determinationId)}/compute`,
+    { method: 'POST' },
+  );
+}
+
+/** POST /desk/determinations/{id}/submit — maker step complete; draft -> pending_review. */
+export function submitDeskDetermination(determinationId: string): Promise<DeskDetermination> {
+  return request<DeskDetermination>(
+    `${DESK}/determinations/${encodeURIComponent(determinationId)}/submit`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * POST /desk/determinations/{id}/approve — checker step. Refused when the
+ * reviewer is the preparer (maker-checker) or a hard QA gate failed
+ * (qa_passed=false) — surface both as explicit UI states.
+ */
+export function approveDeskDetermination(determinationId: string): Promise<DeskDetermination> {
+  return request<DeskDetermination>(
+    `${DESK}/determinations/${encodeURIComponent(determinationId)}/approve`,
+    { method: 'POST' },
+  );
+}
+
+/** POST /desk/determinations/{id}/reject — checker rejection with a required reason. */
+export function rejectDeskDetermination(
+  determinationId: string,
+  reason: string,
+): Promise<DeskDetermination> {
+  return request<DeskDetermination>(
+    `${DESK}/determinations/${encodeURIComponent(determinationId)}/reject`,
+    { method: 'POST', body: { reason } },
+  );
+}
+
+/**
+ * POST /desk/determinations/{id}/supersede — correction path: a NEW draft for
+ * the same COB date carrying supersedes_id; the published original is never
+ * edited. Returns the new draft. 201.
+ */
+export function supersedeDeskDetermination(determinationId: string): Promise<DeskDetermination> {
+  return request<DeskDetermination>(
+    `${DESK}/determinations/${encodeURIComponent(determinationId)}/supersede`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * POST /desk/determinations/{id}/publish — fan the approved determination out
+ * to every bank. Partial failure is the contract: the publication row records
+ * a per-bank result either way, and re-publishing heals partial fan-outs.
+ */
+export function publishDeskDetermination(determinationId: string): Promise<DeskPublication> {
+  return request<DeskPublication>(
+    `${DESK}/determinations/${encodeURIComponent(determinationId)}/publish`,
+    { method: 'POST' },
+  );
+}
+
+/** GET /desk/publications — newest first, optionally for one determination. */
+export function listDeskPublications(
+  determinationId?: string,
+): Promise<DeskPublicationsResponse> {
+  return request<DeskPublicationsResponse>(
+    `${DESK}/publications${query({ determination_id: determinationId })}`,
+  );
 }
 
 // --------------------------------------------------------------------------

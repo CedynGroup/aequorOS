@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Code2, LogOut } from 'lucide-react';
+import { Code2, LineChart, LogOut } from 'lucide-react';
 import {
   clearToken,
   getAuthConfig,
@@ -14,9 +14,9 @@ import {
 import type { ReactNode } from 'react';
 
 // One sidebar entry per staff discipline; a section's surfaces are the top
-// nav INSIDE it (app/(shell)/(developer)/layout.tsx), the dashboard's module
-// frame pattern. Future disciplines (e.g. the CP-3 market-data desk) are new
-// entries here with their own route group + top nav.
+// nav INSIDE it (app/(shell)/(developer)/layout.tsx and
+// app/(shell)/(desk)/layout.tsx), the dashboard's module frame pattern.
+// Future disciplines are new entries here with their own route group + top nav.
 const NAV = [
   {
     href: '/tenants',
@@ -24,6 +24,13 @@ const NAV = [
     icon: Code2,
     // Active for every surface inside the Developer section.
     match: ['/tenants', '/onboard', '/operations'],
+  },
+  {
+    href: '/desk/determinations',
+    label: 'Markets Desk',
+    icon: LineChart,
+    // Active for every surface inside the Markets Desk section.
+    match: ['/desk'],
   },
 ] as const;
 

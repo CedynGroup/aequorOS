@@ -42,6 +42,7 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/desk/determinations",
         "/operator/v1/desk/determinations/{determination_id}",
         "/operator/v1/desk/determinations/{determination_id}/approve",
+        "/operator/v1/desk/determinations/{determination_id}/compute",
         "/operator/v1/desk/determinations/{determination_id}/publish",
         "/operator/v1/desk/determinations/{determination_id}/reject",
         "/operator/v1/desk/determinations/{determination_id}/submit",
