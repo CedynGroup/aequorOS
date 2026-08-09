@@ -363,6 +363,8 @@ def _run_analysis(
     facts: list[BankFinancialFact],
     active: _FtpParams | None,
     ltp_draws: dict[str, Decimal] | None = None,
+    *,
+    shift_override: Decimal | None = None,
 ) -> _FtpAnalysis:
     if not facts:
         raise FtpRunError(
@@ -390,7 +392,7 @@ def _run_analysis(
 
     base_curve = build_curve(curve_points)
     validate_product_alignment(products, base_curve)
-    shift = _scenario_shift(scenario_code, active)
+    shift = shift_override if shift_override is not None else _scenario_shift(scenario_code, active)
     curve = shift_curve(base_curve, shift)
 
     product_result = product_profitability(products, curve, active.min_product_margin_pct)
@@ -972,6 +974,30 @@ def _compute_inline(
     active = _load_ftp_params_or_none(db, ctx, bank, period.period_end)
     draws = _load_ltp_draws(db, ctx, bank, period.period_end)
     return _run_analysis(BASELINE_SCENARIO, facts, active, draws)
+
+
+def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its full scope
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    shocks: dict[str, Decimal],
+    scenario_code: str = "analysis",
+) -> _FtpAnalysis:
+    """Workbench seam: reprice the book under an arbitrary curve/spread shift
+    without persisting anything. The combined shift is curve + funding spread,
+    exactly how the official scenario overlays compose."""
+    facts = _load_facts(db, ctx, bank, period)
+    active = _load_ftp_params_or_none(db, ctx, bank, period.period_end)
+    draws = _load_ltp_draws(db, ctx, bank, period.period_end)
+    if not shocks:
+        return _run_analysis(scenario_code, facts, active, draws, shift_override=Decimal(0))
+    shift_bp = shocks.get(SHOCK_CURVE_SHIFT_BP, Decimal(0)) + shocks.get(
+        SHOCK_FUNDING_ADD_BP, Decimal(0)
+    )
+    return _run_analysis(
+        scenario_code, facts, active, draws, shift_override=shift_bp / _HUNDRED
+    )
 
 
 def _compute_inline_or_409(

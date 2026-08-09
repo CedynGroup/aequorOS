@@ -435,6 +435,105 @@ def get_bsd3_preview(
     )
 
 
+@dataclass(frozen=True)
+class LiquidityScenarioAnalysis:
+    """One scenario's computed liquidity picture — engine outputs only."""
+
+    lcr: LcrResult
+    nsfr: NsfrResult
+    params: LiquidityParams
+    currency_gaps: CurrencyGapResult
+    mismatch_limit: Decimal | None
+    stressed_ladder: tuple[StressedLadder, ...]
+
+
+def _execute_scenario_compute(  # noqa: PLR0913 - the official path hands over its loaded inputs
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    facts: list[BankFinancialFact],
+    active: _ActiveLiquidityParams,
+    currency_ladders: dict[str, dict[str, list[str] | str]],
+    shocks: dict[str, Decimal],
+    scenario_code: str,
+) -> LiquidityScenarioAnalysis:
+    """The scenario arithmetic shared by official runs and the workbench.
+
+    Extracted from ``_create_and_execute`` so desk analysis and immutable
+    regulatory runs are guaranteed to produce identical numbers for identical
+    inputs. Pure with respect to run state: raises the module's domain errors,
+    never writes a ``RegulatoryRun``.
+    """
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_params = _engine_params(active)
+    if shocks:
+        engine_facts, engine_params = apply_liquidity_stress(
+            scenario_code, engine_facts, engine_params, shocks
+        )
+    if not engine_facts:
+        raise LiquidityRunError(
+            "financial_facts_missing",
+            "The reporting period has no financial facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    lcr = compute_lcr(engine_facts, engine_params)
+    nsfr = compute_nsfr(engine_facts, engine_params)
+    ladder_inputs = {
+        currency: {
+            "assets": _ladder_lists(ladder, "assets"),
+            "liabilities": _ladder_lists(ladder, "liabilities"),
+        }
+        for currency, ladder in currency_ladders.items()
+    }
+    currency_gaps = compute_currency_gaps(
+        ladder_inputs,
+        base_currency(bank),
+        shocks.get(SHOCK_FX_DEPRECIATION, Decimal(0)),
+    )
+    mismatch_limit = _currency_mismatch_limit(db, ctx, bank, period.period_end)
+    runoff_schedule = {
+        int(key.removeprefix(SHOCK_NMD_RUNOFF_PREFIX).removeprefix("h")): value
+        for key, value in shocks.items()
+        if key.startswith(SHOCK_NMD_RUNOFF_PREFIX)
+    }
+    stressed_ladder: tuple[StressedLadder, ...] = ()
+    if runoff_schedule:
+        stressed_ladder = compute_stressed_ladder(
+            ladder_inputs,
+            {
+                currency: Decimal(str(ladder.get("demand_liabilities", "0")))
+                for currency, ladder in currency_ladders.items()
+            },
+            runoff_schedule,
+        )
+    return LiquidityScenarioAnalysis(
+        lcr=lcr,
+        nsfr=nsfr,
+        params=engine_params,
+        currency_gaps=currency_gaps,
+        mismatch_limit=mismatch_limit,
+        stressed_ladder=stressed_ladder,
+    )
+
+
+def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its full scope
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    shocks: dict[str, Decimal],
+    scenario_code: str = "analysis",
+) -> LiquidityScenarioAnalysis:
+    """Workbench seam: compute one scenario without persisting anything."""
+    facts = _load_facts(db, ctx, bank, period)
+    active = _load_active_params(db, ctx, bank, period.period_end)
+    currency_ladders = _currency_ladders(db, ctx, bank, period)
+    return _execute_scenario_compute(
+        db, ctx, bank, period, facts, active, currency_ladders, shocks, scenario_code
+    )
+
+
 def _create_and_execute(
     db: Session,
     ctx: TenantContext,
@@ -494,62 +593,26 @@ def _create_and_execute(
 
     run_id = run.id
     try:
-        engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
-        engine_params = _engine_params(active)
-        if scenario_code != BASELINE_SCENARIO:
-            if not shocks:
-                raise LiquidityRunError(
-                    "missing_parameter",
-                    f"No liquidity stress shocks are configured for scenario '{scenario_code}'.",
-                    {"scenario_code": scenario_code},
-                )
-            engine_facts, engine_params = apply_liquidity_stress(
-                scenario_code, engine_facts, engine_params, shocks
-            )
-        if not engine_facts:
+        if scenario_code != BASELINE_SCENARIO and not shocks:
             raise LiquidityRunError(
-                "financial_facts_missing",
-                "The reporting period has no financial facts to analyze.",
-                {"reporting_period_id": str(period.id)},
+                "missing_parameter",
+                f"No liquidity stress shocks are configured for scenario '{scenario_code}'.",
+                {"scenario_code": scenario_code},
             )
-        lcr = compute_lcr(engine_facts, engine_params)
-        nsfr = compute_nsfr(engine_facts, engine_params)
-        currency_gaps = compute_currency_gaps(
-            {
-                currency: {
-                    "assets": _ladder_lists(ladder, "assets"),
-                    "liabilities": _ladder_lists(ladder, "liabilities"),
-                }
-                for currency, ladder in currency_ladders.items()
-            },
-            base_currency(bank),
-            shocks.get(SHOCK_FX_DEPRECIATION, Decimal(0)),
+        analysis = _execute_scenario_compute(
+            db, ctx, bank, period, facts, active, currency_ladders, shocks, scenario_code
         )
-        mismatch_limit = _currency_mismatch_limit(db, ctx, bank, period.period_end)
-        runoff_schedule = {
-            int(key.removeprefix(SHOCK_NMD_RUNOFF_PREFIX).removeprefix("h")): value
-            for key, value in shocks.items()
-            if key.startswith(SHOCK_NMD_RUNOFF_PREFIX)
-        }
-        stressed_ladder: tuple[StressedLadder, ...] = ()
-        if runoff_schedule:
-            stressed_ladder = compute_stressed_ladder(
-                {
-                    currency: {
-                        "assets": _ladder_lists(ladder, "assets"),
-                        "liabilities": _ladder_lists(ladder, "liabilities"),
-                    }
-                    for currency, ladder in currency_ladders.items()
-                },
-                {
-                    currency: Decimal(str(ladder.get("demand_liabilities", "0")))
-                    for currency, ladder in currency_ladders.items()
-                },
-                runoff_schedule,
-            )
         _persist_success(
-            db, ctx, run, lcr, nsfr, engine_params, base_currency(bank),
-            currency_gaps, mismatch_limit, stressed_ladder,
+            db,
+            ctx,
+            run,
+            analysis.lcr,
+            analysis.nsfr,
+            analysis.params,
+            base_currency(bank),
+            analysis.currency_gaps,
+            analysis.mismatch_limit,
+            analysis.stressed_ladder,
         )
     except LiquidityRunError as exc:
         _persist_failure(db, ctx, run_id, exc)

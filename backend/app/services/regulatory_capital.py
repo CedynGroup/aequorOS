@@ -185,6 +185,73 @@ class _ActiveCapitalParams:
     ecl_assumptions: tuple[EclAssumption, ...] = ()
 
 
+@dataclass(frozen=True)
+class CapitalScenarioAnalysis:
+    """One scenario's computed capital picture — engine outputs only."""
+
+    rwa: RwaResult
+    ratios: CapitalRatiosResult
+    stress: CapitalStressResult | None
+    params: CapitalParams
+    ecl: EclResult | None
+
+
+def _execute_scenario_compute(
+    facts: list[BankFinancialFact],
+    active: _ActiveCapitalParams,
+    shocks: dict[str, Decimal],
+    scenario_code: str,
+    period: BankReportingPeriod,
+) -> CapitalScenarioAnalysis:
+    """The scenario arithmetic shared by official runs and the workbench.
+
+    Empty stress shocks (net of the ECL conditioning keys) means the point-in-
+    time baseline; otherwise the four-quarter stress path. Raises the module's
+    domain errors; never writes a ``RegulatoryRun``.
+    """
+    if not facts:
+        raise CapitalRunError(
+            "financial_facts_missing",
+            "The reporting period has no financial facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_params = _engine_params(active)
+    # ECL conditioning keys are the ECL engine's, never the stress engine's
+    # (which rejects unknown shocks).
+    stress_shocks = {
+        key: value for key, value in shocks.items() if key not in ECL_CONDITIONING_KEYS
+    }
+    ecl = _modeled_ecl(engine_facts, active, shocks)
+    gp_override = ecl.general_ecl if ecl is not None else None
+    if not stress_shocks:
+        rwa = compute_rwa(engine_facts, engine_params)
+        ratios = compute_capital_ratios(engine_facts, rwa, engine_params, gp_override)
+        return CapitalScenarioAnalysis(
+            rwa=rwa, ratios=ratios, stress=None, params=engine_params, ecl=ecl
+        )
+    stress = run_capital_stress(
+        scenario_code, engine_facts, engine_params, stress_shocks, gp_override
+    )
+    return CapitalScenarioAnalysis(
+        rwa=stress.rwa, ratios=stress.ratios, stress=stress, params=engine_params, ecl=ecl
+    )
+
+
+def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its full scope
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    shocks: dict[str, Decimal],
+    scenario_code: str = "analysis",
+) -> CapitalScenarioAnalysis:
+    """Workbench seam: compute one scenario without persisting anything."""
+    facts = _load_facts(db, ctx, bank, period)
+    active = _load_active_params(db, ctx, bank, period.period_end)
+    return _execute_scenario_compute(facts, active, shocks, scenario_code, period)
+
+
 def create_capital_run(
     db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryRunCreate
 ) -> RegulatoryRunRead:
@@ -466,48 +533,28 @@ def _create_and_execute(
 
     run_id = run.id
     try:
-        if not facts:
-            raise CapitalRunError(
-                "financial_facts_missing",
-                "The reporting period has no financial facts to analyze.",
-                {"reporting_period_id": str(period.id)},
-            )
-        engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
-        engine_params = _engine_params(active)
-        # ECL conditioning keys are the ECL engine's, never the stress
-        # engine's (which rejects unknown shocks).
-        stress_shocks = {
-            key: value for key, value in shocks.items() if key not in ECL_CONDITIONING_KEYS
-        }
-        ecl = _modeled_ecl(engine_facts, active, shocks)
-        gp_override = ecl.general_ecl if ecl is not None else None
-        if scenario_code == BASELINE_SCENARIO:
-            rwa = compute_rwa(engine_facts, engine_params)
-            ratios = compute_capital_ratios(engine_facts, rwa, engine_params, gp_override)
-            _persist_success(
-                db, ctx, run, rwa, ratios, engine_params, None, base_currency(bank), ecl
-            )
-        else:
-            if not stress_shocks:
+        if scenario_code != BASELINE_SCENARIO:
+            stress_only = {
+                key: value for key, value in shocks.items() if key not in ECL_CONDITIONING_KEYS
+            }
+            if not stress_only:
                 raise CapitalRunError(
                     "missing_parameter",
                     f"No capital stress shocks are configured for scenario '{scenario_code}'.",
                     {"scenario_code": scenario_code},
                 )
-            stress = run_capital_stress(
-                scenario_code, engine_facts, engine_params, stress_shocks, gp_override
-            )
-            _persist_success(
-                db,
-                ctx,
-                run,
-                stress.rwa,
-                stress.ratios,
-                engine_params,
-                stress,
-                base_currency(bank),
-                ecl,
-            )
+        analysis = _execute_scenario_compute(facts, active, shocks, scenario_code, period)
+        _persist_success(
+            db,
+            ctx,
+            run,
+            analysis.rwa,
+            analysis.ratios,
+            analysis.params,
+            analysis.stress,
+            base_currency(bank),
+            analysis.ecl,
+        )
     except CapitalRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
     except MissingParameterError as exc:

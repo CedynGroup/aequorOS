@@ -48,10 +48,12 @@ from app.domain.irr.engine import (
     classify_eve_change,
     compute_duration,
     compute_ear,
+    compute_eve,
     compute_gap,
     compute_nii,
     ear_line_item,
     run_irr_scenarios,
+    scenario_shifts,
 )
 from app.models import (
     Bank,
@@ -760,6 +762,81 @@ def _compute_inline(
     facts = _load_facts(db, ctx, bank, period)
     active = _load_irr_params_or_none(db, ctx, bank, period.period_end)
     return _run_analysis(db, ctx, bank, period, facts, active)
+
+
+@dataclass(frozen=True)
+class IrrScenarioAnalysis:
+    """One scenario's EVE picture — engine outputs only."""
+
+    base_eve: Decimal
+    shifted_eve: Decimal
+    delta_eve: Decimal
+    delta_eve_pct_tier1: Decimal
+    eve_limit_pct: Decimal
+    status: str
+    tier1: Decimal
+    ear: Decimal | None
+
+
+def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its full scope
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    shocks: dict[str, Decimal],
+    scenario_code: str = "analysis",
+) -> IrrScenarioAnalysis:
+    """Workbench seam: one scenario's ΔEVE without persisting anything.
+
+    Prices the shock set through the SAME shift builder the official Basel
+    scenario table uses (`scenario_shifts`), against the active base curve
+    and Tier 1 read the same way as the official runs.
+    """
+    facts = _load_facts(db, ctx, bank, period)
+    if not facts:
+        raise IrrRunError(
+            "financial_facts_missing",
+            "The reporting period has no IRR facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    active = _load_irr_params_or_none(db, ctx, bank, period.period_end)
+    if active is None:
+        raise IrrRunError(
+            "missing_parameter",
+            "Required IRR parameters (base curve, scenario shocks, or limits) are "
+            "not configured.",
+            None,
+        )
+    tier1 = _load_tier1(db, ctx, bank, period)
+    if tier1 <= 0:
+        raise IrrRunError(
+            "missing_parameter",
+            "Tier 1 capital must be positive to express ΔEVE as a percentage.",
+            None,
+        )
+    positions = _positions_from_facts(facts, active.curve)
+    base_eve = compute_eve(positions, active.curve, {})
+    if shocks:
+        shifts = scenario_shifts(scenario_code, shocks, active.curve)
+        shifted_eve = compute_eve(positions, active.curve, shifts)
+    else:
+        shifted_eve = base_eve
+    delta = shifted_eve - base_eve
+    delta_pct = (delta / tier1 * Decimal("100")).quantize(Decimal("0.000001"))
+    ear: Decimal | None = None
+    parallel = shocks.get("parallel_bp")
+    if parallel is not None:
+        ear = compute_ear(compute_gap(positions), parallel)
+    return IrrScenarioAnalysis(
+        base_eve=base_eve,
+        shifted_eve=shifted_eve,
+        delta_eve=delta,
+        delta_eve_pct_tier1=delta_pct,
+        eve_limit_pct=active.eve_limit_pct,
+        status=classify_eve_change(abs(delta_pct), active.eve_limit_pct),
+        tier1=tier1,
+        ear=ear,
+    )
 
 
 def _compute_inline_or_409(

@@ -505,9 +505,14 @@ def _side_duration(
     )
 
 
-def _scenario_shifts(
+def scenario_shifts(
     scenario_code: str, shocks: Mapping[str, Decimal], curve: Mapping[Decimal, Decimal]
 ) -> dict[Decimal, Decimal]:
+    """Per-tenor curve shifts (decimal) for one scenario's shock set.
+
+    Public seam: the Scenario Workbench prices desk-authored shocks through
+    exactly the same builder the official Basel scenario table uses.
+    """
     known = {SHOCK_PARALLEL_BP, SHOCK_SHORT_BP, SHOCK_LONG_BP, SHOCK_DECAY_YEARS}
     for key in shocks:
         if key not in known:
@@ -533,6 +538,9 @@ def _scenario_shifts(
         decay = shocks[SHOCK_DECAY_YEARS]
         return {midpoint: short * (-midpoint / decay).exp() for midpoint in midpoints}
     raise MissingParameterError(f"stress_shock:{scenario_code}:{SHOCK_PARALLEL_BP}")
+
+
+_scenario_shifts = scenario_shifts
 
 
 def _present_value(amount: Decimal, midpoint: Decimal, rate: Decimal) -> Decimal:

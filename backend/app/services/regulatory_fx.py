@@ -844,6 +844,67 @@ def _build_trend(
     return points
 
 
+@dataclass(frozen=True)
+class FxScenarioAnalysis:
+    """One scenario's NOP picture — engine outputs only."""
+
+    nop: NopResult
+    scenario: FxScenarioNop | None
+    single_limit_pct: Decimal
+    aggregate_limit_pct: Decimal
+
+
+def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its full scope
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    shocks: dict[str, Decimal],
+    scenario_code: str = "analysis",
+) -> FxScenarioAnalysis:
+    """Workbench seam: one depreciation scenario without persisting anything."""
+    facts = _load_facts(db, ctx, bank, period)
+    if not facts:
+        raise FxRunError(
+            "financial_facts_missing",
+            "The reporting period has no FX facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    active = _load_fx_params_or_none(db, ctx, bank, period.period_end)
+    if active is None:
+        raise FxRunError(
+            "missing_parameter",
+            "Required FX parameters (limits or depreciation shocks) are not configured.",
+            None,
+        )
+    tier1 = _load_tier1(db, ctx, bank, period)
+    if tier1 <= 0:
+        raise FxRunError(
+            "missing_parameter",
+            "Tier 1 capital must be positive to express the NOP as a percentage.",
+            None,
+        )
+    positions = _positions_from_facts(facts)
+    nop = compute_nop(positions, tier1, active.single_limit_pct, active.aggregate_limit_pct)
+    scenario: FxScenarioNop | None = None
+    shock_pct = shocks.get(SHOCK_DEPRECIATION)
+    if shock_pct is not None:
+        outcomes = run_fx_scenarios(
+            positions,
+            tier1,
+            {scenario_code: shock_pct},
+            active.single_limit_pct,
+            active.aggregate_limit_pct,
+        )
+        scenario = outcomes[0]
+    return FxScenarioAnalysis(
+        nop=nop,
+        scenario=scenario,
+        single_limit_pct=active.single_limit_pct,
+        aggregate_limit_pct=active.aggregate_limit_pct,
+    )
+
+
 def _compute_inline(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> _FxAnalysis:

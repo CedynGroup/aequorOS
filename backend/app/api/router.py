@@ -28,6 +28,7 @@ from app.features.manage_market_data_uploads import router as market_data_upload
 from app.features.manage_notifications import router as notifications_router
 from app.features.manage_regulatory_reporting import router as regulatory_reporting_router
 from app.features.manage_scenarios import router as scenarios_router
+from app.features.manage_stress_scenarios import router as stress_scenarios_router
 from app.features.manage_temenos_connections import router as temenos_connections_router
 from app.features.push_data import router as push_router
 from app.features.read_behavioral_models import router as behavioral_models_router
@@ -47,6 +48,7 @@ from app.features.run_regulatory_fx import router as regulatory_fx_router
 from app.features.run_regulatory_irr import router as regulatory_irr_router
 from app.features.run_regulatory_liquidity import router as regulatory_liquidity_router
 from app.features.run_reverse_stress import router as reverse_stress_router
+from app.features.run_scenario_analysis import router as scenario_analysis_router
 from app.features.track_jobs import router as jobs_router
 
 api_router = APIRouter()
@@ -65,6 +67,8 @@ v1_router.include_router(liquidity_cfp_router)
 v1_router.include_router(credit_params_router)
 v1_router.include_router(capital_plan_router)
 v1_router.include_router(examiner_router)
+v1_router.include_router(stress_scenarios_router)
+v1_router.include_router(scenario_analysis_router)
 v1_router.include_router(reverse_stress_router)
 v1_router.include_router(regulatory_capital_router)
 v1_router.include_router(regulatory_irr_router)
