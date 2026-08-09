@@ -5,9 +5,10 @@ enqueues an ``official_run`` for every bank whose latest period has no official
 run since today's cutoff hour; when scheduled market data pulls are enabled it
 enqueues the due ``market_data_pull`` jobs (see ``market_data_jobs``); then it
 enqueues the next tick at the following hour boundary. It is inert (no enqueue,
-no reschedule) while both ``OFFICIAL_RUN_ENABLED`` and
-``MARKET_DATA_PULL_ENABLED`` are off, so no environment auto-mints heavy runs or
-vendor pulls and tests stay deterministic.
+no reschedule) while every scheduling flag — ``OFFICIAL_RUN_ENABLED``,
+``MARKET_DATA_PULL_ENABLED``, ``TEMENOS_PULL_ENABLED``, and
+``DATABASE_DIRECT_HEALTH_ENABLED`` — is off, so no environment auto-mints heavy
+runs or vendor pulls and tests stay deterministic.
 """
 
 from __future__ import annotations
@@ -37,8 +38,14 @@ def run_tick(session: Session, job: Job) -> None:
     official_enabled = settings.worker.official_run_enabled
     market_data_enabled = settings.market_data.market_data_pull_enabled
     temenos_enabled = settings.temenos.temenos_pull_enabled
-    if not official_enabled and not market_data_enabled and not temenos_enabled:
-        job.progress = {"status": "inert", "reason": "official_run_disabled"}
+    database_direct_health_enabled = settings.database_direct.database_direct_health_enabled
+    if (
+        not official_enabled
+        and not market_data_enabled
+        and not temenos_enabled
+        and not database_direct_health_enabled
+    ):
+        job.progress = {"status": "inert", "reason": "scheduling_disabled"}
         return
 
     org_id = job.organization_id
@@ -61,6 +68,15 @@ def run_tick(session: Session, job: Job) -> None:
         from app.services.temenos_jobs import enqueue_due_temenos_pulls  # noqa: PLC0415
 
         temenos_pulls = len(enqueue_due_temenos_pulls(session, org_id, now=now))
+
+    database_direct_probes = 0
+    if database_direct_health_enabled:
+        # Lazy import: the probe pulls in the database-direct adapter tree.
+        from app.services.database_direct_jobs import (  # noqa: PLC0415
+            enqueue_due_database_direct_probes,
+        )
+
+        database_direct_probes = len(enqueue_due_database_direct_probes(session, org_id, now=now))
 
     # Daily reporting-deadline scan (submission_pipeline_plan.md §W3): the scan
     # date rides the coalesce key, so each org gets at most one scan per day.
@@ -90,6 +106,7 @@ def run_tick(session: Session, job: Job) -> None:
         "official_runs_enqueued": enqueued,
         "market_data_pulls_enqueued": market_data_pulls,
         "temenos_pulls_enqueued": temenos_pulls,
+        "database_direct_probes_enqueued": database_direct_probes,
         "deadline_scan_enqueued": deadline_scan_enqueued,
         # Key present only when the SMTP mirror is configured (default off).
         **(

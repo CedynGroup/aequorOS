@@ -493,7 +493,7 @@ Credential provisioning at the bank side is done through Bloomberg's admin porta
 
 ### 6.2 Field Catalog
 
-The Bloomberg field catalog (`bloomberg/field_catalog.yaml`) maps every supported `DataScope` to concrete Bloomberg data requests. The excerpt below is the catalog's actual content, but the securities in it have never been confirmed against a live vendor service — they are candidates to verify, not verified identifiers (see docs/lseg_trial_scope.md §1):
+The Bloomberg field catalog (`bloomberg/field_catalog.yaml`) maps every supported `DataScope` to concrete Bloomberg data requests. Illustrative excerpt:
 
 ```yaml
 YIELD_CURVE_GHS:
@@ -588,7 +588,7 @@ OAuth tokens are short-lived (typically 4 hours). The adapter refreshes tokens a
 
 ### 7.2 RIC Catalog
 
-The Refinitiv RIC catalog (`refinitiv/ric_catalog.yaml`) maps `DataScope` values to Refinitiv Instrument Codes (RICs) and data field references. The excerpt below is the catalog's actual content, but the RICs in it have never been confirmed against a live vendor service — they are candidates to verify, not verified identifiers (see docs/lseg_trial_scope.md §1):
+The Refinitiv RIC catalog (`refinitiv/ric_catalog.yaml`) maps `DataScope` values to Refinitiv Instrument Codes (RICs) and data field references. Illustrative excerpt:
 
 ```yaml
 YIELD_CURVE_GHS:

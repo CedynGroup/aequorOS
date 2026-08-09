@@ -42,6 +42,7 @@ JOB_TYPES = (
     "etl_dedup",
     "reporting_deadline_scan",
     "notification_email_mirror",
+    "database_direct_health",
 )
 
 # Retry backoff is 2**attempts * base seconds (10s, 20s, 40s at base=5).

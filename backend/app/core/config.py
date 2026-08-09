@@ -446,6 +446,24 @@ class TemenosSettings(BaseSettings):
     temenos_pull_enabled: bool = Field(default=False, alias="TEMENOS_PULL_ENABLED")
 
 
+class DatabaseDirectSettings(BaseSettings):
+    """Database-Direct adapter scheduling settings.
+
+    ``DATABASE_DIRECT_HEALTH_ENABLED`` gates the scheduled daily connection
+    health probes (off by default). A probe is the existing live connection
+    test — connect, authenticate, read the data dictionary — so it monitors a
+    bank's reporting replica and, as genuine database activity, keeps
+    idle-stopping test cores awake (OCI stops an Always Free Oracle ADB after
+    seven consecutive idle days).
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    database_direct_health_enabled: bool = Field(
+        default=False, alias="DATABASE_DIRECT_HEALTH_ENABLED"
+    )
+
+
 class WorkerSettings(BaseSettings):
     """Live-engine background worker and scheduler settings.
 
@@ -541,6 +559,7 @@ class Settings(BaseSettings):
     behavioral: BehavioralSettings = Field(default_factory=BehavioralSettings)
     market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
     temenos: TemenosSettings = Field(default_factory=TemenosSettings)
+    database_direct: DatabaseDirectSettings = Field(default_factory=DatabaseDirectSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
     smtp: SmtpSettings = Field(default_factory=SmtpSettings)
     attestation: AttestationSettings = Field(default_factory=AttestationSettings)

@@ -25,6 +25,7 @@ from app.db.base import utc_now
 from app.db.session import get_worker_sessionmaker
 from app.models import Job
 from app.services import (
+    database_direct_jobs,
     etl_dedup_jobs,
     job_queue,
     market_data_jobs,
@@ -46,6 +47,7 @@ HANDLERS: dict[str, Handler] = {
     "temenos_pull": temenos_jobs.run_temenos_pull,
     "etl_dedup": etl_dedup_jobs.run_etl_dedup,
     "reporting_deadline_scan": reporting_deadline_scan.run_reporting_deadline_scan,
+    "database_direct_health": database_direct_jobs.run_database_direct_health,
 }
 
 
