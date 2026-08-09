@@ -21,7 +21,7 @@ through one operator BFF. Never a page inside bank.aequoros.com.
 | Jurisdiction/currency | `jurisdictions` global registry (GH/NG/KE/ZA seeded); `banks.currency`+`jurisdiction_code` REQUIRED, no defaults | Console form makes both mandatory picks |
 | SSO connection | `sso_connections` per org, admin-managed in customer Settings | Console pre-creates the stub (issuer/domains empty until bank IT fills them) |
 | First admin | Users are pre-provisioned rows (`auth_provider='oidc'` or password) | Console creates the first admin (password reset flow or OIDC pre-provision) |
-| Storage bucket | Bucket-per-institution convention (see storage.md; MinIO quirks memory) | Provisioning step creates + verifies the bucket |
+| Storage buckets | `app/storage/provisioning.py::provision_institution` — the ONLY sanctioned path: four tier buckets per institution, versioning on retained tiers, temp lifecycle, idempotent | Saga calls it, plus the AWS-specific work in §2a |
 | Cross-tenant reads | ONLY the worker, via BYPASSRLS role (`WORKER_DATABASE_URL`) | Operator BFF gets its own DB role on the same precedent |
 | Audit | `audit_events` append-only (DB trigger) | Every operator action lands there with `operator_context` |
 | Activity data | `jobs`, ingestion batches, `live_metrics`, `live_metric_snapshots`, freshness | Read-only cross-tenant views over them |
@@ -42,9 +42,11 @@ silently):
    derives the currency default from the chosen jurisdiction but the
    operator must confirm; never auto-couple silently, that's the exact bug
    the no-defaults rule exists to prevent).
-3. **Storage bucket** — create per-institution bucket, write+delete a probe
-   object, record verification. (Cloudflare-WAF HEAD quirk applies; probe
-   with GET.)
+3. **Storage buckets (AWS)** — call `provision_institution` (never raw
+   bucket creation; the module is the sanctioned path and safely retries),
+   then the §2a AWS additions; probe with a write+GET+delete cycle
+   (the current MinIO's Cloudflare WAF blocks HEAD — GET-probe works on
+   both targets).
 4. **SSO connection stub** — disabled row in `sso_connections`; the bank's
    IT completes it later via customer Settings → Authentication per
    docs/sso-onboarding.md. Console shows the two redirect URIs to hand the
@@ -68,6 +70,44 @@ first ingestion lands (standing order, 2026-07-21).
 Tests: hermetic saga tests (full success; bucket-failure rollback; the
 no-defaults rule enforced — payload without currency/jurisdiction is a 422
 at the schema layer, not a silent 'GHS').
+
+## 2a. Storage on AWS — per-institution buckets, keys, and secrets
+
+The founder's requirement: onboarding from the portal creates the
+institution's buckets ON AWS with the relevant secrets, and it just works.
+The design that does this with the smallest secret surface:
+
+- **Reuse `provision_institution` against AWS S3.** It is S3-protocol
+  already. One code fix required first: it always sends
+  `CreateBucketConfiguration.LocationConstraint` (a MinIO requirement),
+  which real AWS REJECTS for us-east-1 — branch on endpoint/region.
+- **One platform IAM principal, not per-tenant access keys.** The app
+  already consolidates on a single S3_* credential set. Keep that: the
+  provisioning saga (running in the control plane with a privileged AWS
+  principal) creates the buckets and attaches bucket policies scoping the
+  platform principal to them. No new static credentials are minted per
+  tenant, so there are no per-tenant secrets to rotate, leak, or
+  distribute. (Alternative, if contractual isolation demands it:
+  per-tenant IAM access keys held in EncryptedDbVault — supported custody
+  path, but adopt only when a bank's diligence requires it.)
+- **Per-tenant KMS key — this is the secret that matters.** The saga
+  creates a KMS key per institution, sets SSE-KMS with that key as the
+  default encryption on all four tier buckets, and registers the key ARN
+  against the org (a small `tenant_storage` registry row; the ARN is
+  config, not a secret — access is IAM-governed). Consequences:
+  - **CP-4 (offboarding/crypto-shred) is SOLVED for AWS-provisioned
+    tenants**: offboarding schedules KMS key deletion and every object,
+    including backups, becomes undecryptable — the exact recipe
+    staff_UI.md demands and the KES-less MinIO cannot deliver.
+  - Per-tenant encryption isolation without per-tenant credentials.
+- **AWS principals live only in the control plane.** The operator/
+  provisioning service holds the AWS credentials capable of CreateBucket/
+  CreateKey/PutBucketPolicy; the tenant-facing app keeps only the runtime
+  S3_* read/write principal. Tenant-plane code can never provision.
+- **Migration note:** existing MinIO institutions (the sample bank) stay
+  where they are; new tenants provision to AWS from day one, which aligns
+  with the MinIO retirement date (2027-01-14) — the migration is then
+  "move two dev-era tenants", not a fleet.
 
 ## 3. Backend: operator read APIs (CP-2 ops slice)
 
@@ -138,13 +178,17 @@ BFF endpoints:
 - **Impersonation** (CP-2b): read-only first, examiner-role shaped, dual
   identity `act` token, banner, separate audit stream — per staff_UI.md §5.
   Not in this phase.
-- **Market-data desk + curve engines** (CP-3) and **offboarding/
-  crypto-shred** (CP-4): staff_UI.md gap register. CP-4 remains a
-  before-first-paying-tenant blocker independent of this console.
+- **Market-data desk + curve engines** (CP-3): staff_UI.md gap register.
+- **CP-4 (crypto-shred)**: SOLVED for AWS-provisioned tenants by §2a's
+  per-tenant KMS design; remains open only for anything left on the
+  KES-less MinIO at offboarding time.
 - **Billing**: nothing exists; out of scope.
 
 ## 7. Sequencing
 
+0. `provision_institution` AWS-compat fix (LocationConstraint branch) +
+   the per-tenant KMS/SSE-KMS/bucket-policy additions + `tenant_storage`
+   registry — testable against LocalStack/moto hermetically.
 1. Provisioning service + saga tests (backend only — usable via one CLI
    call before any UI exists; this alone "covers the gap").
 2. Operator BFF skeleton + workforce login + audit context.
