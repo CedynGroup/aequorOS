@@ -173,17 +173,35 @@ def _discover_jwks_uri(issuer: str) -> str:
     import urllib.request  # noqa: PLC0415
 
     url = issuer.rstrip("/") + "/.well-known/openid-configuration"
-    if not url.startswith("https://"):
+    if not url.startswith("https://") and not _is_loopback_issuer_allowed(issuer):
         raise TokenInvalidError(f"OIDC issuer must be https, got {issuer!r}.")
     try:
-        with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310 - https enforced above
+        with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310 - https (or non-production loopback) enforced above
             document = json.load(response)
     except Exception as exc:
         raise TokenInvalidError(f"OIDC discovery failed for {issuer!r}: {exc}") from exc
     jwks_uri = document.get("jwks_uri")
-    if not isinstance(jwks_uri, str) or not jwks_uri.startswith("https://"):
+    if not isinstance(jwks_uri, str) or not (
+        jwks_uri.startswith("https://") or _is_loopback_issuer_allowed(jwks_uri)
+    ):
         raise TokenInvalidError(f"OIDC discovery for {issuer!r} returned no usable jwks_uri.")
     return jwks_uri
+
+
+def _is_loopback_issuer_allowed(url: str) -> bool:
+    """Plain-http OIDC endpoints are tolerated ONLY on loopback and ONLY
+    outside production — the same never-in-production rule as operator dev
+    auth. This exists so the full workforce-OIDC path (discovery → JWKS →
+    verification) can be exercised locally against a stub IdP; every deployed
+    environment still hard-requires https."""
+    from urllib.parse import urlparse  # noqa: PLC0415 - lazy; only the SSO path needs it
+
+    from app.core.config import get_settings  # noqa: PLC0415 - avoid import cycle
+
+    if get_settings().app.app_env == "production":
+        return False
+    parsed = urlparse(url)
+    return parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
 
 
 def unverified_claims(id_token: str) -> dict[str, Any]:

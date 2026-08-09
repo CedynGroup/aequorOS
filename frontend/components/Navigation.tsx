@@ -20,9 +20,9 @@ const dashboardLoginUrl =
 
 // "Employee Login" sends AequorOS staff to the internal operator console — a
 // separate control-plane app on its own subdomain (docs/internal/staff_UI.md).
-// Same build-arg pattern as the client login URL.
-const employeeLoginUrl =
-  process.env.NEXT_PUBLIC_CONSOLE_URL ?? 'https://console.aequoros.com/login';
+// Same build-arg pattern as the client login URL above: localhost default for
+// dev, production sets NEXT_PUBLIC_CONSOLE_URL (https://console.aequoros.com).
+const employeeLoginUrl = `${(process.env.NEXT_PUBLIC_CONSOLE_URL ?? 'http://localhost:3002').replace(/\/$/, '')}/login`;
 
 export default function Navigation() {
   const [scrolled, setScrolled] = useState(false);

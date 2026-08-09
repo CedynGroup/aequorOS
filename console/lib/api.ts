@@ -17,23 +17,18 @@
  * - Every non-2xx response is thrown as ApiError. The backend error envelope
  *   is `{ error: { code, message, ... } }` (app/core/errors.py); non-JSON
  *   bodies degrade to `http_<status>`.
- * - The bearer token lives in sessionStorage (dev auth). OIDC workforce login
- *   replaces the /login page later; this token path stays for local dev
- *   (backend hard-refuses dev auth when APP_ENV=production).
+ * - ALL operator API traffic goes through the console's own /api/op proxy
+ *   (app/api/op/[...path]/route.ts), in both auth modes:
+ *   - workforce OIDC: the id_token lives in an HttpOnly cookie the proxy
+ *     turns into the bearer — browser JS never holds the credential;
+ *   - dev token (local only): the sessionStorage token rides the
+ *     Authorization header and the proxy forwards it verbatim (the backend
+ *     hard-refuses dev auth when APP_ENV=production).
+ *   The proxy also means the operator API itself never needs to be reachable
+ *   from the operator's browser — only from the console server.
  */
 
-export const API_BASE = (
-  process.env.NEXT_PUBLIC_OPERATOR_API_URL ?? 'http://127.0.0.1:8100'
-).replace(/\/+$/, '');
-
-/** Hostname (with port) of the API base — shown in the header env badge. */
-export function apiHost(): string {
-  try {
-    return new URL(API_BASE).host;
-  } catch {
-    return API_BASE;
-  }
-}
+export const API_BASE = '/api/op';
 
 // --------------------------------------------------------------------------
 // Session token (dev auth — sessionStorage only, never persisted to disk)
@@ -212,11 +207,11 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
 
   if (opts.auth !== false) {
+    // Dev-token mode sends the bearer explicitly; workforce mode sends
+    // nothing — the HttpOnly session cookie rides along and the /api/op
+    // proxy attaches the id_token server-side.
     const token = getToken();
-    if (!token) {
-      throw new ApiError('not_authenticated', 'No operator token in this session.', 401);
-    }
-    headers.Authorization = `Bearer ${token}`;
+    if (token) headers.Authorization = `Bearer ${token}`;
   }
   if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -292,4 +287,41 @@ export function listDataEngines(): Promise<DataEnginesResponse> {
 /** POST /operator/v1/tenants — run the provisioning saga. Returns the step record either way. */
 export function provisionTenant(body: ProvisionTenantRequest): Promise<ProvisionTenantResponse> {
   return request<ProvisionTenantResponse>('/operator/v1/tenants', { method: 'POST', body });
+}
+
+// --------------------------------------------------------------------------
+// Workforce session (console-local /api/auth routes, not the operator API)
+// --------------------------------------------------------------------------
+
+export interface AuthConfig {
+  oidc_configured: boolean;
+  issuer_host: string | null;
+  api_host: string;
+}
+
+export interface WorkforceSession {
+  authenticated: boolean;
+  email: string | null;
+  expires_at: string | null;
+}
+
+async function consoleJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, { cache: 'no-store', ...init });
+  if (!res.ok) throw new ApiError(`http_${res.status}`, res.statusText, res.status);
+  return (await res.json()) as T;
+}
+
+/** Which sign-in methods this deployment offers + the API host for badges. */
+export function getAuthConfig(): Promise<AuthConfig> {
+  return consoleJson<AuthConfig>('/api/auth/config');
+}
+
+/** The current workforce OIDC session, if any (dev sessions are sessionStorage-only). */
+export function getWorkforceSession(): Promise<WorkforceSession> {
+  return consoleJson<WorkforceSession>('/api/auth/session');
+}
+
+/** End the workforce session (clears the HttpOnly cookie). */
+export function workforceLogout(): Promise<{ ok: boolean }> {
+  return consoleJson<{ ok: boolean }>('/api/auth/logout', { method: 'POST' });
 }

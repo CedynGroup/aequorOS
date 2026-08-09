@@ -5,3 +5,4 @@ node_modules
 
 # local env (the committed .env.example documents the variables)
 .env*.local
+.env*

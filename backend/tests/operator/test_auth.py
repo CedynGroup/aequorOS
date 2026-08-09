@@ -5,7 +5,9 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core import security
 from app.core.config import get_operator_settings, get_settings
+from app.core.security import _is_loopback_issuer_allowed
 from app.operator.main import create_operator_app
 from tests.operator.conftest import operator_headers
 
@@ -70,3 +72,31 @@ def test_dev_auth_in_production_refuses_boot(monkeypatch: pytest.MonkeyPatch) ->
 def test_provision_requires_auth(operator_client: TestClient) -> None:
     response = operator_client.post("/operator/v1/tenants", json={})
     assert response.status_code == 401
+
+
+class TestLoopbackIssuerCarveOut:
+    """Plain-http OIDC endpoints: loopback-only, never in production
+    (mirrors the dev-auth rule; exists so the workforce flow can be
+    exercised locally against a stub IdP)."""
+
+    def test_loopback_http_allowed_outside_production(self) -> None:
+        assert _is_loopback_issuer_allowed("http://127.0.0.1:8110")
+        assert _is_loopback_issuer_allowed("http://localhost:8110")
+
+    def test_non_loopback_http_always_rejected(self) -> None:
+        assert not _is_loopback_issuer_allowed("http://idp.example.com")
+        assert not _is_loopback_issuer_allowed("http://192.168.1.10:8110")
+
+    def test_loopback_http_rejected_in_production(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("APP_ENV", "production")
+        get_settings.cache_clear()
+        try:
+            assert not _is_loopback_issuer_allowed("http://127.0.0.1:8110")
+        finally:
+            get_settings.cache_clear()
+
+    def test_https_discovery_rule_unchanged_for_non_loopback(self) -> None:
+        with pytest.raises(security.TokenInvalidError, match="must be https"):
+            security._discover_jwks_uri("http://idp.example.com")

@@ -2,8 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { Activity, Building2, LogOut, PlusCircle } from 'lucide-react';
-import { apiHost, clearToken } from '@/lib/api';
+import {
+  clearToken,
+  getAuthConfig,
+  getToken,
+  getWorkforceSession,
+  workforceLogout,
+} from '@/lib/api';
 import type { ReactNode } from 'react';
 
 const NAV = [
@@ -15,11 +22,52 @@ const NAV = [
 /**
  * Thin console shell: fixed left rail (brand + nav) and a top header carrying
  * the environment badge (which API this console is pointed at — the single
- * most important piece of operator context) and the session controls.
+ * most important piece of operator context) and the session identity: the
+ * workforce email for OIDC sessions, an explicit DEV SESSION chip otherwise.
  */
 export default function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [apiHost, setApiHost] = useState<string | null>(null);
+  const [identity, setIdentity] = useState<
+    { mode: 'oidc'; email: string } | { mode: 'dev' } | null
+  >(null);
+
+  useEffect(() => {
+    let alive = true;
+    getAuthConfig()
+      .then((config) => alive && setApiHost(config.api_host))
+      .catch(() => alive && setApiHost(null));
+    if (getToken()) {
+      setIdentity({ mode: 'dev' });
+    } else {
+      getWorkforceSession()
+        .then(
+          (session) =>
+            alive &&
+            setIdentity(
+              session.authenticated && session.email
+                ? { mode: 'oidc', email: session.email }
+                : null,
+            ),
+        )
+        .catch(() => alive && setIdentity(null));
+    }
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function signOut() {
+    clearToken();
+    try {
+      await workforceLogout();
+    } catch {
+      // Cookie clearing failed (console route unreachable) — the redirect to
+      // /login still ends the usable session; the cookie dies with the token exp.
+    }
+    router.replace('/login');
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -57,26 +105,32 @@ export default function Shell({ children }: { children: ReactNode }) {
       <div className="ml-56 flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-border-light bg-surface-alt/95 px-6 backdrop-blur">
           <div className="flex items-center gap-2">
-            <span
-              className="rounded border border-border-light bg-surface px-2 py-0.5 font-mono text-micro text-slate"
-              title={`Operator API base: ${apiHost()}`}
-            >
-              API · {apiHost()}
-            </span>
+            {apiHost && (
+              <span
+                className="rounded border border-border-light bg-surface px-2 py-0.5 font-mono text-micro text-slate"
+                title={`Operator API base (via the console's /api/op proxy): ${apiHost}`}
+              >
+                API · {apiHost}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3">
-            {/* The operator API does not yet return an operator identity
-                (email/claims). Until it does, show the honest truth: this is
-                a dev token session. */}
-            <span className="rounded bg-warning-light px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-warning">
-              dev session
-            </span>
+            {identity?.mode === 'dev' && (
+              <span className="rounded bg-warning-light px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-warning">
+                dev session
+              </span>
+            )}
+            {identity?.mode === 'oidc' && (
+              <span
+                className="rounded border border-border-light bg-surface px-2 py-0.5 font-mono text-micro text-slate"
+                title="Workforce OIDC session"
+              >
+                {identity.email}
+              </span>
+            )}
             <button
               type="button"
-              onClick={() => {
-                clearToken();
-                router.replace('/login');
-              }}
+              onClick={() => void signOut()}
               className="inline-flex items-center gap-1.5 rounded border border-border-light px-2.5 py-1 text-caption font-medium text-slate hover:bg-surface hover:text-ink"
             >
               <LogOut size={13} />
