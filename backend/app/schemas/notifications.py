@@ -22,7 +22,9 @@ class NotificationRead(ClosedModel):
     title: str
     body: str
     entity_type: str | None
-    entity_id: UUID | None
+    # Post-platform-ID-epoch this can be a BK-/OR- code, pre-epoch rows keep
+    # UUID text — the column is plain String(40), so the schema must be too.
+    entity_id: str | None
     recipient_user_id: UUID | None
     read_at: datetime | None
     created_at: datetime

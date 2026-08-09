@@ -217,6 +217,8 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
 
   return (
     <div className="space-y-6">
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
+        <div className="xl:col-span-2 space-y-6">
       {/* Scenario library */}
       <SectionCard
         title="Scenario library"
@@ -479,8 +481,22 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
           </div>
         </SectionCard>
       )}
+        </div>
 
+        <div className="xl:col-span-3 space-y-6">
       {/* Results */}
+      {!analysis && (
+        <SectionCard title="Analysis results" noPadding>
+          <div className="px-6 py-12 text-center">
+            <p className="text-body font-medium text-navy">
+              Select scenarios and run analysis
+            </p>
+            <p className="mt-1 text-caption text-slate">
+              Side-by-side results appear here — transient until you save them.
+            </p>
+          </div>
+        </SectionCard>
+      )}
       {analysis && (
         <SectionCard
           title="Analysis results"
@@ -490,7 +506,7 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
             <div className="flex items-center gap-3">
               <input
                 className="flex-1 rounded-md border border-border-light bg-transparent px-3 py-2 text-body text-navy"
-                placeholder="Name this analysis to save it (e.g. Pre-ALCO wholesale sensitivity)"
+                placeholder="Name this analysis…"
                 value={saveName}
                 onChange={(e) => setSaveName(e.target.value)}
               />
@@ -509,61 +525,74 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
             <table className="w-full text-body">
               <thead>
                 <tr className="border-b border-border text-micro font-medium uppercase tracking-wider text-slate bg-surface">
-                  <th className="px-5 py-3 text-left">Scenario</th>
-                  {metrics.map((spec) => (
-                    <th key={spec.key} className="px-5 py-3 text-right">
-                      {spec.label}
+                  <th className="px-5 py-3 text-left">Metric</th>
+                  {analysis.results.map((result: ScenarioResultRead) => (
+                    <th
+                      key={`h:${result.kind}:${result.code}:${result.scenarioId ?? ''}`}
+                      className={`px-5 py-3 text-right ${
+                        result.status === 'failed' ? 'text-critical' : ''
+                      }`}
+                    >
+                      {result.label}
+                      {result.status === 'failed' ? ' ⚠' : ''}
                     </th>
                   ))}
-                  <th className="px-5 py-3 text-right">Δ vs first</th>
-                  <th className="px-5 py-3 text-right">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-light">
-                {analysis.results.map((result: ScenarioResultRead) => {
-                  const primary = Number(result.metrics?.[primaryMetric] ?? Number.NaN);
-                  const base = Number(baselineResult?.metrics?.[primaryMetric] ?? Number.NaN);
-                  const delta =
-                    Number.isFinite(primary) && Number.isFinite(base) ? primary - base : null;
-                  const statusValue = result.metricStatuses?.[primaryMetric];
+                {metrics.map((spec) => {
+                  const first = analysis.results[0];
+                  const firstValue = Number(first?.metrics?.[spec.key] ?? Number.NaN);
                   return (
-                    <tr key={`${result.kind}:${result.code}:${result.scenarioId ?? ''}`}>
-                      <td className="px-5 py-3">
-                        <p className="font-medium text-navy">{result.label}</p>
-                        {result.status === 'failed' && (
-                          <p className="text-caption text-critical">
-                            {result.errorCode}: {result.errorMessage}
-                          </p>
-                        )}
-                      </td>
-                      {metrics.map((spec) => (
-                        <td key={spec.key} className="px-5 py-3 text-right font-mono text-navy">
-                          {result.status === 'failed'
-                            ? '—'
-                            : fmtMetric(spec, result.metrics?.[spec.key])}
-                        </td>
-                      ))}
-                      <td className="px-5 py-3 text-right font-mono">
-                        {delta === null || result === baselineResult ? (
-                          <span className="text-slate">—</span>
-                        ) : (
-                          <span
-                            className={
-                              (primarySpec?.higherIsBetter ?? true)
-                                ? delta < 0
-                                  ? 'text-critical'
-                                  : 'text-success'
-                                : delta > 0
-                                ? 'text-critical'
-                                : 'text-success'
-                            }
+                    <tr key={spec.key}>
+                      <td className="px-5 py-3 font-medium text-navy">{spec.label}</td>
+                      {analysis.results.map((result: ScenarioResultRead, index: number) => {
+                        if (result.status === 'failed') {
+                          return (
+                            <td
+                              key={`${spec.key}:${index}`}
+                              className="px-5 py-3 text-right font-mono text-slate-light"
+                            >
+                              —
+                            </td>
+                          );
+                        }
+                        const value = Number(result.metrics?.[spec.key] ?? Number.NaN);
+                        const showDelta =
+                          index > 0 && Number.isFinite(value) && Number.isFinite(firstValue);
+                        const delta = showDelta ? value - firstValue : null;
+                        const adverse =
+                          delta !== null &&
+                          ((spec.higherIsBetter ?? true) ? delta < 0 : delta > 0);
+                        return (
+                          <td
+                            key={`${spec.key}:${index}`}
+                            className="px-5 py-3 text-right font-mono text-navy whitespace-nowrap"
                           >
-                            {delta > 0 ? '+' : ''}
-                            {delta.toFixed(2)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-right">
+                            {fmtMetric(spec, result.metrics?.[spec.key])}
+                            {delta !== null && delta !== 0 && (
+                              <span
+                                className={`ml-2 text-micro ${
+                                  adverse ? 'text-critical' : 'text-slate'
+                                }`}
+                              >
+                                {spec.kind === 'pct'
+                                  ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)}`
+                                  : `${delta > 0 ? '+' : ''}${((delta / Math.abs(firstValue)) * 100).toFixed(1)}%`}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+                <tr>
+                  <td className="px-5 py-3 font-medium text-navy">Status</td>
+                  {analysis.results.map((result: ScenarioResultRead, index: number) => {
+                    const statusValue = result.metricStatuses?.[primaryMetric];
+                    return (
+                      <td key={`status:${index}`} className="px-5 py-3 text-right">
                         {result.status === 'failed' ? (
                           <StatusPill tone="critical">Failed</StatusPill>
                         ) : statusValue ? (
@@ -574,12 +603,26 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
                           <StatusPill tone="slate">OK</StatusPill>
                         )}
                       </td>
-                    </tr>
-                  );
-                })}
+                    );
+                  })}
+                </tr>
               </tbody>
             </table>
           </div>
+          {analysis.results.some((r: ScenarioResultRead) => r.status === 'failed') && (
+            <div className="px-5 py-3 border-t border-border-light space-y-1">
+              {analysis.results
+                .filter((r: ScenarioResultRead) => r.status === 'failed')
+                .map((r: ScenarioResultRead) => (
+                  <p
+                    key={`err:${r.kind}:${r.code}:${r.scenarioId ?? ''}`}
+                    className="text-caption text-critical"
+                  >
+                    {r.label} — {r.errorCode}: {r.errorMessage}
+                  </p>
+                ))}
+            </div>
+          )}
         </SectionCard>
       )}
 
@@ -612,6 +655,8 @@ export default function ScenarioWorkbench({ module, metrics, primaryMetric }: Pr
           </ul>
         </SectionCard>
       )}
+        </div>
+      </div>
     </div>
   );
 }
