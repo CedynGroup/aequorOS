@@ -19,13 +19,13 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'welcome',
     title: 'Welcome to AequorOS',
-    body: 'This is the Command Center — a live cross-module view of your regulatory position. Everything you see is computed server-side by deterministic engines and updates as data lands.',
+    body: 'This is the Command Center — a live cross-module view of your treasury and risk position. Everything you see is computed server-side by deterministic engines and updates as data lands.',
     selectors: ["aside nav a[href='/']"],
   },
   {
     id: 'module-rail',
     title: 'The module rail',
-    body: 'Every regulatory module lives here: IRRBB, Liquidity, FX, Basel Capital, FTP, Forecasting, and Behavioral — plus the Data Engine and the governance pages (Reports, Submissions, Settings).',
+    body: 'Every regulatory module lives here: IRRBB, Liquidity, FX, Basel Capital, FTP, Forecasting, and Behavioral — plus the Data Engine and the governance pages (Reports, Institution Profile, Regulatory Reporting, Settings).',
     selectors: ['aside nav'],
   },
   {
@@ -51,8 +51,8 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'Live freshness',
     body: 'This pill tracks live figures against the last finalised results. Green means in sync; "Changed" means data moved since the period was last closed — reconcile under Governance → Reports.',
     selectors: [
-      "header span[title^='Live figures']",
-      "header span[title^='Data changed']",
+      "header *[title^='Live figures']",
+      "header *[title^='Data has changed']",
     ],
   },
   {

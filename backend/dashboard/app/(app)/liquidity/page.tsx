@@ -16,6 +16,7 @@ import RatioTrendChart from '@/components/liquidity/charts/RatioTrendChart';
 import NetOutflowChart from '@/components/liquidity/charts/NetOutflowChart';
 import { runComputedAt, runThresholds } from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
+import LiveEngineNote from '@/components/live/LiveEngineNote';
 import {
   useLiquidityDashboard,
   useRegulatoryRun,
@@ -124,6 +125,7 @@ export default function LiquidityCockpit() {
         title="Liquidity Cockpit"
         subtitle={`Basel III LCR & NSFR per ${centralBankName()} CRD framework · 30-day stressed horizon`}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
+        action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 
       <QueryBoundary

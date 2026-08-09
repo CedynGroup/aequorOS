@@ -98,7 +98,7 @@ export default function BehavioralOverviewPage() {
 
         <SectionCard
           title="How assumptions reach the engines"
-          subtitle="Model outputs never flow silently into regulatory numbers"
+          subtitle="Model outputs never flow silently into the ALM engines"
         >
           <p className="text-body text-navy/85 leading-relaxed">
             Each model trains on the bank&apos;s ingested canonical history and

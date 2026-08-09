@@ -20,7 +20,6 @@ import type {
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusPill from '@/components/ui/StatusPill';
-import RunBadge from '@/components/ui/RunBadge';
 import KpiStat from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
 import ChartFrame from '@/components/ui/ChartFrame';
@@ -161,7 +160,7 @@ export default function ScenariosPage() {
 
           <SectionCard
             title="Forecast run registry"
-            subtitle="Saved projections — every row carries its snapshot id · pick A and B to compare"
+            subtitle="Saved projections — pick A and B to compare"
             noPadding
           >
             <RunRegistryTable
@@ -359,7 +358,6 @@ function ScenarioDesigner({
               <StatusPill tone="action">
                 {scenarioLabel(result.scenarioCode)}
               </StatusPill>
-              <RunBadge run={result} />
               <Link
                 href={`/forecasting?run=${result.id}`}
                 className="inline-flex items-center gap-1 text-caption font-medium text-action hover:underline"
@@ -490,7 +488,6 @@ function RunRegistryTable({
             <th className="text-left px-4 py-2.5">Created</th>
             <th className="text-left px-4 py-2.5">Scenario</th>
             <th className="text-left px-4 py-2.5">Period</th>
-            <th className="text-left px-4 py-2.5">Snapshot</th>
             <th className="text-right px-4 py-2.5">Avg ROE</th>
             <th className="text-right px-4 py-2.5">Y5 CAR</th>
             <th className="text-right px-4 py-2.5">Y5 LCR</th>
@@ -518,9 +515,6 @@ function RunRegistryTable({
                 </td>
                 <td className="px-4 py-2.5 font-mono text-caption text-slate">
                   {r.periodLabel}
-                </td>
-                <td className="px-4 py-2.5 font-mono text-caption text-slate">
-                  {shortId(r.inputHash)}
                 </td>
                 <td className="px-4 py-2.5 text-right font-mono tnum">
                   {r.avgRoePct === null ? '—' : fmtPct(num(r.avgRoePct), 2)}
@@ -659,10 +653,8 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
       <div className="flex items-center gap-3 flex-wrap">
         <h2 className="text-h2 text-navy">Run comparison</h2>
         <StatusPill tone="action">{labelA}</StatusPill>
-        <RunBadge run={a} />
         <span className="text-slate text-caption">vs</span>
         <StatusPill tone="amber">{labelB}</StatusPill>
-        <RunBadge run={b} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -702,7 +694,7 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
 
         <SectionCard
           title="Summary deltas"
-          subtitle="Persisted run summaries · Δ is B − A"
+          subtitle="Saved projection summaries · Δ is B − A"
           noPadding
         >
           <div className="overflow-x-auto">

@@ -178,7 +178,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
       {varTrend.length >= 2 && (
         <ChartFrame
           title={`Portfolio VaR trend (${confidence.toFixed(0)}%, 1-day)`}
-          subtitle="Trailing periods · hollow points are inline computations without a persisted run"
+          subtitle="Trailing periods · hollow points are live computations not yet stored"
           height={260}
         >
           <TrendChart

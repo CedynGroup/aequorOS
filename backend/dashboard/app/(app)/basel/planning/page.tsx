@@ -25,14 +25,9 @@ import {
 import { fmtDateUTC, labelize, num } from '@/lib/api/values';
 import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
-const SCENARIO_ORDER = ['base', 'adverse', 'severely_adverse', 'custom'] as const;
+import { SCENARIO_LABELS } from '@/components/forecasting/lib';
 
-const SCENARIO_LABELS: Record<string, string> = {
-  base: 'Base',
-  adverse: 'Adverse',
-  severely_adverse: 'Severely adverse',
-  custom: 'Custom',
-};
+const SCENARIO_ORDER = ['base', 'adverse', 'severely_adverse', 'custom'] as const;
 
 type PathRow = {
   label: string;

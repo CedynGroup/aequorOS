@@ -20,7 +20,6 @@ import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import Sparkline from '@/components/ui/Sparkline';
 import StatusPill from '@/components/ui/StatusPill';
-import RunBadge from '@/components/ui/RunBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import SectionCard from '@/components/ui/SectionCard';
 import ChartFrame from '@/components/ui/ChartFrame';
@@ -381,7 +380,6 @@ function RunDashboard({
         subtitle="Annual balance-sheet and P&L path with period-over-period deltas"
         noPadding
         computedAt={computedAt}
-        runBadge={<RunBadge run={run} />}
       >
         <HorizonTable path={path} />
       </SectionCard>
@@ -435,7 +433,6 @@ function RunDashboard({
         subtitle="Projection integrity and regulatory rule evaluation persisted on the run"
         noPadding
         computedAt={computedAt}
-        runBadge={<RunBadge run={run} />}
       >
         <ValidationList validations={run.validations} />
       </SectionCard>

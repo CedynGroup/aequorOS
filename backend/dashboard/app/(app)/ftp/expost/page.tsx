@@ -165,7 +165,7 @@ function ExPostBody({ ctx }: { ctx: FtpFrameContext }) {
       <EmptyState
         Icon={FlaskConical}
         title="No stored scenario runs for this period"
-        description="The ex-ante columns come from the stored baseline, rates-up and funding-stress results for this period. They fill in automatically once the period's results are finalised under Governance."
+        description="The ex-ante columns come from the stored baseline, rates-up and funding-stress results for this period. They fill in automatically once this period's results are computed and stored."
       />
     );
   }

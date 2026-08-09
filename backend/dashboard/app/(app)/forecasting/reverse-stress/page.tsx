@@ -101,7 +101,7 @@ export default function ReverseStress() {
 
               <SectionCard
                 title="Frontier narrative"
-                subtitle={`Saved frontier · snapshot ${frontier.inputHash.slice(0, 16)}… · engine ${frontier.engineVersion}`}
+                subtitle="The most recent saved frontier for this period"
                 footer={
                   <span>
                     The frontier anchors to both engines&apos; baseline snapshots,
@@ -110,7 +110,7 @@ export default function ReverseStress() {
                     STRESS-PACK) carries this frontier alongside the traffic lights —
                     generate it from the{' '}
                     <Link href="/submissions" className="text-action hover:underline">
-                      Regulatory Reporting hub
+                      Regulatory Reporting
                     </Link>
                     .
                   </span>

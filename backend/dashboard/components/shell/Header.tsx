@@ -12,17 +12,18 @@ import {
   Moon,
   RadioTower,
   AlertTriangle,
+  Loader2,
   LogOut,
   UserRound,
 } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useBankContext } from './BankContext';
 import { useTheme } from './ThemeProvider';
-import { fmtDateUTC, fmtRelative } from '@/lib/api/values';
+import { fmtDateUTC, fmtRelative, isoDate } from '@/lib/api/values';
 import { avatarColor, initialsFrom, roleLabel } from '@/lib/api/identity';
 import { useUserProfile } from '@/components/profile/ProfileProvider';
 import { LOGIN_URL } from '@/lib/loginUrl';
-import { useBankFreshness, useNotifications } from '@/lib/api/hooks';
+import { useBankFreshness, useNotifications, useRefreshBankData } from '@/lib/api/hooks';
 import CommandPalette from './CommandPalette';
 import NotificationDrawer from './NotificationDrawer';
 import AlertsBell from '@/components/live/AlertsBell';
@@ -141,6 +142,7 @@ function NotificationsBell() {
 function LiveFreshnessPill() {
   const { bank, period } = useBankContext();
   const freshness = useBankFreshness(bank?.id, period?.id);
+  const refresh = useRefreshBankData(bank?.id);
 
   const modules = freshness.data?.modules ?? [];
   if (modules.length === 0) return null;
@@ -154,13 +156,26 @@ function LiveFreshnessPill() {
 
   if (anyStale) {
     return (
-      <span
-        title="Data has changed since results were last finalised — reconcile under Governance → Reports."
-        className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-warning/30 bg-warning-light text-warning text-caption font-medium whitespace-nowrap"
+      <button
+        type="button"
+        disabled={refresh.isPending || !period}
+        onClick={() =>
+          period &&
+          refresh.mutate({
+            asOfDate: isoDate(period.periodEnd),
+            reason: 'Recompute after data change (header)',
+          })
+        }
+        title="Data has changed since results were last finalised — click to recompute live figures. Official runs stay under Governance → Reports."
+        className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-warning/30 bg-warning-light text-warning text-caption font-medium whitespace-nowrap hover:bg-warning/15 disabled:opacity-60"
       >
-        <AlertTriangle size={11} aria-hidden />
-        Changed
-      </span>
+        {refresh.isPending ? (
+          <Loader2 size={11} className="animate-spin" aria-hidden />
+        ) : (
+          <AlertTriangle size={11} aria-hidden />
+        )}
+        {refresh.isPending ? 'Recomputing…' : 'Changed'}
+      </button>
     );
   }
 

@@ -16,6 +16,7 @@ import type {
 import PageHeader from '@/components/ui/PageHeader';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import { useBankContext } from '@/components/shell/BankContext';
+import LiveEngineNote from '@/components/live/LiveEngineNote';
 import { useFxDashboard, useRegulatoryRun } from '@/lib/api/hooks';
 import { fmtDateUTC } from '@/lib/api/values';
 
@@ -60,6 +61,7 @@ export default function FxModuleFrame({
         title={title}
         subtitle={subtitle}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
+        action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 
       <QueryBoundary

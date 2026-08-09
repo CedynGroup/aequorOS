@@ -19,7 +19,6 @@ import type {
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusPill from '@/components/ui/StatusPill';
-import RunBadge from '@/components/ui/RunBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import SectionCard from '@/components/ui/SectionCard';
 import QueryBoundary from '@/components/ui/QueryBoundary';
@@ -171,7 +170,6 @@ function ResolvedSection({
       title="Resolved on the latest run"
       subtitle={`The exact assumption set the engine consumed for the ${scenarioLabel(run.scenarioCode)} run — saved with the projection, snapshot-bound`}
       computedAt={run.createdAt}
-      runBadge={<RunBadge run={run} />}
       footer={
         <span>
           Scenario{' '}

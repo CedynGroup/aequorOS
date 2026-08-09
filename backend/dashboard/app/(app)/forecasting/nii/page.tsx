@@ -12,7 +12,6 @@ import type { ForecastRunRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import Sparkline from '@/components/ui/Sparkline';
-import RunBadge from '@/components/ui/RunBadge';
 import StatusPill from '@/components/ui/StatusPill';
 import EmptyState from '@/components/ui/EmptyState';
 import SectionCard from '@/components/ui/SectionCard';
@@ -203,7 +202,6 @@ function NiiDashboard({
           subtitle="Per-year NII by scenario, delta vs the base-case run"
           noPadding
           computedAt={primary.createdAt}
-          runBadge={<RunBadge run={primary} />}
         >
           {base ? (
             <SensitivityTable
@@ -293,7 +291,7 @@ function SensitivityTable({
       )}
       <p className="px-4 py-2.5 text-caption text-slate border-t border-border-light inline-flex items-center gap-2">
         <StatusPill tone="slate">Derived</StatusPill>
-        Delta is the percentage difference between the two persisted run paths;
+        Delta is the percentage difference between the two saved projection paths;
         no values are modeled client-side.
       </p>
     </div>

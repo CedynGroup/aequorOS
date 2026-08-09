@@ -130,7 +130,7 @@ export default function CapitalStructurePage() {
           <EmptyState
             Icon={Layers}
             title="Awaiting period results"
-            description="The tiered capital breakdown is produced when the period's results are finalised under Governance. Once this period closes, the detail appears here."
+            description="The tiered capital breakdown is produced with this period's stored results and appears here automatically once they are computed."
           />
         </div>
       ) : (

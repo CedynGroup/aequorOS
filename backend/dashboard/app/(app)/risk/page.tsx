@@ -27,8 +27,10 @@ import {
   useIrrDashboard,
   useLiquidityDashboard,
   useLiveSummary,
+  useRefreshBankData,
+  useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, fmtRelative, statusTone } from '@/lib/api/values';
+import { fmtDateUTC, fmtRelative, isoDate, statusTone } from '@/lib/api/values';
 import LimitWall from '@/components/risk/LimitWall';
 import {
   extractAllLimits,
@@ -58,6 +60,8 @@ export default function RiskLimitMonitorPage() {
   const ftp = useFtpDashboard(bankId, periodId);
   const liveSummary = useLiveSummary(bankId);
   const alerts = useBankAlerts(bankId, 200);
+  const liquidityRun = useRegulatoryRun(bankId, liquidity.data?.latestRunId ?? undefined);
+  const refresh = useRefreshBankData(bankId);
 
   const [filter, setFilter] = useState<Filter>('all');
   const [tab, setTab] = useState('wall');
@@ -74,12 +78,13 @@ export default function RiskLimitMonitorPage() {
     () =>
       extractAllLimits({
         liquidity: liquidity.data,
+        liquidityRun: liquidityRun.data,
         capital: capital.data,
         irr: irr.data,
         fx: fx.data,
         ftp: ftp.data,
       }),
-    [liquidity.data, capital.data, irr.data, fx.data, ftp.data]
+    [liquidity.data, liquidityRun.data, capital.data, irr.data, fx.data, ftp.data]
   );
 
   const isLoading = moduleQueries.some(([, query]) => query.isLoading);
@@ -158,7 +163,23 @@ export default function RiskLimitMonitorPage() {
                 </span>
               ))}
               {liveSummary.data?.isStale && (
-                <StatusPill tone="amber">Data changed since results were last finalised</StatusPill>
+                <span className="inline-flex items-center gap-2">
+                  <StatusPill tone="amber">Data changed since results were last finalised</StatusPill>
+                  <button
+                    type="button"
+                    disabled={refresh.isPending || !period}
+                    onClick={() =>
+                      period &&
+                      refresh.mutate({
+                        asOfDate: isoDate(period.periodEnd),
+                        reason: 'Recompute after data change (Risk & Limits)',
+                      })
+                    }
+                    className="text-caption font-medium text-action hover:underline disabled:opacity-60"
+                  >
+                    {refresh.isPending ? 'Recomputing…' : 'Recompute now'}
+                  </button>
+                </span>
               )}
             </div>
           )}
@@ -204,7 +225,7 @@ export default function RiskLimitMonitorPage() {
                 <EmptyState
                   Icon={Gauge}
                   title="No payload-backed limits to show"
-                  description="No module dashboard exposed a numeric limit threshold for this period. Run the module scenarios, or check the validation checks tab for pass/fail rule evaluations."
+                  description="No module dashboard exposed a numeric limit threshold for this period. Run scenarios in a module's Stress workbench, or check the validation checks tab for pass/fail rule evaluations."
                 />
               ) : filteredRows.length === 0 ? (
                 <EmptyState

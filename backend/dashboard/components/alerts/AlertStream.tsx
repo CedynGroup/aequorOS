@@ -18,11 +18,11 @@ import { fmtRelative, labelize } from '@/lib/api/values';
 export type AlertGroupBy = 'module' | 'severity';
 
 export const ALERT_MODULE_HREFS: Record<string, string> = {
-  liquidity: '/liquidity',
+  liquidity: '/liquidity/monitoring',
   capital: '/basel',
-  irr: '/irr',
-  fx: '/fx',
-  ftp: '/ftp',
+  irr: '/irr/limits',
+  fx: '/fx/limits',
+  ftp: '/ftp/products',
   forecast: '/forecasting',
 };
 

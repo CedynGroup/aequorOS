@@ -14,6 +14,7 @@ import RatioTrendChart from '@/components/liquidity/charts/RatioTrendChart';
 import CapitalWaterfallChart from '@/components/basel/charts/CapitalWaterfallChart';
 import { runComputedAt, runMetricThreshold } from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
+import LiveEngineNote from '@/components/live/LiveEngineNote';
 import {
   useCapitalDashboard,
   useRegulatoryRun,
@@ -101,6 +102,7 @@ export default function BaselOverview() {
         title="Basel Capital"
         subtitle={`Capital Adequacy Ratio · Tier 1 / Tier 2 · ${regShort()} CRD framework`}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
+        action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 
       <QueryBoundary

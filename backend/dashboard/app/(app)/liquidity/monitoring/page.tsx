@@ -192,7 +192,7 @@ export default function MonitoringTools() {
 
             <SectionCard
               title="The eleven LMTD appendix tables"
-              subtitle="Filed through the Regulatory Reporting hub as the LMT return"
+              subtitle="Filed through the Regulatory Reporting as the LMT return"
             >
               <div className="text-body text-navy/85 leading-relaxed space-y-3">
                 <p>
@@ -202,7 +202,7 @@ export default function MonitoringTools() {
                   generate from canonical position data and export in the return
                   format from the{' '}
                   <Link href="/submissions" className="text-action hover:underline">
-                    Regulatory Reporting hub
+                    Regulatory Reporting
                   </Link>{' '}
                   (return code LMT). Per-currency funding gaps and the USD funding
                   stress ride every liquidity run on the{' '}

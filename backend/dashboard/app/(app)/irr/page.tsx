@@ -133,7 +133,7 @@ export default function IrrOverviewPage() {
                     ? `recomputed ${fmtRelative(live.computedAt)}`
                     : data.stored
                     ? 'from the latest stored results'
-                    : 'computed inline — not yet persisted'
+                    : 'computed live from current positions'
                 }
               />
             </div>

@@ -10,6 +10,7 @@
  */
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { FlaskConical, Loader2, PlayCircle } from 'lucide-react';
 import type {
   ProjectionYearRead,
@@ -406,8 +407,11 @@ export default function WhatIfLab() {
               <p className="mt-2 text-caption text-slate">
                 Engine diagnostic <code className="font-mono">{activeFailure.code}</code>
                 {' · '}run <code className="font-mono">{activeFailure.runId.slice(0, 8)}</code>
-                {' — '}adjust the scenario assumptions in the Assumption Registry or
-                choose a milder shock, then run again.
+                {' — '}adjust the assumptions in the{' '}
+                <Link href="/forecasting/scenario" className="text-action hover:underline">
+                  Scenario Builder
+                </Link>{' '}
+                or choose a milder shock, then run again.
                 {activeView ? ' The last successful projection is shown below.' : ''}
               </p>
             </div>
@@ -605,8 +609,6 @@ function ShockResult({
         }
         footer={
           <RunProvenance
-            runId={view.provenance.runId}
-            inputHash={view.provenance.inputHash}
             createdAt={view.provenance.createdAt}
             note="Shocked and base paths computed by the same engine on identical canonical inputs."
           />
@@ -670,7 +672,7 @@ function ShockResult({
         {/* Assumption diff */}
         <SectionCard
           title="What the shock moved"
-          subtitle="Shocked vs base resolved assumptions, from the persisted run payload"
+          subtitle="Shocked vs base resolved assumptions, from the saved projection"
           noPadding
         >
           {movedAssumptions.length === 0 ? (

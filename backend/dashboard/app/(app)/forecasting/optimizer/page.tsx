@@ -309,8 +309,6 @@ export default function StrategicOptimizer() {
                   subtitle={`Every candidate breached at least one ${regShort()} floor`}
                   footer={
                     <RunProvenance
-                      runId={view.provenance.runId}
-                      inputHash={view.provenance.inputHash}
                       createdAt={view.provenance.createdAt}
                     />
                   }
@@ -340,10 +338,8 @@ export default function StrategicOptimizer() {
                 height={260}
                 footer={
                   <RunProvenance
-                    runId={view.provenance.runId}
-                    inputHash={view.provenance.inputHash}
                     createdAt={view.provenance.createdAt}
-                    note={`Persisted as ${labelize('constrained_search')} regulatory runs for audit.`}
+                    note="Kept as saved optimizer projections."
                   />
                 }
               >
@@ -391,11 +387,6 @@ export default function StrategicOptimizer() {
                 subtitle="Top strategies by 5-year average ROE, with the decision levers and constraint outcomes"
                 noPadding
                 computedAt={view.provenance.createdAt ?? undefined}
-                runBadge={
-                  storedRun.data && !runOptimizer.data ? (
-                    <RunBadge run={storedRun.data} />
-                  ) : undefined
-                }
               >
                 <RankingTable view={view} />
               </SectionCard>

@@ -156,8 +156,8 @@ export default function NSFRDashboard() {
 
             {!run ? (
               <EmptyState
-                title="No stored baseline run for this period"
-                description="ASF and RSF line-item detail is produced when the period's results are finalised under Governance. Once this period closes, the full NSFR breakdown appears here."
+                title="Awaiting stored results for this period"
+                description="ASF and RSF line-item detail is produced with this period's stored results and appears here automatically once they are computed."
               />
             ) : (
               <>

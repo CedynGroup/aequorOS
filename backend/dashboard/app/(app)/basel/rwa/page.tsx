@@ -125,7 +125,7 @@ export default function RWABreakdown() {
           <EmptyState
             Icon={Layers}
             title="Awaiting period results"
-            description="The full risk-weighted asset detail is produced when the period's results are finalised under Governance. Once this period closes, the breakdown appears here."
+            description="The full risk-weighted asset detail is produced with this period's stored results and appears here automatically once they are computed."
           />
         </div>
       ) : (
