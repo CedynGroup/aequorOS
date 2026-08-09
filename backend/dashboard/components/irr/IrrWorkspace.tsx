@@ -65,7 +65,6 @@ export default function IrrWorkspace({
         ]}
         title="Interest Rate Risk"
         subtitle={subtitle}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 

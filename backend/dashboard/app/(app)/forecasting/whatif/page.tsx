@@ -36,7 +36,7 @@ import {
   useRegulatoryRuns,
   useRunWhatIf,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num } from '@/lib/api/values';
+import { num } from '@/lib/api/values';
 import { fmtCurrency, fmtCurrencySigned, fmtPct } from '@/lib/format';
 
 // ---------------------------------------------------------------------------
@@ -380,7 +380,6 @@ export default function WhatIfLab() {
         ]}
         title="What-if Lab"
         subtitle="Deterministic macro shocks re-projected against the unshocked base run on identical canonical inputs"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <QueryBoundary

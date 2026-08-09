@@ -52,7 +52,7 @@ import {
   useForecastRun,
   useForecastRuns,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, isoDate, labelize, num, statusTone } from '@/lib/api/values';
+import { isoDate, labelize, num, statusTone } from '@/lib/api/values';
 import { currencyCode, fmtCurrency, fmtPct, fmtPctSigned, regShort } from '@/lib/format';
 import { seriesColor } from '@/lib/chartTheme';
 
@@ -131,7 +131,6 @@ function BalanceSheetWorkspace() {
         ]}
         title="Balance Sheet Forecast"
         subtitle="Deterministic 5-year projection from canonical financials and persisted scenario assumptions"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <div className="flex items-center gap-2">
             <select

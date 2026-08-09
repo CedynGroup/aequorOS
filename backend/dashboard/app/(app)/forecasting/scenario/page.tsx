@@ -42,7 +42,7 @@ import {
   useForecastRuns,
   useForecastScenarios,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, fmtTimestamp, num, shortId } from '@/lib/api/values';
+import { fmtTimestamp, num, shortId } from '@/lib/api/values';
 import { currencyCode, fmtCurrency, fmtPct } from '@/lib/format';
 
 type FormValues = Record<AssumptionKey, number>;
@@ -138,7 +138,6 @@ export default function ScenariosPage() {
         ]}
         title="Scenario Manager"
         subtitle="Design scenario assumptions, run projections, and compare saved runs side-by-side"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <QueryBoundary

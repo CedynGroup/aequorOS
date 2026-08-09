@@ -21,7 +21,6 @@ export default function FxScenarios() {
         ]}
         title="FX Scenario Workbench"
         subtitle="Depreciation shocks against the current open position — live analysis, side-by-side comparison"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
       <div className="px-8 py-6">
         <ScenarioWorkbench

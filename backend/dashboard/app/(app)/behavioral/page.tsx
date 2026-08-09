@@ -86,7 +86,6 @@ export default function BehavioralOverviewPage() {
         ]}
         title="Behavioral Models"
         subtitle="Tenant-scoped ML estimators feeding the ALM engines through the reviewed-assumption workflow"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <div className="px-8 py-6 space-y-6">

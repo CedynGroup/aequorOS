@@ -12,7 +12,7 @@ import HQLAStackChart from '@/components/charts/HQLAStackChart';
 import { runComputedAt } from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useLiquidityDashboard, useRegulatoryRun } from '@/lib/api/hooks';
-import { fmtDateUTC, num } from '@/lib/api/values';
+import { num } from '@/lib/api/values';
 import { CHART_SERIES, seriesColor } from '@/lib/chartTheme';
 import { currencyCode, fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
@@ -127,7 +127,6 @@ export default function LiquidityBuffer() {
         ]}
         title="Liquidity Buffer"
         subtitle="High quality liquid asset composition · Basel III LCR numerator"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <QueryBoundary

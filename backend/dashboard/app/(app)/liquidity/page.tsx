@@ -21,7 +21,7 @@ import {
   useLiquidityDashboard,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
+import { num, statusTone } from '@/lib/api/values';
 import { currencyCode, fmtCurrency, fmtPct, regShort, centralBankName } from '@/lib/format';
 
 type LineRow = {
@@ -124,7 +124,6 @@ export default function LiquidityCockpit() {
         ]}
         title="Liquidity Cockpit"
         subtitle={`Basel III LCR & NSFR per ${centralBankName()} CRD framework · 30-day stressed horizon`}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 

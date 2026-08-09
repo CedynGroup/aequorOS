@@ -20,7 +20,6 @@ export default function FtpScenarios() {
         ]}
         title="FTP Scenario Workbench"
         subtitle="Curve and funding-spread overlays repricing the book — live analysis, side-by-side comparison"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
       <div className="px-8 py-6">
         <ScenarioWorkbench

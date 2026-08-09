@@ -164,11 +164,11 @@ function LiveFreshnessPill() {
 
   return (
     <span
-      title="Live figures — recomputed automatically as data arrives and on the hourly schedule."
+      title={`Live figures — recomputed automatically as data arrives and on the hourly schedule${latest ? `; engines last ran ${fmtRelative(latest)}` : ''}.`}
       className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-success/30 bg-success-light text-success text-caption font-medium whitespace-nowrap"
     >
       <RadioTower size={11} aria-hidden />
-      Live{latest ? ` · ${fmtRelative(latest)}` : ''}
+      Live
     </span>
   );
 }

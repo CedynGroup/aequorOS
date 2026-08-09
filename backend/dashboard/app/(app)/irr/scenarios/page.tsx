@@ -22,7 +22,6 @@ export default function IrrScenarios() {
         ]}
         title="Rate Scenario Workbench"
         subtitle="ΔEVE under the Basel shock table and your own curve shocks — live analysis, side-by-side comparison"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
       <div className="px-8 py-6">
         <ScenarioWorkbench

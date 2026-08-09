@@ -163,7 +163,6 @@ export default function CapitalPlanning() {
         ]}
         title="Capital Planning"
         subtitle="Multi-year capital ratio projection from stored forecast runs · what-if planner on the current base"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <QueryBoundary

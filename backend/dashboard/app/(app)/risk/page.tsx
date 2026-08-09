@@ -30,7 +30,7 @@ import {
   useRefreshBankData,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, fmtRelative, isoDate, statusTone } from '@/lib/api/values';
+import { fmtRelative, isoDate, statusTone } from '@/lib/api/values';
 import LimitWall from '@/components/risk/LimitWall';
 import {
   extractAllLimits,
@@ -107,7 +107,6 @@ export default function RiskLimitMonitorPage() {
         breadcrumbs={[{ label: 'Command' }, { label: 'Risk & Limits' }]}
         title="Risk & Limit Monitor"
         subtitle="Bank-wide limit utilization and breach status — every threshold shown comes from the module payloads, never hardcoded in this page."
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       {isLoading ? (

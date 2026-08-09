@@ -21,7 +21,6 @@ export default function CapitalStress() {
         ]}
         title="Capital Stress Workbench"
         subtitle="Credit-loss, RWA-growth and FX shocks over the four-quarter capital path — live analysis, side-by-side comparison"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
       <div className="px-8 py-6">
         <ScenarioWorkbench

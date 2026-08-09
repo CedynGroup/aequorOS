@@ -118,7 +118,6 @@ export default function MonitoringTools() {
         ]}
         title="Liquidity Monitoring Tools"
         subtitle={`Board threshold register (LMTD ¶11) · liquidity-value schedule (LRMD ¶60–63) · per-currency funding mismatch`}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <QueryBoundary

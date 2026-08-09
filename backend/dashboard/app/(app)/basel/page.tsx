@@ -19,7 +19,7 @@ import {
   useCapitalDashboard,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
+import { num, statusTone } from '@/lib/api/values';
 import { seriesColor } from '@/lib/chartTheme';
 import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
@@ -106,7 +106,6 @@ export default function BaselOverview() {
         ]}
         title="Basel Capital"
         subtitle={`Capital Adequacy Ratio · Tier 1 / Tier 2 · ${regShort()} CRD framework`}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 

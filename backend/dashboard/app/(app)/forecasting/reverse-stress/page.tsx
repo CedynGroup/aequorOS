@@ -9,6 +9,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useLatestReverseStress, useRunReverseStress } from '@/lib/api/hooks';
+import { ErrorPanel } from '@/components/ui/QueryBoundary';
 import { fmtDateUTC } from '@/lib/api/values';
 
 // Reverse stress (Phase 2 item 4): bisection over the existing scenario
@@ -49,7 +50,6 @@ export default function ReverseStress() {
         ]}
         title="Reverse Stress Testing"
         subtitle="The severity multipliers at which the hard floors break — searched over the stored scenario engines, never a new model"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <button
             type="button"

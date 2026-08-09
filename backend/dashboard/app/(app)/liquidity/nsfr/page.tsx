@@ -15,7 +15,7 @@ import {
   useLiquidityDashboard,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
+import { num, statusTone } from '@/lib/api/values';
 import { fmtCurrency, regShort } from '@/lib/format';
 
 type WeightedRow = {
@@ -100,7 +100,6 @@ export default function NSFRDashboard() {
         ]}
         title="Net Stable Funding Ratio"
         subtitle={`Basel III NSFR per ${regShort()} CRD · 1-year stable funding horizon`}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <QueryBoundary

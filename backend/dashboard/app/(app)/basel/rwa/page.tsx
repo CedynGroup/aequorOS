@@ -17,7 +17,7 @@ import {
   isNoBaselineRunError,
   useRwaBreakdown,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num, shortId } from '@/lib/api/values';
+import { num, shortId } from '@/lib/api/values';
 import { seriesColor } from '@/lib/chartTheme';
 import { currencyCode, fmtCurrency, regShort } from '@/lib/format';
 
@@ -118,7 +118,6 @@ export default function RWABreakdown() {
         ]}
         title="RWA Breakdown"
         subtitle={`Risk-weighted assets by risk type · ${regShort()} CRD standardized approach`}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       {needsBaseline ? (

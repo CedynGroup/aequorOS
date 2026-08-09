@@ -29,7 +29,7 @@ import ScenarioLinesChart, {
 import { useScenarioRunSet } from '@/components/forecasting/hooks';
 import { scenarioLabel, yoyPct } from '@/components/forecasting/lib';
 import { useBankContext } from '@/components/shell/BankContext';
-import { fmtDateUTC, num } from '@/lib/api/values';
+import { num } from '@/lib/api/values';
 import { fmtCurrency, fmtPct, fmtPctSigned } from '@/lib/format';
 import { seriesColor } from '@/lib/chartTheme';
 
@@ -63,7 +63,6 @@ export default function NiiForecastPage() {
         ]}
         title="Net Interest Income Forecast"
         subtitle="Projected NII per horizon year from the persisted forecast path · scenario sensitivity vs base"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <QueryBoundary

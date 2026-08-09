@@ -22,7 +22,6 @@ export default function LiquidityStress() {
         ]}
         title="Liquidity Stress Workbench"
         subtitle="Run-off, inflow and haircut scenarios against current positions — live analysis, side-by-side comparison"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
       <div className="px-8 py-6">
         <ScenarioWorkbench

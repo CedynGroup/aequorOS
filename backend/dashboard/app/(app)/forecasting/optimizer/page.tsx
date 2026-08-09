@@ -39,7 +39,7 @@ import {
   useRegulatoryRuns,
   useRunOptimizer,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, labelize, num } from '@/lib/api/values';
+import { labelize, num } from '@/lib/api/values';
 import { fmtPct, regShort } from '@/lib/format';
 import {
   axisProps,
@@ -235,7 +235,6 @@ export default function StrategicOptimizer() {
         ]}
         title="Strategy Optimizer"
         subtitle="Constrained scenario search over the deterministic 5-year projection engine"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={runButton}
       />
 

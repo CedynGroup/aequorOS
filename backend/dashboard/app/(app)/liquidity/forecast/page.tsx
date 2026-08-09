@@ -74,7 +74,6 @@ export default function CashFlowForecast() {
         ]}
         title="Cash Flow Forecast"
         subtitle="Daily net cash flow projection · LSTM behavioral model vs static assumptions"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <div className="px-8 py-6 space-y-6">

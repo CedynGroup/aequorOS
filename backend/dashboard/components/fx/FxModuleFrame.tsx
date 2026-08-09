@@ -60,7 +60,6 @@ export default function FxModuleFrame({
         ]}
         title={title}
         subtitle={subtitle}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 

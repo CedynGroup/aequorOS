@@ -135,7 +135,6 @@ export default function ContingencyFundingPlan() {
         ]}
         title="Contingency Funding Plan"
         subtitle={`Server-side EWI framework (LRMD ¶28) · CFP lifecycle with ${regShort()} ¶74 notification`}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <QueryBoundary

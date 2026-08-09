@@ -34,7 +34,7 @@ import {
   useForecastRuns,
   useForecastScenarios,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num } from '@/lib/api/values';
+import { num } from '@/lib/api/values';
 
 export default function AssumptionsPage() {
   const { bank, period } = useBankContext();
@@ -54,8 +54,7 @@ export default function AssumptionsPage() {
           { label: 'Assumptions' },
         ]}
         title="Assumption Registry"
-        subtitle="The resolved assumptions the projection engine consumed, and the preset catalogue they resolve from"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
+        subtitle="The audit record of what each run consumed — assumptions are edited in the Scenario Builder"
         action={
           <Link
             href="/behavioral"

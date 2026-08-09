@@ -14,7 +14,7 @@ import {
   useCapitalDashboard,
   useCapitalStructure,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num, shortId } from '@/lib/api/values';
+import { num, shortId } from '@/lib/api/values';
 import { seriesColor } from '@/lib/chartTheme';
 import { fmtCurrencyFull } from '@/lib/format';
 
@@ -123,7 +123,6 @@ export default function CapitalStructurePage() {
         ]}
         title="Capital Structure"
         subtitle="Tier 1 (CET1, AT1), Tier 2, and regulatory deductions"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       {needsBaseline ? (
