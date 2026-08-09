@@ -111,7 +111,10 @@ def run_worker(
     stale_after = timedelta(seconds=settings.worker.worker_stale_job_seconds)
     reap_interval = max(stale_after.total_seconds() / 2, poll_interval)
     job_types = job_types or tuple(HANDLERS)
-    if settings.worker.official_run_enabled:
+    # Seed when ANY scheduled feature is on — gating this on official runs
+    # alone stranded every other scheduled feature (live refresh, connection
+    # probes, vendor pulls) with no tick chain to run them.
+    if scheduler.any_scheduling_enabled(settings):
         try:
             with _new_session() as session:
                 scheduler.seed_ticks(session)

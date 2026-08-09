@@ -95,6 +95,7 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("MARKET_DATA_PULL_ENABLED", "0")
     monkeypatch.setenv("TEMENOS_PULL_ENABLED", "0")
     monkeypatch.setenv("DATABASE_DIRECT_HEALTH_ENABLED", "0")
+    monkeypatch.setenv("LIVE_REFRESH_ENABLED", "0")
     # Same guard for the OpenBao backend's endpoint and AppRole: a developer who
     # points their .env at a live OpenBao would otherwise flip the tests that
     # assert "this deployment cannot sign" into the configured branch. The

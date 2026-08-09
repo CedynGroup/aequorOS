@@ -485,6 +485,11 @@ class WorkerSettings(BaseSettings):
     worker_stale_job_seconds: float = Field(default=900.0, alias="WORKER_STALE_JOB_SECONDS")
     official_run_hour: int = Field(default=2, alias="OFFICIAL_RUN_HOUR")
     official_run_enabled: bool = Field(default=False, alias="OFFICIAL_RUN_ENABLED")
+    #: Hourly scheduled live refresh: keeps the live tier's computed_at current
+    #: even when no new data arrives, so "Live" genuinely means today. Cheap
+    #: (pipeline_refresh writes zero RegulatoryRun rows). Default off — the
+    #: scheduler stays inert unless a deployment opts in.
+    live_refresh_enabled: bool = Field(default=False, alias="LIVE_REFRESH_ENABLED")
     # The worker claims and processes jobs across every tenant, so its DB
     # connection must see all rows. On an RLS-forced Postgres this requires a
     # BYPASSRLS role (the app role is deliberately tenant-scoped). When unset,

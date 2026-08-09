@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.base import utc_now
-from app.models import Job
+from app.models import BankReportingPeriod, Job, LiveMetric
 from app.services import job_queue, scheduler
 from app.services.sample_bank_seed import SAMPLE_BANK_ID, seed_sample_bank
 from tests.api.helpers import ORG_1
@@ -68,4 +68,70 @@ def test_run_tick_enqueues_official_and_reschedules_when_enabled(
     )
     assert len(queued_ticks) == 1
     assert queued_ticks[0].run_after is not None
+    get_settings.cache_clear()
+
+
+def test_run_tick_enqueues_live_refreshes_when_enabled(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LIVE_REFRESH_ENABLED alone keeps the tick alive and refreshes a bank
+    whose live tier has never been computed — "Live" must mean today, not the
+    last ingestion."""
+    monkeypatch.setenv("LIVE_REFRESH_ENABLED", "true")
+    get_settings.cache_clear()
+    seed_sample_bank(db_session)
+    db_session.commit()
+    _tick_job(db_session)
+    tick = job_queue.claim_next(db_session, utc_now(), ("scheduled_tick",))
+    assert tick is not None
+
+    scheduler.run_tick(db_session, tick)
+
+    refreshes = list(db_session.scalars(select(Job).where(Job.job_type == "pipeline_refresh")))
+    assert len(refreshes) == 1
+    assert refreshes[0].bank_id == SAMPLE_BANK_ID
+    assert refreshes[0].payload.get("as_of_date")
+    assert tick.progress["live_refreshes_enqueued"] == 1
+    assert _count(db_session, "scheduled_tick", status="queued") == 1
+    get_settings.cache_clear()
+
+
+def test_live_refresh_skips_a_fresh_live_tier(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A live tier computed within the interval is left alone — the scheduled
+    refresh exists to cure staleness, not to churn."""
+    monkeypatch.setenv("LIVE_REFRESH_ENABLED", "true")
+    get_settings.cache_clear()
+    seed_sample_bank(db_session)
+    period_id = db_session.scalar(
+        select(BankReportingPeriod.id)
+        .where(
+            BankReportingPeriod.organization_id == ORG_1,
+            BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+        )
+        .order_by(BankReportingPeriod.period_end.desc())
+        .limit(1)
+    )
+    assert period_id is not None
+    db_session.add(
+        LiveMetric(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            reporting_period_id=period_id,
+            module="liquidity",
+            status="green",
+            metrics={},
+            computed_at=utc_now(),
+        )
+    )
+    db_session.commit()
+    _tick_job(db_session)
+    tick = job_queue.claim_next(db_session, utc_now(), ("scheduled_tick",))
+    assert tick is not None
+
+    scheduler.run_tick(db_session, tick)
+
+    assert _count(db_session, "pipeline_refresh") == 0
+    assert tick.progress["live_refreshes_enqueued"] == 0
     get_settings.cache_clear()

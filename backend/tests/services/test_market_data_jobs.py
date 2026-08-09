@@ -368,6 +368,7 @@ def test_scheduler_tick_enqueues_due_pulls_when_enabled(
         "market_data_pulls_enqueued": 1,
         "temenos_pulls_enqueued": 0,
         "database_direct_probes_enqueued": 0,
+        "live_refreshes_enqueued": 0,
         "deadline_scan_enqueued": True,
     }
     queued_ticks = list(
