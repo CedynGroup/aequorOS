@@ -63,16 +63,16 @@ function readLocalPreference(): ThemePreference {
   } catch {
     // Storage unavailable; use the OS preference.
   }
-  return 'system';
+  return 'dark';
 }
 
 export default function ThemeProvider({ children }: { children: ReactNode }) {
   const { profile, updateProfile, refetch } = useUserProfile();
-  const [theme, setThemeState] = useState<ThemePreference>('system');
+  const [theme, setThemeState] = useState<ThemePreference>('dark');
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('dark');
   const pendingTheme = useRef<ThemePreference | null>(null);
   const isSyncing = useRef(false);
-  const confirmedTheme = useRef<ThemePreference>('system');
+  const confirmedTheme = useRef<ThemePreference>('dark');
 
   const applyTheme = useCallback((preference: ThemePreference) => {
     const resolved = resolveTheme(preference);

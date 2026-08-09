@@ -39,7 +39,7 @@ const SEVERITY_STYLES: Record<
 };
 
 /** Deep-link target for a notification, when its entity supports one. */
-function notificationHref(notification: NotificationRead): string | null {
+export function notificationHref(notification: NotificationRead): string | null {
   if (notification.type.startsWith('reporting.deadline.')) return '/submissions';
   if (notification.entityType === 'regulatory_package') {
     return '/submissions/history';
