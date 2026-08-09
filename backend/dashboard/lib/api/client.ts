@@ -7,6 +7,7 @@
  */
 
 import {
+  CreditParamsApi,
   IntegrationKeysApi,
   LiquidityCfpApi,
   LiquidityThresholdsApi,
@@ -92,6 +93,7 @@ export const notificationsApi = new NotificationsApi(configuration);
 export const integrationKeysApi = new IntegrationKeysApi(configuration);
 export const liquidityCfpApi = new LiquidityCfpApi(configuration);
 export const liquidityThresholdsApi = new LiquidityThresholdsApi(configuration);
+export const creditParamsApi = new CreditParamsApi(configuration);
 export const reverseStressApi = new ReverseStressApi(configuration);
 export const scenarioWorkbenchApi = new ScenarioWorkbenchApi(configuration);
 

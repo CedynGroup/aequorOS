@@ -39,8 +39,12 @@ import type {
   CashflowHorizon,
   CertifyAndSendRequest,
   ChannelCode,
+  CrmHaircutUpdate,
+  EclAssumptionUpdate,
+  EwiRegisterPut,
   ForecastRunCreate,
   InstitutionProfilePut,
+  LiquidityThresholdUpdate,
   MarketDataConnectionCreate,
   MarketDataConnectionUpdate,
   OutletCreate,
@@ -68,6 +72,7 @@ import {
   banksApi,
   behavioralModelsApi,
   cashflowForecastApi,
+  creditParamsApi,
   forecastingApi,
   institutionProfileApi,
   integrationKeysApi,
@@ -3000,3 +3005,92 @@ export function useDeleteScenarioAnalysis(bankId: string | undefined, module: Wo
   });
 }
 
+
+// --- Board registers (Governance → Board Registers editor surface) ---------
+// Reads pair with the existing register hooks above (['liq-thresholds'],
+// ['ewi-dashboard']); the credit-parameter registers get their own keys here.
+// Every PUT is approver-gated server-side and audited — the payloads carry
+// the Board evidence (approved_by + reason), never a bare value change.
+
+export function useCrmHaircutRegister(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['crm-haircuts', bankId],
+    queryFn: () => apiCall(() => creditParamsApi.getCrmHaircutRegister({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useEclAssumptionRegister(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['ecl-assumptions', bankId],
+    queryFn: () => apiCall(() => creditParamsApi.getEclAssumptionRegister({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useUpdateLiquidityThresholdRegister(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: LiquidityThresholdUpdate) =>
+      apiCall(() =>
+        liquidityThresholdsApi.updateLiquidityThresholdRegister({
+          bankId: bankId!,
+          liquidityThresholdUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['liq-thresholds', bankId] });
+      // Threshold generations feed the monitoring/liquidity views.
+      void queryClient.invalidateQueries({ queryKey: ['liq-dashboard', bankId] });
+    },
+  });
+}
+
+export function useUpdateLiquidityEwiRegister(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: EwiRegisterPut) =>
+      apiCall(() =>
+        liquidityCfpApi.updateLiquidityEwiRegister({
+          bankId: bankId!,
+          ewiRegisterPut: payload,
+        })
+      ),
+    onSuccess: () => {
+      // Prefix-invalidates every period's dashboard read.
+      void queryClient.invalidateQueries({ queryKey: ['ewi-dashboard', bankId] });
+    },
+  });
+}
+
+export function useUpdateCrmHaircutRegister(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CrmHaircutUpdate) =>
+      apiCall(() =>
+        creditParamsApi.updateCrmHaircutRegister({
+          bankId: bankId!,
+          crmHaircutUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['crm-haircuts', bankId] });
+    },
+  });
+}
+
+export function useUpdateEclAssumptionRegister(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: EclAssumptionUpdate) =>
+      apiCall(() =>
+        creditParamsApi.updateEclAssumptionRegister({
+          bankId: bankId!,
+          eclAssumptionUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ecl-assumptions', bankId] });
+    },
+  });
+}

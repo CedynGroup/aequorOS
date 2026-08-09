@@ -10,10 +10,12 @@ import StatusPill from '@/components/ui/StatusPill';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import { useBankContext } from '@/components/shell/BankContext';
+import StressedLadderPanel from '@/components/liquidity/StressedLadderPanel';
 import {
   useLiquidityDashboard,
   useLiquidityHaircutSchedule,
   useLiquidityThresholdRegister,
+  useRegulatoryRun,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, num } from '@/lib/api/values';
 import { currencyCode, fmtCurrency, fmtPct, regShort } from '@/lib/format';
@@ -97,6 +99,8 @@ export default function MonitoringTools() {
   const dashboard = useLiquidityDashboard(bankId, periodId);
   const thresholds = useLiquidityThresholdRegister(bankId);
   const haircuts = useLiquidityHaircutSchedule(bankId);
+  const latestRunId = dashboard.data?.latestRunId;
+  const latestRun = useRegulatoryRun(bankId, latestRunId);
 
   const metrics = dashboard.data?.metrics;
   const fxGap = metrics?.fxFundingGapGhs != null ? num(metrics.fxFundingGapGhs) : null;
@@ -154,6 +158,12 @@ export default function MonitoringTools() {
                 hint="Foreign-currency funding dependence"
               />
             </div>
+
+            <StressedLadderPanel
+              runId={latestRunId}
+              run={latestRun.data}
+              isLoading={dashboard.isLoading || latestRun.isLoading}
+            />
 
             <SectionCard
               title="Board threshold register"

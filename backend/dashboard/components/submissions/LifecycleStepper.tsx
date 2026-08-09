@@ -31,6 +31,39 @@ const STEP_INDEX: Partial<Record<PackageStatus, number>> = {
   acknowledged: 5,
 };
 
+/**
+ * The workspace stage a package status maps onto — the returns workspace
+ * chooses its primary panels from this. Declined is the regulator's final
+ * refusal and shares the rejected stage; draft is vestigial (packages are
+ * minted `generated`) and falls back to the first stage.
+ */
+export type LifecycleStage =
+  | 'generated'
+  | 'validated'
+  | 'pending_approval'
+  | 'approved'
+  | 'submitted'
+  | 'acknowledged'
+  | 'rejected'
+  | 'superseded';
+
+const STAGE_FOR: Partial<Record<PackageStatus, LifecycleStage>> = {
+  draft: 'generated',
+  generated: 'generated',
+  validated: 'validated',
+  pending_approval: 'pending_approval',
+  approved: 'approved',
+  submitted: 'submitted',
+  acknowledged: 'acknowledged',
+  rejected: 'rejected',
+  declined: 'rejected',
+  superseded: 'superseded',
+};
+
+export function stageFor(status: PackageStatus): LifecycleStage {
+  return STAGE_FOR[status] ?? 'generated';
+}
+
 export default function LifecycleStepper({ status }: { status: PackageStatus }) {
   const terminal =
     status === 'rejected' || status === 'declined' || status === 'superseded'
