@@ -240,7 +240,7 @@ def _run_capital(db: Session, period_id, scenario: str):
         MAKER,
         SAMPLE_BANK_ID,
         RegulatoryRunCreate(
-            module="capital", reporting_period_id=period_id, scenario_code=scenario
+            module="capital", reporting_period_id=period_id, scenario_code=scenario  # type: ignore[index]
         ),
     )
 

@@ -194,14 +194,14 @@ def test_stress_pack_requires_a_stress_scenario(db_session: Session) -> None:
             MAKER,
             SAMPLE_BANK_ID,
             RegulatoryRunCreate(
-                module=module, reporting_period_id=period_id, scenario_code="baseline"
+                module=module, reporting_period_id=period_id, scenario_code="baseline"  # type: ignore[index]
             ),
         )
         assert run.status == "succeeded"
     with pytest.raises(HTTPException) as excinfo:
         _generate(db_session)
     assert excinfo.value.status_code == 409
-    assert excinfo.value.detail["error_code"] == "no_stress_scenarios"
+    assert excinfo.value.detail["error_code"] == "no_stress_scenarios"  # type: ignore[index]
 
 
 def test_stress_pack_exports_to_xlsx(

@@ -165,7 +165,7 @@ def test_starters_evaluate_with_honest_gaps_and_no_invented_rag(db_session: Sess
             db_session,
             MAKER,
             liquidity_ewi._get_bank_or_404(db_session, MAKER, SAMPLE_BANK_ID),  # noqa: SLF001
-            db_session.get(BankReportingPeriod, _period_id(db_session)),
+            db_session.get(BankReportingPeriod, _period_id(db_session)),  # type: ignore[index]
         )
     }
     assert set(evaluations) == {starter.code for starter in liquidity_ewi.STARTER_INDICATORS}
@@ -284,7 +284,7 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
             SAMPLE_BANK_ID,
             CfpActivationCreate(reporting_period_id=period_id, reason="Funding shock"),
         )
-    assert excinfo.value.detail["error_code"] == "no_approved_cfp"
+    assert excinfo.value.detail["error_code"] == "no_approved_cfp"  # type: ignore[index]
 
     # A plan missing the intraday horizon cannot be approved (¶75(b)).
     incomplete = _full_content().model_copy(
@@ -306,7 +306,7 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
             SAMPLE_BANK_ID,
             CfpApprove(approval_reference="BM-2026-08", reason="Annual approval"),
         )
-    assert excinfo.value.detail["error_code"] == "cfp_missing_intraday"
+    assert excinfo.value.detail["error_code"] == "cfp_missing_intraday"  # type: ignore[index]
 
     # Complete the draft; the preparer cannot approve their own plan.
     liquidity_cfp.put_cfp(
@@ -319,7 +319,7 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
             SAMPLE_BANK_ID,
             CfpApprove(approval_reference="BM-2026-08", reason="Annual approval"),
         )
-    assert excinfo.value.detail["error_code"] == "self_approval"
+    assert excinfo.value.detail["error_code"] == "self_approval"  # type: ignore[index]
 
     approved = liquidity_cfp.approve_cfp(
         db_session,
@@ -329,7 +329,7 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
     )
     assert approved.status == "approved"
     assert approved.approval_expires_at is not None
-    assert (approved.approval_expires_at - approved.approval_timestamp.date()).days == 365
+    assert (approved.approval_expires_at - approved.approval_timestamp.date()).days == 365  # type: ignore[index]
 
     # Activation: ¶74 — EWI snapshot + regulator notification into the pipeline.
     event = liquidity_cfp.activate_cfp(
@@ -363,7 +363,7 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
             SAMPLE_BANK_ID,
             CfpActivationCreate(reporting_period_id=period_id, reason="Again"),
         )
-    assert excinfo.value.detail["error_code"] == "cfp_already_active"
+    assert excinfo.value.detail["error_code"] == "cfp_already_active"  # type: ignore[index]
 
     de_escalated = liquidity_cfp.de_escalate_cfp(
         db_session,

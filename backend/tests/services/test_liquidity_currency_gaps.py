@@ -69,7 +69,7 @@ def _run(db: Session, scenario: str):
         MAKER,
         SAMPLE_BANK_ID,
         RegulatoryRunCreate(
-            module="liquidity", reporting_period_id=_period_id(db), scenario_code=scenario
+            module="liquidity", reporting_period_id=_period_id(db), scenario_code=scenario  # type: ignore[index]
         ),
     )
 

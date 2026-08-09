@@ -175,9 +175,7 @@ def _resolve_ref(  # noqa: PLR0913 - resolution needs the full scoping
         )
     )
     if scenario is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found.")
     shocks = {key: Decimal(str(value)) for key, value in scenario.shocks.items()}
     return _ResolvedRef(
         kind="custom",
@@ -358,9 +356,7 @@ def run_analysis(
     """Compute the requested scenarios side by side. Writes nothing."""
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
-    resolved = [
-        _resolve_ref(db, ctx, bank, module, period, ref) for ref in payload.scenarios
-    ]
+    resolved = [_resolve_ref(db, ctx, bank, module, period, ref) for ref in payload.scenarios]
     results = [_compute_one(db, ctx, bank, period, module, entry) for entry in resolved]
     return AnalysisRunRead(
         bank_id=bank.id,
@@ -414,9 +410,7 @@ def save_analysis(
     """Recompute server-side and snapshot — clients never supply numbers."""
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
-    resolved = [
-        _resolve_ref(db, ctx, bank, module, period, ref) for ref in payload.scenarios
-    ]
+    resolved = [_resolve_ref(db, ctx, bank, module, period, ref) for ref in payload.scenarios]
     results = [_compute_one(db, ctx, bank, period, module, entry) for entry in resolved]
     row = SavedScenarioAnalysis(
         organization_id=ctx.organization_id,
@@ -468,8 +462,7 @@ def list_analyses(  # noqa: PLR0913 - one read carries its full scoping
         SavedScenarioAnalysis.module == module,
     ]
     total = (
-        db.scalar(select(func.count()).select_from(SavedScenarioAnalysis).where(*conditions))
-        or 0
+        db.scalar(select(func.count()).select_from(SavedScenarioAnalysis).where(*conditions)) or 0
     )
     rows = db.scalars(
         select(SavedScenarioAnalysis)

@@ -28,6 +28,7 @@ from app.schemas.scenario_workbench import (
     ScenarioRefIn,
     StressScenarioCreate,
     StressScenarioUpdate,
+    WorkbenchModule,
 )
 from app.services import (
     analysis_workbench,
@@ -117,7 +118,7 @@ def test_custom_scenario_crud_guards(db_session: Session) -> None:
                 code="combined", name="x", shocks={"inflow_multiplier": Decimal("0.5")}
             ),
         )
-    assert excinfo.value.detail["error_code"] == "code_reserved"
+    assert excinfo.value.detail["error_code"] == "code_reserved"  # type: ignore[index]
 
     # Unknown shock keys are named, with the allowed vocabulary.
     with pytest.raises(HTTPException) as excinfo:
@@ -126,12 +127,10 @@ def test_custom_scenario_crud_guards(db_session: Session) -> None:
             MAKER,
             SAMPLE_BANK_ID,
             "liquidity",
-            StressScenarioCreate(
-                code="bad_keys", name="x", shocks={"made_up_key": Decimal("1")}
-            ),
+            StressScenarioCreate(code="bad_keys", name="x", shocks={"made_up_key": Decimal("1")}),
         )
-    assert excinfo.value.detail["error_code"] == "unsupported_shock_key"
-    assert "inflow_multiplier" in excinfo.value.detail["allowed_keys"]
+    assert excinfo.value.detail["error_code"] == "unsupported_shock_key"  # type: ignore[index]
+    assert "inflow_multiplier" in excinfo.value.detail["allowed_keys"]  # type: ignore[index]
 
     # Capital requires the full quarterly set together.
     with pytest.raises(HTTPException) as excinfo:
@@ -146,7 +145,7 @@ def test_custom_scenario_crud_guards(db_session: Session) -> None:
                 shocks={"quarterly_rwa_growth_pct": Decimal("3")},
             ),
         )
-    assert excinfo.value.detail["error_code"] == "incomplete_capital_shock_set"
+    assert excinfo.value.detail["error_code"] == "incomplete_capital_shock_set"  # type: ignore[index]
 
     created = stress_scenarios.create_scenario(
         db_session,
@@ -168,7 +167,7 @@ def test_custom_scenario_crud_guards(db_session: Session) -> None:
                 code="desk_a", name="Again", shocks={"inflow_multiplier": Decimal("0.6")}
             ),
         )
-    assert excinfo.value.detail["error_code"] == "scenario_code_exists"
+    assert excinfo.value.detail["error_code"] == "scenario_code_exists"  # type: ignore[index]
 
     updated = stress_scenarios.update_scenario(
         db_session,
@@ -258,11 +257,12 @@ def test_analysis_parity_with_official_runs_and_zero_writes(db_session: Session)
         assert result.metrics["car_pct"] == expected["car_pct"], result.code
 
     # IRR / FX / FTP adapters run clean over the seeded book.
-    for module, codes in (
+    adapter_cases: tuple[tuple[WorkbenchModule, tuple[str, str]], ...] = (
         ("irr", ("baseline", "parallel_up_200")),
         ("fx", ("baseline", "severe_depreciation")),
         ("ftp", ("baseline", "rates_up_200")),
-    ):
+    )
+    for module, codes in adapter_cases:
         outcome = analysis_workbench.run_analysis(
             db_session,
             MAKER,
@@ -367,9 +367,9 @@ def test_overrides_failures_as_data_and_saved_analyses(db_session: Session) -> N
     )
     assert fetched.results[0].metrics["lcr_pct"] == saved.results[0].metrics["lcr_pct"]
     analysis_workbench.delete_analysis(db_session, MAKER, SAMPLE_BANK_ID, "liquidity", saved.id)
-    assert analysis_workbench.list_analyses(
-        db_session, MAKER, SAMPLE_BANK_ID, "liquidity"
-    ).total == 0
+    assert (
+        analysis_workbench.list_analyses(db_session, MAKER, SAMPLE_BANK_ID, "liquidity").total == 0
+    )
 
     # Still zero official writes across everything above.
     assert _run_count(db_session) == runs_before

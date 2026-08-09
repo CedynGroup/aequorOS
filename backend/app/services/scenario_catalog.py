@@ -123,12 +123,8 @@ _IRR_DEFS = {
     "short_down_250": SystemScenarioDef(
         "short_down_250", "Short rates −250bp", "Short-end downward shock."
     ),
-    "steepener": SystemScenarioDef(
-        "steepener", "Steepener", "Short rates down, long rates up."
-    ),
-    "flattener": SystemScenarioDef(
-        "flattener", "Flattener", "Short rates up, long rates down."
-    ),
+    "steepener": SystemScenarioDef("steepener", "Steepener", "Short rates down, long rates up."),
+    "flattener": SystemScenarioDef("flattener", "Flattener", "Short rates up, long rates down."),
     "parallel_up_450": SystemScenarioDef(
         "parallel_up_450", "Parallel +450bp", "Local-rate severity shock (informational)."
     ),
@@ -199,14 +195,10 @@ SHOCK_VOCABULARY: dict[str, ShockVocabulary] = {
         exact_keys=frozenset(CAPITAL_REQUIRED_KEYS) | frozenset(ECL_CONDITIONING_KEYS)
     ),
     "irr": ShockVocabulary(
-        exact_keys=frozenset(
-            {SHOCK_PARALLEL_BP, SHOCK_SHORT_BP, SHOCK_LONG_BP, SHOCK_DECAY_YEARS}
-        )
+        exact_keys=frozenset({SHOCK_PARALLEL_BP, SHOCK_SHORT_BP, SHOCK_LONG_BP, SHOCK_DECAY_YEARS})
     ),
     "fx": ShockVocabulary(exact_keys=frozenset({SHOCK_DEPRECIATION})),
-    "ftp": ShockVocabulary(
-        exact_keys=frozenset({SHOCK_CURVE_SHIFT_BP, SHOCK_FUNDING_ADD_BP})
-    ),
+    "ftp": ShockVocabulary(exact_keys=frozenset({SHOCK_CURVE_SHIFT_BP, SHOCK_FUNDING_ADD_BP})),
 }
 
 

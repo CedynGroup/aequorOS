@@ -133,7 +133,7 @@ def test_capital_plan_lifecycle_requires_forecast_and_maker_checker(
             SAMPLE_BANK_ID,
             CapitalPlanApprove(approval_reference="BM-ICAAP-1", reason="Annual approval"),
         )
-    assert excinfo.value.detail["error_code"] == "no_forecast_run"
+    assert excinfo.value.detail["error_code"] == "no_forecast_run"  # type: ignore[index]
 
     _run_forecast(db_session)
     # Maker-checker: the preparer cannot approve.
@@ -144,7 +144,7 @@ def test_capital_plan_lifecycle_requires_forecast_and_maker_checker(
             SAMPLE_BANK_ID,
             CapitalPlanApprove(approval_reference="BM-ICAAP-1", reason="Annual approval"),
         )
-    assert excinfo.value.detail["error_code"] == "self_approval"
+    assert excinfo.value.detail["error_code"] == "self_approval"  # type: ignore[index]
 
     approved = capital_plan.approve_capital_plan(
         db_session,
@@ -154,7 +154,7 @@ def test_capital_plan_lifecycle_requires_forecast_and_maker_checker(
     )
     assert approved.status == "approved"
     assert approved.approval_expires_at is not None
-    assert (approved.approval_expires_at - approved.approval_timestamp.date()).days == 365
+    assert (approved.approval_expires_at - approved.approval_timestamp.date()).days == 365  # type: ignore[index]
 
     # The projection assembles from the stored forecast run with the
     # Pillar-1 + Pillar-2 requirement overlay.
@@ -185,7 +185,7 @@ def test_ilaap_component_refreshes_quarterly_from_stored_liquidity_state(
             SAMPLE_BANK_ID,
             IlaapRefreshCreate(reporting_period_id=period_id),
         )
-    assert excinfo.value.detail["error_code"] == "no_baseline_run"
+    assert excinfo.value.detail["error_code"] == "no_baseline_run"  # type: ignore[index]
 
     run = regulatory_liquidity.create_liquidity_run(
         db_session,

@@ -138,7 +138,7 @@ def test_every_registered_return_generates_and_exports_end_to_end(
     by_module = {outcome.module: outcome for outcome in outcomes}
     assert set(by_module) == {"liquidity", "capital", "irr", "fx", "ftp", "forecast"}
     failed = {
-        module: outcome.detail
+        module: outcome.detail  # type: ignore[index]
         for module, outcome in by_module.items()
         if outcome.status != "succeeded"
     }
@@ -156,7 +156,7 @@ def test_every_registered_return_generates_and_exports_end_to_end(
         if code in TEMPLATE_GATED:
             with pytest.raises(HTTPException) as excinfo:
                 generation.generate_package(db_session, MAKER, SAMPLE_BANK_ID, payload)
-            assert excinfo.value.detail["error_code"] == "template_pending", code
+            assert excinfo.value.detail["error_code"] == "template_pending", code  # type: ignore[index]
             continue
         read = generation.generate_package(db_session, MAKER, SAMPLE_BANK_ID, payload)
         package = db_session.scalar(
