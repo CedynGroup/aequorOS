@@ -70,6 +70,13 @@ from app.models.liquidity_cfp import (
 )
 from app.models.live import LiveFinding, LiveMetric, LiveMetricSnapshot
 from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
+from app.models.market_desk import (
+    DeskDetermination,
+    DeskMethodology,
+    DeskObservation,
+    DeskPublication,
+    DeskSourceCapture,
+)
 from app.models.notification import Notification
 from app.models.operator import OperatorAuditLog, TenantStorage
 from app.models.organization import Organization
@@ -177,6 +184,11 @@ __all__ = [
     "DatabaseDirectConnection",
     "MarketDataConnection",
     "MarketDataQuotaUsage",
+    "DeskDetermination",
+    "DeskMethodology",
+    "DeskObservation",
+    "DeskPublication",
+    "DeskSourceCapture",
     "CfpActivationEvent",
     "ContingencyFundingPlan",
     "LiquidityEwiIndicator",

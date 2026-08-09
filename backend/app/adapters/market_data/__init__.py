@@ -134,8 +134,9 @@ __all__ = [
 
 # Importing the vendor packages registers every shipped market data adapter
 # with the registry (mirrors app/adapters/__init__.py for ingestion adapters).
+from app.adapters.market_data.aequor_desk.adapter import AequorDeskAdapter  # noqa: E402
 from app.adapters.market_data.bloomberg.adapter import BloombergAdapter  # noqa: E402
 from app.adapters.market_data.manual_upload.adapter import ManualUploadAdapter  # noqa: E402
 from app.adapters.market_data.refinitiv.adapter import RefinitivAdapter  # noqa: E402
 
-__all__ += ["BloombergAdapter", "ManualUploadAdapter", "RefinitivAdapter"]
+__all__ += ["AequorDeskAdapter", "BloombergAdapter", "ManualUploadAdapter", "RefinitivAdapter"]

@@ -374,7 +374,7 @@ def test_quota_summary_lists_every_vendor(db_client: TestClient) -> None:
     response = db_client.get(f"/api/v1/banks/{bank_id}/market-data/quota", headers=headers())
     assert response.status_code == 200, response.text
     vendors = {entry["vendor"]: entry for entry in response.json()["vendors"]}
-    assert set(vendors) == {"bloomberg", "refinitiv", "manual_upload"}
+    assert set(vendors) == {"bloomberg", "refinitiv", "manual_upload", "aequor_desk"}
     for entry in vendors.values():
         assert entry["units_consumed"] == 0
         assert entry["pull_count"] == 0

@@ -26,6 +26,7 @@ from app.core.logging import configure_logging
 from app.core.request_id import RequestIdMiddleware
 from app.operator.features.activity import router as activity_router
 from app.operator.features.data_engines import router as data_engines_router
+from app.operator.features.desk import router as desk_router
 from app.operator.features.provision import router as provision_router
 from app.operator.features.tenants import router as tenants_router
 from app.schemas.health import HealthResponse
@@ -86,6 +87,7 @@ def create_operator_app() -> FastAPI:
     operator_router.include_router(provision_router)
     operator_router.include_router(activity_router)
     operator_router.include_router(data_engines_router)
+    operator_router.include_router(desk_router)
     app.include_router(operator_router)
     return app
 

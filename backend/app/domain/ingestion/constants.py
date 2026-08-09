@@ -23,6 +23,7 @@ SOURCE_SYSTEMS: tuple[str, ...] = (
     "REFINITIV",
     "MANUAL_UPLOAD",
     "MANUAL",
+    "AEQUOR_DESK",
 )
 SourceSystem = Literal[
     "EXCEL_CSV",
@@ -37,6 +38,7 @@ SourceSystem = Literal[
     "REFINITIV",
     "MANUAL_UPLOAD",
     "MANUAL",
+    "AEQUOR_DESK",
 ]
 
 POSITION_TYPES: tuple[str, ...] = (
@@ -210,8 +212,15 @@ MappingConfigStatus = Literal["draft", "active", "retired"]
 # Market data (market_data_adapter.md sections 10 and 13): canonical entity
 # value sets plus the vendor/credential-lifecycle vocabulary the operational
 # connection tables enforce.
-MARKET_DATA_VENDORS: tuple[str, ...] = ("bloomberg", "refinitiv", "manual_upload")
-MarketDataVendor = Literal["bloomberg", "refinitiv", "manual_upload"]
+# ``aequor_desk`` is the AequorOS market research desk publishing as an
+# internal vendor (AequorOS_Market_Data_and_Curve_Platform.md §2): a valid
+# vendor for canonical provenance and the connection-table CHECK, but NOT
+# bank-onboardable — the bank-facing connection API's vendor Literal
+# (app/schemas/market_data_connections.py) deliberately excludes it, because
+# desk data is pushed centrally at publication; there is nothing for a bank
+# to configure and no credential to hold.
+MARKET_DATA_VENDORS: tuple[str, ...] = ("bloomberg", "refinitiv", "manual_upload", "aequor_desk")
+MarketDataVendor = Literal["bloomberg", "refinitiv", "manual_upload", "aequor_desk"]
 
 MARKET_DATA_CONNECTION_STATUSES: tuple[str, ...] = (
     "TESTING",
@@ -234,8 +243,28 @@ MarketDataConnectionStatus = Literal[
     "DISABLED",
 ]
 
-YIELD_CURVE_TYPES: tuple[str, ...] = ("sovereign", "interbank", "swap", "credit_spread")
-YieldCurveType = Literal["sovereign", "interbank", "swap", "credit_spread"]
+# 'zero' / 'forward' / 'discount' carry the desk-constructed curve family
+# (AEQ.GHS.SOV.ZERO / AEQ.GHS.SOV.FWD / AEQ.GHS.OIS — spec §8): a bootstrapped
+# zero curve, its derived forward curve, and the synthetic OIS discounting
+# proxy are typed distinctly from vendor-sourced observed curves.
+YIELD_CURVE_TYPES: tuple[str, ...] = (
+    "sovereign",
+    "interbank",
+    "swap",
+    "credit_spread",
+    "zero",
+    "forward",
+    "discount",
+)
+YieldCurveType = Literal[
+    "sovereign",
+    "interbank",
+    "swap",
+    "credit_spread",
+    "zero",
+    "forward",
+    "discount",
+]
 
 FX_RATE_TYPES: tuple[str, ...] = ("spot", "forward")
 FxRateType = Literal["spot", "forward"]
