@@ -614,3 +614,68 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+class OperatorSettings(BaseSettings):
+    """Operator control-plane API settings (docs/internal/developer.md §4).
+
+    The operator app (``app.operator.main``) is a SEPARATE ASGI app — never
+    mounted on the tenant API — deployed behind an allowlist/VPN with
+    workforce OIDC login. These settings are deliberately kept out of the
+    tenant :class:`Settings` aggregate: tenant-plane code has no reason to
+    read them, and the operator entrypoint resolves them independently via
+    :func:`get_operator_settings`.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    #: Port the operator uvicorn binds (its own Coolify app / local process).
+    operator_port: int = Field(default=8100, alias="OPERATOR_PORT")
+    #: Comma-separated allowed origins for the staff console frontend.
+    operator_cors_origins_raw: str = Field(default="", alias="OPERATOR_CORS_ORIGINS")
+    #: Dedicated DB URL for the operator role. Cross-tenant reads on the
+    #: RLS-forced primary need a BYPASSRLS role (the worker precedent) — the
+    #: use site falls back to WORKER_DATABASE_URL then DATABASE_URL, so a
+    #: local/hermetic run works without extra configuration.
+    operator_database_url: str | None = Field(default=None, alias="OPERATOR_DATABASE_URL")
+    #: Development bearer-token auth. NEVER valid in production: the operator
+    #: app refuses to boot when this is on with APP_ENV=production.
+    dev_auth_enabled: bool = Field(default=False, alias="OPERATOR_DEV_AUTH_ENABLED")
+    dev_token: str | None = Field(default=None, alias="OPERATOR_DEV_TOKEN")
+    dev_email: str = Field(default="dev@aequoros.com", alias="OPERATOR_DEV_EMAIL")
+    #: Workforce OIDC (Google Workspace / Okta issuer). Verified with the same
+    #: zero-trust machinery as customer SSO (`verify_oidc_id_token`); tokens
+    #: must carry a verified email under the allowed domain.
+    oidc_issuer: str | None = Field(default=None, alias="OPERATOR_OIDC_ISSUER")
+    oidc_client_id: str | None = Field(default=None, alias="OPERATOR_OIDC_CLIENT_ID")
+    oidc_allowed_domain: str = Field(default="aequoros.com", alias="OPERATOR_OIDC_ALLOWED_DOMAIN")
+    #: Per-tenant KMS keys + SSE-KMS bucket encryption during provisioning
+    #: (developer.md §2a). Off by default: MinIO deployments have no KMS, and
+    #: the saga records the step as honestly skipped rather than pretending.
+    aws_kms_enabled: bool = Field(default=False, alias="OPERATOR_AWS_KMS_ENABLED")
+
+    @field_validator(
+        "operator_database_url",
+        "dev_token",
+        "oidc_issuer",
+        "oidc_client_id",
+        mode="before",
+    )
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.operator_cors_origins_raw.split(",")
+            if origin.strip()
+        ]
+
+
+@lru_cache
+def get_operator_settings() -> OperatorSettings:
+    return OperatorSettings()

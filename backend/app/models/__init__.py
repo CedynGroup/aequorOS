@@ -71,6 +71,7 @@ from app.models.liquidity_cfp import (
 from app.models.live import LiveFinding, LiveMetric, LiveMetricSnapshot
 from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
 from app.models.notification import Notification
+from app.models.operator import OperatorAuditLog, TenantStorage
 from app.models.organization import Organization
 from app.models.regulatory import (
     Bank,
@@ -181,7 +182,9 @@ __all__ = [
     "LiquidityEwiIndicator",
     "Notification",
     "IntegrationKey",
+    "OperatorAuditLog",
     "Organization",
+    "TenantStorage",
     "PackageSignaturePlacement",
     "PackageSignatureRecipient",
     "RegulatoryArtifactVersion",

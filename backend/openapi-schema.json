@@ -6386,6 +6386,178 @@
         "title": "CashflowHorizon",
         "type": "integer"
       },
+      "CashflowWindowCurrencyTotalRead": {
+        "additionalProperties": false,
+        "description": "Whole-window totals for one currency, in that currency.",
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "inflows": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Inflows",
+            "type": "string"
+          },
+          "net": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net",
+            "type": "string"
+          },
+          "outflows": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Outflows",
+            "type": "string"
+          },
+          "position_count": {
+            "title": "Position Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "inflows",
+          "outflows",
+          "net",
+          "position_count"
+        ],
+        "title": "CashflowWindowCurrencyTotalRead",
+        "type": "object"
+      },
+      "CashflowWindowMonthRead": {
+        "additionalProperties": false,
+        "description": "One calendar month \u00d7 currency cell of the contractual flow window.\n\n``month`` is the first day of the calendar month. Every month of the\nrequested window appears for each currency that has at least one flow\ninside the window (zero months included, so charts and tables stay\ncontiguous); currencies with no flows in the window are omitted entirely.\nAmounts are in the position's own currency \u2014 never converted.",
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "inflows": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Inflows",
+            "type": "string"
+          },
+          "month": {
+            "format": "date",
+            "title": "Month",
+            "type": "string"
+          },
+          "net": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net",
+            "type": "string"
+          },
+          "outflows": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Outflows",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "currency",
+          "inflows",
+          "outflows",
+          "net"
+        ],
+        "title": "CashflowWindowMonthRead",
+        "type": "object"
+      },
+      "CashflowWindowOverallRead": {
+        "additionalProperties": false,
+        "description": "Whole-window totals in base-currency equivalents.\n\nUses only the INGESTED base-currency leg each snapshot already carries\n(``attributes.balance_ghs`` \u2014 the same seam ``regulatory_liquidity`` and\n``fact_derivation`` read); base-currency positions fall back to their own\nbalance. Positions with no ingested conversion are excluded and counted in\n``unconverted_count`` \u2014 never converted at an invented rate.",
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "inflows": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Inflows",
+            "type": "string"
+          },
+          "net": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net",
+            "type": "string"
+          },
+          "outflows": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Outflows",
+            "type": "string"
+          },
+          "unconverted_count": {
+            "title": "Unconverted Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "inflows",
+          "outflows",
+          "net",
+          "unconverted_count"
+        ],
+        "title": "CashflowWindowOverallRead",
+        "type": "object"
+      },
+      "CashflowWindowRead": {
+        "additionalProperties": false,
+        "description": "Contractual principal flows maturing inside [start_date, end_date].\n\n``no_maturity_count`` is the honesty stat: in-scope positions of the\ncurrent book whose snapshot carries no contractual maturity \u2014 they can\nnever appear in any window and are reported, not silently dropped. It is a\nproperty of the book, not of the window.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/CashflowWindowMonthRead"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "no_maturity_count": {
+            "title": "No Maturity Count",
+            "type": "integer"
+          },
+          "overall": {
+            "$ref": "#/components/schemas/CashflowWindowOverallRead"
+          },
+          "position_count": {
+            "title": "Position Count",
+            "type": "integer"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "totals": {
+            "items": {
+              "$ref": "#/components/schemas/CashflowWindowCurrencyTotalRead"
+            },
+            "title": "Totals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "start_date",
+          "end_date",
+          "months",
+          "totals",
+          "overall",
+          "position_count",
+          "no_maturity_count"
+        ],
+        "title": "CashflowWindowRead",
+        "type": "object"
+      },
       "CertificationPreviewRead": {
         "additionalProperties": false,
         "description": "Exactly what the signer is shown before committing.\n\nThe digest and the statement are both present because the UI must render\nwhat will actually be signed, not a paraphrase of it.",
@@ -32271,6 +32443,124 @@
         "summary": "Get Bank Alerts",
         "tags": [
           "live-engine"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/analytics/cashflow-window": {
+      "get": {
+        "description": "Contractual cash flows maturing inside [start_date, end_date]: the\ncurrent canonical book's per-currency, per-calendar-month inflows,\noutflows and nets, with per-currency and base-equivalent totals plus the\ncount of positions carrying no contractual maturity (excluded).",
+        "operationId": "computeCashflowWindow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Start Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "End Date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashflowWindowRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Compute Cashflow Window",
+        "tags": [
+          "cashflow-window"
         ]
       }
     },
