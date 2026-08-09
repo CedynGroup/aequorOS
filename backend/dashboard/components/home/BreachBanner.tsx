@@ -89,7 +89,7 @@ export default function BreachBanner({
                       {item.message}
                       <span className="text-caption text-slate whitespace-nowrap">
                         {' '}
-                        · {fmtRelative(item.createdAt)}
+                        · open since {fmtRelative(item.createdAt)}
                       </span>
                     </span>
                   </li>
@@ -127,7 +127,7 @@ export default function BreachBanner({
             <div className="min-w-0">
               <p className="text-body font-semibold text-navy">
                 {breached.length} module{breached.length === 1 ? '' : 's'}{' '}
-                breaching limits for period {period.label}
+                breaching live limits
               </p>
               <ul className="mt-2 space-y-1.5">
                 {breached.slice(0, 3).map((module) => (

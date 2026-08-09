@@ -48,9 +48,6 @@ export default function CommandCenterPage() {
             ? `${bank.name} · ${centralBankName()} licensee · ${labelize(bank.licenseType)}`
             : 'Loading bank profile…'
         }
-        asOf={
-          effective.period ? fmtDateUTC(effective.period.periodEnd) : undefined
-        }
         action={<RoleLensTabs role={role} onChange={setRole} />}
       />
 

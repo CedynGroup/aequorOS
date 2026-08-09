@@ -32,7 +32,7 @@ export default function BalanceSheetStrip({
       <div className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-h3 text-navy">Balance sheet</h2>
         <p className="text-caption text-slate">
-          Canonical facts · period {period.label}
+          Canonical positions · live edge
         </p>
       </div>
       {facts.isLoading || !facts.data ? (

@@ -64,7 +64,7 @@ export default function PulseWall({
       <div className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-h3 text-navy">Module pulse</h2>
         <p className="text-caption text-slate">
-          Six regulatory engines · period {period.label}
+          Six regulatory engines · live positions
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
