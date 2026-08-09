@@ -22,7 +22,6 @@ export default function Logo({
   showWordmark?: boolean;
   className?: string;
 }) {
-  const markColor = 'rgb(var(--accent))';
   const wordColor = variant === 'dark' ? '#FFFFFF' : 'rgb(var(--heading))';
   const taglineColor =
     variant === 'dark' ? 'rgba(202, 220, 252, 0.9)' : 'rgb(var(--text-muted))';
@@ -36,7 +35,14 @@ export default function Logo({
         role="img"
         aria-label="AequorOS"
       >
-        <path d={A_PATH} style={{ fill: markColor }} />
+        <defs>
+          <linearGradient id="aeq-mark" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#4D9FFF" />
+            <stop offset="1" stopColor="#2563EB" />
+          </linearGradient>
+        </defs>
+        <rect width="64" height="64" rx="14" fill="url(#aeq-mark)" />
+        <path d={A_PATH} fill="#FFFFFF" />
       </svg>
       {showWordmark && (
         <div className="leading-none">
