@@ -73,6 +73,7 @@ import {
   banksApi,
   behavioralModelsApi,
   cashflowForecastApi,
+  cashflowWindowApi,
   creditParamsApi,
   forecastingApi,
   institutionProfileApi,
@@ -3134,6 +3135,31 @@ export function useWindowAnalytics(
     queryFn: () =>
       apiCall(() =>
         windowAnalyticsApi.computeWindowAnalytics({
+          bankId: bankId!,
+          startDate: new Date(start!),
+          endDate: new Date(end!),
+        })
+      ),
+    enabled: enabled && Boolean(bankId && start && end),
+  });
+}
+
+/**
+ * Contractual cash-flow window over [start, end] (ISO yyyy-mm-dd): the current
+ * canonical book's maturities bucketed per currency and calendar month
+ * server-side. Fires only when enabled — the panel's Compute button gates it.
+ */
+export function useCashflowWindow(
+  bankId: string | undefined,
+  start: string | undefined,
+  end: string | undefined,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: ['cashflow-window', bankId, start ?? null, end ?? null],
+    queryFn: () =>
+      apiCall(() =>
+        cashflowWindowApi.computeCashflowWindow({
           bankId: bankId!,
           startDate: new Date(start!),
           endDate: new Date(end!),

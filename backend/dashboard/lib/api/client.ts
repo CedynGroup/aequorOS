@@ -16,6 +16,7 @@ import {
   BanksApi,
   BehavioralModelsApi,
   CashflowForecastApi,
+  CashflowWindowApi,
   Configuration,
   ForecastingApi,
   InstitutionProfileApi,
@@ -83,6 +84,7 @@ export const regulatoryFxApi = new RegulatoryFxApi(configuration);
 export const regulatoryFtpApi = new RegulatoryFtpApi(configuration);
 export const forecastingApi = new ForecastingApi(configuration);
 export const cashflowForecastApi = new CashflowForecastApi(configuration);
+export const cashflowWindowApi = new CashflowWindowApi(configuration);
 export const liveEngineApi = new LiveEngineApi(configuration);
 export const jobsApi = new JobsApi(configuration);
 export const marketDataApi = new MarketDataApi(configuration);

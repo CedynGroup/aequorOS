@@ -11,6 +11,7 @@ import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import { useBankContext } from '@/components/shell/BankContext';
 import StressedLadderPanel from '@/components/liquidity/StressedLadderPanel';
+import CashflowWindowPanel from '@/components/liquidity/CashflowWindowPanel';
 import {
   useLiquidityDashboard,
   useLiquidityHaircutSchedule,
@@ -163,6 +164,8 @@ export default function MonitoringTools() {
               run={latestRun.data}
               isLoading={dashboard.isLoading || latestRun.isLoading}
             />
+
+            <CashflowWindowPanel bankId={bankId} />
 
             <SectionCard
               title="Board threshold register"

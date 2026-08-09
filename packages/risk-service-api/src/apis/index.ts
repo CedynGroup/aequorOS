@@ -8,6 +8,7 @@ export * from "./CapitalApi";
 export * from "./CapitalPlanApi";
 export * from "./CasesApi";
 export * from "./CashflowForecastApi";
+export * from "./CashflowWindowApi";
 export * from "./CreditParamsApi";
 export * from "./DatabaseDirectApi";
 export * from "./DocumentsApi";
