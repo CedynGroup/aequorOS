@@ -14,7 +14,7 @@ import type { LiveModule } from '@aequoros/risk-service-api';
 
 export type RoleLens = 'treasurer' | 'alm' | 'risk' | 'cfo';
 
-export type PanelKey = 'pulse' | 'balance' | 'band';
+export type PanelKey = 'pulse' | 'window' | 'balance' | 'band';
 
 /** 'severity' sorts pulse cards red → amber → green instead of a fixed order. */
 export type ModuleOrder = LiveModule[] | 'severity';
@@ -25,22 +25,22 @@ export const ROLE_CONFIG: Record<
 > = {
   treasurer: {
     label: 'Treasurer',
-    panels: ['pulse', 'balance', 'band'],
+    panels: ['pulse', 'window', 'balance', 'band'],
     moduleOrder: ['liquidity', 'fx', 'irr', 'capital', 'ftp', 'forecast'],
   },
   alm: {
     label: 'ALM',
-    panels: ['pulse', 'band', 'balance'],
+    panels: ['pulse', 'window', 'band', 'balance'],
     moduleOrder: ['irr', 'liquidity', 'ftp', 'fx', 'capital', 'forecast'],
   },
   risk: {
     label: 'Risk',
-    panels: ['pulse', 'band', 'balance'],
+    panels: ['pulse', 'window', 'band', 'balance'],
     moduleOrder: 'severity',
   },
   cfo: {
     label: 'CFO',
-    panels: ['balance', 'pulse', 'band'],
+    panels: ['balance', 'pulse', 'window', 'band'],
     moduleOrder: ['capital', 'ftp', 'forecast', 'liquidity', 'irr', 'fx'],
   },
 };
