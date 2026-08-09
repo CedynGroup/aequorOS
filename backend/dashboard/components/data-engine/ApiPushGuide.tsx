@@ -119,7 +119,7 @@ function IntegrationKeysPanel() {
   const keys = keysQuery.data?.keys ?? [];
 
   return (
-    <div className="mt-5 border-t border-line pt-4">
+    <div className="mt-5 border-t border-border-light pt-4">
       <div className="flex items-center gap-2">
         <KeyRound size={15} className="text-action" aria-hidden />
         <h3 className="text-h3 text-navy">Integration keys</h3>

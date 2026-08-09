@@ -117,6 +117,7 @@ On the **API** deployment (Coolify → risk-api → Environment):
 ```
 SIGNING_BACKEND=openbao
 ATTESTATION_SIGNING_ENABLED=1
+ATTESTATION_ESIGN_REQUIRED=1
 SIGNER_ID_PEPPER=<generated once, never rotated>
 OPENBAO_ADDR=https://bao.aequoros.com
 OPENBAO_ROLE_ID=<from step 4>
@@ -142,7 +143,11 @@ naming the setting.
 curl -s https://api.aequoros.com/api/health/ready
 ```
 
-Signing gaps are reported here in production. Then certify a return end to end
+Signing gaps are reported here in production — unless
+`ATTESTATION_ESIGN_REQUIRED=0`, the deployment-wide kill-switch under which no
+return demands a signature (configured policies go dormant, submission follows
+the bare maker-checker approval) and signing gaps stop being a readiness
+failure (docs/attestation_esignature.md §9 D16). Then certify a return end to end
 and download it: the signature block should carry the officer's name and their
 `SGN-` id, and Verify should report an institutional trust anchor rather than
 `embedded_chain`.

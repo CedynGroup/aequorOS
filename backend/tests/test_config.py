@@ -24,6 +24,8 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
     assert settings.database.database_url is None
     assert settings.cors.origins == []
     assert settings.logging.log_level == "INFO"
+    # The e-sign requirement ships ON; disabling it is an explicit deployment act.
+    assert settings.attestation.esign_required is True
 
 
 def test_settings_read_existing_environment_names(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -32,9 +34,12 @@ def test_settings_read_existing_environment_names(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/risk")
     monkeypatch.setenv("CORS_ORIGINS", " http://localhost:3000, ,http://localhost:3001 ")
     monkeypatch.setenv("LOG_LEVEL", "debug")
+    # pydantic bool parsing accepts yes/no — the shape operators actually type.
+    monkeypatch.setenv("ATTESTATION_ESIGN_REQUIRED", "no")
 
     settings = Settings()
 
+    assert settings.attestation.esign_required is False
     assert settings.app.app_env == "staging"
     assert settings.app.app_name == "risk-service-staging"
     assert (

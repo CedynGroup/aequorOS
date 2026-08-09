@@ -39,7 +39,7 @@ import {
   useRegulatoryRuns,
   useRunOptimizer,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, labelize, num } from '@/lib/api/values';
+import { labelize, num } from '@/lib/api/values';
 import { fmtPct, regShort } from '@/lib/format';
 import {
   axisProps,
@@ -235,7 +235,6 @@ export default function StrategicOptimizer() {
         ]}
         title="Strategy Optimizer"
         subtitle="Constrained scenario search over the deterministic 5-year projection engine"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={runButton}
       />
 
@@ -255,7 +254,7 @@ export default function StrategicOptimizer() {
               <EmptyState
                 Icon={Search}
                 title="No optimizer runs yet"
-                description={`Run the optimizer to search the decision grid for the highest 5-year average ROE strategy that keeps CAR, LCR, and NSFR above their ${regShort()} minimums. The full result persists as an auditable run.`}
+                description={`Run the optimizer to search the decision grid for the highest 5-year average ROE strategy that keeps CAR, LCR, and NSFR above their ${regShort()} minimums. The full result is kept as a saved optimizer projection.`}
                 action={runButton}
               />
             </>
@@ -309,8 +308,6 @@ export default function StrategicOptimizer() {
                   subtitle={`Every candidate breached at least one ${regShort()} floor`}
                   footer={
                     <RunProvenance
-                      runId={view.provenance.runId}
-                      inputHash={view.provenance.inputHash}
                       createdAt={view.provenance.createdAt}
                     />
                   }
@@ -340,10 +337,8 @@ export default function StrategicOptimizer() {
                 height={260}
                 footer={
                   <RunProvenance
-                    runId={view.provenance.runId}
-                    inputHash={view.provenance.inputHash}
                     createdAt={view.provenance.createdAt}
-                    note={`Persisted as ${labelize('constrained_search')} regulatory runs for audit.`}
+                    note="Kept as saved optimizer projections."
                   />
                 }
               >
@@ -391,11 +386,6 @@ export default function StrategicOptimizer() {
                 subtitle="Top strategies by 5-year average ROE, with the decision levers and constraint outcomes"
                 noPadding
                 computedAt={view.provenance.createdAt ?? undefined}
-                runBadge={
-                  storedRun.data && !runOptimizer.data ? (
-                    <RunBadge run={storedRun.data} />
-                  ) : undefined
-                }
               >
                 <RankingTable view={view} />
               </SectionCard>

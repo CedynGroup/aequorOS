@@ -8,7 +8,6 @@
  *   2. Six-module pulse wall (headline live metric per regulatory engine)
  *   3. Big-4 balance-sheet strip (canonical facts)
  *   4. Ratio trend (LCR/NSFR/CAR across all periods) + operational feed
- *   5. Per-module run-freshness strip
  *
  * Every panel reads the *effective* reporting period resolved by
  * `useEffectivePeriod`: the header-selected period when it has facts,
@@ -30,8 +29,8 @@ import BreachBanner from '@/components/home/BreachBanner';
 import PulseWall from '@/components/home/PulseWall';
 import BalanceSheetStrip from '@/components/home/BalanceSheetStrip';
 import RatioTrendChart from '@/components/home/RatioTrendChart';
+import WindowAnalysis from '@/components/home/WindowAnalysis';
 import OperationalFeed from '@/components/home/OperationalFeed';
-import FreshnessStrip from '@/components/home/FreshnessStrip';
 import { centralBankName } from '@/lib/format';
 
 export default function CommandCenterPage() {
@@ -49,9 +48,6 @@ export default function CommandCenterPage() {
           bank
             ? `${bank.name} · ${centralBankName()} licensee · ${labelize(bank.licenseType)}`
             : 'Loading bank profile…'
-        }
-        asOf={
-          effective.period ? fmtDateUTC(effective.period.periodEnd) : undefined
         }
         action={<RoleLensTabs role={role} onChange={setRole} />}
       />
@@ -115,6 +111,8 @@ export default function CommandCenterPage() {
                     moduleOrder={lens.moduleOrder}
                   />
                 );
+              case 'window':
+                return <WindowAnalysis key="window" bankId={bankId} />;
               case 'balance':
                 return (
                   <BalanceSheetStrip
@@ -125,28 +123,19 @@ export default function CommandCenterPage() {
                 );
               case 'band':
                 return (
-                  <div
-                    key="band"
-                    className="grid grid-cols-1 xl:grid-cols-5 gap-6"
-                  >
-                    <div className="xl:col-span-3 min-w-0">
-                      <RatioTrendChart
-                        bankId={bankId}
-                        period={effective.period!}
-                      />
-                    </div>
-                    <div className="xl:col-span-2 min-w-0">
-                      <OperationalFeed bankId={bankId} />
+                  <div key="band" className="space-y-6">
+                    <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                      <div className="xl:col-span-3 min-w-0">
+                        <RatioTrendChart
+                          bankId={bankId}
+                          period={effective.period!}
+                        />
+                      </div>
+                      <div className="xl:col-span-2 min-w-0">
+                        <OperationalFeed bankId={bankId} />
+                      </div>
                     </div>
                   </div>
-                );
-              case 'freshness':
-                return (
-                  <FreshnessStrip
-                    key="freshness"
-                    bankId={bankId}
-                    period={effective.period!}
-                  />
                 );
               default:
                 return null;

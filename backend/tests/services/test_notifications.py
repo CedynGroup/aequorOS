@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import BankReportingPeriod, Notification, User
+from app.schemas.notifications import NotificationRead
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.regulatory_reporting import (
     PackageApprovalDecisionCreate,
@@ -476,3 +477,28 @@ def test_deadline_scan_flags_pending_orass_reupload_daily(db_session: Session) -
     db_session.commit()
     assert rerun["notifications_emitted"] == 0
     assert _total_notifications(db_session) == total
+
+
+def test_platform_id_entity_survives_the_read_schema(db_session: Session) -> None:
+    """Post-epoch notifications reference banks by BK- platform code.
+
+    The read schema must accept them: regression for the 500 that hit
+    /notifications when the first bank-scoped notification landed after the
+    platform-ID epoch (entity_id was typed UUID while the column is text).
+    """
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    emitted = notifications.emit(
+        db_session,
+        ctx,
+        type="liquidity.cfp.bog_notification",
+        severity="critical",
+        title="CFP activation",
+        body="Contingency funding plan activated.",
+        entity_type="bank",
+        entity_id="BK-SAMP0001",
+    )
+    db_session.commit()
+    assert emitted
+    listed, _total, _unread = notifications.list_notifications(db_session, ctx)
+    payloads = [NotificationRead.model_validate(row, from_attributes=True) for row in listed]
+    assert any(p.entity_id == "BK-SAMP0001" for p in payloads)

@@ -70,6 +70,15 @@ _MONEY_FIELDS = frozenset({"balance", "notional"})
 _RATE_FIELDS = frozenset({"interest_rate", "rate_spread"})
 _DATE_FIELDS = frozenset({"origination_date", "contractual_maturity", "next_repricing_date"})
 _INT_FIELDS = frozenset({"ifrs9_stage", "behavioral_maturity_months"})
+_BOOL_FIELDS = frozenset(
+    {
+        "encumbered",
+        "operational_purpose",
+        "redeemable_within_two_days",
+        "pledged_as_collateral",
+        "resident",
+    }
+)
 # Dict-valued canonical fields pass through verbatim when present on a record
 # and defined on the target model (attributes everywhere, external
 # identifiers on counterparties).
@@ -401,11 +410,31 @@ def _coerce_field(canonical_field: str, value: Any) -> Any:
         return _coerce_date(value)
     if canonical_field in _INT_FIELDS:
         return _coerce_int(value)
+    if canonical_field in _BOOL_FIELDS:
+        return _coerce_bool(value)
     return str(value).strip() if not isinstance(value, dict | list) else _fail_type(value)
 
 
 def _fail_type(value: Any) -> Any:
     raise _CoercionError(f"unsupported JSON type {type(value).__name__}")
+
+_BOOL_TRUE = frozenset({"true", "t", "yes", "y", "1"})
+_BOOL_FALSE = frozenset({"false", "f", "no", "n", "0"})
+
+
+def _coerce_bool(value: Any) -> bool | None:
+    """Strict yes/no coercion: JSON booleans, 0/1, and core-system CHAR flags."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in _BOOL_TRUE:
+            return True
+        if lowered in _BOOL_FALSE:
+            return False
+    raise _CoercionError(f"cannot read {value!r} as a boolean flag")
 
 
 def _coerce_decimal(value: Any) -> Decimal:

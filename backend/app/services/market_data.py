@@ -77,10 +77,14 @@ class CurveView:
 
     ``points`` are ``(tenor_months, rate)`` pairs sorted by tenor; rates are
     decimal fractions (0.245, never 24.5) per data_engine.md §4.6.
+    ``curve_type`` carries the constructed-curve family (``zero`` /
+    ``forward`` / ``discount`` for desk curves, ``sovereign`` etc. for
+    observed vendor curves) so consumers can badge each series truthfully.
     """
 
     currency: str
     curve_name: str
+    curve_type: str
     as_of_date: date
     points: tuple[tuple[int, Decimal], ...]
     attribution: SourceAttribution
@@ -142,15 +146,21 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
     currency: str,
     as_of: date,
     *,
+    curve_name: str | None = None,
     now: datetime | None = None,
 ) -> CurveView | None:
     """The authoritative yield curve for ``currency`` at ``as_of``, or None.
 
     Latest business date at or before ``as_of`` wins; among same-date curves
     from different sources the most recently ingested wins (§15).
+
+    ``curve_name`` is an OPT-IN narrowing for multi-curve consumers (the
+    Markets tab serving every published curve by name). When omitted the
+    arbitration is exactly the historical single-curve-per-currency behavior
+    that ``fact_derivation`` and the calculation engines depend on.
     """
     now = now or utc_now()
-    curve = db.scalar(
+    query = (
         select(CanonicalYieldCurve)
         .where(
             CanonicalYieldCurve.organization_id == organization_id,
@@ -167,6 +177,9 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
         )
         .limit(1)
     )
+    if curve_name is not None:
+        query = query.where(CanonicalYieldCurve.curve_name == curve_name)
+    curve = db.scalar(query)
     if curve is None:
         return None
     points = list(
@@ -186,6 +199,7 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
     return CurveView(
         currency=curve.currency,
         curve_name=curve.curve_name,
+        curve_type=curve.curve_type,
         as_of_date=curve.as_of_date,
         points=tuple((int(tenor), Decimal(rate)) for tenor, rate in points),
         attribution=_attribution(
@@ -196,6 +210,47 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
             now,
         ),
     )
+
+
+def list_yield_curves(  # noqa: PLR0913 - scope + tenant + as-of is the request key
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    *,
+    as_of: date,
+    currency: str | None = None,
+    now: datetime | None = None,
+) -> list[CurveView]:
+    """Every current-generation curve servable at ``as_of``, one per name.
+
+    Multi-curve companion to :func:`get_yield_curve`: curves are grouped by
+    ``(currency, curve_name)`` and each name is arbitrated independently
+    (latest business date at or before ``as_of``, then most recently
+    ingested) — so a zero, forward, and discounting curve for the same
+    currency are all served side by side instead of collapsing to one
+    winner per currency. Ordered by ``(currency, curve_name)``.
+    """
+    now = now or utc_now()
+    pair_query = (
+        select(CanonicalYieldCurve.currency, CanonicalYieldCurve.curve_name)
+        .where(
+            CanonicalYieldCurve.organization_id == organization_id,
+            CanonicalYieldCurve.bank_id == bank_id,
+            CanonicalYieldCurve.as_of_date <= as_of,
+            CanonicalYieldCurve.superseded_by.is_(None),
+            CanonicalYieldCurve.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+        )
+        .distinct()
+    )
+    if currency is not None:
+        pair_query = pair_query.where(CanonicalYieldCurve.currency == currency.upper())
+    pairs = sorted((ccy, name) for ccy, name in db.execute(pair_query).all())
+    views: list[CurveView] = []
+    for ccy, name in pairs:
+        view = get_yield_curve(db, organization_id, bank_id, ccy, as_of, curve_name=name, now=now)
+        if view is not None:
+            views.append(view)
+    return views
 
 
 def get_fx_spot(  # noqa: PLR0913 - scope + tenant + as-of is the request key

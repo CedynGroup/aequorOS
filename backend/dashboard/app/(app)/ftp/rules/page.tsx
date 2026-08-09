@@ -38,7 +38,7 @@ function RulesBody({ ctx }: { ctx: FtpFrameContext }) {
 
   const snapshotHint = params
     ? 'From the stored run parameter snapshot'
-    : 'Run all scenarios to persist the parameter snapshot';
+    : 'Parameters appear once results are stored for this period';
 
   return (
     <>

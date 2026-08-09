@@ -29,7 +29,7 @@ export type TrendChartPoint = {
 
 /**
  * Period-over-period trend line for FTP metrics with an optional floor line.
- * Hollow markers flag points computed inline (no persisted run yet).
+ * Hollow markers flag points computed live (no stored results yet).
  */
 export default function TrendChart({
   data,
@@ -101,7 +101,7 @@ export default function TrendChart({
                 ? {
                     value: thresholdLabel,
                     position: 'insideBottomRight',
-                    fontSize: 10,
+                    fontSize: 11,
                     fill: CHART_CRIT,
                   }
                 : undefined

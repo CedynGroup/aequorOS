@@ -23,23 +23,32 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.liquidity.engine import (
+    SHOCK_FX_DEPRECIATION,
+    SHOCK_NMD_RUNOFF_PREFIX,
+    CurrencyGapResult,
     LcrResult,
     LiquidityComputationError,
     LiquidityFact,
     LiquidityParams,
     MissingParameterError,
     NsfrResult,
+    StressedLadder,
     UnsupportedShockError,
     apply_liquidity_stress,
+    compute_currency_gaps,
     compute_lcr,
     compute_nsfr,
+    compute_stressed_ladder,
 )
 from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
     ParamCapitalThreshold,
     ParamLcrRunoffRate,
+    ParamLiquidityThreshold,
     ParamNsfrWeight,
     ParamStressShock,
     RegulatoryLineItem,
@@ -82,11 +91,22 @@ from app.services.live_types import (
 from app.services.params import get_active_params
 
 ENGINE_VERSION = "regulatory-liquidity-v1.0.0"
-INPUT_SCHEMA_VERSION = "bank-facts-v2"
+# v3 (2026-08-07): the snapshot gains the per-currency contractual ladders
+# block (Phase 2 item 2 — FRM 16-17 currency gaps / USD funding stress).
+INPUT_SCHEMA_VERSION = "bank-facts-v3"
 OUTPUT_SCHEMA_VERSION = "liquidity-metrics-v1"
 MODULE_LIQUIDITY = "liquidity"
 BASELINE_SCENARIO = "baseline"
-LIQUIDITY_SCENARIO_CODES = ("baseline", "idiosyncratic", "market_wide", "combined")
+LIQUIDITY_SCENARIO_CODES = (
+    "baseline",
+    "idiosyncratic",
+    "market_wide",
+    "combined",
+    # Cedi-depreciation-coupled FX funding stress (Phase 2 item 2): FX
+    # run-off uplifts on the fact engine + fx_depreciation_pct on the
+    # per-currency gap layer.
+    "usd_funding_stress",
+)
 
 BSD3_FORM_CODE = "BSD-3"
 BSD3_FORM_TITLE = "Liquidity Returns (LCR & NSFR)"
@@ -313,7 +333,7 @@ def get_bsd3_preview(
     for item in items:
         by_section.setdefault(item.section, []).append(item)
 
-    metrics = {key: Decimal(str(value)) for key, value in run.metrics.items()}
+    metrics = _scalar_metrics(run)
     hqla_rows = [
         Bsd3RowRead(
             row_code=f"1.{index}",
@@ -415,6 +435,105 @@ def get_bsd3_preview(
     )
 
 
+@dataclass(frozen=True)
+class LiquidityScenarioAnalysis:
+    """One scenario's computed liquidity picture — engine outputs only."""
+
+    lcr: LcrResult
+    nsfr: NsfrResult
+    params: LiquidityParams
+    currency_gaps: CurrencyGapResult
+    mismatch_limit: Decimal | None
+    stressed_ladder: tuple[StressedLadder, ...]
+
+
+def _execute_scenario_compute(  # noqa: PLR0913 - the official path hands over its loaded inputs
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    facts: list[BankFinancialFact],
+    active: _ActiveLiquidityParams,
+    currency_ladders: dict[str, dict[str, list[str] | str]],
+    shocks: dict[str, Decimal],
+    scenario_code: str,
+) -> LiquidityScenarioAnalysis:
+    """The scenario arithmetic shared by official runs and the workbench.
+
+    Extracted from ``_create_and_execute`` so desk analysis and immutable
+    regulatory runs are guaranteed to produce identical numbers for identical
+    inputs. Pure with respect to run state: raises the module's domain errors,
+    never writes a ``RegulatoryRun``.
+    """
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_params = _engine_params(active)
+    if shocks:
+        engine_facts, engine_params = apply_liquidity_stress(
+            scenario_code, engine_facts, engine_params, shocks
+        )
+    if not engine_facts:
+        raise LiquidityRunError(
+            "financial_facts_missing",
+            "The reporting period has no financial facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    lcr = compute_lcr(engine_facts, engine_params)
+    nsfr = compute_nsfr(engine_facts, engine_params)
+    ladder_inputs = {
+        currency: {
+            "assets": _ladder_lists(ladder, "assets"),
+            "liabilities": _ladder_lists(ladder, "liabilities"),
+        }
+        for currency, ladder in currency_ladders.items()
+    }
+    currency_gaps = compute_currency_gaps(
+        ladder_inputs,
+        base_currency(bank),
+        shocks.get(SHOCK_FX_DEPRECIATION, Decimal(0)),
+    )
+    mismatch_limit = _currency_mismatch_limit(db, ctx, bank, period.period_end)
+    runoff_schedule = {
+        int(key.removeprefix(SHOCK_NMD_RUNOFF_PREFIX).removeprefix("h")): value
+        for key, value in shocks.items()
+        if key.startswith(SHOCK_NMD_RUNOFF_PREFIX)
+    }
+    stressed_ladder: tuple[StressedLadder, ...] = ()
+    if runoff_schedule:
+        stressed_ladder = compute_stressed_ladder(
+            ladder_inputs,
+            {
+                currency: Decimal(str(ladder.get("demand_liabilities", "0")))
+                for currency, ladder in currency_ladders.items()
+            },
+            runoff_schedule,
+        )
+    return LiquidityScenarioAnalysis(
+        lcr=lcr,
+        nsfr=nsfr,
+        params=engine_params,
+        currency_gaps=currency_gaps,
+        mismatch_limit=mismatch_limit,
+        stressed_ladder=stressed_ladder,
+    )
+
+
+def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its full scope
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    shocks: dict[str, Decimal],
+    scenario_code: str = "analysis",
+) -> LiquidityScenarioAnalysis:
+    """Workbench seam: compute one scenario without persisting anything."""
+    facts = _load_facts(db, ctx, bank, period)
+    active = _load_active_params(db, ctx, bank, period.period_end)
+    currency_ladders = _currency_ladders(db, ctx, bank, period)
+    return _execute_scenario_compute(
+        db, ctx, bank, period, facts, active, currency_ladders, shocks, scenario_code
+    )
+
+
 def _create_and_execute(
     db: Session,
     ctx: TenantContext,
@@ -429,7 +548,10 @@ def _create_and_execute(
         if scenario_code != BASELINE_SCENARIO
         else {}
     )
-    snapshot = _build_snapshot(bank, period, scenario_code, facts, active, shocks)
+    currency_ladders = _currency_ladders(db, ctx, bank, period)
+    snapshot = _build_snapshot(
+        bank, period, scenario_code, facts, active, shocks, currency_ladders
+    )
 
     run = RegulatoryRun(
         organization_id=ctx.organization_id,
@@ -471,27 +593,27 @@ def _create_and_execute(
 
     run_id = run.id
     try:
-        engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
-        engine_params = _engine_params(active)
-        if scenario_code != BASELINE_SCENARIO:
-            if not shocks:
-                raise LiquidityRunError(
-                    "missing_parameter",
-                    f"No liquidity stress shocks are configured for scenario '{scenario_code}'.",
-                    {"scenario_code": scenario_code},
-                )
-            engine_facts, engine_params = apply_liquidity_stress(
-                scenario_code, engine_facts, engine_params, shocks
-            )
-        if not engine_facts:
+        if scenario_code != BASELINE_SCENARIO and not shocks:
             raise LiquidityRunError(
-                "financial_facts_missing",
-                "The reporting period has no financial facts to analyze.",
-                {"reporting_period_id": str(period.id)},
+                "missing_parameter",
+                f"No liquidity stress shocks are configured for scenario '{scenario_code}'.",
+                {"scenario_code": scenario_code},
             )
-        lcr = compute_lcr(engine_facts, engine_params)
-        nsfr = compute_nsfr(engine_facts, engine_params)
-        _persist_success(db, ctx, run, lcr, nsfr, engine_params, base_currency(bank))
+        analysis = _execute_scenario_compute(
+            db, ctx, bank, period, facts, active, currency_ladders, shocks, scenario_code
+        )
+        _persist_success(
+            db,
+            ctx,
+            run,
+            analysis.lcr,
+            analysis.nsfr,
+            analysis.params,
+            base_currency(bank),
+            analysis.currency_gaps,
+            analysis.mismatch_limit,
+            analysis.stressed_ladder,
+        )
     except LiquidityRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
     except MissingParameterError as exc:
@@ -544,7 +666,7 @@ def _create_and_execute(
     return _read_run(db, _run_or_404(db, ctx, bank.id, run_id))
 
 
-def _persist_success(  # noqa: PLR0913
+def _persist_success(  # noqa: PLR0913, PLR0915
     db: Session,
     ctx: TenantContext,
     run: RegulatoryRun,
@@ -552,6 +674,9 @@ def _persist_success(  # noqa: PLR0913
     nsfr: NsfrResult,
     params: LiquidityParams,
     currency: str,
+    currency_gaps: CurrencyGapResult,
+    mismatch_limit: Decimal | None,
+    stressed_ladder: tuple[StressedLadder, ...] = (),
 ) -> None:
     run.metrics = {
         "lcr_pct": str(lcr.lcr_pct),
@@ -560,7 +685,40 @@ def _persist_success(  # noqa: PLR0913
         "net_outflows_30d_ghs": str(lcr.net_outflows_total),
         "asf_total_ghs": str(nsfr.asf_total),
         "rsf_total_ghs": str(nsfr.rsf_total),
+        "fx_funding_gap_ghs": str(currency_gaps.fx_funding_gap),
+        "fx_share_of_liabilities_pct": str(currency_gaps.fx_share_of_liabilities_pct),
+        "stressed_fx_funding_gap_ghs": str(currency_gaps.stressed_fx_funding_gap),
+        "fx_depreciation_pct": str(currency_gaps.fx_depreciation_pct),
+        "currency_gaps": [
+            {
+                "currency": gap.currency,
+                "assets": [str(v) for v in gap.assets],
+                "liabilities": [str(v) for v in gap.liabilities],
+                "net": [str(v) for v in gap.net],
+                "cumulative": [str(v) for v in gap.cumulative],
+                "assets_total": str(gap.assets_total),
+                "liabilities_total": str(gap.liabilities_total),
+                "net_total": str(gap.net_total),
+                "stressed_liabilities_total": str(gap.stressed_liabilities_total),
+                "stressed_net_total": str(gap.stressed_net_total),
+            }
+            for gap in currency_gaps.gaps
+        ],
     }
+    if stressed_ladder:
+        # LRMD para 50-54: the behaviourally-modified stress ladder.
+        run.metrics["stressed_ladder"] = [
+            {
+                "currency": entry.currency,
+                "contractual_liabilities": [str(v) for v in entry.contractual_liabilities],
+                "stressed_liabilities": [str(v) for v in entry.stressed_liabilities],
+                "stressed_net": [str(v) for v in entry.stressed_net],
+                "stressed_cumulative": [str(v) for v in entry.stressed_cumulative],
+                "demand_deposits": str(entry.demand_deposits),
+                "stable_core": str(entry.stable_core),
+            }
+            for entry in stressed_ladder
+        ]
     metric_rows: tuple[tuple[str, Decimal, str, Decimal | None, str], ...] = (
         ("lcr_pct", lcr.lcr_pct, "pct", params.lcr_min_pct, lcr.status),
         ("nsfr_pct", nsfr.nsfr_pct, "pct", params.nsfr_min_pct, nsfr.status),
@@ -601,7 +759,11 @@ def _persist_success(  # noqa: PLR0913
             )
         )
     for position, (rule_code, passed, severity, message) in enumerate(
-        _validation_rows(lcr, nsfr, params, currency), start=1
+        (
+            *_validation_rows(lcr, nsfr, params, currency),
+            *_currency_gap_validations(currency_gaps, mismatch_limit),
+        ),
+        start=1,
     ):
         db.add(
             RegulatoryValidation(
@@ -728,7 +890,64 @@ def _validation_rows(
     )
 
 
-def _metrics_from_results(lcr: LcrResult, nsfr: NsfrResult) -> LiquidityMetricsRead:
+
+def _currency_gap_validations(
+    currency_gaps: CurrencyGapResult, mismatch_limit: Decimal | None
+) -> list[tuple[str, bool, str, str]]:
+    """Board per-currency mismatch limit checks (LMTD para 11(d)).
+
+    Applies only when the Board has adopted ``currency_mismatch_limit_pct``
+    in the threshold register: the worst negative cumulative gap of each
+    currency, as a percentage of that currency's liabilities, must not
+    exceed the limit. Without a Board row no check is invented.
+    """
+    if mismatch_limit is None:
+        return []
+    rows: list[tuple[str, bool, str, str]] = []
+    for gap in currency_gaps.gaps:
+        if gap.liabilities_total <= 0:
+            continue
+        worst = min(gap.cumulative)
+        if worst >= 0:
+            rows.append(
+                (
+                    f"currency_mismatch_{gap.currency.lower()}",
+                    True,
+                    "info",
+                    f"{gap.currency}: no negative cumulative gap.",
+                )
+            )
+            continue
+        breach_pct = (-worst) / gap.liabilities_total * Decimal("100")
+        passed = breach_pct <= mismatch_limit
+        rows.append(
+            (
+                f"currency_mismatch_{gap.currency.lower()}",
+                passed,
+                "info" if passed else "warning",
+                (
+                    f"{gap.currency}: worst cumulative gap {worst} is "
+                    f"{breach_pct.quantize(Decimal('0.0001'))}% of currency "
+                    f"liabilities against the Board limit of {mismatch_limit}%."
+                ),
+            )
+        )
+    return rows
+
+
+def _scalar_metrics(run: RegulatoryRun) -> dict[str, Decimal]:
+    """run.metrics scalars as Decimals, skipping structured blocks
+    (``currency_gaps`` is a list of per-currency dicts as of v3)."""
+    return {
+        key: Decimal(str(value))
+        for key, value in run.metrics.items()
+        if not isinstance(value, (list, dict))
+    }
+
+
+def _metrics_from_results(
+    lcr: LcrResult, nsfr: NsfrResult, currency_gaps: CurrencyGapResult | None = None
+) -> LiquidityMetricsRead:
     return LiquidityMetricsRead(
         lcr_pct=lcr.lcr_pct,
         lcr_status=lcr.status,
@@ -738,6 +957,13 @@ def _metrics_from_results(lcr: LcrResult, nsfr: NsfrResult) -> LiquidityMetricsR
         net_outflows_30d_ghs=lcr.net_outflows_total,
         asf_total_ghs=nsfr.asf_total,
         rsf_total_ghs=nsfr.rsf_total,
+        fx_funding_gap_ghs=currency_gaps.fx_funding_gap if currency_gaps else None,
+        fx_share_of_liabilities_pct=(
+            currency_gaps.fx_share_of_liabilities_pct if currency_gaps else None
+        ),
+        stressed_fx_funding_gap_ghs=(
+            currency_gaps.stressed_fx_funding_gap if currency_gaps else None
+        ),
     )
 
 
@@ -752,7 +978,7 @@ def _metrics_from_run(db: Session, run: RegulatoryRun) -> LiquidityMetricsRead:
             )
         )
     }
-    metrics = {key: Decimal(str(value)) for key, value in run.metrics.items()}
+    metrics = _scalar_metrics(run)
     return LiquidityMetricsRead(
         lcr_pct=metrics["lcr_pct"],
         lcr_status=statuses.get("lcr_pct", "red"),  # type: ignore[arg-type]
@@ -762,6 +988,9 @@ def _metrics_from_run(db: Session, run: RegulatoryRun) -> LiquidityMetricsRead:
         net_outflows_30d_ghs=metrics["net_outflows_30d_ghs"],
         asf_total_ghs=metrics["asf_total_ghs"],
         rsf_total_ghs=metrics["rsf_total_ghs"],
+        fx_funding_gap_ghs=metrics.get("fx_funding_gap_ghs"),
+        fx_share_of_liabilities_pct=metrics.get("fx_share_of_liabilities_pct"),
+        stressed_fx_funding_gap_ghs=metrics.get("stressed_fx_funding_gap_ghs"),
     )
 
 
@@ -819,7 +1048,7 @@ def _build_trend(
     for period in periods[-_TREND_MAX_POINTS:]:
         run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
         if run is not None:
-            metrics = {key: Decimal(str(value)) for key, value in run.metrics.items()}
+            metrics = _scalar_metrics(run)
             points.append(
                 LiquidityTrendPointRead(
                     reporting_period_id=period.id,
@@ -906,7 +1135,10 @@ def current_input_hash(
     if not facts:
         return None
     active = _load_active_params(db, ctx, bank, period.period_end)
-    snapshot = _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active, {})
+    currency_ladders = _currency_ladders(db, ctx, bank, period)
+    snapshot = _build_snapshot(
+        bank, period, BASELINE_SCENARIO, facts, active, {}, currency_ladders
+    )
     return _snapshot_hash(snapshot)
 
 
@@ -1034,6 +1266,120 @@ def _engine_params(active: _ActiveLiquidityParams) -> LiquidityParams:
     )
 
 
+
+# --- Per-currency contractual ladders (Phase 2 item 2; FRM 16-17) -----------
+#
+# Five LMTD horizons in cedi equivalents from the canonical book — the same
+# current-generation accepted/warning slice the LMT return derives from.
+# Undated demand-natured items (cash; current/call/savings deposits) sit in
+# the shortest bucket; other undated in the longest. Stringified and
+# canonically ordered for the value-based input hash.
+_LADDER_HORIZON_DAYS = (30, 91, 182, 365, None)
+_CCY_ASSET_TYPES = ("LOAN", "SECURITY_HOLDING", "CASH", "INTERBANK_PLACEMENT", "OTHER_ASSET")
+_CCY_LIABILITY_TYPES = ("DEPOSIT", "INTERBANK_BORROWING", "OTHER_LIABILITY")
+_CCY_DERIVATIVES = ("DERIVATIVE", "FX_HEDGE", "INTEREST_RATE_SWAP")
+_CCY_DEMAND_DEPOSITS = ("CURRENT", "CALL", "SAVINGS")
+_CCY_STATUSES = ("accepted", "warning")
+
+
+def _ladder_bucket_index(
+    maturity: date | None, as_of: date, *, on_demand: bool
+) -> int:
+    if maturity is None:
+        return 0 if on_demand else len(_LADDER_HORIZON_DAYS) - 1
+    days = (maturity - as_of).days
+    for index, upper in enumerate(_LADDER_HORIZON_DAYS):
+        if upper is None or days <= upper:
+            return index
+    return len(_LADDER_HORIZON_DAYS) - 1
+
+
+def _currency_ladders(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> dict[str, dict[str, list[str] | str]]:
+    records = db.execute(
+        select(CanonicalPositionSnapshot, CanonicalPosition)
+        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
+        .where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            CanonicalPositionSnapshot.as_of_date == period.period_end,
+            CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(_CCY_STATUSES),
+            CanonicalPosition.position_type.in_(
+                (*_CCY_ASSET_TYPES, *_CCY_LIABILITY_TYPES, *_CCY_DERIVATIVES)
+            ),
+        )
+    ).all()
+    base = base_currency(bank)
+    buckets = len(_LADDER_HORIZON_DAYS)
+    ladders: dict[str, dict[str, list[Decimal]]] = {}
+    for snapshot, position in records:
+        attributes = snapshot.attributes or {}
+        raw = attributes.get("balance_ghs")
+        if raw not in (None, ""):
+            amount = Decimal(str(raw))
+        elif position.currency == base:
+            amount = Decimal(str(snapshot.balance or 0))
+        else:
+            # No ingested conversion: contributes zero, never a made-up rate
+            # (mirrors fact_derivation and the LMT generator).
+            continue
+        kind = position.position_type
+        if kind in _CCY_DERIVATIVES:
+            side = "assets" if amount >= 0 else "liabilities"
+            amount = abs(amount)
+        elif kind in _CCY_ASSET_TYPES:
+            side = "assets"
+        else:
+            side = "liabilities"
+        on_demand = kind == "CASH" or (
+            kind == "DEPOSIT"
+            and (snapshot.deposit_account_type or "").upper() in _CCY_DEMAND_DEPOSITS
+        )
+        index = _ladder_bucket_index(
+            snapshot.contractual_maturity, period.period_end, on_demand=on_demand
+        )
+        ladder = ladders.setdefault(
+            position.currency,
+            {
+                "assets": [Decimal(0)] * buckets,
+                "liabilities": [Decimal(0)] * buckets,
+                "demand": [Decimal(0)],
+            },
+        )
+        ladder[side][index] += amount
+        if kind == "DEPOSIT" and on_demand:
+            ladder["demand"][0] += amount
+    return {
+        currency: {
+            "assets": [str(value) for value in ladder["assets"]],
+            "liabilities": [str(value) for value in ladder["liabilities"]],
+            "demand_liabilities": str(ladder["demand"][0]),
+        }
+        for currency, ladder in sorted(ladders.items())
+    }
+
+
+def _ladder_lists(ladder: dict[str, list[str] | str], key: str) -> list[Decimal]:
+    values = ladder.get(key, [])
+    assert isinstance(values, list)  # demand_liabilities is the only scalar key
+    return [Decimal(value) for value in values]
+
+
+def _currency_mismatch_limit(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> Decimal | None:
+    """Board per-currency mismatch limit (LMTD para 11(d)), when adopted."""
+    rows = get_active_params(
+        db, ctx.organization_id, bank.jurisdiction_code, ParamLiquidityThreshold, as_of
+    )
+    for row in rows:
+        if row.institution_class == "bank" and row.threshold_code == "currency_mismatch_limit_pct":
+            return Decimal(str(row.threshold_pct))
+    return None
+
+
 def _load_shocks(
     db: Session, ctx: TenantContext, bank: Bank, scenario_code: str, as_of: date
 ) -> dict[str, Decimal]:
@@ -1054,6 +1400,7 @@ def _build_snapshot(  # noqa: PLR0913
     facts: list[BankFinancialFact],
     active: _ActiveLiquidityParams,
     shocks: dict[str, Decimal],
+    currency_ladders: dict[str, dict[str, list[str] | str]],
 ) -> dict[str, Any]:
     return {
         "schema_version": INPUT_SCHEMA_VERSION,
@@ -1091,6 +1438,9 @@ def _build_snapshot(  # noqa: PLR0913
             "thresholds_pct": _stringified(active.thresholds),
         },
         "shocks": _stringified(shocks),
+        # v3: per-currency contractual ladders (five LMTD horizons, cedi
+        # equivalents) — canonical keys sorted, values stringified.
+        "currency_ladders": currency_ladders,
     }
 
 
@@ -1262,3 +1612,99 @@ def _require_actor(ctx: TenantContext) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="X-User-Id header is required."
         )
+
+
+def liquidity_breach_multiplier(  # noqa: PLR0914 - one bounded frontier search
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    scenario_code: str = "combined",
+) -> dict[str, Any]:
+    """Reverse stress (Phase 2 item 4): the smallest severity multiplier k at
+    which the LCR breaches its minimum, scaling the named scenario's shocks.
+
+    k interpolates between baseline parameters (k=0) and the configured
+    scenario (k=1), extrapolating beyond: run-off rates move linearly from
+    the base rate toward the shocked rate (capped at 100), the inflow
+    multiplier from 1 toward the shocked multiplier (floored at 0), and the
+    HQLA haircut linearly (capped at 100). Behavioural/FX keys do not enter
+    the LCR and are excluded. Deterministic bisection to 0.05 precision over
+    k in (0, 5]; inline computation, no stored runs per probe.
+    """
+    facts = _load_facts(db, ctx, bank, period)
+    if not facts:
+        raise LiquidityRunError(
+            "financial_facts_missing",
+            "The reporting period has no financial facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    active = _load_active_params(db, ctx, bank, period.period_end)
+    shocks = _load_shocks(db, ctx, bank, scenario_code, period.period_end)
+    if not shocks:
+        raise LiquidityRunError(
+            "missing_parameter",
+            f"No liquidity stress shocks are configured for scenario '{scenario_code}'.",
+            {"scenario_code": scenario_code},
+        )
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_params = _engine_params(active)
+    hundred = Decimal("100")
+    one = Decimal("1")
+
+    def scaled_shocks(k: Decimal) -> dict[str, Decimal]:
+        scaled: dict[str, Decimal] = {}
+        for key, value in shocks.items():
+            if key.startswith("runoff:"):
+                base = engine_params.outflow_rates.get(key.removeprefix("runoff:"), _ZERO)
+                scaled[key] = min(hundred, max(_ZERO, base + (value - base) * k))
+            elif key == "inflow_multiplier":
+                scaled[key] = max(_ZERO, one + (value - one) * k)
+            elif key == "hqla_securities_haircut_pct":
+                scaled[key] = min(hundred, max(_ZERO, value * k))
+            elif key.startswith("asf:") or key == "rsf:securities_weight_override":
+                scaled[key] = value  # NSFR shocks do not move the LCR frontier
+            # fx_depreciation_pct / nmd_runoff:* never reach the fact engine.
+        return scaled
+
+    def lcr_at(k: Decimal) -> Decimal | None:
+        stressed_facts, stressed_params = apply_liquidity_stress(
+            scenario_code, engine_facts, engine_params, scaled_shocks(k)
+        )
+        try:
+            return compute_lcr(stressed_facts, stressed_params).lcr_pct
+        except LiquidityComputationError:
+            return None  # degenerate (net outflow <= 0): treated as no breach
+
+    minimum = engine_params.lcr_min_pct
+    k_max = Decimal("5")
+    precision = Decimal("0.05")
+    lcr_max = lcr_at(k_max)
+    baseline_lcr = lcr_at(_ZERO)
+    if lcr_max is None or lcr_max >= minimum:
+        return {
+            "breached": False,
+            "scenario_code": scenario_code,
+            "lcr_min_pct": str(minimum),
+            "baseline_lcr_pct": str(baseline_lcr) if baseline_lcr is not None else None,
+            "lcr_at_k_max_pct": str(lcr_max) if lcr_max is not None else None,
+            "k_max": str(k_max),
+        }
+    low, high = _ZERO, k_max
+    while high - low > precision:
+        mid = (low + high) / 2
+        value = lcr_at(mid)
+        if value is not None and value < minimum:
+            high = mid
+        else:
+            low = mid
+    frontier = high.quantize(precision)
+    frontier_lcr = lcr_at(frontier)
+    return {
+        "breached": True,
+        "scenario_code": scenario_code,
+        "lcr_min_pct": str(minimum),
+        "baseline_lcr_pct": str(baseline_lcr) if baseline_lcr is not None else None,
+        "breach_multiplier": str(frontier),
+        "lcr_at_breach_pct": str(frontier_lcr) if frontier_lcr is not None else None,
+    }

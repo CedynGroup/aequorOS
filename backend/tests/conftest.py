@@ -82,6 +82,20 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # so boolean switches are blanked with "0".
     monkeypatch.setenv("SIGNER_ID_PEPPER", "")
     monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
+    # Pin the e-sign REQUIREMENT to its platform default (required). A
+    # developer's ATTESTATION_ESIGN_REQUIRED=0 would otherwise relax every
+    # policy the suite resolves and flip the submission-gate assertions.
+    monkeypatch.setenv("ATTESTATION_ESIGN_REQUIRED", "1")
+    # Scheduler feature flags, pinned to their defaults (off). A developer who
+    # enables any of them in .env (e.g. DATABASE_DIRECT_HEALTH_ENABLED=true to
+    # exercise the probe locally) would otherwise un-inert the scheduled tick
+    # and fail every "inert when disabled" test. Tests that need a flag on set
+    # it themselves.
+    monkeypatch.setenv("OFFICIAL_RUN_ENABLED", "0")
+    monkeypatch.setenv("MARKET_DATA_PULL_ENABLED", "0")
+    monkeypatch.setenv("TEMENOS_PULL_ENABLED", "0")
+    monkeypatch.setenv("DATABASE_DIRECT_HEALTH_ENABLED", "0")
+    monkeypatch.setenv("LIVE_REFRESH_ENABLED", "0")
     # Same guard for the OpenBao backend's endpoint and AppRole: a developer who
     # points their .env at a live OpenBao would otherwise flip the tests that
     # assert "this deployment cannot sign" into the configured branch. The

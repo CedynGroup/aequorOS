@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Value } from "./Value";
+import type { Value2 } from "./Value2";
 import {
-  ValueFromJSON,
-  ValueFromJSONTyped,
-  ValueToJSON,
-  ValueToJSONTyped,
-} from "./Value";
+  Value2FromJSON,
+  Value2FromJSONTyped,
+  Value2ToJSON,
+  Value2ToJSONTyped,
+} from "./Value2";
 
 /**
  *
@@ -39,10 +39,10 @@ export interface PositionSnapshotOverrideCreate {
   reason: string;
   /**
    *
-   * @type {Value}
+   * @type {Value2}
    * @memberof PositionSnapshotOverrideCreate
    */
-  value: Value | null;
+  value: Value2 | null;
 }
 
 /**
@@ -53,6 +53,15 @@ export const PositionSnapshotOverrideCreateFieldEnum = {
   InterestRate: "interest_rate",
   Ifrs9Stage: "ifrs9_stage",
   BehavioralMaturityMonths: "behavioral_maturity_months",
+  Encumbered: "encumbered",
+  EncumbranceReason: "encumbrance_reason",
+  OwningEntity: "owning_entity",
+  AssetLocation: "asset_location",
+  OperationalPurpose: "operational_purpose",
+  RedeemableWithinTwoDays: "redeemable_within_two_days",
+  PledgedAsCollateral: "pledged_as_collateral",
+  LienReference: "lien_reference",
+  DepositAccountType: "deposit_account_type",
 } as const;
 export type PositionSnapshotOverrideCreateFieldEnum =
   (typeof PositionSnapshotOverrideCreateFieldEnum)[keyof typeof PositionSnapshotOverrideCreateFieldEnum];
@@ -85,7 +94,7 @@ export function PositionSnapshotOverrideCreateFromJSONTyped(
   return {
     field: json["field"],
     reason: json["reason"],
-    value: ValueFromJSON(json["value"]),
+    value: Value2FromJSON(json["value"]),
   };
 }
 
@@ -106,6 +115,6 @@ export function PositionSnapshotOverrideCreateToJSONTyped(
   return {
     field: value["field"],
     reason: value["reason"],
-    value: ValueToJSON(value["value"]),
+    value: Value2ToJSON(value["value"]),
   };
 }

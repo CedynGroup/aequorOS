@@ -1,25 +1,25 @@
 'use client';
 
-import { Loader2, PlayCircle } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Layers } from 'lucide-react';
 import type { CapitalLineRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import ChartFrame from '@/components/ui/ChartFrame';
 import SectionCard from '@/components/ui/SectionCard';
 import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
+import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import DonutChart from '@/components/charts/DonutChart';
 import RwaBucketChart from '@/components/basel/charts/RwaBucketChart';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   isNoBaselineRunError,
-  useCreateRegulatoryRun,
   useRwaBreakdown,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num, shortId } from '@/lib/api/values';
+import { num, shortId } from '@/lib/api/values';
 import { seriesColor } from '@/lib/chartTheme';
-import { fmtCurrency, regShort } from '@/lib/format';
+import { currencyCode, fmtCurrency, regShort } from '@/lib/format';
 
 type Row = {
   item: string;
@@ -47,7 +47,7 @@ function rwaColumns(
     { key: 'item', header: itemHeader, render: (r) => r.item, width: '44%' },
     {
       key: 'exposure',
-      header: 'Exposure (GHS)',
+      header: `Exposure (${currencyCode()})`,
       numeric: true,
       render: (r) =>
         r.exposureGHS === null ? '—' : fmtCurrency(r.exposureGHS),
@@ -74,7 +74,6 @@ export default function RWABreakdown() {
   const periodId = period?.id;
 
   const breakdown = useRwaBreakdown(bankId, periodId);
-  const runBaseline = useCreateRegulatoryRun(bankId);
 
   const data = breakdown.data;
   const needsBaseline = isNoBaselineRunError(breakdown.error);
@@ -108,28 +107,6 @@ export default function RWABreakdown() {
       ]
     : [];
 
-  const runBaselineButton = (
-    <button
-      type="button"
-      disabled={runBaseline.isPending || !periodId}
-      onClick={() =>
-        periodId &&
-        runBaseline.mutate({
-          module: 'capital',
-          reportingPeriodId: periodId,
-          scenarioCode: 'baseline',
-        })
-      }
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-    >
-      {runBaseline.isPending ? (
-        <Loader2 size={13} className="animate-spin" aria-hidden />
-      ) : (
-        <PlayCircle size={13} aria-hidden />
-      )}
-      Run baseline
-    </button>
-  );
 
   return (
     <>
@@ -141,22 +118,22 @@ export default function RWABreakdown() {
         ]}
         title="RWA Breakdown"
         subtitle={`Risk-weighted assets by risk type · ${regShort()} CRD standardized approach`}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       {needsBaseline ? (
         <div className="px-8 py-6">
           <EmptyState
-            Icon={PlayCircle}
-            title="Baseline run required"
-            description="The RWA breakdown comes from a persisted baseline capital run. Run baseline to calculate and store the full risk-weighted asset detail for this reporting period."
+            Icon={Layers}
+            title="Awaiting period results"
+            description="The full risk-weighted asset detail is produced with this period's stored results and appears here automatically once they are computed."
             action={
-              <div className="flex flex-col items-center gap-3">
-                {runBaselineButton}
-                {runBaseline.error && (
-                  <ErrorPanel error={runBaseline.error} title="Run failed" />
-                )}
-              </div>
+              <Link
+                href="/data-engine"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+              >
+                Open Data Engine
+                <ArrowRight size={13} aria-hidden />
+              </Link>
             }
           />
         </div>
@@ -258,7 +235,7 @@ export default function RWABreakdown() {
                 }
               >
                 <DataTable
-                  columns={rwaColumns('Exposure class', 'Risk weight', 'RWA (GHS)')}
+                  columns={rwaColumns('Exposure class', 'Risk weight', `RWA (${currencyCode()})`)}
                   rows={[
                     ...creditRows,
                     {
@@ -280,7 +257,7 @@ export default function RWABreakdown() {
                   noPadding
                 >
                   <DataTable
-                    columns={rwaColumns('Line', 'Charge rate', 'Amount (GHS)')}
+                    columns={rwaColumns('Line', 'Charge rate', `Amount (${currencyCode()})`)}
                     rows={[
                       ...marketRows,
                       {
@@ -301,7 +278,7 @@ export default function RWABreakdown() {
                   noPadding
                 >
                   <DataTable
-                    columns={rwaColumns('Line', 'Alpha', 'Amount (GHS)')}
+                    columns={rwaColumns('Line', 'Alpha', `Amount (${currencyCode()})`)}
                     rows={[
                       ...operationalRows,
                       {

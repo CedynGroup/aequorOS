@@ -81,6 +81,43 @@ importers:
         specifier: ^5.6.2
         version: 5.9.3
 
+  console:
+    dependencies:
+      lucide-react:
+        specifier: ^0.446.0
+        version: 0.446.0(react@18.3.1)
+      next:
+        specifier: 14.2.15
+        version: 14.2.15(@playwright/test@1.62.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.16.11
+        version: 20.19.41
+      '@types/react':
+        specifier: ^18.3.11
+        version: 18.3.30
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.7(@types/react@18.3.30)
+      autoprefixer:
+        specifier: ^10.4.20
+        version: 10.5.0(postcss@8.5.24)
+      postcss:
+        specifier: ^8.5.24
+        version: 8.5.24
+      tailwindcss:
+        specifier: ^3.4.13
+        version: 3.4.19
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+
   frontend:
     dependencies:
       lucide-react:

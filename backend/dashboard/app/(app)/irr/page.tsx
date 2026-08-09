@@ -15,12 +15,11 @@ import TrendChart from '@/components/irr/charts/TrendChart';
 import { scenarioLabel } from '@/components/irr/scenarios';
 import KpiStat, { type KpiStatus } from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
-import RunBadge from '@/components/ui/RunBadge';
 import Sparkline from '@/components/ui/Sparkline';
 import StatusPill from '@/components/ui/StatusPill';
 import EmptyState from '@/components/ui/EmptyState';
 import ValidationList from '@/components/ui/ValidationList';
-import { fmtRelative, num, statusTone } from '@/lib/api/values';
+import { num, statusTone } from '@/lib/api/values';
 import { fmtCurrency, fmtCurrencySigned, fmtPct, regShort } from '@/lib/format';
 
 function kpiStatus(status: string): KpiStatus | undefined {
@@ -81,13 +80,10 @@ export default function IrrOverviewPage() {
           cumulative: num(g.cumulativeGapGhs),
         }));
 
-        const live = data.live ?? null;
-        const runBadge = latestRun ? <RunBadge run={latestRun} /> : undefined;
-
         return (
           <>
             {/* KPI row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               <KpiStat
                 label="Worst ΔEVE / Tier 1"
                 value={fmtPct(worstPct, 2)}
@@ -126,18 +122,6 @@ export default function IrrOverviewPage() {
                 status={earWorst < 0 ? 'warn' : 'ok'}
                 hint={`+200bp ${fmtCurrencySigned(earUp)} · −200bp ${fmtCurrencySigned(earDown)}`}
               />
-              <KpiStat
-                label="Live engine"
-                value={live ? live.status.toUpperCase() : data.stored ? 'STORED' : 'INLINE'}
-                status={live ? kpiStatus(live.status) : undefined}
-                hint={
-                  live
-                    ? `recomputed ${fmtRelative(live.computedAt)}`
-                    : data.stored
-                    ? 'from the latest official run'
-                    : 'computed inline — not yet persisted'
-                }
-              />
             </div>
 
             {/* Tornado + mini ladder */}
@@ -155,7 +139,6 @@ export default function IrrOverviewPage() {
                   </Link>
                 }
                 computedAt={computedAt}
-                runBadge={runBadge}
               >
                 {eveBars.length > 0 ? (
                   <TornadoChart data={eveBars} height={280} />
@@ -177,7 +160,6 @@ export default function IrrOverviewPage() {
                   </Link>
                 }
                 computedAt={computedAt}
-                runBadge={runBadge}
                 footer={
                   <span>
                     12-month cumulative gap{' '}
@@ -209,12 +191,11 @@ export default function IrrOverviewPage() {
                 </StatusPill>
               }
               computedAt={computedAt}
-              runBadge={runBadge}
               footer={
                 hasInlineTrendPoints ? (
                   <span>
-                    Hollow points are computed inline — run all scenarios on those
-                    periods to persist them.
+                    Hollow points are live computations — they solidify once
+                    those periods’ results are stored.
                   </span>
                 ) : undefined
               }
@@ -231,7 +212,7 @@ export default function IrrOverviewPage() {
                 <EmptyState
                   Icon={Zap}
                   title="No trend history"
-                  description="Run all scenarios to build the per-period EVE sensitivity trend."
+                  description="The per-period EVE sensitivity trend builds as results are stored each period."
                 />
               )}
             </SectionCard>
@@ -242,7 +223,6 @@ export default function IrrOverviewPage() {
               subtitle="IRRBB rule evaluation for this period"
               noPadding
               computedAt={computedAt}
-              runBadge={runBadge}
             >
               <ValidationList validations={data.validations} />
             </SectionCard>

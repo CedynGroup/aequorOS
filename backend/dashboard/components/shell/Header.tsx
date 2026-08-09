@@ -6,26 +6,25 @@ import {
   ChevronDown,
   Calendar,
   Check,
-  Inbox,
   Menu,
   Sun,
   Moon,
   RadioTower,
   AlertTriangle,
+  Loader2,
   LogOut,
   UserRound,
 } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useBankContext } from './BankContext';
 import { useTheme } from './ThemeProvider';
-import { fmtDateUTC, fmtRelative } from '@/lib/api/values';
+import { fmtDateUTC, fmtRelative, isoDate } from '@/lib/api/values';
 import { avatarColor, initialsFrom, roleLabel } from '@/lib/api/identity';
 import { useUserProfile } from '@/components/profile/ProfileProvider';
 import { LOGIN_URL } from '@/lib/loginUrl';
-import { useBankFreshness, useNotifications } from '@/lib/api/hooks';
+import { useLiveSummary, useRefreshBankData } from '@/lib/api/hooks';
 import CommandPalette from './CommandPalette';
-import NotificationDrawer from './NotificationDrawer';
-import AlertsBell from '@/components/live/AlertsBell';
+import UnifiedBell from '@/components/shell/UnifiedBell';
 import { regShort } from '@/lib/format';
 
 export default function Header({
@@ -66,7 +65,7 @@ export default function Header({
           </span>
           <span className="hidden md:inline mx-2 text-slate-light">|</span>
           <span className="hidden md:inline text-slate text-caption">
-            {regShort()} license · {bank ? capitalize(bank.licenseType) : '—'}
+            {bank ? `${regShort()} license · ${capitalize(bank.licenseType)}` : '—'}
           </span>
         </div>
       </div>
@@ -97,9 +96,7 @@ export default function Header({
 
         <LiveFreshnessPill />
 
-        <AlertsBell />
-
-        <NotificationsBell />
+        <UnifiedBell />
 
         <ThemeToggle />
 
@@ -111,66 +108,67 @@ export default function Header({
   );
 }
 
-/** In-app notification inbox: unread badge + drawer (distinct from the
- * live limit-breach AlertsBell). */
-function NotificationsBell() {
-  const [open, setOpen] = useState(false);
-  const feed = useNotifications();
-  const unread = feed.data?.unreadCount ?? 0;
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`}
-        className="relative w-9 h-9 inline-flex items-center justify-center rounded text-slate hover:bg-surface"
-      >
-        <Inbox size={16} aria-hidden />
-        {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-action text-white text-[10px] font-semibold inline-flex items-center justify-center">
-            {unread > 99 ? '99+' : unread}
-          </span>
-        )}
-      </button>
-      <NotificationDrawer open={open} onClose={() => setOpen(false)} />
-    </>
-  );
-}
 
-/** Compact aggregate live-engine freshness pill: dot + "Live · 2m ago". */
+/** How old the live tier may be before the header stops calling it current.
+ * The scheduled refresh runs hourly and every accepted ingestion batch also
+ * triggers one, so anything past two hours means the pipeline is not running. */
+const LIVE_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
+
+/** Compact live-engine recency pill: dot + "Live · 2m ago".
+ *
+ * State is the AGE of the live tier, never the comparison against official
+ * runs — official runs are a Governance concern (the moat), and the desk
+ * surfaces live-compute continuously. Amber here means only "the live tier
+ * has not recomputed recently"; the click is a manual recompute. */
 function LiveFreshnessPill() {
   const { bank, period } = useBankContext();
-  const freshness = useBankFreshness(bank?.id, period?.id);
+  const summary = useLiveSummary(bank?.id);
+  const refresh = useRefreshBankData(bank?.id);
 
-  const modules = freshness.data?.modules ?? [];
+  const modules = summary.data?.modules ?? [];
   if (modules.length === 0) return null;
 
-  const anyStale = modules.some((m) => m.isStale);
   const latest = modules.reduce<Date | null>((acc, m) => {
     if (!m.computedAt) return acc;
     const computed = new Date(m.computedAt);
     return !acc || computed.getTime() > acc.getTime() ? computed : acc;
   }, null);
+  const aged = !latest || Date.now() - latest.getTime() > LIVE_STALE_AFTER_MS;
 
-  if (anyStale) {
+  if (aged || refresh.isPending) {
     return (
-      <span
-        title="Data changed since the last official run — mint one from the module dashboard."
-        className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-warning/30 bg-warning-light text-warning text-caption font-medium whitespace-nowrap"
+      <button
+        type="button"
+        disabled={refresh.isPending || !period}
+        onClick={() =>
+          period &&
+          refresh.mutate({
+            asOfDate: isoDate(period.periodEnd),
+            reason: 'Recompute live figures (header)',
+          })
+        }
+        title="The live tier has not recomputed recently — click to recompute now. It refreshes automatically as data arrives and on the hourly schedule."
+        className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-warning/30 bg-warning-light text-warning text-caption font-medium whitespace-nowrap hover:bg-warning/15 disabled:opacity-60"
       >
-        <AlertTriangle size={11} aria-hidden />
-        Changed
-      </span>
+        {refresh.isPending ? (
+          <Loader2 size={11} className="animate-spin" aria-hidden />
+        ) : (
+          <AlertTriangle size={11} aria-hidden />
+        )}
+        {refresh.isPending
+          ? 'Recomputing…'
+          : `Live · stale${latest ? ` (${fmtRelative(latest)})` : ''}`}
+      </button>
     );
   }
 
   return (
     <span
-      title="Live figures match the last official run."
+      title={`Live figures — recomputed automatically as data arrives and on the hourly schedule${latest ? `; engines last ran ${fmtRelative(latest)}` : ''}.`}
       className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-success/30 bg-success-light text-success text-caption font-medium whitespace-nowrap"
     >
       <RadioTower size={11} aria-hidden />
-      Live{latest ? ` · ${fmtRelative(latest)}` : ''}
+      Live
     </span>
   );
 }
@@ -329,11 +327,12 @@ function PeriodSelector() {
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        title="Reporting period for analysis and governance — desk figures always track the live edge of the newest period."
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-caption font-medium text-slate hover:bg-surface"
       >
         <Calendar size={13} aria-hidden />
-        As of{' '}
+        Period{' '}
         <span className="font-mono text-navy tnum">
           {period ? fmtDateUTC(period.periodEnd) : '—'}
         </span>

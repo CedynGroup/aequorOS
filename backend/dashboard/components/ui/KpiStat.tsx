@@ -4,9 +4,9 @@ import DeltaBadge from './DeltaBadge';
 export type KpiStatus = 'ok' | 'warn' | 'crit';
 
 const edgeStyles: Record<KpiStatus, string> = {
-  ok: 'inset 2px 0 0 rgb(var(--ok))',
-  warn: 'inset 2px 0 0 rgb(var(--warn))',
-  crit: 'inset 2px 0 0 rgb(var(--crit))',
+  ok: 'inset 3px 0 0 rgb(var(--ok))',
+  warn: 'inset 3px 0 0 rgb(var(--warn))',
+  crit: 'inset 3px 0 0 rgb(var(--crit))',
 };
 
 /**
@@ -49,13 +49,16 @@ export default function KpiStat({
       className={`card px-4 py-3.5 flex flex-col gap-1.5 min-w-0 ${className}`}
       style={status ? { boxShadow: edgeStyles[status] } : undefined}
     >
-      <p className="text-micro font-medium text-slate uppercase tracking-wider truncate">
+      <p className="text-micro font-medium text-slate uppercase tracking-wider">
         {label}
       </p>
 
       <div className="flex items-end justify-between gap-3">
         <div className="flex items-baseline gap-1 min-w-0">
-          <span className="font-mono text-kpi text-navy tnum truncate">
+          <span
+            className="font-mono text-kpi text-navy tnum whitespace-nowrap"
+            title={typeof value === 'number' ? String(value) : value}
+          >
             {typeof value === 'number' ? String(value) : value}
           </span>
           {unit && <span className="text-body text-slate shrink-0">{unit}</span>}
@@ -76,7 +79,7 @@ export default function KpiStat({
             <span />
           )}
           {hint && (
-            <span className="text-caption text-slate truncate">{hint}</span>
+            <span className="text-caption text-slate">{hint}</span>
           )}
         </div>
       )}

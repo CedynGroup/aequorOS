@@ -1,5 +1,6 @@
 import type { MarketDataAttributionRead } from '@aequoros/risk-service-api';
 import StatusPill from '@/components/ui/StatusPill';
+import { MonoChip } from './chips';
 
 /** "3m", "2h", "5d" — compact age from the attribution's ageSeconds. */
 export function fmtAge(seconds: number): string {
@@ -27,9 +28,7 @@ export default function AttributionChip({
   const age = fmtAge(attribution.ageSeconds);
   return (
     <span className={`inline-flex items-center gap-1.5 min-w-0 ${className}`}>
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-border-light bg-surface text-[10px] font-mono uppercase tracking-wider text-slate whitespace-nowrap">
-        {attribution.sourceSystem}
-      </span>
+      <MonoChip>{attribution.sourceSystem}</MonoChip>
       {attribution.stale ? (
         <StatusPill tone="amber">Stale · {age}</StatusPill>
       ) : (

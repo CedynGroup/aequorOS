@@ -1,14 +1,11 @@
 'use client';
 
-import Link from 'next/link';
-import { FileText, Info, Loader2, PlayCircle } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat, { type KpiStatus } from '@/components/ui/KpiStat';
 import LimitBar from '@/components/ui/LimitBar';
 import ChartFrame from '@/components/ui/ChartFrame';
 import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
-import RunBadge from '@/components/ui/RunBadge';
 import Sparkline from '@/components/ui/Sparkline';
 import ValidationList from '@/components/ui/ValidationList';
 import QueryBoundary from '@/components/ui/QueryBoundary';
@@ -16,14 +13,13 @@ import DonutChart from '@/components/charts/DonutChart';
 import RatioTrendChart from '@/components/liquidity/charts/RatioTrendChart';
 import CapitalWaterfallChart from '@/components/basel/charts/CapitalWaterfallChart';
 import { runComputedAt, runMetricThreshold } from '@/components/liquidity/runData';
-import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
+import LiveEngineNote from '@/components/live/LiveEngineNote';
 import {
   useCapitalDashboard,
-  useCreateRegulatoryRun,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, isoDate, num, statusTone } from '@/lib/api/values';
+import { num, statusTone } from '@/lib/api/values';
 import { seriesColor } from '@/lib/chartTheme';
 import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
@@ -38,7 +34,6 @@ export default function BaselOverview() {
 
   const dashboard = useCapitalDashboard(bankId, periodId);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
-  const runBaseline = useCreateRegulatoryRun(bankId);
 
   const data = dashboard.data;
   const run = latestRun.data;
@@ -71,10 +66,15 @@ export default function BaselOverview() {
     : [];
 
   const carTrend = (data?.trend ?? []).map((p) => num(p.carPct));
-  const carDelta =
-    carTrend.length >= 2
-      ? carTrend[carTrend.length - 1] - carTrend[carTrend.length - 2]
+  const tier1Trend = (data?.trend ?? []).map((p) => num(p.tier1RatioPct));
+  const cet1Trend = (data?.trend ?? []).map((p) => num(p.cet1RatioPct));
+  const periodDelta = (series: number[]): number | undefined =>
+    series.length >= 2
+      ? series[series.length - 1] - series[series.length - 2]
       : undefined;
+  const carDelta = periodDelta(carTrend);
+  const tier1Delta = periodDelta(tier1Trend);
+  const cet1Delta = periodDelta(cet1Trend);
   const hasInlineTrendPoints = (data?.trend ?? []).some((p) => !p.stored);
   const compliantCount = carTrend.filter((v) => v >= carMin).length;
 
@@ -92,9 +92,7 @@ export default function BaselOverview() {
   const computedAt = runComputedAt(run);
   const provenance = data ? (
     <span>
-      {data.stored
-        ? 'Stored baseline run'
-        : 'Live computation — run baseline to persist'}
+      Computed from current positions and the active parameter set
     </span>
   ) : undefined;
 
@@ -108,45 +106,7 @@ export default function BaselOverview() {
         ]}
         title="Basel Capital"
         subtitle={`Capital Adequacy Ratio · Tier 1 / Tier 2 · ${regShort()} CRD framework`}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
-        action={
-          <div className="flex items-center gap-2">
-            <FreshnessBadge
-              bankId={bankId}
-              periodId={periodId}
-              module="capital"
-              asOfDate={period ? isoDate(period.periodEnd) : undefined}
-            />
-            {run && <RunBadge run={run} />}
-            <Link
-              href="/submissions/returns?code=BSD2"
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-action border border-action/30 bg-action-light rounded-md hover:bg-action/10"
-            >
-              <FileText size={13} aria-hidden />
-              Official returns →
-            </Link>
-            <button
-              type="button"
-              disabled={runBaseline.isPending || !periodId}
-              onClick={() =>
-                periodId &&
-                runBaseline.mutate({
-                  module: 'capital',
-                  reportingPeriodId: periodId,
-                  scenarioCode: 'baseline',
-                })
-              }
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            >
-              {runBaseline.isPending ? (
-                <Loader2 size={13} className="animate-spin" aria-hidden />
-              ) : (
-                <PlayCircle size={13} aria-hidden />
-              )}
-              Run baseline
-            </button>
-          </div>
-        }
+        action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 
       <QueryBoundary
@@ -156,15 +116,6 @@ export default function BaselOverview() {
       >
         {data && (
           <div className="px-8 py-6 space-y-6">
-            {!data.stored && (
-              <div className="card border-l-4 border-l-warning bg-warning-light/40 px-5 py-3.5 flex items-start gap-3">
-                <Info size={16} className="text-warning shrink-0 mt-0.5" aria-hidden />
-                <p className="text-body text-navy/85 leading-relaxed">
-                  Showing a live computation for this period — run baseline to
-                  persist an auditable regulatory run.
-                </p>
-              </div>
-            )}
 
             {/* Headline ratios */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -182,6 +133,8 @@ export default function BaselOverview() {
                 value={num(data.metrics.tier1RatioPct).toFixed(2)}
                 unit="%"
                 status={kpiStatus(data.metrics.tier1Status)}
+                delta={tier1Delta}
+                sparkline={<Sparkline data={tier1Trend} />}
                 hint={
                   tier1Min !== null
                     ? `Regulatory minimum ${tier1Min.toFixed(1)}%`
@@ -193,6 +146,8 @@ export default function BaselOverview() {
                 value={num(data.metrics.cet1RatioPct).toFixed(2)}
                 unit="%"
                 status={kpiStatus(data.metrics.cet1Status)}
+                delta={cet1Delta}
+                sparkline={<Sparkline data={cet1Trend} />}
                 hint={
                   cet1Min !== null
                     ? `Regulatory minimum ${cet1Min.toFixed(1)}%`
@@ -217,7 +172,6 @@ export default function BaselOverview() {
               title="Regulatory floors"
               subtitle={`${regShort()} CRD minimums — compliant while each ratio stays above its floor`}
               computedAt={computedAt}
-              runBadge={run ? <RunBadge run={run} /> : undefined}
               footer={provenance}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5">
@@ -288,11 +242,11 @@ export default function BaselOverview() {
                 footer={
                   hasInlineTrendPoints ? (
                     <span>
-                      Hollow points are computed inline — run baseline on those
-                      periods to persist them.
+                      Hollow points are live computations — they solidify once
+                      those periods’ results are stored.
                     </span>
                   ) : (
-                    <span>All trend points are stored baseline runs.</span>
+                    <span>All trend points come from stored results.</span>
                   )
                 }
               >
@@ -380,7 +334,6 @@ export default function BaselOverview() {
               title="Regulatory buffer status"
               subtitle={`${regShort()} CRD thresholds for the Capital Adequacy Ratio`}
               computedAt={computedAt}
-              runBadge={run ? <RunBadge run={run} /> : undefined}
               footer={provenance}
             >
               <div className="grid grid-cols-2 md:grid-cols-5 gap-5">
@@ -421,7 +374,6 @@ export default function BaselOverview() {
               subtitle="Regulatory rule evaluation for this period"
               noPadding
               computedAt={computedAt}
-              runBadge={run ? <RunBadge run={run} /> : undefined}
               footer={provenance}
             >
               <ValidationList validations={data.validations} />

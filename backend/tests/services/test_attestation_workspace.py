@@ -871,6 +871,78 @@ def test_a_bare_approval_still_works_where_signing_is_relaxed(db_session: Sessio
     assert decided.status == "approved"
 
 
+def test_the_esign_kill_switch_routes_a_mandatory_return_through_bare_approval(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_seed writes a MANDATORY configured row; ATTESTATION_ESIGN_REQUIRED=0
+    alone routes the package through the bare maker-checker decision, with the
+    stored row untouched (dormant, not edited)."""
+    package = _seed(db_session)
+    monkeypatch.setenv("ATTESTATION_ESIGN_REQUIRED", "0")
+    get_settings.cache_clear()
+
+    reporting_workflow.request_approval(
+        db_session, MAKER, SAMPLE_BANK_ID, package.id, PackageApprovalRequestCreate()
+    )
+    decided = reporting_workflow.decide_approval(
+        db_session,
+        APPROVER,
+        SAMPLE_BANK_ID,
+        package.id,
+        PackageApprovalDecisionCreate(action="approved"),
+    )
+    assert decided.status == "approved"
+
+    status_read = attestation_api.attestation_status(
+        db_session, MAKER, SAMPLE_BANK_ID, package.id
+    )
+    assert status_read.can_submit is True
+    assert status_read.policy.require_signature is False
+    assert status_read.policy.source == "esign_disabled"
+
+    row = db_session.scalar(
+        select(ReturnSigningPolicy).where(
+            ReturnSigningPolicy.organization_id == DEMO_ORG_ID,
+            ReturnSigningPolicy.return_code == "BSD3",
+        )
+    )
+    assert row is not None
+    assert row.require_signature is True
+    get_settings.cache_clear()
+
+
+def test_flag_off_mid_ceremony_takes_the_bare_path_and_refuses_more_signing(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A package the preparer already certified still reaches submission through
+    the bare decision when the flag drops; the signature stays as append-only
+    evidence, and FURTHER ceremony refuses — off means no ceremony, not optional."""
+    package = _seed(db_session)
+    _certify(db_session, MAKER, package, role="preparer")
+    db_session.refresh(package)
+    assert package.attestation_state == "preparer_certified"
+
+    monkeypatch.setenv("ATTESTATION_ESIGN_REQUIRED", "0")
+    get_settings.cache_clear()
+
+    decided = reporting_workflow.decide_approval(
+        db_session,
+        APPROVER,
+        SAMPLE_BANK_ID,
+        package.id,
+        PackageApprovalDecisionCreate(action="approved"),
+    )
+    assert decided.status == "approved"
+    workflow.ensure_submittable(db_session, MAKER, package)  # no raise
+    assert _signature_count(db_session) == 1
+
+    policy = workflow.package_policy(db_session, MAKER, package)
+    with pytest.raises(AttestationConflict) as excinfo:
+        workflow.ensure_certifiable(package, policy, "approver")
+    assert excinfo.value.error_code == "signature_not_required"
+    get_settings.cache_clear()
+
+
 def test_send_back_returns_the_package_for_rework_and_unfreezes_the_figures(
     db_session: Session,
 ) -> None:

@@ -6,6 +6,7 @@ from app.api.health import router as health_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.database_connections import router as database_direct_connections_router
 from app.features.bulk_update_cases import router as bulk_update_cases_router
+from app.features.examiner_surfaces import router as examiner_router
 from app.features.generate_case_reports import router as case_reports_router
 from app.features.ingest_data import router as ingestion_router
 from app.features.list_case_taxonomy import router as case_taxonomy_router
@@ -14,21 +15,29 @@ from app.features.list_taxonomy import router as taxonomy_router
 from app.features.manage_attestation import router as attestation_router
 from app.features.manage_banks import router as banks_router
 from app.features.manage_capital import router as capital_router
+from app.features.manage_capital_plan import router as capital_plan_router
+from app.features.manage_credit_params import router as credit_params_router
 from app.features.manage_documents import router as documents_router
 from app.features.manage_institution_profile import router as institution_profile_router
 from app.features.manage_integration_keys import router as integration_keys_router
+from app.features.manage_liquidity_cfp import router as liquidity_cfp_router
+from app.features.manage_liquidity_thresholds import router as liquidity_thresholds_router
 from app.features.manage_live_engine import router as live_engine_router
 from app.features.manage_market_data_connections import router as market_data_connections_router
+from app.features.manage_market_data_overlays import router as market_data_overlays_router
 from app.features.manage_market_data_uploads import router as market_data_uploads_router
 from app.features.manage_notifications import router as notifications_router
 from app.features.manage_regulatory_reporting import router as regulatory_reporting_router
 from app.features.manage_scenarios import router as scenarios_router
+from app.features.manage_stress_scenarios import router as stress_scenarios_router
 from app.features.manage_temenos_connections import router as temenos_connections_router
 from app.features.push_data import router as push_router
 from app.features.read_behavioral_models import router as behavioral_models_router
 from app.features.read_cashflow_forecast import router as cashflow_forecast_router
+from app.features.read_cashflow_window import router as cashflow_window_router
 from app.features.read_financial_workspace import router as financial_workspace_router
 from app.features.read_market_data_views import router as market_data_views_router
+from app.features.read_window_analytics import router as window_analytics_router
 from app.features.record_case_decisions import router as case_decisions_router
 from app.features.review_cases import router as cases_router
 from app.features.review_findings import router as findings_router
@@ -41,6 +50,8 @@ from app.features.run_regulatory_ftp import router as regulatory_ftp_router
 from app.features.run_regulatory_fx import router as regulatory_fx_router
 from app.features.run_regulatory_irr import router as regulatory_irr_router
 from app.features.run_regulatory_liquidity import router as regulatory_liquidity_router
+from app.features.run_reverse_stress import router as reverse_stress_router
+from app.features.run_scenario_analysis import router as scenario_analysis_router
 from app.features.track_jobs import router as jobs_router
 
 api_router = APIRouter()
@@ -54,6 +65,14 @@ v1_router.include_router(ingestion_router)
 v1_router.include_router(push_router)
 v1_router.include_router(database_direct_connections_router)
 v1_router.include_router(regulatory_liquidity_router)
+v1_router.include_router(liquidity_thresholds_router)
+v1_router.include_router(liquidity_cfp_router)
+v1_router.include_router(credit_params_router)
+v1_router.include_router(capital_plan_router)
+v1_router.include_router(examiner_router)
+v1_router.include_router(stress_scenarios_router)
+v1_router.include_router(scenario_analysis_router)
+v1_router.include_router(reverse_stress_router)
 v1_router.include_router(regulatory_capital_router)
 v1_router.include_router(regulatory_irr_router)
 v1_router.include_router(regulatory_fx_router)
@@ -67,6 +86,7 @@ v1_router.include_router(forecasting_router)
 v1_router.include_router(live_engine_router)
 v1_router.include_router(market_data_uploads_router)
 v1_router.include_router(market_data_connections_router)
+v1_router.include_router(market_data_overlays_router)
 v1_router.include_router(temenos_connections_router)
 v1_router.include_router(cashflow_forecast_router)
 v1_router.include_router(behavioral_models_router)
@@ -86,4 +106,6 @@ v1_router.include_router(findings_router)
 v1_router.include_router(liquidity_router)
 v1_router.include_router(taxonomy_router)
 v1_router.include_router(market_data_views_router)
+v1_router.include_router(window_analytics_router)
+v1_router.include_router(cashflow_window_router)
 api_router.include_router(v1_router)

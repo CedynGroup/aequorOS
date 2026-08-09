@@ -7,6 +7,7 @@ import pytest
 
 from app.adapters.excel_csv.type_coercion import (
     CoercionError,
+    coerce_bool,
     coerce_date,
     coerce_int,
     coerce_money,
@@ -116,3 +117,37 @@ class TestIntAndString:
         assert coerce_string("  LN-0001  ") == "LN-0001"
         assert coerce_string("N/A") is None
         assert coerce_string(1000) == "1000"
+
+
+class TestBool:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (True, True),
+            (False, False),
+            (1, True),
+            (0, False),
+            ("Yes", True),
+            ("no", False),
+            ("Y", True),
+            ("n", False),
+            ("TRUE", True),
+            ("false", False),
+            ("t", True),
+            ("F", False),
+            (" 1 ", True),
+            ("0", False),
+        ],
+    )
+    def test_bool_forms(self, value: object, expected: bool) -> None:
+        assert coerce_bool(value) is expected
+
+    def test_bool_nulls(self) -> None:
+        assert coerce_bool(None) is None
+        assert coerce_bool("N/A") is None
+        assert coerce_bool("") is None
+
+    @pytest.mark.parametrize("value", ["maybe", "2", 2, 1.0, "yesno"])
+    def test_bool_rejects_ambiguity(self, value: object) -> None:
+        with pytest.raises(CoercionError):
+            coerce_bool(value)

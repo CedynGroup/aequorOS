@@ -34,13 +34,41 @@ class YieldCurvePointRead(ClosedModel):
     rate: Decimal
 
 
+class CurveOverlayComponentRead(ClosedModel):
+    """One active per-bank overlay composing into a curve's adjusted series.
+
+    ``value`` units follow ``adjustment_type``: basis points for
+    ``additive_bps``, a rate decimal fraction for ``fixed``, a factor for
+    ``multiplicative``. ``tenor_months`` NULL means the spread is flat
+    across all tenors.
+    """
+
+    overlay_id: UUID
+    component_tag: str
+    adjustment_type: str
+    value: Decimal
+    tenor_months: int | None = Field(title="Overlay Component Tenor Months")
+    effective_from: date = Field(title="Overlay Component Effective From")
+
+
 class YieldCurveViewRead(ClosedModel):
-    """One currency's authoritative curve; rates are decimal fractions."""
+    """One published curve (keyed by ``curve_name``); rates decimal fractions.
+
+    ``curve_type`` badges the series (zero / forward / discount for desk-
+    constructed curves; sovereign etc. for observed vendor curves).
+    ``adjusted_points`` + ``overlay_components`` are non-empty only when the
+    bank has active private overlays on this curve name: base + overlays
+    composed at read time, golden data untouched (spec §2, §9). Both empty
+    means "no adjusted series" — the base is never duplicated.
+    """
 
     currency: str
     curve_name: str
+    curve_type: str
     as_of_date: date = Field(title="Yield Curve As Of Date")
     points: list[YieldCurvePointRead]
+    adjusted_points: list[YieldCurvePointRead] = Field(title="Yield Curve Adjusted Points")
+    overlay_components: list[CurveOverlayComponentRead]
     attribution: MarketDataAttributionRead
 
 

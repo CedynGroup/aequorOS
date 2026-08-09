@@ -14,6 +14,18 @@ from app.main import app  # noqa: E402 - import must follow the worker-disable a
 
 
 def main() -> int:
+    """Write the schema to argv[1] when given, else stdout.
+
+    Writing the file directly (rather than shell-redirecting stdout) keeps
+    the schema immune to anything a developer's .env routes to stdout —
+    app-creation warnings through a JSON log sink corrupted the redirect
+    form (2026-08-09).
+    """
+    if len(sys.argv) > 1:
+        with open(sys.argv[1], "w", encoding="utf-8") as handle:
+            json.dump(app.openapi(), handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        return 0
     json.dump(app.openapi(), sys.stdout, indent=2, sort_keys=True)
     sys.stdout.write("\n")
     return 0

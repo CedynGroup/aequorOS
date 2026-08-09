@@ -134,7 +134,7 @@ export const ASSUMPTION_FIELDS: AssumptionField[] = [
     apiKey: 'fx_depreciation_pct',
     label: 'FX depreciation',
     definition:
-      'Annual cedi depreciation applied to FX-linked risk-weighted assets.',
+      'Annual base-currency depreciation applied to FX-linked risk-weighted assets.',
     unit: '%',
     min: -10,
     max: 60,

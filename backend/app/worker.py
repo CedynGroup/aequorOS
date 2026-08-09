@@ -25,19 +25,27 @@ from app.db.base import utc_now
 from app.db.session import get_worker_sessionmaker
 from app.models import Job
 from app.services import (
+    database_direct_jobs,
     etl_dedup_jobs,
     job_queue,
     market_data_jobs,
+    notification_email_mirror,
     pipeline,
     reporting_deadline_scan,
     scheduler,
     temenos_jobs,
 )
+from app.services.market_desk import capture_job as desk_capture_job
 
 logger = logging.getLogger(__name__)
 
 Handler = Callable[[Session, Job], None]
 
+# HAZARD: HANDLERS and job_queue.JOB_TYPES must cover each other exactly — a
+# JOB_TYPES entry with no handler here is enqueueable but never claimable, so
+# its jobs sit "queued" forever (how notification_email_mirror was orphaned
+# until 2026-08-09: enqueued by every tick, absent here). The parity test in
+# tests/services/test_desk_capture_job.py enforces the invariant.
 HANDLERS: dict[str, Handler] = {
     "pipeline_refresh": pipeline.run_refresh,
     "official_run": pipeline.run_official,
@@ -46,6 +54,9 @@ HANDLERS: dict[str, Handler] = {
     "temenos_pull": temenos_jobs.run_temenos_pull,
     "etl_dedup": etl_dedup_jobs.run_etl_dedup,
     "reporting_deadline_scan": reporting_deadline_scan.run_reporting_deadline_scan,
+    "notification_email_mirror": notification_email_mirror.run_notification_email_mirror,
+    "database_direct_health": database_direct_jobs.run_database_direct_health,
+    "desk_capture": desk_capture_job.run_desk_capture,
 }
 
 
@@ -109,7 +120,10 @@ def run_worker(
     stale_after = timedelta(seconds=settings.worker.worker_stale_job_seconds)
     reap_interval = max(stale_after.total_seconds() / 2, poll_interval)
     job_types = job_types or tuple(HANDLERS)
-    if settings.worker.official_run_enabled:
+    # Seed when ANY scheduled feature is on — gating this on official runs
+    # alone stranded every other scheduled feature (live refresh, connection
+    # probes, vendor pulls) with no tick chain to run them.
+    if scheduler.any_scheduling_enabled(settings):
         try:
             with _new_session() as session:
                 scheduler.seed_ticks(session)

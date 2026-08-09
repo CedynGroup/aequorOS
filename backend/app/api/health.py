@@ -67,9 +67,16 @@ def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResp
     # could have relaxed the policy — see `_warn_if_signing_unconfigured`.
     #
     # Only production: local and test deployments legitimately run without a
-    # signing key, and failing their readiness probe would be noise.
+    # signing key, and failing their readiness probe would be noise. And only
+    # while the e-sign requirement is in force: with ATTESTATION_ESIGN_REQUIRED
+    # off, no return can demand a signature, so a deployment that cannot sign
+    # is not a filing outage.
     signing_gaps = settings.attestation.signing_readiness_gaps()
-    if signing_gaps and settings.app.app_env == "production":
+    if (
+        signing_gaps
+        and settings.app.app_env == "production"
+        and settings.attestation.esign_required
+    ):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(

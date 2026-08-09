@@ -27,7 +27,15 @@ from typing import Literal
 
 type FidelityGrade = Literal["CONFIRMED", "PARTIAL", "REPRESENTATIVE"]
 type ReturnFamily = Literal[
-    "liquidity", "capital", "irrbb", "fx", "icaap_stress", "corporate", "large_exposures", "dbk"
+    "liquidity",
+    "capital",
+    "irrbb",
+    "fx",
+    "icaap_stress",
+    "corporate",
+    "large_exposures",
+    "dbk",
+    "stress",
 ]
 type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual", "daily"]
 type ChannelCode = Literal["orass_sandbox", "email", "manual"]
@@ -316,6 +324,82 @@ REGISTRY: dict[str, ReturnDefinition] = {
             template_id="bog-icaap-stress-v1",
             fidelity="REPRESENTATIVE",
             default_channel="manual",
+        ),
+        # --- Template-gated returns (product.md §Phase 2 items 12/14) ------
+        # Both are REAL periodic obligations banks must plan for, so they
+        # live in the registry and the compliance calendar TODAY; but their
+        # BoG form layouts are unpublished, and the standing order is to get
+        # the form first, never infer it (the BSD-2 inference is not repeated).
+        # Generation refuses with error_code "template_pending" until the
+        # official layout lands; deadlines are stated conventions and remain
+        # overridable through the existing deadline-override machinery.
+        ReturnDefinition(
+            code="BSD-MONTHLY",
+            family="capital",
+            title="Monthly BSD Prudential Pack (Balance Sheet + P&L)",
+            directive_citation=(
+                "BoG monthly prudential returns (BSD) — the bread-and-butter "
+                "monthly filing carrying balance sheet, P&L, deposits and "
+                "withdrawals in BoG's own form. The official layout is NOT "
+                "published to us; generation is gated until the form is obtained "
+                "(validation register: get the form first, never infer it)."
+            ),
+            frequency="monthly",
+            # Day 9 follows the observed BoG monthly-return convention
+            # (LMTD Part II ¶7 precedent, as for LE-MONTHLY); overridable.
+            deadline_rule=monthly_day(9),
+            generator="template_pending",
+            template_id="bog-bsd-monthly-pending",
+            fidelity="REPRESENTATIVE",
+            default_channel="manual",
+        ),
+        ReturnDefinition(
+            code="LAS-QUARTERLY",
+            family="liquidity",
+            title="Quarterly Liquidity Adequacy Statement (LAS)",
+            directive_citation=(
+                "LRMD 2026 ¶12 — the Board files a quarterly Liquidity Adequacy "
+                "Statement to the regulator, ILAAP-supported and embedded in the "
+                "annual ICAAP report; quarterly from 2027. No template is "
+                "published; generation is gated until the form is obtained. The "
+                "Board-level signing chain is an open practitioner question "
+                "(lrmd_gap_analysis.md §9 Q12). The quarterly ILAAP snapshot "
+                "(capital-plan workspace) is the prepared substance this filing "
+                "will draw on."
+            ),
+            frequency="quarterly",
+            # Cadence is directive-given; the day-count is NOT (first LAS
+            # presumed after Q1 2027). 30 days is a stated presumption,
+            # overridable via deadline overrides.
+            deadline_rule=quarterly_days_after(30),
+            generator="template_pending",
+            template_id="bog-las-quarterly-pending",
+            fidelity="REPRESENTATIVE",
+            default_channel="manual",
+        ),
+        ReturnDefinition(
+            code="STRESS-PACK",
+            family="stress",
+            title="Stress Test Output Report pack",
+            directive_citation=(
+                "Stress Testing Guideline (Feb 2026) ¶¶24–27 — stress-test results "
+                "must be reported to Board and senior management with remedial "
+                "actions; the standardized output-report structure (traffic lights, "
+                "pro-forma capital, ratio evolution, attribution, recommended "
+                "actions, reverse-stress frontier) is AequorOS's own artifact "
+                "(product.md §Phase 2 item 6), not a published BoG template."
+            ),
+            # Event-driven: this is a Board/ALCO artifact generated on demand
+            # after the stress engines run — no BoG filing deadline exists for
+            # it (the regulator sees stress results inside ICAAP-STRESS). The
+            # nominal frequency/deadline only satisfy the package row shape.
+            frequency="quarterly",
+            deadline_rule=quarterly_days_after(30),
+            generator="stress_pack",
+            template_id="aeq-stress-pack-v1",
+            fidelity="REPRESENTATIVE",
+            default_channel="manual",
+            event_driven=True,
         ),
         # --- LRT corporate return packs (plan W5) --------------------------
         # Event-driven (event_driven=True): the calendar never expands them

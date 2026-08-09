@@ -10,6 +10,7 @@
  */
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { FlaskConical, Loader2, PlayCircle } from 'lucide-react';
 import type {
   ProjectionYearRead,
@@ -35,7 +36,7 @@ import {
   useRegulatoryRuns,
   useRunWhatIf,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num } from '@/lib/api/values';
+import { num } from '@/lib/api/values';
 import { fmtCurrency, fmtCurrencySigned, fmtPct } from '@/lib/format';
 
 // ---------------------------------------------------------------------------
@@ -379,7 +380,6 @@ export default function WhatIfLab() {
         ]}
         title="What-if Lab"
         subtitle="Deterministic macro shocks re-projected against the unshocked base run on identical canonical inputs"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <QueryBoundary
@@ -406,8 +406,11 @@ export default function WhatIfLab() {
               <p className="mt-2 text-caption text-slate">
                 Engine diagnostic <code className="font-mono">{activeFailure.code}</code>
                 {' · '}run <code className="font-mono">{activeFailure.runId.slice(0, 8)}</code>
-                {' — '}adjust the scenario assumptions in the Assumption Registry or
-                choose a milder shock, then run again.
+                {' — '}adjust the assumptions in the{' '}
+                <Link href="/forecasting/scenario" className="text-action hover:underline">
+                  Scenario Builder
+                </Link>{' '}
+                or choose a milder shock, then run again.
                 {activeView ? ' The last successful projection is shown below.' : ''}
               </p>
             </div>
@@ -492,8 +495,8 @@ export default function WhatIfLab() {
 
                 <p className="text-caption text-slate leading-relaxed">
                   Each run re-projects the full 5-year path with the shocked
-                  assumption set and persists an auditable what-if regulatory
-                  run alongside the unshocked base.
+                  assumption set and keeps the result as a saved what-if
+                  projection alongside the unshocked base.
                 </p>
               </div>
             </SectionCard>
@@ -605,8 +608,6 @@ function ShockResult({
         }
         footer={
           <RunProvenance
-            runId={view.provenance.runId}
-            inputHash={view.provenance.inputHash}
             createdAt={view.provenance.createdAt}
             note="Shocked and base paths computed by the same engine on identical canonical inputs."
           />
@@ -670,7 +671,7 @@ function ShockResult({
         {/* Assumption diff */}
         <SectionCard
           title="What the shock moved"
-          subtitle="Shocked vs base resolved assumptions, from the persisted run payload"
+          subtitle="Shocked vs base resolved assumptions, from the saved projection"
           noPadding
         >
           {movedAssumptions.length === 0 ? (

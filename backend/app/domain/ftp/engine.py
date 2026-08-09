@@ -556,3 +556,72 @@ def _bps_text(value: Decimal) -> str:
 
 def _describe(value: str) -> str:
     return value.replace("_", " ").title()
+
+
+# ---------------------------------------------------------------------------
+# Liquidity transfer pricing — contingent-liquidity charge (Phase 2 item 11;
+# LRMD 2026 ¶78–79, BIS LTP). The buffer that pre-funds expected stressed
+# draws on committed facilities is raised at term and re-invested overnight,
+# so its cost is the negative carry between the buffer tenor and overnight —
+# charged to the products that create the contingency (¶48(b): the expected
+# draw comes from the liquidity stress parameters, never invented here).
+# ---------------------------------------------------------------------------
+
+LTP_BUFFER_TENOR_YEARS = Decimal("1")
+
+
+@dataclass(frozen=True)
+class ContingentFacility:
+    """One committed/contingent facility family with its stressed draw."""
+
+    line_code: str
+    undrawn_amount: Decimal
+    expected_draw_pct: Decimal
+
+
+@dataclass(frozen=True)
+class LtpChargeItem:
+    line_code: str
+    undrawn_amount: Decimal
+    expected_draw_pct: Decimal
+    buffer_cost_pct: Decimal
+    annual_charge: Decimal
+
+
+@dataclass(frozen=True)
+class LtpResult:
+    items: tuple[LtpChargeItem, ...]
+    buffer_cost_pct: Decimal
+    total_charge: Decimal
+
+
+def contingent_liquidity_charges(
+    facilities: Sequence[ContingentFacility],
+    curve: CurveResult,
+    buffer_tenor_years: Decimal = LTP_BUFFER_TENOR_YEARS,
+) -> LtpResult:
+    """Annual contingent-liquidity charge per facility family.
+
+    charge = undrawn x expected stressed draw x buffer carry, where the carry
+    is the FTP curve's term-minus-overnight spread at the buffer tenor,
+    floored at zero (an inverted curve never turns the charge into a rebate).
+    """
+    carry = max(curve.rate_at(buffer_tenor_years) - curve.overnight_rate_pct, _ZERO)
+    items = tuple(
+        LtpChargeItem(
+            line_code=facility.line_code,
+            undrawn_amount=money(facility.undrawn_amount),
+            expected_draw_pct=facility.expected_draw_pct,
+            buffer_cost_pct=carry,
+            annual_charge=money(
+                facility.undrawn_amount
+                * facility.expected_draw_pct
+                / _HUNDRED
+                * carry
+                / _HUNDRED
+            ),
+        )
+        for facility in sorted(facilities, key=lambda entry: entry.line_code)
+    )
+    total = money(sum((item.annual_charge for item in items), _ZERO))
+    return LtpResult(items=items, buffer_cost_pct=carry, total_charge=total)

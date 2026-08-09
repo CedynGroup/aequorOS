@@ -160,6 +160,34 @@ def coerce_int(value: object) -> int | None:
     raise CoercionError("integer", value, f"unsupported type {type(value).__name__}")
 
 
+_BOOL_TRUE = frozenset({"true", "t", "yes", "y", "1"})
+_BOOL_FALSE = frozenset({"false", "f", "no", "n", "0"})
+
+
+def coerce_bool(value: object) -> bool | None:
+    """Parse a yes/no flag from the spellings banks actually use.
+
+    Accepts booleans, 0/1 integers, and the usual textual forms
+    (``Yes``/``No``, ``TRUE``/``FALSE``, ``Y``/``N``). Anything else is an
+    error, not a guess — a misread encumbrance flag corrupts a regulatory
+    return silently.
+    """
+    if is_null_like(value):
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in _BOOL_TRUE:
+            return True
+        if lowered in _BOOL_FALSE:
+            return False
+        raise CoercionError("boolean", value, "not a recognized yes/no value")
+    raise CoercionError("boolean", value, f"unsupported type {type(value).__name__}")
+
+
 def excel_serial_for(target: date) -> int:
     """The Excel serial number for a date (test and fixture helper)."""
     return (target - _EXCEL_EPOCH).days

@@ -16,6 +16,7 @@ import type {
   BankFreshnessRead,
   ErrorResponse,
   JobEnqueuedRead,
+  LiveSnapshotListRead,
   LiveSummaryRead,
   OfficialRunRequest,
   RefreshRequest,
@@ -29,6 +30,8 @@ import {
   ErrorResponseToJSON,
   JobEnqueuedReadFromJSON,
   JobEnqueuedReadToJSON,
+  LiveSnapshotListReadFromJSON,
+  LiveSnapshotListReadToJSON,
   LiveSummaryReadFromJSON,
   LiveSummaryReadToJSON,
   OfficialRunRequestFromJSON,
@@ -49,6 +52,12 @@ export interface GetBankFreshnessRequest {
 
 export interface GetLiveSummaryRequest {
   bankId: string;
+}
+
+export interface ListLiveSnapshotsRequest {
+  bankId: string;
+  module: string;
+  days?: number;
 }
 
 export interface MintOfficialRunRequest {
@@ -242,6 +251,81 @@ export class LiveEngineApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<LiveSummaryRead> {
     const response = await this.getLiveSummaryRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Plane-2 daily ladder: past days are EOD closes, today is the live edge.
+   * List Live Snapshots
+   */
+  async listLiveSnapshotsRaw(
+    requestParameters: ListLiveSnapshotsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<LiveSnapshotListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listLiveSnapshots().',
+      );
+    }
+
+    if (requestParameters["module"] == null) {
+      throw new runtime.RequiredError(
+        "module",
+        'Required parameter "module" was null or undefined when calling listLiveSnapshots().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["module"] != null) {
+      queryParameters["module"] = requestParameters["module"];
+    }
+
+    if (requestParameters["days"] != null) {
+      queryParameters["days"] = requestParameters["days"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/live-snapshots`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      LiveSnapshotListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Plane-2 daily ladder: past days are EOD closes, today is the live edge.
+   * List Live Snapshots
+   */
+  async listLiveSnapshots(
+    requestParameters: ListLiveSnapshotsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<LiveSnapshotListRead> {
+    const response = await this.listLiveSnapshotsRaw(
       requestParameters,
       initOverrides,
     );

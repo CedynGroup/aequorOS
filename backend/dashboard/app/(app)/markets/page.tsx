@@ -2,12 +2,15 @@
 
 /**
  * Markets hub — the consumption side of market data. Everything the canonical
- * store can serve for this bank right now: yield curves, FX spot boards,
- * issuer ratings, and macro indices, each with source attribution and
- * freshness. Source management (vendor connections, quotas, manual uploads)
- * stays in Data Engine → Market Data.
+ * store can serve for this bank right now: every published yield curve
+ * (multi-curve, keyed by curve name, with the bank's private overlay
+ * composition), grouped reference rates, FX spot boards, issuer ratings, and
+ * macro indices — each with source attribution and freshness. Source
+ * management (vendor connections, quotas, manual uploads) stays in
+ * Data Engine → Market Data.
  */
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, CandlestickChart } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -20,6 +23,8 @@ import CurveBoard from '@/components/markets/CurveBoard';
 import FxBoard from '@/components/markets/FxBoard';
 import RatingsStrip from '@/components/markets/RatingsStrip';
 import IndicesStrip from '@/components/markets/IndicesStrip';
+import RatesBoard, { isReferenceRateCode } from '@/components/markets/RatesBoard';
+import OverlayDrawer from '@/components/markets/OverlayDrawer';
 
 const MANAGE_SOURCES_HREF = '/data-engine/market-data';
 
@@ -59,6 +64,7 @@ export default function MarketsPage() {
   const { bank } = useBankContext();
   const views = useMarketDataViews(bank?.id);
   const data = views.data;
+  const [overlayCurveName, setOverlayCurveName] = useState<string | null>(null);
 
   const isEmpty =
     data !== undefined &&
@@ -66,6 +72,13 @@ export default function MarketsPage() {
     data.fxRates.length === 0 &&
     data.ratings.length === 0 &&
     data.indices.length === 0;
+
+  const referenceRates =
+    data?.indices.filter((index) => isReferenceRateCode(index.indexCode)) ?? [];
+  const otherIndices =
+    data?.indices.filter((index) => !isReferenceRateCode(index.indexCode)) ?? [];
+  const overlayCurve =
+    data?.curves.find((curve) => curve.curveName === overlayCurveName) ?? null;
 
   return (
     <>
@@ -100,12 +113,24 @@ export default function MarketsPage() {
               />
             ) : (
               <>
+                {referenceRates.length > 0 && (
+                  <Section
+                    title="Reference rates"
+                    subtitle="Policy, money-market, and lending reference rates published to your Markets tab"
+                  >
+                    <RatesBoard indices={referenceRates} />
+                  </Section>
+                )}
+
                 {data.curves.length > 0 && (
                   <Section
                     title="Curve board"
-                    subtitle="Yield curves by currency — latest arbitrated generation at or before the as-of date"
+                    subtitle="Every published curve at the as-of date — official base vs your private spread composition"
                   >
-                    <CurveBoard curves={data.curves} />
+                    <CurveBoard
+                      curves={data.curves}
+                      onEditOverlays={(curveName) => setOverlayCurveName(curveName)}
+                    />
                   </Section>
                 )}
 
@@ -131,12 +156,12 @@ export default function MarketsPage() {
                   </div>
                 )}
 
-                {data.indices.length > 0 && (
+                {otherIndices.length > 0 && (
                   <Section
                     title="Indicators"
                     subtitle="Macro indices and forecasts by scenario"
                   >
-                    <IndicesStrip indices={data.indices} />
+                    <IndicesStrip indices={otherIndices} />
                   </Section>
                 )}
 
@@ -157,6 +182,15 @@ export default function MarketsPage() {
           </div>
         )}
       </QueryBoundary>
+
+      {bank && overlayCurve && (
+        <OverlayDrawer
+          bankId={bank.id}
+          bankName={bank.name}
+          curve={overlayCurve}
+          onClose={() => setOverlayCurveName(null)}
+        />
+      )}
     </>
   );
 }

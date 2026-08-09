@@ -19,11 +19,11 @@ export const LIVE_MODULE_LABELS: Record<LiveModule, string> = {
 };
 
 export const LIVE_MODULE_HREFS: Record<LiveModule, string> = {
-  liquidity: '/liquidity',
+  liquidity: '/liquidity/monitoring',
   capital: '/basel',
-  irr: '/irr',
-  fx: '/fx',
-  ftp: '/ftp',
+  irr: '/irr/limits',
+  fx: '/fx/limits',
+  ftp: '/ftp/products',
   forecast: '/forecasting',
 };
 
@@ -38,6 +38,11 @@ const PRIMARY_METRIC: Record<LiveModule, { key: string; label: string }> = {
   ftp: { key: 'portfolio_nim_pct', label: 'Portfolio NIM' },
   forecast: { key: 'year5_car_pct', label: 'Year-5 CAR' },
 };
+
+/** Raw payload key of a module's headline metric (snapshot ladder reads it). */
+export function livePrimaryMetricKey(module: LiveModule): string {
+  return PRIMARY_METRIC[module].key;
+}
 
 /** Headline metric for a module's live block, or null when unavailable. */
 export function livePrimaryMetric(

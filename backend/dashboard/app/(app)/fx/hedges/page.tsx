@@ -13,7 +13,7 @@ import FxModuleFrame, { type FxFrameContext } from '@/components/fx/FxModuleFram
 import HedgeScatter from '@/components/fx/charts/HedgeScatter';
 import { fxRunParameters } from '@/components/fx/params';
 import { num } from '@/lib/api/values';
-import { fmtCurrency, fmtCurrencySigned, fmtPct } from '@/lib/format';
+import { fmtCurrency, fmtCurrencySigned, fmtPct, currencyCode } from '@/lib/format';
 
 /**
  * IFRS 9 dual-test defaults, as stated by the backend's `hedges_effective`
@@ -100,7 +100,7 @@ function HedgesBody({ ctx }: { ctx: FxFrameContext }) {
     },
     {
       key: 'mtm',
-      header: 'MTM (GHS)',
+      header: `MTM (${currencyCode()})`,
       numeric: true,
       render: (r) => fmtCurrencySigned(num(r.mtmGhs)),
     },
@@ -132,7 +132,7 @@ function HedgesBody({ ctx }: { ctx: FxFrameContext }) {
         <KpiStat
           label="Aggregate hedge MTM"
           value={fmtCurrencySigned(aggregateMtm)}
-          hint="Sum of hedge marks, GHS equivalent"
+          hint={`Sum of hedge marks, ${currencyCode()} equivalent`}
         />
         <KpiStat
           label="Effective hedges"

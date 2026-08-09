@@ -25,6 +25,25 @@ logger = logging.getLogger(__name__)
 TEMP_EXPIRY_DAYS = 30
 
 
+def _create_bucket(s3_client, settings: StorageEngineSettings, bucket: str) -> None:
+    """Create a bucket, branching on the S3 dialect (developer.md §2a).
+
+    MinIO requires an explicit ``CreateBucketConfiguration.LocationConstraint``
+    even for regions where real AWS S3 REJECTS one: AWS refuses the
+    configuration block for us-east-1 (InvalidLocationConstraint). Send it
+    when an explicit endpoint is configured (MinIO / any S3-compatible — the
+    probed behavior of the managed MinIO deployment, preserved exactly) or
+    when the region genuinely needs it; omit it only for bare AWS us-east-1.
+    """
+    if settings.endpoint is not None or settings.region != "us-east-1":
+        s3_client.create_bucket(
+            Bucket=bucket,
+            CreateBucketConfiguration={"LocationConstraint": settings.region},
+        )
+    else:
+        s3_client.create_bucket(Bucket=bucket)
+
+
 @dataclass(frozen=True)
 class ProvisioningResult:
     institution_slug: str
@@ -51,12 +70,7 @@ def provision_institution(
         if _bucket_exists(s3_client, bucket):
             existing.append(bucket)
         else:
-            # MinIO requires an explicit LocationConstraint even for regions
-            # where AWS S3 would reject one (probed against the managed MinIO deployment).
-            s3_client.create_bucket(
-                Bucket=bucket,
-                CreateBucketConfiguration={"LocationConstraint": settings.region},
-            )
+            _create_bucket(s3_client, settings, bucket)
             created.append(bucket)
             logger.info("provisioned bucket %s", bucket)
 
@@ -117,10 +131,7 @@ def ensure_audit_bucket(s3_client, settings: StorageEngineSettings, bucket: str)
     rule is set so nothing ever ages out implicitly.
     """
     if not _bucket_exists(s3_client, bucket):
-        s3_client.create_bucket(
-            Bucket=bucket,
-            CreateBucketConfiguration={"LocationConstraint": settings.region},
-        )
+        _create_bucket(s3_client, settings, bucket)
         logger.info("provisioned audit bucket %s", bucket)
     s3_client.put_bucket_versioning(Bucket=bucket, VersioningConfiguration={"Status": "Enabled"})
     if settings.kms_key_id is not None:

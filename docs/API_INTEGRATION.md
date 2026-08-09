@@ -203,6 +203,7 @@ ingestion. Fetch them at
 | `rating` | string | no | External rating. |
 | `rating_source` | string | no | Rating agency. |
 | `group_reference` | string | no | Group / parent counterparty reference. |
+| `resident` | boolean | no | Residency relative to the reporting institution's jurisdiction (liquidity-directive classification). Accepts `true`/`false`, `0`/`1`, `"Y"`/`"N"`, `"yes"`/`"no"`. |
 | `external_identifiers` | object | no | e.g. `{"tin": "…", "lei": "…"}` — preserved verbatim. |
 | `attributes` | object | no | Free-form extras. |
 
@@ -237,7 +238,46 @@ ingestion. Fetch them at
 | `rate_index` | string | no | e.g. `GHREF`. |
 | `rate_spread` | number | no | Decimal fraction. |
 | `ifrs9_stage` | integer | no | 1, 2, or 3. |
-| `attributes` | object | no | Instrument specifics (hedge pair, contract rate, MtM, swap legs, ECL, branch, …) — preserved verbatim and used by module fact derivation. |
+| `encumbered` | boolean | no | Asset tied to legal/regulatory/contractual restrictions preventing sale, transfer or pledge (BoG liquidity-directive definition). Unset = treated as unencumbered. Boolean fields accept `true`/`false`, `0`/`1`, `"Y"`/`"N"`, `"yes"`/`"no"`. |
+| `encumbrance_reason` | string | no | What the asset is pledged to (e.g. `"BoG repo"`, `"margin"`). |
+| `owning_entity` | string | no | Legal entity / affiliate owning the asset (collateral management). |
+| `asset_location` | string | no | Where the asset is held (e.g. `"CSD"`) — the unencumbered-assets register's Location column. |
+| `operational_purpose` | boolean | no | Correspondent balance held for operational purposes and readily withdrawable. |
+| `redeemable_within_two_days` | boolean | no | Marketable and redeemable within two working days. |
+| `pledged_as_collateral` | boolean | no | Deposit pledged to secure a credit facility (drives the concentration-netting rule). |
+| `lien_reference` | string | no | Source reference of the facility the deposit secures. |
+| `deposit_account_type` | enum | no | `CURRENT`, `CALL`, `SAVINGS`, `FIXED`, `OTHER` — classifies deposits for the liquidity monitoring tables (volatile = current + call). |
+| `attributes` | object | no | Instrument specifics (hedge pair, contract rate, MtM, swap legs, ECL, branch, …) — preserved verbatim and used by module fact derivation. Documented liquidity-directive conventions below. |
+
+**Liquidity-directive attribute conventions.** The Liquidity Monitoring Tools
+return reads these documented `attributes` keys when present (all optional;
+sections that depend on them render only when a source supplies the data):
+
+| Attribute key | Type | Feeds | Description |
+| --- | --- | --- | --- |
+| `obs_category` | string | Table 2 rows 13/15/16/17 | `lending_facility`, `letter_of_credit`, `guarantee`, or `obs_vehicle_facility`. Defaults: undrawn commitments → lending facilities; LC/guarantees → indemnities and guarantees. |
+| `funding_instrument` | string | Table 8 | `negotiable_paper` marks a liability as a negotiable paper funding instrument. |
+| `collateral_instrument` | string | Table 4 | Display name of collateral received against this position. |
+| `collateral_asset_class` | string | Table 10 | `loans_advances`, `equity`, `debt_government`, `debt_financial`, `debt_nonfinancial`, or `other`. |
+| `collateral_received_ghs` | number | Tables 4, 10 | Fair value of collateral received, available for encumbrance (cedi equivalent). |
+| `collateral_rehypothecable` | boolean | Table 4 | Whether the received collateral can be re-pledged. |
+| `collateral_rehypothecated_ghs` | number | Table 4 | Amount already re-pledged. |
+| `collateral_unavailable_ghs` | number | Table 10 | Nominal of collateral received NOT available for encumbrance. |
+| `collateral_group_issued` | boolean | Table 10 | Collateral issued by other entities of the reporting group. |
+| `collateral_bog_eligible` | boolean | Table 10 | Collateral eligible for central-bank standing facilities. |
+| `own_debt_available_ghs` | number | Table 10 | Own debt securities issued, available for encumbrance. |
+| `own_debt_unavailable_ghs` | number | Table 10 | Own debt securities issued, not available for encumbrance. |
+
+Credit-risk-mitigation conventions on **LOAN** positions (consumed by the
+capital module's CRM recognition; the supervisory haircut comes from the
+bank's `crm-haircuts` register, never from the payload):
+
+| Attribute key | Type | Consumed by | Meaning |
+|---|---|---|---|
+| `crm_collateral_ghs` | number | Credit RWA (CRM) | Eligible collateral value (cedi equivalent) pledged against the loan. |
+| `crm_collateral_class` | string | Credit RWA (CRM) | Collateral class the haircut register keys on (e.g. `CASH`, `GOLD`, `SOVEREIGN_DEBT`, `CORPORATE_DEBT`). Required alongside the value. |
+| `crm_guarantee_ghs` | number | Credit RWA (CRM) | Eligible guarantee amount covering the loan. |
+| `crm_guarantor_class` | string | Credit RWA (CRM) | Guarantor class the haircut register keys on. Required alongside the value. |
 
 ### 3.5 Reference datasets
 

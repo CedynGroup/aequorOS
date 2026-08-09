@@ -21,6 +21,7 @@ from pydantic import ValidationError
 from app.adapters.excel_csv.sheet_analyzer import AnalyzedTable, analyze_sheet
 from app.adapters.excel_csv.type_coercion import (
     CoercionError,
+    coerce_bool,
     coerce_date,
     coerce_int,
     coerce_money,
@@ -60,6 +61,15 @@ _MONEY_FIELDS = frozenset({"balance", "notional"})
 _RATE_FIELDS = frozenset({"interest_rate", "rate_spread"})
 _DATE_FIELDS = frozenset({"origination_date", "contractual_maturity", "next_repricing_date"})
 _INT_FIELDS = frozenset({"ifrs9_stage", "behavioral_maturity_months"})
+_BOOL_FIELDS = frozenset(
+    {
+        "encumbered",
+        "operational_purpose",
+        "redeemable_within_two_days",
+        "pledged_as_collateral",
+        "resident",
+    }
+)
 
 _DATA_MODELS: dict[EntityType, type] = {
     "gl_account": GlAccountData,
@@ -393,6 +403,8 @@ def _coerce_field(canonical_field: str, value: Any, *, dayfirst: bool) -> Any:
         return coerce_date(value, dayfirst=dayfirst)
     if canonical_field in _INT_FIELDS:
         return coerce_int(value)
+    if canonical_field in _BOOL_FIELDS:
+        return coerce_bool(value)
     return coerce_string(value)
 
 

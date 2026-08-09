@@ -333,83 +333,345 @@ _LMT_TEMPLATE = ReturnTemplate(
     sections=(
         *_liquidity_sections(lmt_subset=True),
         SectionLayout(
+            section_code="prudential_ratio_inputs",
+            layout_id="lmt_prudential_inputs_table1",
+            sheet_title="BOG Prudential Ratios",
+            columns=(
+                ColumnSpec("description", "Amounts in GHS '000", "text"),
+                ColumnSpec("value", "Reporting Month", "ghs"),
+                ColumnSpec("previous_month_ghs", "Previous Month", "ghs"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LMTD_CITATION} — Table 1 BOG Prudential Ratios",
+            notes=(
+                "Six inputs computed from the canonical book per the LMTD para 5 "
+                "definitions (Narrow/Broad Liquid Assets leg by leg, Volatile "
+                "liabilities = current + call deposits, short-term liabilities "
+                "with the contractual-by-nature rule). Previous Month renders "
+                "only when a prior period's canonical book exists.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="prudential_ratio_percentages",
+            layout_id="lmt_prudential_percentages_table1",
+            sheet_title="BOG Prudential Ratios (%)",
+            columns=(
+                ColumnSpec("description", "Percentage", "text"),
+                ColumnSpec("value", "Reporting Month", "pct"),
+                ColumnSpec("previous_month_pct", "Previous Month", "pct"),
+                ColumnSpec("threshold_min_pct", "Floor (%)", "pct"),
+                ColumnSpec("threshold_source", "Floor Source", "text"),
+                ColumnSpec("status", "Status", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LMTD_CITATION} — Table 1 BOG Prudential Ratios",
+            notes=(
+                "The printed form carries the first three columns; Floor/Source/"
+                "Status are supervisory annotations from the Board threshold "
+                "register (LMTD para 11(b), ParamLiquidityThreshold) with the "
+                "directive's published bank minimums as the regulatory default. "
+                "Ratios with a zero denominator report status not_computable "
+                "rather than a fabricated percentage. Para 9 note: for SDIs "
+                "these are binding compliance ratios, not monitoring tools.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
             section_code="maturity_ladder",
-            layout_id="lmt_maturity_ladder_partial",
+            layout_id="lmt_maturity_ladder_table2",
             sheet_title="Contractual Maturity Mismatch",
             columns=(
-                ColumnSpec("code", "Bucket", "text"),
-                ColumnSpec("assets_ghs", "Assets (GHS '000)", "ghs"),
-                ColumnSpec("liabilities_ghs", "Liabilities (GHS '000)", "ghs"),
-                ColumnSpec("value", "Mismatch (GHS '000)", "ghs"),
-                ColumnSpec("cumulative_gap_ghs", "Cumulative Mismatch (GHS '000)", "ghs"),
+                ColumnSpec("description", "Contractual Balance Sheet Mismatch", "text"),
+                ColumnSpec("code", "#", "text"),
+                ColumnSpec("value", "Total", "ghs"),
+                ColumnSpec("next_day_ghs", "Next Day", "ghs"),
+                ColumnSpec("d2_7_ghs", "2 - 7 days", "ghs"),
+                ColumnSpec("d8_14_ghs", "8 - 14 days", "ghs"),
+                ColumnSpec("d15_1m_ghs", "15 days to 1 mth", "ghs"),
+                ColumnSpec("m1_2_ghs", "1 - 2 mths", "ghs"),
+                ColumnSpec("m2_3_ghs", "2 - 3 mths", "ghs"),
+                ColumnSpec("m3_6_ghs", "3 - 6 mths", "ghs"),
+                ColumnSpec("m6_9_ghs", "6 - 9 mths", "ghs"),
+                ColumnSpec("m9_12_ghs", "9 mths - 1 yr", "ghs"),
+                ColumnSpec("y1_2_ghs", "1 - 2 yrs", "ghs"),
+                ColumnSpec("y2_3_ghs", "2 - 3 yrs", "ghs"),
+                ColumnSpec("y3_5_ghs", "3 - 5 yrs", "ghs"),
+                ColumnSpec("y5_plus_ghs", "> 5 yrs", "ghs"),
+                ColumnSpec("non_contractual_ghs", "Non-contractual", "ghs"),
             ),
-            fidelity="PARTIAL",
+            fidelity="CONFIRMED",
             source_citation=f"{_LMTD_CITATION} — Table 2 Contractual Cash Flow Mismatch",
             notes=(
-                "Condensed bucket set (overnight / 2-7d / 8-30d / 1-3m / 3-6m / 6-12m / "
-                ">1y + non-contractual) derived from canonical contractual maturities; "
-                "the published Table 2 carries 15 columns and an off-balance block the "
-                "canonical data does not yet fill. Positions without a stated maturity "
-                "report in the separate non-contractual row (Table 2's final column), "
-                "never in overnight.",
+                "Full published grid: rows 1-17 (assets/liabilities categories, "
+                "stable vs volatile deposits, on-balance mismatch + cumulative, and "
+                "the off-balance block rows 12-17) x the 13 dated buckets + Total + "
+                "Non-contractual. Deposits split on the ingested deposit_account_type "
+                "(volatile = current + call, LMTD para 5); derivative-family "
+                "instruments split by carrying-value sign; OBS rows classify on "
+                "attributes['obs_category'] with documented defaults (commitments to "
+                "row 15, LC/guarantees to row 17). Bucket bounds are calendar-"
+                "approximate day counts. Positions without a stated maturity report "
+                "in the Non-contractual column, never in Next Day; the cumulative "
+                "row runs across dated buckets only, as printed.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="items_no_contractual_maturity",
+            layout_id="lmt_no_maturity_table3",
+            sheet_title="Items with No Contractual Maturity",
+            columns=(
+                ColumnSpec("code", "#", "text"),
+                ColumnSpec(
+                    "description",
+                    "Name of Instrument/investments/Item without contractual maturity",
+                    "text",
+                ),
+                ColumnSpec("value", "Amount (GHS'000)", "ghs"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_LMTD_CITATION} — Table 3 Information on Investments and Items "
+                "with No Contractual Maturity"
+            ),
+            notes=(
+                "Non-contractual positions excluding deposits (whose undated "
+                "treatment lives in Table 2 rows 6-7), itemized by instrument.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="collateral_rehypothecation",
+            layout_id="lmt_rehypothecation_table4",
+            sheet_title="Customer Collateral Received",
+            columns=(
+                ColumnSpec("code", "#", "text"),
+                ColumnSpec("description", "Name of Instrument", "text"),
+                ColumnSpec("total_amounts_ghs", "Total Amounts (A)", "ghs"),
+                ColumnSpec("hypothecated_ghs", "Amounts already hypothecated (B)", "ghs"),
+                ColumnSpec("value", "Amount Available C = (A-B)", "ghs"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LMTD_CITATION} — Table 4 Customer Collateral Received",
+            notes=(
+                "Customer collateral which can be re-hypothecated, from the "
+                "documented collateral_* position-attribute conventions; renders "
+                "only when a source supplies re-hypothecable collateral.",
             ),
             optional=True,
         ),
         SectionLayout(
             section_code="funding_concentration",
-            layout_id="lmt_funding_concentration_partial",
-            sheet_title="Concentration of Funding",
+            layout_id="lmt_funding_concentration_table5",
+            sheet_title="Funding from Significant Counterparties",
             columns=(
-                ColumnSpec("code", "Rank", "text"),
-                ColumnSpec("description", "Depositor", "text"),
-                ColumnSpec("counterparty_type", "Counterparty Type", "text"),
-                ColumnSpec("value", "Deposits (GHS '000)", "ghs"),
-                ColumnSpec("pct_total_deposits", "% of Total Deposits", "pct"),
+                ColumnSpec("code", "#", "text"),
+                ColumnSpec(
+                    "description",
+                    "Name of Significant Counterparty (1% of Total Assets)",
+                    "text",
+                ),
+                ColumnSpec("value", "Amount of Funding", "ghs"),
+                ColumnSpec("pct_total_liabilities", "Percentage of Total Liabilities", "pct"),
+                ColumnSpec("related_party", "Intragroup or related parties (Yes or No)", "text"),
             ),
-            fidelity="PARTIAL",
-            source_citation=f"{_LMTD_CITATION} — Table 5 Funding from Significant Counterparties",
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_LMTD_CITATION} — Table 5 Funding Liabilities Sourced from "
+                "Significant Counterparties"
+            ),
             notes=(
-                "Top-10 depositors by canonical counterparty from DEPOSIT positions; "
-                "the published Table 5 asks Top 20 and Top 100 and Tables 7-8 add "
-                "maturity horizons the canonical counterparty links do not yet fill. "
-                "Deposits without a counterparty link count in the total but cannot "
-                "be ranked.",
+                "Selection is the directive's rule: connected counterparties "
+                "(Large Exposures grouping) whose funding exceeds 1% of Total "
+                "Assets — a population, not a Top-N cut. The Top-20/Top-100 "
+                "totals and percentage rows apply para-23's netting (pledged "
+                "deposits leave both numerator and denominator). The related-"
+                "party flag comes from the source's counterparty flag or the "
+                "institution's related-party register.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="assets_liabilities_by_currency",
+            layout_id="lmt_currency_mismatch_table6",
+            sheet_title="Assets and Liabilities by Significant Currency",
+            columns=(
+                ColumnSpec("code", "Name of Significant Currency", "text"),
+                ColumnSpec("assets_ghs", "Assets", "ghs"),
+                ColumnSpec("liabilities_ghs", "Liabilities", "ghs"),
+                ColumnSpec("value", "Mismatch (2-3)", "ghs"),
+                ColumnSpec(
+                    "mismatch_pct_total_liabilities",
+                    "Mismatch as a Percentage of Total Liabilities",
+                    "pct",
+                ),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_LMTD_CITATION} — Table 6 List of Assets and Liabilities by "
+                "Significant Currencies"
+            ),
+            notes=(
+                "A currency is significant when liabilities denominated in it are "
+                ">= 5% of total liabilities (LMTD para 30/41); rows are the "
+                "significant currencies, largest liability base first; amounts are "
+                "cedi equivalents from ingested conversions.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="maturity_of_exposures",
+            layout_id="lmt_maturity_of_exposures_table7",
+            sheet_title="Time Buckets of Maturity of Exposures",
+            columns=(
+                ColumnSpec("description", "Item", "text"),
+                ColumnSpec("m_lt1_ghs", "<1", "ghs"),
+                ColumnSpec("m1_3_ghs", "1 - 3", "ghs"),
+                ColumnSpec("m3_6_ghs", "3 - 6", "ghs"),
+                ColumnSpec("m6_12_ghs", "6 - 12", "ghs"),
+                ColumnSpec("m_gt12_ghs", ">12", "ghs"),
+                ColumnSpec("value", "Total", "ghs"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LMTD_CITATION} — Table 7 Time Buckets of Maturity of Exposures",
+            notes=(
+                "Blocks as printed: A Top-20 depositors, B funding from each "
+                "significant counterparty, C assets and D liabilities by "
+                "significant currency — across para-31's five month horizons. "
+                "Undated demand-natured positions report in <1 month; other "
+                "undated in >12 — a maturity is never fabricated.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="deposit_funding_concentration",
+            layout_id="lmt_deposit_concentration_table8",
+            sheet_title="Concentration of Deposit Funding",
+            columns=(
+                ColumnSpec("description", "Concentration of deposit funding", "text"),
+                ColumnSpec("value", "Total", "ghs"),
+                ColumnSpec("next_day_ghs", "Next day", "ghs"),
+                ColumnSpec("d2_7_ghs", "2 to 7 days", "ghs"),
+                ColumnSpec("d8_1m_ghs", "8 days to 1 month", "ghs"),
+                ColumnSpec("m1_2_ghs", "1 to 2 months", "ghs"),
+                ColumnSpec("m2_3_ghs", "2 to 3 months", "ghs"),
+                ColumnSpec("m3_6_ghs", "3 to 6 months", "ghs"),
+                ColumnSpec("m6_12_ghs", "6 to 12 months", "ghs"),
+                ColumnSpec("m_gt12_ghs", "> 12 months", "ghs"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_LMTD_CITATION} — Table 8 Concentration of Deposit Funding",
+            notes=(
+                "Rows as printed: associates funding, twenty largest depositors, "
+                "twenty largest financial-institution balances, twenty largest "
+                "government/parastatal balances, and negotiable paper funding "
+                "instruments with the two of-which sub-rows. Built to the printed "
+                "nine buckets; para 31 names five — the discrepancy is a recorded "
+                "question to the regulator, and the filed template wins. "
+                "Negotiable paper fills from the documented "
+                "attributes['funding_instrument'] convention.",
             ),
             optional=True,
         ),
         SectionLayout(
             section_code="unencumbered_assets",
-            layout_id="lmt_unencumbered_assets_partial",
+            layout_id="lmt_unencumbered_assets_table9",
             sheet_title="Available Unencumbered Assets",
             columns=(
-                ColumnSpec("code", "Item", "text"),
+                ColumnSpec("code", "S/No.", "text"),
                 ColumnSpec("description", "Description", "text"),
-                ColumnSpec("hqla_level", "HQLA Level", "text"),
-                ColumnSpec("value", "Value (GHS '000)", "ghs"),
+                ColumnSpec("asset_type", "Asset Type & Nature", "text"),
+                ColumnSpec("location", "Location", "text"),
+                ColumnSpec("value", "Value in Cedi ('000)", "ghs"),
+                ColumnSpec("haircut_pct", "Estimated Haircut (%)", "pct"),
+                ColumnSpec("monetized_value_ghs", "Monetized Value of Collateral", "ghs"),
             ),
-            fidelity="PARTIAL",
+            fidelity="CONFIRMED",
             source_citation=(
                 f"{_LMTD_CITATION} — Table 9 Statement of Available Unencumbered Assets"
             ),
             notes=(
-                "HQLA-classified securities facts; the canonical model carries no "
-                "encumbrance flags, secondary-market haircuts or monetised values, so "
-                "those Table 9 columns are omitted rather than invented.",
+                "All seven printed columns and three sections: A secondary-market "
+                "marketable (non-sovereign), B BoG standing-facility eligible, C by "
+                "significant currency (para-36 denominator: 5% of total available "
+                "unencumbered collateral). Haircuts and monetized values resolve "
+                "from the institution's LRMD para-60-63 liquidity-value schedule; "
+                "an uncalibrated asset class reports haircut_source=unset with a "
+                "zero haircut rather than an invented number.",
             ),
             optional=True,
         ),
+        SectionLayout(
+            section_code="collateral_received",
+            layout_id="lmt_collateral_received_table10",
+            sheet_title="Collateral Received",
+            columns=(
+                ColumnSpec("description", "Collateral received by the reporting bank", "text"),
+                ColumnSpec("value", "Fair value available for encumbrance — Total", "ghs"),
+                ColumnSpec("group_issued_ghs", "Issued by other entities of the group", "ghs"),
+                ColumnSpec("bog_eligible_ghs", "BOG eligible", "ghs"),
+                ColumnSpec("unavailable_ghs", "Nominal not available for encumbrance", "ghs"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_LMTD_CITATION} — Table 10 Collateral received by the reporting "
+                "financial institution"
+            ),
+            notes=(
+                "Rows as printed (loans and advances, equity, the three debt-"
+                "security issuer classes, other collateral, own debt securities, "
+                "grand total), filled from the documented collateral_* / "
+                "own_debt_* position-attribute conventions "
+                "(docs/API_INTEGRATION.md section 3.4). The section renders only "
+                "when a source supplies collateral data.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="lcr_by_currency",
+            layout_id="lmt_lcr_by_currency_table11",
+            sheet_title="LCR by Significant Currency",
+            columns=(
+                ColumnSpec("description", "LCR by Significant Currency", "text"),
+                ColumnSpec("cedi_ghs", "Cedi", "ghs"),
+                ColumnSpec("usd_ghs", "USD", "ghs"),
+                ColumnSpec("pound_ghs", "Pound", "ghs"),
+                ColumnSpec("euro_ghs", "Euro", "ghs"),
+                ColumnSpec("others_ghs", "Others", "ghs"),
+                ColumnSpec("value", "All Currencies", "ghs"),
+            ),
+            fidelity="PARTIAL",
+            source_citation=f"{_LMTD_CITATION} — Table 11 LCR by Significant Currency",
+            notes=(
+                "Printed fixed columns (Cedi/USD/Pound/Euro/Others), values in cedi "
+                "equivalents. Calibration posture, stated not hidden: HQLA Level 1 "
+                "from canonical classification; Levels 2A/2B zero (no canonical L2 "
+                "taxonomy — never invented); outflows on the most conservative "
+                "contractual basis (maturing <= 30 days + demand deposits in full) "
+                "pending the unpublished LCR Directive's run-off calibration; "
+                "inflows contractual <= 30 days under the Basel 75% cap. The "
+                "printed form labels Net Cash Outflow '(2-1)', which inverts the "
+                "LCR; implemented as (1-2) and recorded as a deviation.",
+            ),
+            optional=True,
+        ),
+
     ),
     notes=(
-        "Retires TODO(RR-6): beyond the LCR-by-significant-currency subset (Table 11 "
-        "taxonomy, aggregate currency), the return now carries a contractual "
-        "maturity-mismatch ladder (condensed Table 2), top-10 depositor funding "
-        "concentration (Table 5 subset) and available HQLA-classified assets (Table 9 "
-        "subset) derived from canonical data. Tool sections appear only when their "
-        "underlying data exists — empty grids are never fabricated.",
-        "LMTD Appendix Tables 1 (BOG Prudential Ratios), 3-4, 6-8 and 10 remain "
-        "unfilled: the canonical data honestly carries no prudential-ratio series, "
-        "collateral re-hypothecation, significant-currency split or horizon-bucketed "
-        "depositor data yet.",
+        "Beyond the LCR subset (Table 11 taxonomy, aggregate currency), the return "
+        "carries the FULL published Table 2 contractual maturity-mismatch grid "
+        "(17 rows x 15 columns, CONFIRMED — rebuilt 2026-08-07 from the LMTD "
+        "appendix), top-10 depositor funding concentration (Table 5 subset) and "
+        "available HQLA-classified assets (Table 9 subset) derived from canonical "
+        "data. Tool sections appear only when their underlying data exists — empty "
+        "grids are never fabricated.",
+        "All eleven LMTD appendix tables render as of 2026-08-07. Tables 1-3 "
+        "and 5-10 are CONFIRMED against the published forms; Tables 4 and 10 "
+        "fill from the documented collateral attribute conventions and render "
+        "only when a source supplies the data; Table 11 renders the full "
+        "published per-currency grid with a documented conservative "
+        "calibration pending the unpublished LCR Directive.",
         _T_MINUS_1_NOTE,
     ),
 )
@@ -988,6 +1250,194 @@ _ICAAP_STRESS_TEMPLATE = ReturnTemplate(
 )
 
 # ---------------------------------------------------------------------------
+# Stress Test Output Report pack (product.md §Phase 2 item 6)
+# ---------------------------------------------------------------------------
+
+_STRESS_PACK_CITATION = (
+    "Stress Testing Guideline (Feb 2026) ¶¶24–27 — results reported to Board and "
+    "senior management with remedial actions; the output-report structure is "
+    "AequorOS's own standardized Board/ALCO artifact, not a published BoG template"
+)
+
+_STRESS_PACK_TEMPLATE = ReturnTemplate(
+    template_id="aeq-stress-pack-v1",
+    return_code="STRESS-PACK",
+    title="Stress Test Output Report pack",
+    fidelity="REPRESENTATIVE",
+    source_citation=_STRESS_PACK_CITATION,
+    attestation_lines=BOARD_ATTESTATION_LINES,
+    sections=(
+        SectionLayout(
+            section_code="traffic_lights",
+            layout_id="stress_traffic_lights_representative",
+            sheet_title="Stress Outcome Traffic Lights",
+            columns=(
+                _CODE,
+                _ITEM,
+                ColumnSpec("value", "Value", "auto"),
+                ColumnSpec("threshold", "Threshold", "auto"),
+                ColumnSpec("status", "Status", "text"),
+                ColumnSpec("module", "Module", "text"),
+                ColumnSpec("scenario_code", "Scenario", "text"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — values, thresholds and green/amber/red "
+                "classifications are the engines' stored headline metric results, "
+                "re-tabulated without reclassification"
+            ),
+        ),
+        SectionLayout(
+            section_code="ratio_evolution",
+            layout_id="stress_ratio_evolution_representative",
+            sheet_title="Capital Ratio Evolution Under Stress",
+            columns=(
+                ColumnSpec("code", "Scenario / Quarter", "text"),
+                _ITEM,
+                ColumnSpec("value", "CAR (%)", "pct"),
+                ColumnSpec("cet1_ratio_pct", "CET1 (%)", "pct"),
+                ColumnSpec("tier1_ratio_pct", "Tier 1 (%)", "pct"),
+                ColumnSpec("leverage_ratio_pct", "Leverage (%)", "pct"),
+                ColumnSpec("total_rwa_ghs", "Total RWA (GHS '000)", "ghs"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — quarterly path from each stored "
+                "capital-stress run"
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="pro_forma_capital",
+            layout_id="stress_pro_forma_representative",
+            sheet_title="Pro-Forma Capital (Stress End-State)",
+            columns=(
+                ColumnSpec("code", "Scenario", "text"),
+                _ITEM,
+                ColumnSpec("value", "Total Capital (GHS '000)", "ghs"),
+                ColumnSpec("cet1_capital_ghs", "CET1 Capital (GHS '000)", "ghs"),
+                ColumnSpec("tier1_capital_ghs", "Tier 1 Capital (GHS '000)", "ghs"),
+                ColumnSpec("total_rwa_ghs", "Total RWA (GHS '000)", "ghs"),
+                ColumnSpec("end_car_pct", "End CAR (%)", "pct"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — final-quarter capital stack per stored "
+                "capital-stress run"
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="attribution",
+            layout_id="stress_attribution_representative",
+            sheet_title="Scenario Attribution vs Baseline",
+            columns=(
+                _CODE,
+                _ITEM,
+                ColumnSpec("value", "Impact (pp)", "pct"),
+                ColumnSpec("baseline_pct", "Baseline (%)", "pct"),
+                ColumnSpec("stressed_pct", "Stressed (%)", "pct"),
+                ColumnSpec("scenario_code", "Scenario", "text"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — scenario-minus-baseline deltas over the "
+                "same canonical book (both runs anchor to the baseline input hash)"
+            ),
+        ),
+        SectionLayout(
+            section_code="reverse_stress_frontier",
+            layout_id="stress_reverse_frontier_representative",
+            sheet_title="Reverse-Stress Frontier",
+            columns=(
+                _CODE,
+                _ITEM,
+                ColumnSpec("value", "Severity Multiplier (x)", "number"),
+                ColumnSpec("breached", "Breached", "text"),
+                ColumnSpec("floor_pct", "Floor (%)", "pct"),
+                ColumnSpec("ratio_at_breach_pct", "Ratio at Breach (%)", "pct"),
+                ColumnSpec("scenario_code", "Scenario Scaled", "text"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — frontier from the latest stored "
+                "reverse-stress run (bisection over both engines); absent until "
+                "one exists"
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="recommended_actions",
+            layout_id="stress_recommended_actions_representative",
+            sheet_title="Recommended Actions",
+            columns=(
+                _CODE,
+                ColumnSpec("description", "Recommended Action", "text"),
+                ColumnSpec("value", "Reference Level", "auto"),
+                ColumnSpec("scenario_code", "Scenario", "text"),
+                ColumnSpec("module", "Module", "text"),
+            ),
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                f"{_STRESS_PACK_CITATION} — the capital engine's fired trigger "
+                "actions plus deterministic funding-remediation lines for "
+                "amber/red liquidity ratios"
+            ),
+            optional=True,
+        ),
+    ),
+    notes=(
+        "Board/ALCO artifact (event-driven, no BoG filing deadline): every figure "
+        "re-tabulates stored engine runs — the pack computes nothing itself, so "
+        "each number traces to a run input hash in source_runs.",
+        "Mixed units: traffic-light and action rows carry their own unit field "
+        "(pct/ghs) and render via auto columns.",
+    ),
+)
+
+# ---------------------------------------------------------------------------
+# Template-gated returns (Phase 2 items 12/14) — real obligations whose BoG
+# forms are unpublished. Zero sections by design: the layout is never
+# inferred, and generation refuses with error_code "template_pending".
+# ---------------------------------------------------------------------------
+
+_BSD_MONTHLY_TEMPLATE = ReturnTemplate(
+    template_id="bog-bsd-monthly-pending",
+    return_code="BSD-MONTHLY",
+    title="Monthly BSD Prudential Pack (Balance Sheet + P&L)",
+    fidelity="REPRESENTATIVE",
+    source_citation=(
+        "BoG monthly BSD prudential returns — official layout not yet obtained; "
+        "the form is acquired, never inferred (validation register)"
+    ),
+    sections=(),
+    notes=(
+        "Registered so the monthly obligation appears in the compliance calendar; "
+        "generation is gated until the official BoG form is registered.",
+    ),
+)
+
+_LAS_QUARTERLY_TEMPLATE = ReturnTemplate(
+    template_id="bog-las-quarterly-pending",
+    return_code="LAS-QUARTERLY",
+    title="Quarterly Liquidity Adequacy Statement (LAS)",
+    fidelity="REPRESENTATIVE",
+    source_citation=(
+        "LRMD 2026 ¶12 — quarterly Board LAS, ILAAP-supported; no published "
+        "template, and the Board-level signer convention is an open question "
+        "(lrmd_gap_analysis.md §9 Q12)"
+    ),
+    attestation_lines=BOARD_ATTESTATION_LINES,
+    sections=(),
+    notes=(
+        "Registered so the quarterly obligation appears in the compliance calendar; "
+        "generation is gated until the official form is registered. The quarterly "
+        "ILAAP snapshot (capital-plan workspace) is the prepared substance this "
+        "filing will draw on.",
+    ),
+)
+
+# ---------------------------------------------------------------------------
 # LRT corporate return packs (plan W5) — event-driven master-data packs
 # ---------------------------------------------------------------------------
 
@@ -1387,6 +1837,9 @@ TEMPLATES: dict[str, ReturnTemplate] = {
         _DBK_DAILY_TEMPLATE,
         _LE_TEMPLATE,
         _ICAAP_STRESS_TEMPLATE,
+        _STRESS_PACK_TEMPLATE,
+        _BSD_MONTHLY_TEMPLATE,
+        _LAS_QUARTERLY_TEMPLATE,
         _LRT_PROFILE_TEMPLATE,
         _LRT_OUTLET_TEMPLATE,
         _LRT_PARTY_TEMPLATE,

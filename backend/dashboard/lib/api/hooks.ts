@@ -19,6 +19,12 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type {
+  LiveModule,
+  AnalysisRunCreate,
+  SavedAnalysisCreate,
+  StressScenarioCreate,
+  StressScenarioUpdate,
+  WorkbenchModule,
   AdoptSignatureRequest,
   ApprovalDecision,
   ArtifactKind,
@@ -34,10 +40,15 @@ import type {
   CashflowHorizon,
   CertifyAndSendRequest,
   ChannelCode,
+  CrmHaircutUpdate,
+  EclAssumptionUpdate,
+  EwiRegisterPut,
   ForecastRunCreate,
   InstitutionProfilePut,
+  LiquidityThresholdUpdate,
   MarketDataConnectionCreate,
   MarketDataConnectionUpdate,
+  MarketDataOverlayCreate,
   OutletCreate,
   OutletUpdate,
   PackageStatusFilter,
@@ -63,12 +74,19 @@ import {
   banksApi,
   behavioralModelsApi,
   cashflowForecastApi,
+  cashflowWindowApi,
+  creditParamsApi,
   forecastingApi,
   institutionProfileApi,
   integrationKeysApi,
+  liquidityCfpApi,
+  liquidityThresholdsApi,
   isApiError,
   jobsApi,
+  reverseStressApi,
+  scenarioWorkbenchApi,
   liveEngineApi,
+  windowAnalyticsApi,
   marketDataApi,
   notificationsApi,
   organizationApi,
@@ -1070,6 +1088,77 @@ export function useMarketDataViews(bankId: string | undefined, asOf?: string) {
       ),
     enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Per-bank market data overlays (spec §9): the bank's private spread layer on
+// the published golden copy. Mutations invalidate both the overlay list and
+// the composed views (adjusted curves are computed server-side at read time).
+// ---------------------------------------------------------------------------
+
+const overlayInvalidatePrefixes = ['md-overlays', 'md-views'];
+
+export function useMarketDataOverlays(
+  bankId: string | undefined,
+  options?: { includeHistory?: boolean; baseCurveName?: string }
+) {
+  return useQuery({
+    queryKey: [
+      'md-overlays',
+      bankId,
+      options?.includeHistory ?? false,
+      options?.baseCurveName ?? null,
+    ],
+    queryFn: () =>
+      apiCall(() =>
+        marketDataApi.listMarketDataOverlays({
+          bankId: bankId!,
+          includeHistory: options?.includeHistory,
+          baseCurveName: options?.baseCurveName,
+        })
+      ),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useCreateMarketDataOverlay(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: MarketDataOverlayCreate) =>
+      apiCall(() =>
+        marketDataApi.createMarketDataOverlay({
+          bankId: bankId!,
+          marketDataOverlayCreate: payload,
+        })
+      ),
+    onSuccess: () => {
+      overlayInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+export function useEndMarketDataOverlay(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { overlayId: string; effectiveTo: string }) =>
+      apiCall(() =>
+        marketDataApi.endMarketDataOverlay({
+          bankId: bankId!,
+          overlayId: payload.overlayId,
+          marketDataOverlayEnd: {
+            effectiveTo: new Date(`${payload.effectiveTo}T00:00:00Z`),
+          },
+        })
+      ),
+    onSuccess: () => {
+      overlayInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
   });
 }
 
@@ -2772,3 +2861,383 @@ export function useUpsertSigningPolicy() {
     },
   });
 }
+
+// --- Phase 2: EWI / CFP / threshold registers / reverse stress -------------
+
+export function useEwiDashboard(bankId: string | undefined, periodId: string | undefined) {
+  return useQuery({
+    queryKey: ['ewi-dashboard', bankId, periodId],
+    queryFn: () =>
+      apiCall(() =>
+        liquidityCfpApi.getLiquidityEwiDashboard({
+          bankId: bankId!,
+          reportingPeriodId: periodId!,
+        })
+      ),
+    enabled: Boolean(bankId && periodId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useCfpSummary(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['cfp-summary', bankId],
+    queryFn: () => apiCall(() => liquidityCfpApi.getContingencyFundingPlan({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useCfpEvents(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['cfp-events', bankId],
+    queryFn: () =>
+      apiCall(() => liquidityCfpApi.listContingencyFundingPlanEvents({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useLiquidityThresholdRegister(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['liq-thresholds', bankId],
+    queryFn: () =>
+      apiCall(() => liquidityThresholdsApi.getLiquidityThresholdRegister({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useLiquidityHaircutSchedule(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['liq-haircuts', bankId],
+    queryFn: () =>
+      apiCall(() => liquidityThresholdsApi.getLiquidityHaircutSchedule({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useLatestReverseStress(
+  bankId: string | undefined,
+  periodId: string | undefined
+) {
+  return useQuery({
+    queryKey: ['reverse-stress', bankId, periodId],
+    queryFn: async () => {
+      try {
+        return await apiCall(() =>
+          reverseStressApi.getLatestReverseStress({
+            bankId: bankId!,
+            reportingPeriodId: periodId!,
+          })
+        );
+      } catch (error) {
+        // No frontier run yet is a normal state, not an error banner.
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+    enabled: Boolean(bankId && periodId),
+  });
+}
+
+export function useRunReverseStress(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (periodId: string) =>
+      apiCall(() =>
+        reverseStressApi.runReverseStress({
+          bankId: bankId!,
+          reverseStressRunCreate: { reportingPeriodId: periodId },
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['reverse-stress'] });
+    },
+  });
+}
+
+// --- Scenario Workbench ------------------------------------------------------
+
+export function useScenarioCatalogue(
+  bankId: string | undefined,
+  module: WorkbenchModule,
+  periodId: string | undefined
+) {
+  return useQuery({
+    queryKey: ['scenario-catalogue', bankId, module, periodId],
+    queryFn: () =>
+      apiCall(() =>
+        scenarioWorkbenchApi.listScenarioCatalogue({
+          bankId: bankId!,
+          module,
+          reportingPeriodId: periodId,
+        })
+      ),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useRunScenarioAnalysis(bankId: string | undefined, module: WorkbenchModule) {
+  return useMutation({
+    mutationFn: (payload: AnalysisRunCreate) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.runScenarioAnalysis({
+          bankId: bankId!,
+          module,
+          analysisRunCreate: payload,
+        })
+      ),
+  });
+}
+
+export function useCreateStressScenario(bankId: string | undefined, module: WorkbenchModule) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: StressScenarioCreate) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.createStressScenario({
+          bankId: bankId!,
+          module,
+          stressScenarioCreate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['scenario-catalogue', bankId, module] });
+    },
+  });
+}
+
+export function useUpdateStressScenario(bankId: string | undefined, module: WorkbenchModule) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ scenarioId, payload }: { scenarioId: string; payload: StressScenarioUpdate }) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.updateStressScenario({
+          bankId: bankId!,
+          module,
+          scenarioId,
+          stressScenarioUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['scenario-catalogue', bankId, module] });
+    },
+  });
+}
+
+export function useArchiveStressScenario(bankId: string | undefined, module: WorkbenchModule) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ scenarioId, isArchived }: { scenarioId: string; isArchived: boolean }) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.archiveStressScenario({
+          bankId: bankId!,
+          module,
+          scenarioId,
+          stressScenarioArchive: { isArchived },
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['scenario-catalogue', bankId, module] });
+    },
+  });
+}
+
+export function useSavedAnalyses(bankId: string | undefined, module: WorkbenchModule) {
+  return useQuery({
+    queryKey: ['scenario-analyses', bankId, module],
+    queryFn: () =>
+      apiCall(() => scenarioWorkbenchApi.listScenarioAnalyses({ bankId: bankId!, module })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useSaveScenarioAnalysis(bankId: string | undefined, module: WorkbenchModule) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SavedAnalysisCreate) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.saveScenarioAnalysis({
+          bankId: bankId!,
+          module,
+          savedAnalysisCreate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['scenario-analyses', bankId, module] });
+    },
+  });
+}
+
+export function useDeleteScenarioAnalysis(bankId: string | undefined, module: WorkbenchModule) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (analysisId: string) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.deleteScenarioAnalysis({ bankId: bankId!, module, analysisId })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['scenario-analyses', bankId, module] });
+    },
+  });
+}
+
+
+// --- Board registers (Governance → Board Registers editor surface) ---------
+// Reads pair with the existing register hooks above (['liq-thresholds'],
+// ['ewi-dashboard']); the credit-parameter registers get their own keys here.
+// Every PUT is approver-gated server-side and audited — the payloads carry
+// the Board evidence (approved_by + reason), never a bare value change.
+
+export function useCrmHaircutRegister(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['crm-haircuts', bankId],
+    queryFn: () => apiCall(() => creditParamsApi.getCrmHaircutRegister({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useEclAssumptionRegister(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['ecl-assumptions', bankId],
+    queryFn: () => apiCall(() => creditParamsApi.getEclAssumptionRegister({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useUpdateLiquidityThresholdRegister(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: LiquidityThresholdUpdate) =>
+      apiCall(() =>
+        liquidityThresholdsApi.updateLiquidityThresholdRegister({
+          bankId: bankId!,
+          liquidityThresholdUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['liq-thresholds', bankId] });
+      // Threshold generations feed the monitoring/liquidity views.
+      void queryClient.invalidateQueries({ queryKey: ['liq-dashboard', bankId] });
+    },
+  });
+}
+
+export function useUpdateLiquidityEwiRegister(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: EwiRegisterPut) =>
+      apiCall(() =>
+        liquidityCfpApi.updateLiquidityEwiRegister({
+          bankId: bankId!,
+          ewiRegisterPut: payload,
+        })
+      ),
+    onSuccess: () => {
+      // Prefix-invalidates every period's dashboard read.
+      void queryClient.invalidateQueries({ queryKey: ['ewi-dashboard', bankId] });
+    },
+  });
+}
+
+export function useUpdateCrmHaircutRegister(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CrmHaircutUpdate) =>
+      apiCall(() =>
+        creditParamsApi.updateCrmHaircutRegister({
+          bankId: bankId!,
+          crmHaircutUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['crm-haircuts', bankId] });
+    },
+  });
+}
+
+export function useUpdateEclAssumptionRegister(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: EclAssumptionUpdate) =>
+      apiCall(() =>
+        creditParamsApi.updateEclAssumptionRegister({
+          bankId: bankId!,
+          eclAssumptionUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ecl-assumptions', bankId] });
+    },
+  });
+}
+
+/**
+ * Plane-2 daily ladder for one bank+module: past days are EOD closes, the
+ * newest row is the live edge. Powers prior-close deltas and daily sparklines.
+ */
+export function useLiveSnapshots(
+  bankId: string | undefined,
+  module: LiveModule,
+  days = 45
+) {
+  return useQuery({
+    queryKey: ['live-snapshots', bankId, module, days],
+    queryFn: () =>
+      apiCall(() =>
+        liveEngineApi.listLiveSnapshots({ bankId: bankId!, module, days })
+      ),
+    enabled: Boolean(bankId),
+    refetchInterval: 120_000,
+  });
+}
+
+/**
+ * Engine-computed window analytics over [start, end] (ISO yyyy-mm-dd):
+ * per-period ratio series (stored baseline runs first, inline fallback),
+ * window statistics, and daily-snapshot aggregates. Fires only when enabled —
+ * the Compute button on the Command Center gates it.
+ */
+export function useWindowAnalytics(
+  bankId: string | undefined,
+  start: string | undefined,
+  end: string | undefined,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: ['window-analytics', bankId, start ?? null, end ?? null],
+    queryFn: () =>
+      apiCall(() =>
+        windowAnalyticsApi.computeWindowAnalytics({
+          bankId: bankId!,
+          startDate: new Date(start!),
+          endDate: new Date(end!),
+        })
+      ),
+    enabled: enabled && Boolean(bankId && start && end),
+  });
+}
+
+/**
+ * Contractual cash-flow window over [start, end] (ISO yyyy-mm-dd): the current
+ * canonical book's maturities bucketed per currency and calendar month
+ * server-side. Fires only when enabled — the panel's Compute button gates it.
+ */
+export function useCashflowWindow(
+  bankId: string | undefined,
+  start: string | undefined,
+  end: string | undefined,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: ['cashflow-window', bankId, start ?? null, end ?? null],
+    queryFn: () =>
+      apiCall(() =>
+        cashflowWindowApi.computeCashflowWindow({
+          bankId: bankId!,
+          startDate: new Date(start!),
+          endDate: new Date(end!),
+        })
+      ),
+    enabled: enabled && Boolean(bankId && start && end),
+  });
+}
+

@@ -31,6 +31,39 @@ const STEP_INDEX: Partial<Record<PackageStatus, number>> = {
   acknowledged: 5,
 };
 
+/**
+ * The workspace stage a package status maps onto — the returns workspace
+ * chooses its primary panels from this. Declined is the regulator's final
+ * refusal and shares the rejected stage; draft is vestigial (packages are
+ * minted `generated`) and falls back to the first stage.
+ */
+export type LifecycleStage =
+  | 'generated'
+  | 'validated'
+  | 'pending_approval'
+  | 'approved'
+  | 'submitted'
+  | 'acknowledged'
+  | 'rejected'
+  | 'superseded';
+
+const STAGE_FOR: Partial<Record<PackageStatus, LifecycleStage>> = {
+  draft: 'generated',
+  generated: 'generated',
+  validated: 'validated',
+  pending_approval: 'pending_approval',
+  approved: 'approved',
+  submitted: 'submitted',
+  acknowledged: 'acknowledged',
+  rejected: 'rejected',
+  declined: 'rejected',
+  superseded: 'superseded',
+};
+
+export function stageFor(status: PackageStatus): LifecycleStage {
+  return STAGE_FOR[status] ?? 'generated';
+}
+
 export default function LifecycleStepper({ status }: { status: PackageStatus }) {
   const terminal =
     status === 'rejected' || status === 'declined' || status === 'superseded'
@@ -45,7 +78,7 @@ export default function LifecycleStepper({ status }: { status: PackageStatus }) 
     : STEP_INDEX[status] ?? -1;
 
   return (
-    <div className="flex items-center gap-0 flex-wrap" aria-label="Package lifecycle">
+    <div className="flex items-center gap-0 flex-wrap w-full" aria-label="Package lifecycle">
       {STEPS.map((step, i) => {
         // These are states REACHED, not activities in progress: the state a
         // package is in has been achieved, so it ticks. The highlight moves to
@@ -61,21 +94,23 @@ export default function LifecycleStepper({ status }: { status: PackageStatus }) 
             {i > 0 && (
               <div
                 aria-hidden
-                className={`h-px w-6 ${i <= reached ? 'bg-action' : 'bg-border'}`}
+                className={`h-px flex-1 min-w-[26px] ${
+                  i <= reached ? 'bg-success/50' : 'bg-border'
+                }`}
               />
             )}
             <div className="flex items-center gap-1.5 px-1">
               <span
                 aria-hidden
-                className={`inline-flex items-center justify-center w-4.5 h-4.5 w-[18px] h-[18px] rounded-full border text-[9px] font-mono ${
+                className={`inline-flex items-center justify-center w-6 h-6 rounded-full border text-micro font-mono ${
                   done
-                    ? 'bg-action text-white border-action'
+                    ? 'bg-success-light text-success border-success/40'
                     : current
-                    ? 'border-action text-action bg-action-light'
+                    ? 'bg-action text-white border-action ring-4 ring-action-light'
                     : 'border-border text-slate bg-surface'
                 }`}
               >
-                {done ? <Check size={10} /> : i + 1}
+                {done ? <Check size={12} /> : i + 1}
               </span>
               <span
                 className={`text-caption whitespace-nowrap ${

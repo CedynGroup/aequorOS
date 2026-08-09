@@ -15,9 +15,18 @@
  * the preparer certifies and freezes, an approver certifies the identical
  * frozen figures, and submission is gated on a complete attestation. The
  * Attestation card owns those affordances.
+ *
+ * The workspace is STAGE-FOCUSED: the lifecycle stepper sits in its own
+ * full-width card under the selectors, and the panel(s) an operator acts on at
+ * the current stage (stageFor(status)) take the wide primary column. Every
+ * other card stays mounted and reachable in the rail — nothing is ever
+ * unmounted by the stage, because the e2e journeys (and operators) reach for
+ * out-of-stage controls: the Submit card's disabled state and blocked reason
+ * are asserted while the return is merely validated, the PDF export is pulled
+ * on a freshly generated package, and prior versions are compared mid-chain.
  */
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Fragment, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   CheckCircle2,
@@ -87,7 +96,10 @@ import {
   downloadEmailFallbackEml,
   fmtBytes,
 } from '@/components/submissions/shared';
-import LifecycleStepper from '@/components/submissions/LifecycleStepper';
+import LifecycleStepper, {
+  stageFor,
+  type LifecycleStage,
+} from '@/components/submissions/LifecycleStepper';
 import PriorVersionsCard from '@/components/submissions/PriorVersionsCard';
 import SnapshotPreview from '@/components/submissions/SnapshotPreview';
 import ValidationPanel from '@/components/submissions/ValidationPanel';
@@ -115,6 +127,50 @@ const CHANNEL_OPTIONS: ChannelCode[] = [
   'email',
   'manual',
 ];
+
+/** One line under the stepper naming what this stage is for. Wording is kept
+ * deliberately distinct from the state-specific copy inside the cards — the
+ * e2e journeys assert several of those phrases as SINGLE elements. */
+const STAGE_HINTS: Record<LifecycleStage, string> = {
+  generated: 'Review the snapshot, then run validation to unlock certification.',
+  validated:
+    'Validation passed — certify as preparer to freeze the figures and route the return for approval.',
+  pending_approval:
+    'Figures frozen — the named approver reviews, then approves and signs, or sends the return back with a note.',
+  approved: 'Fully approved — export artifacts and submit through a channel.',
+  submitted: 'With the regulator — poll the channel for a decision.',
+  acknowledged: 'Complete — the regulator acknowledged this filing.',
+  rejected:
+    'The regulator returned this filing — read the comments, then rework it on a superseding version.',
+  superseded: 'Superseded — a newer version of this return and reporting date exists.',
+};
+
+type PanelId =
+  | 'snapshot'
+  | 'validation'
+  | 'approval'
+  | 'export'
+  | 'submit'
+  | 'events'
+  | 'resubmission'
+  | 'prior_versions';
+
+/** The panel(s) an operator acts on at each stage — promoted to the wide
+ * primary column. Everything else stays mounted in the rail. */
+const PRIMARY_PANELS: Record<LifecycleStage, PanelId[]> = {
+  generated: ['snapshot', 'validation'],
+  validated: ['validation', 'approval'],
+  pending_approval: ['approval'],
+  approved: ['export', 'submit'],
+  submitted: ['events', 'submit'],
+  acknowledged: ['submit', 'export'],
+  rejected: ['resubmission', 'events'],
+  superseded: ['prior_versions'],
+};
+
+/** Rail ordering: action cards first, then the history group. */
+const RAIL_ACTIONS: PanelId[] = ['approval', 'export', 'submit', 'resubmission'];
+const RAIL_HISTORY: PanelId[] = ['snapshot', 'validation', 'events', 'prior_versions'];
 
 /** The structured ORASS-downtime 409 payload (workflow.submit 409 details). */
 type DowntimeFallback = {
@@ -304,6 +360,7 @@ function ReturnsWorkspace() {
               }
               regeneratePending={generate.isPending}
               regenerateError={generate.error}
+              chainRefreshing={generate.isPending || packagesQuery.isFetching}
             />
           )}
         </QueryBoundary>
@@ -312,23 +369,33 @@ function ReturnsWorkspace() {
   );
 }
 
+/**
+ * Compact identity line for the selected return — the full directive citation
+ * and fidelity blurb collapse behind a disclosure rather than occupying a
+ * full-width card above the workspace. The `{code} — {title}` paragraph stays
+ * always-visible: it is what confirms the selector landed on the right return
+ * (and what the LRT deep-link journey asserts).
+ */
 function FidelityBanner({ template }: { template: ReturnTemplateRead }) {
   const info = FIDELITY_INFO[template.fidelity];
   return (
-    <div className="card px-5 py-4 flex items-start gap-3">
-      <ScrollText size={16} className="text-action shrink-0 mt-0.5" aria-hidden />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-body font-medium text-navy">
-            {template.code} — {template.title}
-          </p>
-          <FidelityPill fidelity={template.fidelity} />
-        </div>
-        <p className="mt-1 text-caption text-navy/80">{info.blurb}</p>
-        <p className="mt-1.5 text-caption text-slate leading-relaxed">
+    <div className="min-w-0">
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <ScrollText size={13} className="text-action shrink-0" aria-hidden />
+        <p className="text-caption font-medium text-navy min-w-0">
+          {template.code} — {template.title}
+        </p>
+        <FidelityPill fidelity={template.fidelity} />
+      </div>
+      <details className="mt-1 pl-6">
+        <summary className="cursor-pointer text-caption font-medium text-action hover:text-action-hover">
+          Directive basis
+        </summary>
+        <p className="mt-1 text-caption text-navy/80 max-w-3xl">{info.blurb}</p>
+        <p className="mt-1 text-caption text-slate leading-relaxed max-w-3xl">
           {template.directiveCitation}
         </p>
-      </div>
+      </details>
     </div>
   );
 }
@@ -371,6 +438,7 @@ function PackageWorkspace({
   onRegenerate,
   regeneratePending,
   regenerateError,
+  chainRefreshing,
 }: {
   bankId: string;
   summary: RegulatoryPackageSummaryRead;
@@ -383,6 +451,9 @@ function PackageWorkspace({
   onRegenerate: () => void;
   regeneratePending: boolean;
   regenerateError: unknown;
+  /** A regeneration (or package-list refresh) is in flight, so the version on
+   * screen may be about to be superseded — version-bound actions hold. */
+  chainRefreshing: boolean;
 }) {
   const validate = useValidateRegulatoryPackage(bankId);
   const requestApproval = useRequestPackageApproval(bankId);
@@ -492,503 +563,596 @@ function PackageWorkspace({
     );
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Current version + lifecycle */}
-      <SectionCard
-        title={
-          <span className="inline-flex items-center gap-2.5">
-            {summary.returnCode} · {fmtDateUTC(summary.reportingDate)}
-            <span className="font-mono text-caption text-slate tnum">
-              v{summary.version}
-            </span>
-            <PackageStatusPill status={status} />
-            {attestation && (
-              <AttestationStatePill state={attestation.attestationState} />
-            )}
-            {submissionRevision && (
-              <span
-                title="Submission revision — resubmissions carry +0.1"
-                className="font-mono text-caption text-slate tnum rounded border border-border px-1.5 py-0.5"
-              >
-                Rev {submissionRevision}
-              </span>
-            )}
+  const stage = stageFor(status);
+  // Pre-approval the certification card holds the full-width slot above the
+  // columns; from approved onwards it retreats to the top of the rail — its
+  // clearance pill answers the submission gate and must stay readable at every
+  // stage. `generated` is deliberately in the full-width set even though
+  // certifying is not yet possible there: regeneration flips a validated
+  // package back to generated in place, and moving the panel between slots on
+  // that transition remounts the certify button mid-click — the signing
+  // workspace e2e journey clicks it exactly across that boundary. Position
+  // stability across generated ↔ validated is part of the contract.
+  const attestationPrimary =
+    stage === 'generated' ||
+    stage === 'validated' ||
+    stage === 'pending_approval';
+
+  /* Current version — identity, immutability, the supersession chain. */
+  const revisionCard = (
+    <SectionCard
+      title={
+        <span className="inline-flex items-center gap-2.5">
+          {summary.returnCode} · {fmtDateUTC(summary.reportingDate)}
+          <span className="font-mono text-caption text-slate tnum">
+            v{summary.version}
           </span>
-        }
-        subtitle={`Generated ${fmtTimestamp(summary.generatedAt)} · immutable snapshot — regeneration supersedes, never mutates`}
-        actions={
-          <GenerateButton
-            label="Regenerate (new version)"
-            pending={regeneratePending}
-            onClick={onRegenerate}
-          />
-        }
-      >
-        <LifecycleStepper status={status} />
-        {Boolean(regenerateError) && (
-          <div className="mt-4">
-            <ErrorPanel error={regenerateError} title="Could not regenerate" />
-          </div>
-        )}
-        {priorVersions.length > 0 && (
-          <p className="mt-4 text-caption text-slate tnum">
-            Superseded chain:{' '}
-            <span className="font-mono text-navy/80">
-              v{summary.version} (current)
-              {priorVersions.map((prior) => ` ← v${prior.version}`).join('')}
+          <PackageStatusPill status={status} />
+          {attestation && (
+            <AttestationStatePill state={attestation.attestationState} />
+          )}
+          {submissionRevision && (
+            <span
+              title="Submission revision — resubmissions carry +0.1"
+              className="font-mono text-caption text-slate tnum rounded border border-border px-1.5 py-0.5"
+            >
+              Rev {submissionRevision}
             </span>
-          </p>
-        )}
-      </SectionCard>
-
-      {regulatorComments && (
-        <SupervisorCommentsPanel status={status} comments={regulatorComments} />
+          )}
+        </span>
+      }
+      subtitle={`Generated ${fmtTimestamp(summary.generatedAt)} · immutable snapshot — regeneration supersedes, never mutates`}
+      actions={
+        <GenerateButton
+          label="Regenerate (new version)"
+          pending={regeneratePending}
+          onClick={onRegenerate}
+        />
+      }
+    >
+      {Boolean(regenerateError) && (
+        <div className="mb-3">
+          <ErrorPanel error={regenerateError} title="Could not regenerate" />
+        </div>
       )}
+      {priorVersions.length > 0 ? (
+        <p className="text-caption text-slate tnum">
+          Superseded chain:{' '}
+          <span className="font-mono text-navy/80">
+            v{summary.version} (current)
+            {priorVersions.map((prior) => ` ← v${prior.version}`).join('')}
+          </span>
+        </p>
+      ) : (
+        <p className="text-caption text-slate leading-relaxed">
+          v{summary.version} is the only version on this chain — regenerating
+          mints a new immutable version and supersedes this one; history is
+          never mutated.
+        </p>
+      )}
+    </SectionCard>
+  );
 
-      {pendingReupload && (
-        <div className="card border-l-4 border-l-warning bg-warning-light/40 px-5 py-4 flex items-start gap-3">
-          <UploadCloud size={16} className="text-warning shrink-0 mt-0.5" aria-hidden />
-          <div className="min-w-0 flex-1">
-            <p className="text-body font-medium text-navy">
-              Pending ORASS re-upload
-            </p>
-            <p className="mt-1 text-caption text-navy/80 leading-relaxed">
-              This return was submitted via the email fallback during ORASS
-              downtime. Per BoG Notice BG/FMD/2026/07 it is deemed complete
-              only after re-upload through ORASS once functionality is
-              restored.
-            </p>
-          </div>
-          {/* Also a submission, so also gated: the re-upload sends the filed
-              document to the regulator, and every path that does reads the same
-              clearance rather than trusting the earlier submission. */}
+  const supervisorBanner = regulatorComments && (
+    <SupervisorCommentsPanel status={status} comments={regulatorComments} />
+  );
+
+  const reuploadBanner = pendingReupload && (
+    <div className="card border-l-4 border-l-warning bg-warning-light/40 px-5 py-4 flex items-start gap-3">
+      <UploadCloud size={16} className="text-warning shrink-0 mt-0.5" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="text-body font-medium text-navy">
+          Pending ORASS re-upload
+        </p>
+        <p className="mt-1 text-caption text-navy/80 leading-relaxed">
+          This return was submitted via the email fallback during ORASS
+          downtime. Per BoG Notice BG/FMD/2026/07 it is deemed complete
+          only after re-upload through ORASS once functionality is
+          restored.
+        </p>
+      </div>
+      {/* Also a submission, so also gated: the re-upload sends the filed
+          document to the regulator, and every path that does reads the same
+          clearance rather than trusting the earlier submission. */}
+      <button
+        type="button"
+        disabled={submit.isPending || attestationBlocks}
+        title={attestationBlockReason ?? undefined}
+        onClick={() =>
+          submit.mutate({ packageId: summary.id, channel: 'orass_sandbox' })
+        }
+        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+      >
+        {submit.isPending ? (
+          <Loader2 size={13} className="animate-spin" aria-hidden />
+        ) : (
+          <RadioTower size={13} aria-hidden />
+        )}
+        Re-upload via ORASS
+      </button>
+    </div>
+  );
+
+  /* Certification — the signing ceremony is the gate everything downstream
+     depends on. Full-width at the stages where certifying is the act in
+     progress; top of the rail everywhere else. */
+  const attestationCard = (
+    <AttestationPanel
+      bankId={bankId}
+      packageId={summary.id}
+      returnLabel={`${summary.returnCode} · ${fmtDateUTC(summary.reportingDate)} v${summary.version}`}
+      packageStatus={status}
+      validationClean={report !== null && !validationBlocked}
+    />
+  );
+
+  const snapshotCard = (
+    <SectionCard
+      title="Snapshot preview"
+      subtitle="The immutable generated return content — exactly what the exports render"
+    >
+      {pkgLoading ? (
+        <SkeletonCard />
+      ) : pkgError ? (
+        <ErrorPanel error={pkgError} onRetry={onRetryPkg} />
+      ) : pkg ? (
+        <SnapshotPreview snapshot={pkg.snapshot} />
+      ) : null}
+    </SectionCard>
+  );
+
+  const validationCard = (
+    <SectionCard
+      title="Validation"
+      subtitle="Completeness, internal consistency (cross-foots), and prior-period movement checks"
+      actions={
+        /* Two contracts on this one control. Its accessible name starts with
+           "Validate" in BOTH states ("Validate" / "Validate again"), because a
+           regeneration can swap the on-screen version from validated to
+           generated between a lookup and a click — a name that stops matching
+           mid-swap silently skips validation and strands the new version
+           unvalidated. And it LOCKS while the chain is refreshing for the same
+           reason: a validate aimed at a version about to be superseded must
+           wait and land on its successor. */
+        <button
+          type="button"
+          disabled={!canValidate || validate.isPending || chainRefreshing}
+          onClick={() => validate.mutate(summary.id)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+        >
+          {validate.isPending ? (
+            <Loader2 size={13} className="animate-spin" aria-hidden />
+          ) : (
+            <ShieldCheck size={13} aria-hidden />
+          )}
+          {status === 'validated' ? 'Validate again' : 'Validate'}
+        </button>
+      }
+    >
+      {validate.error && (
+        <div className="mb-3">
+          <ErrorPanel error={validate.error} title="Validation call failed" />
+        </div>
+      )}
+      {report ? (
+        <ValidationPanel report={report} />
+      ) : (
+        <p className="text-caption text-slate">
+          Not validated yet — run validation to unlock the approval
+          request.
+        </p>
+      )}
+    </SectionCard>
+  );
+
+  const eventsCard = (
+    <SectionCard
+      title="Submission events"
+      subtitle="Chronological channel trail — sandbox interactions are labeled"
+      footer={
+        latestSubmitted?.detail?.sandbox === true ? (
+          <span className="inline-flex items-center gap-1.5">
+            <FlaskConical size={11} aria-hidden />
+            SANDBOX — simulated ORASS; the real portal API is not public
+          </span>
+        ) : undefined
+      }
+    >
+      <QueryBoundary
+        isLoading={eventsQuery.isLoading}
+        error={eventsQuery.error}
+        onRetry={() => eventsQuery.refetch()}
+        skeleton={<SkeletonCard />}
+      >
+        <EventsFeed events={events} />
+      </QueryBoundary>
+    </SectionCard>
+  );
+
+  const approvalCard = (
+    <SectionCard
+      title="Approval"
+      subtitle={
+        signingRequired
+          ? 'Maker-checker: certifying as preparer is the request; a different officer approves and signs'
+          : 'Maker-checker: a different officer decides on the Approvals tab'
+      }
+    >
+      {/* Where signatures are required, the preparer's certification IS the
+          request for approval — it freezes the figures and routes the return
+          to the officer they name. Offering a separate Request approval
+          button here would move the package out of 'validated', which is the
+          only status a preparer certification is accepted from, leaving a
+          return that neither officer can sign. */}
+      {signingRequired ? (
+        <p className="text-caption text-navy/85 leading-relaxed">
+          {status === 'pending_approval'
+            ? 'Sent for approval by the preparer’s certification — the named approver reviews, then approves and signs in one act, or sends it back with a note.'
+            : status === 'validated'
+            ? 'Validation passed. Certify as preparer in the Attestation card above: that freezes the figures and sends the return to the approver you name.'
+            : validationBlocked
+            ? 'Blocked: the latest validation report carries ERROR findings. Resolve and re-validate first.'
+            : status === 'generated' || report === null
+            ? 'Validate the package first; certification is only accepted for a validated package.'
+            : `Package is '${status}'.`}
+        </p>
+      ) : (
+        <>
           <button
             type="button"
-            disabled={submit.isPending || attestationBlocks}
-            title={attestationBlockReason ?? undefined}
-            onClick={() =>
-              submit.mutate({ packageId: summary.id, channel: 'orass_sandbox' })
-            }
-            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+            disabled={!canRequestApproval || requestApproval.isPending}
+            onClick={() => requestApproval.mutate({ packageId: summary.id })}
+            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
           >
-            {submit.isPending ? (
+            {requestApproval.isPending ? (
               <Loader2 size={13} className="animate-spin" aria-hidden />
             ) : (
-              <RadioTower size={13} aria-hidden />
+              <FileCheck2 size={13} aria-hidden />
             )}
-            Re-upload via ORASS
+            Request approval
           </button>
+          <p className="mt-2 text-caption text-slate leading-relaxed">
+            {status === 'pending_approval'
+              ? 'Awaiting a checker decision — open the Approvals tab to decide as a second officer.'
+              : validationBlocked
+              ? 'Blocked: the latest validation report carries ERROR findings. Resolve and re-validate first.'
+              : status === 'generated' || report === null
+              ? 'Validate the package first; approval can only be requested for a validated package.'
+              : status === 'validated'
+              ? 'Validation passed — request approval to enter the maker-checker queue.'
+              : `Package is '${status}'.`}
+          </p>
+        </>
+      )}
+      {requestApproval.error && (
+        <div className="mt-3">
+          <ErrorPanel
+            error={requestApproval.error}
+            title="Approval request failed"
+          />
+        </div>
+      )}
+    </SectionCard>
+  );
+
+  const exportCard = (
+    <SectionCard
+      title="Export artifacts"
+      subtitle={`Renders the snapshot through the declarative ${regShort()} templates`}
+    >
+      <div className="flex items-center gap-2">
+        {EXPORT_KINDS.map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            disabled={!canExport || exportPackage.isPending}
+            onClick={() => runExport(kind)}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface disabled:opacity-60"
+          >
+            {exportingKind === kind && exportPackage.isPending ? (
+              <Loader2 size={13} className="animate-spin" aria-hidden />
+            ) : (
+              <FileOutput size={13} aria-hidden />
+            )}
+            {kind.toUpperCase()}
+          </button>
+        ))}
+      </div>
+      {exportPackage.error && (
+        <div className="mt-3">
+          <ErrorPanel error={exportPackage.error} title="Export failed" />
+        </div>
+      )}
+      {downloadError && (
+        <p className="mt-2 text-caption text-critical">{downloadError}</p>
+      )}
+      {filedVersion && (
+        <SignedReturnRow
+          version={filedVersion}
+          onDownload={() => handleVersionDownload(filedVersion)}
+        />
+      )}
+      {artifacts.length > 0 ? (
+        <>
+          {filedVersion && (
+            <p className="mt-4 text-micro font-medium uppercase tracking-wider text-slate">
+              Pre-signature engine output
+            </p>
+          )}
+          <ul className="mt-2 space-y-2">
+            {artifacts.map((artifact) => (
+              <li
+                key={artifact.id}
+                className="flex items-center gap-2 rounded border border-border-light bg-surface px-3 py-2"
+              >
+                <span className="font-mono text-caption font-medium text-navy uppercase">
+                  {artifact.kind}
+                </span>
+                <span className="font-mono text-micro text-slate tnum truncate">
+                  sha256 {shortId(artifact.checksumSha256, 12)}
+                </span>
+                <CopyButton text={artifact.checksumSha256} label="checksum" />
+                <span className="ml-auto font-mono text-micro text-slate tnum whitespace-nowrap">
+                  {fmtBytes(artifact.sizeBytes)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleDownload(artifact)}
+                  aria-label={`Download ${artifact.kind} artifact`}
+                  className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                >
+                  <Download size={11} aria-hidden />
+                  Download
+                </button>
+              </li>
+            ))}
+          </ul>
+          {filedVersion && (
+            <p className="mt-2 text-caption text-slate leading-relaxed">
+              Retained for provenance — what the engine rendered before
+              anyone signed. It is never filed.
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="mt-3 text-caption text-slate">
+          No artifacts exported yet. Exports mint checksummed files in
+          the outputs tier; submitting via a channel auto-exports xlsx
+          when none exists.
+        </p>
+      )}
+    </SectionCard>
+  );
+
+  const submitCard = (
+    <SectionCard
+      title="Submit"
+      subtitle="Channel defaults to the registry entry for this return"
+    >
+      <label className="flex items-center justify-between gap-2 text-caption text-slate">
+        Channel
+        <select
+          value={channel}
+          onChange={(e) => setChannel(e.target.value as ChannelCode)}
+          className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
+        >
+          {CHANNEL_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {CHANNEL_LABELS[option]}
+              {option === defaultChannel ? ' · default' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      {channel === 'orass_sandbox' && (
+        <p className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded border border-warning/25 bg-warning-light text-warning text-micro font-medium uppercase tracking-wider">
+          <FlaskConical size={11} aria-hidden />
+          SANDBOX — simulated ORASS
+        </p>
+      )}
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          data-testid="submit-package"
+          disabled={!canSubmit || attestationBlocks || submit.isPending}
+          title={attestationBlockReason ?? undefined}
+          onClick={() => submit.mutate({ packageId: summary.id, channel })}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+        >
+          {submit.isPending ? (
+            <Loader2 size={13} className="animate-spin" aria-hidden />
+          ) : (
+            <Send size={13} aria-hidden />
+          )}
+          Submit
+        </button>
+        <button
+          type="button"
+          disabled={!canPoll || poll.isPending}
+          onClick={() => poll.mutate(summary.id)}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface disabled:opacity-60"
+        >
+          {poll.isPending ? (
+            <Loader2 size={13} className="animate-spin" aria-hidden />
+          ) : (
+            <RefreshCw size={13} aria-hidden />
+          )}
+          Poll status
+        </button>
+      </div>
+      {/* Named, not merely refused: an operator staring at a greyed-out
+          Submit needs to know which signature is missing, and the disabled
+          title alone is invisible to a touch device. */}
+      {attestationBlockReason && (
+        <p
+          data-testid="submit-blocked-reason"
+          className="mt-2 text-caption text-navy/85 leading-relaxed"
+        >
+          {attestationBlockReason} No return reaches a channel without every
+          signature the policy in force requires.
+        </p>
+      )}
+      {!canSubmit && !canPoll && !canReupload && (
+        <p className="mt-2 text-caption text-slate leading-relaxed">
+          {status === 'submitted'
+            ? 'Submitted — awaiting the regulator decision.'
+            : status === 'acknowledged'
+            ? 'Acknowledged by the regulator — this obligation is complete.'
+            : status === 'rejected'
+            ? 'Rejected by the regulator — regenerate to mint a superseding version and rework it.'
+            : status === 'declined'
+            ? 'Declined by the regulator — the decision is final; see the supervisor comments above.'
+            : 'Submission unlocks once the package is approved.'}
+        </p>
+      )}
+      {latestSubmitted?.channel === 'email' && (
+        <div className="mt-3 space-y-1.5">
+          <button
+            type="button"
+            onClick={handleEmlDownload}
+            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
+          >
+            <Download size={13} aria-hidden />
+            Download .eml
+          </button>
+          <p className="text-micro text-slate leading-relaxed">
+            Send-ready downtime email bundle (subject, instructions, and
+            attachments) — open in your mail client and send.
+          </p>
+        </div>
+      )}
+      {emlError && (
+        <p className="mt-2 text-caption text-critical">{emlError}</p>
+      )}
+      {poll.data && (
+        <p className="mt-2 text-caption text-navy/80">
+          Last poll:{' '}
+          <span className="font-mono">{poll.data.pollStatus}</span>
+        </p>
+      )}
+      {poll.error && (
+        <div className="mt-3">
+          <ErrorPanel error={poll.error} title="Poll failed" />
+        </div>
+      )}
+      {submit.error && !fallback && (
+        <div className="mt-3">
+          <ErrorPanel error={submit.error} title="Submission failed" />
         </div>
       )}
 
-      {/* Certification — full width, above the read/act columns: the signing
-          ceremony is the gate everything downstream depends on. */}
-      <AttestationPanel
+      {fallback && (
+        <div className="mt-3 rounded border border-warning/30 bg-warning-light/50 px-3.5 py-3 space-y-2.5">
+          <p className="inline-flex items-center gap-1.5 text-body font-medium text-navy">
+            <Mail size={13} className="text-warning" aria-hidden />
+            ORASS downtime — email fallback available
+          </p>
+          <p className="text-caption text-navy/80 leading-relaxed">
+            {fallback.message}
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              disabled={submit.isPending || attestationBlocks}
+              title={attestationBlockReason ?? undefined}
+              onClick={() =>
+                submit.mutate({ packageId: summary.id, channel: 'email' })
+              }
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+            >
+              <Mail size={13} aria-hidden />
+              Use email fallback
+            </button>
+            <button
+              type="button"
+              onClick={handleEmlDownload}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
+            >
+              <Download size={13} aria-hidden />
+              Download .eml
+            </button>
+          </div>
+          {instructionsQuery.data && (
+            <details className="text-caption text-navy/80">
+              <summary className="cursor-pointer font-medium text-navy">
+                Preview send-ready instructions
+              </summary>
+              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-border-light bg-surface p-3 font-mono text-micro leading-relaxed">
+                {instructionsQuery.data.instructions}
+              </pre>
+            </details>
+          )}
+        </div>
+      )}
+    </SectionCard>
+  );
+
+  const panels: Record<PanelId, ReactNode> = {
+    snapshot: snapshotCard,
+    validation: validationCard,
+    approval: approvalCard,
+    export: exportCard,
+    submit: submitCard,
+    events: eventsCard,
+    resubmission: (
+      <ResubmissionCard
         bankId={bankId}
         packageId={summary.id}
-        returnLabel={`${summary.returnCode} · ${fmtDateUTC(summary.reportingDate)} v${summary.version}`}
-        packageStatus={status}
-        validationClean={report !== null && !validationBlocked}
+        status={status}
+        requests={resubmissions}
+        requestsError={resubmissionsQuery.error}
+        latestSubmittedChannel={latestSubmitted?.channel ?? null}
       />
+    ),
+    prior_versions: <PriorVersionsCard bankId={bankId} packageId={summary.id} />,
+  };
+
+  const primaryIds = PRIMARY_PANELS[stage];
+  const railActionIds = RAIL_ACTIONS.filter((id) => !primaryIds.includes(id));
+  const railHistoryIds = RAIL_HISTORY.filter((id) => !primaryIds.includes(id));
+
+  return (
+    <div className="space-y-6">
+      {/* Lifecycle — its own full-width card directly under the selectors;
+          the stage it reports decides which panels take the primary column. */}
+      <SectionCard title="Lifecycle" subtitle={STAGE_HINTS[stage]}>
+        <LifecycleStepper status={status} />
+      </SectionCard>
+
+      {revisionCard}
+
+      {supervisorBanner}
+
+      {reuploadBanner}
+
+      {attestationPrimary && attestationCard}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-        {/* Snapshot + validation (left, wide) */}
+        {/* The current stage's primary panel(s) — wide column */}
         <div className="xl:col-span-2 space-y-6 min-w-0">
-          <SectionCard
-            title="Snapshot preview"
-            subtitle="The immutable generated return content — exactly what the exports render"
-          >
-            {pkgLoading ? (
-              <SkeletonCard />
-            ) : pkgError ? (
-              <ErrorPanel error={pkgError} onRetry={onRetryPkg} />
-            ) : pkg ? (
-              <SnapshotPreview snapshot={pkg.snapshot} />
-            ) : null}
-          </SectionCard>
-
-          <SectionCard
-            title="Validation"
-            subtitle="Completeness, internal consistency (cross-foots), and prior-period movement checks"
-            actions={
-              <button
-                type="button"
-                disabled={!canValidate || validate.isPending}
-                onClick={() => validate.mutate(summary.id)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-              >
-                {validate.isPending ? (
-                  <Loader2 size={13} className="animate-spin" aria-hidden />
-                ) : (
-                  <ShieldCheck size={13} aria-hidden />
-                )}
-                {status === 'validated' ? 'Re-validate' : 'Validate'}
-              </button>
-            }
-          >
-            {validate.error && (
-              <div className="mb-3">
-                <ErrorPanel error={validate.error} title="Validation call failed" />
-              </div>
-            )}
-            {report ? (
-              <ValidationPanel report={report} />
-            ) : (
-              <p className="text-caption text-slate">
-                Not validated yet — run validation to unlock the approval
-                request.
-              </p>
-            )}
-          </SectionCard>
-
-          <SectionCard
-            title="Submission events"
-            subtitle="Chronological channel trail — sandbox interactions are labeled"
-            footer={
-              latestSubmitted?.detail?.sandbox === true ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <FlaskConical size={11} aria-hidden />
-                  SANDBOX — simulated ORASS; the real portal API is not public
-                </span>
-              ) : undefined
-            }
-          >
-            <QueryBoundary
-              isLoading={eventsQuery.isLoading}
-              error={eventsQuery.error}
-              onRetry={() => eventsQuery.refetch()}
-              skeleton={<SkeletonCard />}
-            >
-              <EventsFeed events={events} />
-            </QueryBoundary>
-          </SectionCard>
+          {primaryIds.map((id) => (
+            <Fragment key={id}>{panels[id]}</Fragment>
+          ))}
         </div>
 
-        {/* Actions rail (right) */}
+        {/* Everything else stays mounted and reachable: action cards first,
+            then the history group. The e2e journeys drive out-of-stage
+            controls (a disabled Submit while merely validated, a PDF export
+            on a freshly generated package, prior-version diffs mid-chain), so
+            nothing here may be collapsed away. */}
         <div className="space-y-6 min-w-0">
-          <SectionCard
-            title="Approval"
-            subtitle={
-              signingRequired
-                ? 'Maker-checker: certifying as preparer is the request; a different officer approves and signs'
-                : 'Maker-checker: a different officer decides on the Approvals tab'
-            }
-          >
-            {/* Where signatures are required, the preparer's certification IS the
-                request for approval — it freezes the figures and routes the return
-                to the officer they name. Offering a separate Request approval
-                button here would move the package out of 'validated', which is the
-                only status a preparer certification is accepted from, leaving a
-                return that neither officer can sign. */}
-            {signingRequired ? (
-              <p className="text-caption text-navy/85 leading-relaxed">
-                {status === 'pending_approval'
-                  ? 'Sent for approval by the preparer’s certification — the named approver reviews, then approves and signs in one act, or sends it back with a note.'
-                  : status === 'validated'
-                  ? 'Validation passed. Certify as preparer in the Attestation card above: that freezes the figures and sends the return to the approver you name.'
-                  : validationBlocked
-                  ? 'Blocked: the latest validation report carries ERROR findings. Resolve and re-validate first.'
-                  : status === 'generated' || report === null
-                  ? 'Validate the package first; certification is only accepted for a validated package.'
-                  : `Package is '${status}'.`}
-              </p>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  disabled={!canRequestApproval || requestApproval.isPending}
-                  onClick={() => requestApproval.mutate({ packageId: summary.id })}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-                >
-                  {requestApproval.isPending ? (
-                    <Loader2 size={13} className="animate-spin" aria-hidden />
-                  ) : (
-                    <FileCheck2 size={13} aria-hidden />
-                  )}
-                  Request approval
-                </button>
-                <p className="mt-2 text-caption text-slate leading-relaxed">
-                  {status === 'pending_approval'
-                    ? 'Awaiting a checker decision — open the Approvals tab to decide as a second officer.'
-                    : validationBlocked
-                    ? 'Blocked: the latest validation report carries ERROR findings. Resolve and re-validate first.'
-                    : status === 'generated' || report === null
-                    ? 'Validate the package first; approval can only be requested for a validated package.'
-                    : status === 'validated'
-                    ? 'Validation passed — request approval to enter the maker-checker queue.'
-                    : `Package is '${status}'.`}
-                </p>
-              </>
-            )}
-            {requestApproval.error && (
-              <div className="mt-3">
-                <ErrorPanel
-                  error={requestApproval.error}
-                  title="Approval request failed"
-                />
-              </div>
-            )}
-          </SectionCard>
-
-          <SectionCard
-            title="Export artifacts"
-            subtitle={`Renders the snapshot through the declarative ${regShort()} templates`}
-          >
-            <div className="flex items-center gap-2">
-              {EXPORT_KINDS.map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  disabled={!canExport || exportPackage.isPending}
-                  onClick={() => runExport(kind)}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface disabled:opacity-60"
-                >
-                  {exportingKind === kind && exportPackage.isPending ? (
-                    <Loader2 size={13} className="animate-spin" aria-hidden />
-                  ) : (
-                    <FileOutput size={13} aria-hidden />
-                  )}
-                  {kind.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            {exportPackage.error && (
-              <div className="mt-3">
-                <ErrorPanel error={exportPackage.error} title="Export failed" />
-              </div>
-            )}
-            {downloadError && (
-              <p className="mt-2 text-caption text-critical">{downloadError}</p>
-            )}
-            {filedVersion && (
-              <SignedReturnRow
-                version={filedVersion}
-                onDownload={() => handleVersionDownload(filedVersion)}
-              />
-            )}
-            {artifacts.length > 0 ? (
-              <>
-                {filedVersion && (
-                  <p className="mt-4 text-micro font-medium uppercase tracking-wider text-slate">
-                    Pre-signature engine output
-                  </p>
-                )}
-                <ul className="mt-2 space-y-2">
-                  {artifacts.map((artifact) => (
-                    <li
-                      key={artifact.id}
-                      className="flex items-center gap-2 rounded border border-border-light bg-surface px-3 py-2"
-                    >
-                      <span className="font-mono text-caption font-medium text-navy uppercase">
-                        {artifact.kind}
-                      </span>
-                      <span className="font-mono text-micro text-slate tnum truncate">
-                        sha256 {shortId(artifact.checksumSha256, 12)}
-                      </span>
-                      <CopyButton text={artifact.checksumSha256} label="checksum" />
-                      <span className="ml-auto font-mono text-micro text-slate tnum whitespace-nowrap">
-                        {fmtBytes(artifact.sizeBytes)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleDownload(artifact)}
-                        aria-label={`Download ${artifact.kind} artifact`}
-                        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
-                      >
-                        <Download size={11} aria-hidden />
-                        Download
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                {filedVersion && (
-                  <p className="mt-2 text-caption text-slate leading-relaxed">
-                    Retained for provenance — what the engine rendered before
-                    anyone signed. It is never filed.
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="mt-3 text-caption text-slate">
-                No artifacts exported yet. Exports mint checksummed files in
-                the outputs tier; submitting via a channel auto-exports xlsx
-                when none exists.
-              </p>
-            )}
-          </SectionCard>
-
-          <SectionCard
-            title="Submit"
-            subtitle="Channel defaults to the registry entry for this return"
-          >
-            <label className="flex items-center justify-between gap-2 text-caption text-slate">
-              Channel
-              <select
-                value={channel}
-                onChange={(e) => setChannel(e.target.value as ChannelCode)}
-                className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
-              >
-                {CHANNEL_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {CHANNEL_LABELS[option]}
-                    {option === defaultChannel ? ' · default' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {channel === 'orass_sandbox' && (
-              <p className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded border border-warning/25 bg-warning-light text-warning text-micro font-medium uppercase tracking-wider">
-                <FlaskConical size={11} aria-hidden />
-                SANDBOX — simulated ORASS
-              </p>
-            )}
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                type="button"
-                data-testid="submit-package"
-                disabled={!canSubmit || attestationBlocks || submit.isPending}
-                title={attestationBlockReason ?? undefined}
-                onClick={() => submit.mutate({ packageId: summary.id, channel })}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-              >
-                {submit.isPending ? (
-                  <Loader2 size={13} className="animate-spin" aria-hidden />
-                ) : (
-                  <Send size={13} aria-hidden />
-                )}
-                Submit
-              </button>
-              <button
-                type="button"
-                disabled={!canPoll || poll.isPending}
-                onClick={() => poll.mutate(summary.id)}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface disabled:opacity-60"
-              >
-                {poll.isPending ? (
-                  <Loader2 size={13} className="animate-spin" aria-hidden />
-                ) : (
-                  <RefreshCw size={13} aria-hidden />
-                )}
-                Poll status
-              </button>
-            </div>
-            {/* Named, not merely refused: an operator staring at a greyed-out
-                Submit needs to know which signature is missing, and the disabled
-                title alone is invisible to a touch device. */}
-            {attestationBlockReason && (
-              <p
-                data-testid="submit-blocked-reason"
-                className="mt-2 text-caption text-navy/85 leading-relaxed"
-              >
-                {attestationBlockReason} No return reaches a channel without every
-                signature the policy in force requires.
-              </p>
-            )}
-            {!canSubmit && !canPoll && !canReupload && (
-              <p className="mt-2 text-caption text-slate leading-relaxed">
-                {status === 'submitted'
-                  ? 'Submitted — awaiting the regulator decision.'
-                  : status === 'acknowledged'
-                  ? 'Acknowledged by the regulator — this obligation is complete.'
-                  : status === 'rejected'
-                  ? 'Rejected by the regulator — regenerate to mint a superseding version and rework it.'
-                  : status === 'declined'
-                  ? 'Declined by the regulator — the decision is final; see the supervisor comments above.'
-                  : 'Submission unlocks once the package is approved.'}
-              </p>
-            )}
-            {latestSubmitted?.channel === 'email' && (
-              <div className="mt-3 space-y-1.5">
-                <button
-                  type="button"
-                  onClick={handleEmlDownload}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
-                >
-                  <Download size={13} aria-hidden />
-                  Download .eml
-                </button>
-                <p className="text-micro text-slate leading-relaxed">
-                  Send-ready downtime email bundle (subject, instructions, and
-                  attachments) — open in your mail client and send.
-                </p>
-              </div>
-            )}
-            {emlError && (
-              <p className="mt-2 text-caption text-critical">{emlError}</p>
-            )}
-            {poll.data && (
-              <p className="mt-2 text-caption text-navy/80">
-                Last poll:{' '}
-                <span className="font-mono">{poll.data.pollStatus}</span>
-              </p>
-            )}
-            {poll.error && (
-              <div className="mt-3">
-                <ErrorPanel error={poll.error} title="Poll failed" />
-              </div>
-            )}
-            {submit.error && !fallback && (
-              <div className="mt-3">
-                <ErrorPanel error={submit.error} title="Submission failed" />
-              </div>
-            )}
-
-            {fallback && (
-              <div className="mt-3 rounded border border-warning/30 bg-warning-light/50 px-3.5 py-3 space-y-2.5">
-                <p className="inline-flex items-center gap-1.5 text-body font-medium text-navy">
-                  <Mail size={13} className="text-warning" aria-hidden />
-                  ORASS downtime — email fallback available
-                </p>
-                <p className="text-caption text-navy/80 leading-relaxed">
-                  {fallback.message}
-                </p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    disabled={submit.isPending || attestationBlocks}
-                    title={attestationBlockReason ?? undefined}
-                    onClick={() =>
-                      submit.mutate({ packageId: summary.id, channel: 'email' })
-                    }
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-                  >
-                    <Mail size={13} aria-hidden />
-                    Use email fallback
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleEmlDownload}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
-                  >
-                    <Download size={13} aria-hidden />
-                    Download .eml
-                  </button>
-                </div>
-                {instructionsQuery.data && (
-                  <details className="text-caption text-navy/80">
-                    <summary className="cursor-pointer font-medium text-navy">
-                      Preview send-ready instructions
-                    </summary>
-                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-border-light bg-surface p-3 font-mono text-micro leading-relaxed">
-                      {instructionsQuery.data.instructions}
-                    </pre>
-                  </details>
-                )}
-              </div>
-            )}
-          </SectionCard>
-
-          <ResubmissionCard
-            bankId={bankId}
-            packageId={summary.id}
-            status={status}
-            requests={resubmissions}
-            requestsError={resubmissionsQuery.error}
-            latestSubmittedChannel={latestSubmitted?.channel ?? null}
-          />
-
-          <PriorVersionsCard bankId={bankId} packageId={summary.id} />
+          {!attestationPrimary && attestationCard}
+          {railActionIds.map((id) => (
+            <Fragment key={id}>{panels[id]}</Fragment>
+          ))}
+          <div className="space-y-4">
+            <p className="text-micro font-medium uppercase tracking-wider text-slate">
+              History &amp; artifacts
+            </p>
+            {railHistoryIds.map((id) => (
+              <Fragment key={id}>{panels[id]}</Fragment>
+            ))}
+          </div>
         </div>
       </div>
     </div>

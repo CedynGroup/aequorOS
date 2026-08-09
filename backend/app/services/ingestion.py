@@ -34,7 +34,11 @@ from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
 from app.domain.ingestion.adapter import SourceAdapter, get_adapter_class
-from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES, SourceSystem
+from app.domain.ingestion.constants import (
+    BATCH_ACCEPTED_STATUSES,
+    DEPOSIT_ACCOUNT_TYPES,
+    SourceSystem,
+)
 from app.domain.ingestion.contracts import (
     ENTITY_TYPES,
     AdapterConfig,
@@ -883,11 +887,53 @@ def list_position_facets(
     )
 
 
+def _override_bool(value: Any) -> bool | None:
+    """Parse an override payload value as a nullable boolean."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in ("true", "t", "yes", "y", "1"):
+            return True
+        if lowered in ("false", "f", "no", "n", "0"):
+            return False
+    raise ValueError(f"{value!r} is not a boolean")
+
+
+def _override_deposit_account_type(value: Any) -> str | None:
+    if value is None:
+        return None
+    candidate = str(value).strip().upper()
+    if candidate not in DEPOSIT_ACCOUNT_TYPES:
+        raise ValueError(f"{value!r} is not one of {DEPOSIT_ACCOUNT_TYPES}")
+    return candidate
+
+
+def _override_str(value: Any) -> str | None:
+    return None if value is None else str(value).strip()
+
+
 _OVERRIDE_COERCIONS: dict[str, Any] = {
     "balance": lambda value: Decimal(str(value)),
     "interest_rate": lambda value: Decimal(str(value)) if value is not None else None,
     "ifrs9_stage": lambda value: int(value) if value is not None else None,
     "behavioral_maturity_months": lambda value: int(value) if value is not None else None,
+    # LMTD/LRMD classification fields: exactly the corrections a bank makes
+    # by hand during liquidity-directive onboarding, so they take the same
+    # audited HUMAN_OVERRIDE path as every other snapshot field.
+    "encumbered": _override_bool,
+    "operational_purpose": _override_bool,
+    "redeemable_within_two_days": _override_bool,
+    "pledged_as_collateral": _override_bool,
+    "encumbrance_reason": _override_str,
+    "owning_entity": _override_str,
+    "asset_location": _override_str,
+    "lien_reference": _override_str,
+    "deposit_account_type": _override_deposit_account_type,
 }
 
 
@@ -979,6 +1025,15 @@ def override_position_snapshot(
         contractual_maturity=snapshot.contractual_maturity,
         next_repricing_date=snapshot.next_repricing_date,
         ifrs9_stage=snapshot.ifrs9_stage,
+        encumbered=snapshot.encumbered,
+        encumbrance_reason=snapshot.encumbrance_reason,
+        owning_entity=snapshot.owning_entity,
+        asset_location=snapshot.asset_location,
+        operational_purpose=snapshot.operational_purpose,
+        redeemable_within_two_days=snapshot.redeemable_within_two_days,
+        pledged_as_collateral=snapshot.pledged_as_collateral,
+        lien_reference=snapshot.lien_reference,
+        deposit_account_type=snapshot.deposit_account_type,
         behavioral_maturity_months=snapshot.behavioral_maturity_months,
         enrichment_provenance={
             **snapshot.enrichment_provenance,
@@ -1533,6 +1588,7 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
             rating=data.rating,
             rating_source=data.rating_source,
             group_reference=data.group_reference,
+            resident=data.resident,
             external_identifiers=data.external_identifiers,
             attributes=data.attributes,
             **common,
@@ -1618,6 +1674,15 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
             contractual_maturity=data.contractual_maturity,
             next_repricing_date=data.next_repricing_date,
             ifrs9_stage=data.ifrs9_stage,
+            encumbered=data.encumbered,
+            encumbrance_reason=data.encumbrance_reason,
+            owning_entity=data.owning_entity,
+            asset_location=data.asset_location,
+            operational_purpose=data.operational_purpose,
+            redeemable_within_two_days=data.redeemable_within_two_days,
+            pledged_as_collateral=data.pledged_as_collateral,
+            lien_reference=data.lien_reference,
+            deposit_account_type=data.deposit_account_type,
             attributes=data.attributes,
             **common,
         )

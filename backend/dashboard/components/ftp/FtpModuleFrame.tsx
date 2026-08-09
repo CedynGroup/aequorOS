@@ -8,23 +8,20 @@
  */
 
 import type { ReactNode } from 'react';
-import { Info, Loader2, Zap } from 'lucide-react';
 import type {
   FtpDashboardRead,
   FtpMetricsRead,
   RegulatoryRunRead,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
-import RunBadge from '@/components/ui/RunBadge';
 import QueryBoundary from '@/components/ui/QueryBoundary';
-import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
+import LiveEngineNote from '@/components/live/LiveEngineNote';
 import {
   useFtpDashboard,
   useRegulatoryRun,
-  useRunAllFtpScenarios,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, isoDate } from '@/lib/api/values';
+import { fmtDateUTC } from '@/lib/api/values';
 
 export type FtpFrameContext = {
   data: FtpDashboardRead;
@@ -53,25 +50,9 @@ export default function FtpModuleFrame({
 
   const dashboard = useFtpDashboard(bankId, periodId);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
-  const runAll = useRunAllFtpScenarios(bankId);
 
   const data = dashboard.data;
 
-  const runAllButton = (
-    <button
-      type="button"
-      disabled={runAll.isPending || !periodId}
-      onClick={() => periodId && runAll.mutate({ reportingPeriodId: periodId })}
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-    >
-      {runAll.isPending ? (
-        <Loader2 size={13} className="animate-spin" aria-hidden />
-      ) : (
-        <Zap size={13} aria-hidden />
-      )}
-      Run all scenarios
-    </button>
-  );
 
   return (
     <>
@@ -83,19 +64,7 @@ export default function FtpModuleFrame({
         ]}
         title={title}
         subtitle={subtitle}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
-        action={
-          <div className="flex items-center gap-2">
-            <FreshnessBadge
-              bankId={bankId}
-              periodId={periodId}
-              module="ftp"
-              asOfDate={period ? isoDate(period.periodEnd) : undefined}
-            />
-            {latestRun.data && <RunBadge run={latestRun.data} />}
-            {runAllButton}
-          </div>
-        }
+        action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 
       <QueryBoundary
@@ -105,21 +74,6 @@ export default function FtpModuleFrame({
       >
         {data && (
           <div className="px-8 py-6 space-y-6">
-            {!data.stored && (
-              <div className="card border-l-4 border-l-warning bg-warning-light/40 px-5 py-3.5 flex items-start gap-3">
-                <Info
-                  size={16}
-                  className="text-warning shrink-0 mt-0.5"
-                  aria-hidden
-                />
-                <p className="text-body text-navy/85 leading-relaxed">
-                  Showing a live computation for this period — run all
-                  scenarios to persist auditable regulatory runs (and the
-                  parameter snapshot) for the rate and funding-stress
-                  overlays.
-                </p>
-              </div>
-            )}
             {children({
               data,
               metrics: data.metrics,

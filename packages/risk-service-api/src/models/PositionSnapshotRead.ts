@@ -28,6 +28,12 @@ export interface PositionSnapshotRead {
    * @type {string}
    * @memberof PositionSnapshotRead
    */
+  assetLocation?: string | null;
+  /**
+   *
+   * @type {string}
+   * @memberof PositionSnapshotRead
+   */
   balance: string;
   /**
    *
@@ -35,6 +41,24 @@ export interface PositionSnapshotRead {
    * @memberof PositionSnapshotRead
    */
   behavioralMaturityMonths: number | null;
+  /**
+   *
+   * @type {string}
+   * @memberof PositionSnapshotRead
+   */
+  depositAccountType?: string | null;
+  /**
+   *
+   * @type {boolean}
+   * @memberof PositionSnapshotRead
+   */
+  encumbered?: boolean | null;
+  /**
+   *
+   * @type {string}
+   * @memberof PositionSnapshotRead
+   */
+  encumbranceReason?: string | null;
   /**
    *
    * @type {{ [key: string]: any; }}
@@ -64,13 +88,43 @@ export interface PositionSnapshotRead {
    * @type {string}
    * @memberof PositionSnapshotRead
    */
+  lienReference?: string | null;
+  /**
+   *
+   * @type {string}
+   * @memberof PositionSnapshotRead
+   */
   lineageId: string;
+  /**
+   *
+   * @type {boolean}
+   * @memberof PositionSnapshotRead
+   */
+  operationalPurpose?: boolean | null;
+  /**
+   *
+   * @type {string}
+   * @memberof PositionSnapshotRead
+   */
+  owningEntity?: string | null;
+  /**
+   *
+   * @type {boolean}
+   * @memberof PositionSnapshotRead
+   */
+  pledgedAsCollateral?: boolean | null;
   /**
    *
    * @type {string}
    * @memberof PositionSnapshotRead
    */
   positionId: string;
+  /**
+   *
+   * @type {boolean}
+   * @memberof PositionSnapshotRead
+   */
+  redeemableWithinTwoDays?: boolean | null;
   /**
    *
    * @type {string}
@@ -142,14 +196,41 @@ export function PositionSnapshotReadFromJSONTyped(
   }
   return {
     asOfDate: new Date(json["as_of_date"]),
+    assetLocation:
+      json["asset_location"] == null ? undefined : json["asset_location"],
     balance: json["balance"],
     behavioralMaturityMonths: json["behavioral_maturity_months"],
+    depositAccountType:
+      json["deposit_account_type"] == null
+        ? undefined
+        : json["deposit_account_type"],
+    encumbered: json["encumbered"] == null ? undefined : json["encumbered"],
+    encumbranceReason:
+      json["encumbrance_reason"] == null
+        ? undefined
+        : json["encumbrance_reason"],
     enrichmentProvenance: json["enrichment_provenance"],
     id: json["id"],
     ifrs9Stage: json["ifrs9_stage"],
     interestRate: json["interest_rate"],
+    lienReference:
+      json["lien_reference"] == null ? undefined : json["lien_reference"],
     lineageId: json["lineage_id"],
+    operationalPurpose:
+      json["operational_purpose"] == null
+        ? undefined
+        : json["operational_purpose"],
+    owningEntity:
+      json["owning_entity"] == null ? undefined : json["owning_entity"],
+    pledgedAsCollateral:
+      json["pledged_as_collateral"] == null
+        ? undefined
+        : json["pledged_as_collateral"],
     positionId: json["position_id"],
+    redeemableWithinTwoDays:
+      json["redeemable_within_two_days"] == null
+        ? undefined
+        : json["redeemable_within_two_days"],
     supersededSnapshotId:
       json["superseded_snapshot_id"] == null
         ? undefined
@@ -172,14 +253,23 @@ export function PositionSnapshotReadToJSONTyped(
 
   return {
     as_of_date: value["asOfDate"].toISOString().substring(0, 10),
+    asset_location: value["assetLocation"],
     balance: value["balance"],
     behavioral_maturity_months: value["behavioralMaturityMonths"],
+    deposit_account_type: value["depositAccountType"],
+    encumbered: value["encumbered"],
+    encumbrance_reason: value["encumbranceReason"],
     enrichment_provenance: value["enrichmentProvenance"],
     id: value["id"],
     ifrs9_stage: value["ifrs9Stage"],
     interest_rate: value["interestRate"],
+    lien_reference: value["lienReference"],
     lineage_id: value["lineageId"],
+    operational_purpose: value["operationalPurpose"],
+    owning_entity: value["owningEntity"],
+    pledged_as_collateral: value["pledgedAsCollateral"],
     position_id: value["positionId"],
+    redeemable_within_two_days: value["redeemableWithinTwoDays"],
     superseded_snapshot_id: value["supersededSnapshotId"],
     validation_status: value["validationStatus"],
   };

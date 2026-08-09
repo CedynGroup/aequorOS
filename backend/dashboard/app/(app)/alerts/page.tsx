@@ -10,7 +10,8 @@
  */
 
 import { useState } from 'react';
-import { BellRing, Info } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, BellRing, Info } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import QueryBoundary from '@/components/ui/QueryBoundary';
@@ -100,6 +101,15 @@ export default function AlertCenterPage() {
                 Icon={BellRing}
                 title="No open alerts"
                 description="Every live module is inside its limits for the current period. New breaches appear here automatically as the pipeline recomputes on ingestion."
+                action={
+                  <Link
+                    href="/risk"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+                  >
+                    View Risk & Limits
+                    <ArrowRight size={13} aria-hidden />
+                  </Link>
+                }
               />
             ) : (
               <>

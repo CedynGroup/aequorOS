@@ -18,6 +18,13 @@ import {
   YieldCurvePointReadToJSON,
   YieldCurvePointReadToJSONTyped,
 } from "./YieldCurvePointRead";
+import type { CurveOverlayComponentRead } from "./CurveOverlayComponentRead";
+import {
+  CurveOverlayComponentReadFromJSON,
+  CurveOverlayComponentReadFromJSONTyped,
+  CurveOverlayComponentReadToJSON,
+  CurveOverlayComponentReadToJSONTyped,
+} from "./CurveOverlayComponentRead";
 import type { MarketDataAttributionRead } from "./MarketDataAttributionRead";
 import {
   MarketDataAttributionReadFromJSON,
@@ -27,11 +34,24 @@ import {
 } from "./MarketDataAttributionRead";
 
 /**
- * One currency's authoritative curve; rates are decimal fractions.
+ * One published curve (keyed by ``curve_name``); rates decimal fractions.
+ *
+ * ``curve_type`` badges the series (zero / forward / discount for desk-
+ * constructed curves; sovereign etc. for observed vendor curves).
+ * ``adjusted_points`` + ``overlay_components`` are non-empty only when the
+ * bank has active private overlays on this curve name: base + overlays
+ * composed at read time, golden data untouched (spec §2, §9). Both empty
+ * means "no adjusted series" — the base is never duplicated.
  * @export
  * @interface YieldCurveViewRead
  */
 export interface YieldCurveViewRead {
+  /**
+   *
+   * @type {Array<YieldCurvePointRead>}
+   * @memberof YieldCurveViewRead
+   */
+  adjustedPoints: Array<YieldCurvePointRead>;
   /**
    *
    * @type {Date}
@@ -58,6 +78,18 @@ export interface YieldCurveViewRead {
   curveName: string;
   /**
    *
+   * @type {string}
+   * @memberof YieldCurveViewRead
+   */
+  curveType: string;
+  /**
+   *
+   * @type {Array<CurveOverlayComponentRead>}
+   * @memberof YieldCurveViewRead
+   */
+  overlayComponents: Array<CurveOverlayComponentRead>;
+  /**
+   *
    * @type {Array<YieldCurvePointRead>}
    * @memberof YieldCurveViewRead
    */
@@ -70,11 +102,19 @@ export interface YieldCurveViewRead {
 export function instanceOfYieldCurveViewRead(
   value: object,
 ): value is YieldCurveViewRead {
+  if (!("adjustedPoints" in value) || value["adjustedPoints"] === undefined)
+    return false;
   if (!("asOfDate" in value) || value["asOfDate"] === undefined) return false;
   if (!("attribution" in value) || value["attribution"] === undefined)
     return false;
   if (!("currency" in value) || value["currency"] === undefined) return false;
   if (!("curveName" in value) || value["curveName"] === undefined) return false;
+  if (!("curveType" in value) || value["curveType"] === undefined) return false;
+  if (
+    !("overlayComponents" in value) ||
+    value["overlayComponents"] === undefined
+  )
+    return false;
   if (!("points" in value) || value["points"] === undefined) return false;
   return true;
 }
@@ -92,10 +132,17 @@ export function YieldCurveViewReadFromJSONTyped(
   }
   return {
     ...json,
+    adjustedPoints: (json["adjusted_points"] as Array<any>).map(
+      YieldCurvePointReadFromJSON,
+    ),
     asOfDate: new Date(json["as_of_date"]),
     attribution: MarketDataAttributionReadFromJSON(json["attribution"]),
     currency: json["currency"],
     curveName: json["curve_name"],
+    curveType: json["curve_type"],
+    overlayComponents: (json["overlay_components"] as Array<any>).map(
+      CurveOverlayComponentReadFromJSON,
+    ),
     points: (json["points"] as Array<any>).map(YieldCurvePointReadFromJSON),
   };
 }
@@ -113,10 +160,17 @@ export function YieldCurveViewReadToJSONTyped(
   }
 
   return {
+    adjusted_points: (value["adjustedPoints"] as Array<any>).map(
+      YieldCurvePointReadToJSON,
+    ),
     as_of_date: value["asOfDate"].toISOString().substring(0, 10),
     attribution: MarketDataAttributionReadToJSON(value["attribution"]),
     currency: value["currency"],
     curve_name: value["curveName"],
+    curve_type: value["curveType"],
+    overlay_components: (value["overlayComponents"] as Array<any>).map(
+      CurveOverlayComponentReadToJSON,
+    ),
     points: (value["points"] as Array<any>).map(YieldCurvePointReadToJSON),
   };
 }

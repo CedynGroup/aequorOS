@@ -5,6 +5,7 @@ const tabs = [
   { href: '/ftp/products', label: 'Product Profitability' },
   { href: '/ftp/lines', label: 'Business Lines' },
   { href: '/ftp/rules', label: 'Rules' },
+  { href: '/ftp/scenarios', label: 'Scenarios' },
   { href: '/ftp/expost', label: 'Ex-ante vs Ex-post' },
 ];
 

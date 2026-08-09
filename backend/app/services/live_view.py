@@ -14,10 +14,12 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
-from app.models import Bank, BankReportingPeriod, LiveMetric
+from app.models import Bank, BankReportingPeriod, LiveMetric, LiveMetricSnapshot
 from app.schemas.live import (
     JobEnqueuedRead,
     LiveModuleView,
+    LiveSnapshotListRead,
+    LiveSnapshotRead,
     LiveSummaryRead,
     OfficialRunRequest,
     RefreshRequest,
@@ -154,3 +156,52 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     if bank is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
     return bank
+
+
+def list_live_snapshots(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    *,
+    module: str,
+    days: int = 45,
+) -> LiveSnapshotListRead:
+    """The plane-2 daily ladder, oldest first, capped at ``days`` rows.
+
+    Past days are end-of-day closes; today's row (when present) is the live
+    edge. The series only has rows for days a refresh actually ran — gaps
+    are honest, not zero-filled.
+    """
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    rows = list(
+        db.scalars(
+            select(LiveMetricSnapshot)
+            .where(
+                LiveMetricSnapshot.organization_id == ctx.organization_id,
+                LiveMetricSnapshot.bank_id == bank.id,
+                LiveMetricSnapshot.module == module,
+            )
+            .order_by(LiveMetricSnapshot.snapshot_date.desc())
+            .limit(days)
+        )
+    )
+    rows.reverse()
+    return LiveSnapshotListRead(
+        bank_id=bank.id,
+        module=module,
+        days=days,
+        snapshots=[
+            LiveSnapshotRead(
+                snapshot_date=row.snapshot_date,
+                module=row.module,
+                metrics={
+                    key: value
+                    for key, value in row.metrics.items()
+                    if isinstance(value, (str, int, float, bool))
+                },
+                status=row.status,
+                computed_at=row.computed_at,
+            )
+            for row in rows
+        ],
+    )

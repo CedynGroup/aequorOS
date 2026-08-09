@@ -30,6 +30,7 @@ from app.models.canonical import (
     CanonicalYieldCurvePoint,
 )
 from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
+from app.models.capital_plan import CapitalPlan, IlaapSnapshot
 from app.models.database_connection import DatabaseDirectConnection
 from app.models.financial import (
     FinancialAccount,
@@ -62,16 +63,37 @@ from app.models.institution_profile import (
 )
 from app.models.integration_key import IntegrationKey
 from app.models.jurisdiction import Jurisdiction
-from app.models.live import LiveFinding, LiveMetric
-from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
+from app.models.liquidity_cfp import (
+    CfpActivationEvent,
+    ContingencyFundingPlan,
+    LiquidityEwiIndicator,
+)
+from app.models.live import LiveFinding, LiveMetric, LiveMetricSnapshot
+from app.models.market_data import (
+    MarketDataConnection,
+    MarketDataOverlay,
+    MarketDataQuotaUsage,
+)
+from app.models.market_desk import (
+    DeskDetermination,
+    DeskMethodology,
+    DeskObservation,
+    DeskPublication,
+    DeskSourceCapture,
+)
 from app.models.notification import Notification
+from app.models.operator import OperatorAuditLog, TenantStorage
 from app.models.organization import Organization
 from app.models.regulatory import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
     ParamCapitalThreshold,
+    ParamCrmHaircut,
+    ParamEclAssumption,
     ParamLcrRunoffRate,
+    ParamLiquidityHaircut,
+    ParamLiquidityThreshold,
     ParamNsfrWeight,
     ParamRiskWeight,
     ParamStressShock,
@@ -106,6 +128,7 @@ from app.models.risk import (
     StoredObject,
 )
 from app.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
+from app.models.scenario_workbench import SavedScenarioAnalysis, StressScenario
 from app.models.sso_connection import SsoConnection
 from app.models.temenos import TemenosConnection
 from app.models.user import User
@@ -134,6 +157,8 @@ __all__ = [
     "CapitalIndicator",
     "CapitalProjection",
     "CapitalProjectionFinding",
+    "CapitalPlan",
+    "IlaapSnapshot",
     "CalculationForecastPeriod",
     "CalculationRun",
     "LiquidityAnalysisResult",
@@ -158,13 +183,25 @@ __all__ = [
     "LineageRecord",
     "LiveFinding",
     "LiveMetric",
+    "LiveMetricSnapshot",
     "MappingConfigRecord",
     "DatabaseDirectConnection",
     "MarketDataConnection",
+    "MarketDataOverlay",
     "MarketDataQuotaUsage",
+    "DeskDetermination",
+    "DeskMethodology",
+    "DeskObservation",
+    "DeskPublication",
+    "DeskSourceCapture",
+    "CfpActivationEvent",
+    "ContingencyFundingPlan",
+    "LiquidityEwiIndicator",
     "Notification",
     "IntegrationKey",
+    "OperatorAuditLog",
     "Organization",
+    "TenantStorage",
     "PackageSignaturePlacement",
     "PackageSignatureRecipient",
     "RegulatoryArtifactVersion",
@@ -177,6 +214,10 @@ __all__ = [
     "TemenosConnection",
     "TranslationFailure",
     "ParamCapitalThreshold",
+    "ParamCrmHaircut",
+    "ParamEclAssumption",
+    "ParamLiquidityHaircut",
+    "ParamLiquidityThreshold",
     "ParamLcrRunoffRate",
     "ParamNsfrWeight",
     "ParamRiskWeight",
@@ -192,6 +233,8 @@ __all__ = [
     "RegulatoryRun",
     "RegulatorySubmissionEvent",
     "RegulatoryValidation",
+    "SavedScenarioAnalysis",
+    "StressScenario",
     "RelatedParty",
     "RelatedPartyRole",
     "RiskAssessment",

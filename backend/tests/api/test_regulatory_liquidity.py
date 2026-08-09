@@ -18,12 +18,17 @@ GOLDEN_LCR_BY_SCENARIO = {
     "idiosyncratic": (Decimal("94.8387"), "amber"),
     "market_wide": (Decimal("113.0091"), "green"),
     "combined": (Decimal("87.3566"), "red"),
+    # Minted 2026-08-07 from the deterministic seeded book: FX run-off
+    # uplifts + 5% HQLA haircut; the 30% depreciation itself lands on the
+    # per-currency gap layer, not the fact engine.
+    "usd_funding_stress": (Decimal("108.8099"), "green"),
 }
 GOLDEN_NSFR_BY_SCENARIO = {
     "baseline": (Decimal("151.4871"), "green"),
     "idiosyncratic": (Decimal("139.5133"), "green"),
     "market_wide": (Decimal("147.9442"), "green"),
     "combined": (Decimal("136.2505"), "green"),
+    "usd_funding_stress": (Decimal("151.4871"), "green"),
 }
 
 
@@ -64,7 +69,7 @@ def test_create_baseline_run_persists_snapshot_metrics_and_outputs(  # noqa: PLR
     assert run["module"] == "liquidity"
     assert run["scenario_code"] == "baseline"
     assert run["engine_version"] == "regulatory-liquidity-v1.0.0"
-    assert run["input_schema_version"] == "bank-facts-v2"
+    assert run["input_schema_version"] == "bank-facts-v3"
     assert run["output_schema_version"] == "liquidity-metrics-v1"
     assert run["started_at"] is not None
     assert run["completed_at"] is not None
@@ -72,7 +77,7 @@ def test_create_baseline_run_persists_snapshot_metrics_and_outputs(  # noqa: PLR
     assert len(run["input_hash"]) == 64
 
     snapshot = run["inputs"]
-    assert snapshot["schema_version"] == "bank-facts-v2"
+    assert snapshot["schema_version"] == "bank-facts-v3"
     assert snapshot["scenario_code"] == "baseline"
     assert snapshot["as_of_date"] == "2026-03-31"
     assert snapshot["reporting_period"]["label"] == "2026-03"
@@ -185,6 +190,7 @@ def test_run_all_scenarios_returns_four_runs_with_golden_statuses(
         "idiosyncratic",
         "market_wide",
         "combined",
+        "usd_funding_stress",
     ]
     assert all(run["status"] == "succeeded" for run in runs)
 

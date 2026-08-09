@@ -262,6 +262,53 @@ class TestGatingSemantics:
         assert outcome.findings == []
 
 
+class TestLmtdClassificationCoverage:
+    def test_deposit_without_account_type_is_flagged(self) -> None:
+        outcome = run_validation(
+            records_of(make_position("DP-01", position_type="DEPOSIT")),
+            config_with(RuleConfig(name="lmtd_classification_coverage", severity="INFO")),
+            context(),
+        )
+        (finding,) = outcome.findings
+        assert finding.rule == "lmtd_classification_coverage"
+        assert finding.severity == "INFO"
+        assert "deposit_account_type" in finding.detail
+        assert finding.source_reference == "DP-01"
+
+    def test_classified_deposit_and_encumbrance_flagged_asset_pass(self) -> None:
+        outcome = run_validation(
+            records_of(
+                make_position("DP-02", position_type="DEPOSIT", deposit_account_type="CALL"),
+                make_position("SEC-01", position_type="SECURITY_HOLDING", encumbered=False),
+            ),
+            config_with(RuleConfig(name="lmtd_classification_coverage", severity="INFO")),
+            context(),
+        )
+        assert outcome.findings == []
+
+    def test_liquid_asset_without_encumbrance_flag_is_flagged(self) -> None:
+        outcome = run_validation(
+            records_of(make_position("SEC-02", position_type="SECURITY_HOLDING")),
+            config_with(RuleConfig(name="lmtd_classification_coverage", severity="WARNING")),
+            context(),
+        )
+        (finding,) = outcome.findings
+        assert "encumbered" in finding.detail
+        assert finding.severity == "WARNING"
+
+    def test_loans_are_not_in_scope(self) -> None:
+        outcome = run_validation(
+            records_of(make_position()),  # a LOAN with neither field set
+            config_with(RuleConfig(name="lmtd_classification_coverage", severity="INFO")),
+            context(),
+        )
+        assert outcome.findings == []
+
+    def test_default_config_keeps_coverage_at_info(self) -> None:
+        rules = {rule.name: rule for rule in default_validation_config().rules}
+        assert rules["lmtd_classification_coverage"].severity == "INFO"
+
+
 class TestReport:
     def test_report_shape_matches_the_operator_contract(self) -> None:
         outcome = run_validation(

@@ -57,14 +57,18 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.models import (
     Bank,
-    BankFinancialFact,
     BankReportingPeriod,
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
+    ParamLiquidityHaircut,
+    ParamLiquidityThreshold,
+    RelatedParty,
 )
 from app.services import regulatory_capital, regulatory_liquidity
+from app.services.liquidity_thresholds import BANK_MINIMUM_PCT as _TABLE1_BANK_MINIMUM_PCT
+from app.services.params import get_active_params
 from app.services.regulatory_reporting.generation import (
     MODULE_CAPITAL,
     MODULE_LIQUIDITY,
@@ -96,24 +100,118 @@ _SOVEREIGN_CATEGORY_PREFIX = "SOVEREIGN"
 _LE_THRESHOLD_FRACTION = Decimal("0.10")  # large exposure = ≥10% of NOF (¶11)
 _TOP_EXPOSURES_CAP = 100  # Template 2: top-100 exposures
 
-# LMTD-derived contractual maturity ladder (condensed bucket set — the
-# published Table 2 carries 15 columns; these buckets follow the plan spec
-# and the fact_derivation repricing day-bounds). Undated positions land in
-# the separate non-contractual bucket (Table 2's final column), never in
-# overnight.
-_LADDER_BUCKETS: tuple[tuple[str, str, int | None], ...] = (
-    ("overnight", "Overnight", 1),
-    ("2-7d", "2-7 days", 7),
-    ("8-30d", "8-30 days", 30),
-    ("1-3m", "1-3 months", 91),
-    ("3-6m", "3-6 months", 182),
-    ("6-12m", "6-12 months", 365),
-    (">1y", "Over 1 year", None),
+# LMTD Table 2 (Contractual Cash Flow Mismatch) — the FULL published bucket
+# set: 13 dated columns + non-contractual (built 2026-08-07, replacing the
+# condensed 7-bucket ladder whose aggregation was lossy). Upper bounds are
+# calendar-approximate day counts (months ≈ 30/31-day steps, years ≈ 365);
+# undated positions land in the separate non-contractual column, never in
+# Next Day. Keys double as snapshot-row extras and template column ids.
+_TABLE2_BUCKETS: tuple[tuple[str, str, int | None], ...] = (
+    ("next_day_ghs", "Next Day", 1),
+    ("d2_7_ghs", "2 - 7 days", 7),
+    ("d8_14_ghs", "8 - 14 days", 14),
+    ("d15_1m_ghs", "15 days to 1 mth", 30),
+    ("m1_2_ghs", "1 - 2 mths", 61),
+    ("m2_3_ghs", "2 - 3 mths", 91),
+    ("m3_6_ghs", "3 - 6 mths", 182),
+    ("m6_9_ghs", "6 - 9 mths", 273),
+    ("m9_12_ghs", "9 mths - 1 yr", 365),
+    ("y1_2_ghs", "1 - 2 yrs", 730),
+    ("y2_3_ghs", "2 - 3 yrs", 1095),
+    ("y3_5_ghs", "3 - 5 yrs", 1825),
+    ("y5_plus_ghs", "> 5 yrs", None),
 )
-_NON_CONTRACTUAL_BUCKET = ("non_contractual", "Non-contractual (no stated maturity)")
-_LADDER_ASSET_TYPES = ("LOAN", "SECURITY_HOLDING", "INTERBANK_PLACEMENT", "CASH", "OTHER_ASSET")
-_LADDER_LIABILITY_TYPES = ("DEPOSIT", "INTERBANK_BORROWING", "OTHER_LIABILITY")
+_NON_CONTRACTUAL_BUCKET = ("non_contractual_ghs", "Non-contractual")
+
+# Table 2 row taxonomy: canonical position types → published row categories.
+# Derivative-family instruments split by carrying-value sign (MTM asset →
+# row 3, MTM liability → row 8) because the canonical model stores one
+# signed balance per instrument, not separate legs.
+_T2_ADVANCES = ("LOAN",)
+_T2_DERIVATIVE_FAMILY = ("DERIVATIVE", "FX_HEDGE", "INTEREST_RATE_SWAP")
+_T2_OTHER_ASSETS = ("CASH", "INTERBANK_PLACEMENT", "OTHER_ASSET")
+_T2_OTHER_LIABILITIES = ("INTERBANK_BORROWING", "OTHER_LIABILITY")
+_T2_OFF_BALANCE = ("LC_GUARANTEE", "COMMITMENT_UNDRAWN")
+_TABLE2_POSITION_TYPES = (
+    *_T2_ADVANCES,
+    "SECURITY_HOLDING",
+    *_T2_DERIVATIVE_FAMILY,
+    *_T2_OTHER_ASSETS,
+    "DEPOSIT",
+    *_T2_OTHER_LIABILITIES,
+    *_T2_OFF_BALANCE,
+)
+# LMTD ¶5: Volatile Liabilities = all demand deposits (current and call).
+# Stable = the complement; an unclassified deposit reports as stable/OTHER
+# and is flagged at the ingestion gate (lmtd_classification_coverage).
+_VOLATILE_DEPOSIT_TYPES = ("CURRENT", "CALL")
+# Off-balance-sheet sub-rows (Table 2 rows 13/15/16/17). Sources that
+# distinguish OBS instruments set attributes["obs_category"]; without it,
+# undrawn commitments default to row 15 (irrevocable lending facilities)
+# and LC/guarantee positions to row 17 (indemnities and guarantees) — the
+# dominant category in Ghanaian OBS books. Row 16 fills only when the
+# source names its letters of credit.
+_OBS_CATEGORY_ROWS = {
+    "obs_vehicle_facility": "13",
+    "lending_facility": "15",
+    "letter_of_credit": "16",
+    "guarantee": "17",
+}
 _TOP_DEPOSITORS = 10
+
+# --- LMTD Table 1: BOG Prudential Ratios (tool (a); built 2026-08-07) ------
+#
+# Six inputs (LMTD ¶5 definitions) for the reporting and previous month, and
+# eight ratios compared against the Board threshold register
+# (ParamLiquidityThreshold) with the directive's published bank minimums as
+# the regulatory floor when no Board row exists. ¶9 makes these BINDING
+# compliance ratios for SDIs; for banks they are monitoring tools.
+_TABLE1_RATIOS: tuple[tuple[str, str, str, str], ...] = (
+    ("narrow_to_volatile", "Narrow Liquid Assets to Volatile Liabilities", "narrow", "volatile"),
+    ("broad_to_volatile", "Broad Liquid Assets to Volatile Liabilities", "broad", "volatile"),
+    (
+        "narrow_to_short_term",
+        "Narrow Liquid Assets to Short Term Liabilities",
+        "narrow",
+        "short_term",
+    ),
+    (
+        "broad_to_short_term",
+        "Broad Liquid Assets to Short Term Liabilities",
+        "broad",
+        "short_term",
+    ),
+    (
+        "narrow_to_total_deposits",
+        "Narrow Liquid Assets to Total Deposits",
+        "narrow",
+        "total_deposits",
+    ),
+    (
+        "broad_to_total_deposits",
+        "Broad Liquid Assets to Total Deposits",
+        "broad",
+        "total_deposits",
+    ),
+    ("narrow_to_total_assets", "Narrow Liquid Assets to Total Assets", "narrow", "total_assets"),
+    ("broad_to_total_assets", "Broad Liquid Assets to Total Assets", "broad", "total_assets"),
+)
+_TABLE1_INPUT_LABELS: tuple[tuple[str, str], ...] = (
+    ("narrow", "Narrow Liquid Assets"),
+    ("broad", "Broad Liquid Assets"),
+    ("volatile", "Volatile liabilities"),
+    ("total_deposits", "Total Deposits"),
+    ("short_term", "Short-term liabilities"),
+    ("total_assets", "Total Assets"),
+)
+_ONE_YEAR_DAYS = 365
+_BANK_COUNTERPARTY_TYPES = ("BANK_OECD", "BANK_NON_OECD")
+# LMTD ¶5 short-term liabilities (a): current, call and savings accounts are
+# by their nature assessed to mature within one year, regardless of any
+# stated maturity — behavioural/NMD lives must never leak into this rule.
+_SHORT_TERM_BY_NATURE = ("CURRENT", "CALL", "SAVINGS")
+_EQUITY_CATEGORY_PREFIX = "EQUITY"
+_TOTAL_ASSET_TYPES = ("LOAN", "SECURITY_HOLDING", "CASH", "INTERBANK_PLACEMENT", "OTHER_ASSET")
 
 
 def _conflict_409(error_code: str, message: str) -> HTTPException:
@@ -157,6 +255,28 @@ class _CanonicalRow:
     counterparty_tin: str
     issuer: str | None
     regulatory_category: str | None
+    # LMTD/LRMD 2026 classification fields (canonical epoch 2026-08-07).
+    notional_ghs: Decimal | None
+    deposit_account_type: str | None
+    obs_category: str | None
+    encumbered: bool | None
+    encumbrance_reason: str | None
+    owning_entity: str | None
+    asset_location: str | None
+    operational_purpose: bool | None
+    redeemable_within_two_days: bool | None
+    pledged_as_collateral: bool | None
+    lien_reference: str | None
+    counterparty_resident: bool | None
+    counterparty_rating: str | None
+    # Table 8 negotiable-paper convention + counterparty-side related hint.
+    funding_instrument: str | None
+    counterparty_related_hint: bool
+    # Tables 4/10 collateral-received conventions: the documented
+    # ``collateral_*`` / ``own_debt_*`` attribute keys, present only when the
+    # source supplies them (docs/API_INTEGRATION.md §3.4).
+    collateral: dict[str, Any] | None
+    product_name: str | None
 
 
 def _group_reference(counterparty: CanonicalCounterparty) -> str | None:
@@ -220,9 +340,12 @@ def _load_canonical_rows(
                 balance_ghs = _ZERO
                 has_ghs_value = False
         notional_ghs = _dec_or_none(attributes.get("notional_ghs"))
+        if notional_ghs is None and position.currency == base_currency:
+            notional_ghs = _dec_or_none(snapshot.notional)
         ccf = _dec_or_none(attributes.get("credit_conversion_factor"))
         undrawn = notional_ghs * ccf if notional_ghs is not None and ccf is not None else _ZERO
         issuer = attributes.get("issuer")
+        obs_category = attributes.get("obs_category")
         rows.append(
             _CanonicalRow(
                 position_type=position.position_type,
@@ -244,9 +367,65 @@ def _load_canonical_rows(
                 counterparty_tin=_counterparty_tin(counterparty) if counterparty else "",
                 issuer=str(issuer) if issuer else None,
                 regulatory_category=(product.regulatory_category if product is not None else None),
+                notional_ghs=notional_ghs,
+                deposit_account_type=snapshot.deposit_account_type,
+                obs_category=str(obs_category) if obs_category else None,
+                encumbered=snapshot.encumbered,
+                encumbrance_reason=snapshot.encumbrance_reason,
+                owning_entity=snapshot.owning_entity,
+                asset_location=snapshot.asset_location,
+                operational_purpose=snapshot.operational_purpose,
+                redeemable_within_two_days=snapshot.redeemable_within_two_days,
+                pledged_as_collateral=snapshot.pledged_as_collateral,
+                lien_reference=snapshot.lien_reference,
+                counterparty_resident=(
+                    counterparty.resident if counterparty is not None else None
+                ),
+                counterparty_rating=counterparty.rating if counterparty is not None else None,
+                funding_instrument=(
+                    str(attributes["funding_instrument"]).strip().lower()
+                    if attributes.get("funding_instrument")
+                    else None
+                ),
+                counterparty_related_hint=_counterparty_related_hint(counterparty),
+                collateral=_collateral_attributes(attributes),
+                product_name=product.name if product is not None else None,
             )
         )
     return rows
+
+
+_COLLATERAL_KEYS = (
+    "collateral_instrument",
+    "collateral_asset_class",
+    "collateral_received_ghs",
+    "collateral_rehypothecable",
+    "collateral_rehypothecated_ghs",
+    "collateral_unavailable_ghs",
+    "collateral_group_issued",
+    "collateral_bog_eligible",
+    "own_debt_available_ghs",
+    "own_debt_unavailable_ghs",
+)
+
+
+def _collateral_attributes(attributes: dict[str, Any]) -> dict[str, Any] | None:
+    present = {key: attributes[key] for key in _COLLATERAL_KEYS if attributes.get(key)}
+    return present or None
+
+
+def _counterparty_related_hint(counterparty: CanonicalCounterparty | None) -> bool:
+    """True when the SOURCE marks the counterparty related/intragroup."""
+    if counterparty is None:
+        return False
+    attributes = counterparty.attributes or {}
+    for key in ("related_party", "intragroup"):
+        value = attributes.get(key)
+        if isinstance(value, bool) and value:
+            return True
+        if isinstance(value, str) and value.strip().lower() in ("true", "yes", "y", "1"):
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -579,244 +758,1523 @@ def _maturity_bucket(maturity: date | None, as_of: date) -> str:
     if maturity is None:
         return _NON_CONTRACTUAL_BUCKET[0]
     days = (maturity - as_of).days
-    for code, _, upper in _LADDER_BUCKETS:
+    for code, _, upper in _TABLE2_BUCKETS:
         if upper is None or days <= upper:
             return code
-    return _LADDER_BUCKETS[-1][0]
+    return _TABLE2_BUCKETS[-1][0]
+
+
+_BUCKET_CODES = tuple(code for code, _, _ in _TABLE2_BUCKETS)
+_ALL_BUCKET_CODES = (*_BUCKET_CODES, _NON_CONTRACTUAL_BUCKET[0])
+
+# Table 2's printed rows, in filing order. Derived rows (1, 5, 10, 11, 12,
+# 14) are computed from the category rows; the rest accumulate positions.
+_TABLE2_ROW_LABELS: tuple[tuple[str, str], ...] = (
+    ("1", "Contractual maturity of assets (items 2 to 4)"),
+    ("2", "Advances"),
+    ("3", "Trading, hedging and other investment instruments"),
+    ("4", "Other assets"),
+    ("5", "Contractual maturity of liabilities (items 6 to 9)"),
+    ("6", "Stable deposits"),
+    ("7", "Volatile deposits"),
+    ("8", "Trading and hedging instruments"),
+    ("9", "Other liabilities"),
+    ("10", "On-balance sheet contractual mismatch (item 1 less item 5)"),
+    ("11", "Cumulative on-balance sheet contractual mismatch"),
+    ("12", "Off-balance sheet exposure to liquidity risk, of which:"),
+    ("13", "Liquidity facilities provided to off-balance-sheet vehicles"),
+    ("14", "Undrawn commitments (items 15 to 17)"),
+    ("15", "Unutilised portion of irrevocable lending facilities"),
+    ("16", "Unutilised portion of irrevocable letters of credit"),
+    ("17", "Indemnities and guarantees"),
+)
+
+_Vector = dict[str, Decimal]
+
+
+def _vector() -> _Vector:
+    return dict.fromkeys(_ALL_BUCKET_CODES, _ZERO)
+
+
+def _vector_sum(*vectors: _Vector) -> _Vector:
+    out = _vector()
+    for vec in vectors:
+        for code in _ALL_BUCKET_CODES:
+            out[code] += vec[code]
+    return out
+
+
+def _vector_sub(left: _Vector, right: _Vector) -> _Vector:
+    return {code: left[code] - right[code] for code in _ALL_BUCKET_CODES}
+
+
+def _table2_row_for(row: _CanonicalRow) -> tuple[str, Decimal] | None:  # noqa: PLR0911 - one return per printed row category
+    """(printed row number, contribution amount) for one canonical position.
+
+    Classification is deterministic and documented — never heuristic:
+    on-balance categories map from ``position_type`` (with the derivative
+    sign split), deposits split stable/volatile on ``deposit_account_type``,
+    and OBS sub-rows follow ``attributes["obs_category"]`` with documented
+    per-type defaults. Amounts: on-balance rows use the GHS balance; OBS
+    rows use the GHS notional (the unutilised amount itself, not a
+    CCF-weighted capital equivalent), falling back to balance.
+    """
+    kind = row.position_type
+    if kind in _T2_ADVANCES:
+        return "2", row.balance_ghs
+    if kind == "SECURITY_HOLDING":
+        return "3", row.balance_ghs
+    if kind in _T2_DERIVATIVE_FAMILY:
+        if row.balance_ghs < _ZERO:
+            return "8", -row.balance_ghs
+        return "3", row.balance_ghs
+    if kind in _T2_OTHER_ASSETS:
+        return "4", row.balance_ghs
+    if kind == "DEPOSIT":
+        account_type = (row.deposit_account_type or "").upper()
+        if account_type in _VOLATILE_DEPOSIT_TYPES:
+            return "7", row.balance_ghs
+        return "6", row.balance_ghs
+    if kind in _T2_OTHER_LIABILITIES:
+        return "9", row.balance_ghs
+    if kind in _T2_OFF_BALANCE:
+        amount = row.notional_ghs if row.notional_ghs is not None else row.balance_ghs
+        category = (row.obs_category or "").strip().lower()
+        target = _OBS_CATEGORY_ROWS.get(category)
+        if target is None:
+            target = "15" if kind == "COMMITMENT_UNDRAWN" else "17"
+        return target, amount
+    return None
+
+
+def _table2_snapshot_row(number: str, label: str, vector: _Vector) -> dict[str, Any]:
+    total = sum((vector[code] for code in _ALL_BUCKET_CODES), _ZERO)
+    return snapshot_row(
+        number, label, total, **{code: str(vector[code]) for code in _ALL_BUCKET_CODES}
+    )
 
 
 def _ladder_section(rows: list[_CanonicalRow], as_of: date) -> tuple[dict[str, Any], Decimal]:
-    assets: dict[str, Decimal] = {}
-    liabilities: dict[str, Decimal] = {}
+    """LMTD Table 2 — the full 17-row × 15-column published grid."""
+    accumulated: dict[str, _Vector] = {number: _vector() for number, _ in _TABLE2_ROW_LABELS}
     for row in rows:
-        bucket = _maturity_bucket(row.contractual_maturity, as_of)
-        if row.position_type in _LADDER_ASSET_TYPES:
-            assets[bucket] = assets.get(bucket, _ZERO) + row.balance_ghs
-        else:
-            liabilities[bucket] = liabilities.get(bucket, _ZERO) + row.balance_ghs
+        target = _table2_row_for(row)
+        if target is None:
+            continue
+        number, amount = target
+        accumulated[number][_maturity_bucket(row.contractual_maturity, as_of)] += amount
 
-    ladder_rows: list[dict[str, Any]] = []
-    cumulative = _ZERO
-    for code, label, _ in _LADDER_BUCKETS:
-        asset_total = assets.get(code, _ZERO)
-        liability_total = liabilities.get(code, _ZERO)
-        gap = asset_total - liability_total
-        cumulative += gap
-        ladder_rows.append(
-            snapshot_row(
-                code,
-                f"Contractual mismatch — {label}",
-                gap,
-                assets_ghs=str(asset_total),
-                liabilities_ghs=str(liability_total),
-                cumulative_gap_ghs=str(cumulative),
+    vectors = accumulated
+    vectors["1"] = _vector_sum(vectors["2"], vectors["3"], vectors["4"])
+    vectors["5"] = _vector_sum(vectors["6"], vectors["7"], vectors["8"], vectors["9"])
+    vectors["10"] = _vector_sub(vectors["1"], vectors["5"])
+    vectors["14"] = _vector_sum(vectors["15"], vectors["16"], vectors["17"])
+    # Row 12 is "of which" 13 + 14; a source can additionally book other OBS
+    # liquidity exposures straight to row 12 via obs_category in the future —
+    # today it is exactly the sum of its sub-rows.
+    vectors["12"] = _vector_sum(vectors["13"], vectors["14"])
+
+    labels = dict(_TABLE2_ROW_LABELS)
+    table_rows: list[dict[str, Any]] = []
+    on_balance_mismatch_total = _ZERO
+    for number, label in _TABLE2_ROW_LABELS:
+        if number == "11":
+            # Cumulative mismatch runs across dated buckets only; the
+            # non-contractual column sits outside the run (kept blank, as on
+            # the printed form).
+            cumulative = _ZERO
+            extras: dict[str, str] = {}
+            for code in _BUCKET_CODES:
+                cumulative += vectors["10"][code]
+                extras[code] = str(cumulative)
+            table_rows.append(snapshot_row(number, labels[number], cumulative, **extras))
+            continue
+        table_rows.append(_table2_snapshot_row(number, label, vectors[number]))
+        if number == "10":
+            on_balance_mismatch_total = sum(
+                (vectors["10"][code] for code in _ALL_BUCKET_CODES), _ZERO
             )
-        )
-    nc_code, nc_label = _NON_CONTRACTUAL_BUCKET
-    nc_assets = assets.get(nc_code, _ZERO)
-    nc_liabilities = liabilities.get(nc_code, _ZERO)
-    # The non-contractual column sits outside the dated cumulative run
-    # (LMTD Table 2 keeps it as a separate final column).
-    ladder_rows.append(
-        snapshot_row(
-            nc_code,
-            f"Contractual mismatch — {nc_label}",
-            nc_assets - nc_liabilities,
-            assets_ghs=str(nc_assets),
-            liabilities_ghs=str(nc_liabilities),
-        )
-    )
-    bucket_codes = [*(code for code, _, _ in _LADDER_BUCKETS), nc_code]
-    total_gap = sum(
-        (assets.get(code, _ZERO) - liabilities.get(code, _ZERO) for code in bucket_codes),
-        _ZERO,
-    )
+
     section = snapshot_section(
         "maturity_ladder",
         "Contractual Maturity Mismatch",
-        ladder_rows,
+        table_rows,
         snapshot_total(
-            "contractual_gap_total_ghs",
-            "Total contractual mismatch (assets − liabilities)",
-            total_gap,
+            "on_balance_mismatch_total_ghs",
+            "On-balance sheet contractual mismatch — total (item 1 less item 5)",
+            on_balance_mismatch_total,
+            equals_sum_of_rows=False,
+        ),
+    )
+    return section, on_balance_mismatch_total
+
+
+def _within_one_year(maturity: date | None, as_of: date) -> bool:
+    return maturity is not None and (maturity - as_of).days <= _ONE_YEAR_DAYS
+
+
+def _unencumbered(row: _CanonicalRow) -> bool:
+    """NULL is treated as unencumbered — the backward-compatible reading; the
+    lmtd_classification_coverage ingestion rule surfaces the gap."""
+    return row.encumbered is not True
+
+
+def _is_sovereign_security(row: _CanonicalRow) -> bool:
+    return row.position_type == "SECURITY_HOLDING" and (
+        (row.regulatory_category or "").startswith(_SOVEREIGN_CATEGORY_PREFIX)
+    )
+
+
+def _narrow_liquid_amount(  # noqa: PLR0911 - one return per directive leg
+    row: _CanonicalRow, as_of: date
+) -> Decimal:
+    """LMTD ¶5 Narrow Liquid Assets, leg by leg, conservatively.
+
+    Legs: (a) vault notes and coins — CASH without a counterparty link;
+    (b) unencumbered non-resident correspondent balances held for operational
+    purposes — CASH with a non-resident bank counterparty flagged
+    operational_purpose; (c) placements with non-resident FIs rated AAA;
+    (d) balances at the central bank — CASH with a CENTRAL_BANK counterparty;
+    (e) unencumbered sovereign/central-bank bills ≤1yr; (f) other ≤1yr
+    securities redeemable within two working days, unencumbered, not already
+    counted under (e); (g) claims on other domestic banks — placements with
+    resident bank counterparties. Every leg requires its positive signal;
+    unknown residency or purpose is never assumed — understating liquid
+    assets is the only safe direction for a prudential ratio.
+    """
+    kind = row.position_type
+    cp_type = row.counterparty_type
+    is_bank_cp = cp_type in _BANK_COUNTERPARTY_TYPES
+    if kind == "CASH":
+        if cp_type is None:
+            return row.balance_ghs  # (a) vault cash
+        if cp_type == "CENTRAL_BANK":
+            return row.balance_ghs  # (d) balances at the central bank
+        if (
+            is_bank_cp
+            and row.counterparty_resident is False
+            and row.operational_purpose is True
+            and _unencumbered(row)
+        ):
+            return row.balance_ghs  # (b) operational correspondent balances
+        if is_bank_cp and row.counterparty_resident is True:
+            return row.balance_ghs  # (g) claims on other domestic banks
+        return _ZERO
+    if kind == "INTERBANK_PLACEMENT" and is_bank_cp:
+        if row.counterparty_resident is False and (row.counterparty_rating or "").startswith(
+            "AAA"
+        ):
+            return row.balance_ghs  # (c) AAA non-resident FI placements
+        if row.counterparty_resident is True:
+            return row.balance_ghs  # (g) claims on other domestic banks
+        return _ZERO
+    if kind == "SECURITY_HOLDING" and _unencumbered(row) and _within_one_year(
+        row.contractual_maturity, as_of
+    ):
+        if _is_sovereign_security(row):
+            return row.balance_ghs  # (e) GoG/BoG bills ≤ 1 yr
+        if row.redeemable_within_two_days is True:
+            return row.balance_ghs  # (f) two-working-day redeemables
+    return _ZERO
+
+
+def _table1_inputs(rows: list[_CanonicalRow], as_of: date) -> dict[str, Decimal]:
+    """The six Table 1 inputs from the canonical book (LMTD ¶5 definitions)."""
+    inputs = {key: _ZERO for key, _ in _TABLE1_INPUT_LABELS}
+    equities = _ZERO
+    for row in rows:
+        narrow = _narrow_liquid_amount(row, as_of)
+        inputs["narrow"] += narrow
+        # Broad = Narrow + unencumbered GoG bonds > 1 yr (marketable, freely
+        # transferable) + GSE-listed equities capped at 10% of total liquid
+        # assets (cap applied after the loop).
+        if narrow == _ZERO and _is_sovereign_security(row) and _unencumbered(row):
+            inputs["broad"] += row.balance_ghs
+        if (
+            row.position_type == "SECURITY_HOLDING"
+            and _unencumbered(row)
+            and (row.regulatory_category or "").startswith(_EQUITY_CATEGORY_PREFIX)
+        ):
+            equities += row.balance_ghs
+
+        if row.position_type == "DEPOSIT":
+            inputs["total_deposits"] += row.balance_ghs
+            account_type = (row.deposit_account_type or "").upper()
+            if account_type in _VOLATILE_DEPOSIT_TYPES:
+                inputs["volatile"] += row.balance_ghs
+            if account_type in _SHORT_TERM_BY_NATURE or _within_one_year(
+                row.contractual_maturity, as_of
+            ):
+                inputs["short_term"] += row.balance_ghs
+        elif row.position_type in _T2_OTHER_LIABILITIES and _within_one_year(
+            row.contractual_maturity, as_of
+        ):
+            inputs["short_term"] += row.balance_ghs
+        elif row.position_type in _T2_OFF_BALANCE and _within_one_year(
+            row.contractual_maturity, as_of
+        ):
+            # ¶5 short-term liabilities (d): contingent liabilities ≤ 1 yr.
+            amount = row.notional_ghs if row.notional_ghs is not None else row.balance_ghs
+            inputs["short_term"] += amount
+
+        if row.position_type in _TOTAL_ASSET_TYPES or (
+            row.position_type in _T2_DERIVATIVE_FAMILY and row.balance_ghs > _ZERO
+        ):
+            inputs["total_assets"] += row.balance_ghs
+
+    inputs["broad"] += inputs["narrow"]
+    # GSE equities cap: E ≤ 10% of total liquid assets, total including the
+    # capped equities themselves → E_capped = min(E, other_broad / 9).
+    if equities > _ZERO:
+        inputs["broad"] += min(equities, inputs["broad"] / Decimal("9"))
+    return inputs
+
+
+def _table1_thresholds(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> dict[str, tuple[Decimal, str]]:
+    """Ratio floor per code: Board register row when one is active, else the
+    directive's published bank minimum (the regulatory floor)."""
+    resolved: dict[str, tuple[Decimal, str]] = {
+        code: (minimum, "regulatory_default")
+        for code, minimum in _TABLE1_BANK_MINIMUM_PCT.items()
+    }
+    jurisdiction = (bank.jurisdiction_code or "GH").strip().upper()
+    for row in get_active_params(
+        db, ctx.organization_id, jurisdiction, ParamLiquidityThreshold, as_of
+    ):
+        if row.institution_class == "bank" and row.threshold_code in resolved:
+            resolved[row.threshold_code] = (Decimal(str(row.threshold_pct)), "board_register")
+    return resolved
+
+
+def _previous_period_end(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> date | None:
+    return db.scalar(
+        select(BankReportingPeriod.period_end)
+        .where(
+            BankReportingPeriod.organization_id == ctx.organization_id,
+            BankReportingPeriod.bank_id == bank.id,
+            BankReportingPeriod.period_end < period.period_end,
+        )
+        .order_by(BankReportingPeriod.period_end.desc())
+        .limit(1)
+    )
+
+
+def _prudential_ratio_sections(
+    current: dict[str, Decimal],
+    previous: dict[str, Decimal] | None,
+    thresholds: dict[str, tuple[Decimal, str]],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], int]:
+    """LMTD Table 1 as two blocks: GHS inputs, then the percentage grid."""
+    input_rows: list[dict[str, Any]] = []
+    for key, label in _TABLE1_INPUT_LABELS:
+        extras: dict[str, str] = {}
+        if previous is not None:
+            extras["previous_month_ghs"] = str(previous[key])
+        input_rows.append(snapshot_row(key, label, current[key], **extras))
+
+    ratio_rows: list[dict[str, Any]] = []
+    findings: list[dict[str, str]] = []
+    breaches = 0
+    for code, label, numerator_key, denominator_key in _TABLE1_RATIOS:
+        minimum, threshold_source = thresholds[code]
+        denominator = current[denominator_key]
+        extras = {
+            "threshold_min_pct": str(minimum),
+            "threshold_source": threshold_source,
+        }
+        if previous is not None and previous[denominator_key] > _ZERO:
+            extras["previous_month_pct"] = str(
+                _pct_of(previous[numerator_key], previous[denominator_key])
+            )
+        if denominator <= _ZERO:
+            extras["status"] = "not_computable"
+            ratio_rows.append(snapshot_row(code, label, _ZERO, **extras))
+            continue
+        ratio = _pct_of(current[numerator_key], denominator)
+        below = ratio < minimum
+        extras["status"] = "below_minimum" if below else "ok"
+        ratio_rows.append(snapshot_row(code, label, ratio, **extras))
+        if below:
+            breaches += 1
+            findings.append(
+                _finding(
+                    "lmt.prudential_ratio_below_minimum",
+                    "WARNING",
+                    f"{label}: {ratio}% is below the {minimum}% floor "
+                    f"({threshold_source.replace('_', ' ')}).",
+                )
+            )
+
+    sections = [
+        snapshot_section(
+            "prudential_ratio_inputs",
+            "BOG Prudential Ratios",
+            input_rows,
+            snapshot_total(
+                "narrow_liquid_assets_ghs",
+                "Narrow Liquid Assets",
+                current["narrow"],
+                equals_sum_of_rows=False,
+            ),
+        ),
+        snapshot_section(
+            "prudential_ratio_percentages",
+            "BOG Prudential Ratios (%)",
+            ratio_rows,
+        ),
+    ]
+    return sections, findings, breaches
+
+
+# --- Significant currency (LMTD ¶30/¶41; built 2026-08-07) -----------------
+#
+# A currency is significant when liabilities denominated in it are ≥ 5% of
+# total liabilities. (¶36 uses a different denominator — total available
+# unencumbered collateral — for Table 9C; both live here so the two are never
+# conflated.) Amounts are cedi equivalents throughout ("Values in Cedi" on
+# the printed forms), i.e. the ingested balance_ghs conversions.
+_SIGNIFICANT_CURRENCY_THRESHOLD = Decimal("0.05")
+# Table 11's printed columns are fixed: Cedi | USD | Pound | Euro | Others.
+# Ghana-factual literals are the documented exception inside BoG return
+# artifacts; the "cedi" column maps to the bank's base currency.
+_TABLE11_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("cedi_ghs", "Cedi"),
+    ("usd_ghs", "USD"),
+    ("pound_ghs", "Pound"),
+    ("euro_ghs", "Euro"),
+    ("others_ghs", "Others"),
+)
+_TABLE11_ISO = {"USD": "usd_ghs", "GBP": "pound_ghs", "EUR": "euro_ghs"}
+_THIRTY_DAYS = 30
+_LCR_INFLOW_CAP = Decimal("0.75")
+
+
+def _is_t2_liability(row: _CanonicalRow) -> bool:
+    target = _table2_row_for(row)
+    return target is not None and target[0] in ("6", "7", "8", "9")
+
+
+def _is_t2_asset(row: _CanonicalRow) -> bool:
+    target = _table2_row_for(row)
+    return target is not None and target[0] in ("2", "3", "4")
+
+
+def _liabilities_by_currency(rows: list[_CanonicalRow]) -> dict[str, Decimal]:
+    totals: dict[str, Decimal] = {}
+    for row in rows:
+        target = _table2_row_for(row)
+        if target is not None and target[0] in ("6", "7", "8", "9"):
+            totals[row.currency] = totals.get(row.currency, _ZERO) + target[1]
+    return totals
+
+
+def _significant_currencies(rows: list[_CanonicalRow]) -> list[str]:
+    """Currencies whose liabilities are ≥ 5% of total liabilities, largest first."""
+    by_currency = _liabilities_by_currency(rows)
+    total = sum(by_currency.values(), _ZERO)
+    if total <= _ZERO:
+        return []
+    return [
+        currency
+        for currency, amount in sorted(by_currency.items(), key=lambda kv: (-kv[1], kv[0]))
+        if amount / total >= _SIGNIFICANT_CURRENCY_THRESHOLD
+    ]
+
+
+def _table6_section(rows: list[_CanonicalRow]) -> tuple[dict[str, Any] | None, int]:
+    """LMTD Table 6 — assets and liabilities per significant currency."""
+    significant = _significant_currencies(rows)
+    if not significant:
+        return None, 0
+    total_liabilities = sum(_liabilities_by_currency(rows).values(), _ZERO)
+    assets_by_ccy: dict[str, Decimal] = {}
+    liabilities_by_ccy: dict[str, Decimal] = {}
+    for row in rows:
+        target = _table2_row_for(row)
+        if target is None:
+            continue
+        number, amount = target
+        if number in ("2", "3", "4"):
+            assets_by_ccy[row.currency] = assets_by_ccy.get(row.currency, _ZERO) + amount
+        elif number in ("6", "7", "8", "9"):
+            liabilities_by_ccy[row.currency] = (
+                liabilities_by_ccy.get(row.currency, _ZERO) + amount
+            )
+
+    section_rows: list[dict[str, Any]] = []
+    total_mismatch = _ZERO
+    for currency in significant:
+        assets = assets_by_ccy.get(currency, _ZERO)
+        liabilities = liabilities_by_ccy.get(currency, _ZERO)
+        mismatch = assets - liabilities
+        total_mismatch += mismatch
+        extras = {
+            "assets_ghs": str(assets),
+            "liabilities_ghs": str(liabilities),
+            "mismatch_pct_total_liabilities": (
+                str(_pct_of(mismatch, total_liabilities))
+                if total_liabilities > _ZERO
+                else "0"
+            ),
+        }
+        section_rows.append(snapshot_row(currency, currency, mismatch, **extras))
+    section = snapshot_section(
+        "assets_liabilities_by_currency",
+        "List of Assets and Liabilities by Significant Currencies",
+        section_rows,
+        snapshot_total(
+            "currency_mismatch_total_ghs",
+            "Total mismatch across significant currencies",
+            total_mismatch,
             equals_sum_of_rows=True,
         ),
     )
-    return section, total_gap
+    return section, len(significant)
 
 
-def _funding_concentration_section(
-    deposit_rows: list[_CanonicalRow],
-) -> tuple[dict[str, Any] | None, Decimal, Decimal, list[dict[str, str]]]:
-    total_deposits = sum((row.balance_ghs for row in deposit_rows), _ZERO)
-    by_counterparty: dict[UUID, dict[str, Any]] = {}
-    unattributed = _ZERO
-    for row in deposit_rows:
-        if row.counterparty_id is None:
-            unattributed += row.balance_ghs
-            continue
-        entry = by_counterparty.setdefault(
-            row.counterparty_id,
-            {
-                "name": row.counterparty_name or str(row.counterparty_id),
-                "type": row.counterparty_type or "",
-                "amount": _ZERO,
-            },
+def _table11_column(currency: str, base_currency: str) -> str:
+    if currency == base_currency:
+        return "cedi_ghs"
+    return _TABLE11_ISO.get(currency, "others_ghs")
+
+
+def _table11_section(  # noqa: PLR0914 - one linear grid assembly
+    rows: list[_CanonicalRow], as_of: date, base_currency: str
+) -> dict[str, Any]:
+    """LMTD Table 11 — LCR by significant currency (fixed five columns).
+
+    Honest calibration posture, documented on the template: HQLA Level 1 is
+    computed from canonical classification (cash-family + unencumbered
+    sovereign securities); Levels 2A/2B report zero because the canonical
+    model carries no L2 taxonomy — never invented. Outflows take the most
+    conservative contractual basis (liabilities maturing ≤ 30 days plus
+    demand deposits in full) pending the unpublished LCR Directive's run-off
+    calibration; inflows are contractual asset maturities ≤ 30 days subject
+    to the Basel 75% cap. Net cash outflow is computed (1)−(2) — the printed
+    form's "(2-1)" label inverts the LCR and is carried as a documented
+    deviation, not reproduced.
+    """
+    column_keys = [key for key, _ in _TABLE11_COLUMNS]
+    zero = dict.fromkeys(column_keys, _ZERO)
+    l1 = dict(zero)
+    outflow = dict(zero)
+    inflow = dict(zero)
+    for row in rows:
+        column = _table11_column(row.currency, base_currency)
+        days = (
+            (row.contractual_maturity - as_of).days
+            if row.contractual_maturity is not None
+            else None
         )
-        entry["amount"] += row.balance_ghs
+        # HQLA Level 1: cash-family legs + unencumbered sovereign securities.
+        if row.position_type == "CASH" or _is_sovereign_security(row) and _unencumbered(row):
+            l1[column] += row.balance_ghs
+        # Contractual 30-day outflows: maturing liabilities + demand deposits.
+        target = _table2_row_for(row)
+        if target is not None and target[0] in ("6", "7", "8", "9"):
+            account_type = (row.deposit_account_type or "").upper()
+            if account_type in _VOLATILE_DEPOSIT_TYPES or (
+                days is not None and days <= _THIRTY_DAYS
+            ):
+                outflow[column] += target[1]
+        # Contractual 30-day inflows: maturing assets (never HQLA double-count).
+        elif (
+            target is not None
+            and target[0] in ("2", "3", "4")
+            and days is not None
+            and days <= _THIRTY_DAYS
+            and row.position_type != "CASH"
+            and not _is_sovereign_security(row)
+        ):
+            inflow[column] += target[1]
+
+    def _grid_row(
+        code: str, label: str, values: dict[str, Decimal], total: Decimal | None = None
+    ) -> dict[str, Any]:
+        row_total = total if total is not None else sum(values.values(), _ZERO)
+        return snapshot_row(
+            code, label, row_total, **{key: str(values[key]) for key in column_keys}
+        )
+
+    capped_inflow = {
+        key: min(inflow[key], (outflow[key] * _LCR_INFLOW_CAP)) for key in column_keys
+    }
+    net = {key: outflow[key] - capped_inflow[key] for key in column_keys}
+    ratio: dict[str, Decimal] = {}
+    for key in column_keys:
+        ratio[key] = _pct_of(l1[key], net[key]) if net[key] > _ZERO else _ZERO
+    aggregate_l1 = sum(l1.values(), _ZERO)
+    aggregate_net = sum(net.values(), _ZERO)
+    aggregate_ratio = _pct_of(aggregate_l1, aggregate_net) if aggregate_net > _ZERO else _ZERO
+
+    section_rows = [
+        _grid_row("stock_of_hqla", "Stock of HQLA", l1),
+        _grid_row("level_1", "Level 1", l1),
+        _grid_row("level_2a", "Level 2A", dict(zero)),
+        _grid_row("level_2b", "Level 2B", dict(zero)),
+        _grid_row("total_adjusted_hqla", "A) Total adjusted HQLA", l1),
+        _grid_row("total_cash_outflow", "Total Cash outflow (1)", outflow),
+        _grid_row("total_cash_inflow", "Total Cash inflow (2)", capped_inflow),
+        _grid_row("net_cash_outflow", "B) Net Cash Outflow (1-2)", net),
+        _grid_row(
+            "lcr_pct",
+            "Liquidity Coverage Ratio (LCR) (A/B*100)",
+            ratio,
+            total=aggregate_ratio,
+        ),
+    ]
+    return snapshot_section(
+        "lcr_by_currency",
+        "LCR by Significant Currency",
+        section_rows,
+    )
+
+
+# --- Concentration of funding: Tables 5, 7 and 8 (rebuilt 2026-08-07) ------
+#
+# Table 5's selection rule is the directive's, not "Top N by size": every
+# connected counterparty (Large Exposures Directive grouping, footnote 4)
+# providing funding of MORE THAN 1% of Total Assets, plus Top-20/Top-100
+# depositor totals with the ¶23 netting rule (deposits pledged to secure a
+# facility deducted from both the numerator and the total-deposit
+# denominator). Table 7 uses ¶31's five horizons; Table 8 uses its own nine
+# printed buckets — the ¶31-vs-template discrepancy is recorded, and we build
+# to the templates because those are what gets filed.
+_SIGNIFICANT_FUNDING_FRACTION = Decimal("0.01")
+_TOP20 = 20
+_TOP100 = 100
+_FIVE_YEARS_DAYS = 1825
+_FI_COUNTERPARTY_TYPES = ("BANK_OECD", "BANK_NON_OECD", "NBFI")
+_GOV_COUNTERPARTY_TYPES = ("SOVEREIGN", "GOVERNMENT_ENTITY", "CENTRAL_BANK")
+_NEGOTIABLE_PAPER = "negotiable_paper"
+_TABLE7_BUCKETS: tuple[tuple[str, str, int | None], ...] = (
+    ("m_lt1_ghs", "<1", 30),
+    ("m1_3_ghs", "1 - 3", 91),
+    ("m3_6_ghs", "3 - 6", 182),
+    ("m6_12_ghs", "6 - 12", 365),
+    ("m_gt12_ghs", ">12", None),
+)
+_TABLE8_BUCKETS: tuple[tuple[str, str, int | None], ...] = (
+    ("next_day_ghs", "Next day", 1),
+    ("d2_7_ghs", "2 to 7 days", 7),
+    ("d8_1m_ghs", "8 days to 1 month", 30),
+    ("m1_2_ghs", "1 to 2 months", 61),
+    ("m2_3_ghs", "2 to 3 months", 91),
+    ("m3_6_ghs", "3 to 6 months", 182),
+    ("m6_12_ghs", "6 to 12 months", 365),
+    ("m_gt12_ghs", "> 12 months", None),
+)
+
+
+@dataclass
+class _FundingEntity:
+    """One funding provider: a single counterparty or a connected group."""
+
+    key: str
+    name: str
+    related: bool
+    is_financial: bool = False
+    is_government: bool = False
+    funding: Decimal = _ZERO
+    deposits: Decimal = _ZERO
+    pledged_deposits: Decimal = _ZERO
+    rows: list[_CanonicalRow] = field(default_factory=list)
+
+
+def _normalized_name(name: str) -> str:
+    return " ".join(name.strip().lower().split())
+
+
+def _related_party_names(db: Session, ctx: TenantContext, bank: Bank) -> frozenset[str]:
+    names = db.scalars(
+        select(RelatedParty.full_name).where(
+            RelatedParty.organization_id == ctx.organization_id,
+            RelatedParty.bank_id == bank.id,
+        )
+    ).all()
+    return frozenset(_normalized_name(name) for name in names)
+
+
+def _funding_entities(
+    rows: list[_CanonicalRow], related_names: frozenset[str]
+) -> tuple[dict[str, _FundingEntity], Decimal, list[dict[str, str]]]:
+    """Aggregate liability rows into connected funding entities.
+
+    Related/intragroup = the source's own flag on the counterparty OR a
+    normalized-name match against the institution's related-party register
+    (the W4 governance build) — both documented, neither inferred.
+    """
+    entities: dict[str, _FundingEntity] = {}
+    unattributed = _ZERO
+    for row in rows:
+        target = _table2_row_for(row)
+        if target is None or target[0] not in ("6", "7", "8", "9"):
+            continue
+        amount = target[1]
+        if row.counterparty_id is None:
+            unattributed += amount
+            continue
+        key = row.counterparty_group or f"cp:{row.counterparty_id}"
+        name = (
+            f"Group: {row.counterparty_group}"
+            if row.counterparty_group
+            else (row.counterparty_name or str(row.counterparty_id))
+        )
+        entity = entities.setdefault(
+            _normalized_name(key),
+            _FundingEntity(key=key, name=name, related=False),
+        )
+        entity.funding += amount
+        entity.rows.append(row)
+        if row.counterparty_related_hint or (
+            row.counterparty_name is not None
+            and _normalized_name(row.counterparty_name) in related_names
+        ):
+            entity.related = True
+        if row.counterparty_type in _FI_COUNTERPARTY_TYPES:
+            entity.is_financial = True
+        if row.counterparty_type in _GOV_COUNTERPARTY_TYPES:
+            entity.is_government = True
+        if row.position_type == "DEPOSIT":
+            entity.deposits += amount
+            if row.pledged_as_collateral is True:
+                entity.pledged_deposits += amount
 
     findings: list[dict[str, str]] = []
     if unattributed > _ZERO:
         findings.append(
             _finding(
-                "lmt.unattributed_deposits",
+                "lmt.unattributed_funding",
                 "INFO",
-                f"Deposits of {unattributed} GHS carry no counterparty link; they are "
-                "included in total deposit liabilities but cannot be ranked by "
-                "depositor.",
+                f"Funding of {unattributed} GHS carries no counterparty link; it is "
+                "included in totals but cannot be attributed to a provider for the "
+                "concentration tables.",
             )
         )
-    if not by_counterparty or total_deposits <= _ZERO:
-        return None, total_deposits, _ZERO, findings
+    return entities, unattributed, findings
 
-    ranked = sorted(by_counterparty.values(), key=lambda entry: (-entry["amount"], entry["name"]))
-    top = ranked[:_TOP_DEPOSITORS]
-    top_total = sum((entry["amount"] for entry in top), _ZERO)
+
+def _netted_pct(top: list[_FundingEntity], total_deposits: Decimal) -> Decimal:
+    """¶23: pledged deposits leave both the numerator and the denominator."""
+    top_deposits = sum((entity.deposits for entity in top), _ZERO)
+    pledged = sum((entity.pledged_deposits for entity in top), _ZERO)
+    denominator = total_deposits - pledged
+    if denominator <= _ZERO:
+        return _ZERO
+    return _pct_of(top_deposits - pledged, denominator)
+
+
+def _funding_concentration_section(  # noqa: PLR0914 - one linear table assembly
+    entities: dict[str, _FundingEntity],
+    total_assets: Decimal,
+    total_liabilities: Decimal,
+    total_deposits: Decimal,
+) -> tuple[dict[str, Any] | None, dict[str, Decimal], list[_FundingEntity]]:
+    """LMTD Table 5 — funding from significant counterparties (> 1% of assets)."""
+    if not entities:
+        return None, {}, []
+    ranked = sorted(entities.values(), key=lambda e: (-e.funding, e.name))
+    threshold = total_assets * _SIGNIFICANT_FUNDING_FRACTION
+    significant = [entity for entity in ranked if entity.funding > threshold]
+    by_deposits = sorted(entities.values(), key=lambda e: (-e.deposits, e.name))
+    top20 = [entity for entity in by_deposits[:_TOP20] if entity.deposits > _ZERO]
+    top100 = [entity for entity in by_deposits[:_TOP100] if entity.deposits > _ZERO]
+    top20_total = sum((entity.deposits for entity in top20), _ZERO)
+    top100_total = sum((entity.deposits for entity in top100), _ZERO)
+
     rows = [
         snapshot_row(
             str(index),
-            entry["name"],
-            entry["amount"],
-            pct_total_deposits=str(_pct_of(entry["amount"], total_deposits)),
-            counterparty_type=entry["type"],
+            entity.name,
+            entity.funding,
+            pct_total_liabilities=(
+                str(_pct_of(entity.funding, total_liabilities))
+                if total_liabilities > _ZERO
+                else "0"
+            ),
+            related_party="Yes" if entity.related else "No",
         )
-        for index, entry in enumerate(top, start=1)
+        for index, entity in enumerate(significant, start=1)
     ]
+    significant_total = sum((entity.funding for entity in significant), _ZERO)
+    rows.append(
+        snapshot_row("total", "Total", significant_total, related_party="", unit="ghs")
+    )
+    rows.append(
+        snapshot_row(
+            "top20_total",
+            "Total for Top 20 counterparties (depositors)",
+            top20_total,
+            unit="ghs",
+        )
+    )
+    rows.append(
+        snapshot_row(
+            "top100_total",
+            "Total for Top 100 counterparties (depositors)",
+            top100_total,
+            unit="ghs",
+        )
+    )
+    top20_pct = _netted_pct(top20, total_deposits)
+    top100_pct = _netted_pct(top100, total_deposits)
+    rows.append(
+        snapshot_row(
+            "top20_pct_of_deposits",
+            "Total 20 deposits as a percentage of total deposits",
+            top20_pct,
+            unit="pct",
+        )
+    )
+    rows.append(
+        snapshot_row(
+            "top100_pct_of_deposits",
+            "Total 100 deposits as a percentage of total deposits",
+            top100_pct,
+            unit="pct",
+        )
+    )
     section = snapshot_section(
         "funding_concentration",
-        "Concentration of Funding (Top 10 Depositors)",
+        "Funding Liabilities Sourced from Significant Counterparties",
         rows,
-        snapshot_total("total_deposits_ghs", "Total deposit liabilities", total_deposits),
+        snapshot_total(
+            "significant_funding_total_ghs",
+            "Total funding from significant counterparties (> 1% of Total Assets)",
+            significant_total,
+        ),
     )
-    return section, total_deposits, _pct_of(top_total, total_deposits), findings
+    metrics = {
+        "top20_total": top20_total,
+        "top100_total": top100_total,
+        "top20_pct": top20_pct,
+        "top100_pct": top100_pct,
+    }
+    return section, metrics, significant
 
 
-def _unencumbered_assets_section(
-    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
-) -> tuple[dict[str, Any] | None, Decimal]:
-    facts = list(
-        db.scalars(
-            select(BankFinancialFact)
-            .where(
-                BankFinancialFact.organization_id == ctx.organization_id,
-                BankFinancialFact.bank_id == bank.id,
-                BankFinancialFact.reporting_period_id == period.id,
-                BankFinancialFact.fact_group == "securities",
-                BankFinancialFact.hqla_level.is_not(None),
-            )
-            .order_by(BankFinancialFact.category)
+def _bucket_for(
+    row: _CanonicalRow, as_of: date, buckets: tuple[tuple[str, str, int | None], ...]
+) -> str:
+    """Concentration-table bucketing with documented undated rules.
+
+    Demand-natured deposits (current/call/savings) and cash are callable on
+    demand → the shortest bucket; any other undated position reports in the
+    longest bucket — a maturity is never fabricated.
+    """
+    maturity = row.contractual_maturity
+    if maturity is None:
+        account_type = (row.deposit_account_type or "").upper()
+        on_demand = (
+            row.position_type == "CASH"
+            or (row.position_type == "DEPOSIT" and account_type in _SHORT_TERM_BY_NATURE)
         )
+        return buckets[0][0] if on_demand else buckets[-1][0]
+    days = (maturity - as_of).days
+    for code, _, upper in buckets:
+        if upper is None or days <= upper:
+            return code
+    return buckets[-1][0]
+
+
+def _bucket_vector(
+    rows: list[_CanonicalRow],
+    as_of: date,
+    buckets: tuple[tuple[str, str, int | None], ...],
+    *,
+    amount_of: Any = None,
+) -> dict[str, Decimal]:
+    vector: dict[str, Decimal] = {code: _ZERO for code, _, _ in buckets}
+    for row in rows:
+        amount = amount_of(row) if amount_of is not None else row.balance_ghs
+        if amount is None:
+            continue
+        vector[_bucket_for(row, as_of, buckets)] += amount
+    return vector
+
+
+def _grid_bucket_row(
+    code: str,
+    label: str,
+    vector: dict[str, Decimal],
+    buckets: tuple[tuple[str, str, int | None], ...],
+) -> dict[str, Any]:
+    total = sum(vector.values(), _ZERO)
+    return snapshot_row(
+        code, label, total, **{key: str(vector[key]) for key, _, _ in buckets}
     )
-    if not facts:
-        return None, _ZERO
-    rows = [
-        snapshot_row(
-            fact.category,
-            fact.category.replace("_", " "),
-            fact.amount,
-            hqla_level=fact.hqla_level,
-        )
-        for fact in facts
+
+
+def _table7_section(
+    rows: list[_CanonicalRow],
+    entities: dict[str, _FundingEntity],
+    significant: list[_FundingEntity],
+    as_of: date,
+) -> dict[str, Any]:
+    """LMTD Table 7 — time buckets of maturity of exposures (five horizons)."""
+    by_deposits = sorted(entities.values(), key=lambda e: (-e.deposits, e.name))
+    top20 = [entity for entity in by_deposits[:_TOP20] if entity.deposits > _ZERO]
+    section_rows: list[dict[str, Any]] = []
+
+    top20_deposit_rows = [
+        row
+        for entity in top20
+        for row in entity.rows
+        if row.position_type == "DEPOSIT"
     ]
-    total = sum((Decimal(str(fact.amount)) for fact in facts), _ZERO)
+    section_rows.append(
+        _grid_bucket_row(
+            "A",
+            "A. Top 20 Depositors",
+            _bucket_vector(top20_deposit_rows, as_of, _TABLE7_BUCKETS),
+            _TABLE7_BUCKETS,
+        )
+    )
+
+    b_total = {code: _ZERO for code, _, _ in _TABLE7_BUCKETS}
+    for index, entity in enumerate(significant, start=1):
+        vector = _bucket_vector(entity.rows, as_of, _TABLE7_BUCKETS)
+        for code, _, _unused in _TABLE7_BUCKETS:
+            b_total[code] += vector[code]
+        section_rows.append(
+            _grid_bucket_row(f"B{index}", entity.name, vector, _TABLE7_BUCKETS)
+        )
+    section_rows.append(
+        _grid_bucket_row(
+            "B_total", "B. Funding from Significant Counterparties — Total",
+            b_total, _TABLE7_BUCKETS,
+        )
+    )
+
+    significant_ccys = _significant_currencies(rows)
+    c_total = {code: _ZERO for code, _, _ in _TABLE7_BUCKETS}
+    d_total = {code: _ZERO for code, _, _ in _TABLE7_BUCKETS}
+    for currency in significant_ccys:
+        ccy_assets = [r for r in rows if r.currency == currency and _is_t2_asset(r)]
+        ccy_liabilities = [
+            r for r in rows if r.currency == currency and _is_t2_liability(r)
+        ]
+        asset_vector = _bucket_vector(ccy_assets, as_of, _TABLE7_BUCKETS)
+        liability_vector = _bucket_vector(ccy_liabilities, as_of, _TABLE7_BUCKETS)
+        for code, _, _unused in _TABLE7_BUCKETS:
+            c_total[code] += asset_vector[code]
+            d_total[code] += liability_vector[code]
+        section_rows.append(
+            _grid_bucket_row(f"C_{currency}", f"Assets — {currency}", asset_vector, _TABLE7_BUCKETS)
+        )
+        section_rows.append(
+            _grid_bucket_row(
+                f"D_{currency}", f"Liabilities — {currency}", liability_vector, _TABLE7_BUCKETS
+            )
+        )
+    section_rows.append(
+        _grid_bucket_row(
+            "C_total", "C. Assets by Significant Currency — Total", c_total, _TABLE7_BUCKETS
+        )
+    )
+    section_rows.append(
+        _grid_bucket_row(
+            "D_total", "D. Liabilities by Significant Currency — Total", d_total, _TABLE7_BUCKETS
+        )
+    )
+    return snapshot_section(
+        "maturity_of_exposures",
+        "Time Buckets of Maturity of Exposures",
+        section_rows,
+    )
+
+
+def _table8_section(
+    rows: list[_CanonicalRow],
+    entities: dict[str, _FundingEntity],
+    as_of: date,
+) -> dict[str, Any]:
+    """LMTD Table 8 — concentration of deposit funding (nine printed buckets)."""
+    by_deposits = sorted(entities.values(), key=lambda e: (-e.deposits, e.name))
+    top20_dep = [e for e in by_deposits[:_TOP20] if e.deposits > _ZERO]
+    financial = sorted(
+        (e for e in entities.values() if e.is_financial), key=lambda e: (-e.funding, e.name)
+    )[:_TOP20]
+    government = sorted(
+        (e for e in entities.values() if e.is_government), key=lambda e: (-e.funding, e.name)
+    )[:_TOP20]
+    associates_rows = [
+        row for entity in entities.values() if entity.related for row in entity.rows
+    ]
+    top20_dep_rows = [
+        row for e in top20_dep for row in e.rows if row.position_type == "DEPOSIT"
+    ]
+    financial_rows = [row for e in financial for row in e.rows]
+    government_rows = [row for e in government for row in e.rows]
+    paper_rows = [
+        row
+        for row in rows
+        if _is_t2_liability(row) and row.funding_instrument == _NEGOTIABLE_PAPER
+    ]
+    paper_short = [
+        row
+        for row in paper_rows
+        if row.contractual_maturity is not None
+        and (row.contractual_maturity - as_of).days <= _ONE_YEAR_DAYS
+    ]
+    paper_long = [
+        row
+        for row in paper_rows
+        if row.contractual_maturity is not None
+        and (row.contractual_maturity - as_of).days > _FIVE_YEARS_DAYS
+    ]
+
+    blocks: tuple[tuple[str, str, list[_CanonicalRow]], ...] = (
+        ("associates", "Funding from associates of the reporting financial institution",
+         associates_rows),
+        ("top20_depositors", "Twenty largest depositors", top20_dep_rows),
+        ("top20_financial", "Twenty largest financial institutions funding balances",
+         financial_rows),
+        ("top20_government", "Twenty largest government and parastatals funding balances",
+         government_rows),
+        ("negotiable_paper", "Negotiable paper funding instruments", paper_rows),
+        ("negotiable_paper_lte_12m",
+         "of which: issued for a period not exceeding twelve months", paper_short),
+        ("negotiable_paper_gt_5y", "of which: issued for a period exceeding five years",
+         paper_long),
+    )
+    section_rows = [
+        _grid_bucket_row(
+            code, label, _bucket_vector(block, as_of, _TABLE8_BUCKETS), _TABLE8_BUCKETS
+        )
+        for code, label, block in blocks
+    ]
+    return snapshot_section(
+        "deposit_funding_concentration",
+        "Concentration of Deposit Funding",
+        section_rows,
+    )
+
+
+# --- Tables 3, 4, 9 (full) and 10 (built 2026-08-07) ------------------------
+
+_HUNDRED_PCT = Decimal("100")
+_TABLE10_CLASSES: tuple[tuple[str, str], ...] = (
+    ("loans_advances", "Loans and advances"),
+    ("equity", "Equity instruments"),
+    ("debt_government", "Debt securities — Government issued"),
+    ("debt_financial", "Debt securities — Issued by financial institutions"),
+    ("debt_nonfinancial", "Debt securities — Issued by non-financial corporations"),
+    ("other", "Other collateral received"),
+)
+
+
+def _haircut_schedule(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> list[tuple[str, Decimal]]:
+    """Active liquidity-value rows, longest asset-class prefix first."""
+    jurisdiction = (bank.jurisdiction_code or "GH").strip().upper()
+    rows = get_active_params(db, ctx.organization_id, jurisdiction, ParamLiquidityHaircut, as_of)
+    return sorted(
+        ((row.asset_class.upper(), Decimal(str(row.haircut_pct))) for row in rows),
+        key=lambda item: -len(item[0]),
+    )
+
+
+def _haircut_for(
+    regulatory_category: str | None, schedule: list[tuple[str, Decimal]]
+) -> Decimal | None:
+    """Longest-prefix match against the schedule; None = no calibrated class."""
+    category = (regulatory_category or "").upper()
+    for asset_class, pct in schedule:
+        if category.startswith(asset_class):
+            return pct
+    return None
+
+
+def _instrument_label(row: _CanonicalRow) -> str:
+    return row.product_name or row.issuer or row.position_type.replace("_", " ").title()
+
+
+def _table3_section(rows: list[_CanonicalRow]) -> dict[str, Any] | None:
+    """LMTD Table 3 — investments/items with no contractual maturity.
+
+    Population: non-contractual positions EXCLUDING deposits (whose undated
+    treatment lives in Table 2 rows 6/7 and the concentration tables),
+    itemized by instrument label and aggregated.
+    """
+    amounts: dict[str, Decimal] = {}
+    for row in rows:
+        if row.contractual_maturity is not None or row.position_type == "DEPOSIT":
+            continue
+        target = _table2_row_for(row)
+        if target is None:
+            continue
+        label = _instrument_label(row)
+        amounts[label] = amounts.get(label, _ZERO) + target[1]
+    if not amounts:
+        return None
+    section_rows = [
+        snapshot_row(str(index), label, amount)
+        for index, (label, amount) in enumerate(
+            sorted(amounts.items(), key=lambda kv: (-kv[1], kv[0])), start=1
+        )
+    ]
+    total = sum(amounts.values(), _ZERO)
+    return snapshot_section(
+        "items_no_contractual_maturity",
+        "Investments and Items with No Contractual Maturity",
+        section_rows,
+        snapshot_total(
+            "no_contractual_maturity_total_ghs", "Total", total, equals_sum_of_rows=True
+        ),
+    )
+
+
+def _table4_section(rows: list[_CanonicalRow]) -> dict[str, Any] | None:
+    """LMTD Table 4 — customer collateral which can be re-hypothecated."""
+    entries: dict[str, tuple[Decimal, Decimal]] = {}
+    for row in rows:
+        collateral = row.collateral
+        if not collateral:
+            continue
+        rehypothecable = str(collateral.get("collateral_rehypothecable", "")).strip().lower()
+        if rehypothecable not in ("true", "yes", "y", "1"):
+            continue
+        instrument = str(
+            collateral.get("collateral_instrument") or _instrument_label(row)
+        )
+        received = _dec_or_none(collateral.get("collateral_received_ghs")) or _ZERO
+        hypothecated = _dec_or_none(collateral.get("collateral_rehypothecated_ghs")) or _ZERO
+        prior = entries.get(instrument, (_ZERO, _ZERO))
+        entries[instrument] = (prior[0] + received, prior[1] + hypothecated)
+    if not entries:
+        return None
+    section_rows = []
+    total_a = total_b = _ZERO
+    for index, (instrument, (received, hypothecated)) in enumerate(
+        sorted(entries.items(), key=lambda kv: (-kv[1][0], kv[0])), start=1
+    ):
+        total_a += received
+        total_b += hypothecated
+        section_rows.append(
+            snapshot_row(
+                str(index),
+                instrument,
+                received - hypothecated,
+                total_amounts_ghs=str(received),
+                hypothecated_ghs=str(hypothecated),
+            )
+        )
+    return snapshot_section(
+        "collateral_rehypothecation",
+        "Customer Collateral Received",
+        section_rows,
+        snapshot_total(
+            "collateral_available_total_ghs",
+            "Total available for re-hypothecation (A-B)",
+            total_a - total_b,
+            equals_sum_of_rows=True,
+        ),
+    )
+
+
+def _is_bog_eligible_security(row: _CanonicalRow) -> bool:
+    """BoG standing-facility eligibility: the LMTD's own eligible-collateral
+    family — sovereign/central-bank instruments by regulatory category."""
+    return _is_sovereign_security(row)
+
+
+def _table9_row(
+    index: int, row: _CanonicalRow, schedule: list[tuple[str, Decimal]]
+) -> dict[str, Any]:
+    haircut = _haircut_for(row.regulatory_category, schedule)
+    effective = haircut if haircut is not None else _ZERO
+    monetized = row.balance_ghs * (_HUNDRED_PCT - effective) / _HUNDRED_PCT
+    return snapshot_row(
+        str(index),
+        _instrument_label(row),
+        row.balance_ghs,
+        asset_type=row.regulatory_category or row.position_type,
+        location=row.asset_location or "",
+        haircut_pct=str(effective),
+        haircut_source="schedule" if haircut is not None else "unset",
+        monetized_value_ghs=str(monetized),
+    )
+
+
+def _table9_section(
+    rows: list[_CanonicalRow], schedule: list[tuple[str, Decimal]]
+) -> tuple[dict[str, Any] | None, Decimal]:
+    """LMTD Table 9 — available unencumbered assets, all seven columns.
+
+    Section A: unencumbered securities marketable in secondary markets that
+    are NOT in the BoG standing-facility family; Section B: the BoG-eligible
+    family (sovereign/central-bank instruments); Section C: A∪B by
+    significant currency, where significance uses ¶36's denominator — 5% of
+    total available unencumbered collateral, not total liabilities.
+    """
+    unencumbered = [
+        row
+        for row in rows
+        if row.position_type == "SECURITY_HOLDING" and _unencumbered(row)
+    ]
+    if not unencumbered:
+        return None, _ZERO
+    section_b = [row for row in unencumbered if _is_bog_eligible_security(row)]
+    section_a = [row for row in unencumbered if not _is_bog_eligible_security(row)]
+
+    section_rows: list[dict[str, Any]] = []
+    total = _ZERO
+    for block_code, block_label, block in (
+        ("A", "A. Marketable as collateral in secondary market", section_a),
+        ("B", "B. Eligible for BOG standing facilities", section_b),
+    ):
+        block_total = _ZERO
+        for index, row in enumerate(
+            sorted(block, key=lambda r: (-r.balance_ghs, _instrument_label(r))), start=1
+        ):
+            entry = _table9_row(index, row, schedule)
+            entry["code"] = f"{block_code}{index}"
+            section_rows.append(entry)
+            block_total += row.balance_ghs
+        section_rows.append(
+            snapshot_row(f"{block_code}_total", f"{block_label} — Total", block_total)
+        )
+        total += block_total
+
+    # Section C — by significant currency (¶36 denominator).
+    by_currency: dict[str, Decimal] = {}
+    monetized_by_currency: dict[str, Decimal] = {}
+    for row in unencumbered:
+        haircut = _haircut_for(row.regulatory_category, schedule) or _ZERO
+        by_currency[row.currency] = by_currency.get(row.currency, _ZERO) + row.balance_ghs
+        monetized_by_currency[row.currency] = monetized_by_currency.get(
+            row.currency, _ZERO
+        ) + row.balance_ghs * (_HUNDRED_PCT - haircut) / _HUNDRED_PCT
+    for currency, amount in sorted(by_currency.items(), key=lambda kv: (-kv[1], kv[0])):
+        if total > _ZERO and amount / total >= _SIGNIFICANT_CURRENCY_THRESHOLD:
+            section_rows.append(
+                snapshot_row(
+                    f"C_{currency}",
+                    f"C. By significant currency — {currency}",
+                    amount,
+                    monetized_value_ghs=str(monetized_by_currency[currency]),
+                )
+            )
+
     section = snapshot_section(
         "unencumbered_assets",
         "Available Unencumbered Assets",
-        rows,
+        section_rows,
         snapshot_total(
             "unencumbered_assets_total_ghs",
-            "Total HQLA-classified assets",
+            "Total available unencumbered assets",
             total,
-            equals_sum_of_rows=True,
         ),
     )
     return section, total
 
 
+def _table10_section(rows: list[_CanonicalRow]) -> dict[str, Any] | None:
+    """LMTD Table 10 — collateral received by the reporting institution."""
+    classes: dict[str, dict[str, Decimal]] = {
+        code: {"total": _ZERO, "group": _ZERO, "bog": _ZERO, "unavailable": _ZERO}
+        for code, _ in _TABLE10_CLASSES
+    }
+    own_debt = {"total": _ZERO, "group": _ZERO, "bog": _ZERO, "unavailable": _ZERO}
+    seen = False
+    for row in rows:
+        collateral = row.collateral
+        if not collateral:
+            continue
+        received = _dec_or_none(collateral.get("collateral_received_ghs"))
+        unavailable = _dec_or_none(collateral.get("collateral_unavailable_ghs"))
+        if received is not None or unavailable is not None:
+            seen = True
+            asset_class = str(collateral.get("collateral_asset_class") or "other").lower()
+            bucket = classes.get(asset_class, classes["other"])
+            amount = received or _ZERO
+            bucket["total"] += amount
+            bucket["unavailable"] += unavailable or _ZERO
+            if str(collateral.get("collateral_group_issued", "")).strip().lower() in (
+                "true", "yes", "y", "1",
+            ):
+                bucket["group"] += amount
+            if str(collateral.get("collateral_bog_eligible", "")).strip().lower() in (
+                "true", "yes", "y", "1",
+            ):
+                bucket["bog"] += amount
+        own_available = _dec_or_none(collateral.get("own_debt_available_ghs"))
+        own_unavailable = _dec_or_none(collateral.get("own_debt_unavailable_ghs"))
+        if own_available is not None or own_unavailable is not None:
+            seen = True
+            own_debt["total"] += own_available or _ZERO
+            own_debt["unavailable"] += own_unavailable or _ZERO
+    if not seen:
+        return None
+
+    def _class_row(code: str, label: str, bucket: dict[str, Decimal]) -> dict[str, Any]:
+        return snapshot_row(
+            code,
+            label,
+            bucket["total"],
+            group_issued_ghs=str(bucket["group"]),
+            bog_eligible_ghs=str(bucket["bog"]),
+            unavailable_ghs=str(bucket["unavailable"]),
+        )
+
+    section_rows = [
+        _class_row(code, label, classes[code]) for code, label in _TABLE10_CLASSES
+    ]
+    section_rows.append(_class_row("own_debt", "Own debt securities issued", own_debt))
+    grand = {
+        key: sum((classes[code][key] for code, _ in _TABLE10_CLASSES), _ZERO)
+        + own_debt[key]
+        for key in ("total", "group", "bog", "unavailable")
+    }
+    section_rows.append(
+        _class_row(
+            "grand_total", "Total Assets, Collateral Received and Own Debt Securities Issued",
+            grand,
+        )
+    )
+    return snapshot_section(
+        "collateral_received",
+        "Collateral Received by the Reporting Financial Institution",
+        section_rows,
+    )
+
+
 _LMT_TOOL_NOTES = [
     (
-        "Maturity ladder: condensed bucket set (overnight / 2-7d / 8-30d / 1-3m / "
-        "3-6m / 6-12m / >1y + non-contractual) derived from canonical contractual "
-        "maturities; the published Table 2 carries 15 columns and an off-balance "
-        "block the canonical data does not yet fill."
+        "Prudential ratios (Table 1): six inputs computed leg-by-leg from the "
+        "canonical book per the LMTD para 5 definitions, eight ratios against "
+        "the Board threshold register (regulatory published minimums where no "
+        "Board row is active). Classification is conservative: a leg counts "
+        "only on its positive signal (residency, operational purpose, two-day "
+        "redeemability, encumbrance), never by assumption. Current/call/"
+        "savings deposits are short-term by nature regardless of stated "
+        "maturity; behavioural lives never enter these ratios. Previous-month "
+        "column reports only when a prior period's canonical book exists — "
+        "never fabricated."
     ),
     (
-        "Funding concentration: top-10 depositors by canonical counterparty; the "
-        "published Table 5 asks Top 20 and Top 100 — the derivation reports what "
-        "the ingested counterparty links support."
+        "Significant currency (Tables 6 and 11): a currency is significant when "
+        "liabilities in it are >= 5% of total liabilities (LMTD para 30/41); all "
+        "amounts are cedi equivalents from ingested conversions. Table 11 keeps "
+        "the printed fixed columns (Cedi/USD/Pound/Euro/Others); Level 2A/2B "
+        "report zero because the canonical model carries no L2 taxonomy; "
+        "outflows take the most conservative contractual basis (maturing <= 30d "
+        "+ demand deposits in full) pending the unpublished LCR Directive "
+        "calibration; the printed form's Net Cash Outflow '(2-1)' label inverts "
+        "the LCR and is implemented as (1-2) — a documented deviation."
     ),
     (
-        "Available unencumbered assets: HQLA-classified securities facts; the "
-        "canonical model carries no encumbrance flags, secondary-market haircuts "
-        "or monetised values, so those Table 9 columns are omitted, not invented."
+        "Maturity ladder: the full published Table 2 grid — 17 rows x 15 columns "
+        "(13 dated buckets + Total + Non-contractual). Deposits split stable/"
+        "volatile on the ingested deposit_account_type (volatile = current + call "
+        "per LMTD para 5; unclassified deposits report as stable and are flagged "
+        "at the ingestion gate). Derivative-family instruments split by carrying-"
+        "value sign (asset MTM to row 3, liability MTM to row 8). Off-balance "
+        "rows 13/15/16/17 classify on attributes['obs_category'] with documented "
+        "defaults (undrawn commitments to row 15, LC/guarantees to row 17); "
+        "amounts are unutilised notionals, not CCF-weighted equivalents. Bucket "
+        "bounds are calendar-approximate day counts; undated positions report "
+        "non-contractual, never Next Day."
+    ),
+    (
+        "Funding concentration (Tables 5/7/8): significant counterparty = "
+        "connected group (Large Exposures grouping) providing funding of more "
+        "than 1% of Total Assets — the directive's population, not Top-N. "
+        "Top-20/Top-100 percentages apply the para-23 netting rule: deposits "
+        "pledged to secure a facility leave both numerator and denominator. "
+        "Related/intragroup = the source's own counterparty flag or a name "
+        "match against the institution's related-party register — never "
+        "inferred. Table 7 uses para-31's five horizons; Table 8 uses its nine "
+        "printed buckets (the para-31 discrepancy is recorded as a directive "
+        "question). Undated demand-natured funding reports in the shortest "
+        "bucket, other undated in the longest — maturities are never invented. "
+        "Table 8 negotiable paper fills from the documented "
+        "attributes['funding_instrument'] = 'negotiable_paper' convention."
+    ),
+    (
+        "Unencumbered assets (Table 9): itemized unencumbered securities across "
+        "all seven printed columns and three sections — A secondary-market "
+        "marketable (non-sovereign), B BoG standing-facility eligible (the "
+        "directive's eligible-collateral family), C by significant currency "
+        "using para-36's denominator (5% of total available unencumbered "
+        "collateral). Haircuts and monetized values resolve from the "
+        "institution's LRMD para-60-63 liquidity-value schedule "
+        "(ParamLiquidityHaircut, longest-prefix match on regulatory category); "
+        "an uncalibrated class reports haircut_source=unset with a zero "
+        "haircut, never an invented number."
+    ),
+    (
+        "Collateral received (Tables 4 and 10): filled from the documented "
+        "collateral_* / own_debt_* position-attribute conventions "
+        "(docs/API_INTEGRATION.md section 3.4) — instrument, asset class, fair "
+        "value available for encumbrance, group-issued and BoG-eligible flags, "
+        "re-hypothecation amounts, and nominal not available. Sections render "
+        "only when a source supplies the data; empty grids are never "
+        "fabricated."
+    ),
+    (
+        "No-contractual-maturity items (Table 3): non-contractual positions "
+        "excluding deposits (whose undated treatment lives in Table 2 rows 6-7 "
+        "and the concentration tables), itemized by instrument."
     ),
 ]
 
 
-def _build_lmt_tool_block(
+def _build_lmt_tool_block(  # noqa: PLR0915 - the eleven tables assemble linearly
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> _LmtToolBlock:
     sections: list[dict[str, Any]] = []
     totals: list[dict[str, Any]] = []
     findings: list[dict[str, str]] = []
 
-    ladder_rows = _load_canonical_rows(
-        db, ctx, bank, period.period_end, (*_LADDER_ASSET_TYPES, *_LADDER_LIABILITY_TYPES)
-    )
+    ladder_rows = _load_canonical_rows(db, ctx, bank, period.period_end, _TABLE2_POSITION_TYPES)
     if ladder_rows:
-        ladder_section, total_gap = _ladder_section(ladder_rows, period.period_end)
+        # Table 1 — BOG Prudential Ratios (tool (a), first in the appendix).
+        current_inputs = _table1_inputs(ladder_rows, period.period_end)
+        previous_inputs: dict[str, Decimal] | None = None
+        previous_end = _previous_period_end(db, ctx, bank, period)
+        if previous_end is not None:
+            previous_rows = _load_canonical_rows(
+                db, ctx, bank, previous_end, _TABLE2_POSITION_TYPES
+            )
+            if previous_rows:
+                previous_inputs = _table1_inputs(previous_rows, previous_end)
+        thresholds = _table1_thresholds(db, ctx, bank, period.period_end)
+        ratio_sections, ratio_findings, breaches = _prudential_ratio_sections(
+            current_inputs, previous_inputs, thresholds
+        )
+        sections.extend(ratio_sections)
+        findings.extend(ratio_findings)
+        totals.append(
+            snapshot_row(
+                "narrow_liquid_assets_ghs",
+                "Narrow Liquid Assets",
+                current_inputs["narrow"],
+                unit="ghs",
+            )
+        )
+        totals.append(
+            snapshot_row(
+                "broad_liquid_assets_ghs",
+                "Broad Liquid Assets",
+                current_inputs["broad"],
+                unit="ghs",
+            )
+        )
+        totals.append(
+            snapshot_row(
+                "prudential_ratio_breaches",
+                "Prudential ratios below their floor",
+                breaches,
+                unit="count",
+            )
+        )
+
+        ladder_section, mismatch_total = _ladder_section(ladder_rows, period.period_end)
         sections.append(ladder_section)
         totals.append(
             snapshot_row(
-                "contractual_gap_total_ghs",
-                "Total contractual mismatch",
-                total_gap,
+                "on_balance_mismatch_total_ghs",
+                "On-balance sheet contractual mismatch (item 1 less item 5)",
+                mismatch_total,
                 unit="ghs",
             )
         )
 
-    deposit_rows = [row for row in ladder_rows if row.position_type == "DEPOSIT"]
-    concentration, total_deposits, top_share_pct, deposit_findings = _funding_concentration_section(
-        deposit_rows
-    )
-    findings.extend(deposit_findings)
-    if concentration is not None:
-        sections.append(concentration)
-        totals.append(
-            snapshot_row(
-                "total_deposits_ghs", "Total deposit liabilities", total_deposits, unit="ghs"
-            )
-        )
-        totals.append(
-            snapshot_row(
-                "top10_depositor_share_pct",
-                "Top-10 depositor share of total deposits",
-                top_share_pct,
-                unit="pct",
-            )
-        )
+        # Tables 3 and 4.
+        table3 = _table3_section(ladder_rows)
+        if table3 is not None:
+            sections.append(table3)
+        table4 = _table4_section(ladder_rows)
+        if table4 is not None:
+            sections.append(table4)
 
-    unencumbered, unencumbered_total = _unencumbered_assets_section(db, ctx, bank, period)
-    if unencumbered is not None:
-        sections.append(unencumbered)
-        totals.append(
-            snapshot_row(
-                "unencumbered_assets_ghs",
-                "Available unencumbered (HQLA-classified) assets",
-                unencumbered_total,
-                unit="ghs",
-            )
+        # Tables 5, 7, 8 — funding concentration on the directive's rules.
+        related_names = _related_party_names(db, ctx, bank)
+        entities, _unattributed, funding_findings = _funding_entities(
+            ladder_rows, related_names
         )
+        findings.extend(funding_findings)
+        total_liabilities = sum(_liabilities_by_currency(ladder_rows).values(), _ZERO)
+        concentration, metrics, significant = _funding_concentration_section(
+            entities,
+            current_inputs["total_assets"],
+            total_liabilities,
+            current_inputs["total_deposits"],
+        )
+        if concentration is not None:
+            sections.append(concentration)
+            totals.append(
+                snapshot_row(
+                    "total_deposits_ghs",
+                    "Total deposit liabilities",
+                    current_inputs["total_deposits"],
+                    unit="ghs",
+                )
+            )
+            totals.append(
+                snapshot_row(
+                    "top20_deposits_pct",
+                    "Top-20 deposits as % of total deposits (net of pledged, para 23)",
+                    metrics["top20_pct"],
+                    unit="pct",
+                )
+            )
+            totals.append(
+                snapshot_row(
+                    "top100_deposits_pct",
+                    "Top-100 deposits as % of total deposits (net of pledged, para 23)",
+                    metrics["top100_pct"],
+                    unit="pct",
+                )
+            )
+
+        # Table 6 — assets/liabilities by significant currency.
+        table6, significant_count = _table6_section(ladder_rows)
+        if table6 is not None:
+            sections.append(table6)
+            totals.append(
+                snapshot_row(
+                    "significant_currencies",
+                    "Significant currencies (liabilities >= 5% of total)",
+                    significant_count,
+                    unit="count",
+                )
+            )
+
+        # Tables 7 and 8 — maturity and deposit-funding concentration grids.
+        if concentration is not None:
+            sections.append(
+                _table7_section(ladder_rows, entities, significant, period.period_end)
+            )
+            sections.append(_table8_section(ladder_rows, entities, period.period_end))
+
+        # Tables 9 and 10 — unencumbered assets and collateral received.
+        schedule = _haircut_schedule(db, ctx, bank, period.period_end)
+        table9, unencumbered_total = _table9_section(ladder_rows, schedule)
+        if table9 is not None:
+            sections.append(table9)
+            totals.append(
+                snapshot_row(
+                    "unencumbered_assets_ghs",
+                    "Total available unencumbered assets",
+                    unencumbered_total,
+                    unit="ghs",
+                )
+            )
+        table10 = _table10_section(ladder_rows)
+        if table10 is not None:
+            sections.append(table10)
+
+        # Table 11 — LCR by significant currency.
+        base_currency = (bank.currency or "GHS").strip().upper()
+        sections.append(_table11_section(ladder_rows, period.period_end, base_currency))
 
     return _LmtToolBlock(
         sections=sections, totals=totals, findings=findings, notes=list(_LMT_TOOL_NOTES)

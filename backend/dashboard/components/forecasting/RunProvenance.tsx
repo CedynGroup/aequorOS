@@ -1,36 +1,26 @@
-import { GitCommitHorizontal } from 'lucide-react';
-import { fmtTimestamp, shortId } from '@/lib/api/values';
+import { Clock } from 'lucide-react';
+import { fmtTimestamp } from '@/lib/api/values';
 
 /**
- * Provenance meta row for computed results that carry run identity but not
- * the full RunBadge field set (what-if / optimizer result payloads):
- * run id, input hash, computed-at. Every value comes off the API payload.
+ * Computed-at meta row for what-if / optimizer results. Full run provenance
+ * (engine version, input hash) is governance furniture and lives on the
+ * Reports registry, not on desk surfaces.
  */
 export default function RunProvenance({
-  runId,
-  inputHash,
   createdAt,
   note,
 }: {
-  runId: string;
-  inputHash: string;
   createdAt: Date | null;
   note?: string;
 }) {
   return (
     <div className="flex items-center gap-3 flex-wrap text-caption text-slate">
-      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-border-light bg-surface font-mono text-[10px] tnum">
-        <GitCommitHorizontal size={11} aria-hidden />
-        run {shortId(runId)}
-        <span className="text-slate-light">·</span>
-        input {shortId(inputHash)}
-        {createdAt && (
-          <>
-            <span className="text-slate-light">·</span>
-            {fmtTimestamp(createdAt)}
-          </>
-        )}
-      </span>
+      {createdAt && (
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-border-light bg-surface font-mono text-micro tnum">
+          <Clock size={11} aria-hidden />
+          computed {fmtTimestamp(createdAt)}
+        </span>
+      )}
       {note && <span>{note}</span>}
     </div>
   );

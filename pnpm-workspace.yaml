@@ -2,6 +2,7 @@ packages:
   - "frontend"
   - "backend/dashboard"
   - "backend"
+  - "console"
   - "packages/*"
 
 allowBuilds:

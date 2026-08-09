@@ -396,7 +396,7 @@ def test_liquidity_and_capital_engines_succeed_on_derived_facts(db_session: Sess
         SAMPLE_BANK_ID,
         LiquidityScenarioBatchCreate(reporting_period_id=result.reporting_period_id),
     )
-    assert [run.status for run in liquidity.runs] == ["succeeded"] * 4
+    assert [run.status for run in liquidity.runs] == ["succeeded"] * 5  # + usd stress
     baseline = liquidity.runs[0]
     assert Decimal(str(baseline.metrics["lcr_pct"])) > Decimal("100")
     assert Decimal(str(baseline.metrics["nsfr_pct"])) > Decimal("100")

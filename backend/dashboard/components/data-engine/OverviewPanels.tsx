@@ -7,18 +7,12 @@
  */
 
 import Link from 'next/link';
-import {
-  ArrowRight,
-  CheckCircle2,
-  Clock,
-  FileSpreadsheet,
-  Server,
-  Webhook,
-} from 'lucide-react';
+import { ArrowRight, FileSpreadsheet, Server, Webhook } from 'lucide-react';
 import type {
   IngestionSourceSummaryRead,
   IngestionSummaryRead,
 } from '@aequoros/risk-service-api';
+import StatusPill from '@/components/ui/StatusPill';
 import { useBankContext } from '@/components/shell/BankContext';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
 import { SkeletonLine } from '@/components/ui/Skeleton';
@@ -67,21 +61,14 @@ function combineSources(
 }
 
 function StatusBadge({ status, label }: { status: Integration['status']; label: string }) {
-  if (status === 'connected') {
-    return (
-      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium text-success">
-        <CheckCircle2 size={13} aria-hidden /> {label}
-      </span>
-    );
-  }
-  if (status === 'pending') {
-    return (
-      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium text-slate">
-        <Clock size={13} aria-hidden /> {label}
-      </span>
-    );
-  }
-  return <span className="ml-auto text-caption font-medium text-slate">{label}</span>;
+  return (
+    <StatusPill
+      tone={status === 'connected' ? 'success' : 'slate'}
+      className="ml-auto shrink-0"
+    >
+      {label}
+    </StatusPill>
+  );
 }
 
 function IntegrationCard({

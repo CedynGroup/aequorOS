@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import {
   CheckCircle2,
   CloudOff,
+  Database,
   Loader2,
   RotateCw,
 } from 'lucide-react';
@@ -14,6 +16,7 @@ import type {
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
+import EmptyState from '@/components/ui/EmptyState';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import StatusPill from '@/components/ui/StatusPill';
 import { SkeletonChart } from '@/components/ui/Skeleton';
@@ -323,10 +326,19 @@ export default function BehavioralModelPage({
               {products.length ? (
                 <DataTable columns={columns} rows={products} density="comfortable" />
               ) : (
-                <p className="px-5 py-4 text-body text-slate">
-                  No canonical history available for this bank yet — ingest position data to
-                  train the model.
-                </p>
+                <EmptyState
+                  Icon={Database}
+                  title="No product-level output yet"
+                  description="No canonical position history is available for this bank, so the model has nothing to estimate per product. Ingest position data through the Data Engine and the estimates appear here."
+                  action={
+                    <Link
+                      href="/data-engine"
+                      className="inline-flex items-center px-3 py-2 text-caption font-medium btn-primary"
+                    >
+                      Open Data Engine
+                    </Link>
+                  }
+                />
               )}
             </SectionCard>
 

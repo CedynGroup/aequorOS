@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -23,6 +24,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.capital.ecl import (
+    BASE_SCENARIO,
+    EclAssumption,
+    EclExposure,
+    EclResult,
+    EclScenario,
+    compute_ecl,
+)
 from app.domain.capital.engine import (
     TRIGGER_EARLY_WARNING,
     CapitalComputationError,
@@ -46,6 +55,8 @@ from app.models import (
     BankFinancialFact,
     BankReportingPeriod,
     ParamCapitalThreshold,
+    ParamCrmHaircut,
+    ParamEclAssumption,
     ParamRiskWeight,
     ParamStressShock,
     RegulatoryLineItem,
@@ -119,12 +130,34 @@ _REQUIRED_THRESHOLDS = (
 _CAPITAL_FACT_GROUPS = (
     "balance_sheet",
     "capital_component",
+    "crm_collateral",
+    "ecl_exposure",
     "loan_exposure",
     "market_risk",
     "off_balance",
     "operational_income",
     "securities",
 )
+
+# Phase 2 item 8: forward-looking ECL conditioning shocks — consumed by the
+# ECL engine, never passed to run_capital_stress (which rejects unknown keys).
+ECL_CONDITIONING_KEYS = ("ecl_pd_multiplier", "ecl_lgd_multiplier")
+
+# Phase 2 item 9: Basel II comprehensive-approach supervisory haircuts
+# (¶151 table; conservative representative pick per class — 10-business-day
+# holding period, the table's upper band where a range applies). These are
+# CODE defaults, overridable per class through the effective-dated
+# ``param_crm_haircut`` register; a class absent from both gets zero
+# recognition — a haircut is never invented.
+DEFAULT_CRM_HAIRCUTS: dict[str, Decimal] = {
+    "CASH": Decimal("0"),
+    "GOLD": Decimal("15"),
+    "SOVEREIGN_DEBT": Decimal("4"),
+    "BANK_DEBT": Decimal("8"),
+    "CORPORATE_DEBT": Decimal("8"),
+    "EQUITY_MAIN_INDEX": Decimal("15"),
+    "EQUITY_OTHER": Decimal("25"),
+}
 _CET1_LINE_PREFIX = "cet1:"
 _AT1_LINE_PREFIX = "at1:"
 _T2_LINE_PREFIX = "t2:"
@@ -145,6 +178,78 @@ class CapitalRunError(Exception):
 class _ActiveCapitalParams:
     risk_weights: dict[str, Decimal]
     thresholds: dict[str, Decimal]
+    # Phase 2 items 8/9. crm_haircuts = code defaults overlaid by register
+    # rows; ecl_assumptions empty until the bank configures its PD/LGD set
+    # (the engine then falls back to ingested provisions).
+    crm_haircuts: dict[str, Decimal] = dataclass_field(default_factory=dict)
+    ecl_assumptions: tuple[EclAssumption, ...] = ()
+
+
+@dataclass(frozen=True)
+class CapitalScenarioAnalysis:
+    """One scenario's computed capital picture — engine outputs only."""
+
+    rwa: RwaResult
+    ratios: CapitalRatiosResult
+    stress: CapitalStressResult | None
+    params: CapitalParams
+    ecl: EclResult | None
+
+
+def _execute_scenario_compute(
+    facts: list[BankFinancialFact],
+    active: _ActiveCapitalParams,
+    shocks: dict[str, Decimal],
+    scenario_code: str,
+    period: BankReportingPeriod,
+) -> CapitalScenarioAnalysis:
+    """The scenario arithmetic shared by official runs and the workbench.
+
+    Empty stress shocks (net of the ECL conditioning keys) means the point-in-
+    time baseline; otherwise the four-quarter stress path. Raises the module's
+    domain errors; never writes a ``RegulatoryRun``.
+    """
+    if not facts:
+        raise CapitalRunError(
+            "financial_facts_missing",
+            "The reporting period has no financial facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_params = _engine_params(active)
+    # ECL conditioning keys are the ECL engine's, never the stress engine's
+    # (which rejects unknown shocks).
+    stress_shocks = {
+        key: value for key, value in shocks.items() if key not in ECL_CONDITIONING_KEYS
+    }
+    ecl = _modeled_ecl(engine_facts, active, shocks)
+    gp_override = ecl.general_ecl if ecl is not None else None
+    if not stress_shocks:
+        rwa = compute_rwa(engine_facts, engine_params)
+        ratios = compute_capital_ratios(engine_facts, rwa, engine_params, gp_override)
+        return CapitalScenarioAnalysis(
+            rwa=rwa, ratios=ratios, stress=None, params=engine_params, ecl=ecl
+        )
+    stress = run_capital_stress(
+        scenario_code, engine_facts, engine_params, stress_shocks, gp_override
+    )
+    return CapitalScenarioAnalysis(
+        rwa=stress.rwa, ratios=stress.ratios, stress=stress, params=engine_params, ecl=ecl
+    )
+
+
+def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its full scope
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    shocks: dict[str, Decimal],
+    scenario_code: str = "analysis",
+) -> CapitalScenarioAnalysis:
+    """Workbench seam: compute one scenario without persisting anything."""
+    facts = _load_facts(db, ctx, bank, period)
+    active = _load_active_params(db, ctx, bank, period.period_end)
+    return _execute_scenario_compute(facts, active, shocks, scenario_code, period)
 
 
 def create_capital_run(
@@ -428,29 +533,28 @@ def _create_and_execute(
 
     run_id = run.id
     try:
-        if not facts:
-            raise CapitalRunError(
-                "financial_facts_missing",
-                "The reporting period has no financial facts to analyze.",
-                {"reporting_period_id": str(period.id)},
-            )
-        engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
-        engine_params = _engine_params(active)
-        if scenario_code == BASELINE_SCENARIO:
-            rwa = compute_rwa(engine_facts, engine_params)
-            ratios = compute_capital_ratios(engine_facts, rwa, engine_params)
-            _persist_success(db, ctx, run, rwa, ratios, engine_params, None, base_currency(bank))
-        else:
-            if not shocks:
+        if scenario_code != BASELINE_SCENARIO:
+            stress_only = {
+                key: value for key, value in shocks.items() if key not in ECL_CONDITIONING_KEYS
+            }
+            if not stress_only:
                 raise CapitalRunError(
                     "missing_parameter",
                     f"No capital stress shocks are configured for scenario '{scenario_code}'.",
                     {"scenario_code": scenario_code},
                 )
-            stress = run_capital_stress(scenario_code, engine_facts, engine_params, shocks)
-            _persist_success(
-                db, ctx, run, stress.rwa, stress.ratios, engine_params, stress, base_currency(bank)
-            )
+        analysis = _execute_scenario_compute(facts, active, shocks, scenario_code, period)
+        _persist_success(
+            db,
+            ctx,
+            run,
+            analysis.rwa,
+            analysis.ratios,
+            analysis.params,
+            analysis.stress,
+            base_currency(bank),
+            analysis.ecl,
+        )
     except CapitalRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
     except MissingParameterError as exc:
@@ -503,6 +607,42 @@ def _create_and_execute(
     return get_regulatory_run(db, ctx, bank.id, run_id)
 
 
+def _modeled_ecl(
+    facts: tuple[CapitalFact, ...],
+    active: _ActiveCapitalParams,
+    shocks: dict[str, Decimal],
+) -> EclResult | None:
+    """IFRS 9 modeled ECL (item 8) — active only when BOTH staged exposures
+    and Board-configured assumptions exist; otherwise the run keeps the
+    ingested-provisions path untouched."""
+    exposures = []
+    for fact in facts:
+        if fact.fact_group != "ecl_exposure":
+            continue
+        segment, _, stage_token = fact.category.rpartition(":stage")
+        if not segment or not stage_token.isdigit():
+            continue
+        exposures.append(
+            EclExposure(segment=segment, stage=int(stage_token), ead=fact.amount)
+        )
+    if not exposures or not active.ecl_assumptions:
+        return None
+    pd_multiplier = shocks.get("ecl_pd_multiplier")
+    lgd_multiplier = shocks.get("ecl_lgd_multiplier")
+    if pd_multiplier is not None or lgd_multiplier is not None:
+        scenarios = (
+            EclScenario(
+                code="conditioned",
+                weight_pct=Decimal("100"),
+                pd_multiplier=pd_multiplier if pd_multiplier is not None else Decimal("1"),
+                lgd_multiplier=lgd_multiplier if lgd_multiplier is not None else Decimal("1"),
+            ),
+        )
+    else:
+        scenarios = (BASE_SCENARIO,)
+    return compute_ecl(exposures, active.ecl_assumptions, scenarios)
+
+
 def _persist_success(  # noqa: PLR0913
     db: Session,
     ctx: TenantContext,
@@ -512,6 +652,7 @@ def _persist_success(  # noqa: PLR0913
     params: CapitalParams,
     stress: CapitalStressResult | None,
     currency: str,
+    ecl: EclResult | None = None,
 ) -> None:
     metrics: dict[str, Any] = {
         "car_pct": str(ratios.car_pct),
@@ -524,6 +665,18 @@ def _persist_success(  # noqa: PLR0913
         "operational_rwa_ghs": str(rwa.operational_rwa),
         "total_capital_ghs": str(ratios.total_capital),
     }
+    if ecl is not None:
+        # Item 8: modeled IFRS 9 allowances. Stage 1+2 replaced the ingested
+        # general-provisions component in this run's Tier 2 (still capped).
+        metrics["ecl_total_ghs"] = str(ecl.total_ecl)
+        metrics["ecl_general_ghs"] = str(ecl.general_ecl)
+        metrics["ecl_specific_ghs"] = str(ecl.specific_ecl)
+        for stage in (1, 2, 3):
+            metrics[f"ecl_stage{stage}_ghs"] = str(ecl.stage_totals.get(stage, Decimal("0")))
+        if ecl.uncovered:
+            metrics["ecl_uncovered_segments"] = ",".join(
+                f"{segment}:stage{stage}" for segment, stage in ecl.uncovered
+            )
     if stress is not None:
         metrics["stress_path"] = [
             {
@@ -1198,9 +1351,29 @@ def _load_active_params(
     threshold_rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, as_of
     )
+    crm_rows = get_active_params(
+        db, ctx.organization_id, bank.jurisdiction_code, ParamCrmHaircut, as_of
+    )
+    ecl_rows = get_active_params(
+        db, ctx.organization_id, bank.jurisdiction_code, ParamEclAssumption, as_of
+    )
+    crm_haircuts = dict(DEFAULT_CRM_HAIRCUTS)
+    crm_haircuts.update(
+        {row.collateral_class: Decimal(str(row.haircut_pct)) for row in crm_rows}
+    )
     return _ActiveCapitalParams(
         risk_weights={row.risk_weight_code: Decimal(str(row.weight_pct)) for row in weight_rows},
         thresholds={row.threshold_code: Decimal(str(row.value_pct)) for row in threshold_rows},
+        crm_haircuts=crm_haircuts,
+        ecl_assumptions=tuple(
+            EclAssumption(
+                segment=row.segment,
+                stage=row.stage,
+                pd_pct=Decimal(str(row.pd_pct)),
+                lgd_pct=Decimal(str(row.lgd_pct)),
+            )
+            for row in ecl_rows
+        ),
     )
 
 
@@ -1225,6 +1398,7 @@ def _engine_params(active: _ActiveCapitalParams) -> CapitalParams:
         leverage_min_pct=thresholds["leverage_min"],
         car_early_warning_pct=thresholds["car_early_warning"],
         car_critical_pct=thresholds["car_critical"],
+        crm_haircuts=active.crm_haircuts,
     )
 
 
@@ -1280,12 +1454,39 @@ def _build_snapshot(  # noqa: PLR0913
             ),
             key=lambda entry: json.dumps(entry, sort_keys=True),
         ),
-        "parameters": {
-            "risk_weights_pct": _stringified(active.risk_weights),
-            "thresholds_pct": _stringified(active.thresholds),
-        },
+        "parameters": _snapshot_parameters(active),
         "shocks": _stringified(shocks),
     }
+
+
+def _snapshot_parameters(active: _ActiveCapitalParams) -> dict[str, Any]:
+    """ECL/CRM blocks join the snapshot only when configured/consumed, so
+    pre-existing books hash exactly as before (value-based discipline)."""
+    parameters: dict[str, Any] = {
+        "risk_weights_pct": _stringified(active.risk_weights),
+        "thresholds_pct": _stringified(active.thresholds),
+    }
+    configured_crm = {
+        key: value
+        for key, value in active.crm_haircuts.items()
+        if DEFAULT_CRM_HAIRCUTS.get(key) != value
+    }
+    if configured_crm:
+        parameters["crm_haircuts_pct"] = _stringified(configured_crm)
+    if active.ecl_assumptions:
+        parameters["ecl_assumptions"] = sorted(
+            (
+                {
+                    "segment": row.segment,
+                    "stage": row.stage,
+                    "pd_pct": str(row.pd_pct),
+                    "lgd_pct": str(row.lgd_pct),
+                }
+                for row in active.ecl_assumptions
+            ),
+            key=lambda entry: (entry["segment"], entry["stage"]),
+        )
+    return parameters
 
 
 def _stringified(values: dict[str, Decimal]) -> dict[str, str]:
@@ -1367,3 +1568,80 @@ def _require_actor(ctx: TenantContext) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="X-User-Id header is required."
         )
+
+
+def capital_breach_multiplier(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    scenario_code: str = "severe",
+) -> dict[str, Any]:
+    """Reverse stress (Phase 2 item 4): the smallest severity multiplier k at
+    which the four-quarter CET1 path breaches the CET1 minimum.
+
+    k scales the named capital scenario's quarterly credit losses and RWA
+    growth linearly and moves the FX RWA multiplier from 1 toward its shocked
+    value; quarterly income is NOT scaled (income does not rise with
+    severity). Deterministic bisection to 0.05 precision over k in (0, 5].
+    """
+    facts = _load_facts(db, ctx, bank, period)
+    if not facts:
+        raise CapitalRunError(
+            "financial_facts_missing",
+            "The reporting period has no financial facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    active = _load_active_params(db, ctx, bank, period.period_end)
+    engine_params = _engine_params(active)
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    shocks = _load_shocks(db, ctx, bank, scenario_code, period.period_end)
+    if not shocks:
+        raise CapitalRunError(
+            "missing_parameter",
+            f"No capital stress shocks are configured for scenario '{scenario_code}'.",
+            {"scenario_code": scenario_code},
+        )
+    one = Decimal("1")
+
+    def scaled_shocks(k: Decimal) -> dict[str, Decimal]:
+        return {
+            "quarterly_rwa_growth_pct": shocks["quarterly_rwa_growth_pct"] * k,
+            "quarterly_income_m": shocks["quarterly_income_m"],
+            "quarterly_credit_loss_m": shocks["quarterly_credit_loss_m"] * k,
+            "fx_rwa_multiplier": one + (shocks["fx_rwa_multiplier"] - one) * k,
+        }
+
+    def worst_cet1_at(k: Decimal) -> Decimal:
+        result = run_capital_stress(scenario_code, engine_facts, engine_params, scaled_shocks(k))
+        return min(quarter.cet1_ratio for quarter in result.path)
+
+    minimum = engine_params.cet1_min_pct
+    k_max = Decimal("5")
+    precision = Decimal("0.05")
+    baseline_cet1 = worst_cet1_at(Decimal("0"))
+    if worst_cet1_at(k_max) >= minimum:
+        return {
+            "breached": False,
+            "scenario_code": scenario_code,
+            "cet1_min_pct": str(minimum),
+            "baseline_worst_cet1_pct": str(baseline_cet1),
+            "worst_cet1_at_k_max_pct": str(worst_cet1_at(k_max)),
+            "k_max": str(k_max),
+        }
+    low, high = Decimal("0"), k_max
+    while high - low > precision:
+        mid = (low + high) / 2
+        if worst_cet1_at(mid) < minimum:
+            high = mid
+        else:
+            low = mid
+    frontier = high.quantize(precision)
+    return {
+        "breached": True,
+        "scenario_code": scenario_code,
+        "cet1_min_pct": str(minimum),
+        "baseline_worst_cet1_pct": str(baseline_cet1),
+        "breach_multiplier": str(frontier),
+        "worst_cet1_at_breach_pct": str(worst_cet1_at(frontier)),
+    }

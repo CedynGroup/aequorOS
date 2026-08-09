@@ -8,7 +8,7 @@
  * next to triple-digit liquidity ratios.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CartesianGrid,
   Legend,
@@ -20,8 +20,8 @@ import {
   YAxis,
 } from 'recharts';
 import type { BankReportingPeriodRead } from '@aequoros/risk-service-api';
+import RangeTabs, { RANGE_MONTHS, type RangePreset } from '@/components/ui/RangeTabs';
 import ChartFrame from '@/components/ui/ChartFrame';
-import RunBadge from '@/components/ui/RunBadge';
 import {
   axisProps,
   chartLegendProps,
@@ -52,6 +52,7 @@ export default function RatioTrendChart({
   bankId: string | undefined;
   period: BankReportingPeriodRead;
 }) {
+  const [range, setRange] = useState<RangePreset>('1Y');
   const liq = useLiquidityDashboard(bankId, period.id);
   const cap = useCapitalDashboard(bankId, period.id);
   // Audit chip for the footer: the liquidity baseline run backing this period.
@@ -79,10 +80,17 @@ export default function RatioTrendChart({
         });
       }
     }
-    return [...byPeriod.values()].sort((a, b) => a.t - b.t);
-  }, [liq.data, cap.data]);
+    const all = [...byPeriod.values()].sort((a, b) => a.t - b.t);
+    const months = RANGE_MONTHS[range];
+    return months === null ? all : all.slice(-months);
+  }, [liq.data, cap.data, range]);
 
   const isLoading = liq.isLoading || cap.isLoading;
+  const windowMove = (() => {
+    const withLcr = rows.filter((r) => r.lcr !== undefined);
+    if (withLcr.length < 2) return null;
+    return (withLcr[withLcr.length - 1].lcr ?? 0) - (withLcr[0].lcr ?? 0);
+  })();
   const storedCount = (liq.data?.trend ?? []).filter((p) => p.stored).length;
 
   return (
@@ -91,14 +99,18 @@ export default function RatioTrendChart({
       subtitle="LCR & NSFR (left axis) · CAR (right axis) per reporting period"
       height={280}
       loading={isLoading}
+      actions={<RangeTabs value={range} onChange={setRange} />}
       footer={
         <>
           <span>
-            {rows.length} periods · {storedCount} with stored baseline runs
+            {rows.length} periods
+            {windowMove !== null &&
+              ` · LCR ${windowMove >= 0 ? '+' : ''}${windowMove.toFixed(1)}pp over the window`}
+            {' · '}
+            {storedCount} with stored results
           </span>
           {liqRun.data && (
             <span className="ml-auto">
-              <RunBadge run={liqRun.data} />
             </span>
           )}
         </>

@@ -35,7 +35,7 @@ Methodology notes:
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
@@ -62,6 +62,13 @@ FACT_GROUP_OFF_BALANCE = "off_balance"
 FACT_GROUP_MARKET_RISK = "market_risk"
 FACT_GROUP_OPERATIONAL_INCOME = "operational_income"
 FACT_GROUP_CAPITAL_COMPONENT = "capital_component"
+# Phase 2 items 8/9: staged EAD buckets ("<family>:stage<n>") for the IFRS 9
+# ECL engine, and CRM collateral/guarantee values ("<family>:<class>") netted
+# against credit exposures after supervisory haircuts. Both groups exist only
+# where the source data carries staging / collateral — their absence leaves
+# every pre-existing computation untouched.
+FACT_GROUP_ECL_EXPOSURE = "ecl_exposure"
+FACT_GROUP_CRM_COLLATERAL = "crm_collateral"
 
 OTHER_ASSETS_CATEGORY = "other_assets"
 OTHER_ASSETS_RISK_WEIGHT_CODE = "RW100"
@@ -167,6 +174,10 @@ class CapitalParams:
     leverage_min_pct: Decimal
     car_early_warning_pct: Decimal
     car_critical_pct: Decimal
+    # Supervisory haircuts per collateral class (Phase 2 item 9). A class
+    # absent from the mapping gets NO recognition — a haircut is never
+    # invented for an unknown collateral type.
+    crm_haircuts: Mapping[str, Decimal] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -382,8 +393,14 @@ def compute_rwa(facts: Sequence[CapitalFact], params: CapitalParams) -> RwaResul
 
 
 def compute_capital_ratios(
-    facts: Sequence[CapitalFact], rwa: RwaResult, params: CapitalParams
+    facts: Sequence[CapitalFact],
+    rwa: RwaResult,
+    params: CapitalParams,
+    general_provisions_override: Decimal | None = None,
 ) -> CapitalRatiosResult:
+    """``general_provisions_override`` replaces the ingested general-provisions
+    component with the IFRS 9 engine's modeled stage-1/2 ECL (Phase 2 item 8:
+    "replaces ingested-provisions-only") — the Tier 2 cap still applies."""
     components = sorted(
         (fact for fact in facts if fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT),
         key=lambda fact: (
@@ -404,6 +421,8 @@ def compute_capital_ratios(
             _ZERO,
         )
     )
+    if general_provisions_override is not None:
+        gp_amount = money(general_provisions_override)
     gp_cap = money(rwa.credit_rwa * params.tier2_gp_cap_pct_credit_rwa / _HUNDRED)
     gp_included = min(gp_amount, gp_cap)
     gp_cap_applied = gp_amount > gp_cap
@@ -480,6 +499,7 @@ def run_capital_stress(
     facts: Sequence[CapitalFact],
     params: CapitalParams,
     shocks: Mapping[str, Decimal],
+    general_provisions_override: Decimal | None = None,
 ) -> CapitalStressResult:
     """Project the four-quarter capital path for one stress scenario.
 
@@ -499,7 +519,7 @@ def run_capital_stress(
             raise MissingParameterError(f"stress_shock:{scenario_code}:{shock_key}")
 
     rwa = compute_rwa(facts, params)
-    ratios = compute_capital_ratios(facts, rwa, params)
+    ratios = compute_capital_ratios(facts, rwa, params, general_provisions_override)
     growth_factor = _ONE + shocks[SHOCK_QUARTERLY_RWA_GROWTH_PCT] / _HUNDRED
     quarterly_retention = (
         shocks[SHOCK_QUARTERLY_INCOME_M] - shocks[SHOCK_QUARTERLY_CREDIT_LOSS_M]
@@ -571,24 +591,54 @@ def _evaluate_trigger(
     )
 
 
+def _crm_recognized_by_category(
+    facts: Sequence[CapitalFact], params: CapitalParams
+) -> dict[str, Decimal]:
+    """Post-haircut CRM value per loan family (Phase 2 item 9).
+
+    ``crm_collateral`` facts carry ``"<loan family>:<collateral class>"``
+    categories; recognition = value x (1 - supervisory haircut). A class with
+    no configured haircut gets zero recognition — never an invented haircut.
+    """
+    recognized: dict[str, Decimal] = {}
+    for fact in facts:
+        if fact.fact_group != FACT_GROUP_CRM_COLLATERAL:
+            continue
+        family, _, collateral_class = fact.category.rpartition(":")
+        if not family:
+            continue
+        haircut = params.crm_haircuts.get(collateral_class)
+        if haircut is None:
+            continue
+        value = money(fact.amount * (_HUNDRED - haircut) / _HUNDRED)
+        recognized[family] = recognized.get(family, _ZERO) + value
+    return recognized
+
+
 def _credit_line_items(
     facts: Sequence[CapitalFact], params: CapitalParams
 ) -> tuple[CapitalLineItem, ...]:
     items: list[CapitalLineItem] = []
+    crm_recognized = _crm_recognized_by_category(facts, params)
     loans = sorted(
         (fact for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE),
         key=lambda fact: fact.category,
     )
     for fact in loans:
         weight = _risk_weight(params, fact.risk_weight_code, fact.category)
+        crm = min(crm_recognized.get(fact.category, _ZERO), money(fact.amount))
+        net_exposure = money(fact.amount - crm)
+        description = _describe(fact.category)
+        if crm > _ZERO:
+            description = f"{description} (After CRM Collateral, Post-Haircut)"
         items.append(
             CapitalLineItem(
                 "credit_rwa",
                 fact.category,
-                _describe(fact.category),
-                money(fact.amount),
+                description,
+                net_exposure,
                 weight,
-                money(fact.amount * weight / _HUNDRED),
+                money(net_exposure * weight / _HUNDRED),
             )
         )
     other_assets = [

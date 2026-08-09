@@ -24,10 +24,7 @@ import {
  * @interface FinancialCovenantCreateComplianceStatus
  */
 export type FinancialCovenantCreateComplianceStatus =
-  | "compliant"
-  | "non_compliant"
-  | "unknown"
-  | null;
+  "compliant" | "non_compliant" | "unknown" | null;
 
 /**
  * Check if a given object implements the FinancialCovenantCreateComplianceStatus interface.

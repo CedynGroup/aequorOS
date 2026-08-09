@@ -1,7 +1,5 @@
 'use client';
 
-import Link from 'next/link';
-import { FileText, Info, Loader2, PlayCircle } from 'lucide-react';
 import type { LiquidityDashboardLineRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import RatioGauge from '@/components/ui/RatioGauge';
@@ -10,7 +8,6 @@ import LimitBar from '@/components/ui/LimitBar';
 import ChartFrame from '@/components/ui/ChartFrame';
 import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
-import RunBadge from '@/components/ui/RunBadge';
 import Sparkline from '@/components/ui/Sparkline';
 import ValidationList from '@/components/ui/ValidationList';
 import QueryBoundary from '@/components/ui/QueryBoundary';
@@ -18,15 +15,14 @@ import DataTable, { type Column } from '@/components/ui/DataTable';
 import RatioTrendChart from '@/components/liquidity/charts/RatioTrendChart';
 import NetOutflowChart from '@/components/liquidity/charts/NetOutflowChart';
 import { runComputedAt, runThresholds } from '@/components/liquidity/runData';
-import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
+import LiveEngineNote from '@/components/live/LiveEngineNote';
 import {
-  useCreateRegulatoryRun,
   useLiquidityDashboard,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, isoDate, num, statusTone } from '@/lib/api/values';
-import { fmtCurrency, fmtPct, regShort, centralBankName } from '@/lib/format';
+import { num, statusTone } from '@/lib/api/values';
+import { currencyCode, fmtCurrency, fmtPct, regShort, centralBankName } from '@/lib/format';
 
 type LineRow = {
   item: string;
@@ -50,7 +46,7 @@ function lineColumns(rateHeader: string, weightedHeader: string): Column<LineRow
     { key: 'item', header: 'Category', render: (r) => r.item, width: '46%' },
     {
       key: 'balance',
-      header: 'Balance (GHS)',
+      header: `Balance (${currencyCode()})`,
       numeric: true,
       render: (r) =>
         r.balanceGHS === null ? '—' : fmtCurrency(r.balanceGHS),
@@ -77,7 +73,6 @@ export default function LiquidityCockpit() {
 
   const dashboard = useLiquidityDashboard(bankId, periodId);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
-  const runBaseline = useCreateRegulatoryRun(bankId);
 
   const data = dashboard.data;
   const run = latestRun.data;
@@ -115,9 +110,7 @@ export default function LiquidityCockpit() {
   const computedAt = runComputedAt(run);
   const provenance = data ? (
     <span>
-      {data.stored
-        ? 'Stored baseline run'
-        : 'Live computation — run baseline to persist'}
+      Computed from current positions and the active parameter set
     </span>
   ) : undefined;
 
@@ -131,45 +124,7 @@ export default function LiquidityCockpit() {
         ]}
         title="Liquidity Cockpit"
         subtitle={`Basel III LCR & NSFR per ${centralBankName()} CRD framework · 30-day stressed horizon`}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
-        action={
-          <div className="flex items-center gap-2">
-            <FreshnessBadge
-              bankId={bankId}
-              periodId={periodId}
-              module="liquidity"
-              asOfDate={period ? isoDate(period.periodEnd) : undefined}
-            />
-            {run && <RunBadge run={run} />}
-            <Link
-              href="/submissions/returns?code=BSD3"
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-action border border-action/30 bg-action-light rounded-md hover:bg-action/10"
-            >
-              <FileText size={13} aria-hidden />
-              Official returns →
-            </Link>
-            <button
-              type="button"
-              disabled={runBaseline.isPending || !periodId}
-              onClick={() =>
-                periodId &&
-                runBaseline.mutate({
-                  module: 'liquidity',
-                  reportingPeriodId: periodId,
-                  scenarioCode: 'baseline',
-                })
-              }
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            >
-              {runBaseline.isPending ? (
-                <Loader2 size={13} className="animate-spin" aria-hidden />
-              ) : (
-                <PlayCircle size={13} aria-hidden />
-              )}
-              Run baseline
-            </button>
-          </div>
-        }
+        action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 
       <QueryBoundary
@@ -179,15 +134,6 @@ export default function LiquidityCockpit() {
       >
         {data && (
           <div className="px-8 py-6 space-y-6">
-            {!data.stored && (
-              <div className="card border-l-4 border-l-warning bg-warning-light/40 px-5 py-3.5 flex items-start gap-3">
-                <Info size={16} className="text-warning shrink-0 mt-0.5" aria-hidden />
-                <p className="text-body text-navy/85 leading-relaxed">
-                  Showing a live computation for this period — run baseline to
-                  persist an auditable regulatory run.
-                </p>
-              </div>
-            )}
 
             {/* Headline gauges + component KPIs */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -252,7 +198,6 @@ export default function LiquidityCockpit() {
               title="Regulatory floors"
               subtitle={`${regShort()} CRD thresholds from the active parameter set — green ≥ minimum, amber down to the red floor`}
               computedAt={computedAt}
-              runBadge={run ? <RunBadge run={run} /> : undefined}
               footer={provenance}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5">
@@ -308,11 +253,11 @@ export default function LiquidityCockpit() {
                 footer={
                   hasInlineTrendPoints ? (
                     <span>
-                      Hollow points are computed inline — run baseline on those
-                      periods to persist them.
+                      Hollow points are live computations — they solidify once
+                      those periods’ results are stored.
                     </span>
                   ) : (
-                    <span>All trend points are stored baseline runs.</span>
+                    <span>All trend points come from stored results.</span>
                   )
                 }
               >
@@ -360,7 +305,6 @@ export default function LiquidityCockpit() {
                 subtitle={`30-day stressed runoff per ${regShort()} CRD weights`}
                 noPadding
                 computedAt={computedAt}
-                runBadge={run ? <RunBadge run={run} /> : undefined}
                 footer={provenance}
               >
                 <DataTable
@@ -387,7 +331,6 @@ export default function LiquidityCockpit() {
                 subtitle="Capped at 75% of outflows per Basel III"
                 noPadding
                 computedAt={computedAt}
-                runBadge={run ? <RunBadge run={run} /> : undefined}
                 footer={capNote ? <span>{capNote.message}</span> : provenance}
               >
                 <DataTable
@@ -426,7 +369,6 @@ export default function LiquidityCockpit() {
               subtitle="Regulatory rule evaluation for this period"
               noPadding
               computedAt={computedAt}
-              runBadge={run ? <RunBadge run={run} /> : undefined}
               footer={provenance}
             >
               <ValidationList validations={data.validations} />

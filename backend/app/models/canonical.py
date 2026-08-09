@@ -42,6 +42,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin, utc_now
 from app.domain.ingestion.constants import (
     COUNTERPARTY_TYPES,
+    DEPOSIT_ACCOUNT_TYPES,
     FX_RATE_TYPES,
     GL_ACCOUNT_CLASSES,
     MARKET_INDEX_SCENARIOS,
@@ -189,6 +190,12 @@ class CanonicalCounterparty(CanonicalMetadataMixin, Base):
     rating: Mapped[str | None] = mapped_column(String(16), nullable=True)
     rating_source: Mapped[str | None] = mapped_column(String(40), nullable=True)
     group_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Residency of the counterparty relative to the bank's jurisdiction
+    # (LMTD 2026 ¶5 "Narrow Liquid Assets": non-resident correspondent
+    # balances and non-resident FI placements are distinct classification
+    # legs). NULL = not stated by the source; never inferred from country
+    # alone because branch/subsidiary residency can differ from domicile.
+    resident: Mapped[bool | None] = mapped_column(nullable=True)
     external_identifiers: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
@@ -550,6 +557,11 @@ class CanonicalPositionSnapshot(CanonicalMetadataMixin, Base):
             "ifrs9_stage IN (1, 2, 3) OR ifrs9_stage IS NULL",
             name="ck_canonical_position_snapshots_ifrs9_stage",
         ),
+        CheckConstraint(
+            f"deposit_account_type IN ({_values(DEPOSIT_ACCOUNT_TYPES)}) "
+            "OR deposit_account_type IS NULL",
+            name="ck_canonical_position_snapshots_deposit_account_type",
+        ),
         ForeignKeyConstraint(
             ["position_id", "organization_id"],
             ["canonical_positions.id", "canonical_positions.organization_id"],
@@ -590,6 +602,37 @@ class CanonicalPositionSnapshot(CanonicalMetadataMixin, Base):
     contractual_maturity: Mapped[date | None] = mapped_column(Date, nullable=True)
     next_repricing_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     ifrs9_stage: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # --- BoG liquidity-directive classification fields (LMTD/LRMD 2026;
+    # epoch 2026-08-07). All nullable: NULL means "not stated by the source",
+    # and every consumer treats NULL conservatively per its own rule —
+    # NULL is not encumbered, not pledged, not operational-purpose, not
+    # two-day redeemable. Encumbrance semantics follow the directives'
+    # shared definition: tied to legal, regulatory, contractual or other
+    # restrictions preventing liquidation, sale, transfer or assignment.
+    encumbered: Mapped[bool | None] = mapped_column(nullable=True)
+    # Why/what the asset is pledged to, e.g. "BoG repo", "margin" (LRMD ¶65).
+    encumbrance_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Collateral-management attributes (LRMD ¶64): the legal entity/affiliate
+    # owning the asset and where it is physically held — also LMTD Table 9's
+    # "Location" column.
+    owning_entity: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    asset_location: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Correspondent balances held for operational purposes and readily
+    # withdrawable (LMTD ¶5, Narrow Liquid Assets leg (b)).
+    operational_purpose: Mapped[bool | None] = mapped_column(nullable=True)
+    # Marketable/transferable and redeemable within two working days
+    # (LMTD ¶5, Narrow Liquid Assets leg (f)).
+    redeemable_within_two_days: Mapped[bool | None] = mapped_column(nullable=True)
+    # Deposit used to secure a credit facility (LMTD ¶23: such deposits are
+    # deducted from both numerator and denominator of the Top-20/Top-100
+    # concentration metrics). ``lien_reference`` names the secured facility
+    # in source-reference terms when the source knows it.
+    pledged_as_collateral: Mapped[bool | None] = mapped_column(nullable=True)
+    lien_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # CURRENT/CALL/SAVINGS/FIXED/OTHER — drives the LMTD volatile-liability
+    # definition (current + call) and the contractual-by-nature <1yr rule
+    # (current + call + savings) without product-code heuristics.
+    deposit_account_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Behavioral overlays are enrichment outputs, nullable on raw ingestion;
     # provenance for each enriched field lives in enrichment_provenance.
     behavioral_maturity_months: Mapped[int | None] = mapped_column(Integer, nullable=True)

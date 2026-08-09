@@ -40,6 +40,12 @@ export interface ForecastRunCreate {
   assumptions?: ForecastRunCreateAssumptions;
   /**
    *
+   * @type {number}
+   * @memberof ForecastRunCreate
+   */
+  horizonYears?: number;
+  /**
+   *
    * @type {string}
    * @memberof ForecastRunCreate
    */
@@ -85,6 +91,8 @@ export function ForecastRunCreateFromJSONTyped(
       json["assumptions"] == null
         ? undefined
         : ForecastRunCreateAssumptionsFromJSON(json["assumptions"]),
+    horizonYears:
+      json["horizon_years"] == null ? undefined : json["horizon_years"],
     reportingPeriodId: json["reporting_period_id"],
     scenarioCode: ForecastScenarioCodeFromJSON(json["scenario_code"]),
   };
@@ -104,6 +112,7 @@ export function ForecastRunCreateToJSONTyped(
 
   return {
     assumptions: ForecastRunCreateAssumptionsToJSON(value["assumptions"]),
+    horizon_years: value["horizonYears"],
     reporting_period_id: value["reportingPeriodId"],
     scenario_code: ForecastScenarioCodeToJSON(value["scenarioCode"]),
   };

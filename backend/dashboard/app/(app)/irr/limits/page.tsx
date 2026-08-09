@@ -13,7 +13,6 @@ import IrrWorkspace from '@/components/irr/IrrWorkspace';
 import IllustrativeBadge from '@/components/irr/IllustrativeBadge';
 import { scenarioLabel } from '@/components/irr/scenarios';
 import LimitBar from '@/components/ui/LimitBar';
-import RunBadge from '@/components/ui/RunBadge';
 import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
 import ValidationList from '@/components/ui/ValidationList';
@@ -29,7 +28,6 @@ export default function IrrLimitsPage() {
       {({ data, metrics: m, latestRun, computedAt }) => {
         const eveLimit = num(m.eveLimitPct);
         const worstPct = Math.abs(num(m.worstEveChangePctTier1));
-        const runBadge = latestRun ? <RunBadge run={latestRun} /> : undefined;
 
         const shocks = (data.eveScenarios ?? []).filter(
           (s) => s.scenarioCode !== 'baseline'
@@ -48,7 +46,6 @@ export default function IrrLimitsPage() {
                 </StatusPill>
               }
               computedAt={computedAt}
-              runBadge={runBadge}
             >
               <LimitBar
                 label={`Worst case — ${scenarioLabel(m.worstScenarioCode)}`}
@@ -73,7 +70,6 @@ export default function IrrLimitsPage() {
               title="Limit utilisation by scenario"
               subtitle="Each Basel shock's |ΔEVE| as a share of Tier 1 against the same supervisory ceiling"
               computedAt={computedAt}
-              runBadge={runBadge}
             >
               {shocks.length > 0 ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-6">
@@ -108,8 +104,8 @@ export default function IrrLimitsPage() {
                 </div>
               ) : (
                 <p className="text-body text-slate">
-                  No scenario results for this period — run all scenarios to
-                  populate the limit wall.
+                  No stored scenario results for this period yet — the limit
+                  wall fills in once the period’s results are stored.
                 </p>
               )}
             </SectionCard>
@@ -124,7 +120,6 @@ export default function IrrLimitsPage() {
                 />
               }
               computedAt={computedAt}
-              runBadge={runBadge}
             >
               {trend.length > 0 ? (
                 <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
@@ -160,8 +155,8 @@ export default function IrrLimitsPage() {
                 </div>
               ) : (
                 <p className="text-body text-slate">
-                  No trend history yet — run all scenarios across periods to
-                  build the breach record.
+                  No trend history yet — the breach record builds as results
+                  are stored each period.
                 </p>
               )}
               {trend.some((p) => !p.stored) && (
@@ -176,7 +171,6 @@ export default function IrrLimitsPage() {
               subtitle="Engine validations for this period, including the earnings-at-risk limit check"
               noPadding
               computedAt={computedAt}
-              runBadge={runBadge}
             >
               <ValidationList validations={data.validations} />
             </SectionCard>

@@ -1,0 +1,368 @@
+{
+  "generated_at": "2026-08-09T21:09:33Z",
+  "note": "fetched_at is the harvest-run completion timestamp (single session, all fetches 2026-08-09 ~20:45-21:09 UTC).",
+  "artifacts": [
+    {
+      "path": "raw/bog_page_treasury-bill-rates.html",
+      "source_url": "https://www.bog.gov.gh/treasury-and-the-markets/treasury-bill-rates/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "f30576a84cc46217ee28409648a7e88f20739d4925c01e9df107966ba5355554",
+      "notes": "Page HTML carrying wpDataTables nonce for table_id=2 (name=wdtNonceFrontendServerSide_2). Fixture for nonce-extraction parser."
+    },
+    {
+      "path": "raw/bog_page_interbank-interest-rates.html",
+      "source_url": "https://www.bog.gov.gh/treasury-and-the-markets/interbank-interest-rates/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "14c733c5a9485cb77f9b54575b9684b261bad7d5b07ca3e949836a37fd1dfe35",
+      "notes": "Carries nonces for table_ids 62,63,69,70. DOM order maps table_1->69 (daily rate), table_2->70 (weekly avg), table_3->62 (MPC rate), table_4->63 (MPC rate -200bps)."
+    },
+    {
+      "path": "raw/bog_page_historical-interbank-fx-rates.html",
+      "source_url": "https://www.bog.gov.gh/treasury-and-the-markets/historical-interbank-fx-rates/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "26b0995af419a7495a8e4a9b67c4d2d9bf3101071f8d0cba14a96e1347bb7fab",
+      "notes": "Carries nonce for table_id=40, the full-history FX table (the daily page's table 31 serves only the latest day)."
+    },
+    {
+      "path": "raw/bog_page_economic-data-interest-rates.html",
+      "source_url": "https://www.bog.gov.gh/economic-data/interest-rates/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "630b6dc374b65d21d99fe19f25803f239b0139a7688aeaf75b91f9c065074fb5",
+      "notes": "Carries nonce for table_id=21 (Year x Variable x Jan..Dec monthly interest-rate matrix incl. Ghana Reference Rate)."
+    },
+    {
+      "path": "raw/bog_wdt_table2_tbill_rates_page.json",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=2",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "5746477691a49755a0b2336dd5ba7fe2dd27c0fee517bb321e5ae7689fcacee6",
+      "notes": "GoG treasury securities tender results. Columns: Issue Date, Tender, Security Type, Discount Rate, Interest Rate. recordsTotal=1985, recordsFiltered=1361 (view exposes 2013-08-26 onward only)."
+    },
+    {
+      "path": "raw/bog_wdt_table3_bog_bill_rates_page.json",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=3",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "7eea2a7cce551433c909441e3e1e272270af348db6c58989b7f352ac2521101f",
+      "notes": "BoG bill tender results, same 5 columns as table 2. recordsFiltered=585 (2016-12-23..2026-03-16)."
+    },
+    {
+      "path": "raw/bog_wdt_table69_interbank_daily_page.json",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=69",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "8fe9f99bfec45784d4bc61ff8cf7f2e15b76005c408e5d0b62d8bef222b5c854",
+      "notes": "Daily interbank weighted-average rate. Columns: daily_interest_rate_ID (thousands-separated), Effective Date, Rate (%). recordsFiltered=1722; recordsTotal=38145 is the shared underlying table, not this view."
+    },
+    {
+      "path": "raw/bog_wdt_table70_interbank_weekly_avg_page.json",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=70",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "5e091d04f981656e526c5294f46e7b893084f8b101645ffd2aff6d8f7e503907",
+      "notes": "Weekly average interbank rate. Columns: avg_interest_rate_ID, Week Ending, Average Rate (%). recordsFiltered=364."
+    },
+    {
+      "path": "raw/bog_wdt_table62_mpc_rate_page.json",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=62",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "4625ba54f56e3d5a6e331f5ec80b3323224b11b2988129d84857da280671254e",
+      "notes": "MPC policy rate by decision date, 2002-11-21..2026-07-22. Columns: mpc_rate_ID, Effective Date, Rate (%). recordsFiltered=119; 2 rows have empty Effective Date."
+    },
+    {
+      "path": "raw/bog_wdt_table63_mpc_rate_minus200_page.json",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=63",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "e4920c16ba5d2881ab5230a5a478bff5d4d8af44d9f06328d2b95cae6f7a0d02",
+      "notes": "Same 119 decision dates/IDs as table 62 with rate exactly 200bps lower on every row - a derived corridor-floor display series, not independent data."
+    },
+    {
+      "path": "raw/bog_wdt_table31_daily_fx_latest_day_page.json",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=31",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "9220bfbc8fdea9eb3b61189f654c238242c8e99182582a4dfb8941c6240ed741",
+      "notes": "Daily interbank FX by pair - LATEST DAY ONLY (recordsFiltered=19 pairs; recordsTotal=144647 is the underlying table). Columns: Date, Currency, Currency Pair, Buying, Selling, Mid Rate."
+    },
+    {
+      "path": "raw/bog_wdt_table32_fx_weighted_median_page.json",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=32",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "ae9a3b68cc13bb701885c561422bbdc23f726cfe0b51713218ea4dd36e11ce64",
+      "notes": "Single-cell table: \"Day's Weighted Median Rate: <value>\" for USDGHS - a text banner, not a series."
+    },
+    {
+      "path": "raw/bog_wdt_table40_historical_fx_page.json",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=40",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "c7ef0c0590d779f47521e79333d8a3e8e5ebbec54faaca542137b7afd270df13",
+      "notes": "Full-history FX table (recordsFiltered=recordsTotal=144647), same 6 columns as table 31. Unfiltered first page, newest first."
+    },
+    {
+      "path": "raw/bog_wdt_table40_historical_fx_usdghs_colsearch_page.json",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=40",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "a224589854b8739c2bece1466e650300cb930efa2ee01749c19c3659661e6b13",
+      "notes": "Table 40 filtered server-side to USDGHS via columns[2][search][value]=USDGHS (recordsFiltered=7613). NOTE: global search[value] is broken on this deployment (returns count but 0 rows); per-column search is the working mechanism."
+    },
+    {
+      "path": "raw/bog_wdt_table21_econ_interest_rates_page.json",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=21",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "9a84ac305b0d87801343a40929935f97b99e51f7013fb56cfdf7db5e706f1155",
+      "notes": "Monthly interest-rate matrix: Year, Variables, Jan..Dec. 13 variables incl. Ghana Reference Rate (%), MPR, 91/182/364-day T-bill monthly averages. recordsFiltered=371; data ends 2023; contains a junk Year=0 group."
+    },
+    {
+      "path": "raw/gog_auction_results_index.html",
+      "source_url": "https://www.bog.gov.gh/gog_auction_results/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "004d8835bc8eb83bbfc30a8de64960ff4b82370049010e9d1f584bfe0a2ae9d8",
+      "notes": "GoG auction results index. Tender pages are results-of-gog-tender-<N>/ where N is the tender number (not a year)."
+    },
+    {
+      "path": "raw/bog_auction_results_index.html",
+      "source_url": "https://www.bog.gov.gh/bog_auction_results/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "c2a6e5632a511d4f80385f1b0989f4c0eedbab07a7a14b14dc94ba2d4a1b5156",
+      "notes": "BoG bill auction results index. Tender pages are results-of-tender-<N>-held-on-<d-month-yyyy>/."
+    },
+    {
+      "path": "raw/gog_tender_2019.html",
+      "source_url": "https://www.bog.gov.gh/gog_auction_results/results-of-gog-tender-2019/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "9174191985aa4a3c346d4ab47c824bb2971619c66cfcfd3e31824cf085fc94b0",
+      "notes": "Tender 2019 held 07 Aug 2026. No inline tables - the security breakdown lives in a linked PDF (wp-content/uploads/2026/08/Auctresult2019.pdf)."
+    },
+    {
+      "path": "raw/gog_tender_2018.html",
+      "source_url": "https://www.bog.gov.gh/gog_auction_results/results-of-gog-tender-2018/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "1f4012ac5f06c324f027a0e6f7ae9eeac86762cab363d3b10a89e5ffef851b33",
+      "notes": "Tender 2018 held 31 Jul 2026; PDF-linked like tender 2019."
+    },
+    {
+      "path": "raw/gog_tender_2017.html",
+      "source_url": "https://www.bog.gov.gh/gog_auction_results/results-of-gog-tender-2017/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "66aeafce62b11abdb1a43dcb92e233e90c2627acec7c8baa7f82f20c23cfb6e5",
+      "notes": "Tender 2017 held 24 Jul 2026; PDF-linked."
+    },
+    {
+      "path": "raw/bog_tender_873_2026-08-05.html",
+      "source_url": "https://www.bog.gov.gh/bog_auction_results/results-of-tender-873-held-on-5-august-2026/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "05f9731501d1e08171eb44dae4d46b55233ee6477bacf8b5e4d978c0fb759a7e",
+      "notes": "BoG bill tender 873 (05 Aug 2026); breakdown in linked PDF."
+    },
+    {
+      "path": "raw/bog_tender_873_2026-08-03.html",
+      "source_url": "https://www.bog.gov.gh/bog_auction_results/results-of-tender-873-held-on-3-august-2026/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "c7dd3bebf16cdc170b2956cc204e63bd3823cdd7c1af15d99c6687f68a3f5d8f",
+      "notes": "Same tender number 873 held 03 Aug 2026 - BoG reuses tender numbers across days in the same week."
+    },
+    {
+      "path": "raw/bog_tender_872_2026-07-29.html",
+      "source_url": "https://www.bog.gov.gh/bog_auction_results/results-of-tender-872-held-on-29-july-2026/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "159b5176edf76f3f0ff8f1e0e23b51be874172dfc789511e4a41566c79b96253",
+      "notes": "BoG bill tender 872 (29 Jul 2026)."
+    },
+    {
+      "path": "raw/gog_auction_result_tender_2019.pdf",
+      "source_url": "https://www.bog.gov.gh/wp-content/uploads/2026/08/Auctresult2019.pdf",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "8661364ebf575ee18708c36c3f4d8ec0b3dcc6002fb8dce9969c240b8ab6f26c",
+      "notes": "Example GoG auction result PDF (Notice BG/FMD/2026/39): per-ISIN bids tendered/accepted, bid-rate ranges, weighted avg discount+interest rates, weekly target. Layout-extractable with pdftotext -layout."
+    },
+    {
+      "path": "raw/bog_auction_result_tender_873_2026-08-05.pdf",
+      "source_url": "https://www.bog.gov.gh/wp-content/uploads/2026/08/BOG-Auctresults-873-WED-5TH-AUGUST-26.pdf",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "62c88894eab1988c50511b7a0fc03c66a01224021ba394b6d8d1913f68a59009",
+      "notes": "Example BoG bill auction result PDF (Notice No. 873): per-ISIN bid-rate range, allotted range, weighted avg discount+interest, total sold."
+    },
+    {
+      "path": "raw/bog_summary_econ_fin_data_2026-07.pdf",
+      "source_url": "https://www.bog.gov.gh/wp-content/uploads/2026/07/Summary-of-Economic-and-Financial-Data-July-2026-1.pdf",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "d1b20e8f42f893387352b4567e87dcd443186ae26011df303f337279f5331189",
+      "notes": "Latest Summary of Economic and Financial Data (July 2026), from econ_fin_data/summary-of-economic-and-financial-data-july-2026/."
+    },
+    {
+      "path": "raw/bog_apr_of_banks_2026-05.pdf",
+      "source_url": "https://www.bog.gov.gh/wp-content/uploads/2026/07/MAY-APR-2026.pdf",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "c6f781bb8b8692a65c68d39b9a0ffea53bd508caf3893a25772c5fd656e324fa",
+      "notes": "Latest Annual Percentage Rates (APR) of Banks, as at May 2026 (11 pages, bank-by-bank lending/deposit rates), from notice/annual-percentage-rates-apr-of-banks-as-at-may-2026/."
+    },
+    {
+      "path": "raw/gss_pxweb_monetary_level.json",
+      "source_url": "https://statsbank.statsghana.gov.gh/api/v1/en/Macroeconomic%20Indicators/Monetary%20and%20Financial%20Sector/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "a98706471a8c95f637308c2470a9a83b2b742fec7254ea2c9a97a67e5379954b",
+      "notes": "PxWeb level listing: fin_sound.px, interest.px, monetary.px."
+    },
+    {
+      "path": "raw/gss_pxweb_interest_px_metadata.json",
+      "source_url": "https://statsbank.statsghana.gov.gh/api/v1/en/Macroeconomic%20Indicators/Monetary%20and%20Financial%20Sector/interest.px",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "b3cbe5c2957ef172cadf478e974dedce280a745d1b1238f5accd455885df641b",
+      "notes": "GET metadata for interest.px: Month (643 values, 1971M01..2024M07) x Rate (6 series incl. Ghana reference rate). Table last updated 2024-09-16."
+    },
+    {
+      "path": "raw/gss_pxweb_interest_px_data_response.json",
+      "source_url": "https://statsbank.statsghana.gov.gh/api/v1/en/Macroeconomic%20Indicators/Monetary%20and%20Financial%20Sector/interest.px",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "9363e61e0314fdb52a1f28dcf2c3f8a50d2e2bd0f5c2318d6f48ff44422255eb",
+      "notes": "POST response ({\"format\":\"json\"}, all 6 Rate values): 3858 cells. Response body starts with a UTF-8 BOM."
+    },
+    {
+      "path": "raw/gfim_daily_trading_reports_page.html",
+      "source_url": "https://gfim.com.gh/daily-trading-reports/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "97ebd3fd250d2d8272564ffd84a27814a7c8d979a5ba4ebc830af11e3e0ed2c2",
+      "notes": "Report list is a FileBird Document Library widget: div.njt-fbdl data-json holds the request (encrypted selectedFolder per year tab); var fbdl in page has json_url + rest_nonce."
+    },
+    {
+      "path": "raw/gfim_monthly_reports_page.html",
+      "source_url": "https://gfim.com.gh/monthly-reports/",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "2db1447df6c9febcbe00f0784294979fe79746a600a8232a6d52f467295e90fd",
+      "notes": "Same FileBird mechanism; year tabs 2020-2026, folders per year for Status Reports."
+    },
+    {
+      "path": "raw/gfim_filebird_get_attachments_daily2026_response.json",
+      "source_url": "https://gfim.com.gh/wp-json/filebird/v1/get-attachments",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "531657792760253d70a7f4515b1cff0c76d59f86d8ea56e8ad8efc1c0ca0b381",
+      "notes": "POST body = widget's data-json request object; header X-WP-Nonce from var fbdl.rest_nonce. Returns files[] with title/type/size/url/modified. Daily 2026 folder: 147 xlsx files."
+    },
+    {
+      "path": "raw/gfim_filebird_get_attachments_monthly2026_response.json",
+      "source_url": "https://gfim.com.gh/wp-json/filebird/v1/get-attachments",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "fb4917244058d362db28b717992bc27269768299a8d4b3e393f7bc70ae70fca1",
+      "notes": "Monthly 2026 folder: 7 Status Report PDFs (~11MB each)."
+    },
+    {
+      "path": "raw/gfim_daily_trading_report_2026-08-07.xlsx",
+      "source_url": "https://gfim.com.gh/wp-content/uploads/2026/08/TRADING-REPORT-FOR-GFIM-07082026.xlsx",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "efff5b82d0e30844ddc001132593863ac84226df849dc0c20746232c52368a4b",
+      "notes": "Daily trading report, 7 sheets: SUMMARY, NEW GOG NOTES AND BONDS, DDEP BONDS, OLD GOG NOTES AND BONDS, CORPORATE, TREASURY BILLS, SELL BUY BACK TRADES- GOG BONDS. Per-security ISIN, opening/closing yield, day low/high yield, closing price, volume, trades, maturity."
+    },
+    {
+      "path": "raw/gfim_daily_trading_report_2026-08-06.xlsx",
+      "source_url": "https://gfim.com.gh/wp-content/uploads/2026/08/TRADING-REPORT-FOR-GFIM-06082026.xlsx",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "aff9e2a3ef33aaf34740de9fb133e59e0589846fea724376ccc39b30a0febc10",
+      "notes": "Daily trading report 06 Aug 2026."
+    },
+    {
+      "path": "raw/gfim_daily_trading_report_2026-08-05.xlsx",
+      "source_url": "https://gfim.com.gh/wp-content/uploads/2026/08/TRADING-REPORT-FOR-GFIM-05082026.xlsx",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "593bc1de4eb1005062f637186381c65d3a6d9f2810a4c0532a205082864b920e",
+      "notes": "Daily trading report 05 Aug 2026."
+    },
+    {
+      "path": "raw/gfim_status_report_2026-06.txt",
+      "source_url": "https://gfim.com.gh/wp-content/uploads/2026/07/GFIM-Status-Report-June-2026.pdf",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "b5771a18c1f97f2ac6894a6028c286b0cdb01491642caf4e14074ef3440bd41d",
+      "notes": "Monthly GFIM Status Report June 2026. 11.4MB - consider pruning or Git-LFS if repo size matters. | Original 11.5MB PDF pruned pre-commit; pdftotext -layout extract retained (fetch URL still points to the PDF)."
+    },
+    {
+      "path": "raw/gfim_status_report_2026-05.txt",
+      "source_url": "https://gfim.com.gh/wp-content/uploads/2026/06/GFIM-Status-Report-May-2026.pdf",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "a4d6fe0b77117d6a41c02df995398391150f16da6296f712f5fb5ff09322a3fe",
+      "notes": "Monthly GFIM Status Report May 2026. 11.5MB - consider pruning or Git-LFS if repo size matters. | Original 11.5MB PDF pruned pre-commit; pdftotext -layout extract retained (fetch URL still points to the PDF)."
+    },
+    {
+      "path": "series/tbill_rates.csv",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=2",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "4ccbe261a6e620381cee674f587e2a836e6a16d94de1df94a1520c4baad2ce26",
+      "notes": "All 1361 view rows (2 pages, length=1000), 4 exact server-side duplicate rows dropped -> 1357 rows, 2013-08-26..2026-08-03, ISO dates, sorted asc. Includes notes/bonds security types, not just 91/182/364-day bills."
+    },
+    {
+      "path": "series/bog_bill_rates.csv",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=3",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "e479983cc51187c2c492560e1e5209feca32571968f7b789f86fcff2afff6762",
+      "notes": "All 585 rows, 2016-12-23..2026-03-16. Same shape as tbill_rates.csv."
+    },
+    {
+      "path": "series/interbank_rate.csv",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=69",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "c9588f9feb62fae4c8ad30633795df728ea2cbb95a21bafdf316c3907d70c092",
+      "notes": "Daily interbank weighted-average rate, 1716 unique dates 2019-08-05..2026-08-07 from 1722 rows (6 duplicate dates; 2020-02-25 had conflicting values 16.14/16.12 - kept 16.14, the first in server desc order). ID column dropped."
+    },
+    {
+      "path": "series/interbank_weekly_avg.csv",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=70",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "53dae085f63afcc1ea2411e5872af73a2a5d51d4759e6cfadcaa159f4ee0aa4c",
+      "notes": "Weekly average interbank rate, 363 rows 2019-07-26..2026-08-07."
+    },
+    {
+      "path": "series/mpc_policy_rate.csv",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=62",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "52342524c66aa040242e686318ed3708a6e17da376030167855c0f40e5b24eda",
+      "notes": "MPC policy rate by decision date, 117 rows 2002-11-21..2026-07-22 (2 empty-date rows dropped: IDs 13,509 and 13,430)."
+    },
+    {
+      "path": "series/usdghs_interbank.csv",
+      "source_url": "https://www.bog.gov.gh/wp-admin/admin-ajax.php?action=get_wdtable&table_id=40",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "83213dc22ef3843a7a80050ba0ef902c3ef97dcb924423f570918be045b91304",
+      "notes": "USDGHS daily interbank buy/sell/mid, last 3 years (>= 2023-08-09): 742 rows to 2026-08-07. Pulled from table 40 with per-column USDGHS search, filtered client-side to the 3-year window."
+    },
+    {
+      "path": "series/grr_monthly.csv",
+      "source_url": "https://statsbank.statsghana.gov.gh/api/v1/en/Macroeconomic%20Indicators/Monetary%20and%20Financial%20Sector/interest.px",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "7b34bb06e971f947bb93e6254d616483a8d2c0d7b89befaf2c714568efafb94b",
+      "notes": "Ghana Reference Rate monthly from GSS statsbank, 76 rows 2018-04-01..2024-07-01 (statsbank ends 2024M07; BoG table 21 corroborates 2018-2023). Month key 2024M07 -> first-of-month ISO date."
+    },
+    {
+      "path": "series/gss_interest_rates_monthly.csv",
+      "source_url": "https://statsbank.statsghana.gov.gh/api/v1/en/Macroeconomic%20Indicators/Monetary%20and%20Financial%20Sector/interest.px",
+      "fetched_at": "2026-08-09T21:09:33Z",
+      "sha256": "ba807b58782c7c0f6aaae22722348e02bdf1af44a7e157b70a60c9da4e1d0f59",
+      "notes": "All 6 statsbank interest series long-format (date,rate_name,value), 2235 non-missing cells 1971-01..2024-07: MPR & 91-day T-bill 643 obs each, savings 355, interbank weighted avg 295, avg lending 223, GRR 76."
+    }
+  ],
+  "failures": [
+    {
+      "target": "Ghana Reference Rate publication/notice PDF (BoG)",
+      "attempts": [
+        "https://www.bog.gov.gh/?s=ghana+reference+rate",
+        "https://www.bog.gov.gh/?s=GRR",
+        "https://www.bog.gov.gh/economic-data/ link sweep"
+      ],
+      "outcome": "No GRR notice/publication found; site search returns only 'Credit Reference Bureaux'. Mitigated: GRR monthly series captured from GSS statsbank (2018-04..2024-07) and corroborated by BoG economic-data table 21 (2018-2023)."
+    },
+    {
+      "target": "Full GoG T-bill history 'since ~2000s' via table 2",
+      "attempts": [
+        "table_id=2 with start/length paging"
+      ],
+      "outcome": "View exposes only recordsFiltered=1361 of recordsTotal=1985 rows, earliest 2013-08-26. Rows before that are not reachable through this endpoint."
+    },
+    {
+      "target": "FX history via table 31 (daily-interbank-fx-rates page)",
+      "attempts": [
+        "table_id=31 unpaged",
+        "table_id=31 with global search[value]=USDGHS"
+      ],
+      "outcome": "Table 31 serves only the latest day (recordsFiltered=19). History captured instead from table 40 on /historical-interbank-fx-rates/. Global search[value] is broken site-wide (nonzero count, zero rows)."
+    },
+    {
+      "target": "GSS statsbank currency/current GRR beyond 2024M07",
+      "attempts": [
+        "interest.px metadata + data query"
+      ],
+      "outcome": "interest.px last updated 2024-09-16; Month dimension ends 2024M07. Statsbank is ~2 years stale relative to BoG live tables."
+    }
+  ]
+}

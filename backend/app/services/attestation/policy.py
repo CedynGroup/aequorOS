@@ -1,6 +1,9 @@
 """Who must sign which return — configuration, never hardcoded.
 
-Signing is REQUIRED by default (see :func:`default_policy`). What stays
+Signing is REQUIRED by default (see :func:`default_policy`), with one
+deployment-wide exception: ``ATTESTATION_ESIGN_REQUIRED=0`` is a kill-switch
+applied AFTER resolution (:func:`_apply_esign_kill_switch`), under which no
+return — configured row or default — demands a signature. What stays
 configurable is everything the Bank of Ghana has not confirmed
 (docs/attestation_esignature.md §8): whether a signed PDF artifact is accepted
 as the filing (C1), exactly which officers must sign which of the thirteen
@@ -21,7 +24,7 @@ change never retroactively invalidates a filed return.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any
 
@@ -29,6 +32,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.config import get_settings
 from app.models import ReturnSigningPolicy
 
 
@@ -127,6 +131,9 @@ def default_policy(return_family: str) -> SigningPolicy:
 
     The existing `generated_by != approver` maker-checker control on the
     approval decision is unaffected and still applies to every return.
+
+    A deployment-wide exception exists: ``ATTESTATION_ESIGN_REQUIRED=0``
+    (see :func:`_apply_esign_kill_switch`) suspends the requirement entirely.
     """
     _ = return_family  # every family defaults the same way; kept for call-site clarity
     return SigningPolicy(
@@ -168,7 +175,12 @@ def resolve_policy(  # noqa: PLR0913 - the full package scope is the lookup key
     basis: str,
     as_at: date,
 ) -> SigningPolicy:
-    """The policy in force for this package as at its reporting date."""
+    """The policy in force for this package as at its reporting date.
+
+    The resolution result — configured row or platform default — is subject to
+    the deployment-wide ``ATTESTATION_ESIGN_REQUIRED`` kill-switch, applied
+    last so it overrides configured mandatory rows too.
+    """
     candidates = list(
         db.scalars(
             select(ReturnSigningPolicy).where(
@@ -198,7 +210,7 @@ def resolve_policy(  # noqa: PLR0913 - the full package scope is the lookup key
         )
     )
     if not candidates:
-        return default_policy(return_family)
+        return _apply_esign_kill_switch(default_policy(return_family))
 
     winner = max(candidates, key=lambda row: _specificity(row, bank_id, return_code))
     slots = tuple(
@@ -211,12 +223,37 @@ def resolve_policy(  # noqa: PLR0913 - the full package scope is the lookup key
     )
     if not slots:
         slots = _DEFAULT_SLOTS
-    return SigningPolicy(
-        slots=slots,
-        require_signature=winner.require_signature,
-        require_signed_pdf=winner.require_signed_pdf,
-        distinct_signers=winner.distinct_signers,
-        required_attachments=tuple(str(a) for a in (winner.required_attachments or ())),
-        source="configured",
-        policy_id=str(winner.id),
+    return _apply_esign_kill_switch(
+        SigningPolicy(
+            slots=slots,
+            require_signature=winner.require_signature,
+            require_signed_pdf=winner.require_signed_pdf,
+            distinct_signers=winner.distinct_signers,
+            required_attachments=tuple(str(a) for a in (winner.required_attachments or ())),
+            source="configured",
+            policy_id=str(winner.id),
+        )
+    )
+
+
+def _apply_esign_kill_switch(resolved: SigningPolicy) -> SigningPolicy:
+    """``ATTESTATION_ESIGN_REQUIRED=0`` means no return demands a signature.
+
+    Applied AFTER resolution so it overrides configured mandatory rows as well
+    as the platform default. Rows are dormant, not deleted: the moment the flag
+    returns to true, the untouched resolution result is what this returns.
+    Slots and ``policy_id`` are kept — they are inert once ``require_signature``
+    is false, and they let the UI and audit trail show what would be required
+    and which row went dormant. A policy an administrator already relaxed keeps
+    its ``configured`` attribution: the flag changed nothing for it.
+    """
+    if get_settings().attestation.esign_required:
+        return resolved
+    if not resolved.require_signature and not resolved.require_signed_pdf:
+        return resolved
+    return replace(
+        resolved,
+        require_signature=False,
+        require_signed_pdf=False,
+        source="esign_disabled",
     )

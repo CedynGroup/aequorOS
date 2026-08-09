@@ -1450,6 +1450,7 @@ export const ListIngestionBatchesSourceSystemEnum = {
   Refinitiv: "REFINITIV",
   ManualUpload: "MANUAL_UPLOAD",
   Manual: "MANUAL",
+  AequorDesk: "AEQUOR_DESK",
 } as const;
 export type ListIngestionBatchesSourceSystemEnum =
   (typeof ListIngestionBatchesSourceSystemEnum)[keyof typeof ListIngestionBatchesSourceSystemEnum];

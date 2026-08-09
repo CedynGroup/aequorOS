@@ -87,6 +87,7 @@ export const IngestionSourceSummaryReadSourceSystemEnum = {
   Refinitiv: "REFINITIV",
   ManualUpload: "MANUAL_UPLOAD",
   Manual: "MANUAL",
+  AequorDesk: "AEQUOR_DESK",
 } as const;
 export type IngestionSourceSummaryReadSourceSystemEnum =
   (typeof IngestionSourceSummaryReadSourceSystemEnum)[keyof typeof IngestionSourceSummaryReadSourceSystemEnum];

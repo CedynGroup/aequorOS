@@ -3,7 +3,7 @@
 /**
  * Big-4 balance-sheet strip: total assets, deposits, loans, and capital base
  * summed from the effective period's canonical facts (display grouping only —
- * no client-side regulatory math), formatted as compact GHS.
+ * no client-side regulatory math), formatted as compact base currency.
  */
 
 import type { BankReportingPeriodRead } from '@aequoros/risk-service-api';
@@ -32,7 +32,7 @@ export default function BalanceSheetStrip({
       <div className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-h3 text-navy">Balance sheet</h2>
         <p className="text-caption text-slate">
-          Canonical facts · period {period.label}
+          Canonical positions · live edge
         </p>
       </div>
       {facts.isLoading || !facts.data ? (

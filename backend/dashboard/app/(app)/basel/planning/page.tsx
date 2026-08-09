@@ -10,7 +10,6 @@ import LimitBar from '@/components/ui/LimitBar';
 import ChartFrame from '@/components/ui/ChartFrame';
 import SectionCard from '@/components/ui/SectionCard';
 import SubTabs from '@/components/ui/SubTabs';
-import RunBadge from '@/components/ui/RunBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
@@ -26,14 +25,9 @@ import {
 import { fmtDateUTC, labelize, num } from '@/lib/api/values';
 import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
-const SCENARIO_ORDER = ['base', 'adverse', 'severely_adverse', 'custom'] as const;
+import { SCENARIO_LABELS } from '@/components/forecasting/lib';
 
-const SCENARIO_LABELS: Record<string, string> = {
-  base: 'Base',
-  adverse: 'Adverse',
-  severely_adverse: 'Severely adverse',
-  custom: 'Custom',
-};
+const SCENARIO_ORDER = ['base', 'adverse', 'severely_adverse', 'custom'] as const;
 
 type PathRow = {
   label: string;
@@ -169,7 +163,6 @@ export default function CapitalPlanning() {
         ]}
         title="Capital Planning"
         subtitle="Multi-year capital ratio projection from stored forecast runs · what-if planner on the current base"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
       <QueryBoundary
@@ -243,9 +236,6 @@ export default function CapitalPlanning() {
                 subtitle="Five-year CAR / Tier 1 / CET1 path from the stored forecast run"
                 height={300}
                 loading={forecastRun.isLoading}
-                actions={
-                  forecastRun.data ? <RunBadge run={forecastRun.data} /> : undefined
-                }
                 footer={
                   forecastRun.data ? (
                     <span>
@@ -281,9 +271,6 @@ export default function CapitalPlanning() {
                   subtitle="Per-year ratios and drivers from the forecast engine"
                   noPadding
                   computedAt={runComputedAt(forecastRun.data)}
-                  runBadge={
-                    forecastRun.data ? <RunBadge run={forecastRun.data} /> : undefined
-                  }
                 >
                   <DataTable columns={pathColumns} rows={pathRows} />
                 </SectionCard>

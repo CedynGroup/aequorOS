@@ -204,13 +204,27 @@ class CanonicalPositionFacetsRead(BaseModel):
 
 
 OverridableSnapshotField = Literal[
-    "balance", "interest_rate", "ifrs9_stage", "behavioral_maturity_months"
+    "balance",
+    "interest_rate",
+    "ifrs9_stage",
+    "behavioral_maturity_months",
+    # LMTD/LRMD 2026 classification fields (audited overrides for
+    # liquidity-directive onboarding corrections).
+    "encumbered",
+    "encumbrance_reason",
+    "owning_entity",
+    "asset_location",
+    "operational_purpose",
+    "redeemable_within_two_days",
+    "pledged_as_collateral",
+    "lien_reference",
+    "deposit_account_type",
 ]
 
 
 class PositionSnapshotOverrideCreate(BaseModel):
     field: OverridableSnapshotField
-    value: str | int | float | None
+    value: str | int | float | bool | None
     reason: str = Field(min_length=1)
 
 
@@ -223,6 +237,15 @@ class PositionSnapshotRead(BaseModel):
     interest_rate: Decimal | None
     ifrs9_stage: int | None
     behavioral_maturity_months: int | None
+    encumbered: bool | None = None
+    encumbrance_reason: str | None = None
+    owning_entity: str | None = None
+    asset_location: str | None = None
+    operational_purpose: bool | None = None
+    redeemable_within_two_days: bool | None = None
+    pledged_as_collateral: bool | None = None
+    lien_reference: str | None = None
+    deposit_account_type: str | None = None
     enrichment_provenance: dict[str, Any]
     lineage_id: UUID
     superseded_snapshot_id: UUID | None = None

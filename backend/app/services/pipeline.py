@@ -14,7 +14,7 @@ Both are worker handlers: ``(session, job)`` where ``job.payload`` carries
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -30,6 +30,7 @@ from app.models import (
     Job,
     LiveFinding,
     LiveMetric,
+    LiveMetricSnapshot,
     RegulatoryRun,
     User,
 )
@@ -246,7 +247,53 @@ def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
         existing.status = status
         existing.computed_from_input_hash = input_hash
         existing.computed_at = now
+    _upsert_live_snapshot(session, ctx, bank, period, module, metrics, status, now)
     session.flush()
+
+
+def _upsert_live_snapshot(  # noqa: PLR0913 - mirrors the live-metric upsert
+    session: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    module: str,
+    metrics: dict[str, Any],
+    status: str,
+    computed_at: datetime,
+) -> None:
+    """Plane-2 EOD ladder: the day's LAST refresh is the close.
+
+    One row per (bank, calendar day, module), overwritten on every refresh —
+    past days therefore hold their end-of-day state and today's row is the
+    live edge. Desk prior-close deltas and daily sparklines read this series.
+    """
+    snapshot_date = computed_at.date()
+    existing = session.scalar(
+        select(LiveMetricSnapshot).where(
+            LiveMetricSnapshot.organization_id == ctx.organization_id,
+            LiveMetricSnapshot.bank_id == bank.id,
+            LiveMetricSnapshot.snapshot_date == snapshot_date,
+            LiveMetricSnapshot.module == module,
+        )
+    )
+    if existing is None:
+        session.add(
+            LiveMetricSnapshot(
+                organization_id=ctx.organization_id,
+                bank_id=bank.id,
+                reporting_period_id=period.id,
+                snapshot_date=snapshot_date,
+                module=module,
+                metrics=metrics,
+                status=status,
+                computed_at=computed_at,
+            )
+        )
+    else:
+        existing.reporting_period_id = period.id
+        existing.metrics = metrics
+        existing.status = status
+        existing.computed_at = computed_at
 
 
 def _reconcile_findings(  # noqa: PLR0913 - one reconcile carries the full scope key

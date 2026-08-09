@@ -35,18 +35,21 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.domain.ftp.engine import (
     BranchResult,
+    ContingentFacility,
     CurvePoint,
     CurveResult,
     FtpBranch,
     FtpComputationError,
     FtpNmd,
     FtpProduct,
+    LtpResult,
     MissingParameterError,
     NmdResult,
     ProductResult,
     branch_profitability,
     build_curve,
     classify_core_band,
+    contingent_liquidity_charges,
     curve_within_premium_limits,
     nmd_split,
     product_profitability,
@@ -119,7 +122,16 @@ _HUNDRED = Decimal("100")
 
 # Only these fact groups participate in the FTP module; keeping the snapshot
 # scoped to them makes the input hash insensitive to unrelated fact edits.
-_FTP_FACT_GROUPS = ("ftp_curve_point", "ftp_product", "ftp_branch", "ftp_nmd")
+# "off_balance" joined for the LTP contingent-liquidity charge (Phase 2 item
+# 11, LRMD ¶78–79): committed-facility families are priced for the liquidity
+# they may draw under stress.
+_FTP_FACT_GROUPS = ("ftp_curve_point", "ftp_product", "ftp_branch", "ftp_nmd", "off_balance")
+
+# ¶48(b): stress results feed the transfer-pricing system — the expected draw
+# on each committed-facility family is the LIQUIDITY stress engine's runoff
+# parameter for that family under this scenario, never an FTP-side invention.
+_LTP_STRESS_SCENARIO = "combined"
+_LTP_RUNOFF_PREFIX = "runoff:"
 
 _ZERO = Decimal("0")
 
@@ -156,6 +168,9 @@ class _FtpAnalysis:
     curve_shift_pct: Decimal
     liquidity_premium_max_bps: Decimal
     funding_spread_max_bps: Decimal
+    # None when no committed-facility facts or no stressed-draw parameters
+    # exist — the LTP block is absent, never fabricated.
+    ltp: LtpResult | None = None
 
 
 def run_all_ftp_scenarios(
@@ -246,6 +261,7 @@ def _create_and_execute(
 ) -> RegulatoryRunRead:
     facts = _load_facts(db, ctx, bank, period)
     active = _load_ftp_params_or_none(db, ctx, bank, period.period_end)
+    ltp_draws = _load_ltp_draws(db, ctx, bank, period.period_end)
     snapshot = _build_snapshot(bank, period, scenario_code, facts, active)
 
     run = RegulatoryRun(
@@ -288,7 +304,7 @@ def _create_and_execute(
 
     run_id = run.id
     try:
-        analysis = _run_analysis(scenario_code, facts, active)
+        analysis = _run_analysis(scenario_code, facts, active, ltp_draws)
         _persist_success(db, ctx, run, analysis)
     except FtpRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
@@ -326,10 +342,29 @@ def _create_and_execute(
     return get_regulatory_run(db, ctx, bank.id, run_id)
 
 
+def _load_ltp_draws(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> dict[str, Decimal]:
+    """Expected stressed draw per committed-facility family (¶48(b)): the
+    liquidity combined-scenario runoff parameters, keyed by facility family."""
+    return {
+        row.shock_key.removeprefix(_LTP_RUNOFF_PREFIX): Decimal(str(row.shock_value))
+        for row in get_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamStressShock, as_of
+        )
+        if row.module == "liquidity"
+        and row.scenario_code == _LTP_STRESS_SCENARIO
+        and row.shock_key.startswith(_LTP_RUNOFF_PREFIX)
+    }
+
+
 def _run_analysis(
     scenario_code: str,
     facts: list[BankFinancialFact],
     active: _FtpParams | None,
+    ltp_draws: dict[str, Decimal] | None = None,
+    *,
+    shift_override: Decimal | None = None,
 ) -> _FtpAnalysis:
     if not facts:
         raise FtpRunError(
@@ -357,7 +392,7 @@ def _run_analysis(
 
     base_curve = build_curve(curve_points)
     validate_product_alignment(products, base_curve)
-    shift = _scenario_shift(scenario_code, active)
+    shift = shift_override if shift_override is not None else _scenario_shift(scenario_code, active)
     curve = shift_curve(base_curve, shift)
 
     product_result = product_profitability(products, curve, active.min_product_margin_pct)
@@ -367,6 +402,16 @@ def _run_analysis(
         product_result.weighted_funding_credit_pct,
     )
     nmd_result = nmd_split(nmds, curve, active.nmd_core_min_pct, active.nmd_core_max_pct)
+    facilities = [
+        ContingentFacility(
+            line_code=fact.category,
+            undrawn_amount=Decimal(str(fact.amount)),
+            expected_draw_pct=(ltp_draws or {})[fact.category],
+        )
+        for fact in facts
+        if fact.fact_group == "off_balance" and fact.category in (ltp_draws or {})
+    ]
+    ltp = contingent_liquidity_charges(facilities, curve) if facilities else None
     return _FtpAnalysis(
         scenario_code=scenario_code,
         curve=curve,
@@ -376,6 +421,7 @@ def _run_analysis(
         curve_shift_pct=shift,
         liquidity_premium_max_bps=active.liquidity_premium_max_bps,
         funding_spread_max_bps=active.funding_spread_max_bps,
+        ltp=ltp,
     )
 
 
@@ -516,7 +562,24 @@ def _metrics_payload(analysis: _FtpAnalysis) -> dict[str, Any]:
     products = analysis.products
     nmd = analysis.nmd
     branches = analysis.branches
+    ltp_block: dict[str, Any] = {}
+    if analysis.ltp is not None:
+        ltp_block = {
+            "ltp_total_charge_ghs": str(analysis.ltp.total_charge),
+            "ltp_buffer_cost_pct": str(analysis.ltp.buffer_cost_pct),
+            "ltp_items": [
+                {
+                    "line_code": item.line_code,
+                    "undrawn_amount_ghs": str(item.undrawn_amount),
+                    "expected_draw_pct": str(item.expected_draw_pct),
+                    "buffer_cost_pct": str(item.buffer_cost_pct),
+                    "annual_charge_ghs": str(item.annual_charge),
+                }
+                for item in analysis.ltp.items
+            ],
+        }
     return {
+        **ltp_block,
         "scenario_code": analysis.scenario_code,
         "curve_shift_pct": str(analysis.curve_shift_pct),
         "portfolio_nim_pct": str(products.portfolio_nim_pct),
@@ -652,9 +715,14 @@ def _validation_rows(analysis: _FtpAnalysis) -> tuple[tuple[str, bool, str, str]
 
 
 def _metrics_read(
-    products: ProductResult, nmd: NmdResult, total_branch_contribution: Decimal
+    products: ProductResult,
+    nmd: NmdResult,
+    total_branch_contribution: Decimal,
+    ltp: LtpResult | None = None,
 ) -> FtpMetricsRead:
     return FtpMetricsRead(
+        ltp_total_charge_ghs=ltp.total_charge if ltp is not None else None,
+        ltp_buffer_cost_pct=ltp.buffer_cost_pct if ltp is not None else None,
         portfolio_nim_pct=products.portfolio_nim_pct,
         weighted_asset_yield_pct=products.weighted_asset_yield_pct,
         weighted_funding_credit_pct=products.weighted_funding_credit_pct,
@@ -673,7 +741,12 @@ def _metrics_read(
 
 
 def _metrics_from_analysis(analysis: _FtpAnalysis) -> FtpMetricsRead:
-    return _metrics_read(analysis.products, analysis.nmd, analysis.branches.total_contribution_ghs)
+    return _metrics_read(
+        analysis.products,
+        analysis.nmd,
+        analysis.branches.total_contribution_ghs,
+        analysis.ltp,
+    )
 
 
 def _curve_from_analysis(analysis: _FtpAnalysis) -> list[FtpCurvePointRead]:
@@ -764,6 +837,16 @@ def _metrics_from_run(run: RegulatoryRun) -> FtpMetricsRead:
         nmd_core_min_pct=core_min,
         nmd_core_max_pct=core_max,
         blended_assigned_ftp_pct=_decimal(metrics, "nmd_blended_assigned_ftp_pct"),
+        ltp_total_charge_ghs=(
+            Decimal(str(metrics["ltp_total_charge_ghs"]))
+            if "ltp_total_charge_ghs" in metrics
+            else None
+        ),
+        ltp_buffer_cost_pct=(
+            Decimal(str(metrics["ltp_buffer_cost_pct"]))
+            if "ltp_buffer_cost_pct" in metrics
+            else None
+        ),
     )
 
 
@@ -889,7 +972,32 @@ def _compute_inline(
 ) -> _FtpAnalysis:
     facts = _load_facts(db, ctx, bank, period)
     active = _load_ftp_params_or_none(db, ctx, bank, period.period_end)
-    return _run_analysis(BASELINE_SCENARIO, facts, active)
+    draws = _load_ltp_draws(db, ctx, bank, period.period_end)
+    return _run_analysis(BASELINE_SCENARIO, facts, active, draws)
+
+
+def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its full scope
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    shocks: dict[str, Decimal],
+    scenario_code: str = "analysis",
+) -> _FtpAnalysis:
+    """Workbench seam: reprice the book under an arbitrary curve/spread shift
+    without persisting anything. The combined shift is curve + funding spread,
+    exactly how the official scenario overlays compose."""
+    facts = _load_facts(db, ctx, bank, period)
+    active = _load_ftp_params_or_none(db, ctx, bank, period.period_end)
+    draws = _load_ltp_draws(db, ctx, bank, period.period_end)
+    if not shocks:
+        return _run_analysis(scenario_code, facts, active, draws, shift_override=Decimal(0))
+    shift_bp = shocks.get(SHOCK_CURVE_SHIFT_BP, Decimal(0)) + shocks.get(
+        SHOCK_FUNDING_ADD_BP, Decimal(0)
+    )
+    return _run_analysis(
+        scenario_code, facts, active, draws, shift_override=shift_bp / _HUNDRED
+    )
 
 
 def _compute_inline_or_409(

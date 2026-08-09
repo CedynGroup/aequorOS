@@ -5,9 +5,11 @@ enqueues an ``official_run`` for every bank whose latest period has no official
 run since today's cutoff hour; when scheduled market data pulls are enabled it
 enqueues the due ``market_data_pull`` jobs (see ``market_data_jobs``); then it
 enqueues the next tick at the following hour boundary. It is inert (no enqueue,
-no reschedule) while both ``OFFICIAL_RUN_ENABLED`` and
-``MARKET_DATA_PULL_ENABLED`` are off, so no environment auto-mints heavy runs or
-vendor pulls and tests stay deterministic.
+no reschedule) while every scheduling flag — ``OFFICIAL_RUN_ENABLED``,
+``MARKET_DATA_PULL_ENABLED``, ``TEMENOS_PULL_ENABLED``,
+``DATABASE_DIRECT_HEALTH_ENABLED``, ``LIVE_REFRESH_ENABLED``, and
+``DESK_CAPTURE_ENABLED`` — is off, so no environment auto-mints heavy
+runs or vendor pulls and tests stay deterministic.
 """
 
 from __future__ import annotations
@@ -15,18 +17,33 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.db.base import utc_now
-from app.models import Bank, BankReportingPeriod, Job, RegulatoryRun, User
+from app.models import Bank, BankReportingPeriod, Job, LiveMetric, RegulatoryRun, User
 from app.services import job_queue
 
 SCHEDULED_TICK = "scheduled_tick"
 OFFICIAL_RUN = "official_run"
 _LIQUIDITY_MODULE = "liquidity"
 _BASELINE_SCENARIO = "baseline"
+
+
+def any_scheduling_enabled(settings: Settings) -> bool:
+    """Whether ANY scheduled feature is on — the single source of truth shared
+    by the tick's inert check and the worker's startup tick seeding. A flag
+    listed in one place but not the other either strands its feature with no
+    tick chain (seeding) or lets the chain die (inert check)."""
+    return (
+        settings.worker.official_run_enabled
+        or settings.market_data.market_data_pull_enabled
+        or settings.temenos.temenos_pull_enabled
+        or settings.database_direct.database_direct_health_enabled
+        or settings.worker.live_refresh_enabled
+        or settings.desk.desk_capture_enabled
+    )
 
 
 def run_tick(session: Session, job: Job) -> None:
@@ -37,8 +54,10 @@ def run_tick(session: Session, job: Job) -> None:
     official_enabled = settings.worker.official_run_enabled
     market_data_enabled = settings.market_data.market_data_pull_enabled
     temenos_enabled = settings.temenos.temenos_pull_enabled
-    if not official_enabled and not market_data_enabled and not temenos_enabled:
-        job.progress = {"status": "inert", "reason": "official_run_disabled"}
+    database_direct_health_enabled = settings.database_direct.database_direct_health_enabled
+    live_refresh_enabled = settings.worker.live_refresh_enabled
+    if not any_scheduling_enabled(settings):
+        job.progress = {"status": "inert", "reason": "scheduling_disabled"}
         return
 
     org_id = job.organization_id
@@ -61,6 +80,28 @@ def run_tick(session: Session, job: Job) -> None:
         from app.services.temenos_jobs import enqueue_due_temenos_pulls  # noqa: PLC0415
 
         temenos_pulls = len(enqueue_due_temenos_pulls(session, org_id, now=now))
+
+    database_direct_probes = 0
+    if database_direct_health_enabled:
+        # Lazy import: the probe pulls in the database-direct adapter tree.
+        from app.services.database_direct_jobs import (  # noqa: PLC0415
+            enqueue_due_database_direct_probes,
+        )
+
+        database_direct_probes = len(enqueue_due_database_direct_probes(session, org_id, now=now))
+
+    live_refreshes = 0
+    if live_refresh_enabled:
+        live_refreshes = len(_enqueue_due_live_refreshes(session, org_id, now))
+
+    desk_capture_enqueued = False
+    if settings.desk.desk_capture_enabled:
+        # Lazy import: the capture job pulls in the market-desk source tree.
+        from app.services.market_desk.capture_job import (  # noqa: PLC0415
+            enqueue_due_desk_capture,
+        )
+
+        desk_capture_enqueued = enqueue_due_desk_capture(session, org_id, now=now) is not None
 
     # Daily reporting-deadline scan (submission_pipeline_plan.md §W3): the scan
     # date rides the coalesce key, so each org gets at most one scan per day.
@@ -90,6 +131,9 @@ def run_tick(session: Session, job: Job) -> None:
         "official_runs_enqueued": enqueued,
         "market_data_pulls_enqueued": market_data_pulls,
         "temenos_pulls_enqueued": temenos_pulls,
+        "database_direct_probes_enqueued": database_direct_probes,
+        "live_refreshes_enqueued": live_refreshes,
+        "desk_capture_enqueued": desk_capture_enqueued,
         "deadline_scan_enqueued": deadline_scan_enqueued,
         # Key present only when the SMTP mirror is configured (default off).
         **(
@@ -130,6 +174,51 @@ def _enqueue_due_official_runs(
             coalesce_key=f"official:{bank.id}:{now.date().isoformat()}",
         )
         enqueued.append(str(bank.id))
+    return enqueued
+
+
+# Refresh once per hourly tick, with slack for tick jitter. The live tier is
+# cheap (zero RegulatoryRun writes), and a fresh computed_at is the point: the
+# dashboard's "Live" pill must mean today, not the last ingestion.
+_LIVE_REFRESH_INTERVAL = timedelta(minutes=55)
+
+
+def _enqueue_due_live_refreshes(session: Session, org_id: str, now: datetime) -> list[Job]:
+    """Enqueue a coalesced live refresh per bank whose live tier has aged out.
+
+    The as-of date is the bank's latest reporting period end — the same period
+    the dashboards read — so the refresh re-derives current facts and stamps a
+    current ``computed_at`` even when no new data has arrived.
+    """
+    enqueued: list[Job] = []
+    banks = list(session.scalars(select(Bank).where(Bank.organization_id == org_id)))
+    for bank in banks:
+        period = _latest_period(session, org_id, bank.id)
+        if period is None:
+            continue
+        last = session.scalar(
+            select(func.max(LiveMetric.computed_at)).where(
+                LiveMetric.organization_id == org_id,
+                LiveMetric.bank_id == bank.id,
+            )
+        )
+        if last is not None:
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=now.tzinfo)
+            if (now - last) < _LIVE_REFRESH_INTERVAL:
+                continue
+        as_of = period.period_end.isoformat()
+        enqueued.append(
+            job_queue.enqueue(
+                session,
+                org_id,
+                "pipeline_refresh",
+                bank_id=bank.id,
+                payload={"as_of_date": as_of},
+                coalesce_key=f"refresh:{bank.id}:{as_of}",
+            )
+        )
+    session.flush()
     return enqueued
 
 

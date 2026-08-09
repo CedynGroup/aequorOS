@@ -23,7 +23,16 @@ export function roleLabel(role: string | undefined | null): string {
   return labels[role] ?? role.charAt(0).toUpperCase() + role.slice(1);
 }
 
-/** Stable, high-contrast initials background derived from immutable identity. */
+/**
+ * Stable, high-contrast initials background derived from immutable identity.
+ *
+ * Deliberate identity-palette exception to the CSS-variable rule: these are
+ * concrete hex values (inline `backgroundColor`) because the same user must
+ * get the same recognizable hue in both themes — the point is stable
+ * identity, not theme adaptation. Every value holds white initials at
+ * readable contrast and stays distinguishable from the dark theme's
+ * surfaces (#101827/#17202F).
+ */
 export function avatarColor(identity: string): string {
   const palette = [
     '#0f766e',
@@ -33,7 +42,7 @@ export function avatarColor(identity: string): string {
     '#be123c',
     '#b45309',
     '#047857',
-    '#334155',
+    '#475569', // was #334155 — too close to the dark theme's surfaces
   ];
   let hash = 0;
   for (const character of identity) {

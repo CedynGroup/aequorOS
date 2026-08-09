@@ -86,6 +86,10 @@ def default_validation_config() -> ValidationConfig:
                 severity="WARNING",
                 params={"threshold": "0.4"},
             ),
+            # INFO, not WARNING, by default: most sources will not carry the
+            # LMTD classifications on day one, and a wall of warnings would
+            # bury real ones. Institutions preparing LMT filings raise it.
+            RuleConfig(name="lmtd_classification_coverage", severity="INFO"),
         ]
     )
 
@@ -536,6 +540,65 @@ def _rule_unusual_balance_change(
     return findings
 
 
+_LMTD_DEPOSIT_TYPES = frozenset({"DEPOSIT"})
+_LMTD_ENCUMBRANCE_TYPES = frozenset({"SECURITY_HOLDING", "CASH", "INTERBANK_PLACEMENT"})
+
+
+def _rule_lmtd_classification_coverage(
+    records: CanonicalRecords,
+    rule: RuleConfig,
+    context: ValidationContext,
+    outcome: ValidationOutcome,
+) -> list[Finding]:
+    """Flag positions missing the BoG liquidity-directive classifications.
+
+    The LMTD/LRMD 2026 tables derive from ``deposit_account_type`` (volatile
+    liabilities, stable/volatile ladder split) and ``encumbered`` (Tables
+    1/4/9/10, LRMD liquid-stock exclusion). NULLs are treated conservatively
+    downstream, so a gap never corrupts a return — but it silently shrinks
+    one, which is why coverage is surfaced at the ingestion gate where the
+    onboarding team can still fix the extract.
+    """
+    findings: list[Finding] = []
+    for position in records.positions:
+        if (
+            position.position_type in _LMTD_DEPOSIT_TYPES
+            and position.deposit_account_type is None
+        ):
+            findings.append(
+                Finding(
+                    rule=rule.name,
+                    category="BUSINESS_RULES",
+                    severity=rule.severity,
+                    entity_type="position",
+                    source_reference=position.source_reference,
+                    source_locator=position.source_locator,
+                    detail=(
+                        "deposit_account_type is not set: this deposit cannot be "
+                        "classified stable/volatile for the liquidity monitoring "
+                        "tables and is treated as OTHER."
+                    ),
+                )
+            )
+        if position.position_type in _LMTD_ENCUMBRANCE_TYPES and position.encumbered is None:
+            findings.append(
+                Finding(
+                    rule=rule.name,
+                    category="BUSINESS_RULES",
+                    severity=rule.severity,
+                    entity_type="position",
+                    source_reference=position.source_reference,
+                    source_locator=position.source_locator,
+                    detail=(
+                        "encumbered is not set: the asset is treated as unencumbered "
+                        "in the liquidity monitoring tables (unencumbered-asset "
+                        "register, prudential-ratio liquid assets)."
+                    ),
+                )
+            )
+    return findings
+
+
 _RULES = {
     "structural_duplicate_source_references": _rule_duplicate_source_references,
     "structural_unknown_counterparty": _rule_unknown_counterparty,
@@ -545,6 +608,7 @@ _RULES = {
     "maturity_not_before_as_of": _rule_maturity_not_before_as_of,
     "gl_subledger_reconciliation": _rule_gl_subledger_reconciliation,
     "unusual_balance_change": _rule_unusual_balance_change,
+    "lmtd_classification_coverage": _rule_lmtd_classification_coverage,
 }
 
 RULE_NAMES = tuple(sorted(_RULES))

@@ -49,6 +49,9 @@ docs/ARCHITECTURE.md
 # Client collateral + its brief (local-only)
 docs/demo_deck_brief.md
 docs/collateral/
+start.md
+docs/internal/staff_UI.md
+docs/internal/AequorOS_Market_Data_and_Curve_Platform.md
 
 # Local Snowflake seed CSVs (25MB) loaded into the warehouse — regenerable, not source.
 data_snowflake/

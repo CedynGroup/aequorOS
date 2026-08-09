@@ -15,8 +15,8 @@ import {
   CHART_AXIS,
   CHART_CRIT,
   CHART_GRID,
-  CHART_OK,
   chartTooltipProps,
+  seriesColor,
 } from '@/lib/chartTheme';
 import { fmtCurrencySigned, fmtPct } from '@/lib/format';
 
@@ -87,7 +87,7 @@ export default function TornadoChart({
         <ReferenceLine x={0} stroke={CHART_AXIS} />
         <Bar dataKey="value" radius={[0, 2, 2, 0]} maxBarSize={22}>
           {rows.map((d, i) => (
-            <Cell key={i} fill={d.breach ? CHART_CRIT : CHART_OK} />
+            <Cell key={i} fill={d.breach ? CHART_CRIT : seriesColor(0)} />
           ))}
         </Bar>
       </BarChart>

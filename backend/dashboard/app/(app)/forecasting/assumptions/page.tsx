@@ -12,14 +12,13 @@
  */
 
 import Link from 'next/link';
-import { ArrowUpRight, BookOpen, Brain } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, BookOpen, Brain } from 'lucide-react';
 import type {
   ForecastRunRead,
   ForecastScenarioListRead,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusPill from '@/components/ui/StatusPill';
-import RunBadge from '@/components/ui/RunBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import SectionCard from '@/components/ui/SectionCard';
 import QueryBoundary from '@/components/ui/QueryBoundary';
@@ -35,7 +34,7 @@ import {
   useForecastRuns,
   useForecastScenarios,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num } from '@/lib/api/values';
+import { num } from '@/lib/api/values';
 
 export default function AssumptionsPage() {
   const { bank, period } = useBankContext();
@@ -55,8 +54,7 @@ export default function AssumptionsPage() {
           { label: 'Assumptions' },
         ]}
         title="Assumption Registry"
-        subtitle="The resolved assumptions the projection engine consumed, and the preset catalogue they resolve from"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
+        subtitle="The audit record of what each run consumed — assumptions are edited in the Scenario Builder"
         action={
           <Link
             href="/behavioral"
@@ -84,6 +82,15 @@ export default function AssumptionsPage() {
               Icon={BookOpen}
               title="No succeeded forecast runs yet"
               description="The registry shows the assumption set persisted on a run. Run a forecast from the Balance Sheet tab to populate it."
+              action={
+                <Link
+                  href="/forecasting"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+                >
+                  Run a forecast
+                  <ArrowRight size={13} aria-hidden />
+                </Link>
+              }
             />
           ) : runQuery.data ? (
             <ResolvedSection
@@ -169,9 +176,8 @@ function ResolvedSection({
   return (
     <SectionCard
       title="Resolved on the latest run"
-      subtitle={`The exact assumption set the engine consumed for the ${scenarioLabel(run.scenarioCode)} run — persisted, immutable, hash-bound`}
+      subtitle={`The exact assumption set the engine consumed for the ${scenarioLabel(run.scenarioCode)} run — saved with the projection, snapshot-bound`}
       computedAt={run.createdAt}
-      runBadge={<RunBadge run={run} />}
       footer={
         <span>
           Scenario{' '}

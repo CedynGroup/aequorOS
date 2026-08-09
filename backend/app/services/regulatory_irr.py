@@ -48,10 +48,12 @@ from app.domain.irr.engine import (
     classify_eve_change,
     compute_duration,
     compute_ear,
+    compute_eve,
     compute_gap,
     compute_nii,
     ear_line_item,
     run_irr_scenarios,
+    scenario_shifts,
 )
 from app.models import (
     Bank,
@@ -67,6 +69,7 @@ from app.models import (
 from app.schemas.banks import BankRead, BankReportingPeriodRead
 from app.schemas.regulatory_irr import (
     IrrDashboardRead,
+    IrrEarAnalysisRead,
     IrrEveScenarioRead,
     IrrGapBucketRead,
     IrrMetricsRead,
@@ -760,6 +763,202 @@ def _compute_inline(
     facts = _load_facts(db, ctx, bank, period)
     active = _load_irr_params_or_none(db, ctx, bank, period.period_end)
     return _run_analysis(db, ctx, bank, period, facts, active)
+
+
+@dataclass(frozen=True)
+class IrrScenarioAnalysis:
+    """One scenario's EVE picture — engine outputs only."""
+
+    base_eve: Decimal
+    shifted_eve: Decimal
+    delta_eve: Decimal
+    delta_eve_pct_tier1: Decimal
+    eve_limit_pct: Decimal
+    status: str
+    tier1: Decimal
+    ear: Decimal | None
+
+
+def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its full scope
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    shocks: dict[str, Decimal],
+    scenario_code: str = "analysis",
+) -> IrrScenarioAnalysis:
+    """Workbench seam: one scenario's ΔEVE without persisting anything.
+
+    Prices the shock set through the SAME shift builder the official Basel
+    scenario table uses (`scenario_shifts`), against the active base curve
+    and Tier 1 read the same way as the official runs.
+    """
+    facts = _load_facts(db, ctx, bank, period)
+    if not facts:
+        raise IrrRunError(
+            "financial_facts_missing",
+            "The reporting period has no IRR facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    active = _load_irr_params_or_none(db, ctx, bank, period.period_end)
+    if active is None:
+        raise IrrRunError(
+            "missing_parameter",
+            "Required IRR parameters (base curve, scenario shocks, or limits) are "
+            "not configured.",
+            None,
+        )
+    tier1 = _load_tier1(db, ctx, bank, period)
+    if tier1 <= 0:
+        raise IrrRunError(
+            "missing_parameter",
+            "Tier 1 capital must be positive to express ΔEVE as a percentage.",
+            None,
+        )
+    positions = _positions_from_facts(facts, active.curve)
+    base_eve = compute_eve(positions, active.curve, {})
+    if shocks:
+        shifts = scenario_shifts(scenario_code, shocks, active.curve)
+        shifted_eve = compute_eve(positions, active.curve, shifts)
+    else:
+        shifted_eve = base_eve
+    delta = shifted_eve - base_eve
+    delta_pct = (delta / tier1 * Decimal("100")).quantize(Decimal("0.000001"))
+    ear: Decimal | None = None
+    parallel = shocks.get("parallel_bp")
+    if parallel is not None:
+        ear = compute_ear(compute_gap(positions), parallel)
+    return IrrScenarioAnalysis(
+        base_eve=base_eve,
+        shifted_eve=shifted_eve,
+        delta_eve=delta,
+        delta_eve_pct_tier1=delta_pct,
+        eve_limit_pct=active.eve_limit_pct,
+        status=classify_eve_change(abs(delta_pct), active.eve_limit_pct),
+        tier1=tier1,
+        ear=ear,
+    )
+
+
+# Desk EaR analysis bounds: horizons from one month to five years, parallel
+# shocks on the 25 bp grid between ±25 and ±500 bp. The regulatory figures are
+# always the stored 12-month ±200 bp run metrics — this seam persists nothing.
+EAR_ANALYSIS_MIN_HORIZON_MONTHS = 1
+EAR_ANALYSIS_MAX_HORIZON_MONTHS = 60
+EAR_ANALYSIS_MIN_DELTA_BP = 25
+EAR_ANALYSIS_MAX_DELTA_BP = 500
+EAR_ANALYSIS_DELTA_BP_STEP = 25
+
+
+def compute_ear_analysis(  # noqa: PLR0913 - the workbench seam names its full scope
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    reporting_period_id: UUID,
+    *,
+    horizon_months: int,
+    delta_bp: int,
+) -> IrrEarAnalysisRead:
+    """Workbench seam: EaR over a caller-chosen horizon without persisting anything.
+
+    Loads the facts and active IRR parameters through the SAME loaders the
+    official runs and ``compute_scenario_analysis`` use, builds the same
+    repricing gap, and evaluates the generalized engine EaR at ±``delta_bp``.
+    Stored regulatory runs (12-month ±200 bp) are never read or written here.
+    """
+    _validate_ear_analysis_inputs(horizon_months, delta_bp)
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    period = _get_period_or_404(db, ctx, bank, reporting_period_id)
+    facts = _load_facts(db, ctx, bank, period)
+    if not facts:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "financial_facts_missing",
+                "message": "The reporting period has no IRR facts to analyze.",
+            },
+        )
+    active = _load_irr_params_or_none(db, ctx, bank, period.period_end)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "missing_parameter",
+                "message": (
+                    "Required IRR parameters (base curve, scenario shocks, or limits) are "
+                    "not configured."
+                ),
+            },
+        )
+    try:
+        positions = _positions_from_facts(facts, active.curve)
+    except IrrRunError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error_code": exc.code, "message": exc.message},
+        ) from exc
+    gap = compute_gap(positions)
+    horizon = Decimal(horizon_months)
+    delta = Decimal(delta_bp)
+    twelve = Decimal("12")
+    gap_within_horizon = sum(
+        (
+            bucket.gap
+            for bucket in gap.buckets
+            if bucket.midpoint_years * twelve < horizon
+        ),
+        _ZERO,
+    )
+    return IrrEarAnalysisRead(
+        bank_id=bank.id,
+        reporting_period_id=period.id,
+        horizon_months=horizon_months,
+        delta_bp=delta_bp,
+        ear_up=compute_ear(gap, delta, horizon),
+        ear_down=compute_ear(gap, -delta, horizon),
+        cumulative_gap_within_horizon=gap_within_horizon,
+        basis=(
+            f"dNII = sum(Gap_i x {delta_bp}bp/10000 x ({horizon_months} - m_i)/"
+            f"{horizon_months}) over repricing buckets with midpoint inside "
+            f"{horizon_months} months; canonical gap for the reporting period."
+        ),
+    )
+
+
+def _validate_ear_analysis_inputs(horizon_months: int, delta_bp: int) -> None:
+    if not (
+        EAR_ANALYSIS_MIN_HORIZON_MONTHS <= horizon_months <= EAR_ANALYSIS_MAX_HORIZON_MONTHS
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error_code": "invalid_ear_horizon",
+                "message": (
+                    f"The EaR analysis horizon must be between "
+                    f"{EAR_ANALYSIS_MIN_HORIZON_MONTHS} and "
+                    f"{EAR_ANALYSIS_MAX_HORIZON_MONTHS} months."
+                ),
+                "horizon_months": horizon_months,
+            },
+        )
+    magnitude = abs(delta_bp)
+    if (
+        magnitude < EAR_ANALYSIS_MIN_DELTA_BP
+        or magnitude > EAR_ANALYSIS_MAX_DELTA_BP
+        or magnitude % EAR_ANALYSIS_DELTA_BP_STEP != 0
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error_code": "invalid_ear_delta_bp",
+                "message": (
+                    f"The EaR analysis shock must be a multiple of "
+                    f"{EAR_ANALYSIS_DELTA_BP_STEP} bp between ±{EAR_ANALYSIS_MIN_DELTA_BP} "
+                    f"and ±{EAR_ANALYSIS_MAX_DELTA_BP} bp."
+                ),
+                "delta_bp": delta_bp,
+            },
+        )
 
 
 def _compute_inline_or_409(

@@ -16,13 +16,7 @@
  * @interface Status1
  */
 export type Status1 =
-  | "active"
-  | "inactive"
-  | "closed"
-  | "matured"
-  | "defaulted"
-  | "unknown"
-  | null;
+  "active" | "inactive" | "closed" | "matured" | "defaulted" | "unknown" | null;
 
 /**
  * Check if a given object implements the Status1 interface.

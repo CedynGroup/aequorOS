@@ -96,6 +96,7 @@ def _seed_curve(  # noqa: PLR0913 - fixture knob for every arbitration axis
     rates: dict[int, str],
     as_of: date = AS_OF,
     currency: str = "GHS",
+    curve_type: str = "sovereign",
 ) -> CanonicalYieldCurve:
     meta = _meta(
         db_session, bank, source_system=source_system, as_of=as_of, ingested_at=ingested_at
@@ -105,7 +106,7 @@ def _seed_curve(  # noqa: PLR0913 - fixture knob for every arbitration axis
         source_reference=f"{source_system}/{curve_name}",
         currency=currency,
         curve_name=curve_name,
-        curve_type="sovereign",
+        curve_type=curve_type,
     )
     db_session.add(curve)
     db_session.flush()
@@ -266,6 +267,123 @@ def test_staleness_tag_flips_with_age(db_session: Session) -> None:
     assert stale.attribution.age_seconds > fresh.attribution.age_seconds
 
 
+def test_get_yield_curve_curve_name_filter_is_opt_in(db_session: Session) -> None:
+    """Default arbitration is untouched; curve_name narrows to one series."""
+    bank = _bank(db_session)
+    _seed_curve(
+        db_session,
+        bank,
+        curve_name="AEQ.GHS.SOV.ZERO",
+        source_system="AEQUOR_DESK",
+        ingested_at=EARLIER,
+        rates={12: "0.20"},
+        curve_type="zero",
+    )
+    _seed_curve(
+        db_session,
+        bank,
+        curve_name="AEQ.GHS.OIS",
+        source_system="AEQUOR_DESK",
+        ingested_at=LATER,
+        rates={12: "0.185"},
+        curve_type="discount",
+    )
+
+    # Default (no curve_name): historical single-winner arbitration by currency.
+    default = market_data.get_yield_curve(db_session, ORG_1, bank.id, "GHS", AS_OF, now=NOW)
+    assert default is not None
+    assert default.curve_name == "AEQ.GHS.OIS"  # most recently ingested wins
+
+    named = market_data.get_yield_curve(
+        db_session, ORG_1, bank.id, "GHS", AS_OF, curve_name="AEQ.GHS.SOV.ZERO", now=NOW
+    )
+    assert named is not None
+    assert named.curve_name == "AEQ.GHS.SOV.ZERO"
+    assert named.curve_type == "zero"
+    assert named.points == ((12, Decimal("0.20")),)
+
+    missing = market_data.get_yield_curve(
+        db_session, ORG_1, bank.id, "GHS", AS_OF, curve_name="AEQ.GHS.NOPE", now=NOW
+    )
+    assert missing is None
+
+
+def test_list_yield_curves_serves_every_current_curve(db_session: Session) -> None:
+    """Multi-curve read: one view per (currency, curve_name), each arbitrated."""
+    bank = _bank(db_session)
+    _seed_curve(
+        db_session,
+        bank,
+        curve_name="AEQ.GHS.SOV.ZERO",
+        source_system="AEQUOR_DESK",
+        ingested_at=LATER,
+        rates={3: "0.24", 12: "0.22"},
+        curve_type="zero",
+    )
+    _seed_curve(
+        db_session,
+        bank,
+        curve_name="AEQ.GHS.SOV.FWD",
+        source_system="AEQUOR_DESK",
+        ingested_at=LATER,
+        rates={12: "0.21"},
+        curve_type="forward",
+    )
+    _seed_curve(
+        db_session,
+        bank,
+        curve_name="AEQ.GHS.OIS",
+        source_system="AEQUOR_DESK",
+        ingested_at=LATER,
+        rates={1: "0.26"},
+        curve_type="discount",
+    )
+    # Two generations of the same name: the newer business date must win
+    # WITHIN the name, not collapse the whole currency to one curve.
+    _seed_curve(
+        db_session,
+        bank,
+        curve_name="USD_TREASURY",
+        source_system="BLOOMBERG",
+        ingested_at=EARLIER,
+        as_of=AS_OF - timedelta(days=2),
+        rates={12: "0.043"},
+        currency="USD",
+    )
+    _seed_curve(
+        db_session,
+        bank,
+        curve_name="USD_TREASURY",
+        source_system="BLOOMBERG",
+        ingested_at=LATER,
+        as_of=AS_OF,
+        rates={12: "0.045"},
+        currency="USD",
+    )
+
+    views = market_data.list_yield_curves(db_session, ORG_1, bank.id, as_of=AS_OF, now=NOW)
+
+    assert [(v.currency, v.curve_name, v.curve_type) for v in views] == [
+        ("GHS", "AEQ.GHS.OIS", "discount"),
+        ("GHS", "AEQ.GHS.SOV.FWD", "forward"),
+        ("GHS", "AEQ.GHS.SOV.ZERO", "zero"),
+        ("USD", "USD_TREASURY", "sovereign"),
+    ]
+    usd = views[-1]
+    assert usd.as_of_date == AS_OF
+    assert usd.points == ((12, Decimal("0.045")),)
+
+    # Currency filter narrows without changing per-name arbitration.
+    ghs_only = market_data.list_yield_curves(
+        db_session, ORG_1, bank.id, as_of=AS_OF, currency="ghs", now=NOW
+    )
+    assert [v.curve_name for v in ghs_only] == [
+        "AEQ.GHS.OIS",
+        "AEQ.GHS.SOV.FWD",
+        "AEQ.GHS.SOV.ZERO",
+    ]
+
+
 def test_fx_spot_serves_latest_generation_with_attribution(db_session: Session) -> None:
     bank = _bank(db_session)
     _seed_spot(db_session, bank, rate="12.70", as_of=AS_OF - timedelta(days=1))
@@ -399,6 +517,7 @@ def test_views_expose_no_vendor_concepts_outside_attribution(db_session: Session
     assert {f.name for f in dataclasses.fields(curve)} == {
         "currency",
         "curve_name",
+        "curve_type",
         "as_of_date",
         "points",
         "attribution",

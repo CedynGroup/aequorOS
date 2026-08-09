@@ -222,16 +222,19 @@ def test_every_registered_return_family_seals_a_content_digest(db_session: Sessi
             assert package.register_state_digest is not None, return_code
 
 
-def test_all_thirteen_returns_route_through_the_single_sealing_site() -> None:
+def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
     """Structural guard for G13: there is one place a package is minted.
 
     ``generate_package`` is the only ``RegulatoryPackage(...)`` construction in
     ``app/``, and it seals ``content_digest`` unconditionally — so proving every
-    registered return dispatches through it proves all thirteen are sealed,
-    without seeding thirteen engine runs.
+    registered return dispatches through it proves all of them are sealed,
+    without seeding an engine run per return. Count pinned so a new return
+    family must consciously join this guard (16 = the original thirteen +
+    STRESS-PACK (item 6) + the two template-gated obligations BSD-MONTHLY /
+    LAS-QUARTERLY (items 12/14, generation refused until the forms land)).
     """
     generators = generation._GENERATORS  # pyright: ignore[reportPrivateUsage]
-    assert len(REGISTRY) == 13
+    assert len(REGISTRY) == 16
     for definition in REGISTRY.values():
         assert definition.generator in generators, definition.code
 

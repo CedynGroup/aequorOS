@@ -18,7 +18,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 
 # Kept in sync with app.core.security.ROLES.
-USER_ROLES: tuple[str, ...] = ("admin", "approver", "analyst", "viewer")
+# "examiner" admitted 2026-08-08 (Phase 2 item 7; migration 202608070039).
+USER_ROLES: tuple[str, ...] = ("admin", "approver", "analyst", "examiner", "viewer")
 # "oidc" covers every external IdP (Google Workspace, Entra, Okta, …) — the
 # connection an identity came through lives in sso_connections, not here.
 AUTH_PROVIDERS: tuple[str, ...] = ("password", "oidc", "service")

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { FlaskConical } from 'lucide-react';
 import type { RegulatoryRunSummaryRead } from '@aequoros/risk-service-api';
 import KpiStat from '@/components/ui/KpiStat';
@@ -165,7 +166,15 @@ function ExPostBody({ ctx }: { ctx: FtpFrameContext }) {
       <EmptyState
         Icon={FlaskConical}
         title="No stored scenario runs for this period"
-        description="The ex-ante columns come from the persisted baseline, rates-up, and funding-stress runs. Use 'Run all scenarios' in the header to mint them — the comparison frame fills in automatically."
+        description="The ex-ante columns come from the stored baseline, rates-up and funding-stress results for this period. They fill in automatically once this period's results are computed and stored."
+        action={
+          <Link
+            href="/ftp/scenarios"
+            className="inline-flex items-center px-3 py-2 text-caption font-medium btn-primary"
+          >
+            Open the Scenario Workbench
+          </Link>
+        }
       />
     );
   }
@@ -176,7 +185,7 @@ function ExPostBody({ ctx }: { ctx: FtpFrameContext }) {
         <KpiStat
           label="Ex-ante baseline NIM"
           value={baselineNim !== null ? fmtPct(baselineNim, 2) : '—'}
-          hint="Persisted baseline run for this period"
+          hint="Stored baseline for this period"
         />
         <KpiStat
           label="Worst ex-ante stress NIM"

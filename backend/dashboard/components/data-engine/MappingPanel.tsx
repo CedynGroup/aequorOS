@@ -8,6 +8,7 @@
  */
 
 import { CheckCircle2, FileSpreadsheet } from 'lucide-react';
+import StatusPill from '@/components/ui/StatusPill';
 import { useBankContext } from '@/components/shell/BankContext';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
 import { isApiError } from '@/lib/api/client';
@@ -53,9 +54,12 @@ export default function MappingPanel() {
               </span>
             </p>
           ) : (
-            <p className="mt-1 text-body text-warning">
-              None — activate a starter mapping below before ingesting.
-            </p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <StatusPill tone="amber">None</StatusPill>
+              <span className="text-body text-slate">
+                Activate a starter mapping below before ingesting.
+              </span>
+            </div>
           )}
         </div>
       </div>

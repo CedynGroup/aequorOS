@@ -46,8 +46,15 @@ REGISTRY_CODES = {
     "DBK-DAILY",
     "ICAAP-STRESS",
     "LE-MONTHLY",
+    # Template-gated obligations (Phase 2 items 12/14): real periodic
+    # deadlines in the calendar; generation refuses until the forms land.
+    "BSD-MONTHLY",
+    "LAS-QUARTERLY",
 }
 CORPORATE_CODES = {"LRT-PROFILE", "LRT-OUTLET", "LRT-PARTY", "LRT-CAPITAL", "LRT-PRODUCT"}
+# Phase 2 item 6: the stress pack is likewise event-driven (Board/ALCO
+# artifact, no BoG deadline) — registered, but never a calendar obligation.
+STRESS_CODES = {"STRESS-PACK"}
 
 
 def _seed_latest_period(db_client: TestClient) -> dict[str, Any]:
@@ -521,7 +528,7 @@ def test_return_templates_expose_registry_with_fidelity(db_client: TestClient) -
     templates = {item["code"]: item for item in response.json()["templates"]}
     # The registry (and hence the templates endpoint) also carries the
     # event-driven corporate LRT packs; only the calendar excludes them.
-    assert set(templates) == REGISTRY_CODES | CORPORATE_CODES
+    assert set(templates) == REGISTRY_CODES | CORPORATE_CODES | STRESS_CODES
     assert templates["BSD3"]["fidelity"] == "PARTIAL"
     assert templates["BSD3"]["default_channel"] == "orass_sandbox"
     assert templates["BSD3"]["regulator"] == "BOG"
@@ -530,6 +537,31 @@ def test_return_templates_expose_registry_with_fidelity(db_client: TestClient) -
     for template in templates.values():
         assert template["fidelity"] in ("CONFIRMED", "PARTIAL", "REPRESENTATIVE")
         assert template["directive_citation"]
+
+
+def test_template_gated_returns_appear_in_calendar_but_refuse_generation(
+    db_client: TestClient,
+) -> None:
+    """Phase 2 items 12/14: BSD-MONTHLY and LAS-QUARTERLY are real periodic
+    obligations (calendar-visible today) whose BoG forms are unpublished —
+    generation refuses with template_pending instead of inventing a layout."""
+    _seed_latest_period(db_client)
+    obligations = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/reporting-obligations",
+        headers=headers(),
+        params={"horizon_months": 6},
+    ).json()["obligations"]
+    codes = {item["return_code"] for item in obligations}
+    assert {"BSD-MONTHLY", "LAS-QUARTERLY"} <= codes
+
+    for return_code in ("BSD-MONTHLY", "LAS-QUARTERLY"):
+        response = db_client.post(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages",
+            headers=headers(),
+            json={"return_code": return_code, "reporting_date": REPORTING_DATE},
+        )
+        assert response.status_code == 409, response.text
+        assert response.json()["error"]["details"]["error_code"] == "template_pending"
 
 
 def test_channel_config_credentials_are_write_only(

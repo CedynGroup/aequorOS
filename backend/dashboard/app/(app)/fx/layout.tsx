@@ -3,6 +3,7 @@ import ModuleTabs from '@/components/shell/ModuleTabs';
 const tabs = [
   { href: '/fx', label: 'Exposure' },
   { href: '/fx/var', label: 'VaR & Stress' },
+  { href: '/fx/scenarios', label: 'Scenarios' },
   { href: '/fx/hedges', label: 'Hedge Book' },
   { href: '/fx/limits', label: 'Limits' },
   { href: '/fx/forwards', label: 'Forwards' },

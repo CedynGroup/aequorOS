@@ -7,12 +7,16 @@
  */
 
 import {
+  CreditParamsApi,
   IntegrationKeysApi,
+  LiquidityCfpApi,
+  LiquidityThresholdsApi,
   AttestationApi,
   AuthApi,
   BanksApi,
   BehavioralModelsApi,
   CashflowForecastApi,
+  CashflowWindowApi,
   Configuration,
   ForecastingApi,
   InstitutionProfileApi,
@@ -20,6 +24,8 @@ import {
   LiveEngineApi,
   MarketDataApi,
   NotificationsApi,
+  ReverseStressApi,
+  ScenarioWorkbenchApi,
   OrganizationApi,
   RegulatoryCapitalApi,
   RegulatoryFtpApi,
@@ -29,6 +35,7 @@ import {
   RegulatoryReportingApi,
   ResponseError,
   TemenosApi,
+  WindowAnalyticsApi,
 } from '@aequoros/risk-service-api';
 import { getSession } from 'next-auth/react';
 import { getAccessToken, setAccessToken } from './token';
@@ -77,6 +84,7 @@ export const regulatoryFxApi = new RegulatoryFxApi(configuration);
 export const regulatoryFtpApi = new RegulatoryFtpApi(configuration);
 export const forecastingApi = new ForecastingApi(configuration);
 export const cashflowForecastApi = new CashflowForecastApi(configuration);
+export const cashflowWindowApi = new CashflowWindowApi(configuration);
 export const liveEngineApi = new LiveEngineApi(configuration);
 export const jobsApi = new JobsApi(configuration);
 export const marketDataApi = new MarketDataApi(configuration);
@@ -86,6 +94,12 @@ export const institutionProfileApi = new InstitutionProfileApi(configuration);
 export const organizationApi = new OrganizationApi(configuration);
 export const notificationsApi = new NotificationsApi(configuration);
 export const integrationKeysApi = new IntegrationKeysApi(configuration);
+export const liquidityCfpApi = new LiquidityCfpApi(configuration);
+export const liquidityThresholdsApi = new LiquidityThresholdsApi(configuration);
+export const creditParamsApi = new CreditParamsApi(configuration);
+export const reverseStressApi = new ReverseStressApi(configuration);
+export const scenarioWorkbenchApi = new ScenarioWorkbenchApi(configuration);
+export const windowAnalyticsApi = new WindowAnalyticsApi(configuration);
 
 /**
  * Normalized error surfaced to the UI. `status` is the HTTP status code,

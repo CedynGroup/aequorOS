@@ -66,7 +66,12 @@ _VENDOR_SOURCE_SYSTEMS = {
     "refinitiv": "REFINITIV",
     "manual": "MANUAL_UPLOAD",
     "manual_upload": "MANUAL_UPLOAD",
+    "aequor_desk": "AEQUOR_DESK",
 }
+# Vendors with no external counterparty: no vendor quota exists to consume,
+# so no MarketDataQuotaUsage ledger row is ever written for them (§8.3 for
+# manual uploads; desk publications are AequorOS' own golden copy).
+_ZERO_QUOTA_VENDORS = ("manual", "manual_upload", "aequor_desk")
 _RATE_LOWER = Decimal("-1")
 _RATE_UPPER = Decimal("1")
 
@@ -273,8 +278,8 @@ def execute_pull(  # noqa: PLR0913 - one call carries the full pull context
     )
 
     quota_consumed = 0
-    if vendor not in ("manual", "manual_upload") and extractions:
-        # Manual pulls consume no vendor quota (§8.3).
+    if vendor not in _ZERO_QUOTA_VENDORS and extractions:
+        # Manual and desk pulls consume no vendor quota (§8.3).
         quota_consumed = quota_units
         record_consumption(
             db,

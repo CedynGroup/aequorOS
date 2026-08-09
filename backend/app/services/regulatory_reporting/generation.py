@@ -24,6 +24,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -35,6 +36,7 @@ from app.models import (
     Bank,
     BankReportingPeriod,
     InstitutionProfile,
+    RegulatoryMetricResult,
     RegulatoryPackage,
     RegulatoryRun,
 )
@@ -72,6 +74,10 @@ MODULE_CAPITAL = "capital"
 MODULE_IRR = "irr"
 MODULE_FX = "fx"
 MODULE_FORECAST = "forecast"
+# The ICAAP data companion consumes 5-year forecast runs only. Desk runs may
+# carry other horizons (persisted as ``inputs.horizon_years``; absent == 5),
+# and must never displace the regulatory 5-year projection here.
+_ICAAP_FORECAST_HORIZON_YEARS = 5
 
 _FORECAST_SUMMARY_FIELDS = (
     "avg_roe_pct",
@@ -972,17 +978,24 @@ def _generate_icaap_stress(
     period: BankReportingPeriod,
     definition: ReturnDefinition,
 ) -> GeneratedReturn:
-    forecast_run = db.scalar(
-        select(RegulatoryRun)
-        .where(
-            RegulatoryRun.organization_id == ctx.organization_id,
-            RegulatoryRun.bank_id == bank.id,
-            RegulatoryRun.reporting_period_id == period.id,
-            RegulatoryRun.module == MODULE_FORECAST,
-            RegulatoryRun.status == "succeeded",
-        )
-        .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
-        .limit(1)
+    forecast_run = next(
+        (
+            run
+            for run in db.scalars(
+                select(RegulatoryRun)
+                .where(
+                    RegulatoryRun.organization_id == ctx.organization_id,
+                    RegulatoryRun.bank_id == bank.id,
+                    RegulatoryRun.reporting_period_id == period.id,
+                    RegulatoryRun.module == MODULE_FORECAST,
+                    RegulatoryRun.status == "succeeded",
+                )
+                .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
+            )
+            if run.inputs.get("horizon_years", _ICAAP_FORECAST_HORIZON_YEARS)
+            == _ICAAP_FORECAST_HORIZON_YEARS
+        ),
+        None,
     )
     if forecast_run is None:
         raise HTTPException(
@@ -1060,6 +1073,366 @@ def _generate_icaap_stress(
     )
 
 
+def _stress_traffic_lights(
+    db: Session, scenario_runs: list[tuple[str, str, RegulatoryRun]]
+) -> list[dict[str, Any]]:
+    """One row per stored headline metric of every consumed run — value,
+    threshold and green/amber/red status exactly as the engine persisted them
+    (``RegulatoryMetricResult``); the pack classifies nothing itself."""
+    rows: list[dict[str, Any]] = []
+    for module, scenario_code, run in scenario_runs:
+        results = db.scalars(
+            select(RegulatoryMetricResult)
+            .where(RegulatoryMetricResult.run_id == run.id)
+            .order_by(RegulatoryMetricResult.position)
+        ).all()
+        rows.extend(
+            _row(
+                f"{module}:{scenario_code}:{result.metric_code}",
+                f"{result.metric_code} under '{scenario_code}' ({module})",
+                result.metric_value,
+                unit=result.unit,
+                threshold=str(result.threshold_min) if result.threshold_min is not None else None,
+                status=result.status,
+                module=module,
+                scenario_code=scenario_code,
+            )
+            for result in results
+        )
+    return rows
+
+
+def _stress_ratio_evolution(capital_runs: dict[str, RegulatoryRun]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for scenario_code, run in sorted(capital_runs.items()):
+        if scenario_code == BASELINE_SCENARIO:
+            continue
+        for quarter in run.metrics.get("stress_path", []):
+            rows.append(
+                _row(
+                    f"{scenario_code}:q{quarter['quarter']}",
+                    f"'{scenario_code}' quarter {quarter['quarter']}",
+                    quarter["car"],
+                    cet1_ratio_pct=quarter["cet1_ratio"],
+                    tier1_ratio_pct=quarter["tier1_ratio"],
+                    leverage_ratio_pct=quarter["leverage_ratio"],
+                    total_rwa_ghs=quarter["total_rwa"],
+                    scenario_code=scenario_code,
+                )
+            )
+    return rows
+
+
+def _stress_pro_forma(capital_runs: dict[str, RegulatoryRun]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for scenario_code, run in sorted(capital_runs.items()):
+        if scenario_code == BASELINE_SCENARIO:
+            continue
+        path = run.metrics.get("stress_path", [])
+        if not path:
+            continue
+        end_state = path[-1]
+        rows.append(
+            _row(
+                scenario_code,
+                f"End-state capital position under '{scenario_code}'",
+                end_state["total_capital"],
+                cet1_capital_ghs=end_state["cet1_capital"],
+                tier1_capital_ghs=end_state["tier1_capital"],
+                total_rwa_ghs=end_state["total_rwa"],
+                credit_rwa_ghs=end_state["credit_rwa"],
+                market_rwa_ghs=end_state["market_rwa"],
+                operational_rwa_ghs=end_state["operational_rwa"],
+                end_car_pct=end_state["car"],
+            )
+        )
+    return rows
+
+
+def _stress_attribution(
+    liquidity_runs: dict[str, RegulatoryRun],
+    capital_runs: dict[str, RegulatoryRun],
+    liq_baseline: RegulatoryRun,
+    cap_baseline: RegulatoryRun,
+) -> list[dict[str, Any]]:
+    """Scenario-vs-baseline deltas over the SAME canonical book: both runs
+    anchor to their engine's baseline input hash, so the delta is pure shock
+    attribution rather than a data-vintage difference."""
+    rows: list[dict[str, Any]] = []
+    for metric in ("lcr_pct", "nsfr_pct"):
+        base = Decimal(str(liq_baseline.metrics[metric]))
+        for scenario_code, run in sorted(liquidity_runs.items()):
+            if scenario_code == BASELINE_SCENARIO or metric not in run.metrics:
+                continue
+            stressed = Decimal(str(run.metrics[metric]))
+            rows.append(
+                _row(
+                    f"liquidity:{scenario_code}:{metric}",
+                    f"{metric} impact of '{scenario_code}' vs baseline",
+                    stressed - base,
+                    baseline_pct=str(base),
+                    stressed_pct=str(stressed),
+                    module=MODULE_LIQUIDITY,
+                    scenario_code=scenario_code,
+                )
+            )
+    base_car = Decimal(str(cap_baseline.metrics["car_pct"]))
+    for scenario_code, run in sorted(capital_runs.items()):
+        if scenario_code == BASELINE_SCENARIO:
+            continue
+        path = run.metrics.get("stress_path", [])
+        if not path:
+            continue
+        end_car = Decimal(str(path[-1]["car"]))
+        rows.append(
+            _row(
+                f"capital:{scenario_code}:car_pct",
+                f"End-state CAR impact of '{scenario_code}' vs baseline",
+                end_car - base_car,
+                baseline_pct=str(base_car),
+                stressed_pct=str(end_car),
+                module=MODULE_CAPITAL,
+                scenario_code=scenario_code,
+            )
+        )
+    return rows
+
+
+def _stress_frontier_rows(reverse_run: RegulatoryRun) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for axis_code, floor_key, ratio_key in (
+        ("liquidity_frontier", "lcr_min_pct", "lcr_at_breach_pct"),
+        ("capital_frontier", "cet1_min_pct", "worst_cet1_at_breach_pct"),
+    ):
+        axis = reverse_run.metrics[axis_code.replace("_frontier", "_axis")]
+        breached = axis["breached"]
+        rows.append(
+            _row(
+                axis_code,
+                (
+                    f"Severity multiplier breaching the {axis['scenario_code']} floor"
+                    if breached
+                    else f"No breach up to {axis['k_max']}x scenario severity"
+                ),
+                axis.get("breach_multiplier", axis.get("k_max", "")),
+                breached="true" if breached else "false",
+                floor_pct=axis.get(floor_key),
+                ratio_at_breach_pct=axis.get(ratio_key),
+                scenario_code=axis["scenario_code"],
+            )
+        )
+    return rows
+
+
+def _stress_recommended_actions(
+    capital_runs: dict[str, RegulatoryRun], traffic_rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Deterministic remedial actions: the capital engine's own fired triggers
+    (which carry prescribed action text) plus a funding-remediation line for
+    every liquidity ratio the stored classification marked amber/red."""
+    rows: list[dict[str, Any]] = []
+    for scenario_code, run in sorted(capital_runs.items()):
+        if scenario_code == BASELINE_SCENARIO:
+            continue
+        for trigger in run.metrics.get("triggers", []):
+            if not trigger.get("fired"):
+                continue
+            rows.append(
+                _row(
+                    f"capital:{scenario_code}:{trigger['code']}",
+                    trigger["action"],
+                    trigger["threshold_pct"],
+                    unit="pct",
+                    first_quarter=str(trigger.get("first_quarter") or ""),
+                    scenario_code=scenario_code,
+                    module=MODULE_CAPITAL,
+                )
+            )
+    for light in traffic_rows:
+        if light["module"] != MODULE_LIQUIDITY or light["status"] == "green":
+            continue
+        if light["scenario_code"] == BASELINE_SCENARIO:
+            continue
+        metric = light["code"].rsplit(":", 1)[-1]
+        if metric not in ("lcr_pct", "nsfr_pct"):
+            continue
+        rows.append(
+            _row(
+                f"liquidity:{light['scenario_code']}:{metric}",
+                (
+                    f"Restore {metric} above the regulatory minimum: extend the "
+                    "high-quality liquid asset buffer or term out the funding "
+                    f"profile stressed by scenario '{light['scenario_code']}'."
+                ),
+                light["value"],
+                unit="pct",
+                status=light["status"],
+                scenario_code=light["scenario_code"],
+                module=MODULE_LIQUIDITY,
+            )
+        )
+    return rows
+
+
+def _generate_template_pending(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    definition: ReturnDefinition,
+) -> GeneratedReturn:
+    """Honest refusal for returns whose BoG form is not yet published.
+
+    The obligation is real (it sits in the registry and the calendar), but
+    the standing order is to obtain the official form, never infer it — so
+    generation names the gap instead of fabricating a layout (product.md
+    §Phase 2 items 12/14).
+    """
+    _ = (db, ctx, bank, period)
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "error_code": "template_pending",
+            "message": (
+                f"The official form for {definition.code} has not been obtained "
+                "yet; this return cannot be generated until the regulator's "
+                "template is registered (the layout is never inferred)."
+            ),
+        },
+    )
+
+
+def _generate_stress_pack(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    definition: ReturnDefinition,
+) -> GeneratedReturn:
+    """Stress Test Output Report pack (product.md §Phase 2 item 6).
+
+    Assembles ONLY stored engine state — the latest succeeded liquidity and
+    capital runs per scenario, their persisted headline metric results, and
+    the latest reverse-stress frontier — into the standardized Board/ALCO
+    output report: traffic lights, ratio evolution, pro-forma capital,
+    baseline attribution, recommended actions.
+    """
+    liq_baseline = _baseline_run_or_409(
+        db, ctx, bank, period, MODULE_LIQUIDITY, artifact="the stress pack"
+    )
+    cap_baseline = _baseline_run_or_409(
+        db, ctx, bank, period, MODULE_CAPITAL, artifact="the stress pack"
+    )
+    liquidity_runs = _latest_succeeded_runs_by_scenario(db, ctx, bank, period, MODULE_LIQUIDITY)
+    capital_runs = _latest_succeeded_runs_by_scenario(db, ctx, bank, period, MODULE_CAPITAL)
+    scenario_runs = [
+        (MODULE_LIQUIDITY, code, run) for code, run in sorted(liquidity_runs.items())
+    ] + [(MODULE_CAPITAL, code, run) for code, run in sorted(capital_runs.items())]
+    stressed = [entry for entry in scenario_runs if entry[1] != BASELINE_SCENARIO]
+    if not stressed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "no_stress_scenarios",
+                "message": (
+                    "No succeeded stress-scenario runs exist for this reporting "
+                    "period. Run at least one non-baseline liquidity or capital "
+                    "scenario before generating the stress pack."
+                ),
+            },
+        )
+
+    reverse_run = db.scalar(
+        select(RegulatoryRun)
+        .where(
+            RegulatoryRun.organization_id == ctx.organization_id,
+            RegulatoryRun.bank_id == bank.id,
+            RegulatoryRun.reporting_period_id == period.id,
+            RegulatoryRun.module == "reverse_stress",
+            RegulatoryRun.status == "succeeded",
+        )
+        .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
+        .limit(1)
+    )
+
+    traffic_rows = _stress_traffic_lights(db, scenario_runs)
+    evolution_rows = _stress_ratio_evolution(capital_runs)
+    pro_forma_rows = _stress_pro_forma(capital_runs)
+    attribution_rows = _stress_attribution(
+        liquidity_runs, capital_runs, liq_baseline, cap_baseline
+    )
+    frontier_rows = _stress_frontier_rows(reverse_run) if reverse_run is not None else []
+    action_rows = _stress_recommended_actions(capital_runs, traffic_rows)
+
+    sections = [
+        _section("traffic_lights", "Stress Outcome Traffic Lights", traffic_rows),
+        _section(
+            "ratio_evolution", "Capital Ratio Evolution Under Stress", evolution_rows,
+            optional=True,
+        ),
+        _section(
+            "pro_forma_capital", "Pro-Forma Capital Position (Stress End-State)",
+            pro_forma_rows, optional=True,
+        ),
+        _section("attribution", "Scenario Attribution vs Baseline", attribution_rows),
+        _section(
+            "reverse_stress_frontier", "Reverse-Stress Frontier", frontier_rows,
+            optional=True,
+        ),
+        _section("recommended_actions", "Recommended Actions", action_rows, optional=True),
+    ]
+
+    stressed_lcrs = [
+        Decimal(str(run.metrics["lcr_pct"]))
+        for code, run in liquidity_runs.items()
+        if code != BASELINE_SCENARIO and "lcr_pct" in run.metrics
+    ]
+    end_cars = [
+        Decimal(str(run.metrics["stress_path"][-1]["car"]))
+        for code, run in capital_runs.items()
+        if code != BASELINE_SCENARIO and run.metrics.get("stress_path")
+    ]
+    red_count = sum(1 for light in traffic_rows if light["status"] == "red")
+    totals = [_row("red_light_count", "Metrics classified red across scenarios", red_count)]
+    if stressed_lcrs:
+        totals.append(
+            _row(
+                "worst_stressed_lcr_pct",
+                "Worst stressed LCR across scenarios",
+                min(stressed_lcrs),
+            )
+        )
+    if end_cars:
+        totals.append(
+            _row("worst_end_car_pct", "Worst end-state CAR across scenarios", min(end_cars))
+        )
+
+    metadata: dict[str, Any] = {
+        "liquidity_scenarios": sorted(liquidity_runs),
+        "capital_scenarios": sorted(capital_runs),
+        "baseline_liquidity_input_hash": liq_baseline.input_hash,
+        "baseline_capital_input_hash": cap_baseline.input_hash,
+        "fired_trigger_count": sum(
+            1
+            for code, run in capital_runs.items()
+            if code != BASELINE_SCENARIO
+            for trigger in run.metrics.get("triggers", [])
+            if trigger.get("fired")
+        ),
+    }
+    if reverse_run is not None:
+        metadata["reverse_stress_run_id"] = str(reverse_run.id)
+        metadata["reverse_stress_narrative"] = reverse_run.metrics.get("narrative", "")
+
+    source_runs = [_source_run_entry(run) for _, _, run in scenario_runs]
+    if reverse_run is not None:
+        source_runs.append(_source_run_entry(reverse_run))
+    return GeneratedReturn(
+        snapshot=_envelope(bank, period, definition, sections, totals, metadata),
+        source_runs=source_runs,
+    )
+
+
 # Public seams for sibling generator modules: the LRT corporate packs (plan
 # W5, ``lrt_generation.py``) and the W6 canonical-position returns
 # (``le_generation.py``) assemble the same regulatory-package-v1
@@ -1087,6 +1460,8 @@ _GENERATORS = {
     "irrbb": _generate_irrbb,
     "fx": _generate_fx,
     "icaap_stress": _generate_icaap_stress,
+    "stress_pack": _generate_stress_pack,
+    "template_pending": _generate_template_pending,
     **LRT_GENERATORS,
     **LE_GENERATORS,
     **DBK_GENERATORS,

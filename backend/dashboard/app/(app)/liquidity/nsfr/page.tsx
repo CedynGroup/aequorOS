@@ -1,24 +1,21 @@
 'use client';
 
-import { Loader2, PlayCircle } from 'lucide-react';
 import type { RegulatoryLineItemRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import RatioGauge from '@/components/ui/RatioGauge';
 import KpiStat from '@/components/ui/KpiStat';
 import LimitBar from '@/components/ui/LimitBar';
 import SectionCard from '@/components/ui/SectionCard';
-import RunBadge from '@/components/ui/RunBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import { runComputedAt, runThresholds } from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
-  useCreateRegulatoryRun,
   useLiquidityDashboard,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, num, statusTone } from '@/lib/api/values';
+import { num, statusTone } from '@/lib/api/values';
 import { fmtCurrency, regShort } from '@/lib/format';
 
 type WeightedRow = {
@@ -73,7 +70,6 @@ export default function NSFRDashboard() {
 
   const dashboard = useLiquidityDashboard(bankId, periodId);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
-  const runBaseline = useCreateRegulatoryRun(bankId);
 
   const data = dashboard.data;
   const run = latestRun.data;
@@ -93,28 +89,6 @@ export default function NSFRDashboard() {
 
   const computedAt = runComputedAt(run);
 
-  const runBaselineButton = (
-    <button
-      type="button"
-      disabled={runBaseline.isPending || !periodId}
-      onClick={() =>
-        periodId &&
-        runBaseline.mutate({
-          module: 'liquidity',
-          reportingPeriodId: periodId,
-          scenarioCode: 'baseline',
-        })
-      }
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-    >
-      {runBaseline.isPending ? (
-        <Loader2 size={13} className="animate-spin" aria-hidden />
-      ) : (
-        <PlayCircle size={13} aria-hidden />
-      )}
-      Run baseline
-    </button>
-  );
 
   return (
     <>
@@ -126,13 +100,6 @@ export default function NSFRDashboard() {
         ]}
         title="Net Stable Funding Ratio"
         subtitle={`Basel III NSFR per ${regShort()} CRD · 1-year stable funding horizon`}
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
-        action={
-          <div className="flex items-center gap-2">
-            {run && <RunBadge run={run} />}
-            {runBaselineButton}
-          </div>
-        }
       />
 
       <QueryBoundary
@@ -172,7 +139,6 @@ export default function NSFRDashboard() {
               title="Regulatory floor"
               subtitle={`NSFR is a floor limit — compliant while the ratio stays above the ${regShort()} minimum`}
               computedAt={computedAt}
-              runBadge={run ? <RunBadge run={run} /> : undefined}
             >
               <LimitBar
                 label="NSFR"
@@ -189,9 +155,8 @@ export default function NSFRDashboard() {
 
             {!run ? (
               <EmptyState
-                title="No stored baseline run for this period"
-                description="ASF and RSF line-item detail comes from a persisted baseline liquidity run. Run baseline to calculate and store the full NSFR breakdown."
-                action={runBaselineButton}
+                title="Awaiting stored results for this period"
+                description="ASF and RSF line-item detail is produced with this period's stored results and appears here automatically once they are computed."
               />
             ) : (
               <>
@@ -201,7 +166,6 @@ export default function NSFRDashboard() {
                     subtitle="Liability-side weighting per Basel III §50"
                     noPadding
                     computedAt={computedAt}
-                    runBadge={<RunBadge run={run} />}
                   >
                     <DataTable
                       columns={weightedColumns(
@@ -228,7 +192,6 @@ export default function NSFRDashboard() {
                     subtitle="Asset-side weighting per Basel III §52"
                     noPadding
                     computedAt={computedAt}
-                    runBadge={<RunBadge run={run} />}
                   >
                     <DataTable
                       columns={weightedColumns(

@@ -55,6 +55,9 @@ PACKAGE_STATUSES = (
 # was widened again in migration 202607240022. "dbk" (W6 remainder) is the
 # DBK daily family (Notice BG/FMD/2026/07) — the family and the "daily"
 # frequency were admitted in migration 202607240023.
+# "stress" (Phase 2 item 6) is the event-driven Stress Test Output Report
+# pack — a Board/ALCO artifact, not a BoG return; the constraint was widened
+# in migration 202608070035.
 RETURN_FAMILIES = (
     "liquidity",
     "capital",
@@ -64,6 +67,7 @@ RETURN_FAMILIES = (
     "corporate",
     "large_exposures",
     "dbk",
+    "stress",
 )
 RETURN_FREQUENCIES = ("monthly", "quarterly", "semiannual", "annual", "daily")
 RETURN_BASES = ("solo", "consolidated")

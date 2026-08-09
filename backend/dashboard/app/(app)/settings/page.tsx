@@ -544,7 +544,10 @@ function AboutPanel({ bankId }: { bankId: string | undefined }) {
 
   return (
     <Card>
+      {/* flex-wrap lets the RunBadge chip drop below the title block instead of
+          overlapping it when the card is narrow (two-column settings grid). */}
       <CardHeader
+        className="flex-wrap"
         title="About"
         subtitle="Engine versions from the persisted regulatory runs"
         action={latest ? <RunBadge run={latest} /> : undefined}

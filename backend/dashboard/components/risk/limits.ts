@@ -11,12 +11,14 @@
 
 import type {
   CapitalDashboardRead,
+  RegulatoryRunRead,
   FtpDashboardRead,
   FxDashboardRead,
   IrrDashboardRead,
   LiquidityDashboardRead,
 } from '@aequoros/risk-service-api';
 import { labelize, num } from '@/lib/api/values';
+import { runThresholds } from '@/components/liquidity/runData';
 import { fmtCurrencySigned } from '@/lib/format';
 
 export type LimitModule = 'liquidity' | 'capital' | 'irr' | 'fx' | 'ftp';
@@ -199,23 +201,68 @@ export function ftpLimits(data: FtpDashboardRead | undefined): LimitRow[] {
 }
 
 /**
- * Liquidity intentionally contributes no limit-wall rows: the dashboard
- * payload carries LCR/NSFR statuses but no numeric thresholds, and this page
- * never invents one. Its rule evaluations appear under validation checks.
+ * LCR/NSFR rows for the limit wall. The dashboard payload carries statuses
+ * but no numeric thresholds, so the thresholds come verbatim from the stored
+ * run's snapshotted parameter set (`runThresholds`) — a row is emitted only
+ * when its floor exists there; nothing is ever invented client-side.
  */
-export function liquidityLimits(_data: LiquidityDashboardRead | undefined): LimitRow[] {
-  return [];
+const RATIO_STATUS: Record<string, LimitStatus> = {
+  green: 'ok',
+  amber: 'warn',
+  red: 'crit',
+};
+
+export function liquidityLimits(
+  data: LiquidityDashboardRead | undefined,
+  run?: RegulatoryRunRead
+): LimitRow[] {
+  if (!data) return [];
+  const thresholds = runThresholds(run);
+  const computedAt = data.live?.computedAt;
+  const rows: LimitRow[] = [];
+  const lcrMin = thresholds['lcr_min'];
+  if (lcrMin !== undefined) {
+    rows.push({
+      module: 'liquidity',
+      limit: 'Liquidity Coverage Ratio',
+      value: num(data.metrics.lcrPct),
+      threshold: lcrMin,
+      warnAt: thresholds['lcr_amber_floor'],
+      direction: 'above',
+      status: RATIO_STATUS[data.metrics.lcrStatus] ?? 'ok',
+      unit: '%',
+      computedAt,
+      detail: '30-day stressed horizon',
+    });
+  }
+  const nsfrMin = thresholds['nsfr_min'];
+  if (nsfrMin !== undefined) {
+    rows.push({
+      module: 'liquidity',
+      limit: 'Net Stable Funding Ratio',
+      value: num(data.metrics.nsfrPct),
+      threshold: nsfrMin,
+      warnAt: thresholds['nsfr_amber_floor'],
+      direction: 'above',
+      status: RATIO_STATUS[data.metrics.nsfrStatus] ?? 'ok',
+      unit: '%',
+      computedAt,
+      detail: '1-year stable funding horizon',
+    });
+  }
+  return rows;
 }
 
 export function extractAllLimits(dashboards: {
   liquidity?: LiquidityDashboardRead;
+  liquidityRun?: RegulatoryRunRead;
   capital?: CapitalDashboardRead;
   irr?: IrrDashboardRead;
   fx?: FxDashboardRead;
   ftp?: FtpDashboardRead;
 }): LimitRow[] {
   return [
-    ...liquidityLimits(dashboards.liquidity),
+    ...liquidityLimits(dashboards.liquidity, dashboards.liquidityRun),
     ...capitalLimits(dashboards.capital),
     ...irrLimits(dashboards.irr),
     ...fxLimits(dashboards.fx),

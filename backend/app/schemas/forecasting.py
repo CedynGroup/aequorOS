@@ -75,6 +75,9 @@ class ForecastRunCreate(ClosedModel):
     reporting_period_id: UUID
     scenario_code: ForecastScenarioCode
     assumptions: ForecastAssumptionsUpdate | None = None
+    # Projection horizon in years; 5 is the regulatory default the official
+    # activation path always uses (ICAAP consumes 5-year runs only).
+    horizon_years: int = Field(default=5, ge=1, le=10, title="Forecast Horizon Years")
 
     @model_validator(mode="after")
     def require_assumptions_for_custom(self) -> ForecastRunCreate:

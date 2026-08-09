@@ -28,6 +28,7 @@ import {
   useCanonicalPositionsPage,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, labelize } from '@/lib/api/values';
+import { fmtInt } from '@/lib/format';
 import PositionDrawer, {
   fmtBalance,
   fmtRate,
@@ -38,8 +39,6 @@ const PAGE_SIZES = [100, 250, 500] as const;
 const DEFAULT_PAGE_SIZE = 100;
 const SEARCH_DEBOUNCE_MS = 300;
 const ALL = 'all';
-
-const fmtCount = (value: number) => value.toLocaleString('en-US');
 
 /** Clamp a ?limit= value to the supported page sizes. */
 function parseLimit(raw: string | null): number {
@@ -224,7 +223,7 @@ function PositionsBlotter() {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <KpiStat
                   label="Positions"
-                  value={fmtCount(bookTotal)}
+                  value={fmtInt(bookTotal)}
                   hint="current generation"
                 />
                 <KpiStat
@@ -245,7 +244,7 @@ function PositionsBlotter() {
                 />
                 <KpiStat
                   label="Matching filters"
-                  value={fmtCount(total)}
+                  value={fmtInt(total)}
                   hint={filtersActive ? 'server-filtered' : 'no filters applied'}
                 />
               </div>
@@ -282,7 +281,7 @@ function PositionsBlotter() {
                   <option value={ALL}>All types</option>
                   {facets.data?.positionTypes.map((facet) => (
                     <option key={facet.value} value={facet.value}>
-                      {labelize(facet.value)} ({fmtCount(facet.count)})
+                      {labelize(facet.value)} ({fmtInt(facet.count)})
                     </option>
                   ))}
                 </select>
@@ -300,7 +299,7 @@ function PositionsBlotter() {
                   <option value={ALL}>All currencies</option>
                   {facets.data?.currencies.map((facet) => (
                     <option key={facet.value} value={facet.value}>
-                      {facet.value} ({fmtCount(facet.count)})
+                      {facet.value} ({fmtInt(facet.count)})
                     </option>
                   ))}
                 </select>
@@ -349,8 +348,8 @@ function PositionsBlotter() {
                   {/* Pagination footer */}
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <p className="text-caption text-slate">
-                      Showing {fmtCount(windowStart)}–{fmtCount(windowEnd)} of{' '}
-                      {fmtCount(total)} positions
+                      Showing {fmtInt(windowStart)}–{fmtInt(windowEnd)} of{' '}
+                      {fmtInt(total)} positions
                     </p>
                     <div className="flex items-center gap-2">
                       <label className="flex items-center gap-1.5 text-caption text-slate">

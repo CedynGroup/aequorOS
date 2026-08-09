@@ -77,13 +77,13 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
     },
     {
       key: 'spot',
-      header: 'Spot (GHS)',
+      header: `Spot (${currencyCode()})`,
       numeric: true,
       render: (r) => num(r.spotGhs).toFixed(4),
     },
     {
       key: 'netGhs',
-      header: 'Net (GHS)',
+      header: `Net (${currencyCode()})`,
       numeric: true,
       render: (r) => fmtCurrencySigned(num(r.netGhs)),
     },
@@ -115,7 +115,7 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
         <KpiStat
           label="Aggregate NOP / Tier 1"
           value={fmtPct(num(m.nopPctTier1), 2)}
-          delta={nopDelta}
+          delta={nopDelta !== undefined && nopDelta !== 0 ? nopDelta : undefined}
           invertDelta
           status={statusFor(m.nopStatus)}
           sparkline={nopSpark.length >= 2 ? <Sparkline data={nopSpark} /> : undefined}
@@ -161,8 +161,8 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
           footer={
             splits.size === 0 ? (
               <span>
-                Run all scenarios to persist a run — the stored fact snapshot adds the
-                asset / liability / derivative split per currency.
+                The asset / liability / derivative split per currency appears once
+                stored results exist for this period.
               </span>
             ) : (
               <span>Select a row for the asset / liability / derivative split.</span>
@@ -223,7 +223,7 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
 
       <SectionCard
         title="Depreciation scenarios"
-        subtitle="Aggregate NOP under the cedi depreciation shocks — full detail on VaR & Stress"
+        subtitle="Aggregate NOP under the depreciation shocks — full detail on VaR & Stress"
       >
         <ScenarioStrip scenarios={data.scenarios} aggregateLimitPct={aggregateLimit} />
       </SectionCard>

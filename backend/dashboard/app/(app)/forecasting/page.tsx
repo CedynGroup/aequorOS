@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * Balance Sheet Forecasting — projection workspace for the persisted 5-year
- * forecast run: assets/liabilities/equity chart with base↔adverse band,
- * per-period delta decomposition waterfall, horizon table, and regulatory
- * ratio paths. All figures come off the immutable run payload.
+ * Balance Sheet Forecasting — projection workspace for the persisted forecast
+ * run (user-selectable 3–10 year horizon, 5-year regulatory default):
+ * assets/liabilities/equity chart with base↔adverse band, per-period delta
+ * decomposition waterfall, horizon table, and regulatory ratio paths. All
+ * figures come off the saved projection payload.
  */
 
 import { Suspense, useMemo, useState } from 'react';
@@ -20,7 +21,6 @@ import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import Sparkline from '@/components/ui/Sparkline';
 import StatusPill from '@/components/ui/StatusPill';
-import RunBadge from '@/components/ui/RunBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import SectionCard from '@/components/ui/SectionCard';
 import ChartFrame from '@/components/ui/ChartFrame';
@@ -47,15 +47,14 @@ import {
   yearLabel,
   yoyPct,
 } from '@/components/forecasting/lib';
-import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useCreateForecastRun,
   useForecastRun,
   useForecastRuns,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, isoDate, labelize, num, statusTone } from '@/lib/api/values';
-import { fmtCurrency, fmtPct, fmtPctSigned, regShort } from '@/lib/format';
+import { isoDate, labelize, num, statusTone } from '@/lib/api/values';
+import { currencyCode, fmtCurrency, fmtPct, fmtPctSigned, regShort } from '@/lib/format';
 import { seriesColor } from '@/lib/chartTheme';
 
 const PRESET_SCENARIOS: { code: ForecastScenarioCode; label: string }[] = [
@@ -63,6 +62,18 @@ const PRESET_SCENARIOS: { code: ForecastScenarioCode; label: string }[] = [
   { code: 'adverse', label: 'Adverse' },
   { code: 'severely_adverse', label: 'Severely adverse' },
 ];
+
+/** Selectable projection horizons; 5 years is the regulatory default. */
+const HORIZON_YEARS_OPTIONS = [3, 5, 7, 10] as const;
+const DEFAULT_HORIZON_YEARS = 5;
+
+/** A run's actual horizon is the last projected year on its stored path. */
+function runHorizonYears(run: ForecastRunRead): number {
+  return run.path.reduce(
+    (max, point) => Math.max(max, point.year),
+    0
+  );
+}
 
 function kpiTone(status: string | null): 'ok' | 'warn' | 'crit' | undefined {
   switch (status) {
@@ -99,6 +110,7 @@ function BalanceSheetWorkspace() {
   const requestedRunId = searchParams.get('run');
 
   const [scenario, setScenario] = useState<ForecastScenarioCode>('base');
+  const [horizonYears, setHorizonYears] = useState<number>(DEFAULT_HORIZON_YEARS);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
   const runsQuery = useForecastRuns(bankId, { limit: 50 });
@@ -132,16 +144,9 @@ function BalanceSheetWorkspace() {
           { label: 'Balance Sheet' },
         ]}
         title="Balance Sheet Forecast"
-        subtitle="Deterministic 5-year projection from canonical financials and persisted scenario assumptions"
-        asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
+        subtitle={`Deterministic ${horizonYears}-year projection from canonical financials and persisted scenario assumptions`}
         action={
           <div className="flex items-center gap-2">
-            <FreshnessBadge
-              bankId={bankId}
-              periodId={periodId}
-              module="forecast"
-              asOfDate={period ? isoDate(period.periodEnd) : undefined}
-            />
             <select
               value={scenario}
               onChange={(e) =>
@@ -156,13 +161,30 @@ function BalanceSheetWorkspace() {
                 </option>
               ))}
             </select>
+            <select
+              value={horizonYears}
+              onChange={(e) => setHorizonYears(Number(e.target.value))}
+              aria-label="Forecast horizon in years"
+              className="px-3 py-2 text-caption font-medium text-navy border border-border rounded-md bg-surface-raised hover:bg-surface"
+            >
+              {HORIZON_YEARS_OPTIONS.map((years) => (
+                <option key={years} value={years}>
+                  {years} years
+                  {years === DEFAULT_HORIZON_YEARS ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               disabled={createRun.isPending || !periodId}
               onClick={() =>
                 periodId &&
                 createRun.mutate(
-                  { reportingPeriodId: periodId, scenarioCode: scenario },
+                  {
+                    reportingPeriodId: periodId,
+                    scenarioCode: scenario,
+                    horizonYears,
+                  },
                   { onSuccess: (created) => setSelectedRunId(created.id) }
                 )
               }
@@ -193,7 +215,7 @@ function BalanceSheetWorkspace() {
             <EmptyState
               Icon={PlayCircle}
               title="No forecast runs yet"
-              description={`Run a forecast to project ${bank?.name ?? 'the bank'}'s balance sheet, P&L, and regulatory ratios five years forward from ${period?.label ?? 'the selected period'}. Every run persists an immutable, auditable record.`}
+              description={`Run a forecast to project ${bank?.name ?? 'the bank'}'s balance sheet, P&L, and regulatory ratios ${horizonYears} years forward from ${period?.label ?? 'the selected period'}. Every run is kept as a saved projection you can revisit and compare.`}
             />
           ) : runQuery.isLoading ? (
             <SkeletonChart height={320} />
@@ -230,9 +252,11 @@ function RunDashboard({
   adverse: ForecastRunRead | undefined;
 }) {
   const path = run.path;
+  // The run's actual horizon: desk runs may project 3–10 years, not only 5.
+  const horizon = runHorizonYears(run);
   const y0 = path.find((p) => p.year === 0);
   const y1 = path.find((p) => p.year === 1);
-  const y5 = path.find((p) => p.year === 5);
+  const yFinal = path.find((p) => p.year === horizon);
 
   const assetPath = path.map((p) => num(p.totalAssets));
   const equityPath = path.map((p) => num(p.equity));
@@ -240,8 +264,8 @@ function RunDashboard({
   // Year-1 (12-month) projected asset growth, derived from the stored path.
   const y1AssetGrowth =
     y0 && y1 ? yoyPct(num(y1.totalAssets), num(y0.totalAssets)) : null;
-  const fiveYearAssetGrowth =
-    y0 && y5 ? yoyPct(num(y5.totalAssets), num(y0.totalAssets)) : null;
+  const horizonAssetGrowth =
+    y0 && yFinal ? yoyPct(num(yFinal.totalAssets), num(y0.totalAssets)) : null;
 
   const carThreshold = metricThreshold(run, 'year5_car_pct', 10);
   const lcrThreshold = metricThreshold(run, 'year5_lcr_pct', 100);
@@ -278,6 +302,9 @@ function RunDashboard({
       {/* Scenario context strip */}
       <div className="flex items-center gap-3 flex-wrap">
         <StatusPill tone="action">{scenarioLabel(run.scenarioCode)} scenario</StatusPill>
+        <StatusPill tone={horizon === DEFAULT_HORIZON_YEARS ? 'compliant' : 'action'}>
+          {horizon}-year horizon
+        </StatusPill>
         {adverse && (
           <span className="text-caption text-slate">
             Adverse band overlaid from run{' '}
@@ -301,14 +328,14 @@ function RunDashboard({
           label="Y1 projected asset growth"
           value={y1AssetGrowth === null ? '—' : fmtPctSigned(y1AssetGrowth, 1)}
           hint={
-            fiveYearAssetGrowth === null
+            horizonAssetGrowth === null
               ? 'Derived from the stored path'
-              : `${fmtPctSigned(fiveYearAssetGrowth, 1)} over 5Y · derived from path`
+              : `${fmtPctSigned(horizonAssetGrowth, 1)} over ${horizon}Y · derived from path`
           }
           sparkline={<Sparkline data={assetPath} color={seriesColor(0)} />}
         />
         <KpiStat
-          label="Year-5 CAR"
+          label={`Year-${horizon} CAR`}
           value={fmtPct(num(run.summary.year5CarPct), 2)}
           status={kpiTone(metricStatus(run, 'year5_car_pct'))}
           hint={`${regShort()} minimum ${fmtPct(carThreshold, 0)}`}
@@ -322,7 +349,7 @@ function RunDashboard({
         <KpiStat
           label="Average ROE"
           value={fmtPct(num(run.summary.avgRoePct), 2)}
-          hint="5-year average return on equity"
+          hint={`${horizon}-year average return on equity`}
           sparkline={
             <Sparkline
               data={path.filter((p) => p.roePct !== null).map((p) => num(p.roePct))}
@@ -333,7 +360,7 @@ function RunDashboard({
         <KpiStat
           label="Cumulative net income"
           value={fmtCurrency(num(run.summary.cumulativeNetIncome))}
-          hint="Sum of projected Y1–Y5 profit after tax"
+          hint={`Sum of projected Y1–Y${horizon} profit after tax`}
           sparkline={
             <Sparkline
               data={path.filter((p) => p.year > 0).map((p) => num(p.netIncome))}
@@ -348,7 +375,7 @@ function RunDashboard({
         <ChartFrame
           className="xl:col-span-3"
           title="Balance-sheet projection"
-          subtitle="Total assets, liabilities, and equity over the 5-year horizon"
+          subtitle={`Total assets, liabilities, and equity over the ${horizon}-year horizon`}
           height={320}
           footer={
             <>
@@ -372,7 +399,7 @@ function RunDashboard({
         <ChartFrame
           className="xl:col-span-2"
           title="Asset composition"
-          subtitle="Loans, securities, and cash across the horizon · GHS millions"
+          subtitle={`Loans, securities, and cash across the horizon · ${currencyCode()} millions`}
           height={320}
         >
           <BalanceSheetProjectionChart data={compositionData} height={320} />
@@ -384,11 +411,10 @@ function RunDashboard({
 
       {/* Horizon table */}
       <SectionCard
-        title="5-year projection path"
+        title={`${horizon}-year projection path`}
         subtitle="Annual balance-sheet and P&L path with period-over-period deltas"
         noPadding
         computedAt={computedAt}
-        runBadge={<RunBadge run={run} />}
       >
         <HorizonTable path={path} />
       </SectionCard>
@@ -442,7 +468,6 @@ function RunDashboard({
         subtitle="Projection integrity and regulatory rule evaluation persisted on the run"
         noPadding
         computedAt={computedAt}
-        runBadge={<RunBadge run={run} />}
       >
         <ValidationList validations={run.validations} />
       </SectionCard>
@@ -529,7 +554,7 @@ function WaterfallSection({ run }: { run: ForecastRunRead }) {
             Net change
             <DeltaBadge
               value={netChange / 1_000_000}
-              suffix="M GHS"
+              suffix={`M ${currencyCode()}`}
               decimals={1}
             />
           </span>

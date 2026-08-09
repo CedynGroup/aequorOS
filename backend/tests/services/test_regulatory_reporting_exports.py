@@ -344,18 +344,17 @@ def test_lmt_return_exports_lcr_subset_and_data_backed_tools(
     artifact = export_package(db_session, MAKER, package, "xlsx")
     payload = _read_output(db_session, storage, artifact.object_path)
     workbook = load_workbook(io.BytesIO(payload))
-    # Metadata + the four LCR-subset sections + the HQLA-fact-backed
-    # unencumbered-assets tool + provenance. The NSFR sheets stay absent, and
-    # with no canonical position data seeded here the maturity-ladder and
-    # funding-concentration tools are honestly absent too (plan W6.3: tool
-    # sections render only when their underlying data exists).
+    # Metadata + the four LCR-subset sections + provenance. The NSFR sheets
+    # stay absent, and with no canonical position data seeded here every
+    # position-derived tool — including Table 9, canonical-based as of
+    # P2-6 — is honestly absent (plan W6.3: tool sections render only when
+    # their underlying data exists).
     assert workbook.sheetnames == [
         "Return Metadata",
         "Stock of HQLA",
         "Cash Outflows (30 days)",
         "Cash Inflows (30 days)",
         "Liquidity Coverage Ratio Summar",
-        "Available Unencumbered Assets",
         "Fidelity & Provenance",
     ]
     assert artifact.object_path.endswith("/LMT.xlsx")
@@ -395,6 +394,18 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
         # from the FX engine's baseline run (gap G5).
         "dbk": {"nop_by_currency", "nop_aggregate", "contingents"},
         "icaap_stress": {"forecast_summary", "forecast_path", "stress_summary"},
+        # Phase 2 items 12/14: real obligations, unpublished forms — zero
+        # sections until the official layouts land.
+        "template_pending": set(),
+        # Phase 2 item 6: the Board/ALCO stress pack re-tabulates stored runs.
+        "stress_pack": {
+            "traffic_lights",
+            "ratio_evolution",
+            "pro_forma_capital",
+            "attribution",
+            "reverse_stress_frontier",
+            "recommended_actions",
+        },
         # W6: the LMT return = the liquidity LCR subset + three canonical-data
         # monitoring tools; LE-MONTHLY = the five Large Exposures templates.
         "lmt": {
@@ -402,7 +413,16 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "outflows",
             "inflows",
             "lcr_summary",
+            "prudential_ratio_inputs",
+            "prudential_ratio_percentages",
             "maturity_ladder",
+            "items_no_contractual_maturity",
+            "collateral_rehypothecation",
+            "collateral_received",
+            "assets_liabilities_by_currency",
+            "lcr_by_currency",
+            "maturity_of_exposures",
+            "deposit_funding_concentration",
             "funding_concentration",
             "unencumbered_assets",
         },

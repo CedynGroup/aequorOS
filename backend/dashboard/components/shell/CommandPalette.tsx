@@ -43,22 +43,25 @@ const items: Item[] = [
   { id: 'positions', label: 'Positions', href: '/positions', icon: Layers, group: 'Markets', keywords: 'portfolio balance sheet instruments book' },
 
   { id: 'irr', label: 'IRRBB — Interest Rate Risk Dashboard', hint: 'Module 01', href: '/irr', icon: Activity, group: 'Modules', keywords: 'eve nii repricing gap duration basis' },
+  { id: 'irr-scenarios', label: 'IRRBB — Rate Scenario Workbench', href: '/irr/scenarios', icon: Activity, group: 'Modules', keywords: 'shock parallel steepener workbench scenario' },
 
   { id: 'lcr', label: 'Liquidity — LCR Dashboard', hint: 'Module 02', href: '/liquidity', icon: Droplet, group: 'Modules', keywords: 'coverage ratio hqla outflows' },
   { id: 'nsfr', label: 'Liquidity — NSFR Dashboard', href: '/liquidity/nsfr', icon: Droplet, group: 'Modules', keywords: 'stable funding asf rsf' },
   { id: 'forecast', label: 'Liquidity — Cash Flow Forecast (LSTM)', href: '/liquidity/forecast', icon: Droplet, group: 'Modules', keywords: 'ml prediction cashflow' },
   { id: 'stress', label: 'Liquidity — Stress Scenarios', href: '/liquidity/stress', icon: Droplet, group: 'Modules', keywords: 'runoff survival horizon' },
-  { id: 'submission', label: 'Liquidity — Official Returns (BSD3)', href: '/submissions/returns?code=BSD3', icon: Droplet, group: 'Modules', keywords: 'regulatory filing return bog' },
+  { id: 'submission', label: 'Liquidity — Official Returns (BSD3)', href: '/submissions/returns?code=BSD3', icon: Droplet, group: 'Governance', keywords: 'regulatory filing return bog' },
 
   { id: 'fx', label: 'FX Risk — Net Open Position', hint: 'Module 03', href: '/fx', icon: DollarSign, group: 'Modules', keywords: 'nop currency exposure usd gbp eur cedi' },
+  { id: 'fx-scenarios', label: 'FX — Scenario Workbench', href: '/fx/scenarios', icon: DollarSign, group: 'Modules', keywords: 'depreciation shock workbench scenario' },
 
   { id: 'basel', label: 'Basel Capital — Capital Dashboard', hint: 'Module 04', href: '/basel', icon: ShieldCheck, group: 'Modules', keywords: 'car cet1 tier capital adequacy' },
   { id: 'rwa', label: 'Basel — RWA Breakdown', href: '/basel/rwa', icon: ShieldCheck, group: 'Modules', keywords: 'risk weighted assets credit operational market' },
   { id: 'capital-structure', label: 'Basel — Capital Structure', href: '/basel/structure', icon: ShieldCheck, group: 'Modules', keywords: 'tier 1 2 cet1 instruments' },
   { id: 'basel-stress', label: 'Basel — Stress Testing', href: '/basel/stress', icon: ShieldCheck, group: 'Modules', keywords: 'scenario shock adverse' },
-  { id: 'basel-subs', label: 'Basel — Official Returns (BSD2)', href: '/submissions/returns?code=BSD2', icon: ShieldCheck, group: 'Modules', keywords: 'regulatory filing return bog' },
+  { id: 'basel-subs', label: 'Basel — Official Returns (BSD2)', href: '/submissions/returns?code=BSD2', icon: ShieldCheck, group: 'Governance', keywords: 'regulatory filing return bog' },
 
   { id: 'ftp', label: 'FTP — Funds Transfer Pricing Dashboard', hint: 'Module 05', href: '/ftp', icon: GitBranch, group: 'Modules', keywords: 'margin spread pool matched maturity' },
+  { id: 'ftp-scenarios', label: 'FTP — Scenario Workbench', href: '/ftp/scenarios', icon: GitBranch, group: 'Modules', keywords: 'curve shift funding spread workbench scenario' },
 
   { id: 'forecasting', label: 'Forecasting — Balance Sheet Dashboard', hint: 'Module 06', href: '/forecasting', icon: TrendingUp, group: 'Modules', keywords: 'projection growth plan' },
   { id: 'forecast-scenario', label: 'Forecasting — Scenario Builder', href: '/forecasting/scenario', icon: TrendingUp, group: 'Modules', keywords: 'assumptions what if' },

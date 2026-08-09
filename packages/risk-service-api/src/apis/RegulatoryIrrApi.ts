@@ -14,6 +14,7 @@ import * as runtime from "../runtime";
 import type {
   ErrorResponse,
   IrrDashboardRead,
+  IrrEarAnalysisRead,
   IrrScenarioBatchCreate,
   RegulatoryRunBatchRead,
 } from "../models/index";
@@ -22,11 +23,20 @@ import {
   ErrorResponseToJSON,
   IrrDashboardReadFromJSON,
   IrrDashboardReadToJSON,
+  IrrEarAnalysisReadFromJSON,
+  IrrEarAnalysisReadToJSON,
   IrrScenarioBatchCreateFromJSON,
   IrrScenarioBatchCreateToJSON,
   RegulatoryRunBatchReadFromJSON,
   RegulatoryRunBatchReadToJSON,
 } from "../models/index";
+
+export interface ComputeEarAnalysisRequest {
+  bankId: string;
+  reportingPeriodId: string;
+  horizonMonths?: number;
+  deltaBp?: number;
+}
 
 export interface GetIrrDashboardRequest {
   bankId: string;
@@ -42,6 +52,86 @@ export interface RunAllIrrScenariosRequest {
  *
  */
 export class RegulatoryIrrApi extends runtime.BaseAPI {
+  /**
+   * Pure desk analysis: generalized-horizon EaR on the canonical gap — writes nothing.  The stored regulatory runs keep the 12-month ±200 bp figures; bounds are validated in the service (1..60 months, ±25..±500 bp on the 25 bp grid).
+   * Compute Ear Analysis
+   */
+  async computeEarAnalysisRaw(
+    requestParameters: ComputeEarAnalysisRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<IrrEarAnalysisRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling computeEarAnalysis().',
+      );
+    }
+
+    if (requestParameters["reportingPeriodId"] == null) {
+      throw new runtime.RequiredError(
+        "reportingPeriodId",
+        'Required parameter "reportingPeriodId" was null or undefined when calling computeEarAnalysis().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["reportingPeriodId"] != null) {
+      queryParameters["reporting_period_id"] =
+        requestParameters["reportingPeriodId"];
+    }
+
+    if (requestParameters["horizonMonths"] != null) {
+      queryParameters["horizon_months"] = requestParameters["horizonMonths"];
+    }
+
+    if (requestParameters["deltaBp"] != null) {
+      queryParameters["delta_bp"] = requestParameters["deltaBp"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/irr/ear-analysis`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      IrrEarAnalysisReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Pure desk analysis: generalized-horizon EaR on the canonical gap — writes nothing.  The stored regulatory runs keep the 12-month ±200 bp figures; bounds are validated in the service (1..60 months, ±25..±500 bp on the 25 bp grid).
+   * Compute Ear Analysis
+   */
+  async computeEarAnalysis(
+    requestParameters: ComputeEarAnalysisRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<IrrEarAnalysisRead> {
+    const response = await this.computeEarAnalysisRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Get Irr Dashboard
    */

@@ -103,7 +103,7 @@ class BankFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "'lcr_inflow', 'market_risk', 'operational_income', 'capital_component', "
             "'deposit_behavior', 'irr_position', 'irr_swap', 'fx_position', "
             "'fx_return_history', 'fx_hedge', 'ftp_curve_point', 'ftp_product', "
-            "'ftp_branch', 'ftp_nmd')",
+            "'ftp_branch', 'ftp_nmd', 'ecl_exposure', 'crm_collateral')",
             name="ck_bank_financial_facts_fact_group",
         ),
         ForeignKeyConstraint(
@@ -262,3 +262,124 @@ class ParamCapitalThreshold(RegulatoryParameterMixin, Base):
     # Numeric(12, 6) rather than Numeric(9, 6): threshold values such as the
     # 1250 (12.5x expressed as a percent) RWA multiplier exceed Numeric(9, 6).
     value_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+
+
+class ParamLiquidityThreshold(RegulatoryParameterMixin, Base):
+    """LMTD 2026 ¶11(b)–(e): the Board-set internal threshold register.
+
+    The Board must set internal thresholds for the six liquidity monitoring
+    tools at least annually; the mixin's ``approved_by``/``approval_timestamp``
+    plus the effective-dated generations ARE the Board-approval evidence an
+    examiner asks for ("show me your Board-approved thresholds"). Ratio floors
+    for Table 1 live here first; mismatch and concentration limits join as
+    their tools land. ``institution_class`` matters because ¶9 makes these
+    binding compliance ratios for SDIs while remaining monitoring tools for
+    banks — same register, different consequence.
+    """
+
+    __tablename__ = "param_liquidity_threshold"
+    __table_args__ = (
+        CheckConstraint(
+            "institution_class IN ('bank', 'sdi')",
+            name="ck_param_liquidity_threshold_institution_class",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "institution_class",
+            "threshold_code",
+            "effective_from",
+            name="uq_param_liquidity_threshold_scope",
+        ),
+    )
+
+    institution_class: Mapped[str] = mapped_column(String(8), default="bank", nullable=False)
+    threshold_code: Mapped[str] = mapped_column(String(60), nullable=False)
+    threshold_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ParamLiquidityHaircut(RegulatoryParameterMixin, Base):
+    """LRMD 2026 ¶60–63: the institution's internal liquidity-value schedule.
+
+    Estimated haircuts per asset class, re-assessed at least annually by
+    Senior Management (¶62(b)) — the mixin's approval evidence and
+    effective-dated generations carry that review trail. LMTD Table 9's
+    "Estimated Haircut (%)" and "Monetized Value of Collateral" columns
+    resolve from here: an asset class with no active row reports a zero
+    haircut with the gap noted on the template, never an invented number.
+    ``asset_class`` matches against the position's product
+    ``regulatory_category`` by longest prefix, so a bank can calibrate
+    broadly ("SOVEREIGN") or precisely ("SOVEREIGN_GOG_TBILL").
+    """
+
+    __tablename__ = "param_liquidity_haircut"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "asset_class",
+            "effective_from",
+            name="uq_param_liquidity_haircut_scope",
+        ),
+    )
+
+    asset_class: Mapped[str] = mapped_column(String(80), nullable=False)
+    haircut_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ParamEclAssumption(RegulatoryParameterMixin, Base):
+    """IFRS 9 PD/LGD assumptions per segment + stage (Phase 2 item 8).
+
+    ``segment`` matches the loan family's fact category, with ``ALL`` as the
+    fallback; stage 1 rows carry the 12-month PD, stage 2 the lifetime PD,
+    and stage 3 rows contribute only their LGD (PD is 100% by definition for
+    credit-impaired exposures). The mixin's approval evidence is the model
+    committee / Board trail an auditor asks for.
+    """
+
+    __tablename__ = "param_ecl_assumption"
+    __table_args__ = (
+        CheckConstraint("stage IN (1, 2, 3)", name="ck_param_ecl_assumption_stage"),
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "segment",
+            "stage",
+            "effective_from",
+            name="uq_param_ecl_assumption_scope",
+        ),
+    )
+
+    segment: Mapped[str] = mapped_column(String(60), nullable=False)
+    stage: Mapped[int] = mapped_column(Integer, nullable=False)
+    pd_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    lgd_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ParamCrmHaircut(RegulatoryParameterMixin, Base):
+    """Supervisory haircuts per CRM collateral class (Phase 2 item 9).
+
+    Basel II comprehensive-approach supervisory haircuts (¶151 table) for
+    collateral recognized against credit exposures. Distinct from
+    ``ParamLiquidityHaircut`` (the LRMD liquidity-value schedule): a class
+    with no active row gets ZERO recognition in credit RWA — a haircut is
+    never invented for an unknown collateral type.
+    """
+
+    __tablename__ = "param_crm_haircut"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "collateral_class",
+            "effective_from",
+            name="uq_param_crm_haircut_scope",
+        ),
+    )
+
+    collateral_class: Mapped[str] = mapped_column(String(80), nullable=False)
+    haircut_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -151,6 +151,15 @@ class AttestationSettings(BaseSettings):
     #: Master switch for the signing surfaces. Identity provisioning and the
     #: evidential hardening are always on; producing signatures is not.
     signing_enabled: bool = Field(default=False, alias="ATTESTATION_SIGNING_ENABLED")
+    #: Deployment-wide e-sign REQUIREMENT switch — orthogonal to
+    #: ``signing_enabled``, which says whether this deployment CAN sign. True
+    #: (the default): signing is required per the resolved policy. False: a
+    #: kill-switch — NO return may demand a signature, even under a configured
+    #: mandatory ``ReturnSigningPolicy`` row; every return follows the
+    #: signature-optional workflow (bare maker-checker approval, no ceremony).
+    #: Rows go dormant, not deleted: re-enabling restores them unchanged. See
+    #: ``attestation.policy._apply_esign_kill_switch``.
+    esign_required: bool = Field(default=True, alias="ATTESTATION_ESIGN_REQUIRED")
     #: PEM trust anchors for verification, as a filesystem path (file or
     #: directory). WITHOUT these, verification can only anchor on the
     #: certificate chain the signature itself carries — which proves the
@@ -437,6 +446,65 @@ class TemenosSettings(BaseSettings):
     temenos_pull_enabled: bool = Field(default=False, alias="TEMENOS_PULL_ENABLED")
 
 
+class DatabaseDirectSettings(BaseSettings):
+    """Database-Direct adapter scheduling settings.
+
+    ``DATABASE_DIRECT_HEALTH_ENABLED`` gates the scheduled daily connection
+    health probes (off by default). A probe is the existing live connection
+    test — connect, authenticate, read the data dictionary — so it monitors a
+    bank's reporting replica and, as genuine database activity, keeps
+    idle-stopping test cores awake (OCI stops an Always Free Oracle ADB after
+    seven consecutive idle days).
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    database_direct_health_enabled: bool = Field(
+        default=False, alias="DATABASE_DIRECT_HEALTH_ENABLED"
+    )
+
+
+class DeskSettings(BaseSettings):
+    """Market research desk scheduling settings (app/services/market_desk).
+
+    ``DESK_CAPTURE_ENABLED`` gates the nightly scheduled capture job that
+    scrapes the desk's Tier-1 Ghana sources (BoG/GFIM/GSS) after publication
+    hours, stages observations, and — when an APPROVED methodology exists —
+    computes and submits the day's draft determination for review, so the
+    desk publishes next morning with one maker-checker action. Off by default:
+    no environment scrapes external sites unless it opts in.
+    ``DESK_CAPTURE_HOUR_UTC`` is the earliest UTC hour of the daily run
+    (Accra is UTC, so 18 = after Ghana business hours).
+    ``DESK_CAPTURE_SOURCES`` optionally narrows the run to a comma-separated
+    allow-list of SOURCE_REGISTRY keys (unset/empty = all scheduled sources).
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    desk_capture_enabled: bool = Field(default=False, alias="DESK_CAPTURE_ENABLED")
+    desk_capture_hour_utc: int = Field(default=18, alias="DESK_CAPTURE_HOUR_UTC")
+    desk_capture_sources: str | None = Field(default=None, alias="DESK_CAPTURE_SOURCES")
+
+    @field_validator("desk_capture_sources", mode="before")
+    @classmethod
+    def blank_sources_means_all(cls, value: str | None) -> str | None:
+        """DESK_CAPTURE_SOURCES="" means no allow-list (all sources), the same
+        empty-neutralizes rule as the database URL settings."""
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    @property
+    def capture_source_allowlist(self) -> tuple[str, ...] | None:
+        """The parsed allow-list, or None when every scheduled source runs."""
+        if self.desk_capture_sources is None:
+            return None
+        keys = tuple(
+            key.strip() for key in self.desk_capture_sources.split(",") if key.strip()
+        )
+        return keys or None
+
+
 class WorkerSettings(BaseSettings):
     """Live-engine background worker and scheduler settings.
 
@@ -458,6 +526,11 @@ class WorkerSettings(BaseSettings):
     worker_stale_job_seconds: float = Field(default=900.0, alias="WORKER_STALE_JOB_SECONDS")
     official_run_hour: int = Field(default=2, alias="OFFICIAL_RUN_HOUR")
     official_run_enabled: bool = Field(default=False, alias="OFFICIAL_RUN_ENABLED")
+    #: Hourly scheduled live refresh: keeps the live tier's computed_at current
+    #: even when no new data arrives, so "Live" genuinely means today. Cheap
+    #: (pipeline_refresh writes zero RegulatoryRun rows). Default off — the
+    #: scheduler stays inert unless a deployment opts in.
+    live_refresh_enabled: bool = Field(default=False, alias="LIVE_REFRESH_ENABLED")
     # The worker claims and processes jobs across every tenant, so its DB
     # connection must see all rows. On an RLS-forced Postgres this requires a
     # BYPASSRLS role (the app role is deliberately tenant-scoped). When unset,
@@ -532,6 +605,8 @@ class Settings(BaseSettings):
     behavioral: BehavioralSettings = Field(default_factory=BehavioralSettings)
     market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
     temenos: TemenosSettings = Field(default_factory=TemenosSettings)
+    database_direct: DatabaseDirectSettings = Field(default_factory=DatabaseDirectSettings)
+    desk: DeskSettings = Field(default_factory=DeskSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
     smtp: SmtpSettings = Field(default_factory=SmtpSettings)
     attestation: AttestationSettings = Field(default_factory=AttestationSettings)
@@ -581,3 +656,68 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+class OperatorSettings(BaseSettings):
+    """Operator control-plane API settings (docs/internal/developer.md §4).
+
+    The operator app (``app.operator.main``) is a SEPARATE ASGI app — never
+    mounted on the tenant API — deployed behind an allowlist/VPN with
+    workforce OIDC login. These settings are deliberately kept out of the
+    tenant :class:`Settings` aggregate: tenant-plane code has no reason to
+    read them, and the operator entrypoint resolves them independently via
+    :func:`get_operator_settings`.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    #: Port the operator uvicorn binds (its own Coolify app / local process).
+    operator_port: int = Field(default=8100, alias="OPERATOR_PORT")
+    #: Comma-separated allowed origins for the staff console frontend.
+    operator_cors_origins_raw: str = Field(default="", alias="OPERATOR_CORS_ORIGINS")
+    #: Dedicated DB URL for the operator role. Cross-tenant reads on the
+    #: RLS-forced primary need a BYPASSRLS role (the worker precedent) — the
+    #: use site falls back to WORKER_DATABASE_URL then DATABASE_URL, so a
+    #: local/hermetic run works without extra configuration.
+    operator_database_url: str | None = Field(default=None, alias="OPERATOR_DATABASE_URL")
+    #: Development bearer-token auth. NEVER valid in production: the operator
+    #: app refuses to boot when this is on with APP_ENV=production.
+    dev_auth_enabled: bool = Field(default=False, alias="OPERATOR_DEV_AUTH_ENABLED")
+    dev_token: str | None = Field(default=None, alias="OPERATOR_DEV_TOKEN")
+    dev_email: str = Field(default="dev@aequoros.com", alias="OPERATOR_DEV_EMAIL")
+    #: Workforce OIDC (Google Workspace / Okta issuer). Verified with the same
+    #: zero-trust machinery as customer SSO (`verify_oidc_id_token`); tokens
+    #: must carry a verified email under the allowed domain.
+    oidc_issuer: str | None = Field(default=None, alias="OPERATOR_OIDC_ISSUER")
+    oidc_client_id: str | None = Field(default=None, alias="OPERATOR_OIDC_CLIENT_ID")
+    oidc_allowed_domain: str = Field(default="aequoros.com", alias="OPERATOR_OIDC_ALLOWED_DOMAIN")
+    #: Per-tenant KMS keys + SSE-KMS bucket encryption during provisioning
+    #: (developer.md §2a). Off by default: MinIO deployments have no KMS, and
+    #: the saga records the step as honestly skipped rather than pretending.
+    aws_kms_enabled: bool = Field(default=False, alias="OPERATOR_AWS_KMS_ENABLED")
+
+    @field_validator(
+        "operator_database_url",
+        "dev_token",
+        "oidc_issuer",
+        "oidc_client_id",
+        mode="before",
+    )
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.operator_cors_origins_raw.split(",")
+            if origin.strip()
+        ]
+
+
+@lru_cache
+def get_operator_settings() -> OperatorSettings:
+    return OperatorSettings()

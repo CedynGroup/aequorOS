@@ -71,7 +71,7 @@ depends = ["risk-service:lint", "risk-service:typecheck", "risk-service:test"]
 
 [tasks."risk-service:openapi-schema"]
 description = "Generate OpenAPI schema"
-run = "PYTHONPATH=. uv run python scripts/export_openapi_schema.py > openapi-schema.json"
+run = "PYTHONPATH=. uv run python scripts/export_openapi_schema.py openapi-schema.json"
 
 [tasks."risk-service:openapi-client"]
 description = "Generate TypeScript OpenAPI client"

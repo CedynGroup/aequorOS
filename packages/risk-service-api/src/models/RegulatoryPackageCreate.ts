@@ -18,13 +18,13 @@ import {
   ReturnBasisToJSON,
   ReturnBasisToJSONTyped,
 } from "./ReturnBasis";
-import type { Notes } from "./Notes";
+import type { Notes2 } from "./Notes2";
 import {
-  NotesFromJSON,
-  NotesFromJSONTyped,
-  NotesToJSON,
-  NotesToJSONTyped,
-} from "./Notes";
+  Notes2FromJSON,
+  Notes2FromJSONTyped,
+  Notes2ToJSON,
+  Notes2ToJSONTyped,
+} from "./Notes2";
 
 /**
  *
@@ -40,10 +40,10 @@ export interface RegulatoryPackageCreate {
   basis?: ReturnBasis;
   /**
    *
-   * @type {Notes}
+   * @type {Notes2}
    * @memberof RegulatoryPackageCreate
    */
-  notes?: Notes;
+  notes?: Notes2;
   /**
    *
    * @type {Date}
@@ -88,7 +88,7 @@ export function RegulatoryPackageCreateFromJSONTyped(
     ...json,
     basis:
       json["basis"] == null ? undefined : ReturnBasisFromJSON(json["basis"]),
-    notes: json["notes"] == null ? undefined : NotesFromJSON(json["notes"]),
+    notes: json["notes"] == null ? undefined : Notes2FromJSON(json["notes"]),
     reportingDate: new Date(json["reporting_date"]),
     returnCode: json["return_code"],
   };
@@ -110,7 +110,7 @@ export function RegulatoryPackageCreateToJSONTyped(
 
   return {
     basis: ReturnBasisToJSON(value["basis"]),
-    notes: NotesToJSON(value["notes"]),
+    notes: Notes2ToJSON(value["notes"]),
     reporting_date: value["reportingDate"].toISOString().substring(0, 10),
     return_code: value["returnCode"],
   };

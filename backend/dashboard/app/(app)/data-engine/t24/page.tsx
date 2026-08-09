@@ -13,6 +13,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Database, Loader2, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import EmptyState from '@/components/ui/EmptyState';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useTemenosConnections } from '@/lib/api/hooks';
 import AddConnectionPanel from '@/components/t24/AddConnectionPanel';
@@ -113,16 +114,21 @@ export default function T24Page() {
                 Loading Temenos connections…
               </div>
             ) : rows.length === 0 && !adding ? (
-              <div className="card p-8 text-center space-y-2">
-                <p className="text-body text-navy font-medium">
-                  No Temenos core connected yet
-                </p>
-                <p className="text-caption text-slate max-w-lg mx-auto">
-                  Connect your T24 core over OFS, IRIS, or the Transact Open APIs. The
-                  canonical model and every calculation module behave identically to a file
-                  upload — the native adapter only removes the export step.
-                </p>
-              </div>
+              <EmptyState
+                Icon={Database}
+                title="No Temenos core connected yet"
+                description="Connect your T24 core over OFS, IRIS, or the Transact Open APIs. The canonical model and every calculation module behave identically to a file upload — the native adapter only removes the export step."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setAdding(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+                  >
+                    <Plus size={13} aria-hidden />
+                    Connect a core
+                  </button>
+                }
+              />
             ) : (
               <div className="grid grid-cols-1 gap-4">
                 {rows.map((connection) => (

@@ -57,6 +57,23 @@ class IrrMetricsRead(ClosedModel):
     tier1_ghs: Decimal
 
 
+class IrrEarAnalysisRead(ClosedModel):
+    """Pure desk EaR analysis over a caller-chosen horizon — never persisted.
+
+    The regulatory figures stay the stored 12-month ±200 bp run metrics; this
+    read is the generalized engine formula evaluated on the same canonical gap.
+    """
+
+    bank_id: str
+    reporting_period_id: UUID
+    horizon_months: int
+    delta_bp: int
+    ear_up: Decimal
+    ear_down: Decimal
+    cumulative_gap_within_horizon: Decimal
+    basis: str
+
+
 class IrrValidationRead(ClosedModel):
     rule_code: str
     passed: bool

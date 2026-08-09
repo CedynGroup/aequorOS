@@ -7,9 +7,10 @@ import './globals.css';
 /**
  * Sets `data-theme` on <html> synchronously, before first paint, so the
  * dark-first token system in globals.css never flashes the wrong theme.
- * Mirrors ThemeProvider's storage key ('aeq-theme'); system is the fallback.
+ * Mirrors ThemeProvider's storage key ('aeq-theme'); dark is the fallback —
+ * 'system' applies only when a user explicitly chose it in the toggle.
  */
-const themeInitScript = `(function(){try{var t=localStorage.getItem('aeq-theme');var p=t==='light'||t==='dark'||t==='system'?t:'system';var r=p==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):p;document.documentElement.dataset.theme=r;}catch(e){document.documentElement.dataset.theme='dark';}})();`;
+const themeInitScript = `(function(){try{var t=localStorage.getItem('aeq-theme');var p=t==='light'||t==='dark'||t==='system'?t:'dark';var r=p==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):p;document.documentElement.dataset.theme=r;}catch(e){document.documentElement.dataset.theme='dark';}})();`;
 
 const inter = Inter({
   subsets: ['latin'],

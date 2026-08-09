@@ -113,6 +113,7 @@ export const CanonicalPositionReadSourceSystemEnum = {
   Refinitiv: "REFINITIV",
   ManualUpload: "MANUAL_UPLOAD",
   Manual: "MANUAL",
+  AequorDesk: "AEQUOR_DESK",
 } as const;
 export type CanonicalPositionReadSourceSystemEnum =
   (typeof CanonicalPositionReadSourceSystemEnum)[keyof typeof CanonicalPositionReadSourceSystemEnum];

@@ -1,0 +1,8 @@
+# deps / build output
+node_modules
+.next
+*.tsbuildinfo
+
+# local env (the committed .env.example documents the variables)
+.env*.local
+.env*

@@ -183,7 +183,9 @@ def enqueue_due_market_data_pulls(
     Also performs the cheap half of the §10.3 daily health check: expiry-based
     state transitions (ACTIVE → EXPIRING_SOON → EXPIRED) are derived from
     ``credential_expires_at`` and persisted. Manual-upload connections are
-    never scheduled (§8: the operator pushes; nothing to pull). Inert unless
+    never scheduled (§8: the operator pushes; nothing to pull), and neither
+    are aequor_desk ones (desk publications are pushed centrally at
+    determination publish time; there is no vendor to poll). Inert unless
     ``MARKET_DATA_PULL_ENABLED``.
     """
     if not get_settings().market_data.market_data_pull_enabled:
@@ -193,7 +195,7 @@ def enqueue_due_market_data_pulls(
         session.scalars(
             select(MarketDataConnection).where(
                 MarketDataConnection.organization_id == organization_id,
-                MarketDataConnection.vendor != "manual_upload",
+                MarketDataConnection.vendor.notin_(("manual_upload", "aequor_desk")),
             )
         )
     )

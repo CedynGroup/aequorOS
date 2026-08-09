@@ -29,7 +29,7 @@ export type TrendChartPoint = {
 
 /**
  * Period-over-period trend line for FX metrics with an optional limit line.
- * Hollow markers flag points computed inline (no persisted run yet).
+ * Hollow markers flag points computed live (no stored results yet).
  */
 export default function TrendChart({
   data,
@@ -101,7 +101,7 @@ export default function TrendChart({
                 ? {
                     value: thresholdLabel,
                     position: 'insideTopRight',
-                    fontSize: 10,
+                    fontSize: 11,
                     fill: CHART_CRIT,
                   }
                 : undefined

@@ -24,11 +24,7 @@ import {
  * @interface PackageSubmitCreateChannel
  */
 export type PackageSubmitCreateChannel =
-  | "orass_api"
-  | "orass_sandbox"
-  | "email"
-  | "manual"
-  | null;
+  "orass_api" | "orass_sandbox" | "email" | "manual" | null;
 
 /**
  * Check if a given object implements the PackageSubmitCreateChannel interface.

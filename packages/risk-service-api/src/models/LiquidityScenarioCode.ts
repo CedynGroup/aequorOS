@@ -19,6 +19,7 @@ export const LiquidityScenarioCode = {
   Idiosyncratic: "idiosyncratic",
   MarketWide: "market_wide",
   Combined: "combined",
+  UsdFundingStress: "usd_funding_stress",
 } as const;
 export type LiquidityScenarioCode =
   (typeof LiquidityScenarioCode)[keyof typeof LiquidityScenarioCode];

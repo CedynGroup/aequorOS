@@ -456,6 +456,11 @@ _LIQUIDITY_IDIOSYNCRATIC: dict[str, str] = {
     "runoff:committed_corporate": "50",
     "inflow_multiplier": "0.75",
     "hqla_securities_haircut_pct": "0",
+    # LRMD para 50-54 behavioural NMD run-off (calibrate from the reviewed
+    # NMD-duration assumptions; these are the demo-book defaults).
+    "nmd_runoff:h1": "25",
+    "nmd_runoff:h2": "10",
+    "nmd_runoff:h3": "5",
     "asf:retail_deposits_stable": "90",
     "asf:retail_deposits_less_stable": "80",
     "asf:wholesale_operational": "40",
@@ -484,11 +489,28 @@ _LIQUIDITY_COMBINED: dict[str, str] = {
     "hqla_securities_haircut_pct": "8",
     "rsf:securities_weight_override": "10",
 }
+_LIQUIDITY_USD_FUNDING: dict[str, str] = {
+    # Cedi-depreciation-coupled FX funding stress (Phase 2 item 2; the 30%
+    # magnitude follows the 2022-23 cedi window the FX stressed-VaR already
+    # calibrates on). Wholesale/corporate run-offs uplift because FX funding
+    # is predominantly wholesale; the depreciation itself is applied by the
+    # per-currency gap layer, not the fact engine.
+    "fx_depreciation_pct": "30",
+    "runoff:wholesale_operational": "40",
+    "runoff:wholesale_non_op_sme": "60",
+    "runoff:wholesale_non_op_corporate": "100",
+    "runoff:committed_corporate": "50",
+    "inflow_multiplier": "0.80",
+    "hqla_securities_haircut_pct": "5",
+    "nmd_runoff:h1": "30",
+    "nmd_runoff:h2": "10",
+}
 _STRESS_SHOCKS: dict[str, dict[str, dict[str, str]]] = {
     "liquidity": {
         "idiosyncratic": _LIQUIDITY_IDIOSYNCRATIC,
         "market_wide": _LIQUIDITY_MARKET_WIDE,
         "combined": _LIQUIDITY_COMBINED,
+        "usd_funding_stress": _LIQUIDITY_USD_FUNDING,
     },
     "capital": {
         "mild": {

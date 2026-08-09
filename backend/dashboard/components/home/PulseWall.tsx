@@ -35,9 +35,9 @@ import {
 } from './pulse';
 
 const EDGE_STYLE: Record<Traffic, string> = {
-  green: 'inset 2px 0 0 rgb(var(--ok))',
-  amber: 'inset 2px 0 0 rgb(var(--warn))',
-  red: 'inset 2px 0 0 rgb(var(--crit))',
+  green: 'inset 3px 0 0 rgb(var(--ok))',
+  amber: 'inset 3px 0 0 rgb(var(--warn))',
+  red: 'inset 3px 0 0 rgb(var(--crit))',
 };
 
 const SPARK_COLOR: Record<Traffic | 'na', string> = {
@@ -64,7 +64,7 @@ export default function PulseWall({
       <div className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-h3 text-navy">Module pulse</h2>
         <p className="text-caption text-slate">
-          Six regulatory engines · period {period.label}
+          Six regulatory engines · live positions
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -164,15 +164,20 @@ function PulseCard({ card }: { card: PulseCardModel }) {
           )}
           <div className="mt-1.5 flex items-center justify-between gap-2 min-w-0">
             {card.delta !== undefined ? (
-              <DeltaBadge
-                value={card.delta}
-                suffix=" pts"
-                decimals={2}
-                invert={card.invertDelta}
-              />
+              <span className="inline-flex items-center gap-1.5 min-w-0">
+                <DeltaBadge
+                  value={card.delta}
+                  suffix=" pts"
+                  decimals={2}
+                  invert={card.invertDelta}
+                />
+                <span className="text-caption text-slate-light truncate">
+                  {card.deltaBasis === 'close' ? 'vs prior close' : 'vs prior period'}
+                </span>
+              </span>
             ) : (
               <span className="text-caption text-slate-light">
-                vs prior period —
+                {card.deltaBasis === 'close' ? 'vs prior close —' : 'vs prior period —'}
               </span>
             )}
             <span className="text-caption text-slate truncate">

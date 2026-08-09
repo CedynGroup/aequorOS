@@ -87,6 +87,10 @@ class FtpMetricsRead(ClosedModel):
     nmd_core_min_pct: Decimal
     nmd_core_max_pct: Decimal
     blended_assigned_ftp_pct: Decimal
+    # LTP contingent-liquidity charge (Phase 2 item 11; LRMD ¶78–79). None
+    # when no committed-facility facts or stressed-draw parameters exist.
+    ltp_total_charge_ghs: Decimal | None = None
+    ltp_buffer_cost_pct: Decimal | None = None
 
 
 class FtpValidationRead(ClosedModel):

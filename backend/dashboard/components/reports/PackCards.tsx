@@ -86,7 +86,7 @@ export default function PackCards({
         <Card key={pack.form}>
           <CardHeader
             title={
-              <span className="inline-flex items-center gap-2">
+              <span className="inline-flex items-center gap-2 whitespace-nowrap">
                 <FileCheck2 size={15} className="text-action" aria-hidden />
                 {pack.form}
               </span>

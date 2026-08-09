@@ -15,7 +15,7 @@ import { ErrorPanel, PageSkeleton } from '@/components/ui/QueryBoundary';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useCanonicalPositions, useLineageWalk } from '@/lib/api/ingestion';
 import { formatDate, formatDateTime } from '@/components/data-engine/shared';
-import { fmtLocale } from '@/lib/format';
+import { fmtInt, fmtLocale } from '@/lib/format';
 
 function formatAmount(value: string | null): string {
   if (value === null || value === undefined) return '—';
@@ -124,12 +124,11 @@ export default function CanonicalPositionsPage() {
               </div>
               <div className="mt-4 flex items-center justify-between gap-3">
                 <p className="text-caption text-slate">
-                  Showing {(positionsQuery.data.offset + 1).toLocaleString('en-US')}–
-                  {(
+                  Showing {fmtInt(positionsQuery.data.offset + 1)}–
+                  {fmtInt(
                     positionsQuery.data.offset + positionsQuery.data.positions.length
-                  ).toLocaleString('en-US')}{' '}
-                  of {positionsQuery.data.total.toLocaleString('en-US')} canonical
-                  positions
+                  )}{' '}
+                  of {fmtInt(positionsQuery.data.total)} canonical positions
                 </p>
                 <div className="flex items-center gap-2">
                   <button
