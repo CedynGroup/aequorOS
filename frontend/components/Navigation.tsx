@@ -18,6 +18,12 @@ const dashboardLoginUrl =
   process.env.NEXT_PUBLIC_LOGIN_URL ??
   `${(process.env.NEXT_PUBLIC_DASHBOARD_URL ?? 'http://localhost:3001').replace(/\/$/, '')}/login`;
 
+// "Employee Login" sends AequorOS staff to the internal operator console — a
+// separate control-plane app on its own subdomain (docs/internal/staff_UI.md).
+// Same build-arg pattern as the client login URL.
+const employeeLoginUrl =
+  process.env.NEXT_PUBLIC_CONSOLE_URL ?? 'https://console.aequoros.com/login';
+
 export default function Navigation() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -78,6 +84,12 @@ export default function Navigation() {
           >
             Client Login
           </a>
+          <a
+            href={employeeLoginUrl}
+            className="text-sm font-medium text-text-muted hover:text-navy transition-colors"
+          >
+            Employee Login
+          </a>
         </div>
 
         <button
@@ -120,6 +132,13 @@ export default function Navigation() {
               className="inline-flex w-full items-center justify-center rounded-md border border-border-light px-5 py-3 text-base font-semibold text-navy transition-colors hover:bg-soft-bg"
             >
               Client Login
+            </a>
+            <a
+              href={employeeLoginUrl}
+              onClick={() => setOpen(false)}
+              className="inline-flex w-full items-center justify-center rounded-md px-5 py-3 text-base font-medium text-text-muted transition-colors hover:bg-soft-bg"
+            >
+              Employee Login
             </a>
           </div>
         </div>
