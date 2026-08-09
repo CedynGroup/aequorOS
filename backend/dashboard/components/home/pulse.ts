@@ -17,8 +17,10 @@ import type {
   LiveModule,
 } from '@aequoros/risk-service-api';
 import type { StatusTone } from '@/components/ui/StatusPill';
+import { livePrimaryMetricKey } from '@/components/live/moduleDisplay';
 import {
   useCapitalDashboard,
+  useLiveSnapshots,
   useForecastRuns,
   useFtpDashboard,
   useFxDashboard,
@@ -72,6 +74,8 @@ export type PulseCardModel = {
   invertDelta?: boolean;
   hint?: string;
   spark?: number[];
+  /** 'close' when delta/spark ride the daily EOD ladder, else monthly. */
+  deltaBasis?: 'close' | 'period';
   computedAt?: Date | string | null;
   /** Basis note shown when there is no live computed-at timestamp. */
   basisNote?: string;
@@ -91,6 +95,22 @@ function trendDelta<T extends TrendPoint>(
   const idx = trend.findIndex((p) => p.reportingPeriodId === periodId);
   if (idx <= 0) return undefined;
   return pick(trend[idx]) - pick(trend[idx - 1]);
+}
+
+/** Prior-close delta + daily spark from the plane-2 EOD ladder. */
+function ladderOverlay(
+  snapshots: { metrics: { [key: string]: any } }[] | undefined,
+  key: string
+): { delta: number; spark: number[] } | null {
+  if (!snapshots || snapshots.length < 2) return null;
+  const values = snapshots
+    .map((s) => Number(s.metrics?.[key]))
+    .filter((v) => Number.isFinite(v));
+  if (values.length < 2) return null;
+  return {
+    delta: values[values.length - 1] - values[values.length - 2],
+    spark: values.slice(-31),
+  };
 }
 
 /** Up to the last 12 trend values ending at the effective period. */
@@ -126,7 +146,18 @@ export function usePulseCards(
   const ftp = useFtpDashboard(bankId, periodId);
   const forecasts = useForecastRuns(bankId, { limit: 10 });
 
-  const cards: Record<LiveModule, PulseCardModel> = {
+  // Plane-2 EOD ladders — when at least two daily points exist, the card's
+  // delta and sparkline switch from month-over-month to prior-close.
+  const ladders = {
+    liquidity: useLiveSnapshots(bankId, 'liquidity'),
+    capital: useLiveSnapshots(bankId, 'capital'),
+    irr: useLiveSnapshots(bankId, 'irr'),
+    fx: useLiveSnapshots(bankId, 'fx'),
+    ftp: useLiveSnapshots(bankId, 'ftp'),
+    forecast: useLiveSnapshots(bankId, 'forecast'),
+  } as const;
+
+  const baseCards: Record<LiveModule, PulseCardModel> = {
     liquidity: {
       module: 'liquidity',
       isLoading: liq.isLoading,
@@ -246,6 +277,22 @@ export function usePulseCards(
     },
     forecast: buildForecastCard(forecasts, periodId),
   };
+
+  const cards = Object.fromEntries(
+    DEFAULT_MODULE_ORDER.map((module) => {
+      const card = baseCards[module];
+      const overlay = ladderOverlay(
+        ladders[module].data?.snapshots,
+        livePrimaryMetricKey(module)
+      );
+      return [
+        module,
+        overlay
+          ? { ...card, delta: overlay.delta, spark: overlay.spark, deltaBasis: 'close' as const }
+          : { ...card, deltaBasis: 'period' as const },
+      ];
+    })
+  ) as Record<LiveModule, PulseCardModel>;
 
   return {
     cards,

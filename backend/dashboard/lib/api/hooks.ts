@@ -19,6 +19,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type {
+  LiveModule,
   AnalysisRunCreate,
   SavedAnalysisCreate,
   StressScenarioCreate,
@@ -3094,3 +3095,24 @@ export function useUpdateEclAssumptionRegister(bankId: string | undefined) {
     },
   });
 }
+
+/**
+ * Plane-2 daily ladder for one bank+module: past days are EOD closes, the
+ * newest row is the live edge. Powers prior-close deltas and daily sparklines.
+ */
+export function useLiveSnapshots(
+  bankId: string | undefined,
+  module: LiveModule,
+  days = 45
+) {
+  return useQuery({
+    queryKey: ['live-snapshots', bankId, module, days],
+    queryFn: () =>
+      apiCall(() =>
+        liveEngineApi.listLiveSnapshots({ bankId: bankId!, module, days })
+      ),
+    enabled: Boolean(bankId),
+    refetchInterval: 120_000,
+  });
+}
+

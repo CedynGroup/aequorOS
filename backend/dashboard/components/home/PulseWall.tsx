@@ -164,15 +164,20 @@ function PulseCard({ card }: { card: PulseCardModel }) {
           )}
           <div className="mt-1.5 flex items-center justify-between gap-2 min-w-0">
             {card.delta !== undefined ? (
-              <DeltaBadge
-                value={card.delta}
-                suffix=" pts"
-                decimals={2}
-                invert={card.invertDelta}
-              />
+              <span className="inline-flex items-center gap-1.5 min-w-0">
+                <DeltaBadge
+                  value={card.delta}
+                  suffix=" pts"
+                  decimals={2}
+                  invert={card.invertDelta}
+                />
+                <span className="text-caption text-slate-light truncate">
+                  {card.deltaBasis === 'close' ? 'vs prior close' : 'vs prior period'}
+                </span>
+              </span>
             ) : (
               <span className="text-caption text-slate-light">
-                vs prior period —
+                {card.deltaBasis === 'close' ? 'vs prior close —' : 'vs prior period —'}
               </span>
             )}
             <span className="text-caption text-slate truncate">

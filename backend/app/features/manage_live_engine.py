@@ -10,6 +10,7 @@ from app.schemas.live import (
     BankAlertsRead,
     BankFreshnessRead,
     JobEnqueuedRead,
+    LiveSnapshotListRead,
     LiveSummaryRead,
     OfficialRunRequest,
     RefreshRequest,
@@ -84,3 +85,19 @@ def mint_official_run(
     ctx: MutationTenant,
 ) -> JobEnqueuedRead:
     return live_view.mint_official_run(db, ctx, bank_id, payload)
+
+
+@router.get(
+    "/banks/{bank_id}/live-snapshots",
+    response_model=LiveSnapshotListRead,
+    operation_id="listLiveSnapshots",
+)
+def list_live_snapshots(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+    module: Annotated[str, Query(pattern="^(liquidity|capital|irr|fx|ftp|forecast)$")],
+    days: Annotated[int, Query(ge=2, le=120)] = 45,
+) -> LiveSnapshotListRead:
+    """Plane-2 daily ladder: past days are EOD closes, today is the live edge."""
+    return live_view.list_live_snapshots(db, ctx, bank_id, module=module, days=days)

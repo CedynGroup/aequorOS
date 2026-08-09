@@ -39,6 +39,11 @@ const PRIMARY_METRIC: Record<LiveModule, { key: string; label: string }> = {
   forecast: { key: 'year5_car_pct', label: 'Year-5 CAR' },
 };
 
+/** Raw payload key of a module's headline metric (snapshot ladder reads it). */
+export function livePrimaryMetricKey(module: LiveModule): string {
+  return PRIMARY_METRIC[module].key;
+}
+
 /** Headline metric for a module's live block, or null when unavailable. */
 export function livePrimaryMetric(
   module: LiveModule,

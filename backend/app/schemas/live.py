@@ -81,3 +81,22 @@ class JobEnqueuedRead(ClosedModel):
     job_id: UUID
     job_type: str
     status: str
+
+
+class LiveSnapshotRead(ClosedModel):
+    """One day's close (or today's live edge) for a module."""
+
+    snapshot_date: date
+    module: str
+    metrics: dict[str, Any]
+    status: str
+    computed_at: datetime
+
+
+class LiveSnapshotListRead(ClosedModel):
+    """Daily ladder for one bank+module, oldest first."""
+
+    bank_id: str
+    module: str
+    days: int
+    snapshots: list[LiveSnapshotRead]

@@ -68,7 +68,7 @@ from app.models.liquidity_cfp import (
     ContingencyFundingPlan,
     LiquidityEwiIndicator,
 )
-from app.models.live import LiveFinding, LiveMetric
+from app.models.live import LiveFinding, LiveMetric, LiveMetricSnapshot
 from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
 from app.models.notification import Notification
 from app.models.organization import Organization
@@ -171,6 +171,7 @@ __all__ = [
     "LineageRecord",
     "LiveFinding",
     "LiveMetric",
+    "LiveMetricSnapshot",
     "MappingConfigRecord",
     "DatabaseDirectConnection",
     "MarketDataConnection",

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
     JSON,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKeyConstraint,
     Index,
@@ -75,6 +76,54 @@ class LiveMetric(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(String(8), nullable=False)
     computed_from_input_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class LiveMetricSnapshot(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
+    """Plane-2 history: one row per (bank, calendar day, module).
+
+    Upserted on every pipeline refresh alongside ``live_metrics``, so the
+    day's LAST refresh is the end-of-day close and today's row is the live
+    edge "so far". Prior-close desk deltas and daily sparklines read this
+    ladder; the monthly reporting spine and regulatory runs are untouched.
+    """
+
+    __tablename__ = "live_metric_snapshots"
+    __table_args__ = (
+        CheckConstraint(_MODULE_CHECK, name="ck_live_metric_snapshots_module"),
+        CheckConstraint(
+            "status IN ('green', 'amber', 'red', 'na')",
+            name="ck_live_metric_snapshots_status",
+        ),
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "bank_id",
+            "snapshot_date",
+            "module",
+            name="uq_live_metric_snapshots_day",
+        ),
+        Index(
+            "ix_live_metric_snapshots_series",
+            "organization_id",
+            "bank_id",
+            "module",
+            "snapshot_date",
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    reporting_period_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    module: Mapped[str] = mapped_column(String(16), nullable=False)
+    metrics: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(8), nullable=False)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 

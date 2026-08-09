@@ -1,4 +1,4 @@
-import { fmtRelative } from '@/lib/api/values';
+import { fmtRelative, fmtTimestamp } from '@/lib/api/values';
 
 /**
  * Desk-grade provenance line: which engine tier produced the figures on
@@ -17,9 +17,9 @@ export default function LiveEngineNote({
     return (
       <span
         className="text-caption text-slate whitespace-nowrap"
-        title={`Engines last ran ${fmtRelative(live.computedAt)} — recomputation fires automatically when new data lands.`}
+        title={`Position date — when the engines last consumed the book. Recomputation fires automatically when new data lands (last ran ${fmtRelative(live.computedAt)}).`}
       >
-        Live engine
+        Positions as of {fmtTimestamp(live.computedAt)}
         {!healthy && (
           <>
             {' '}

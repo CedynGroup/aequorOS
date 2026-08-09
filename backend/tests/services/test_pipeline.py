@@ -232,3 +232,41 @@ def _baseline_hashes_by_module(db_session: Session) -> dict[str, set[str]]:
     for module, input_hash in rows:
         hashes.setdefault(module, set()).add(input_hash)
     return hashes
+
+
+def test_refresh_upserts_the_daily_snapshot_ladder(db_session: Session) -> None:
+    """Plane-2 EOD ladder: one snapshot row per (bank, day, module), overwritten
+    by every refresh — the day's last refresh is the close, and re-running a
+    refresh never widens the ladder."""
+    from app.models import LiveMetricSnapshot
+
+    _seed(db_session)
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+
+    metric_count = db_session.scalar(select(func.count()).select_from(LiveMetric))
+    snap_count = db_session.scalar(select(func.count()).select_from(LiveMetricSnapshot))
+    assert metric_count and snap_count == metric_count
+
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+    assert db_session.scalar(select(func.count()).select_from(LiveMetricSnapshot)) == snap_count
+    row = db_session.scalar(select(LiveMetricSnapshot).limit(1))
+    assert row is not None
+    assert row.snapshot_date == row.computed_at.date()
+    assert row.status in ("green", "amber", "red", "na")
+
+
+def test_live_snapshot_ladder_reads_back_through_the_service(db_session: Session) -> None:
+    """The read endpoint's service returns the daily series oldest-first."""
+    from app.api.deps import TenantContext
+    from app.services import live_view
+
+    _seed(db_session)
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    out = live_view.list_live_snapshots(
+        db_session, ctx, SAMPLE_BANK_ID, module="liquidity", days=30
+    )
+    assert out.bank_id == SAMPLE_BANK_ID
+    assert len(out.snapshots) == 1
+    assert out.snapshots[0].module == "liquidity"
+    assert Decimal(str(out.snapshots[0].metrics["lcr_pct"])) > 0

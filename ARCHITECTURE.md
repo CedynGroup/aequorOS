@@ -118,6 +118,29 @@ Invariants every new engine must copy (verified in `app/services/calculations.py
 
 ---
 
+## 3a-bis. The three time planes (adopted 2026-08-09)
+
+Every number lives on exactly one of three planes; UI vocabulary and delta
+semantics follow the plane, never the other way round:
+
+1. **Position-date plane (data)** — every figure is computed from a dated book.
+   Desk headers surface it as "Positions as of {timestamp}" (data provenance,
+   not reporting vocabulary). Ingestion cadence sets its resolution.
+2. **Live plane (desk)** — the rolling current position: `live_metrics`
+   recomputes on every ingestion (debounced) plus the hourly schedule, and
+   `live_metric_snapshots` cuts one row per (bank, day, module) — the day's
+   last refresh is the EOD close, today's row is the live edge. Desk deltas
+   read this ladder ("vs prior close"); daily sparklines too. Value-based
+   hashing guarantees figures cannot drift between refreshes, so "Live"
+   without a clock is truthful.
+3. **Regulatory plane (governance)** — the monthly reporting-period spine and
+   immutable `regulatory_runs`. Month-over-month trends, filings, and
+   freshness-vs-last-official-run live here exclusively.
+
+Growth path: denser ingestion (daily/streaming) makes plane 2 denser and the
+live edge fresher without any architectural change — QRM-cadence to
+MORS-cadence on the same model.
+
 ## 3b. Live engine (two-tier: always-fresh view + immutable official runs)
 
 Ingestion is event-driven, not button-driven. A file upload or API push commits canonical data,

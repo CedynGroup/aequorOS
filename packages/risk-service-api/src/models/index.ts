@@ -568,6 +568,8 @@ export * from "./LiveHash";
 export * from "./LiveMetricComputedAt";
 export * from "./LiveModule";
 export * from "./LiveModuleView";
+export * from "./LiveSnapshotListRead";
+export * from "./LiveSnapshotRead";
 export * from "./LiveStatus";
 export * from "./LiveSummaryComputedAt";
 export * from "./LiveSummaryRead";
