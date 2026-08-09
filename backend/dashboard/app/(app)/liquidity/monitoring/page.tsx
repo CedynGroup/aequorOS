@@ -159,13 +159,13 @@ export default function MonitoringTools() {
               />
             </div>
 
+            <CashflowWindowPanel bankId={bankId} />
+
             <StressedLadderPanel
               runId={latestRunId}
               run={latestRun.data}
               isLoading={dashboard.isLoading || latestRun.isLoading}
             />
-
-            <CashflowWindowPanel bankId={bankId} />
 
             <SectionCard
               title="Board threshold register"

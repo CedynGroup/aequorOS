@@ -123,17 +123,17 @@ export default function CommandCenterPage() {
                 return (
                   <div key="band" className="space-y-6">
                     <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-                      <div className="xl:col-span-3 min-w-0">
+                      <div className="xl:col-span-3 min-w-0 space-y-6">
                         <RatioTrendChart
                           bankId={bankId}
                           period={effective.period!}
                         />
+                        <WindowAnalysis bankId={bankId} />
                       </div>
                       <div className="xl:col-span-2 min-w-0">
                         <OperationalFeed bankId={bankId} />
                       </div>
                     </div>
-                    <WindowAnalysis bankId={bankId} />
                   </div>
                 );
               default:

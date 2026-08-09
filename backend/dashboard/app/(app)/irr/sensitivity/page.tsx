@@ -127,6 +127,14 @@ export default function IrrSensitivityPage() {
               <DataTable columns={columns} rows={rows} density="compact" />
             </SectionCard>
 
+            <EarSection
+              metrics={m}
+              earValidations={earValidations}
+              computedAt={computedAt}
+              bankId={bankId}
+              periodId={periodId}
+            />
+
             <SectionCard
               title="ΔEVE tornado"
               subtitle="Scenarios ordered by economic-value impact; breaching shocks in red"
@@ -138,14 +146,6 @@ export default function IrrSensitivityPage() {
                 <p className="text-body text-slate">No scenario results for this period.</p>
               )}
             </SectionCard>
-
-            <EarSection
-              metrics={m}
-              earValidations={earValidations}
-              computedAt={computedAt}
-              bankId={bankId}
-              periodId={periodId}
-            />
 
             <SectionCard
               title="Methodology"
