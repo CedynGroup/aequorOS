@@ -113,6 +113,48 @@ def test_ready_ignores_the_signing_gap_outside_production(
     get_settings.cache_clear()
 
 
+def test_ready_ignores_the_signing_gap_when_esign_is_disabled(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With the ATTESTATION_ESIGN_REQUIRED kill-switch off, no return can demand
+    a signature, so a production deployment that cannot sign is not a filing
+    outage and must not fail its probe."""
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
+    monkeypatch.setenv("SIGNER_ID_PEPPER", "")
+    monkeypatch.setenv("ATTESTATION_ESIGN_REQUIRED", "0")
+    get_settings.cache_clear()
+
+    assert db_client.get("/api/health/ready").status_code == 200
+    get_settings.cache_clear()
+
+
+def test_startup_names_the_disabled_esign_requirement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The kill-switch replaces the signing-gaps warning with one explicit
+    statement of the suspended requirement."""
+    from loguru import logger  # noqa: PLC0415
+
+    monkeypatch.setenv("ATTESTATION_ESIGN_REQUIRED", "0")
+    monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
+    monkeypatch.setenv("SIGNER_ID_PEPPER", "")
+    monkeypatch.setattr("app.main.configure_logging", lambda level: None)
+    get_settings.cache_clear()
+
+    records: list[str] = []
+    sink_id = logger.add(lambda message: records.append(str(message)), level="WARNING")
+    try:
+        create_app()
+    finally:
+        logger.remove(sink_id)
+        get_settings.cache_clear()
+
+    assert any("ATTESTATION_ESIGN_REQUIRED=0" in record for record in records)
+    assert not any("no regulatory return can be certified" in record for record in records)
+
+
 def test_live_health(client: TestClient) -> None:
     response = client.get("/api/health/live")
 

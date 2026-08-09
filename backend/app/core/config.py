@@ -151,6 +151,15 @@ class AttestationSettings(BaseSettings):
     #: Master switch for the signing surfaces. Identity provisioning and the
     #: evidential hardening are always on; producing signatures is not.
     signing_enabled: bool = Field(default=False, alias="ATTESTATION_SIGNING_ENABLED")
+    #: Deployment-wide e-sign REQUIREMENT switch — orthogonal to
+    #: ``signing_enabled``, which says whether this deployment CAN sign. True
+    #: (the default): signing is required per the resolved policy. False: a
+    #: kill-switch — NO return may demand a signature, even under a configured
+    #: mandatory ``ReturnSigningPolicy`` row; every return follows the
+    #: signature-optional workflow (bare maker-checker approval, no ceremony).
+    #: Rows go dormant, not deleted: re-enabling restores them unchanged. See
+    #: ``attestation.policy._apply_esign_kill_switch``.
+    esign_required: bool = Field(default=True, alias="ATTESTATION_ESIGN_REQUIRED")
     #: PEM trust anchors for verification, as a filesystem path (file or
     #: directory). WITHOUT these, verification can only anchor on the
     #: certificate chain the signature itself carries — which proves the

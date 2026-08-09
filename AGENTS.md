@@ -207,9 +207,15 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   artifact* stays unconfigured-by-default (spec §8 C1–C4: officer titles stay unset);
   what the institution demands *of itself* before filing is the product. A deployment
   that cannot sign therefore cannot file — `ensure_signing_configured` raises
-  `signing_not_configured` naming the settings, and `create_app` refuses to boot in
-  production rather than surfacing it at a filing deadline. Banks relax per return in
-  Settings (an audited PUT); tests use `tests/factories/attestation.relax_signing`.
+  `signing_not_configured` naming the settings, and in production `/health/ready` 503s
+  (boot only WARNS — an earlier boot refusal locked out the admin who could fix it).
+  Banks relax per return in Settings (an audited PUT); tests use
+  `tests/factories/attestation.relax_signing`. `ATTESTATION_ESIGN_REQUIRED=0` (default 1)
+  is the deployment-wide kill-switch: applied after policy resolution
+  (`attestation/policy.py::_apply_esign_kill_switch`, `source="esign_disabled"`), it
+  suspends the requirement everywhere — configured mandatory rows go dormant, every
+  return takes the bare maker-checker approval path, and re-enabling restores the rows
+  unchanged.
   Fields are placed on the document (template per return, package override) from a typed
   palette — one `signature` per role plus any number of `name`/`title`/`initials`/
   `date_signed` boxes, because a BoG attestation block asks each officer for four things.

@@ -36,8 +36,21 @@ def _warn_if_signing_unconfigured(settings: Settings) -> None:
     filing path itself refuses via ``ensure_signing_configured`` with a message
     naming the settings. Neither costs anything to a deployment that is not
     filing today.
+
+    With the ``ATTESTATION_ESIGN_REQUIRED`` kill-switch off, the signing gaps
+    are irrelevant — no return can demand a signature — so the gap warning is
+    replaced by one explicit statement of the suspended requirement.
     """
-    gaps = settings.attestation.signing_readiness_gaps()
+    attestation = settings.attestation
+    if not attestation.esign_required:
+        logger.bind(app_env=settings.app.app_env).warning(
+            "ATTESTATION_ESIGN_REQUIRED=0: the e-sign requirement is disabled "
+            "platform-wide. Every return follows the signature-optional "
+            "workflow (maker-checker approval only); configured signing "
+            "policies are dormant until the flag is re-enabled."
+        )
+        return
+    gaps = attestation.signing_readiness_gaps()
     if gaps:
         logger.bind(app_env=settings.app.app_env, missing=gaps).warning(
             "Attestation signing is not configured, so no regulatory return can "

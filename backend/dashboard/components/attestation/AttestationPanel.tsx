@@ -410,7 +410,11 @@ function Routing({ status }: { status: AttestationStatusRead }) {
           Required signatures
         </p>
         <StatusPill tone={policy.source === 'configured' ? 'action' : 'slate'}>
-          {policy.source === 'configured' ? 'Configured policy' : 'Platform default'}
+          {policy.source === 'configured'
+            ? 'Configured policy'
+            : policy.source === 'esign_disabled'
+              ? 'Signing disabled (deployment)'
+              : 'Platform default'}
         </StatusPill>
         {policy.requireSignedPdf && <StatusPill tone="amber">Signed PDF required</StatusPill>}
         {!policy.distinctSigners && (
