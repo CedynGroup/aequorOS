@@ -327,11 +327,12 @@ function PeriodSelector() {
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        title="Reporting period for analysis and governance — desk figures always track the live edge of the newest period."
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-caption font-medium text-slate hover:bg-surface"
       >
         <Calendar size={13} aria-hidden />
-        As of{' '}
+        Period{' '}
         <span className="font-mono text-navy tnum">
           {period ? fmtDateUTC(period.periodEnd) : '—'}
         </span>
