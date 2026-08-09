@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Activity, Building2, LogOut, PlusCircle } from 'lucide-react';
+import { Code2, LogOut } from 'lucide-react';
 import {
   clearToken,
   getAuthConfig,
@@ -13,10 +13,18 @@ import {
 } from '@/lib/api';
 import type { ReactNode } from 'react';
 
+// One sidebar entry per staff discipline; a section's surfaces are the top
+// nav INSIDE it (app/(shell)/(developer)/layout.tsx), the dashboard's module
+// frame pattern. Future disciplines (e.g. the CP-3 market-data desk) are new
+// entries here with their own route group + top nav.
 const NAV = [
-  { href: '/tenants', label: 'Tenants', icon: Building2 },
-  { href: '/onboard', label: 'Onboard', icon: PlusCircle },
-  { href: '/operations', label: 'Operations', icon: Activity },
+  {
+    href: '/tenants',
+    label: 'Developer',
+    icon: Code2,
+    // Active for every surface inside the Developer section.
+    match: ['/tenants', '/onboard', '/operations'],
+  },
 ] as const;
 
 /**
@@ -78,8 +86,8 @@ export default function Shell({ children }: { children: ReactNode }) {
           <div className="text-micro uppercase tracking-widest text-slate">Operator</div>
         </div>
         <nav className="flex-1 space-y-0.5 px-3">
-          {NAV.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(`${href}/`);
+          {NAV.map(({ href, label, icon: Icon, match }) => {
+            const active = match.some((m) => pathname === m || pathname.startsWith(`${m}/`));
             return (
               <Link
                 key={href}
