@@ -369,6 +369,7 @@ def test_scheduler_tick_enqueues_due_pulls_when_enabled(
         "temenos_pulls_enqueued": 0,
         "database_direct_probes_enqueued": 0,
         "live_refreshes_enqueued": 0,
+        "desk_capture_enqueued": False,
         "deadline_scan_enqueued": True,
     }
     queued_ticks = list(

@@ -6,8 +6,9 @@ run since today's cutoff hour; when scheduled market data pulls are enabled it
 enqueues the due ``market_data_pull`` jobs (see ``market_data_jobs``); then it
 enqueues the next tick at the following hour boundary. It is inert (no enqueue,
 no reschedule) while every scheduling flag — ``OFFICIAL_RUN_ENABLED``,
-``MARKET_DATA_PULL_ENABLED``, ``TEMENOS_PULL_ENABLED``, and
-``DATABASE_DIRECT_HEALTH_ENABLED`` — is off, so no environment auto-mints heavy
+``MARKET_DATA_PULL_ENABLED``, ``TEMENOS_PULL_ENABLED``,
+``DATABASE_DIRECT_HEALTH_ENABLED``, ``LIVE_REFRESH_ENABLED``, and
+``DESK_CAPTURE_ENABLED`` — is off, so no environment auto-mints heavy
 runs or vendor pulls and tests stay deterministic.
 """
 
@@ -41,6 +42,7 @@ def any_scheduling_enabled(settings: Settings) -> bool:
         or settings.temenos.temenos_pull_enabled
         or settings.database_direct.database_direct_health_enabled
         or settings.worker.live_refresh_enabled
+        or settings.desk.desk_capture_enabled
     )
 
 
@@ -92,6 +94,15 @@ def run_tick(session: Session, job: Job) -> None:
     if live_refresh_enabled:
         live_refreshes = len(_enqueue_due_live_refreshes(session, org_id, now))
 
+    desk_capture_enqueued = False
+    if settings.desk.desk_capture_enabled:
+        # Lazy import: the capture job pulls in the market-desk source tree.
+        from app.services.market_desk.capture_job import (  # noqa: PLC0415
+            enqueue_due_desk_capture,
+        )
+
+        desk_capture_enqueued = enqueue_due_desk_capture(session, org_id, now=now) is not None
+
     # Daily reporting-deadline scan (submission_pipeline_plan.md §W3): the scan
     # date rides the coalesce key, so each org gets at most one scan per day.
     # Lazy import: the scan pulls in the regulatory reporting module tree.
@@ -122,6 +133,7 @@ def run_tick(session: Session, job: Job) -> None:
         "temenos_pulls_enqueued": temenos_pulls,
         "database_direct_probes_enqueued": database_direct_probes,
         "live_refreshes_enqueued": live_refreshes,
+        "desk_capture_enqueued": desk_capture_enqueued,
         "deadline_scan_enqueued": deadline_scan_enqueued,
         # Key present only when the SMTP mirror is configured (default off).
         **(

@@ -33,6 +33,15 @@ def _as_aware(value: datetime | None) -> datetime | None:
 
 
 # Live-engine job types (jobs.job_type has no DB CHECK — validate in code).
+#
+# HAZARD: a new job type must land in THREE places in the same change —
+# this tuple, ``worker.HANDLERS``, and (when the scheduler enqueues it behind
+# a flag) ``scheduler.any_scheduling_enabled``. A type listed here but absent
+# from HANDLERS is enqueueable yet never claimable: its jobs sit "queued"
+# forever (the notification_email_mirror precedent — enqueued by the tick,
+# orphaned until its handler entry landed). The parity test
+# ``tests/services/test_desk_capture_job.py::test_every_job_type_has_a_worker_handler``
+# enforces this; keep it green.
 JOB_TYPES = (
     "pipeline_refresh",
     "official_run",
@@ -43,6 +52,7 @@ JOB_TYPES = (
     "reporting_deadline_scan",
     "notification_email_mirror",
     "database_direct_health",
+    "desk_capture",
 )
 
 # Retry backoff is 2**attempts * base seconds (10s, 20s, 40s at base=5).

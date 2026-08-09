@@ -464,6 +464,47 @@ class DatabaseDirectSettings(BaseSettings):
     )
 
 
+class DeskSettings(BaseSettings):
+    """Market research desk scheduling settings (app/services/market_desk).
+
+    ``DESK_CAPTURE_ENABLED`` gates the nightly scheduled capture job that
+    scrapes the desk's Tier-1 Ghana sources (BoG/GFIM/GSS) after publication
+    hours, stages observations, and — when an APPROVED methodology exists —
+    computes and submits the day's draft determination for review, so the
+    desk publishes next morning with one maker-checker action. Off by default:
+    no environment scrapes external sites unless it opts in.
+    ``DESK_CAPTURE_HOUR_UTC`` is the earliest UTC hour of the daily run
+    (Accra is UTC, so 18 = after Ghana business hours).
+    ``DESK_CAPTURE_SOURCES`` optionally narrows the run to a comma-separated
+    allow-list of SOURCE_REGISTRY keys (unset/empty = all scheduled sources).
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    desk_capture_enabled: bool = Field(default=False, alias="DESK_CAPTURE_ENABLED")
+    desk_capture_hour_utc: int = Field(default=18, alias="DESK_CAPTURE_HOUR_UTC")
+    desk_capture_sources: str | None = Field(default=None, alias="DESK_CAPTURE_SOURCES")
+
+    @field_validator("desk_capture_sources", mode="before")
+    @classmethod
+    def blank_sources_means_all(cls, value: str | None) -> str | None:
+        """DESK_CAPTURE_SOURCES="" means no allow-list (all sources), the same
+        empty-neutralizes rule as the database URL settings."""
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    @property
+    def capture_source_allowlist(self) -> tuple[str, ...] | None:
+        """The parsed allow-list, or None when every scheduled source runs."""
+        if self.desk_capture_sources is None:
+            return None
+        keys = tuple(
+            key.strip() for key in self.desk_capture_sources.split(",") if key.strip()
+        )
+        return keys or None
+
+
 class WorkerSettings(BaseSettings):
     """Live-engine background worker and scheduler settings.
 
@@ -565,6 +606,7 @@ class Settings(BaseSettings):
     market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
     temenos: TemenosSettings = Field(default_factory=TemenosSettings)
     database_direct: DatabaseDirectSettings = Field(default_factory=DatabaseDirectSettings)
+    desk: DeskSettings = Field(default_factory=DeskSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
     smtp: SmtpSettings = Field(default_factory=SmtpSettings)
     attestation: AttestationSettings = Field(default_factory=AttestationSettings)
