@@ -77,6 +77,7 @@ export const IngestionBatchCreateSourceSystemEnum = {
   Refinitiv: "REFINITIV",
   ManualUpload: "MANUAL_UPLOAD",
   Manual: "MANUAL",
+  AequorDesk: "AEQUOR_DESK",
 } as const;
 export type IngestionBatchCreateSourceSystemEnum =
   (typeof IngestionBatchCreateSourceSystemEnum)[keyof typeof IngestionBatchCreateSourceSystemEnum];

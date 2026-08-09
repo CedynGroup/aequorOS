@@ -3622,7 +3622,8 @@
               "BLOOMBERG",
               "REFINITIV",
               "MANUAL_UPLOAD",
-              "MANUAL"
+              "MANUAL",
+              "AEQUOR_DESK"
             ],
             "title": "Source System",
             "type": "string"
@@ -7760,6 +7761,56 @@
           "reason"
         ],
         "title": "CrmHaircutUpdate",
+        "type": "object"
+      },
+      "CurveOverlayComponentRead": {
+        "additionalProperties": false,
+        "description": "One active per-bank overlay composing into a curve's adjusted series.\n\n``value`` units follow ``adjustment_type``: basis points for\n``additive_bps``, a rate decimal fraction for ``fixed``, a factor for\n``multiplicative``. ``tenor_months`` NULL means the spread is flat\nacross all tenors.",
+        "properties": {
+          "adjustment_type": {
+            "title": "Adjustment Type",
+            "type": "string"
+          },
+          "component_tag": {
+            "title": "Component Tag",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Overlay Component Effective From",
+            "type": "string"
+          },
+          "overlay_id": {
+            "format": "uuid",
+            "title": "Overlay Id",
+            "type": "string"
+          },
+          "tenor_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay Component Tenor Months"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "overlay_id",
+          "component_tag",
+          "adjustment_type",
+          "value",
+          "tenor_months",
+          "effective_from"
+        ],
+        "title": "CurveOverlayComponentRead",
         "type": "object"
       },
       "DataActivationCreate": {
@@ -15538,7 +15589,8 @@
               "BLOOMBERG",
               "REFINITIV",
               "MANUAL_UPLOAD",
-              "MANUAL"
+              "MANUAL",
+              "AEQUOR_DESK"
             ],
             "title": "Source System",
             "type": "string"
@@ -15735,7 +15787,8 @@
               "BLOOMBERG",
               "REFINITIV",
               "MANUAL_UPLOAD",
-              "MANUAL"
+              "MANUAL",
+              "AEQUOR_DESK"
             ],
             "title": "Source System",
             "type": "string"
@@ -15878,7 +15931,8 @@
               "BLOOMBERG",
               "REFINITIV",
               "MANUAL_UPLOAD",
-              "MANUAL"
+              "MANUAL",
+              "AEQUOR_DESK"
             ],
             "title": "Source System",
             "type": "string"
@@ -18865,7 +18919,8 @@
               "BLOOMBERG",
               "REFINITIV",
               "MANUAL_UPLOAD",
-              "MANUAL"
+              "MANUAL",
+              "AEQUOR_DESK"
             ],
             "title": "Source System",
             "type": "string"
@@ -18943,7 +18998,8 @@
               "BLOOMBERG",
               "REFINITIV",
               "MANUAL_UPLOAD",
-              "MANUAL"
+              "MANUAL",
+              "AEQUOR_DESK"
             ],
             "title": "Source System",
             "type": "string"
@@ -19298,6 +19354,321 @@
           }
         },
         "title": "MarketDataConnectionUpdate",
+        "type": "object"
+      },
+      "MarketDataOverlayCreate": {
+        "additionalProperties": false,
+        "description": "One new adjustment record; ``supersedes`` performs an append-only edit.",
+        "properties": {
+          "adjustment_type": {
+            "enum": [
+              "additive_bps",
+              "fixed",
+              "multiplicative"
+            ],
+            "title": "Adjustment Type",
+            "type": "string"
+          },
+          "base_curve_name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Curve Name"
+          },
+          "base_ref_kind": {
+            "enum": [
+              "curve",
+              "fx",
+              "index"
+            ],
+            "title": "Base Ref Kind",
+            "type": "string"
+          },
+          "component_tag": {
+            "enum": [
+              "liquidity_premium",
+              "term_liquidity_premium",
+              "funding_spread",
+              "credit_spread",
+              "other"
+            ],
+            "title": "Component Tag",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Overlay Create Effective From",
+            "type": "string"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay Create Effective To"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "supersedes": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes"
+          },
+          "tenor_months": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay Create Tenor Months"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "base_ref_kind",
+          "adjustment_type",
+          "value",
+          "component_tag",
+          "effective_from"
+        ],
+        "title": "MarketDataOverlayCreate",
+        "type": "object"
+      },
+      "MarketDataOverlayEnd": {
+        "additionalProperties": false,
+        "description": "End an active overlay: adjustment stops applying after ``effective_to``.",
+        "properties": {
+          "effective_to": {
+            "format": "date",
+            "title": "Overlay End Effective To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "effective_to"
+        ],
+        "title": "MarketDataOverlayEnd",
+        "type": "object"
+      },
+      "MarketDataOverlayListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "Overlay List As Of Date",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "overlays": {
+            "items": {
+              "$ref": "#/components/schemas/MarketDataOverlayRead"
+            },
+            "title": "Overlays",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bank_id",
+          "as_of_date",
+          "overlays",
+          "total"
+        ],
+        "title": "MarketDataOverlayListRead",
+        "type": "object"
+      },
+      "MarketDataOverlayRead": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "adjustment_type": {
+            "title": "Adjustment Type",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "base_curve_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay Base Curve Name"
+          },
+          "base_ref_kind": {
+            "title": "Base Ref Kind",
+            "type": "string"
+          },
+          "component_tag": {
+            "title": "Component Tag",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Overlay Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay Created By"
+          },
+          "created_by_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay Created By Email"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Overlay Effective From",
+            "type": "string"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay Effective To"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay Note"
+          },
+          "superseded_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay Superseded By"
+          },
+          "tenor_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay Tenor Months"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "base_ref_kind",
+          "base_curve_name",
+          "tenor_months",
+          "adjustment_type",
+          "value",
+          "component_tag",
+          "effective_from",
+          "effective_to",
+          "note",
+          "created_by",
+          "created_by_email",
+          "superseded_by",
+          "active",
+          "created_at"
+        ],
+        "title": "MarketDataOverlayRead",
         "type": "object"
       },
       "MarketDataQuotaListRead": {
@@ -29307,8 +29678,15 @@
       },
       "YieldCurveViewRead": {
         "additionalProperties": false,
-        "description": "One currency's authoritative curve; rates are decimal fractions.",
+        "description": "One published curve (keyed by ``curve_name``); rates decimal fractions.\n\n``curve_type`` badges the series (zero / forward / discount for desk-\nconstructed curves; sovereign etc. for observed vendor curves).\n``adjusted_points`` + ``overlay_components`` are non-empty only when the\nbank has active private overlays on this curve name: base + overlays\ncomposed at read time, golden data untouched (spec \u00a72, \u00a79). Both empty\nmeans \"no adjusted series\" \u2014 the base is never duplicated.",
         "properties": {
+          "adjusted_points": {
+            "items": {
+              "$ref": "#/components/schemas/YieldCurvePointRead"
+            },
+            "title": "Yield Curve Adjusted Points",
+            "type": "array"
+          },
           "as_of_date": {
             "format": "date",
             "title": "Yield Curve As Of Date",
@@ -29325,6 +29703,17 @@
             "title": "Curve Name",
             "type": "string"
           },
+          "curve_type": {
+            "title": "Curve Type",
+            "type": "string"
+          },
+          "overlay_components": {
+            "items": {
+              "$ref": "#/components/schemas/CurveOverlayComponentRead"
+            },
+            "title": "Overlay Components",
+            "type": "array"
+          },
           "points": {
             "items": {
               "$ref": "#/components/schemas/YieldCurvePointRead"
@@ -29336,8 +29725,11 @@
         "required": [
           "currency",
           "curve_name",
+          "curve_type",
           "as_of_date",
           "points",
+          "adjusted_points",
+          "overlay_components",
           "attribution"
         ],
         "title": "YieldCurveViewRead",
@@ -37808,7 +38200,8 @@
                     "BLOOMBERG",
                     "REFINITIV",
                     "MANUAL_UPLOAD",
-                    "MANUAL"
+                    "MANUAL",
+                    "AEQUOR_DESK"
                   ],
                   "type": "string"
                 },
@@ -41953,6 +42346,369 @@
           }
         ],
         "summary": "Validate Market Data Connection",
+        "tags": [
+          "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/overlays": {
+      "get": {
+        "operationId": "listMarketDataOverlays",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_history",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include History",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "base_curve_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Base Curve Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataOverlayListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Market Data Overlays",
+        "tags": [
+          "market-data"
+        ]
+      },
+      "post": {
+        "operationId": "createMarketDataOverlay",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketDataOverlayCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataOverlayRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Market Data Overlay",
+        "tags": [
+          "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/overlays/{overlay_id}/end": {
+      "post": {
+        "operationId": "endMarketDataOverlay",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "overlay_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Overlay Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketDataOverlayEnd"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataOverlayRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "End Market Data Overlay",
         "tags": [
           "market-data"
         ]

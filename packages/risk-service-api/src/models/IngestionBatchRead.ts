@@ -189,6 +189,7 @@ export const IngestionBatchReadSourceSystemEnum = {
   Refinitiv: "REFINITIV",
   ManualUpload: "MANUAL_UPLOAD",
   Manual: "MANUAL",
+  AequorDesk: "AEQUOR_DESK",
 } as const;
 export type IngestionBatchReadSourceSystemEnum =
   (typeof IngestionBatchReadSourceSystemEnum)[keyof typeof IngestionBatchReadSourceSystemEnum];

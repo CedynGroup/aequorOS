@@ -69,7 +69,11 @@ from app.models.liquidity_cfp import (
     LiquidityEwiIndicator,
 )
 from app.models.live import LiveFinding, LiveMetric, LiveMetricSnapshot
-from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
+from app.models.market_data import (
+    MarketDataConnection,
+    MarketDataOverlay,
+    MarketDataQuotaUsage,
+)
 from app.models.market_desk import (
     DeskDetermination,
     DeskMethodology,
@@ -183,6 +187,7 @@ __all__ = [
     "MappingConfigRecord",
     "DatabaseDirectConnection",
     "MarketDataConnection",
+    "MarketDataOverlay",
     "MarketDataQuotaUsage",
     "DeskDetermination",
     "DeskMethodology",

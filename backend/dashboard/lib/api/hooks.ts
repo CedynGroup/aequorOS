@@ -48,6 +48,7 @@ import type {
   LiquidityThresholdUpdate,
   MarketDataConnectionCreate,
   MarketDataConnectionUpdate,
+  MarketDataOverlayCreate,
   OutletCreate,
   OutletUpdate,
   PackageStatusFilter,
@@ -1087,6 +1088,77 @@ export function useMarketDataViews(bankId: string | undefined, asOf?: string) {
       ),
     enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Per-bank market data overlays (spec §9): the bank's private spread layer on
+// the published golden copy. Mutations invalidate both the overlay list and
+// the composed views (adjusted curves are computed server-side at read time).
+// ---------------------------------------------------------------------------
+
+const overlayInvalidatePrefixes = ['md-overlays', 'md-views'];
+
+export function useMarketDataOverlays(
+  bankId: string | undefined,
+  options?: { includeHistory?: boolean; baseCurveName?: string }
+) {
+  return useQuery({
+    queryKey: [
+      'md-overlays',
+      bankId,
+      options?.includeHistory ?? false,
+      options?.baseCurveName ?? null,
+    ],
+    queryFn: () =>
+      apiCall(() =>
+        marketDataApi.listMarketDataOverlays({
+          bankId: bankId!,
+          includeHistory: options?.includeHistory,
+          baseCurveName: options?.baseCurveName,
+        })
+      ),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useCreateMarketDataOverlay(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: MarketDataOverlayCreate) =>
+      apiCall(() =>
+        marketDataApi.createMarketDataOverlay({
+          bankId: bankId!,
+          marketDataOverlayCreate: payload,
+        })
+      ),
+    onSuccess: () => {
+      overlayInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+export function useEndMarketDataOverlay(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { overlayId: string; effectiveTo: string }) =>
+      apiCall(() =>
+        marketDataApi.endMarketDataOverlay({
+          bankId: bankId!,
+          overlayId: payload.overlayId,
+          marketDataOverlayEnd: {
+            effectiveTo: new Date(`${payload.effectiveTo}T00:00:00Z`),
+          },
+        })
+      ),
+    onSuccess: () => {
+      overlayInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
   });
 }
 

@@ -1,4 +1,5 @@
-"""Market Data Adapter operational state: vendor connections and quota usage.
+"""Market Data Adapter operational state: vendor connections, quota usage,
+and per-bank overlays.
 
 Canonical market data entities (curves, FX rates, indices, ratings) live in
 ``app.models.canonical``; this module owns the records that describe *how*
@@ -7,6 +8,12 @@ lifecycle per market_data_adapter.md §10) and the per-month quota ledger the
 pull framework enforces (§11). These are operational tables, not canonical
 records — they carry no ingestion provenance metadata.
 
+``market_data_overlays`` is the tenant-side half of the two-layer market
+data architecture (AequorOS_Market_Data_and_Curve_Platform.md §2, §9): a
+bank's private, effective-dated spread adjustments composed onto the shared
+golden copy at read time. Overlays are never written back to golden data
+and never visible to another tenant (RLS-FORCED, migration 202608090044).
+
 Credentials are never stored in plaintext: ``credential_ciphertext`` is an
 opaque encrypted blob and ``vault_path`` is the logical Vault locator
 (``vault://institutions/{bank}/vendor_credentials/{vendor}/default``).
@@ -14,17 +21,20 @@ opaque encrypted blob and ``vault_path`` is the logical Vault locator
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
     JSON,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKeyConstraint,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -37,6 +47,18 @@ from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin
 from app.domain.ingestion.constants import (
     MARKET_DATA_CONNECTION_STATUSES,
     MARKET_DATA_VENDORS,
+)
+
+# Overlay vocabulary (spec §9): what golden object the adjustment attaches
+# to, how it adjusts, and which FTP-style component it decomposes into.
+OVERLAY_BASE_REF_KINDS: tuple[str, ...] = ("curve", "fx", "index")
+OVERLAY_ADJUSTMENT_TYPES: tuple[str, ...] = ("additive_bps", "fixed", "multiplicative")
+OVERLAY_COMPONENT_TAGS: tuple[str, ...] = (
+    "liquidity_premium",
+    "term_liquidity_premium",
+    "funding_spread",
+    "credit_spread",
+    "other",
 )
 
 
@@ -109,6 +131,79 @@ class MarketDataConnection(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     last_pull_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_pull_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+
+
+class MarketDataOverlay(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
+    """One effective-dated, component-tagged adjustment on a golden object.
+
+    Spec §9: default to additive basis-point spreads per tenor (``value`` in
+    bps); ``fixed`` (value in rate decimal-fraction units) and
+    ``multiplicative`` (value a factor) are secondary. ``tenor_months`` NULL
+    means flat — applies to every tenor of the referenced curve. Rows are
+    APPEND-ONLY: an edit creates a new row and stamps the old row's
+    ``superseded_by``; ending an overlay sets ``effective_to``. Composition
+    happens at read time in the views feature — golden data is never touched.
+    """
+
+    __tablename__ = "market_data_overlays"
+    __table_args__ = (
+        CheckConstraint(
+            f"base_ref_kind IN ({_values(OVERLAY_BASE_REF_KINDS)})",
+            name="ck_market_data_overlays_base_ref_kind",
+        ),
+        CheckConstraint(
+            f"adjustment_type IN ({_values(OVERLAY_ADJUSTMENT_TYPES)})",
+            name="ck_market_data_overlays_adjustment_type",
+        ),
+        CheckConstraint(
+            f"component_tag IN ({_values(OVERLAY_COMPONENT_TAGS)})",
+            name="ck_market_data_overlays_component_tag",
+        ),
+        # A curve overlay must name its curve; other kinds must not.
+        CheckConstraint(
+            "(base_ref_kind = 'curve') = (base_curve_name IS NOT NULL)",
+            name="ck_market_data_overlays_curve_name",
+        ),
+        CheckConstraint(
+            "tenor_months IS NULL OR tenor_months > 0",
+            name="ck_market_data_overlays_tenor_months",
+        ),
+        CheckConstraint(
+            "effective_to IS NULL OR effective_to >= effective_from",
+            name="ck_market_data_overlays_effective_window",
+        ),
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+        ),
+        UniqueConstraint("id", "organization_id", name="uq_market_data_overlays_id_org"),
+        Index(
+            "ix_market_data_overlays_scope",
+            "organization_id",
+            "bank_id",
+            "base_ref_kind",
+            "base_curve_name",
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    base_ref_kind: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Golden curve name the adjustment attaches to (e.g. AEQ.GHS.SOV.ZERO);
+    # NULL for fx/index kinds.
+    base_curve_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # NULL = flat spread across all tenors; set = applies to that tenor only.
+    tenor_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    adjustment_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    # additive_bps: basis points; fixed: rate decimal fraction; multiplicative: factor.
+    value: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
+    component_tag: Mapped[str] = mapped_column(String(30), nullable=False)
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    # Set when a newer version replaces this row (append-only edits).
+    superseded_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
 
 
 class MarketDataQuotaUsage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):

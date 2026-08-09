@@ -89,6 +89,7 @@ export const MappingConfigReadSourceSystemEnum = {
   Refinitiv: "REFINITIV",
   ManualUpload: "MANUAL_UPLOAD",
   Manual: "MANUAL",
+  AequorDesk: "AEQUOR_DESK",
 } as const;
 export type MappingConfigReadSourceSystemEnum =
   (typeof MappingConfigReadSourceSystemEnum)[keyof typeof MappingConfigReadSourceSystemEnum];

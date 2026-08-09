@@ -24,6 +24,7 @@ from app.features.manage_liquidity_cfp import router as liquidity_cfp_router
 from app.features.manage_liquidity_thresholds import router as liquidity_thresholds_router
 from app.features.manage_live_engine import router as live_engine_router
 from app.features.manage_market_data_connections import router as market_data_connections_router
+from app.features.manage_market_data_overlays import router as market_data_overlays_router
 from app.features.manage_market_data_uploads import router as market_data_uploads_router
 from app.features.manage_notifications import router as notifications_router
 from app.features.manage_regulatory_reporting import router as regulatory_reporting_router
@@ -85,6 +86,7 @@ v1_router.include_router(forecasting_router)
 v1_router.include_router(live_engine_router)
 v1_router.include_router(market_data_uploads_router)
 v1_router.include_router(market_data_connections_router)
+v1_router.include_router(market_data_overlays_router)
 v1_router.include_router(temenos_connections_router)
 v1_router.include_router(cashflow_forecast_router)
 v1_router.include_router(behavioral_models_router)

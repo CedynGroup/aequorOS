@@ -17,6 +17,10 @@ import type {
   MarketDataConnectionListRead,
   MarketDataConnectionRead,
   MarketDataConnectionUpdate,
+  MarketDataOverlayCreate,
+  MarketDataOverlayEnd,
+  MarketDataOverlayListRead,
+  MarketDataOverlayRead,
   MarketDataQuotaListRead,
   MarketDataScopeListRead,
   MarketDataUploadRead,
@@ -34,6 +38,14 @@ import {
   MarketDataConnectionReadToJSON,
   MarketDataConnectionUpdateFromJSON,
   MarketDataConnectionUpdateToJSON,
+  MarketDataOverlayCreateFromJSON,
+  MarketDataOverlayCreateToJSON,
+  MarketDataOverlayEndFromJSON,
+  MarketDataOverlayEndToJSON,
+  MarketDataOverlayListReadFromJSON,
+  MarketDataOverlayListReadToJSON,
+  MarketDataOverlayReadFromJSON,
+  MarketDataOverlayReadToJSON,
   MarketDataQuotaListReadFromJSON,
   MarketDataQuotaListReadToJSON,
   MarketDataScopeListReadFromJSON,
@@ -51,6 +63,11 @@ export interface CreateMarketDataConnectionRequest {
   marketDataConnectionCreate: MarketDataConnectionCreate;
 }
 
+export interface CreateMarketDataOverlayRequest {
+  bankId: string;
+  marketDataOverlayCreate: MarketDataOverlayCreate;
+}
+
 export interface DisableMarketDataConnectionRequest {
   bankId: string;
   connectionId: string;
@@ -59,6 +76,12 @@ export interface DisableMarketDataConnectionRequest {
 export interface EnableMarketDataConnectionRequest {
   bankId: string;
   connectionId: string;
+}
+
+export interface EndMarketDataOverlayRequest {
+  bankId: string;
+  overlayId: string;
+  marketDataOverlayEnd: MarketDataOverlayEnd;
 }
 
 export interface GetMarketDataQuotaRequest {
@@ -76,6 +99,13 @@ export interface GetMarketDataViewsRequest {
 
 export interface ListMarketDataConnectionsRequest {
   bankId: string;
+}
+
+export interface ListMarketDataOverlaysRequest {
+  bankId: string;
+  asOf?: Date | null;
+  includeHistory?: boolean;
+  baseCurveName?: string | null;
 }
 
 export interface ListMarketDataScopesRequest {
@@ -177,6 +207,76 @@ export class MarketDataApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<MarketDataConnectionRead> {
     const response = await this.createMarketDataConnectionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Create Market Data Overlay
+   */
+  async createMarketDataOverlayRaw(
+    requestParameters: CreateMarketDataOverlayRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<MarketDataOverlayRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling createMarketDataOverlay().',
+      );
+    }
+
+    if (requestParameters["marketDataOverlayCreate"] == null) {
+      throw new runtime.RequiredError(
+        "marketDataOverlayCreate",
+        'Required parameter "marketDataOverlayCreate" was null or undefined when calling createMarketDataOverlay().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/market-data/overlays`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: MarketDataOverlayCreateToJSON(
+          requestParameters["marketDataOverlayCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      MarketDataOverlayReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Create Market Data Overlay
+   */
+  async createMarketDataOverlay(
+    requestParameters: CreateMarketDataOverlayRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<MarketDataOverlayRead> {
+    const response = await this.createMarketDataOverlayRaw(
       requestParameters,
       initOverrides,
     );
@@ -317,6 +417,88 @@ export class MarketDataApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<MarketDataConnectionRead> {
     const response = await this.enableMarketDataConnectionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * End Market Data Overlay
+   */
+  async endMarketDataOverlayRaw(
+    requestParameters: EndMarketDataOverlayRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<MarketDataOverlayRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling endMarketDataOverlay().',
+      );
+    }
+
+    if (requestParameters["overlayId"] == null) {
+      throw new runtime.RequiredError(
+        "overlayId",
+        'Required parameter "overlayId" was null or undefined when calling endMarketDataOverlay().',
+      );
+    }
+
+    if (requestParameters["marketDataOverlayEnd"] == null) {
+      throw new runtime.RequiredError(
+        "marketDataOverlayEnd",
+        'Required parameter "marketDataOverlayEnd" was null or undefined when calling endMarketDataOverlay().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/market-data/overlays/{overlay_id}/end`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"overlay_id"}}`,
+            encodeURIComponent(String(requestParameters["overlayId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: MarketDataOverlayEndToJSON(
+          requestParameters["marketDataOverlayEnd"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      MarketDataOverlayReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * End Market Data Overlay
+   */
+  async endMarketDataOverlay(
+    requestParameters: EndMarketDataOverlayRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<MarketDataOverlayRead> {
+    const response = await this.endMarketDataOverlayRaw(
       requestParameters,
       initOverrides,
     );
@@ -551,6 +733,78 @@ export class MarketDataApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<MarketDataConnectionListRead> {
     const response = await this.listMarketDataConnectionsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * List Market Data Overlays
+   */
+  async listMarketDataOverlaysRaw(
+    requestParameters: ListMarketDataOverlaysRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<MarketDataOverlayListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listMarketDataOverlays().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["asOf"] != null) {
+      queryParameters["as_of"] = (requestParameters["asOf"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    if (requestParameters["includeHistory"] != null) {
+      queryParameters["include_history"] = requestParameters["includeHistory"];
+    }
+
+    if (requestParameters["baseCurveName"] != null) {
+      queryParameters["base_curve_name"] = requestParameters["baseCurveName"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/market-data/overlays`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      MarketDataOverlayListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * List Market Data Overlays
+   */
+  async listMarketDataOverlays(
+    requestParameters: ListMarketDataOverlaysRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<MarketDataOverlayListRead> {
+    const response = await this.listMarketDataOverlaysRaw(
       requestParameters,
       initOverrides,
     );

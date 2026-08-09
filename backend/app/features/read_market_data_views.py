@@ -18,8 +18,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession, Tenant, TenantContext
 from app.db.base import utc_now
-from app.models import Bank
+from app.models import Bank, MarketDataOverlay
 from app.schemas.market_data_views import (
+    CurveOverlayComponentRead,
     FxRateHistoryPointRead,
     FxRateViewRead,
     IndexViewRead,
@@ -29,7 +30,7 @@ from app.schemas.market_data_views import (
     YieldCurvePointRead,
     YieldCurveViewRead,
 )
-from app.services import market_data
+from app.services import market_data, market_data_overlays
 
 router = APIRouter(tags=["market-data"])
 
@@ -54,20 +55,53 @@ def get_market_data_views(
     effective_as_of = as_of if as_of is not None else now.date()
     org = ctx.organization_id
 
+    # Every current-generation curve, one per (currency, curve_name) — the
+    # zero / forward / discounting families are served side by side instead
+    # of one winner per currency. Active per-bank overlays compose onto each
+    # curve at read time (spec §2, §9): golden data untouched, adjusted
+    # series emitted alongside the base.
+    overlays_by_curve: dict[str, list[MarketDataOverlay]] = {}
+    for overlay in market_data_overlays.active_curve_overlays(db, org, bank.id, effective_as_of):
+        overlays_by_curve.setdefault(overlay.base_curve_name or "", []).append(overlay)
+
     curves: list[YieldCurveViewRead] = []
-    for currency in market_data.list_curve_currencies(db, org, bank.id, effective_as_of):
-        curve = market_data.get_yield_curve(db, org, bank.id, currency, effective_as_of, now=now)
-        if curve is None:
-            continue
+    for curve in market_data.list_yield_curves(db, org, bank.id, as_of=effective_as_of, now=now):
+        composed = market_data_overlays.compose_curve(
+            curve.points, overlays_by_curve.get(curve.curve_name, [])
+        )
         curves.append(
             YieldCurveViewRead(
                 currency=curve.currency,
                 curve_name=curve.curve_name,
+                curve_type=curve.curve_type,
                 as_of_date=curve.as_of_date,
                 points=[
                     YieldCurvePointRead(tenor_months=tenor, rate=rate)
                     for tenor, rate in curve.points
                 ],
+                adjusted_points=(
+                    [
+                        YieldCurvePointRead(tenor_months=tenor, rate=rate)
+                        for tenor, rate in composed.adjusted_points
+                    ]
+                    if composed is not None
+                    else []
+                ),
+                overlay_components=(
+                    [
+                        CurveOverlayComponentRead(
+                            overlay_id=component.id,
+                            component_tag=component.component_tag,
+                            adjustment_type=component.adjustment_type,
+                            value=component.value,
+                            tenor_months=component.tenor_months,
+                            effective_from=component.effective_from,
+                        )
+                        for component in composed.components
+                    ]
+                    if composed is not None
+                    else []
+                ),
                 attribution=_attribution_read(curve.attribution),
             )
         )
