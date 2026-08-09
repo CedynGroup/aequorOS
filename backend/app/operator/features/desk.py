@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 
 from app.models import (
     DeskDetermination,
@@ -45,7 +45,13 @@ from app.schemas.market_desk import (
     DeskPublicationListRead,
     DeskPublicationRead,
 )
-from app.services.market_desk import determinations, observations, publication, register
+from app.services.market_desk import (
+    calculation,
+    determinations,
+    observations,
+    publication,
+    register,
+)
 
 router = APIRouter(prefix="/desk", tags=["operator-desk"])
 
@@ -355,6 +361,35 @@ def create_determination(
     return _determination_read(row)
 
 
+@router.post("/determinations/{determination_id}/compute", response_model=DeskDeterminationRead)
+def compute_determination(
+    determination_id: UUID, db: OperatorDb, operator: Operator
+) -> DeskDeterminationRead:
+    """Run the §5 calculation pipeline on a DRAFT: finalize the input
+    snapshot, derive curves and rates, record QA results. Deterministic —
+    recomputing an unchanged draft is a no-op by value."""
+    row = determinations.get(db, determination_id)
+    methodology = register.get_version(db, row.methodology_code, row.methodology_version)
+    try:
+        calculation.compute_determination(db, row, methodology=methodology)
+    except calculation.CalculationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    record_operator_action(
+        db,
+        operator,
+        action="desk.determination.compute",
+        detail={
+            "determination_id": str(row.id),
+            "input_digest": row.input_digest,
+            "qa_passed": bool(row.derived_values.get("qa_passed")),
+        },
+    )
+    db.commit()
+    return _determination_read(row)
+
+
 @router.post("/determinations/{determination_id}/submit", response_model=DeskDeterminationRead)
 def submit_determination(
     determination_id: UUID, db: OperatorDb, operator: Operator
@@ -374,6 +409,9 @@ def submit_determination(
 def approve_determination(
     determination_id: UUID, db: OperatorDb, operator: Operator
 ) -> DeskDeterminationRead:
+    # Hard QA gates (spec §5 step 6) are enforced at this API layer: the
+    # determinations state machine is deliberately QA-agnostic.
+    calculation.ensure_approvable(determinations.get(db, determination_id))
     row = determinations.approve(db, determination_id, reviewed_by=operator.email)
     record_operator_action(
         db,
