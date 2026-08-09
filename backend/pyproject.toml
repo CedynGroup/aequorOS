@@ -32,6 +32,11 @@ dependencies = [
   "rapidfuzz",
   "reportlab>=4.0,<5.1",  # pinned: deterministic bytes rely on invariant=1 (G12)
   "scikit-learn",
+  # Direct import, not a scikit-learn leftover: the curve library
+  # (app/domain/curves) uses scipy.interpolate.PchipInterpolator and
+  # scipy.optimize.least_squares. Listed explicitly so the guarantee does not
+  # rest on another package's dependency tree.
+  "scipy",
   "sqlalchemy",
   "torch",
 ]
