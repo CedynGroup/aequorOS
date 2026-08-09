@@ -84,6 +84,7 @@ import {
   reverseStressApi,
   scenarioWorkbenchApi,
   liveEngineApi,
+  windowAnalyticsApi,
   marketDataApi,
   notificationsApi,
   organizationApi,
@@ -3113,6 +3114,32 @@ export function useLiveSnapshots(
       ),
     enabled: Boolean(bankId),
     refetchInterval: 120_000,
+  });
+}
+
+/**
+ * Engine-computed window analytics over [start, end] (ISO yyyy-mm-dd):
+ * per-period ratio series (stored baseline runs first, inline fallback),
+ * window statistics, and daily-snapshot aggregates. Fires only when enabled —
+ * the Compute button on the Command Center gates it.
+ */
+export function useWindowAnalytics(
+  bankId: string | undefined,
+  start: string | undefined,
+  end: string | undefined,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: ['window-analytics', bankId, start ?? null, end ?? null],
+    queryFn: () =>
+      apiCall(() =>
+        windowAnalyticsApi.computeWindowAnalytics({
+          bankId: bankId!,
+          startDate: new Date(start!),
+          endDate: new Date(end!),
+        })
+      ),
+    enabled: enabled && Boolean(bankId && start && end),
   });
 }
 

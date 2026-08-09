@@ -29,6 +29,7 @@ import BreachBanner from '@/components/home/BreachBanner';
 import PulseWall from '@/components/home/PulseWall';
 import BalanceSheetStrip from '@/components/home/BalanceSheetStrip';
 import RatioTrendChart from '@/components/home/RatioTrendChart';
+import WindowAnalysis from '@/components/home/WindowAnalysis';
 import OperationalFeed from '@/components/home/OperationalFeed';
 import { centralBankName } from '@/lib/format';
 
@@ -120,19 +121,19 @@ export default function CommandCenterPage() {
                 );
               case 'band':
                 return (
-                  <div
-                    key="band"
-                    className="grid grid-cols-1 xl:grid-cols-5 gap-6"
-                  >
-                    <div className="xl:col-span-3 min-w-0">
-                      <RatioTrendChart
-                        bankId={bankId}
-                        period={effective.period!}
-                      />
+                  <div key="band" className="space-y-6">
+                    <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                      <div className="xl:col-span-3 min-w-0">
+                        <RatioTrendChart
+                          bankId={bankId}
+                          period={effective.period!}
+                        />
+                      </div>
+                      <div className="xl:col-span-2 min-w-0">
+                        <OperationalFeed bankId={bankId} />
+                      </div>
                     </div>
-                    <div className="xl:col-span-2 min-w-0">
-                      <OperationalFeed bankId={bankId} />
-                    </div>
+                    <WindowAnalysis bankId={bankId} />
                   </div>
                 );
               default:

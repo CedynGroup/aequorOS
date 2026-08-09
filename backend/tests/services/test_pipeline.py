@@ -13,8 +13,9 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Job, LiveFinding, LiveMetric, RegulatoryRun
-from app.services import job_queue, pipeline
+from app.api.deps import TenantContext
+from app.models import Job, LiveFinding, LiveMetric, LiveMetricSnapshot, RegulatoryRun
+from app.services import job_queue, live_view, pipeline
 from app.services.sample_bank_seed import SAMPLE_BANK_ID, seed_sample_bank
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import (
@@ -238,8 +239,6 @@ def test_refresh_upserts_the_daily_snapshot_ladder(db_session: Session) -> None:
     """Plane-2 EOD ladder: one snapshot row per (bank, day, module), overwritten
     by every refresh — the day's last refresh is the close, and re-running a
     refresh never widens the ladder."""
-    from app.models import LiveMetricSnapshot
-
     _seed(db_session)
     pipeline.run_refresh(db_session, _refresh_job(db_session))
 
@@ -257,9 +256,6 @@ def test_refresh_upserts_the_daily_snapshot_ladder(db_session: Session) -> None:
 
 def test_live_snapshot_ladder_reads_back_through_the_service(db_session: Session) -> None:
     """The read endpoint's service returns the daily series oldest-first."""
-    from app.api.deps import TenantContext
-    from app.services import live_view
-
     _seed(db_session)
     pipeline.run_refresh(db_session, _refresh_job(db_session))
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import BankReportingPeriod, Notification, User
+from app.schemas.notifications import NotificationRead
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.regulatory_reporting import (
     PackageApprovalDecisionCreate,
@@ -485,10 +486,8 @@ def test_platform_id_entity_survives_the_read_schema(db_session: Session) -> Non
     /notifications when the first bank-scoped notification landed after the
     platform-ID epoch (entity_id was typed UUID while the column is text).
     """
-    from app.schemas.notifications import NotificationRead
-
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
-    rows = notifications.emit(
+    emitted = notifications.emit(
         db_session,
         ctx,
         type="liquidity.cfp.bog_notification",
@@ -499,6 +498,7 @@ def test_platform_id_entity_survives_the_read_schema(db_session: Session) -> Non
         entity_id="BK-SAMP0001",
     )
     db_session.commit()
+    assert emitted
     listed, _total, _unread = notifications.list_notifications(db_session, ctx)
     payloads = [NotificationRead.model_validate(row, from_attributes=True) for row in listed]
     assert any(p.entity_id == "BK-SAMP0001" for p in payloads)

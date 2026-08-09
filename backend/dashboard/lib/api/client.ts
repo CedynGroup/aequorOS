@@ -34,6 +34,7 @@ import {
   RegulatoryReportingApi,
   ResponseError,
   TemenosApi,
+  WindowAnalyticsApi,
 } from '@aequoros/risk-service-api';
 import { getSession } from 'next-auth/react';
 import { getAccessToken, setAccessToken } from './token';
@@ -96,6 +97,7 @@ export const liquidityThresholdsApi = new LiquidityThresholdsApi(configuration);
 export const creditParamsApi = new CreditParamsApi(configuration);
 export const reverseStressApi = new ReverseStressApi(configuration);
 export const scenarioWorkbenchApi = new ScenarioWorkbenchApi(configuration);
+export const windowAnalyticsApi = new WindowAnalyticsApi(configuration);
 
 /**
  * Normalized error surfaced to the UI. `status` is the HTTP status code,

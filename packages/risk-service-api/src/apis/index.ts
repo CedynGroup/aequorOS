@@ -38,3 +38,4 @@ export * from "./ScenarioWorkbenchApi";
 export * from "./ScenariosApi";
 export * from "./TaxonomyApi";
 export * from "./TemenosApi";
+export * from "./WindowAnalyticsApi";
