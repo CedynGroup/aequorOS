@@ -34,6 +34,7 @@ export * from "./RegulatoryIrrApi";
 export * from "./RegulatoryLiquidityApi";
 export * from "./RegulatoryReportingApi";
 export * from "./ReverseStressApi";
+export * from "./ScenarioWorkbenchApi";
 export * from "./ScenariosApi";
 export * from "./TaxonomyApi";
 export * from "./TemenosApi";
