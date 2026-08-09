@@ -13,7 +13,6 @@ import IrrWorkspace from '@/components/irr/IrrWorkspace';
 import RepricingLadderChart from '@/components/irr/charts/RepricingLadderChart';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import KpiStat from '@/components/ui/KpiStat';
-import RunBadge from '@/components/ui/RunBadge';
 import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
 import { num, shortId } from '@/lib/api/values';
@@ -29,7 +28,6 @@ export default function IrrGapsPage() {
     >
       {({ data, metrics: m, latestRun, computedAt }) => {
         const rows = data.gapTable ?? [];
-        const runBadge = latestRun ? <RunBadge run={latestRun} /> : undefined;
 
         const ladder = rows.map((g) => ({
           bucket: g.bucket,
@@ -155,7 +153,6 @@ export default function IrrGapsPage() {
               title="Repricing ladder"
               subtitle="RSA plotted up, RSL down, net gap per bucket · cumulative gap overlay"
               computedAt={computedAt}
-              runBadge={runBadge}
             >
               {ladder.length > 0 ? (
                 <RepricingLadderChart data={ladder} height={360} />
@@ -169,7 +166,6 @@ export default function IrrGapsPage() {
               subtitle="Click a bucket to expand its stored-run line item"
               noPadding
               computedAt={computedAt}
-              runBadge={runBadge}
             >
               <DataTable
                 columns={columns}
@@ -236,9 +232,9 @@ export default function IrrGapsPage() {
                     </div>
                   ) : (
                     <p className="mt-3 text-caption text-slate">
-                      No stored run for this period yet — figures above are the
-                      inline computation. Run all scenarios to persist an
-                      auditable line item for this bucket.
+                      No stored results for this period yet — figures above are the
+                      live computation. Line-item drilldown appears once the
+                      period&apos;s results are finalised under Governance.
                     </p>
                   )}
                 </div>

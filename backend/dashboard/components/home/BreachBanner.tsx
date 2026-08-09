@@ -8,7 +8,7 @@
  *      critical strip listing the top three with module chips, link /alerts.
  *   2. No open alerts but modules reporting breach status for the effective
  *      period (e.g. inline-computed breaches before a pipeline refresh has
- *      minted findings) → critical strip naming those modules.
+ *      stored findings) → critical strip naming those modules.
  *   3. Otherwise → slim success strip with the live/computed module count.
  *
  * Reads the polled alerts + live-summary views and the shared pulse-card

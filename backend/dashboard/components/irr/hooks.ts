@@ -10,9 +10,9 @@ import { apiCall, regulatoryLiquidityApi } from '@/lib/api/client';
 
 
 /**
- * Official (immutable) IRR regulatory runs for a bank, newest first.
+ * Stored IRR results for a bank, newest first.
  * Optionally scoped to one reporting period. Each run stores the full
- * banking-book analysis with a value-based input hash for reproducibility.
+ * banking-book analysis reproducible from the canonical snapshot.
  */
 export function useIrrRuns(
   bankId: string | undefined,

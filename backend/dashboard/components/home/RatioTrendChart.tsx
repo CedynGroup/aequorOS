@@ -21,7 +21,6 @@ import {
 } from 'recharts';
 import type { BankReportingPeriodRead } from '@aequoros/risk-service-api';
 import ChartFrame from '@/components/ui/ChartFrame';
-import RunBadge from '@/components/ui/RunBadge';
 import {
   axisProps,
   chartLegendProps,
@@ -98,7 +97,6 @@ export default function RatioTrendChart({
           </span>
           {liqRun.data && (
             <span className="ml-auto">
-              <RunBadge run={liqRun.data} />
             </span>
           )}
         </>

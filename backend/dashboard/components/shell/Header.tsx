@@ -155,7 +155,7 @@ function LiveFreshnessPill() {
   if (anyStale) {
     return (
       <span
-        title="Data changed since the last official run — mint one from the module dashboard."
+        title="Data has changed since results were last finalised — reconcile under Governance → Reports."
         className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-warning/30 bg-warning-light text-warning text-caption font-medium whitespace-nowrap"
       >
         <AlertTriangle size={11} aria-hidden />
@@ -166,7 +166,7 @@ function LiveFreshnessPill() {
 
   return (
     <span
-      title="Live figures match the last official run."
+      title="Live figures match the latest finalised results."
       className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-success/30 bg-success-light text-success text-caption font-medium whitespace-nowrap"
     >
       <RadioTower size={11} aria-hidden />

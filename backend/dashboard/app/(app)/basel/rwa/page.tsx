@@ -1,20 +1,19 @@
 'use client';
 
-import { Loader2, PlayCircle } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import type { CapitalLineRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import ChartFrame from '@/components/ui/ChartFrame';
 import SectionCard from '@/components/ui/SectionCard';
 import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
+import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import DonutChart from '@/components/charts/DonutChart';
 import RwaBucketChart from '@/components/basel/charts/RwaBucketChart';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   isNoBaselineRunError,
-  useCreateRegulatoryRun,
   useRwaBreakdown,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, num, shortId } from '@/lib/api/values';
@@ -74,7 +73,6 @@ export default function RWABreakdown() {
   const periodId = period?.id;
 
   const breakdown = useRwaBreakdown(bankId, periodId);
-  const runBaseline = useCreateRegulatoryRun(bankId);
 
   const data = breakdown.data;
   const needsBaseline = isNoBaselineRunError(breakdown.error);
@@ -108,28 +106,6 @@ export default function RWABreakdown() {
       ]
     : [];
 
-  const runBaselineButton = (
-    <button
-      type="button"
-      disabled={runBaseline.isPending || !periodId}
-      onClick={() =>
-        periodId &&
-        runBaseline.mutate({
-          module: 'capital',
-          reportingPeriodId: periodId,
-          scenarioCode: 'baseline',
-        })
-      }
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-    >
-      {runBaseline.isPending ? (
-        <Loader2 size={13} className="animate-spin" aria-hidden />
-      ) : (
-        <PlayCircle size={13} aria-hidden />
-      )}
-      Run baseline
-    </button>
-  );
 
   return (
     <>
@@ -147,17 +123,9 @@ export default function RWABreakdown() {
       {needsBaseline ? (
         <div className="px-8 py-6">
           <EmptyState
-            Icon={PlayCircle}
-            title="Baseline run required"
-            description="The RWA breakdown comes from a persisted baseline capital run. Run baseline to calculate and store the full risk-weighted asset detail for this reporting period."
-            action={
-              <div className="flex flex-col items-center gap-3">
-                {runBaselineButton}
-                {runBaseline.error && (
-                  <ErrorPanel error={runBaseline.error} title="Run failed" />
-                )}
-              </div>
-            }
+            Icon={Layers}
+            title="Awaiting period results"
+            description="The full risk-weighted asset detail is produced when the period's results are finalised under Governance. Once this period closes, the breakdown appears here."
           />
         </div>
       ) : (

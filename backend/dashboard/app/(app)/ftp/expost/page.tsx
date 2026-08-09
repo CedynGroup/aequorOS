@@ -165,7 +165,7 @@ function ExPostBody({ ctx }: { ctx: FtpFrameContext }) {
       <EmptyState
         Icon={FlaskConical}
         title="No stored scenario runs for this period"
-        description="The ex-ante columns come from the persisted baseline, rates-up, and funding-stress runs. Use 'Run all scenarios' in the header to mint them — the comparison frame fills in automatically."
+        description="The ex-ante columns come from the stored baseline, rates-up and funding-stress results for this period. They fill in automatically once the period's results are finalised under Governance."
       />
     );
   }
@@ -176,7 +176,7 @@ function ExPostBody({ ctx }: { ctx: FtpFrameContext }) {
         <KpiStat
           label="Ex-ante baseline NIM"
           value={baselineNim !== null ? fmtPct(baselineNim, 2) : '—'}
-          hint="Persisted baseline run for this period"
+          hint="Stored baseline for this period"
         />
         <KpiStat
           label="Worst ex-ante stress NIM"

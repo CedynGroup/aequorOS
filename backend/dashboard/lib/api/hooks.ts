@@ -19,6 +19,11 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type {
+  AnalysisRunCreate,
+  SavedAnalysisCreate,
+  StressScenarioCreate,
+  StressScenarioUpdate,
+  WorkbenchModule,
   AdoptSignatureRequest,
   ApprovalDecision,
   ArtifactKind,
@@ -71,6 +76,7 @@ import {
   isApiError,
   jobsApi,
   reverseStressApi,
+  scenarioWorkbenchApi,
   liveEngineApi,
   marketDataApi,
   notificationsApi,
@@ -2864,6 +2870,132 @@ export function useRunReverseStress(bankId: string | undefined) {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['reverse-stress'] });
+    },
+  });
+}
+
+// --- Scenario Workbench ------------------------------------------------------
+
+export function useScenarioCatalogue(
+  bankId: string | undefined,
+  module: WorkbenchModule,
+  periodId: string | undefined
+) {
+  return useQuery({
+    queryKey: ['scenario-catalogue', bankId, module, periodId],
+    queryFn: () =>
+      apiCall(() =>
+        scenarioWorkbenchApi.listScenarioCatalogue({
+          bankId: bankId!,
+          module,
+          reportingPeriodId: periodId,
+        })
+      ),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useRunScenarioAnalysis(bankId: string | undefined, module: WorkbenchModule) {
+  return useMutation({
+    mutationFn: (payload: AnalysisRunCreate) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.runScenarioAnalysis({
+          bankId: bankId!,
+          module,
+          analysisRunCreate: payload,
+        })
+      ),
+  });
+}
+
+export function useCreateStressScenario(bankId: string | undefined, module: WorkbenchModule) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: StressScenarioCreate) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.createStressScenario({
+          bankId: bankId!,
+          module,
+          stressScenarioCreate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['scenario-catalogue', bankId, module] });
+    },
+  });
+}
+
+export function useUpdateStressScenario(bankId: string | undefined, module: WorkbenchModule) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ scenarioId, payload }: { scenarioId: string; payload: StressScenarioUpdate }) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.updateStressScenario({
+          bankId: bankId!,
+          module,
+          scenarioId,
+          stressScenarioUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['scenario-catalogue', bankId, module] });
+    },
+  });
+}
+
+export function useArchiveStressScenario(bankId: string | undefined, module: WorkbenchModule) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ scenarioId, isArchived }: { scenarioId: string; isArchived: boolean }) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.archiveStressScenario({
+          bankId: bankId!,
+          module,
+          scenarioId,
+          stressScenarioArchive: { isArchived },
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['scenario-catalogue', bankId, module] });
+    },
+  });
+}
+
+export function useSavedAnalyses(bankId: string | undefined, module: WorkbenchModule) {
+  return useQuery({
+    queryKey: ['scenario-analyses', bankId, module],
+    queryFn: () =>
+      apiCall(() => scenarioWorkbenchApi.listScenarioAnalyses({ bankId: bankId!, module })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useSaveScenarioAnalysis(bankId: string | undefined, module: WorkbenchModule) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SavedAnalysisCreate) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.saveScenarioAnalysis({
+          bankId: bankId!,
+          module,
+          savedAnalysisCreate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['scenario-analyses', bankId, module] });
+    },
+  });
+}
+
+export function useDeleteScenarioAnalysis(bankId: string | undefined, module: WorkbenchModule) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (analysisId: string) =>
+      apiCall(() =>
+        scenarioWorkbenchApi.deleteScenarioAnalysis({ bankId: bankId!, module, analysisId })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['scenario-analyses', bankId, module] });
     },
   });
 }

@@ -4,7 +4,7 @@ import { fmtTimestamp, shortId } from '@/lib/api/values';
 /**
  * Provenance meta row for computed results that carry run identity but not
  * the full RunBadge field set (what-if / optimizer result payloads):
- * run id, input hash, computed-at. Every value comes off the API payload.
+ * run id, snapshot id, computed-at. Every value comes off the API payload.
  */
 export default function RunProvenance({
   runId,
@@ -23,7 +23,7 @@ export default function RunProvenance({
         <GitCommitHorizontal size={11} aria-hidden />
         run {shortId(runId)}
         <span className="text-slate-light">·</span>
-        input {shortId(inputHash)}
+        snapshot {shortId(inputHash)}
         {createdAt && (
           <>
             <span className="text-slate-light">·</span>

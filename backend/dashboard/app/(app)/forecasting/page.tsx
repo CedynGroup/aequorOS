@@ -4,7 +4,7 @@
  * Balance Sheet Forecasting — projection workspace for the persisted 5-year
  * forecast run: assets/liabilities/equity chart with base↔adverse band,
  * per-period delta decomposition waterfall, horizon table, and regulatory
- * ratio paths. All figures come off the immutable run payload.
+ * ratio paths. All figures come off the saved projection payload.
  */
 
 import { Suspense, useMemo, useState } from 'react';
@@ -47,7 +47,6 @@ import {
   yearLabel,
   yoyPct,
 } from '@/components/forecasting/lib';
-import FreshnessBadge from '@/components/live/FreshnessBadge';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useCreateForecastRun,
@@ -136,12 +135,6 @@ function BalanceSheetWorkspace() {
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <div className="flex items-center gap-2">
-            <FreshnessBadge
-              bankId={bankId}
-              periodId={periodId}
-              module="forecast"
-              asOfDate={period ? isoDate(period.periodEnd) : undefined}
-            />
             <select
               value={scenario}
               onChange={(e) =>
@@ -193,7 +186,7 @@ function BalanceSheetWorkspace() {
             <EmptyState
               Icon={PlayCircle}
               title="No forecast runs yet"
-              description={`Run a forecast to project ${bank?.name ?? 'the bank'}'s balance sheet, P&L, and regulatory ratios five years forward from ${period?.label ?? 'the selected period'}. Every run persists an immutable, auditable record.`}
+              description={`Run a forecast to project ${bank?.name ?? 'the bank'}'s balance sheet, P&L, and regulatory ratios five years forward from ${period?.label ?? 'the selected period'}. Every run is kept as a saved projection you can revisit and compare.`}
             />
           ) : runQuery.isLoading ? (
             <SkeletonChart height={320} />

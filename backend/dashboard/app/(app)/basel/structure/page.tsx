@@ -1,18 +1,17 @@
 'use client';
 
-import { Loader2, PlayCircle } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import type { CapitalLineRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
 import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
+import QueryBoundary from '@/components/ui/QueryBoundary';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   isNoBaselineRunError,
   useCapitalDashboard,
   useCapitalStructure,
-  useCreateRegulatoryRun,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, num, shortId } from '@/lib/api/values';
 import { seriesColor } from '@/lib/chartTheme';
@@ -91,7 +90,6 @@ export default function CapitalStructurePage() {
 
   const structure = useCapitalStructure(bankId, periodId);
   const dashboard = useCapitalDashboard(bankId, periodId);
-  const runBaseline = useCreateRegulatoryRun(bankId);
 
   const data = structure.data;
   const needsBaseline = isNoBaselineRunError(structure.error);
@@ -113,28 +111,6 @@ export default function CapitalStructurePage() {
     { label: 'Tier 2', value: tier2, color: seriesColor(2) },
   ].filter((s) => s.value > 0);
 
-  const runBaselineButton = (
-    <button
-      type="button"
-      disabled={runBaseline.isPending || !periodId}
-      onClick={() =>
-        periodId &&
-        runBaseline.mutate({
-          module: 'capital',
-          reportingPeriodId: periodId,
-          scenarioCode: 'baseline',
-        })
-      }
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-    >
-      {runBaseline.isPending ? (
-        <Loader2 size={13} className="animate-spin" aria-hidden />
-      ) : (
-        <PlayCircle size={13} aria-hidden />
-      )}
-      Run baseline
-    </button>
-  );
 
   return (
     <>
@@ -152,17 +128,9 @@ export default function CapitalStructurePage() {
       {needsBaseline ? (
         <div className="px-8 py-6">
           <EmptyState
-            Icon={PlayCircle}
-            title="Baseline run required"
-            description="The capital structure detail comes from a persisted baseline capital run. Run baseline to calculate and store the tiered capital breakdown for this reporting period."
-            action={
-              <div className="flex flex-col items-center gap-3">
-                {runBaselineButton}
-                {runBaseline.error && (
-                  <ErrorPanel error={runBaseline.error} title="Run failed" />
-                )}
-              </div>
-            }
+            Icon={Layers}
+            title="Awaiting period results"
+            description="The tiered capital breakdown is produced when the period's results are finalised under Governance. Once this period closes, the detail appears here."
           />
         </div>
       ) : (

@@ -6,7 +6,6 @@ import KpiStat from '@/components/ui/KpiStat';
 import ChartFrame from '@/components/ui/ChartFrame';
 import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
-import RunBadge from '@/components/ui/RunBadge';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import HQLAStackChart from '@/components/charts/HQLAStackChart';
@@ -111,8 +110,8 @@ export default function LiquidityBuffer() {
   const provenance = data ? (
     <span>
       {data.stored
-        ? 'Stored baseline run'
-        : 'Live computation — run baseline to persist'}
+        ? 'Computed from stored engine results'
+        : 'Computed live from current positions'}
     </span>
   ) : undefined;
 
@@ -127,7 +126,6 @@ export default function LiquidityBuffer() {
         title="Liquidity Buffer"
         subtitle="High quality liquid asset composition · Basel III LCR numerator"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
-        action={run ? <RunBadge run={run} /> : undefined}
       />
 
       <QueryBoundary
@@ -229,7 +227,6 @@ export default function LiquidityBuffer() {
               subtitle="Market value vs post-haircut LCR value per instrument"
               noPadding
               computedAt={computedAt}
-              runBadge={run ? <RunBadge run={run} /> : undefined}
               footer={
                 <span>
                   Baseline runs carry {regShort()}-eligible instruments at face value;

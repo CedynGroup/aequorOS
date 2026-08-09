@@ -201,7 +201,7 @@ export default function MonitoringTools() {
                   significant-currency splits and the unencumbered-assets schedule —
                   generate from canonical position data and export in the return
                   format from the{' '}
-                  <Link href="/reporting" className="text-action hover:underline">
+                  <Link href="/submissions" className="text-action hover:underline">
                     Regulatory Reporting hub
                   </Link>{' '}
                   (return code LMT). Per-currency funding gaps and the USD funding

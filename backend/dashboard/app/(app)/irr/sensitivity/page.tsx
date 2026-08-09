@@ -15,7 +15,6 @@ import {
 } from '@/components/irr/scenarios';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import KpiStat from '@/components/ui/KpiStat';
-import RunBadge from '@/components/ui/RunBadge';
 import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
 import ValidationList from '@/components/ui/ValidationList';
@@ -31,7 +30,6 @@ export default function IrrSensitivityPage() {
       {({ data, metrics: m, latestRun, computedAt }) => {
         const eveLimit = num(m.eveLimitPct);
         const rows = data.eveScenarios ?? [];
-        const runBadge = latestRun ? <RunBadge run={latestRun} /> : undefined;
 
         const eveBars = rows
           .filter((s) => s.scenarioCode !== 'baseline')
@@ -120,7 +118,6 @@ export default function IrrSensitivityPage() {
               subtitle={`Base EVE ${fmtCurrency(num(m.eveBaseGhs))} · Tier 1 ${fmtCurrency(num(m.tier1Ghs))} · supervisory limit ${eveLimit}% of Tier 1`}
               noPadding
               computedAt={computedAt}
-              runBadge={runBadge}
             >
               <DataTable columns={columns} rows={rows} density="compact" />
             </SectionCard>
@@ -129,7 +126,6 @@ export default function IrrSensitivityPage() {
               title="ΔEVE tornado"
               subtitle="Scenarios ordered by economic-value impact; breaching shocks in red"
               computedAt={computedAt}
-              runBadge={runBadge}
             >
               {eveBars.length > 0 ? (
                 <TornadoChart data={eveBars} height={300} />
@@ -143,7 +139,6 @@ export default function IrrSensitivityPage() {
               subtitle={`Twelve-month ΔNII under ±200bp parallel shocks · Base NII ${fmtCurrency(num(m.niiBaseGhs))}`}
               noPadding
               computedAt={computedAt}
-              runBadge={runBadge}
             >
               <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <KpiStat
@@ -200,8 +195,8 @@ export default function IrrSensitivityPage() {
                 </li>
                 <li>
                   <span className="font-medium text-navy">Provenance</span> —
-                  each official run persists the canonical input snapshot with
-                  a value-based SHA-256 input hash; Tier 1 is read at run time
+                  results are computed from the canonical position snapshot;
+                  Tier 1 is read at computation time
                   as the ΔEVE denominator but deliberately kept out of the
                   hash, scoping reproducibility to positions, hedges and IRR
                   parameters.

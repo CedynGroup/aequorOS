@@ -4,7 +4,7 @@
  * Scenarios — the scenario manager for the forecasting workspace:
  *  1. Scenario designer: preset assumptions + slider overrides → persisted
  *     forecast run (existing createForecastRun mutation, presentation only).
- *  2. Run registry: every immutable forecast run with input hash + status.
+ *  2. Run registry: every saved projection with its snapshot id + status.
  *  3. Side-by-side comparison of any two succeeded runs — metric path
  *     overlay, per-year deltas, and resolved-assumption diff.
  */
@@ -138,7 +138,7 @@ export default function ScenariosPage() {
           { label: 'Scenarios' },
         ]}
         title="Scenario Manager"
-        subtitle="Design scenario assumptions, run persisted projections, and compare immutable runs side-by-side"
+        subtitle="Design scenario assumptions, run projections, and compare saved runs side-by-side"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
@@ -161,7 +161,7 @@ export default function ScenariosPage() {
 
           <SectionCard
             title="Forecast run registry"
-            subtitle="Immutable persisted runs — every row carries its input hash · pick A and B to compare"
+            subtitle="Saved projections — every row carries its snapshot id · pick A and B to compare"
             noPadding
           >
             <RunRegistryTable
@@ -251,7 +251,7 @@ function ScenarioDesigner({
   return (
     <SectionCard
       title="Scenario designer"
-      subtitle="Start from a preset, adjust any assumption, and persist a new immutable projection run"
+      subtitle="Start from a preset, adjust any assumption, and save a new projection run"
       actions={
         <button
           type="button"
@@ -478,7 +478,7 @@ function RunRegistryTable({
     return (
       <p className="px-5 py-4 text-body text-slate">
         No forecast runs yet — run a scenario above to create the first
-        auditable projection.
+        saved projection.
       </p>
     );
   }
@@ -490,7 +490,7 @@ function RunRegistryTable({
             <th className="text-left px-4 py-2.5">Created</th>
             <th className="text-left px-4 py-2.5">Scenario</th>
             <th className="text-left px-4 py-2.5">Period</th>
-            <th className="text-left px-4 py-2.5">Input hash</th>
+            <th className="text-left px-4 py-2.5">Snapshot</th>
             <th className="text-right px-4 py-2.5">Avg ROE</th>
             <th className="text-right px-4 py-2.5">Y5 CAR</th>
             <th className="text-right px-4 py-2.5">Y5 LCR</th>

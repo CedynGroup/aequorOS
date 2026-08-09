@@ -23,6 +23,7 @@ import {
   MarketDataApi,
   NotificationsApi,
   ReverseStressApi,
+  ScenarioWorkbenchApi,
   OrganizationApi,
   RegulatoryCapitalApi,
   RegulatoryFtpApi,
@@ -92,6 +93,7 @@ export const integrationKeysApi = new IntegrationKeysApi(configuration);
 export const liquidityCfpApi = new LiquidityCfpApi(configuration);
 export const liquidityThresholdsApi = new LiquidityThresholdsApi(configuration);
 export const reverseStressApi = new ReverseStressApi(configuration);
+export const scenarioWorkbenchApi = new ScenarioWorkbenchApi(configuration);
 
 /**
  * Normalized error surfaced to the UI. `status` is the HTTP status code,

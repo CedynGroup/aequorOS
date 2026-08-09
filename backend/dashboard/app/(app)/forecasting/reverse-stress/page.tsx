@@ -11,8 +11,8 @@ import { fmtDateUTC } from '@/lib/api/values';
 
 // Reverse stress (Phase 2 item 4): bisection over the existing scenario
 // engines for the severity multipliers that breach the LCR floor and the
-// four-quarter CET1 minimum. The frontier persists as an immutable run
-// anchored to both engines' baseline input hashes.
+// four-quarter CET1 minimum. The frontier is kept as a saved run
+// anchored to both engines' baseline snapshots.
 
 type Axis = Record<string, unknown> | undefined;
 
@@ -101,15 +101,15 @@ export default function ReverseStress() {
 
               <SectionCard
                 title="Frontier narrative"
-                subtitle={`Immutable run · input hash ${frontier.inputHash.slice(0, 16)}… · engine ${frontier.engineVersion}`}
+                subtitle={`Saved frontier · snapshot ${frontier.inputHash.slice(0, 16)}… · engine ${frontier.engineVersion}`}
                 footer={
                   <span>
-                    The frontier anchors to both engines&apos; baseline input hashes,
+                    The frontier anchors to both engines&apos; baseline snapshots,
                     so a Board pack can cite exactly which book and parameter set
                     produced it. The Stress Test Output Report pack (return code
                     STRESS-PACK) carries this frontier alongside the traffic lights —
                     generate it from the{' '}
-                    <Link href="/reporting" className="text-action hover:underline">
+                    <Link href="/submissions" className="text-action hover:underline">
                       Regulatory Reporting hub
                     </Link>
                     .

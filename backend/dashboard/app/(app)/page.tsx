@@ -8,7 +8,6 @@
  *   2. Six-module pulse wall (headline live metric per regulatory engine)
  *   3. Big-4 balance-sheet strip (canonical facts)
  *   4. Ratio trend (LCR/NSFR/CAR across all periods) + operational feed
- *   5. Per-module run-freshness strip
  *
  * Every panel reads the *effective* reporting period resolved by
  * `useEffectivePeriod`: the header-selected period when it has facts,
@@ -31,7 +30,6 @@ import PulseWall from '@/components/home/PulseWall';
 import BalanceSheetStrip from '@/components/home/BalanceSheetStrip';
 import RatioTrendChart from '@/components/home/RatioTrendChart';
 import OperationalFeed from '@/components/home/OperationalFeed';
-import FreshnessStrip from '@/components/home/FreshnessStrip';
 import { centralBankName } from '@/lib/format';
 
 export default function CommandCenterPage() {
@@ -139,14 +137,6 @@ export default function CommandCenterPage() {
                       <OperationalFeed bankId={bankId} />
                     </div>
                   </div>
-                );
-              case 'freshness':
-                return (
-                  <FreshnessStrip
-                    key="freshness"
-                    bankId={bankId}
-                    period={effective.period!}
-                  />
                 );
               default:
                 return null;

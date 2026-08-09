@@ -158,7 +158,7 @@ export default function RiskLimitMonitorPage() {
                 </span>
               ))}
               {liveSummary.data?.isStale && (
-                <StatusPill tone="amber">Data changed since last official run</StatusPill>
+                <StatusPill tone="amber">Data changed since results were last finalised</StatusPill>
               )}
             </div>
           )}

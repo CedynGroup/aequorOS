@@ -255,7 +255,7 @@ export default function StrategicOptimizer() {
               <EmptyState
                 Icon={Search}
                 title="No optimizer runs yet"
-                description={`Run the optimizer to search the decision grid for the highest 5-year average ROE strategy that keeps CAR, LCR, and NSFR above their ${regShort()} minimums. The full result persists as an auditable run.`}
+                description={`Run the optimizer to search the decision grid for the highest 5-year average ROE strategy that keeps CAR, LCR, and NSFR above their ${regShort()} minimums. The full result is kept as a saved optimizer projection.`}
                 action={runButton}
               />
             </>

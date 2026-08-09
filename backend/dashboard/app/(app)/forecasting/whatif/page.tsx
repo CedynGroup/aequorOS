@@ -492,8 +492,8 @@ export default function WhatIfLab() {
 
                 <p className="text-caption text-slate leading-relaxed">
                   Each run re-projects the full 5-year path with the shocked
-                  assumption set and persists an auditable what-if regulatory
-                  run alongside the unshocked base.
+                  assumption set and keeps the result as a saved what-if
+                  projection alongside the unshocked base.
                 </p>
               </div>
             </SectionCard>

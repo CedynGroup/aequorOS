@@ -169,7 +169,7 @@ function ResolvedSection({
   return (
     <SectionCard
       title="Resolved on the latest run"
-      subtitle={`The exact assumption set the engine consumed for the ${scenarioLabel(run.scenarioCode)} run — persisted, immutable, hash-bound`}
+      subtitle={`The exact assumption set the engine consumed for the ${scenarioLabel(run.scenarioCode)} run — saved with the projection, snapshot-bound`}
       computedAt={run.createdAt}
       runBadge={<RunBadge run={run} />}
       footer={

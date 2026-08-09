@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { Printer } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import PackCards from '@/components/reports/PackCards';
+import FreshnessStrip from '@/components/reports/FreshnessStrip';
 import RunsRegistry from '@/components/reports/RunsRegistry';
 import { useBankContext } from '@/components/shell/BankContext';
 import { fmtDateUTC } from '@/lib/api/values';
@@ -37,6 +38,7 @@ export default function ReportsPage() {
       />
 
       <div className="px-8 py-6 space-y-6">
+        {bank && period && <FreshnessStrip bankId={bank.id} period={period} />}
         <PackCards bankId={bank?.id} periodId={period?.id} />
         <RunsRegistry bankId={bank?.id} />
       </div>

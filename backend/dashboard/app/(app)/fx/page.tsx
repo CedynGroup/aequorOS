@@ -161,8 +161,8 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
           footer={
             splits.size === 0 ? (
               <span>
-                Run all scenarios to persist a run — the stored fact snapshot adds the
-                asset / liability / derivative split per currency.
+                The asset / liability / derivative split per currency appears once
+                stored results exist for this period.
               </span>
             ) : (
               <span>Select a row for the asset / liability / derivative split.</span>
