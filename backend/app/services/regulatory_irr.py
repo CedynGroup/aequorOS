@@ -15,15 +15,24 @@ self-contained snapshot. Tier 1 capital is read from the capital-component
 facts at run time as the denominator for the ΔEVE limit but is deliberately
 kept OUT of the input hash, so the IRR hash scopes reproducibility to the
 interest-rate positions, hedges, and IRR parameters.
+
+Dual-curve discounting (curve platform spec §6/§13 Stage 2): when the desk
+publishes a discounting curve for the bank's currency (the AGD,
+``AEQ.{CCY}.OIS``), every EVE/duration present value discounts on it while
+the parameter-table base curve keeps its projection role (floating-leg
+repricing, EaR gap arithmetic). Absent a published discount curve the run is
+byte-identical to the historical single-curve engine — snapshot, hash and
+metrics alike.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from uuid import UUID
 
@@ -37,6 +46,7 @@ from app.domain.irr.engine import (
     BASE_CURVE_SCENARIO,
     EAR_DOWN_BP,
     EAR_UP_BP,
+    IRR_BUCKETS,
     IRR_SCENARIO_CODES,
     DurationResult,
     EveResult,
@@ -82,12 +92,14 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunCreate,
     RegulatoryRunRead,
 )
+from app.services import jurisdictions
 from app.services.audit import record_event
 from app.services.live_block import live_block
 from app.services.live_types import (
     LiveModuleResult,
     findings_from_validations,
 )
+from app.services.market_data import get_discount_curve
 from app.services.params import get_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
@@ -126,6 +138,12 @@ class _IrrParams:
     scenario_shocks: dict[str, dict[str, Decimal]]
     eve_limit_pct: Decimal
     nii_limit_pct: Decimal
+    # Published discounting curve (percent, keyed by the nine bucket midpoints
+    # like ``curve``). None means no discount curve is published for the
+    # bank's currency — the graceful-fallback contract: every PV then
+    # discounts on ``curve`` and results stay byte-identical to the
+    # single-curve engine (the hermetic sample seed publishes no desk curves).
+    discount_curve: dict[Decimal, Decimal] | None = None
 
 
 @dataclass(frozen=True)
@@ -353,11 +371,18 @@ def _run_analysis(  # noqa: PLR0913
             "Tier 1 capital could not be derived from the capital-component facts.",
             None,
         )
+    # Floating legs keep repricing off the PROJECTION curve (active.curve);
+    # only present values move to the published discount curve when one exists.
     positions = _positions_from_facts(facts, active.curve)
     gap = compute_gap(positions)
-    duration = compute_duration(positions, active.curve)
+    duration = compute_duration(positions, active.curve, discount_curve=active.discount_curve)
     eve = run_irr_scenarios(
-        positions, active.curve, active.scenario_shocks, tier1, active.eve_limit_pct
+        positions,
+        active.curve,
+        active.scenario_shocks,
+        tier1,
+        active.eve_limit_pct,
+        discount_curve=active.discount_curve,
     )
     up_450 = active.scenario_shocks.get("parallel_up_450", {}).get("parallel_bp")
     down_450 = active.scenario_shocks.get("parallel_down_450", {}).get("parallel_bp")
@@ -816,10 +841,14 @@ def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its f
             None,
         )
     positions = _positions_from_facts(facts, active.curve)
-    base_eve = compute_eve(positions, active.curve, {})
+    # Workbench parity: the same discount curve the official runs load —
+    # shifts stay keyed by the projection curve's midpoints, shared by both.
+    base_eve = compute_eve(positions, active.curve, {}, discount_curve=active.discount_curve)
     if shocks:
         shifts = scenario_shifts(scenario_code, shocks, active.curve)
-        shifted_eve = compute_eve(positions, active.curve, shifts)
+        shifted_eve = compute_eve(
+            positions, active.curve, shifts, discount_curve=active.discount_curve
+        )
     else:
         shifted_eve = base_eve
     delta = shifted_eve - base_eve
@@ -1193,12 +1222,70 @@ def _load_irr_params_or_none(
         or NII_LIMIT_THRESHOLD not in thresholds
     ):
         return None
+    # Dual-curve wiring (curve platform spec §6/§13 Stage 2): when the desk
+    # publishes a discounting curve for the bank's currency (AGD =
+    # AEQ.{CCY}.OIS, else any curve_type='discount'), every EVE/duration PV
+    # discounts on it; absent, ``discount_curve`` stays None and behavior is
+    # byte-identical to the historical single-curve engine.
+    discount_curve: dict[Decimal, Decimal] | None = None
+    discount_view = get_discount_curve(
+        db, ctx.organization_id, bank.id, jurisdictions.base_currency(bank), as_of
+    )
+    if discount_view is not None:
+        discount_curve = discount_curve_midpoints_pct(discount_view.points)
     return _IrrParams(
         curve=curve,
         scenario_shocks=scenario_shocks,
         eve_limit_pct=thresholds[EVE_LIMIT_THRESHOLD],
         nii_limit_pct=thresholds[NII_LIMIT_THRESHOLD],
+        discount_curve=discount_curve,
     )
+
+
+# Discount-curve percent values quantize to 6 dp (the engine's RATIO_PCT
+# scale) so an unchanged published curve always reproduces the same snapshot
+# block — and therefore the same input_hash.
+_DISCOUNT_PCT = Decimal("0.000001")
+_TWELVE_MONTHS = Decimal("12")
+
+
+def discount_curve_midpoints_pct(points: Sequence[tuple[int, Decimal]]) -> dict[Decimal, Decimal]:
+    """Published curve nodes → the nine-midpoint percent dict the engine uses.
+
+    ``points`` are ``(tenor_months, zero rate as a decimal fraction)`` pairs as
+    served by :class:`app.services.market_data.CurveView`. Tenors convert to
+    years (``months / 12``); zero rates interpolate LINEARLY between published
+    nodes and extrapolate FLAT past both ends; fractions convert to percent and
+    quantize deterministically to 6 dp (``ROUND_HALF_UP``), so a node sitting
+    exactly on a bucket midpoint reproduces its published rate. Keying by the
+    nine canonical bucket midpoints keeps ``scenario_shifts`` (built from the
+    projection curve's midpoints) and the engine's exact-lookup ``_curve_rate``
+    working unchanged on either curve.
+    """
+    by_tenor: dict[Decimal, Decimal] = {}
+    for tenor_months, rate in points:
+        # Last row wins on a duplicate tenor — points arrive tenor-sorted.
+        by_tenor[Decimal(tenor_months) / _TWELVE_MONTHS] = Decimal(rate)
+    nodes = sorted(by_tenor.items())
+    if not nodes:
+        raise ValueError("A published discount curve must carry at least one point.")
+    return {
+        midpoint: (_zero_rate_at(nodes, midpoint) * _HUNDRED).quantize(
+            _DISCOUNT_PCT, rounding=ROUND_HALF_UP
+        )
+        for _, midpoint in IRR_BUCKETS
+    }
+
+
+def _zero_rate_at(nodes: list[tuple[Decimal, Decimal]], tenor_years: Decimal) -> Decimal:
+    if tenor_years <= nodes[0][0]:
+        return nodes[0][1]
+    if tenor_years >= nodes[-1][0]:
+        return nodes[-1][1]
+    for (t0, r0), (t1, r1) in zip(nodes, nodes[1:], strict=False):
+        if t0 <= tenor_years <= t1:
+            return r0 + (r1 - r0) * (tenor_years - t0) / (t1 - t0)
+    raise AssertionError("unreachable: sorted nodes bracket every interior tenor")
 
 
 def _build_snapshot(
@@ -1241,7 +1328,7 @@ def _build_snapshot(
 def _snapshot_parameters(active: _IrrParams | None) -> dict[str, Any]:
     if active is None:
         return {"base_curve_pct": {}, "scenario_shocks": {}, "limits_pct": {}}
-    return {
+    parameters: dict[str, Any] = {
         "base_curve_pct": {
             str(midpoint): str(rate) for midpoint, rate in sorted(active.curve.items())
         },
@@ -1254,6 +1341,16 @@ def _snapshot_parameters(active: _IrrParams | None) -> dict[str, Any]:
             NII_LIMIT_THRESHOLD: str(active.nii_limit_pct),
         },
     }
+    # Hash-compatibility precedent (regulatory_forecasting ``horizon_years``):
+    # the discount-curve block appears ONLY when a published discount curve
+    # was actually used, so every bank without one keeps reproducing its
+    # historical input_hash byte-for-byte under the same INPUT_SCHEMA_VERSION,
+    # while a run that DID discount on it is reproducible from its snapshot.
+    if active.discount_curve is not None:
+        parameters["discount_curve_pct"] = {
+            str(midpoint): str(rate) for midpoint, rate in sorted(active.discount_curve.items())
+        }
+    return parameters
 
 
 def _sorted_attributes(attributes: dict[str, Any]) -> dict[str, Any]:

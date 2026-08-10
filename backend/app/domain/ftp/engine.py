@@ -606,6 +606,12 @@ def contingent_liquidity_charges(
     is the FTP curve's term-minus-overnight spread at the buffer tenor,
     floored at zero (an inverted curve never turns the charge into a rebate).
     """
+    # Dual-curve decision (curve platform spec §6): this carry deliberately
+    # stays on the TRANSFER (FTP) curve, not the platform discount curve
+    # (AGD). It prices the funding COST of pre-funding a stressed draw — a
+    # funding-cost spread over the bank's own transfer curve — not a present
+    # value, so discounting-curve selection plays no role here or anywhere in
+    # FTP pricing (product profitability, NMD split, LTP alike).
     carry = max(curve.rate_at(buffer_tenor_years) - curve.overnight_rate_pct, _ZERO)
     items = tuple(
         LtpChargeItem(

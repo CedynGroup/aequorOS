@@ -217,6 +217,17 @@ by `DataScope` + as-of + institution through `app/services/market_data.py`, and 
   (spec §15; consensus is Phase 3). Every read view carries `SourceAttribution`
   (source_system, batch, ingested_at, stale, age) and fact derivation records the winning
   source in `attributes["derived_from"]`; stale usage is attributed, never silent.
+- **Dual-curve selection** (curve platform spec §6 / §13 Stage 2): discounting is a separate
+  selection from projection. `market_data.get_discount_curve` prefers the desk's
+  `AEQ.{CCY}.OIS` (the AGD for GHS), else the latest current-generation
+  `curve_type='discount'` curve, else returns None — and None means every consumer falls back
+  to single-curve behavior, byte-identical to the historical runs (the hermetic seed publishes
+  no desk curves). IRR EVE/duration PVs discount on the published curve when present (snapshot
+  gains a `discount_curve_pct` block only then; hashes of unaffected banks never move), while
+  floating legs keep repricing off the projection curve. Projection selection: fact derivation
+  prefers the desk's `AEQ.{CCY}.SOV.ZERO` for the FTP/transfer base curve and falls back to
+  currency-level arbitration, stamping the winner in `derived_from`; FTP pricing itself never
+  reads the discount curve (transfer-curve carry is a funding cost, not a PV).
 - **Credentials**: `EncryptedDbVault` (AES-256-GCM, key from `CREDENTIAL_VAULT_MASTER_KEY`,
   per-pull retrieve-and-discard, write-only at the API — responses carry only fingerprint,
   expiry, status). Lifecycle states per §10.2 with expiry-driven

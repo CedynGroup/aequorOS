@@ -47,6 +47,28 @@ _INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
 # 251 spot observations yield the 250 daily returns the FX VaR window uses.
 DEFAULT_FX_HISTORY_LIMIT = 251
 
+# Constructed-curve family a desk publishes for discounting (curve platform
+# spec §6: OIS-based discounting separated from tenor projection curves).
+DISCOUNT_CURVE_TYPE = "discount"
+
+
+def desk_discount_curve_name(currency: str) -> str:
+    """The desk's synthetic OIS / discounting proxy for ``currency``.
+
+    Spec §8 naming grammar ``ISSUER.CURRENCY.SECTOR.TYPE`` — for GHS this is
+    ``AEQ.GHS.OIS``, the Aequor Ghana Discounting Curve (AGD).
+    """
+    return f"AEQ.{currency.upper()}.OIS"
+
+
+def desk_projection_curve_name(currency: str) -> str:
+    """The desk's bootstrapped sovereign zero curve for ``currency``.
+
+    Spec §8 naming grammar — for GHS this is ``AEQ.GHS.SOV.ZERO``, the Aequor
+    Ghana Sovereign Curve (AGS), the preferred projection/transfer-pricing base.
+    """
+    return f"AEQ.{currency.upper()}.SOV.ZERO"
+
 
 def _as_aware(value: datetime) -> datetime:
     """Normalize a possibly-naive DB datetime (SQLite round-trip) to UTC."""
@@ -147,6 +169,7 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
     as_of: date,
     *,
     curve_name: str | None = None,
+    curve_type: str | None = None,
     now: datetime | None = None,
 ) -> CurveView | None:
     """The authoritative yield curve for ``currency`` at ``as_of``, or None.
@@ -154,10 +177,12 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
     Latest business date at or before ``as_of`` wins; among same-date curves
     from different sources the most recently ingested wins (§15).
 
-    ``curve_name`` is an OPT-IN narrowing for multi-curve consumers (the
-    Markets tab serving every published curve by name). When omitted the
-    arbitration is exactly the historical single-curve-per-currency behavior
-    that ``fact_derivation`` and the calculation engines depend on.
+    ``curve_name`` and ``curve_type`` are OPT-IN narrowings for multi-curve
+    consumers (the Markets tab serving every published curve by name; the
+    dual-curve discount selection filtering to the ``discount`` family). When
+    omitted the arbitration is exactly the historical
+    single-curve-per-currency behavior that ``fact_derivation`` and the
+    calculation engines depend on.
     """
     now = now or utc_now()
     query = (
@@ -179,6 +204,8 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
     )
     if curve_name is not None:
         query = query.where(CanonicalYieldCurve.curve_name == curve_name)
+    if curve_type is not None:
+        query = query.where(CanonicalYieldCurve.curve_type == curve_type)
     curve = db.scalar(query)
     if curve is None:
         return None
@@ -209,6 +236,51 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
             ScopeCategory.YIELD_CURVE,
             now,
         ),
+    )
+
+
+def get_discount_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request key
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    currency: str,
+    as_of: date,
+    *,
+    now: datetime | None = None,
+) -> CurveView | None:
+    """The published DISCOUNTING curve for ``currency`` at ``as_of``, or None.
+
+    Dual-curve selection (curve platform spec §6/§13 Stage 2 — discounting
+    separated from projection): prefer the desk's synthetic OIS proxy named
+    ``AEQ.{CCY}.OIS`` (the AGD for GHS); otherwise serve the latest
+    current-generation curve published with ``curve_type='discount'`` under
+    the same §15 arbitration as every other read.
+
+    ``None`` is the graceful-fallback contract: no discounting curve is
+    published for the currency, and every consumer MUST then discount on its
+    projection/base curve — byte-identical to the historical single-curve
+    behavior.
+    """
+    now = now or utc_now()
+    preferred = get_yield_curve(
+        db,
+        organization_id,
+        bank_id,
+        currency,
+        as_of,
+        curve_name=desk_discount_curve_name(currency),
+        now=now,
+    )
+    if preferred is not None:
+        return preferred
+    return get_yield_curve(
+        db,
+        organization_id,
+        bank_id,
+        currency,
+        as_of,
+        curve_type=DISCOUNT_CURVE_TYPE,
+        now=now,
     )
 
 
