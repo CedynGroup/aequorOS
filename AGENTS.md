@@ -4,8 +4,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 
 - **`docs/product.md` is the master product roadmap** (source of truth for build
   sequencing, Phase 0 as-built anchor → Phase 7 enterprise). Sub-docs (rbac.md,
-  data_engine.md, ai_engine.md, market_data_adapter.md, regulatory_reporting.md,
-  storage.md, temenos_adapter.md) govern domain detail; product.md governs order;
+  data_engine.md, ai_engine.md, market_data_adapter.md, regulatory_reporting.md)
+  govern domain detail (storage.md and temenos_adapter.md retired 2026-08-09);
+  product.md governs order;
   code wins over both. Phase numbers are per-document — cite `doc.md §N Phase X`,
   never a bare "Phase 2".
 - **Subdomains are product SEGMENTS, not environments (2026-08-03).** The

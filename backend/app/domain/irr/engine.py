@@ -20,7 +20,12 @@ Methodology (Product Documentation Module 1):
 - **Present value / duration.** Each position is treated as a single
   zero-coupon claim of face ``amount`` maturing at its bucket ``midpoint``,
   discounted at the base curve zero rate for that midpoint:
-  ``PV = amount / (1 + z)^t``. Macaulay duration of the portfolio is the
+  ``PV = amount / (1 + z)^t``. Dual-curve mechanics (curve platform spec §6):
+  when the caller supplies a published ``discount_curve`` (same nine-midpoint
+  keys, percent values), every PV discounts on it instead, while the base
+  ``curve`` keeps its projection role (floating-leg repricing); absent a
+  discount curve the single-curve behavior is byte-identical. Macaulay
+  duration of the portfolio is the
   PV-weighted average midpoint; modified duration divides by ``(1 + y)`` where
   ``y`` is the PV-weighted average zero rate (annual compounding, ``n = 1``);
   convexity is ``(1/P)·Σ(t²·PV)/(1 + y)²``. The duration gap is
@@ -309,13 +314,25 @@ def compute_gap(positions: Sequence[IrrPosition]) -> GapResult:
 
 
 def compute_duration(
-    positions: Sequence[IrrPosition], curve: Mapping[Decimal, Decimal]
+    positions: Sequence[IrrPosition],
+    curve: Mapping[Decimal, Decimal],
+    *,
+    discount_curve: Mapping[Decimal, Decimal] | None = None,
 ) -> DurationResult:
-    """Compute PV, Macaulay/modified duration and convexity for each side."""
+    """Compute PV, Macaulay/modified duration and convexity for each side.
+
+    ``discount_curve`` (dual-curve mechanics, curve platform spec §6): when a
+    published discounting curve exists, every present value — and therefore
+    the PV-weighted times and the ``(1 + y)`` modified-duration divisor —
+    reads it instead of ``curve``, because duration measures the sensitivity
+    of PV to the rates that discount it. ``None`` keeps the historical
+    single-curve behavior byte-identical.
+    """
+    discounting = discount_curve or curve
     assets = [position for position in positions if position.side == "asset"]
     liabilities = [position for position in positions if position.side == "liability"]
-    pv_a, mac_a, mod_a, cvx_a = _side_duration(assets, curve, "asset")
-    pv_l, mac_l, mod_l, cvx_l = _side_duration(liabilities, curve, "liability")
+    pv_a, mac_a, mod_a, cvx_a = _side_duration(assets, discounting, "asset")
+    pv_l, mac_l, mod_l, cvx_l = _side_duration(liabilities, discounting, "liability")
     if pv_a <= _ZERO:
         raise IrrComputationError("Asset present value must be positive to compute duration.")
     duration_gap = duration_years(mod_a - (pv_l / pv_a) * mod_l)
@@ -336,12 +353,25 @@ def compute_eve(
     positions: Sequence[IrrPosition],
     curve: Mapping[Decimal, Decimal],
     shifts: Mapping[Decimal, Decimal],
+    *,
+    discount_curve: Mapping[Decimal, Decimal] | None = None,
 ) -> Decimal:
-    """PV(assets) − PV(liabilities) after applying ``shifts`` (decimal) to the curve."""
+    """PV(assets) − PV(liabilities) after applying ``shifts`` (decimal) to the curve.
+
+    ``discount_curve`` (dual-curve mechanics, curve platform spec §6): when a
+    published discounting curve exists, present values discount on it while
+    ``curve`` remains the projection curve the floating positions repriced
+    off. Both curves are keyed by the same nine bucket midpoints, and the SAME
+    ``shifts`` map applies to whichever curve discounts — an interest-rate
+    shock moves the whole rate complex, discounting included, so a scenario
+    stresses the discount curve exactly as it would the single curve. ``None``
+    keeps the historical single-curve behavior byte-identical.
+    """
+    discounting = discount_curve or curve
     pv_assets = _ZERO
     pv_liabilities = _ZERO
     for position in positions:
-        base_rate = _curve_rate(curve, position.midpoint_years) / _HUNDRED
+        base_rate = _curve_rate(discounting, position.midpoint_years) / _HUNDRED
         shifted_rate = base_rate + shifts.get(position.midpoint_years, _ZERO)
         pv = _present_value(position.amount, position.midpoint_years, shifted_rate)
         if position.side == "asset":
@@ -351,17 +381,24 @@ def compute_eve(
     return money(pv_assets - pv_liabilities)
 
 
-def run_irr_scenarios(
+def run_irr_scenarios(  # noqa: PLR0913 - the scenario sweep names its full scope
     positions: Sequence[IrrPosition],
     curve: Mapping[Decimal, Decimal],
     scenario_shocks: Mapping[str, Mapping[str, Decimal]],
     tier1: Decimal,
     limit_pct: Decimal,
+    *,
+    discount_curve: Mapping[Decimal, Decimal] | None = None,
 ) -> EveResult:
-    """Run the base plus six Basel EVE scenarios and evaluate the ΔEVE limit."""
+    """Run the base plus six Basel EVE scenarios and evaluate the ΔEVE limit.
+
+    ``discount_curve`` threads into every :func:`compute_eve` — the scenario
+    shifts stay built from ``curve``'s midpoints, which are the same nine keys
+    both curves share, so one shift map shocks whichever curve discounts.
+    """
     if tier1 <= _ZERO:
         raise IrrComputationError("Tier 1 capital must be positive to evaluate the EVE limit.")
-    base_eve = compute_eve(positions, curve, {})
+    base_eve = compute_eve(positions, curve, {}, discount_curve=discount_curve)
     line_items: list[IrrLineItem] = [
         IrrLineItem(
             section="irr_eve",
@@ -383,7 +420,7 @@ def run_irr_scenarios(
         if shocks is None:
             raise MissingParameterError(f"stress_shock:{code}")
         shifts = _scenario_shifts(code, shocks, curve)
-        eve = compute_eve(positions, curve, shifts)
+        eve = compute_eve(positions, curve, shifts, discount_curve=discount_curve)
         delta = money(eve - base_eve)
         pct = ratio_pct(delta / tier1 * _HUNDRED)
         # Jurisdiction add-ons are informational until their directive takes

@@ -204,6 +204,7 @@ from app.models import (
 from app.services import jurisdictions
 from app.services.market_data import (
     CurveView,
+    desk_projection_curve_name,
     get_fx_spot,
     get_fx_spot_history,
     get_yield_curve,
@@ -599,9 +600,25 @@ def _load_market_data(
     ``fx_rates_current`` dataset; spot histories deep enough for a VaR return
     series replace ``fx_rates_historical`` per currency. Everything absent
     falls back to the legacy reference rows.
+
+    Projection-curve preference (curve platform spec §13 Stage 2): the desk's
+    published sovereign zero (``AEQ.{CCY}.SOV.ZERO``) wins over currency-level
+    vendor arbitration whenever it exists — it is the secondary-market,
+    arbitrage-consistent upgrade of the same curve. Absent a desk publish the
+    selection is exactly the historical arbitration, so books without desk
+    curves derive byte-identically.
     """
     base_ccy = jurisdictions.base_currency(bank)
-    market_curve = get_yield_curve(db, ctx.organization_id, bank.id, base_ccy, as_of)
+    market_curve = get_yield_curve(
+        db,
+        ctx.organization_id,
+        bank.id,
+        base_ccy,
+        as_of,
+        curve_name=desk_projection_curve_name(base_ccy),
+    )
+    if market_curve is None:
+        market_curve = get_yield_curve(db, ctx.organization_id, bank.id, base_ccy, as_of)
     market_spots: dict[str, Decimal] = {}
     market_fx_history: dict[str, list[tuple[date, Decimal]]] = {}
     for currency in list_fx_base_currencies(db, ctx.organization_id, bank.id, base_ccy, as_of):
@@ -2117,6 +2134,11 @@ def _derive_ftp_curve(
             f"canonical {canonical.base_currency} market yield curve {market_curve.curve_name} "
             f"({market_curve.attribution.source_system})"
         )
+        if market_curve.curve_name == desk_projection_curve_name(canonical.base_currency):
+            # Selection provenance: the desk sovereign zero was preferred over
+            # currency-level vendor arbitration (curve platform spec §13
+            # Stage 2); the arbitration winner keeps the unmarked string.
+            base_source += ", desk-published sovereign zero preferred"
         if market_curve.attribution.stale:
             # Stale data is usable but never silent (§15): attribute it.
             curve_warnings.append(

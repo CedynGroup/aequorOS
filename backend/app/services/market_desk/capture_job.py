@@ -171,9 +171,10 @@ def run_desk_capture(session: Session, job: Job) -> None:
             sources_summary[source_key] = {"status": "skipped_not_due", "reason": due_reason}
             continue
         sources_summary[source_key] = _capture_source(session, spec, cob, due_reason)
-    # Commit what landed before staging: a determination-stage crash must
-    # never roll back tonight's captures and observations.
-    session.commit()
+        # Commit per source: a crash (or an operator watching the console)
+        # sees each source land as it finishes, and a later source's failure
+        # can never roll back an earlier source's captures.
+        session.commit()
 
     determination_summary = _stage_determination(session, cob)
     session.commit()
