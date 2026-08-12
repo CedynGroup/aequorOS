@@ -33,11 +33,11 @@ from app.schemas.capital_plan import (
 from app.schemas.forecasting import ForecastRunCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import capital_plan, regulatory_forecasting, regulatory_liquidity
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
@@ -119,7 +119,7 @@ def _run_forecast(db: Session) -> None:
 def test_capital_plan_lifecycle_requires_forecast_and_maker_checker(
     db_session: Session,
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _ensure_checker(db_session)
 
     capital_plan.put_capital_plan(
@@ -175,7 +175,7 @@ def test_capital_plan_lifecycle_requires_forecast_and_maker_checker(
 def test_ilaap_component_refreshes_quarterly_from_stored_liquidity_state(
     db_session: Session,
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period_id = _period_id(db_session)
 
     with pytest.raises(HTTPException) as excinfo:

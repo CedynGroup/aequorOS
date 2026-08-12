@@ -118,6 +118,19 @@ def _tender_rows(
                     attributes=dict(attributes),
                 )
             )
+            # BoG's "interest" leg is the true (ACT/364) yield — also write
+            # the YIELD alias so package optional series + calculation
+            # reconstruction cross-check see an observed yield when present.
+            if leg == "INTEREST" and stem.startswith(("GHS.TBILL.", "GHS.BOGBILL.")):
+                result.observations.append(
+                    ObservationDraft(
+                        series_code=f"{stem}.YIELD",
+                        as_of_date=issue_date,
+                        value=value,
+                        unit="pct",
+                        attributes={**attributes, "alias_of": f"{stem}.INTEREST"},
+                    )
+                )
     if empty_dates:
         result.warnings.append(f"skipped {empty_dates} row(s) with empty issue date")
     return result
@@ -204,7 +217,12 @@ def parse_table62_mpr(raw: bytes, *, context: ParseContext) -> ParseResult:
 def parse_fx_pairs(raw: bytes, *, context: ParseContext) -> ParseResult:
     """Tables 31 (latest day) and 40 (full history) share one shape:
     Date, Currency, Currency Pair, Buying, Selling, Mid Rate
-    -> GHS.FX.{PAIR}.{BUY,SELL,MID}."""
+    -> GHS.FX.{PAIR}.{BUY,SELL,MID}.
+
+    USDGHS mid is also dual-written as ``GHS.USDGHS.MID`` — the desk package
+    and determination snapshot codes use that shorter alias (legacy, still
+    the rates-package required series). Both codes supersede independently.
+    """
     del context
     result = ParseResult()
     empty_dates = 0
@@ -229,6 +247,20 @@ def parse_fx_pairs(raw: bytes, *, context: ParseContext) -> ParseResult:
                     attributes={"currency": currency},
                 )
             )
+            # Desk rates package + calculation still key the USD/GHS mid as
+            # GHS.USDGHS.MID (determinations.DEFAULT_INPUT_SERIES / package
+            # REQUIRED_RATES_SERIES). Dual-write so live captures satisfy both
+            # codes without a data migration.
+            if pair == "USDGHS" and leg == "MID":
+                result.observations.append(
+                    ObservationDraft(
+                        series_code="GHS.USDGHS.MID",
+                        as_of_date=as_of,
+                        value=value,
+                        unit="rate",
+                        attributes={"currency": currency, "alias_of": "GHS.FX.USDGHS.MID"},
+                    )
+                )
     if empty_dates:
         result.warnings.append(f"skipped {empty_dates} row(s) with empty date")
     return result
@@ -290,15 +322,30 @@ def parse_table21_monthly_matrix(raw: bytes, *, context: ParseContext) -> ParseR
             if value == 0:
                 zero_cells += 1
                 continue
+            as_of = date(year, month_index + 1, 1)
+            attrs = {"variable": label, "month": _MONTH_COLUMNS[month_index]}
             result.observations.append(
                 ObservationDraft(
                     series_code=f"GHS.ECONDATA.{slug}",
-                    as_of_date=date(year, month_index + 1, 1),
+                    as_of_date=as_of,
                     value=value,
                     unit="pct",
-                    attributes={"variable": label, "month": _MONTH_COLUMNS[month_index]},
+                    attributes=dict(attrs),
                 )
             )
+            # BoG monthly matrix carries GRR (fresher than GSS statsbank, which
+            # ends ~2024M07). Dual-write the canonical GHS.GRR so the rates
+            # package is not stuck on a multi-year-stale GSS print.
+            if slug == "GRR":
+                result.observations.append(
+                    ObservationDraft(
+                        series_code="GHS.GRR",
+                        as_of_date=as_of,
+                        value=value,
+                        unit="pct",
+                        attributes={**attrs, "source_table": "bog_econ_interest_monthly"},
+                    )
+                )
     if zero_cells:
         result.warnings.append(f"skipped {zero_cells} 0.00-as-missing cell(s)")
     if junk_years:

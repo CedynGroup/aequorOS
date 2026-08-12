@@ -5,13 +5,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Path
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, Tenant
 from app.schemas.banks import (
     BankFactsRead,
     BankListRead,
     BankRead,
     BankReportingPeriodListRead,
-    BankSeedSummaryRead,
 )
 from app.services import banks
 
@@ -33,11 +32,6 @@ BankReference = Annotated[
 @router.get("/banks", response_model=BankListRead, operation_id="listBanks")
 def list_banks(db: DbSession, ctx: Tenant) -> BankListRead:
     return banks.list_banks(db, ctx)
-
-
-@router.post("/banks/seed-demo", response_model=BankSeedSummaryRead, operation_id="seedDemoBank")
-def seed_demo_bank(db: DbSession, ctx: MutationTenant) -> BankSeedSummaryRead:
-    return banks.seed_demo(db, ctx)
 
 
 @router.get("/banks/{bank_id}", response_model=BankRead, operation_id="getBank")

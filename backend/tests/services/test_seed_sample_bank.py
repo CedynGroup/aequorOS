@@ -19,11 +19,11 @@ from app.models import (
     ParamStressShock,
 )
 from app.services.params import get_active_params
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     ISOLATED_ORG_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 
 EXPECTED_PERIODS = 12
@@ -52,7 +52,7 @@ def _sum(amounts: Iterable[Decimal]) -> Decimal:
 
 
 def test_seed_creates_bank_periods_facts_and_params(db_session: Session) -> None:
-    summary = seed_sample_bank(db_session)
+    summary = materialize_canonical_test_book(db_session)
     db_session.commit()
 
     assert summary.bank_id == SAMPLE_BANK_ID
@@ -98,7 +98,7 @@ def test_seed_creates_bank_periods_facts_and_params(db_session: Session) -> None
 
 
 def test_every_period_ties_out(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
 
     periods = list(
@@ -140,7 +140,7 @@ def test_every_period_ties_out(db_session: Session) -> None:
 
 
 def test_latest_period_matches_canonical_table(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
 
     latest = db_session.scalar(
@@ -188,7 +188,7 @@ def test_latest_period_matches_canonical_table(db_session: Session) -> None:
 
 
 def test_parameter_seed_counts_and_values(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
 
     assert _count(db_session, ParamLcrRunoffRate) == 12
@@ -230,7 +230,7 @@ def test_parameter_seed_counts_and_values(db_session: Session) -> None:
 
 
 def test_irr_positions_reconcile_to_balance_sheet(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
 
     latest = db_session.scalar(
@@ -272,7 +272,7 @@ def test_irr_positions_reconcile_to_balance_sheet(db_session: Session) -> None:
 
 
 def test_irr_parameters_are_seeded(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
 
     curve_points = list(
@@ -313,7 +313,7 @@ def test_irr_parameters_are_seeded(db_session: Session) -> None:
 
 
 def test_fx_positions_reconcile_to_market_risk(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
 
     latest = db_session.scalar(
@@ -360,7 +360,7 @@ def test_fx_positions_reconcile_to_market_risk(db_session: Session) -> None:
 
 
 def test_fx_parameters_are_seeded(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
 
     single_limit = db_session.scalar(
@@ -406,7 +406,7 @@ def test_fx_parameters_are_seeded(db_session: Session) -> None:
 
 
 def test_ftp_facts_reconcile_to_balance_sheet(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
 
     latest = db_session.scalar(
@@ -472,7 +472,7 @@ def test_ftp_facts_reconcile_to_balance_sheet(db_session: Session) -> None:
 
 
 def test_ftp_parameters_are_seeded(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
 
     min_margin = db_session.scalar(
@@ -514,9 +514,9 @@ def test_ftp_parameters_are_seeded(db_session: Session) -> None:
 
 
 def test_seed_is_idempotent(db_session: Session) -> None:
-    first = seed_sample_bank(db_session)
+    first = materialize_canonical_test_book(db_session)
     db_session.commit()
-    second = seed_sample_bank(db_session)
+    second = materialize_canonical_test_book(db_session)
     db_session.commit()
 
     assert second == first
@@ -536,7 +536,7 @@ def test_seed_is_idempotent(db_session: Session) -> None:
 def test_get_active_params_excludes_superseded_rows(db_session: Session) -> None:
     # The seeded baseline is effective from 2000-01-01 (open-ended) so
     # historical backfills compute; the superseded generation sits before it.
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     superseded = ParamRiskWeight(
         organization_id=DEMO_ORG_ID,
         jurisdiction_code="GH",

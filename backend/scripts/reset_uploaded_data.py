@@ -76,12 +76,11 @@ def reset(
     *,
     wipe_all_periods: bool = False,
 ) -> dict[str, int]:
-    """Remove uploaded data; with wipe_all_periods also remove every seeded
-    reporting period (runs, facts, periods) so the bank is completely empty.
+    """Remove uploaded data; with wipe_all_periods also remove every reporting
+    period (runs, facts, periods) so the bank is completely empty.
     The bank row, regulatory parameters, and audit log are always preserved —
     parameters are jurisdiction configuration the engines need to compute on
     freshly uploaded data, and the bank row anchors the UI and storage slug.
-    Restore the synthetic baseline anytime with scripts/seed_sample_bank.py.
     """
     params = {"org": str(org_id), "bank": str(bank_id)}
     deleted: dict[str, int] = {}
@@ -214,10 +213,10 @@ def main() -> int:
     if args.wipe_all_periods:
         print(
             "Reset complete — bank is empty (parameters and bank shell kept). "
-            "Restore the synthetic baseline with scripts/seed_sample_bank.py."
+            "Re-ingest canonical source data through the Data Engine."
         )
     else:
-        print("Reset complete — bank is back to its seeded state.")
+        print("Reset complete — canonical source data and its derived facts were removed.")
     return 0
 
 

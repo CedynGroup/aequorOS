@@ -10,7 +10,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 type ActivationGroupStatus = Literal["derived", "skipped"]
 type ActivationRunStatus = Literal["succeeded", "partial", "failed"]
-type ActivationModule = Literal["liquidity", "capital", "irr", "fx", "ftp", "forecast"]
+type ActivationModule = Literal[
+    "liquidity",
+    "capital",
+    "irr",
+    "fx",
+    "ftp",
+    "forecast",
+    "implied_rating",
+]
 
 
 class ClosedModel(BaseModel):

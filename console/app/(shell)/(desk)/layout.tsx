@@ -13,10 +13,12 @@ import type { ReactNode } from 'react';
  */
 
 const TABS = [
-  { href: '/desk/determinations', label: 'Determinations' },
+  { href: '/desk/determinations', label: 'Research Desk' },
   { href: '/desk/observations', label: 'Observations' },
+  { href: '/desk/curves', label: 'Curves' },
   { href: '/desk/methodology', label: 'Methodology' },
   { href: '/desk/sources', label: 'Sources' },
+  { href: '/desk/entitlements', label: 'Entitlements' },
   { href: '/desk/publications', label: 'Publications' },
 ] as const;
 

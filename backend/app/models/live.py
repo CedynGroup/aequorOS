@@ -21,11 +21,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 
-# The six live-view surfaces. Mirrors the regulatory modules plus forecast; the
-# five cheap modules are recomputed inline on every refresh, forecast reflects
-# the latest immutable official forecast run.
-LIVE_MODULES = ("liquidity", "capital", "irr", "fx", "ftp", "forecast")
-_MODULE_CHECK = "module IN ('liquidity', 'capital', 'irr', 'fx', 'ftp', 'forecast')"
+# The live Treasury/ALM surfaces. Rating is a cheap live scorecard over the
+# canonical book, current market data, and the other live module outputs.
+LIVE_MODULES = ("liquidity", "capital", "irr", "fx", "ftp", "rating", "forecast")
+_MODULE_CHECK = "module IN ('liquidity', 'capital', 'irr', 'fx', 'ftp', 'rating', 'forecast')"
 
 
 class LiveMetric(UuidV4PrimaryKeyMixin, TimestampMixin, Base):

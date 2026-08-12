@@ -1,0 +1,134 @@
+{
+  "Curve 1": {
+    "meta": {
+      "swap_style": "USD SB 3M LIBOR",
+      "convert_to": "Money market Actual/360",
+      "as_of": "2023-12-29"
+    },
+    "n_pillars": 52,
+    "n_grid": 148,
+    "n_holidays": 150,
+    "holidays_sample": [
+      "2017-01-02",
+      "2017-01-16",
+      "2017-02-20",
+      "2017-05-29",
+      "2017-07-04"
+    ],
+    "pillar_tenors": [
+      "ON",
+      "TN",
+      "1W",
+      "1M",
+      "2M",
+      "3M",
+      "6M",
+      "9M",
+      "1Y",
+      "1Y3M",
+      "1Y6M",
+      "1Y9M",
+      "2Y",
+      "2Y3M"
+    ]
+  },
+  "Curve 2": {
+    "meta": {
+      "swap_style": "USD SB 3M LIBOR",
+      "convert_to": "Money market Actual/360",
+      "as_of": "2023-12-29"
+    },
+    "n_pillars": 52,
+    "n_grid": 148,
+    "n_holidays": 150,
+    "holidays_sample": [
+      "2017-01-02",
+      "2017-01-16",
+      "2017-02-20",
+      "2017-05-29",
+      "2017-07-04"
+    ],
+    "pillar_tenors": [
+      "ON",
+      "TN",
+      "1W",
+      "1M",
+      "2M",
+      "3M",
+      "6M",
+      "9M",
+      "1Y",
+      "1Y3M",
+      "1Y6M",
+      "1Y9M",
+      "2Y",
+      "2Y3M"
+    ]
+  },
+  "Curve 3": {
+    "meta": {
+      "swap_style": "USD - Swap SOFR OIS",
+      "convert_to": "Money market Actual/360",
+      "as_of": "2023-12-29"
+    },
+    "n_pillars": 52,
+    "n_grid": 148,
+    "n_holidays": 150,
+    "holidays_sample": [
+      "2017-01-02",
+      "2017-01-16",
+      "2017-02-20",
+      "2017-05-29",
+      "2017-07-04"
+    ],
+    "pillar_tenors": [
+      "ON",
+      "TN",
+      "1W",
+      "1M",
+      "2M",
+      "3M",
+      "6M",
+      "9M",
+      "1Y",
+      "1Y3M",
+      "1Y6M",
+      "1Y9M",
+      "2Y",
+      "2Y3M"
+    ]
+  },
+  "3M SOFR": {
+    "meta": {
+      "swap_style": "USD - Swap SOFR OIS",
+      "convert_to": "Money market Actual/360",
+      "as_of": "2023-12-29"
+    },
+    "n_pillars": 52,
+    "n_grid": 148,
+    "n_holidays": 150,
+    "holidays_sample": [
+      "2017-01-02",
+      "2017-01-16",
+      "2017-02-20",
+      "2017-05-29",
+      "2017-07-04"
+    ],
+    "pillar_tenors": [
+      "ON",
+      "TN",
+      "1W",
+      "1M",
+      "2M",
+      "3M",
+      "6M",
+      "9M",
+      "1Y",
+      "1Y3M",
+      "1Y6M",
+      "1Y9M",
+      "2Y",
+      "2Y3M"
+    ]
+  }
+}

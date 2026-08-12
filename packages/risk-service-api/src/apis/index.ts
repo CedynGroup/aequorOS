@@ -17,6 +17,7 @@ export * from "./FinancialDataApi";
 export * from "./FindingsApi";
 export * from "./ForecastingApi";
 export * from "./HealthApi";
+export * from "./ImpliedRatingApi";
 export * from "./IngestionApi";
 export * from "./InstitutionProfileApi";
 export * from "./IntegrationKeysApi";

@@ -20,6 +20,7 @@ export const LiveModule = {
   Irr: "irr",
   Fx: "fx",
   Ftp: "ftp",
+  Rating: "rating",
   Forecast: "forecast",
 } as const;
 export type LiveModule = (typeof LiveModule)[keyof typeof LiveModule];

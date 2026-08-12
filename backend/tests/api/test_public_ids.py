@@ -19,7 +19,7 @@ from app.services.public_ids import (
     new_bank_public_id,
     new_organization_public_id,
 )
-from app.services.sample_bank_seed import DEMO_ORG_ID, SAMPLE_BANK_ID
+from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, SAMPLE_BANK_ID
 from tests.api.helpers import ORG_2, headers
 
 

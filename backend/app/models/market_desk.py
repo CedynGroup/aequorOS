@@ -200,12 +200,19 @@ class DeskDetermination(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     input_snapshot: Mapped[list[Any]] = mapped_column(JSON, nullable=False)
     input_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     # Curves as node lists keyed by curve code, plus derived rates (incl. the
-    # GRR-consistent base). Set by the calculation pipeline (later phase).
+    # GRR-consistent base). Set by the calculation pipeline.
     derived_values: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
     qa_results: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
+    # Track-1 research judgment (Option B): determination-scoped overrides /
+    # spreads / assumption notes. Never written into the methodology register.
+    # Writable only while status is draft; folded into derived rates on compute
+    # and included in package_digest for reproducibility.
+    research_adjustments: Mapped[list[Any]] = mapped_column(
+        JSON, default=list, server_default=sql_text("'[]'"), nullable=False
     )
     status: Mapped[str] = mapped_column(String(16), default="draft", nullable=False)
     prepared_by: Mapped[str] = mapped_column(String(320), nullable=False)

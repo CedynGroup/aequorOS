@@ -30,6 +30,9 @@ class Jurisdiction(TimestampMixin, Base):
     central_bank_name: Mapped[str] = mapped_column(String(120), nullable=False)
     # Short display form used across the UI (BoG, CBN, CBK, SARB).
     regulator_short: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Canonical issuer identity used by the market-data rating store. This is
+    # data because issuer aliases differ across jurisdictions and vendors.
+    sovereign_rating_issuer: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # Electronic submission portal, where one exists (ORASS for BoG).
     submission_portal: Mapped[str | None] = mapped_column(String(60), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(40), nullable=True)

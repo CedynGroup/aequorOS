@@ -24,7 +24,7 @@ from app.core.config import get_settings
 from app.ml.config import TrainingConfig
 from app.ml.synthetic import generate_daily_series
 from app.services import cashflow_forecast
-from app.services.sample_bank_seed import SAMPLE_BANK_ID
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.api.helpers import ORG_1, ORG_2, headers
 
 AS_OF = datetime.date(2026, 3, 31)

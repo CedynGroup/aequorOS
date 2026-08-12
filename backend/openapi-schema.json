@@ -57,7 +57,8 @@
           "irr",
           "fx",
           "ftp",
-          "forecast"
+          "forecast",
+          "implied_rating"
         ],
         "type": "string"
       },
@@ -1336,6 +1337,13 @@
             "title": "Capital Components",
             "type": "array"
           },
+          "cash_flows": {
+            "items": {
+              "$ref": "#/components/schemas/BankFactRead"
+            },
+            "title": "Cash Flows",
+            "type": "array"
+          },
           "deposit_behavior": {
             "items": {
               "$ref": "#/components/schemas/BankFactRead"
@@ -1398,6 +1406,7 @@
           "lcr_inflows",
           "market_risk",
           "operational_income",
+          "cash_flows",
           "capital_components",
           "deposit_behavior"
         ],
@@ -2083,35 +2092,6 @@
           "closed"
         ],
         "type": "string"
-      },
-      "BankSeedSummaryRead": {
-        "additionalProperties": false,
-        "properties": {
-          "bank_id": {
-            "title": "Bank Id",
-            "type": "string"
-          },
-          "fact_count": {
-            "title": "Fact Count",
-            "type": "integer"
-          },
-          "param_count": {
-            "title": "Param Count",
-            "type": "integer"
-          },
-          "periods": {
-            "title": "Periods",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "bank_id",
-          "periods",
-          "fact_count",
-          "param_count"
-        ],
-        "title": "BankSeedSummaryRead",
-        "type": "object"
       },
       "BasisFilter": {
         "enum": [
@@ -15470,6 +15450,149 @@
         "title": "IlaapSnapshotRead",
         "type": "object"
       },
+      "ImpliedRatingRunCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "support_uplift_notches": {
+            "default": 0,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Support Uplift Notches",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reporting_period_id"
+        ],
+        "title": "ImpliedRatingRunCreate",
+        "type": "object"
+      },
+      "ImpliedRatingRunListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ImpliedRatingRunRead"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "runs"
+        ],
+        "title": "ImpliedRatingRunListRead",
+        "type": "object"
+      },
+      "ImpliedRatingRunRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_hash": {
+            "title": "Input Hash",
+            "type": "string"
+          },
+          "input_snapshot": {
+            "additionalProperties": true,
+            "title": "Input Snapshot",
+            "type": "object"
+          },
+          "methodology_code": {
+            "title": "Methodology Code",
+            "type": "string"
+          },
+          "methodology_version": {
+            "title": "Methodology Version",
+            "type": "integer"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "results": {
+            "additionalProperties": true,
+            "title": "Results",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "reporting_period_id",
+          "methodology_code",
+          "methodology_version",
+          "status",
+          "engine_version",
+          "input_hash",
+          "input_snapshot",
+          "results",
+          "error_code",
+          "error_message",
+          "completed_at",
+          "created_at"
+        ],
+        "title": "ImpliedRatingRunRead",
+        "type": "object"
+      },
       "IncentivePoint": {
         "additionalProperties": false,
         "properties": {
@@ -18563,6 +18686,7 @@
           "irr",
           "fx",
           "ftp",
+          "rating",
           "forecast"
         ],
         "type": "string"
@@ -32543,92 +32667,6 @@
         ]
       }
     },
-    "/api/v1/banks/seed-demo": {
-      "post": {
-        "operationId": "seedDemoBank",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BankSeedSummaryRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request."
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Missing or invalid tenant context."
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Requested resource was not found for the tenant."
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Workflow transition or state conflict."
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request validation failed."
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unexpected server error."
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Seed Demo Bank",
-        "tags": [
-          "banks"
-        ]
-      }
-    },
     "/api/v1/banks/{bank_id}": {
       "get": {
         "operationId": "getBank",
@@ -38165,6 +38203,315 @@
         "summary": "Run All Fx Scenarios",
         "tags": [
           "regulatory-fx"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/implied-rating/runs": {
+      "get": {
+        "operationId": "listImpliedBankRatingRuns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpliedRatingRunListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Implied Bank Rating Runs",
+        "tags": [
+          "implied-rating"
+        ]
+      },
+      "post": {
+        "operationId": "runImpliedBankRating",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImpliedRatingRunCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpliedRatingRunRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Implied Bank Rating",
+        "tags": [
+          "implied-rating"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/implied-rating/runs/{run_id}": {
+      "get": {
+        "operationId": "getImpliedBankRatingRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpliedRatingRunRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Implied Bank Rating Run",
+        "tags": [
+          "implied-rating"
         ]
       }
     },

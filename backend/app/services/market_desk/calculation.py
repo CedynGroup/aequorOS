@@ -101,12 +101,15 @@ __all__ = [
 AGS_CODE = "AEQ.GHS.SOV.ZERO"
 FWD_CODE = "AEQ.GHS.SOV.FWD"
 AGD_CODE = "AEQ.GHS.OIS"
+CORP_CODE = "AEQ.GHS.CORP"  # Stage 3 credit curve
 
 # Input series grammar (desk observation codes).
 MPR_SERIES = "GHS.MPR"
 INTERBANK_SERIES = "GHS.INTERBANK.ON"
 GRR_SERIES = "GHS.GRR"
 USDGHS_MID_SERIES = "GHS.USDGHS.MID"
+# Canonical FX mid from BoG tables 31/40; dual-written as USDGHS_MID_SERIES.
+USDGHS_FX_MID_SERIES = "GHS.FX.USDGHS.MID"
 USDGHS_REF_SERIES = "GHS.FX.USDGHS.REF"
 APR_PREFIX = "GHS.APR."
 BOND_PREFIX = "GHS.GOG.BOND."
@@ -174,12 +177,36 @@ def _canonical_json(value: Any) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _series_methodologies(parameters: dict[str, Any]) -> dict[str, Any]:
+    """Methodology treatments with code-default patterns as a floor.
+
+    Approved methodology rows lag code when new source families land (e.g.
+    GFIM). Merge missing keys from ``DEFAULT_METHODOLOGY_PARAMETERS_V1`` so
+    compute never hard-fails on series the current code already understands;
+    explicit methodology entries still win (Track-2 remains authoritative for
+    overrides).
+    """
+    from app.services.market_desk.register import (  # noqa: PLC0415 - avoid cycle at import
+        DEFAULT_METHODOLOGY_PARAMETERS_V1,
+    )
+
+    table = parameters.get("series_methodologies")
+    if not isinstance(table, dict):
+        table = {}
+    defaults = DEFAULT_METHODOLOGY_PARAMETERS_V1.get("series_methodologies") or {}
+    if not isinstance(defaults, dict):
+        return dict(table)
+    merged = dict(defaults)
+    merged.update(table)  # methodology overrides defaults
+    return merged
+
+
 def resolve_treatment(series_code: str, parameters: dict[str, Any]) -> dict[str, Any]:
     """The declared treatment for a series — exact match first, then the
     longest matching ``PREFIX.*`` pattern. An undeclared series is a hard
     error: the pipeline never silently passes unknown data through."""
-    table = parameters.get("series_methodologies")
-    if not isinstance(table, dict) or not table:
+    table = _series_methodologies(parameters)
+    if not table:
         raise CalculationError(
             "methodology parameters carry no 'series_methodologies' map; "
             "every series must have a declared treatment (spec §5)."
@@ -308,6 +335,200 @@ def _parse_snapshot(
         ]
         series[series_code] = observations
     return series
+
+
+def _corporate_yield_points(
+    snapshot: Sequence[dict[str, str]],
+    *,
+    cob: date,
+    min_trades: int,
+) -> list[tuple[int, float, str]]:
+    """Stage 3 inputs: (tenor_months, yield_decimal, series_code) for corporate GFIM yields."""
+    points: list[tuple[int, float, str]] = []
+    for entry in snapshot:
+        series = str(entry.get("series_code") or "")
+        if not series.endswith(".YIELD") or not series.startswith("GHS.GFIM."):
+            continue
+        if str(entry.get("security_type") or "") != "corporate":
+            continue
+        maturity_raw = entry.get("maturity_date")
+        if not maturity_raw:
+            continue
+        try:
+            maturity = date.fromisoformat(str(maturity_raw)[:10])
+        except ValueError:
+            continue
+        if maturity <= cob:
+            continue
+        trades_raw = entry.get("trades")
+        try:
+            trades = float(trades_raw) if trades_raw not in (None, "") else 0.0
+        except (TypeError, ValueError):
+            trades = 0.0
+        if trades < min_trades:
+            continue
+        months = max(1, int(round((maturity - cob).days / 30.4375)))
+        try:
+            yld = float(entry["value"]) / 100.0  # percent -> decimal zero proxy
+        except (TypeError, ValueError, KeyError):
+            continue
+        points.append((months, yld, series))
+    # Unique months: keep lowest yield (conservative) for duplicates.
+    by_month: dict[int, tuple[float, str]] = {}
+    for months, yld, series in sorted(points):
+        prev = by_month.get(months)
+        if prev is None or yld < prev[0]:
+            by_month[months] = (yld, series)
+    return [(m, y, s) for m, (y, s) in sorted(by_month.items())]
+
+
+def _build_credit_curve(
+    snapshot: Sequence[dict[str, str]],
+    parameters: dict[str, Any],
+    cob: date,
+    flags: list[dict[str, str]],
+) -> dict[str, Any] | None:
+    """Stage 3 — AEQ.GHS.CORP from liquid corporate GFIM yields.
+
+    Sparse EM corporate market: quoted closing yields are treated as
+    continuously-compounded zero proxies (disclosed assumption). Insufficient
+    liquid points → None (curve omitted, not a hard package failure).
+    """
+    min_points = int(parameters.get("credit_curve_min_points", 2))
+    min_trades = int(parameters.get("credit_curve_min_trades", 1))
+    points = _corporate_yield_points(snapshot, cob=cob, min_trades=min_trades)
+    if len(points) < min_points:
+        flags.append(
+            {
+                "series": CORP_CODE,
+                "flag": "credit_curve_skipped",
+                "detail": (
+                    f"only {len(points)} liquid corporate yields "
+                    f"(need {min_points}); Stage 3 curve omitted"
+                ),
+            }
+        )
+        return None
+    month_nodes = [(m, z) for m, z, _ in points]
+    year_nodes = [(m / 12.0, z) for m, z, _ in points]
+    definition = CurveDefinition(
+        curve_code=CORP_CODE,
+        curve_kind="zero",
+        day_count=DayCount.ACT_364,
+        interpolation="linear_zero",
+        extrapolation="flat_forward",
+        instrument_selection=("gfim_corporate_yield", "min_trades"),
+    )
+    block = _curve_block(
+        definition,
+        year_nodes,
+        month_nodes,
+        qa=None,
+        raw_inputs={
+            "as_of": cob.isoformat(),
+            "method": "gfim_corporate_closing_yield_as_zero_proxy",
+            "inputs": [
+                {"series": s, "tenor_months": m, "yield_pct": _fmt(z * 100.0)}
+                for m, z, s in points
+            ],
+            "disclosure": (
+                "Stage 3 credit curve: GFIM corporate closing yields as continuous "
+                "zero proxies — not a full credit-bootstrap; replace with bond-price "
+                "bootstrap when corporate liquidity supports it (Track-2)."
+            ),
+        },
+        extra={
+            "disclosure": (
+                "Aequor Ghana Credit Curve (AEQ.GHS.CORP): synthetic zeros from "
+                "liquid GFIM corporate secondary-market yields."
+            ),
+            "stage": 3,
+        },
+    )
+    return block
+
+
+def _try_true_ois(
+    snapshot: Sequence[dict[str, str]],
+    parameters: dict[str, Any],
+    cob: date,
+    flags: list[dict[str, str]],
+) -> dict[str, Any] | None:
+    """Stage 4 path: bootstrap AGD from GHS.OIS.* instrument quotes when present.
+
+    Ghana has no liquid OIS market yet — this returns None and the synthetic
+    AGD path remains the production default. When instrument series appear,
+    set methodology discounting_mode=ois_bootstrap (Track-2).
+    """
+    mode = str(parameters.get("discounting_mode", "synthetic_agd"))
+    ois_quotes: list[tuple[str, float]] = []
+    for entry in snapshot:
+        series = str(entry.get("series_code") or "")
+        if not series.startswith("GHS.OIS."):
+            continue
+        try:
+            ois_quotes.append((series, float(entry["value"])))
+        except (TypeError, ValueError, KeyError):
+            continue
+    if mode != "ois_bootstrap":
+        if ois_quotes:
+            flags.append(
+                {
+                    "series": AGD_CODE,
+                    "flag": "ois_instruments_present_mode_synthetic",
+                    "detail": (
+                        f"{len(ois_quotes)} GHS.OIS.* quotes ignored because "
+                        "discounting_mode is synthetic_agd (Track-2 to promote)"
+                    ),
+                }
+            )
+        return None
+    if len(ois_quotes) < 2:
+        flags.append(
+            {
+                "series": AGD_CODE,
+                "flag": "ois_bootstrap_fallback_synthetic",
+                "detail": (
+                    f"discounting_mode=ois_bootstrap but only {len(ois_quotes)} "
+                    "GHS.OIS.* quotes; falling back to synthetic AGD"
+                ),
+            }
+        )
+        return None
+    # Minimal true-OIS stub: flat continuous zeros from average instrument quote
+    # until a full OIS bootstrap lands with meeting-date helpers. Disclosed.
+    level = sum(v for _, v in ois_quotes) / len(ois_quotes) / 100.0
+    grid = parameters.get("agd_node_grid_months") or [1, 3, 6, 12, 24, 36, 60]
+    month_nodes = [(int(m), level) for m in grid]
+    year_nodes = [(m / 12.0, z) for m, z in month_nodes]
+    definition = CurveDefinition(
+        curve_code=AGD_CODE,
+        curve_kind="discount",
+        day_count=DayCount.ACT_364,
+        interpolation="log_linear_df",
+        extrapolation="flat_forward",
+        instrument_selection=("GHS.OIS.*", "ois_bootstrap"),
+    )
+    return _curve_block(
+        definition,
+        year_nodes,
+        month_nodes,
+        qa=None,
+        raw_inputs={
+            "as_of": cob.isoformat(),
+            "mode": "ois_bootstrap",
+            "instruments": [{"series": s, "rate_pct": _fmt(v)} for s, v in ois_quotes],
+            "disclosure": (
+                "Stage 4 true-OIS path (stub): average of GHS.OIS.* quotes as a flat "
+                "discount curve until full OIS instrument bootstrap is wired."
+            ),
+        },
+        extra={
+            "disclosure": "True OIS discounting path (methodology discounting_mode=ois_bootstrap).",
+            "stage": 4,
+            "discounting_mode": "ois_bootstrap",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1074,10 +1295,15 @@ def _lending_indicator(ctx: _Ctx, rates: dict[str, Any]) -> None:
 def _fx_section(ctx: _Ctx) -> tuple[dict[str, Any], dict[str, str]]:
     """Rich FX detail plus the flat adapter map. The BoG weighted-median
     reference rate is the published anchor when present; the interbank mid is
-    the fallback."""
+    the fallback. Mid resolves GHS.USDGHS.MID first, then GHS.FX.USDGHS.MID."""
     detail: dict[str, Any] = {}
     flat: dict[str, str] = {}
-    mid = ctx.latest(USDGHS_MID_SERIES)
+    mid = ctx.latest(USDGHS_MID_SERIES) or ctx.latest(USDGHS_FX_MID_SERIES)
+    mid_code = (
+        USDGHS_MID_SERIES
+        if ctx.latest(USDGHS_MID_SERIES) is not None
+        else USDGHS_FX_MID_SERIES
+    )
     ref = ctx.latest(USDGHS_REF_SERIES)
     pair: dict[str, Any] = {}
     if mid is not None:
@@ -1085,8 +1311,8 @@ def _fx_section(ctx: _Ctx) -> tuple[dict[str, Any], dict[str, str]]:
             "value": _fmt(mid.value, 4),
             "as_of": mid.as_of.isoformat(),
             "treatment": "pass_through",
-            "source_series": USDGHS_MID_SERIES,
-            "staleness_flag": ctx.is_stale(USDGHS_MID_SERIES, mid),
+            "source_series": mid_code,
+            "staleness_flag": ctx.is_stale(mid_code, mid),
         }
     if ref is not None:
         pair["reference"] = {
@@ -1189,7 +1415,19 @@ def run_pipeline(
     sovereign = _build_sovereign(ctx)
     agd = _build_agd(ctx)
     curves = _sovereign_blocks(ctx, sovereign)
-    curves[AGD_CODE] = _agd_block(ctx, agd, sovereign)
+    # Stage 4 true-OIS when methodology requests it and instruments exist;
+    # otherwise synthetic AGD (Stage 2).
+    true_ois = _try_true_ois(snapshot, parameters, cob_date, ctx.flags)
+    if true_ois is not None:
+        curves[AGD_CODE] = true_ois
+        discounting_mode = "ois_bootstrap"
+    else:
+        curves[AGD_CODE] = _agd_block(ctx, agd, sovereign)
+        discounting_mode = "synthetic_agd"
+    # Stage 3 credit curve (optional — omitted when illiquid).
+    credit = _build_credit_curve(snapshot, parameters, cob_date, ctx.flags)
+    if credit is not None:
+        curves[CORP_CODE] = credit
 
     rates: dict[str, Any] = {}
     _mpr_rate(ctx, rates)
@@ -1201,28 +1439,48 @@ def run_pipeline(
     fx_detail, fx_flat = _fx_section(ctx)
 
     forward_gate_passed = sovereign.qa is not None and sovereign.qa.passed
-    qa_passed = sovereign.error is None and forward_gate_passed
+    # Curves QA is the hard forward-smoothness / build gate (spec §5 step 6).
+    # Rates QA is independent: a weekly rates package may publish when curves
+    # fail (rates-first product decision). Core policy + interbank prints are
+    # the minimum rates-package signal.
+    curves_qa_passed = sovereign.error is None and forward_gate_passed
+    rates_qa_passed = (
+        bool(rates) and MPR_SERIES in rates and INTERBANK_SERIES in rates
+    )
+    # ``qa_passed`` follows rates readiness so approve/publish paths that still
+    # read the legacy key gate on the rates package, not curve oscillation.
+    qa_passed = rates_qa_passed
 
     derived_values: dict[str, Any] = {
         "qa_passed": qa_passed,
+        "rates_qa_passed": rates_qa_passed,
+        "curves_qa_passed": curves_qa_passed,
         "curves": curves,
         "rates": rates,
         # Flat adapter-contract sections (aequor_desk build_extraction shape).
         "reference_rates": {code: entry["value"] for code, entry in rates.items()},
         "fx": fx_detail,
         "fx_rates": fx_flat,
+        "discounting_mode": discounting_mode,
+        "credit_curve_present": credit is not None,
     }
     qa_results: dict[str, Any] = {
         "qa_passed": qa_passed,
+        "rates_qa_passed": rates_qa_passed,
+        "curves_qa_passed": curves_qa_passed,
         "gates": {
+            "rates_package": "pass" if rates_qa_passed else "fail",
             "curve_build": "pass" if sovereign.error is None else "fail",
             "forward_qa": "pass" if forward_gate_passed else "fail",
+            "credit_curve": "pass" if credit is not None else "skipped",
+            "discounting": discounting_mode,
         },
         "forward_qa": _forward_qa_payload(sovereign.qa),
         "nss_fallback_used": sovereign.nss_used,
         "overnight_spread": agd.diagnostics,
         "cointegration_diagnostic": _cointegration_diagnostic(ctx),
         "grr_check": grr_check,
+        "discounting_mode": discounting_mode,
         "flags": ctx.flags,
     }
     return derived_values, qa_results
@@ -1304,11 +1562,22 @@ def _latest_rows_by_pattern(
 
 
 def _entry(row: DeskObservation) -> dict[str, str]:
-    return {
+    entry: dict[str, str] = {
         "series_code": row.series_code,
         "as_of_date": row.as_of_date.isoformat(),
         "value": str(row.value),
     }
+    # Optional lineage attrs for Stage 3 credit inputs (GFIM corporate yields).
+    attrs = row.attributes or {}
+    if attrs.get("security_type"):
+        entry["security_type"] = str(attrs["security_type"])
+    if attrs.get("maturity_date"):
+        entry["maturity_date"] = str(attrs["maturity_date"])[:10]
+    if attrs.get("trades") is not None:
+        entry["trades"] = str(attrs["trades"])
+    elif "TRADES" in (row.series_code or ""):
+        entry["trades"] = str(row.value)
+    return entry
 
 
 def _grr_month_rows(db: Session, cob_date: date) -> list[DeskObservation]:
@@ -1334,16 +1603,28 @@ def build_calculation_snapshot(
     point-in-time snapshot plus every windowed history the methodology's
     treatments require. Same entry shape and canonical sort as
     ``determinations.build_input_snapshot`` — value-based, id-free.
+
+    Series with no resolvable treatment (even after merging code defaults)
+    are dropped so optional source families never block compute.
     """
     collected: dict[str, dict[str, str]] = {}
+
+    def _admissible(entry: dict[str, str]) -> bool:
+        try:
+            resolve_treatment(str(entry.get("series_code") or ""), parameters)
+            return True
+        except CalculationError:
+            return False
 
     def add(rows: list[DeskObservation]) -> None:
         for row in rows:
             entry = _entry(row)
-            collected[_canonical_json(entry)] = entry
+            if _admissible(entry):
+                collected[_canonical_json(entry)] = entry
 
     for entry in determinations.build_input_snapshot(db, cob_date):
-        collected[_canonical_json(entry)] = entry
+        if _admissible(entry):
+            collected[_canonical_json(entry)] = entry
 
     history_start = cob_date - timedelta(days=_history_lookback_days(parameters))
     for code in (INTERBANK_SERIES, "GHS.TBILL.91.DISCOUNT"):
@@ -1354,15 +1635,111 @@ def build_calculation_snapshot(
     if before_window is not None:
         add([before_window])
     # Latest-only extras beyond the default series.
-    for code in (USDGHS_REF_SERIES, "GHS.TBILL.182.YIELD", "GHS.TBILL.364.YIELD"):
+    for code in (
+        USDGHS_REF_SERIES,
+        USDGHS_MID_SERIES,
+        USDGHS_FX_MID_SERIES,
+        "GHS.TBILL.182.YIELD",
+        "GHS.TBILL.364.YIELD",
+        "GHS.TBILL.91.YIELD",
+    ):
         row = _latest_row(db, code, cob_date)
         if row is not None:
             add([row])
     add(_grr_month_rows(db, cob_date))
     add(_latest_rows_by_pattern(db, APR_PREFIX, cob_date))
     add(_latest_rows_by_pattern(db, BOND_PREFIX, cob_date))
+    # Stage 3 credit inputs: latest GFIM corporate yields (and trade counts).
+    add(_latest_rows_by_pattern(db, "GHS.GFIM.", cob_date))
+    # Stage 4 true-OIS inputs when instrument series exist.
+    add(_latest_rows_by_pattern(db, "GHS.OIS.", cob_date))
 
     return sorted(collected.values(), key=_canonical_json)
+
+
+# ---------------------------------------------------------------------------
+# Research adjustments (Option B — applied after methodology-derived rates).
+# ---------------------------------------------------------------------------
+
+
+def _apply_research_adjustments(
+    derived_values: dict[str, Any],
+    qa_results: dict[str, Any],
+    adjustments: list[dict[str, Any]],
+) -> None:
+    """Fold determination-scoped judgment into derived rates in place.
+
+    Order is methodology pipeline first, then adjustments — so an override
+    replaces the computed level and additive_bps shifts it. Assumption notes
+    leave values unchanged and only record on the rate entry / flags.
+    """
+    if not adjustments:
+        return
+    rates = derived_values.setdefault("rates", {})
+    flags = qa_results.setdefault("flags", [])
+    if not isinstance(flags, list):
+        flags = []
+        qa_results["flags"] = flags
+
+    for adj in adjustments:
+        series = str(adj.get("series_code") or "")
+        kind = str(adj.get("kind") or "")
+        if not series or not kind:
+            continue
+        entry = rates.get(series)
+        if entry is None or not isinstance(entry, dict):
+            # Create a research-only rate row when overriding a series the
+            # pipeline did not emit (still auditable and publishable).
+            entry = {
+                "value": "0.000000",
+                "unit": "pct",
+                "treatment": "research_adjustment",
+                "source_series": [],
+                "as_of": derived_values.get("rates", {})
+                .get(MPR_SERIES, {})
+                .get("as_of", ""),
+                "staleness_flag": False,
+            }
+            rates[series] = entry
+        base_raw = entry.get("value", "0")
+        try:
+            base = float(base_raw)
+        except (TypeError, ValueError):
+            base = 0.0
+        detail = dict(entry.get("detail") or {})
+        detail["research_adjustment"] = {
+            "kind": kind,
+            "value": adj.get("value"),
+            "rationale": adj.get("rationale"),
+            "applied_by": adj.get("applied_by"),
+            "applied_at": adj.get("applied_at"),
+            "pre_adjustment_value": _fmt(base),
+        }
+        if kind == "override":
+            new_val = float(str(adj["value"]))
+            entry["value"] = _fmt(new_val)
+            entry["treatment"] = "research_override"
+        elif kind == "additive_bps":
+            # value is basis points; rates are percent levels.
+            bps = float(str(adj["value"]))
+            entry["value"] = _fmt(base + bps / 100.0)
+            entry["treatment"] = "research_spread"
+        elif kind == "assumption_note":
+            # No numeric change — judgment disclosure only.
+            pass
+        entry["detail"] = detail
+        flags.append(
+            {
+                "series": series,
+                "flag": f"research_adjustment_{kind}",
+                "detail": str(adj.get("rationale") or kind),
+            }
+        )
+
+    # Keep the flat adapter-contract section in lock-step with rates.
+    derived_values["reference_rates"] = {
+        code: entry["value"] for code, entry in rates.items() if isinstance(entry, dict)
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1402,23 +1779,47 @@ def compute_determination(
     parameters: dict[str, Any] = methodology.parameters
     snapshot = build_calculation_snapshot(db, determination.cob_date, parameters=parameters)
     derived_values, qa_results = run_pipeline(snapshot, parameters, determination.cob_date)
+    adjustments = list(determination.research_adjustments or [])
+    _apply_research_adjustments(derived_values, qa_results, adjustments)
     determination.input_snapshot = snapshot
     determination.input_digest = determinations.snapshot_digest(snapshot)
+    derived_values["package_digest"] = determinations.package_digest(
+        input_digest=determination.input_digest,
+        methodology_code=determination.methodology_code,
+        methodology_version=determination.methodology_version,
+        research_adjustments=adjustments,
+    )
+    derived_values["research_adjustments"] = adjustments
     determinations.set_results(
         db, determination.id, derived_values=derived_values, qa_results=qa_results
     )
 
 
 def ensure_approvable(determination: DeskDetermination) -> None:
-    """The API-layer hard-gate guard (spec §5 step 6): a determination whose
-    computed results failed a hard QA gate cannot be approved. Enforced here
-    because the determinations state machine is deliberately QA-agnostic."""
+    """API-layer gate: the rates package must be ready before approval.
+
+    Curve forward-QA may fail without blocking rates publish (rates-first).
+    Prefer ``rates_qa_passed``; fall back to legacy ``qa_passed`` for rows
+    computed before the split was introduced.
+    """
     derived = determination.derived_values or {}
-    if derived.get("qa_passed") is False:
+    if not derived:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "Determination failed a hard QA gate (qa_passed=false); correct the "
-                "inputs and recompute before submitting for approval."
+                "Determination has not been computed; run Compute before "
+                "submitting for approval."
+            ),
+        )
+    rates_ready = derived.get("rates_qa_passed")
+    if rates_ready is None:
+        rates_ready = derived.get("qa_passed")
+    if rates_ready is not True:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Determination failed rates package QA (rates_qa_passed is not true); "
+                "correct the inputs and recompute before submitting for approval. "
+                "Curve QA failures alone do not block rates approval."
             ),
         )

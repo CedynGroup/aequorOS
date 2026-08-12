@@ -30,11 +30,11 @@ from app.schemas.liquidity_cfp import (
     EwiRegisterPut,
 )
 from app.services import liquidity_cfp, liquidity_ewi
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.services.test_le_and_lmt import _CanonicalSeeder
 
@@ -156,7 +156,7 @@ def _full_content() -> CfpContent:
 
 
 def test_starters_evaluate_with_honest_gaps_and_no_invented_rag(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _seed_ewi_book(db_session)
 
     evaluations = {
@@ -193,7 +193,7 @@ def test_starters_evaluate_with_honest_gaps_and_no_invented_rag(db_session: Sess
 
 
 def test_board_thresholds_drive_rag_and_escalation(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _seed_ewi_book(db_session)
     _ensure_checker(db_session)
 
@@ -271,7 +271,7 @@ def test_board_thresholds_drive_rag_and_escalation(db_session: Session) -> None:
 def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
     db_session: Session,
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _seed_ewi_book(db_session)
     _ensure_checker(db_session)
     period_id = _period_id(db_session)

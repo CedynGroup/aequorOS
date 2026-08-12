@@ -26,7 +26,7 @@ from app.models import (
 )
 from app.services.ingestion import bank_slug
 from app.services.regulatory_reporting import workflow as reporting_workflow
-from app.services.sample_bank_seed import SAMPLE_BANK_ID
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from app.storage.client import ObjectMetadata, StorageLocation
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers, relax_signing
 from tests.storage.inmemory import InMemoryStorageClient

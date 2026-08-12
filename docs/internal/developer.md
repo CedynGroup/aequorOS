@@ -141,10 +141,27 @@ BFF's own DB role:
 - **DB role**: `aequoros_operator` — like the worker's role, BYPASSRLS for
   the read views; the provisioning saga runs with write grants on exactly
   the tables it creates. Never the tenant app role.
-- **Workforce login**: reuse `verify_oidc_id_token` against a Google
-  Workspace (or Okta) issuer with an @aequoros.com domain allow-list and a
-  small `operator_users` table (pre-provisioned, role: `developer` |
-  `operator_admin`). MFA enforced at the IdP. No password path.
+- **Workforce login (as-built 2026-08-11, founder's decision — mirrors the
+  client product's own auth model)**: email + password PRIMARY, SSO
+  SECONDARY. Staff accounts live in `operator_users` (email, display_name,
+  role `developer` | `operator_admin`, password hash using the same scheme
+  as tenant users, is_active, last_login_at) — a SEPARATE table from tenant
+  `users`, so the control-plane rule that workforce and customer identity
+  are different systems still holds; only the *mechanism* now matches the
+  product. `POST /operator/auth/login` verifies credentials (generic 401,
+  rate-limited lockout) and issues an 8-hour operator JWT
+  (`OPERATOR_JWT_SECRET`); the console holds it in the HttpOnly session
+  cookie and the `/api/op` proxy attaches it — browser JS never sees it.
+  OIDC (`verify_oidc_id_token` against any configured issuer) remains the
+  optional SSO button; the local dev token remains non-production-only.
+  Operator management is console-native: create (reveal-once password) /
+  reset / deactivate under `/operator/v1/operators`, `operator_admin`-gated,
+  audited; bootstrap via `scripts/create_operator.py`.
+  **`operator_admin` is the platform super-admin role** — unrestricted
+  across every staff surface (Developer, Markets Desk, operator management).
+  The founder (`eric@aequoros.com`) is seeded as `operator_admin`.
+  Scheduled hardening, not blockers: MFA/TOTP on password accounts and/or
+  IdP enforcement once a Workspace exists; IP allowlisting per staff_UI.md.
 - **Audit**: every BFF request writes an `audit_events` row with
   `operator_context` (operator email, request id); provisioning steps each
   write their own. The append-only trigger already guarantees immutability.
@@ -195,3 +212,33 @@ BFF endpoints:
 3. Read APIs + Tenants/Operations screens.
 4. Onboard-bank screen over the saga.
 5. Job-claimant column + race visibility.
+
+## 8. As-built status (2026-08-11)
+
+Everything in §7 items 0–4 is BUILT and on main, proven live:
+
+- **CP-1**: provisioning saga end-to-end (first real tenant BK-7CF5N6KS
+  provisioned from the console with 4 MinIO buckets + probe + SSO stub +
+  reveal-once admin OTP + readiness). Operator API is the backend's third
+  entrypoint: `risk-operator` service in `docker-compose.prod.yml`
+  (uvicorn `app.operator.main:app` :8100), console app deploys separately
+  at console.aequoros.com.
+- **CP-2 ops slice**: tenants wall, per-tenant activity, data-engine
+  connections, publications — read-only cross-tenant via the operator DB
+  role; operator_audit_log append-only.
+- **Auth**: §4's as-built workforce-login model (email+password primary,
+  SSO secondary, operator JWTs, `operator_admin` = super admin, console
+  login page mirrors the client design). The original OIDC-only stance is
+  retired; staff_UI.md carries the dated deviation note.
+- **CP-3 (market research desk)**: BUILT — see
+  AequorOS_Market_Data_and_Curve_Platform.md as-built header: desk spine
+  (methodology register Track-1/2, bitemporal determinations,
+  maker-checker), quant library, 16 real ingestion sources, nightly
+  `desk_capture` job, Markets Desk console section, desk-as-vendor
+  publication (`aequor_desk`, AEQ.* curve names), dual-curve AGD
+  discounting in the engines with byte-identical fallback. First real
+  determination published to the primary 2026-08-09 (447k observations,
+  593 series).
+- Still open: CP-2b impersonation; CP-4 crypto-shred for MinIO-resident
+  tenants; job-claimant column (§7 item 5); MFA/TOTP hardening on
+  password accounts; billing.

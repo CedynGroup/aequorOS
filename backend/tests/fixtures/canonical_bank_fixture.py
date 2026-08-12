@@ -1,9 +1,8 @@
-"""Deterministic Sample Bank Ltd regulatory seed for the demo organization.
+"""Test-only deterministic canonical-bank fixture.
 
-Seeds one bank, twelve monthly reporting periods (April 2025 through March
-2026), tie-out validated financial facts per period, and the Bank of Ghana CRD
-baseline parameter tables. The seed is idempotent: existing Sample Bank rows
-are deleted by fixed UUID before re-insertion.
+This module is intentionally outside ``app`` and must never be imported by
+runtime code. It provides hermetic records for backend tests only; deployed
+bank data enters through adapters, ETL, canonical persistence, and activation.
 """
 
 from __future__ import annotations
@@ -572,12 +571,12 @@ _PARAMETER_MODELS: tuple[type[RegulatoryParameterMixin], ...] = (
 )
 
 
-class SampleBankSeedError(RuntimeError):
+class CanonicalTestBookError(RuntimeError):
     """Raised when the generated seed data fails a deterministic tie-out check."""
 
 
 @dataclass(frozen=True)
-class SeedSummary:
+class CanonicalTestBookSummary:
     bank_id: str
     periods: int
     fact_count: int
@@ -593,7 +592,7 @@ class _PeriodFactors:
     fx: Decimal
 
 
-def seed_sample_bank(session: Session) -> SeedSummary:
+def materialize_canonical_test_book(session: Session) -> CanonicalTestBookSummary:
     """Idempotently seed Sample Bank Ltd for the demo organization."""
     _set_tenant_context(session, DEMO_ORG_ID)
     _ensure_organization(session, DEMO_ORG_ID, DEMO_ORG_NAME)
@@ -629,7 +628,7 @@ def seed_sample_bank(session: Session) -> SeedSummary:
     _ensure_organization(session, ISOLATED_ORG_ID, ISOLATED_ORG_NAME)
     _set_tenant_context(session, DEMO_ORG_ID)
 
-    return SeedSummary(
+    return CanonicalTestBookSummary(
         bank_id=SAMPLE_BANK_ID,
         periods=len(periods),
         fact_count=fact_count,
@@ -1107,7 +1106,7 @@ def _ftp_curve_fact(
     label, tenor, base, liquidity_bps, funding_bps, expected_ftp = row
     ftp = Decimal(base) + (Decimal(liquidity_bps) + Decimal(funding_bps)) / _HUNDRED
     if ftp != Decimal(expected_ftp):
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"FTP curve point {label}: derived FTP {ftp}% != expected {expected_ftp}%."
         )
     return _fact(
@@ -1298,14 +1297,14 @@ def _validate_period_facts(
         fact.amount for fact in balance if fact.attributes.get("side") in ("liability", "equity")
     )
     if assets_total != funding_total:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: assets {assets_total} != liabilities+equity {funding_total}."
         )
 
     loans_gross = next(fact.amount for fact in balance if fact.category == "loans_gross")
     exposure_total = _total(fact.amount for fact in facts if fact.fact_group == "loan_exposure")
     if exposure_total != loans_gross:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: loan exposures {exposure_total} != loans_gross {loans_gross}."
         )
 
@@ -1320,7 +1319,7 @@ def _validate_period_facts(
         if fact.fact_group == "securities" and fact.attributes.get("source") != "cash"
     )
     if securities_group != securities_balance:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: securities facts {securities_group} != "
             f"balance-sheet securities {securities_balance}."
         )
@@ -1344,7 +1343,7 @@ def _validate_fx_positions(
         abs(long_sum - expected_long) > _FX_TIE_TOLERANCE
         or abs(short_sum - expected_short) > _FX_TIE_TOLERANCE
     ):
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: FX net positions (long {long_sum}, short {short_sum}) "
             f"do not match the scaled canonical totals (long {expected_long}, short "
             f"{expected_short})."
@@ -1364,7 +1363,7 @@ def _validate_fx_positions(
             if fact.fact_group == "market_risk" and fact.category == "net_short_fx"
         )
         if long_sum != net_long or short_sum != net_short:
-            raise SampleBankSeedError(
+            raise CanonicalTestBookError(
                 f"Period {period.label}: FX net positions (long {long_sum}, short {short_sum}) "
                 f"do not tie to market_risk (net_long_fx {net_long}, net_short_fx {net_short})."
             )
@@ -1382,7 +1381,7 @@ def _validate_irr_positions(
         fact.amount for fact in positions if fact.attributes.get("source") == "securities"
     )
     if abs(securities_sourced - securities_balance) > _IRR_TIE_TOLERANCE:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: securities-sourced IRR positions {securities_sourced} != "
             f"balance-sheet securities {securities_balance}."
         )
@@ -1393,7 +1392,7 @@ def _validate_irr_positions(
         if fact.attributes.get("source") == "loans" and fact.attributes.get("side") == "asset"
     )
     if loans_sourced > loans_gross + _IRR_TIE_TOLERANCE:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: loan-sourced IRR positions {loans_sourced} exceed "
             f"gross loans {loans_gross}."
         )
@@ -1405,7 +1404,7 @@ def _validate_irr_positions(
         fact.amount for fact in balance if fact.category == "bog_excess_reserves"
     )
     if interbank_sourced > excess_reserves + _IRR_TIE_TOLERANCE:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: interbank IRR placements {interbank_sourced} exceed "
             f"BoG excess reserves {excess_reserves}."
         )
@@ -1431,7 +1430,7 @@ def _validate_ftp_facts(
         product_ftp = Decimal(str(product.attributes["ftp_rate_pct"]))
         curve_rate = curve_ftp.get(tenor)
         if curve_rate is None or curve_rate != product_ftp:
-            raise SampleBankSeedError(
+            raise CanonicalTestBookError(
                 f"Period {period.label}: FTP product {product.category} FTP rate {product_ftp}% "
                 f"does not match the curve rate {curve_rate}% at tenor {tenor}y."
             )
@@ -1440,7 +1439,7 @@ def _validate_ftp_facts(
         product.amount for product in products if product.attributes.get("source") == "loans"
     )
     if loan_products > loans_gross + _FTP_TIE_TOLERANCE:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: FTP loan products {loan_products} exceed gross loans "
             f"{loans_gross}."
         )
@@ -1449,7 +1448,7 @@ def _validate_ftp_facts(
         product.amount for product in products if product.attributes.get("source") == "securities"
     )
     if abs(gov_securities - securities_balance) > _FTP_TIE_TOLERANCE:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: FTP government-securities product {gov_securities} does not "
             f"tie to balance-sheet securities {securities_balance}."
         )
@@ -1460,7 +1459,7 @@ def _validate_ftp_facts(
         product.amount for product in products if product.attributes.get("category") == "liability"
     )
     if deposit_products > total_deposits + _FTP_TIE_TOLERANCE:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: FTP deposit products {deposit_products} exceed total "
             f"deposits {total_deposits}."
         )
@@ -1469,19 +1468,19 @@ def _validate_ftp_facts(
     branch_deposits = _total(fact.amount for fact in branches)
     branch_loans = _total(Decimal(str(fact.attributes["loans_ghs"])) for fact in branches)
     if branch_deposits > total_deposits + _FTP_TIE_TOLERANCE:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: FTP branch deposits {branch_deposits} exceed total "
             f"deposits {total_deposits}."
         )
     if branch_loans > loans_gross + _FTP_TIE_TOLERANCE:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: FTP branch loans {branch_loans} exceed gross loans "
             f"{loans_gross}."
         )
 
     nmd_total = _total(fact.amount for fact in facts if fact.fact_group == "ftp_nmd")
     if nmd_total > total_deposits + _FTP_TIE_TOLERANCE:
-        raise SampleBankSeedError(
+        raise CanonicalTestBookError(
             f"Period {period.label}: FTP non-maturity deposits {nmd_total} exceed total "
             f"deposits {total_deposits}."
         )

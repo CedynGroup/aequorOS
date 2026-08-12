@@ -107,6 +107,13 @@ DEFAULT_METHODOLOGY_PARAMETERS_V1: dict[str, Any] = {
     # outside the ±100 bps corridor on 100% of 2026 trading days — but the
     # spread is extremely stable (std 73 bps over 2026, ~0 bps over the last
     # 20 business days), so a short rolling mean is both honest and tight.
+    # Stage 4 readiness: synthetic_agd (default AGD) or ois_bootstrap when
+    # true overnight-indexed instruments exist (GHS.OIS.*). Insufficient OIS
+    # instruments always fall back to synthetic_agd with a disclosed flag.
+    "discounting_mode": "synthetic_agd",
+    # Stage 3 credit curve (AEQ.GHS.CORP): minimum liquid corporate GFIM yields.
+    "credit_curve_min_points": 2,
+    "credit_curve_min_trades": 1,
     "overnight_spread_window_bdays": 20,
     # Static reference snapshot of the spread at calibration (2026-08-07,
     # interbank 10.23 vs MPR 15.00). The LIVE anchor is the rolling window
@@ -253,20 +260,67 @@ DEFAULT_METHODOLOGY_PARAMETERS_V1: dict[str, Any] = {
         },
         "GHS.USDGHS.MID": {
             "treatment": "pass_through",
-            "unit": "ghs",
+            "unit": "rate",
+            "max_staleness_days": 3,
+            "note": "alias dual-written from GHS.FX.USDGHS.MID (BoG table 31/40)",
+        },
+        "GHS.FX.USDGHS.MID": {
+            "treatment": "pass_through",
+            "unit": "rate",
+            "max_staleness_days": 3,
+            "note": "BoG interbank USD/GHS mid (table 31/40)",
+        },
+        "GHS.FX.*": {
+            "treatment": "pass_through",
+            "unit": "rate",
             "max_staleness_days": 3,
         },
         "GHS.FX.USDGHS.REF": {
             "treatment": "pass_through",
-            "unit": "ghs",
+            "unit": "rate",
             "max_staleness_days": 3,
             "note": "BoG weighted-median reference rate (BOG/FMD/2024/65) — passes through",
+        },
+        "GHS.TBILL.91.INTEREST": {
+            "treatment": "pass_through",
+            "unit": "pct",
+            "max_staleness_days": 14,
+            "note": "BoG published true interest leg (ACT/364); dual-written as .YIELD",
+        },
+        "GHS.TBILL.182.INTEREST": {
+            "treatment": "pass_through",
+            "unit": "pct",
+            "max_staleness_days": 14,
+        },
+        "GHS.TBILL.364.INTEREST": {
+            "treatment": "pass_through",
+            "unit": "pct",
+            "max_staleness_days": 14,
+        },
+        "GHS.BOGBILL.*": {
+            "treatment": "pass_through",
+            "unit": "pct",
+            "max_staleness_days": 14,
         },
         "GHS.APR.*": {
             "treatment": "pass_through",
             "unit": "pct",
             "max_staleness_days": 62,
             "role": "lending_indicator_input",
+        },
+        # GFIM secondary legs (yield/price/volume/trades) share a prefix pattern;
+        # Stage 3 credit selection further filters to corporate YIELD + maturity.
+        "GHS.GFIM.*": {
+            "treatment": "gfim_quote",
+            "unit": "pct",
+            "max_staleness_days": 5,
+            "role": "credit_curve_input",
+        },
+        "GHS.OIS.*": {
+            "treatment": "ois_instrument",
+            "unit": "pct",
+            "max_staleness_days": 5,
+            "role": "true_ois_bootstrap_input",
         },
         "GHS.GOG.BOND.*": {
             "treatment": "bond_quote",

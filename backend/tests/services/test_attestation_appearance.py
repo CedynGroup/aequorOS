@@ -27,7 +27,7 @@ from app.services.attestation.appearance import (
     SignatureMarkRejected,
     normalise_drawn_signature,
 )
-from app.services.sample_bank_seed import DEMO_ORG_ID, DEMO_USER_ID, seed_sample_bank
+from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, DEMO_USER_ID, materialize_canonical_test_book
 
 CTX = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 SIGNER_ID = "SGN-7K4M9PQR2VWX3YZ8"
@@ -211,7 +211,7 @@ def test_a_typed_mark_must_name_an_offered_font() -> None:
 def test_adoption_stores_only_normalised_bytes_and_audits_the_act(
     db_session: Session,
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     raw = _png(_strokes((640, 240)))
     row = appearance.adopt(db_session, CTX, signer_id=SIGNER_ID, kind="drawn", drawn=raw)
     db_session.commit()
@@ -240,7 +240,7 @@ def test_re_adoption_replaces_the_mark_and_leaves_a_second_audit_event(
     evidence, which it is not — the signature commits to the digest and the signed
     bytes. The audit trail is what preserves the history instead.
     """
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     appearance.adopt(
         db_session, CTX, signer_id=SIGNER_ID, kind="drawn", drawn=_png(_strokes())
     )
@@ -275,7 +275,7 @@ def test_re_adoption_replaces_the_mark_and_leaves_a_second_audit_event(
 
 
 def test_a_rejected_mark_never_replaces_a_good_one(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     appearance.adopt(
         db_session,
         CTX,

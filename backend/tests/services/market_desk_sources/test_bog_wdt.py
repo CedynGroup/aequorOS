@@ -48,12 +48,14 @@ class TestTable2TbillRates:
         assert discount.value == Decimal("5.6800")
         assert interest.value == Decimal("5.7618")
         assert discount.attributes["tender"] == "2018"
+        # INTEREST dual-writes YIELD for package optional series / cross-check.
+        assert _by_code(result, "GHS.TBILL.91.YIELD", as_of).value == Decimal("5.7618")
         assert _by_code(result, "GHS.TBILL.182.DISCOUNT", as_of).value == Decimal("7.3597")
         assert _by_code(result, "GHS.TBILL.182.INTEREST", as_of).value == Decimal("7.6409")
         assert _by_code(result, "GHS.TBILL.364.DISCOUNT", as_of).value == Decimal("11.4904")
         assert _by_code(result, "GHS.TBILL.364.INTEREST", as_of).value == Decimal("12.9821")
-        # 25 rows x (discount + interest), all bills on this page.
-        assert len(result.observations) == 50
+        # 25 rows x (discount + interest + yield alias), all bills on this page.
+        assert len(result.observations) == 75
         assert all(o.unit == "pct" for o in result.observations)
 
     def test_notes_and_bonds_get_gog_series_codes(self) -> None:
@@ -68,7 +70,8 @@ class TestTable2TbillRates:
         row = ["03 Aug 2026", "2018", "91 DAY BILL", "5.6800", "5.7618"]
         result = bog_wdt.parse_table2_tbill_rates(_page([row, row]), context=CTX)
         result.observations = dedupe_and_resolve_conflicts(result.observations, result)
-        assert len(result.observations) == 2  # one DISCOUNT + one INTEREST
+        # DISCOUNT + INTEREST + YIELD alias (dual-written from INTEREST)
+        assert len(result.observations) == 3
         assert any("duplicate" in w for w in result.warnings)
 
 
@@ -145,9 +148,11 @@ class TestFxTables:
         assert _by_code(result, "GHS.FX.USDGHS.BUY", as_of).value == Decimal("11.7556")
         assert _by_code(result, "GHS.FX.USDGHS.SELL", as_of).value == Decimal("11.7674")
         assert _by_code(result, "GHS.FX.USDGHS.MID", as_of).value == Decimal("11.7615")
+        # Dual-write for rates package required series.
+        assert _by_code(result, "GHS.USDGHS.MID", as_of).value == Decimal("11.7615")
         assert _by_code(result, "GHS.FX.GBPGHS.MID", as_of).value == Decimal("15.8775")
-        # 19 pairs x 3 legs, all unit 'rate'.
-        assert len(result.observations) == 57
+        # 19 pairs x 3 legs + 1 USDGHS.MID alias, all unit 'rate'.
+        assert len(result.observations) == 58
         assert all(o.unit == "rate" for o in result.observations)
 
     def test_table40_usdghs_column_search_page(self) -> None:
@@ -161,7 +166,15 @@ class TestFxTables:
         assert _by_code(result, "GHS.FX.USDGHS.MID", date(2026, 8, 5)).value == Decimal(
             "11.7400"
         )
-        assert {o.series_code.split(".")[2] for o in result.observations} == {"USDGHS"}
+        assert _by_code(result, "GHS.USDGHS.MID", date(2026, 8, 6)).value == Decimal(
+            "11.7586"
+        )
+        # FX legs use GHS.FX.USDGHS.*; alias is GHS.USDGHS.MID (no pair segment).
+        codes = {o.series_code for o in result.observations}
+        assert "GHS.USDGHS.MID" in codes
+        assert all(
+            c.startswith("GHS.FX.USDGHS.") or c == "GHS.USDGHS.MID" for c in codes
+        )
 
 
 class TestTable32ReferenceBanner:
@@ -202,6 +215,20 @@ class TestTable21MonthlyMatrix:
         assert by_month[1] == Decimal("35.85")
         assert by_month[4] == Decimal("31.66")
         assert any("0.00-as-missing" in w for w in result.warnings)
+
+    def test_grr_dual_written_to_canonical_series(self) -> None:
+        """BoG monthly matrix dual-writes GHS.GRR so the rates package is not
+        stuck on multi-year-stale GSS prints when table 21 has fresher months."""
+        result = bog_wdt.parse_table21_monthly_matrix(
+            read_fixture("bog_wdt_table21_econ_interest_rates_page.json"), context=CTX
+        )
+        grr = [o for o in result.observations if o.series_code == "GHS.GRR"]
+        econ = [o for o in result.observations if o.series_code == "GHS.ECONDATA.GRR"]
+        assert grr
+        assert len(grr) == len(econ)
+        latest = max(grr, key=lambda o: o.as_of_date)
+        assert latest.as_of_date == date(2023, 4, 1)
+        assert latest.value == Decimal("25.76")
 
     def test_junk_year_zero_group_is_skipped(self) -> None:
         raw = _page([["0", "Ghana Reference Rate (%)"] + ["1.00"] * 12])

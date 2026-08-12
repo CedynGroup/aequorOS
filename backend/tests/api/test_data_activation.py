@@ -7,7 +7,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from app.db.session import get_sessionmaker
-from app.services.sample_bank_seed import SAMPLE_BANK_ID
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.api.helpers import ORG_1, ORG_2, headers
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 

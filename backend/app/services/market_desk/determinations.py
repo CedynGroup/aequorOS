@@ -1,10 +1,11 @@
 """Track-1 weekly determinations (spec §5, §10): snapshot, digest, dual control.
 
 A determination is one application of the currently-approved methodology to
-one COB date. This service owns the parts that are structural NOW — the
-input snapshot and its value-based digest, the maker-checker state machine,
-and append-only corrections. The derived values / QA results are set by the
-CALLER (the calculation pipeline lands in a later phase).
+one COB date, optionally carrying determination-scoped research adjustments
+(Option B — overrides, additive bps, assumption notes). This service owns
+the input snapshot and its value-based digest, research-adjustment
+persistence, the maker-checker state machine, and append-only corrections.
+Derived values / QA results are set by the calculation pipeline.
 
 State machine::
 
@@ -13,15 +14,17 @@ State machine::
     published -(correction)-> NEW draft with supersedes_id
 
 ``input_digest`` mirrors the regulatory ``input_hash`` idiom: value-based,
-id-free, canonically sorted JSON — given the methodology version and the
-snapshot, every published value is exactly reproducible.
+id-free, canonically sorted JSON of the observation snapshot.
+``package_digest`` (on derived_values after compute) folds methodology
+version + research_adjustments so published rates remain exactly
+reproducible given the full package.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -34,6 +37,9 @@ if TYPE_CHECKING:
     from datetime import date
 
     from sqlalchemy.orm import Session
+
+ADJUSTMENT_KINDS: tuple[str, ...] = ("override", "additive_bps", "assumption_note")
+type AdjustmentKind = Literal["override", "additive_bps", "assumption_note"]
 
 # The configured input series a determination snapshots (spec §5 step 1):
 # the GRR-formula inputs (MPR, interbank overnight, 91-day T-bill), the full
@@ -58,6 +64,122 @@ def _canonical_json(value: Any) -> str:
 def snapshot_digest(snapshot: list[dict[str, str]]) -> str:
     """SHA-256 of the canonical JSON of a snapshot (value-based, id-free)."""
     return hashlib.sha256(_canonical_json(snapshot).encode("utf-8")).hexdigest()
+
+
+def package_digest(
+    *,
+    input_digest: str,
+    methodology_code: str,
+    methodology_version: int,
+    research_adjustments: list[dict[str, Any]] | None,
+) -> str:
+    """SHA-256 of the full publishable package identity (reproducibility).
+
+    Includes snapshot digest, methodology binding, and research adjustments
+    so an override cannot silently diverge from the stored package identity.
+    """
+    payload = {
+        "input_digest": input_digest,
+        "methodology_code": methodology_code,
+        "methodology_version": methodology_version,
+        "research_adjustments": research_adjustments or [],
+    }
+    return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
+
+
+def _normalize_adjustment(
+    raw: dict[str, Any], *, applied_by: str, applied_at: str
+) -> dict[str, Any]:
+    series_code = str(raw.get("series_code") or "").strip()
+    kind = str(raw.get("kind") or "").strip()
+    rationale = str(raw.get("rationale") or "").strip()
+    if not series_code:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Each research adjustment requires a non-empty series_code.",
+        )
+    if kind not in ADJUSTMENT_KINDS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"research adjustment kind {kind!r} is not one of "
+                f"{', '.join(ADJUSTMENT_KINDS)}."
+            ),
+        )
+    if kind in ("override", "additive_bps") and not rationale:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"research adjustment for {series_code!r} ({kind}) requires a "
+                "non-empty rationale."
+            ),
+        )
+    value = raw.get("value")
+    if kind in ("override", "additive_bps"):
+        if value is None or str(value).strip() == "":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    f"research adjustment for {series_code!r} ({kind}) requires a value."
+                ),
+            )
+        try:
+            float(str(value))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    f"research adjustment value for {series_code!r} must be numeric."
+                ),
+            ) from exc
+        value_str = str(value).strip()
+    else:
+        value_str = None if value is None or str(value).strip() == "" else str(value).strip()
+
+    entry: dict[str, Any] = {
+        "series_code": series_code,
+        "kind": kind,
+        "rationale": rationale,
+        "applied_by": applied_by,
+        "applied_at": applied_at,
+    }
+    if value_str is not None:
+        entry["value"] = value_str
+    return entry
+
+
+def set_research_adjustments(
+    db: Session,
+    determination_id: Any,
+    *,
+    adjustments: list[dict[str, Any]],
+    applied_by: str,
+) -> DeskDetermination:
+    """Replace the draft's research_adjustments set (Option B Track-1 judgment).
+
+    Only drafts are writable. Each override/additive_bps entry requires a
+    numeric value and non-empty rationale. Does not rewrite methodology.
+    """
+    determination = _get_or_404(db, determination_id)
+    _require_status(determination, "draft")
+    stamp = utc_now().isoformat()
+    if not isinstance(adjustments, list):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="research_adjustments must be a list.",
+        )
+    normalized = [
+        _normalize_adjustment(item, applied_by=applied_by, applied_at=stamp)
+        for item in adjustments
+    ]
+    # One entry per series_code (last wins) — stable sort for digest.
+    by_series: dict[str, dict[str, Any]] = {}
+    for entry in normalized:
+        by_series[entry["series_code"]] = entry
+    ordered = sorted(by_series.values(), key=lambda e: e["series_code"])
+    determination.research_adjustments = ordered
+    db.flush()
+    return determination
 
 
 def build_input_snapshot(

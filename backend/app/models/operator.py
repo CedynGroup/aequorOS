@@ -12,13 +12,23 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Index, String
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Index, String
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin, utc_now
 
-OPERATOR_AUTH_MODES: tuple[str, ...] = ("dev", "oidc")
+OPERATOR_AUTH_MODES: tuple[str, ...] = ("dev", "oidc", "password")
+#: Staff roles, least- to most-privileged: ``developer`` uses every read/desk
+#: surface; ``operator_admin`` additionally manages operator accounts (at or
+#: below its own rank); ``super_admin`` is the unrestricted founder tier —
+#: everything, including managing other admins. Rank order is positional.
+OPERATOR_ROLES: tuple[str, ...] = ("developer", "operator_admin", "super_admin")
+
+#: Positional privilege rank — higher outranks lower. Management actions
+#: require the actor's rank >= the target's rank (so only a super_admin can
+#: touch super_admin or operator_admin rows' credentials/status).
+OPERATOR_ROLE_RANK: dict[str, int] = {role: rank for rank, role in enumerate(OPERATOR_ROLES)}
 TENANT_STORAGE_PROVIDERS: tuple[str, ...] = ("minio", "aws")
 
 
@@ -54,6 +64,41 @@ class OperatorAuditLog(UuidV4PrimaryKeyMixin, Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class OperatorUser(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
+    """One AequorOS staff account for the operator console.
+
+    Mirrors the CLIENT identity model (tenant ``users``): email+password is
+    the primary sign-in (Argon2id hash, same scheme as tenant accounts) and
+    workforce OIDC is the secondary path — an OIDC sign-in whose email has a
+    row here must find it active, and takes its role from the row.
+
+    GLOBAL table, deliberately NOT RLS-forced (operator precedent: these are
+    control-plane records owned by the operator role, not tenant data).
+    ``email`` is unique and stored lowercase — the login path lowercases
+    before lookup, and the create paths normalize before insert.
+    ``password_hash`` is nullable: an OIDC-only staff account has no
+    password, exactly like an SSO-only tenant user.
+    """
+
+    __tablename__ = "operator_users"
+    __table_args__ = (
+        CheckConstraint(
+            f"role IN ({_values(OPERATOR_ROLES)})",
+            name="ck_operator_users_role",
+        ),
+    )
+
+    # Unique => indexed; the login lookup path.
+    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 

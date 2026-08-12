@@ -91,6 +91,13 @@ class SourceAttribution:
     ingested_at: datetime
     stale: bool
     age_seconds: float
+    # Source-preference graceful-fallback governance note (market_data_sources.md
+    # §2). Default no-fallback so every existing view is byte-identical: the
+    # preference-aware resolver sets these when the selected plane had no
+    # servable row and the historical any-source arbitration served instead.
+    fell_back: bool = False
+    requested_source: str | None = None
+    served_source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -161,6 +168,33 @@ def _attribution(
     )
 
 
+def _compose_overlay_points(  # noqa: PLR0913 - scope + tenant + curve key is the request
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    curve_name: str,
+    as_of: date,
+    points: tuple[tuple[int, Decimal], ...],
+) -> tuple[tuple[int, Decimal], ...]:
+    """Apply the bank's active curve overlays to ``points`` (identity if none).
+
+    The read-time composition seam (market_data_overlays.md §2): golden
+    canonical rows are never written; the adjusted series is derived on read.
+    With no active overlay the base points are returned unchanged, so
+    ``overlay=True`` on an unadjusted curve is byte-identical to ``overlay=False``.
+    """
+    # Local import breaks any import-order coupling (the overlays service imports
+    # audit/schemas, never this module) — the same pattern list_yield_curves
+    # uses for the entitlements service.
+    from app.services import market_data_overlays  # noqa: PLC0415
+
+    overlays = market_data_overlays.active_curve_overlays(
+        db, organization_id, bank_id, as_of, curve_name=curve_name
+    )
+    composed = market_data_overlays.compose_curve(points, overlays)
+    return composed.adjusted_points if composed is not None else points
+
+
 def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request key
     db: Session,
     organization_id: str,
@@ -170,6 +204,8 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
     *,
     curve_name: str | None = None,
     curve_type: str | None = None,
+    source_systems: tuple[str, ...] | None = None,
+    overlay: bool = False,
     now: datetime | None = None,
 ) -> CurveView | None:
     """The authoritative yield curve for ``currency`` at ``as_of``, or None.
@@ -183,6 +219,12 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
     omitted the arbitration is exactly the historical
     single-curve-per-currency behavior that ``fact_derivation`` and the
     calculation engines depend on.
+
+    ``source_systems`` and ``overlay`` are the source-preference seam
+    (market_data_sources.md §3): when ``source_systems`` is ``None`` the query
+    is unfiltered (byte-identical to the historical arbitration); when given,
+    only rows from those source systems arbitrate. ``overlay=True`` composes
+    the bank's active overlays onto the served points (identity when none).
     """
     now = now or utc_now()
     query = (
@@ -206,6 +248,8 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
         query = query.where(CanonicalYieldCurve.curve_name == curve_name)
     if curve_type is not None:
         query = query.where(CanonicalYieldCurve.curve_type == curve_type)
+    if source_systems is not None:
+        query = query.where(CanonicalYieldCurve.source_system.in_(source_systems))
     curve = db.scalar(query)
     if curve is None:
         return None
@@ -223,12 +267,17 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
     )
     if not points:
         return None
+    resolved_points = tuple((int(tenor), Decimal(rate)) for tenor, rate in points)
+    if overlay:
+        resolved_points = _compose_overlay_points(
+            db, organization_id, bank_id, curve.curve_name, as_of, resolved_points
+        )
     return CurveView(
         currency=curve.currency,
         curve_name=curve.curve_name,
         curve_type=curve.curve_type,
         as_of_date=curve.as_of_date,
-        points=tuple((int(tenor), Decimal(rate)) for tenor, rate in points),
+        points=resolved_points,
         attribution=_attribution(
             curve.ingested_at,
             curve.ingestion_batch_id,
@@ -246,6 +295,8 @@ def get_discount_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request
     currency: str,
     as_of: date,
     *,
+    source_systems: tuple[str, ...] | None = None,
+    overlay: bool = False,
     now: datetime | None = None,
 ) -> CurveView | None:
     """The published DISCOUNTING curve for ``currency`` at ``as_of``, or None.
@@ -269,6 +320,8 @@ def get_discount_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request
         currency,
         as_of,
         curve_name=desk_discount_curve_name(currency),
+        source_systems=source_systems,
+        overlay=overlay,
         now=now,
     )
     if preferred is not None:
@@ -280,6 +333,8 @@ def get_discount_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request
         currency,
         as_of,
         curve_type=DISCOUNT_CURVE_TYPE,
+        source_systems=source_systems,
+        overlay=overlay,
         now=now,
     )
 
@@ -291,6 +346,8 @@ def list_yield_curves(  # noqa: PLR0913 - scope + tenant + as-of is the request 
     *,
     as_of: date,
     currency: str | None = None,
+    source_systems: tuple[str, ...] | None = None,
+    overlay: bool = False,
     now: datetime | None = None,
 ) -> list[CurveView]:
     """Every current-generation curve servable at ``as_of``, one per name.
@@ -301,6 +358,10 @@ def list_yield_curves(  # noqa: PLR0913 - scope + tenant + as-of is the request 
     ingested) — so a zero, forward, and discounting curve for the same
     currency are all served side by side instead of collapsing to one
     winner per currency. Ordered by ``(currency, curve_name)``.
+
+    ``source_systems`` restricts both discovery and per-name arbitration to
+    the given planes (byte-identical when ``None``); ``overlay`` composes the
+    bank's active overlays onto each served curve (spec §3).
     """
     now = now or utc_now()
     pair_query = (
@@ -316,10 +377,28 @@ def list_yield_curves(  # noqa: PLR0913 - scope + tenant + as-of is the request 
     )
     if currency is not None:
         pair_query = pair_query.where(CanonicalYieldCurve.currency == currency.upper())
+    if source_systems is not None:
+        pair_query = pair_query.where(CanonicalYieldCurve.source_system.in_(source_systems))
     pairs = sorted((ccy, name) for ccy, name in db.execute(pair_query).all())
+    # Spec §10: desk dataset entitlements gate visibility of AEQ.* curves.
+    from app.services.market_desk import entitlements as desk_entitlements  # noqa: PLC0415
+
+    datasets = desk_entitlements.active_datasets(db, organization_id, as_of=as_of)
     views: list[CurveView] = []
     for ccy, name in pairs:
-        view = get_yield_curve(db, organization_id, bank_id, ccy, as_of, curve_name=name, now=now)
+        if name.startswith("AEQ.") and not desk_entitlements.curve_allowed(name, datasets):
+            continue
+        view = get_yield_curve(
+            db,
+            organization_id,
+            bank_id,
+            ccy,
+            as_of,
+            curve_name=name,
+            source_systems=source_systems,
+            overlay=overlay,
+            now=now,
+        )
         if view is not None:
             views.append(view)
     return views
@@ -333,13 +412,24 @@ def get_fx_spot(  # noqa: PLR0913 - scope + tenant + as-of is the request key
     quote_currency: str,
     as_of: date,
     *,
+    source_systems: tuple[str, ...] | None = None,
+    overlay: bool = False,
     now: datetime | None = None,
 ) -> FxRateView | None:
-    """The authoritative spot for the pair at ``as_of`` (§15 arbitration)."""
+    """The authoritative spot for the pair at ``as_of`` (§15 arbitration).
+
+    ``source_systems`` restricts arbitration to the given planes (byte-identical
+    when ``None``). ``overlay`` is accepted for signature symmetry with the
+    curve getters but is a no-op: overlays compose only onto curves
+    (``base_ref_kind='curve'``), never spot FX.
+    """
+    del overlay  # FX carries no overlay composition; parameter kept for symmetry.
     now = now or utc_now()
+    query = _fx_spot_query(organization_id, bank_id, base_currency, quote_currency, as_of)
+    if source_systems is not None:
+        query = query.where(CanonicalFxRate.source_system.in_(source_systems))
     row = db.scalar(
-        _fx_spot_query(organization_id, bank_id, base_currency, quote_currency, as_of)
-        .order_by(
+        query.order_by(
             CanonicalFxRate.as_of_date.desc(),
             CanonicalFxRate.ingested_at.desc(),
             CanonicalFxRate.id.desc(),
@@ -371,6 +461,8 @@ def get_fx_spot_history(  # noqa: PLR0913 - scope + tenant + as-of is the reques
     quote_currency: str,
     as_of: date,
     limit: int = DEFAULT_FX_HISTORY_LIMIT,
+    *,
+    source_systems: tuple[str, ...] | None = None,
 ) -> list[tuple[date, Decimal]]:
     """Persisted spot observations for the pair, ascending by business date.
 
@@ -378,9 +470,15 @@ def get_fx_spot_history(  # noqa: PLR0913 - scope + tenant + as-of is the reques
     over time (§5.2). One observation per business date — the most recently
     ingested current-generation row wins — capped to the most recent
     ``limit`` dates at or before ``as_of``. Feeds the VaR return series.
+
+    ``source_systems`` restricts the series to the given planes (byte-identical
+    when ``None``).
     """
+    query = _fx_spot_query(organization_id, bank_id, base_currency, quote_currency, as_of)
+    if source_systems is not None:
+        query = query.where(CanonicalFxRate.source_system.in_(source_systems))
     rows = db.scalars(
-        _fx_spot_query(organization_id, bank_id, base_currency, quote_currency, as_of).order_by(
+        query.order_by(
             CanonicalFxRate.as_of_date.asc(),
             CanonicalFxRate.ingested_at.desc(),
             CanonicalFxRate.id.desc(),
@@ -590,11 +688,24 @@ def get_index(  # noqa: PLR0913 - scope + tenant + as-of is the request key
     as_of: date,
     scenario: str = "base",
     *,
+    source_systems: tuple[str, ...] | None = None,
+    overlay: bool = False,
     now: datetime | None = None,
 ) -> IndexView | None:
-    """The authoritative index/forecast value for ``index_code`` at ``as_of``."""
+    """The authoritative index/forecast value for ``index_code`` at ``as_of``.
+
+    ``source_systems`` restricts arbitration to the given planes (byte-identical
+    when ``None``). ``overlay`` is accepted for signature symmetry but is a
+    no-op: overlays compose only onto curves, never reference indices.
+    """
+    del overlay  # Indices carry no overlay composition; parameter kept for symmetry.
+    from app.services.market_desk import entitlements as desk_entitlements  # noqa: PLC0415
+
+    datasets = desk_entitlements.active_datasets(db, organization_id, as_of=as_of)
+    if not desk_entitlements.index_allowed(index_code, datasets):
+        return None
     now = now or utc_now()
-    row = db.scalar(
+    query = (
         select(CanonicalMarketIndex)
         .where(
             CanonicalMarketIndex.organization_id == organization_id,
@@ -612,6 +723,9 @@ def get_index(  # noqa: PLR0913 - scope + tenant + as-of is the request key
         )
         .limit(1)
     )
+    if source_systems is not None:
+        query = query.where(CanonicalMarketIndex.source_system.in_(source_systems))
+    row = db.scalar(query)
     if row is None:
         return None
     return IndexView(

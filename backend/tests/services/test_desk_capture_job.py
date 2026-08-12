@@ -205,7 +205,7 @@ def test_run_desk_capture_isolates_a_failing_source(
     assert sources["bog_interbank_daily"]["status"] == "captured"
     assert sources["bog_interbank_daily"]["observations"] == 2
     assert sources["bog_fx_daily"]["status"] == "captured"
-    assert sources["bog_fx_daily"]["observations"] == 3  # BUY/SELL/MID
+    assert sources["bog_fx_daily"]["observations"] == 4  # BUY/SELL/MID + USDGHS.MID alias
     assert sources["bog_fx_reference"]["status"] == "failed"
     assert "FetchError" in sources["bog_fx_reference"]["error"]
     # Sources outside the allow-list are reported, not silently absent.
@@ -260,7 +260,7 @@ def test_run_desk_capture_respects_weekly_cadence_and_auction_pass(
     summary = friday.progress["sources"]["bog_tbill_rates"]
     assert summary["status"] == "captured"
     assert summary["due"] == "auction_pass"
-    assert summary["observations"] == 2  # DISCOUNT + INTEREST legs
+    assert summary["observations"] == 3  # DISCOUNT + INTEREST + YIELD alias
     get_settings.cache_clear()
 
 
@@ -308,27 +308,30 @@ def _quiet_capture_env(monkeypatch: pytest.MonkeyPatch, db: Session) -> None:
     monkeypatch.setattr(capture_job, "fetch_source", refuse)
 
 
-def test_determination_staged_pending_review_with_qa(
+def test_determination_staged_draft_ready_with_qa(
     approved_desk: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Capture stages a pre-computed draft for the Analyst — never auto-submits."""
     _quiet_capture_env(monkeypatch, approved_desk)
     job = _desk_job(approved_desk, {"cob_date": COB.isoformat()})
 
     run_desk_capture(approved_desk, job)
 
     summary = job.progress["determination"]
-    assert summary["status"] == "pending_review"
+    assert summary["status"] == "draft_ready"
     row = approved_desk.get(DeskDetermination, UUID(summary["determination_id"]))
     assert row is not None
-    assert row.status == "pending_review"
-    assert row.prepared_by == CAPTURE_IDENTITY  # any human checker satisfies maker-checker
-    assert row.derived_values  # computed, not an empty shell
+    assert row.status == "draft"
+    assert row.prepared_by == CAPTURE_IDENTITY
+    assert row.derived_values  # pre-computed proposed package, not an empty shell
     assert "qa_passed" in row.derived_values
     assert row.qa_results
     assert summary["qa_passed"] == row.derived_values["qa_passed"]
     assert summary["input_digest"] == row.input_digest
-    # The job staged for review and STOPPED — publishing is human-only.
+    # Job stages material for Analyst review and STOPPED — submit/approve/publish
+    # are human-only (Analyst → Supervisor).
     assert row.published_at is None
+    assert row.reviewed_by is None
     get_settings.cache_clear()
 
 
@@ -338,7 +341,7 @@ def test_rerun_same_day_does_not_duplicate_the_draft(
     _quiet_capture_env(monkeypatch, approved_desk)
     first = _desk_job(approved_desk, {"cob_date": COB.isoformat()})
     run_desk_capture(approved_desk, first)
-    assert first.progress["determination"]["status"] == "pending_review"
+    assert first.progress["determination"]["status"] == "draft_ready"
 
     second = _desk_job(approved_desk, {"cob_date": COB.isoformat()})
     run_desk_capture(approved_desk, second)

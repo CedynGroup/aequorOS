@@ -249,6 +249,7 @@ def _seed_demo_tenants(engine: Engine) -> None:
                     locale="en-GH",
                     central_bank_name="Bank of Ghana",
                     regulator_short="BoG",
+                    sovereign_rating_issuer="GHANA_SOVEREIGN",
                     submission_portal="ORASS",
                     timezone="Africa/Accra",
                 ),

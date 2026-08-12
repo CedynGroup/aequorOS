@@ -17,7 +17,7 @@ from sqlalchemy import update
 from app.core.security import ROLES, has_role
 from app.db.session import get_sessionmaker
 from app.models import RegulatoryRun
-from app.services.sample_bank_seed import SAMPLE_BANK_ID
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.api.helpers import ORG_1, ORG_2, headers
 
 

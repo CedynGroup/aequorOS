@@ -38,14 +38,15 @@ const NAV = [
  * Thin console shell: fixed left rail (brand + nav) and a top header carrying
  * the environment badge (which API this console is pointed at — the single
  * most important piece of operator context) and the session identity: the
- * workforce email for OIDC sessions, an explicit DEV SESSION chip otherwise.
+ * operator email for password and OIDC sessions, an explicit DEV SESSION
+ * chip for dev-token sessions.
  */
 export default function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [apiHost, setApiHost] = useState<string | null>(null);
   const [identity, setIdentity] = useState<
-    { mode: 'oidc'; email: string } | { mode: 'dev' } | null
+    { mode: 'oidc' | 'password'; email: string } | { mode: 'dev' } | null
   >(null);
 
   useEffect(() => {
@@ -62,7 +63,10 @@ export default function Shell({ children }: { children: ReactNode }) {
             alive &&
             setIdentity(
               session.authenticated && session.email
-                ? { mode: 'oidc', email: session.email }
+                ? {
+                    mode: session.mode === 'password' ? 'password' : 'oidc',
+                    email: session.email,
+                  }
                 : null,
             ),
         )
@@ -135,10 +139,14 @@ export default function Shell({ children }: { children: ReactNode }) {
                 dev session
               </span>
             )}
-            {identity?.mode === 'oidc' && (
+            {(identity?.mode === 'oidc' || identity?.mode === 'password') && (
               <span
                 className="rounded border border-border-light bg-surface px-2 py-0.5 font-mono text-micro text-slate"
-                title="Workforce OIDC session"
+                title={
+                  identity.mode === 'password'
+                    ? 'Operator session (email + password)'
+                    : 'Workforce OIDC session'
+                }
               >
                 {identity.email}
               </span>

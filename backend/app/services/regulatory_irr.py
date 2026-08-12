@@ -92,14 +92,13 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunCreate,
     RegulatoryRunRead,
 )
-from app.services import jurisdictions
+from app.services import jurisdictions, market_data_sources
 from app.services.audit import record_event
 from app.services.live_block import live_block
 from app.services.live_types import (
     LiveModuleResult,
     findings_from_validations,
 )
-from app.services.market_data import get_discount_curve
 from app.services.params import get_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
@@ -1228,7 +1227,10 @@ def _load_irr_params_or_none(
     # discounts on it; absent, ``discount_curve`` stays None and behavior is
     # byte-identical to the historical single-curve engine.
     discount_curve: dict[Decimal, Decimal] | None = None
-    discount_view = get_discount_curve(
+    # Route through the per-bank source preference (market_data_sources.md §3) so
+    # the selected plane drives IRRBB EVE discounting. The default preference
+    # (aequor + overlay on) reproduces the historical selection byte-identically.
+    discount_view = market_data_sources.preferred_discount_curve(
         db, ctx.organization_id, bank.id, jurisdictions.base_currency(bank), as_of
     )
     if discount_view is not None:

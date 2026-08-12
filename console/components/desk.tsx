@@ -30,15 +30,26 @@ export function DeterminationStatusPill({ status }: { status: string }) {
 }
 
 /**
- * The hard QA-gate verdict from derived_values.qa_passed (spec §5 step 6).
- * Three honest states: pass, fail, and "not computed" (draft with no results
- * yet — qa_passed is simply absent).
+ * Rates package readiness (gates approve/submit). Curves QA is shown
+ * separately — a curves fail does not block rates publish.
  */
 export function QaBadge({ determination }: { determination: DeskDetermination }) {
-  const qa = determination.derived_values?.qa_passed;
-  if (qa === true) return <Chip tone="ok">QA pass</Chip>;
-  if (qa === false) return <Chip tone="crit">QA fail</Chip>;
+  const derived = determination.derived_values ?? {};
+  const rates =
+    derived.rates_qa_passed !== undefined
+      ? derived.rates_qa_passed
+      : derived.qa_passed;
+  if (rates === true) return <Chip tone="ok">rates ready</Chip>;
+  if (rates === false) return <Chip tone="crit">rates fail</Chip>;
   return <Chip>not computed</Chip>;
+}
+
+/** Curves QA badge — advisory for rates-first publish. */
+export function CurvesQaBadge({ determination }: { determination: DeskDetermination }) {
+  const curves = determination.derived_values?.curves_qa_passed;
+  if (curves === true) return <Chip tone="ok">curves pass</Chip>;
+  if (curves === false) return <Chip tone="warn">curves fail</Chip>;
+  return null;
 }
 
 /** Methodology binding as a mono chip: CODE vN. */

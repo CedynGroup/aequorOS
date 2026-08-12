@@ -16,19 +16,20 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.models import Job, LiveFinding, LiveMetric, LiveMetricSnapshot, RegulatoryRun
 from app.services import job_queue, live_view, pipeline
-from app.services.sample_bank_seed import SAMPLE_BANK_ID, seed_sample_bank
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import (
     FIXTURE_AS_OF,
     seed_canonical_fixture,
     seed_hedge_and_swap_positions,
 )
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
-_CHEAP = {"liquidity", "capital", "irr", "fx", "ftp"}
+_CHEAP = {"liquidity", "capital", "irr", "fx", "ftp", "rating"}
+_OFFICIAL_REGULATORY_MODULES = _CHEAP - {"rating"}
 
 
 def _seed(db_session: Session, *, hedged: bool = False) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     if hedged:
@@ -153,7 +154,7 @@ def test_run_refresh_is_idempotent(db_session: Session) -> None:
 
 
 def test_run_refresh_missing_canonical_is_a_noop(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()  # bank + params only, no canonical positions
     job = _refresh_job(db_session)
 
@@ -191,7 +192,7 @@ def test_official_input_hash_survives_fact_rederivation(db_session: Session) -> 
     pipeline.run_refresh(db_session, _refresh_job(db_session))
     pipeline.run_official(db_session, _official_job(db_session))
     before = _baseline_hashes_by_module(db_session)
-    assert set(before) >= _CHEAP  # one baseline hash per cheap module
+    assert set(before) >= _OFFICIAL_REGULATORY_MODULES
 
     # A refresh re-derives facts (new UUIDs, possibly reordered), then a second
     # official run on the same economics must reproduce the identical hashes.

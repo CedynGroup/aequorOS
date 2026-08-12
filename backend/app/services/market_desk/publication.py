@@ -36,10 +36,11 @@ from app.adapters.market_data.aequor_desk.adapter import (
     determination_scopes,
 )
 from app.adapters.market_data.errors import MarketDataError
-from app.adapters.market_data.pull_runner import execute_pull
+from app.adapters.market_data.pull_runner import MarketDataBundle, ScopeExtraction, execute_pull
+from app.adapters.market_data.scope_taxonomy import DataScope
 from app.models import Bank, DeskDetermination, DeskPublication, Organization
 from app.services.ingestion import bank_slug
-from app.services.market_desk import determinations, register
+from app.services.market_desk import determinations, entitlements, register
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -86,17 +87,42 @@ def _publishable(db: Session, determination: DeskDetermination) -> None:
         )
 
 
+def _entitled_extraction(
+    determination: DeskDetermination,
+    scope: DataScope,
+    datasets: set[str],
+) -> ScopeExtraction:
+    """build_extraction, then drop curve/index rows the bank is not entitled to."""
+    extraction = build_extraction(determination, scope)
+    bundle = extraction.bundle
+    curves = [
+        c for c in bundle.curves if entitlements.curve_allowed(c.curve_name, datasets)
+    ]
+    indices = [
+        i for i in bundle.indices if entitlements.index_allowed(i.index_code, datasets)
+    ]
+    filtered = MarketDataBundle(
+        curves=curves,
+        fx_rates=list(bundle.fx_rates),
+        indices=indices,
+        ratings=list(bundle.ratings),
+        warnings=list(bundle.warnings),
+        sample_values=dict(bundle.sample_values),
+    )
+    return ScopeExtraction(raw_payload=extraction.raw_payload, bundle=filtered)
+
+
 def publish(db: Session, determination_id: Any, *, actor: str) -> DeskPublication:
     """Publish one determination into EVERY bank's canonical store.
 
-    Entitlements (spec §10: not every tenant necessarily gets every dataset)
-    are a later phase — this phase skips no bank. Each bank is one
+    Entitlements (spec §10): each bank receives only datasets it is granted
+    (default standard tier when no rows exist). Each bank is one
     ``execute_pull`` (which commits its own batch); a per-bank failure rolls
     back only that bank's partial work and the loop continues.
     """
     determination = determinations.get(db, determination_id)
     _publishable(db, determination)
-    scopes = determination_scopes(determination)
+    all_scopes = determination_scopes(determination)
     # Make the approved state durable before fan-out: per-bank failures roll
     # the session back, and pending pre-publish state must never ride on the
     # first bank's commit.
@@ -113,6 +139,19 @@ def publish(db: Session, determination_id: Any, *, actor: str) -> DeskPublicatio
     results: list[dict[str, Any]] = []
     succeeded = 0
     for bank in banks:
+        datasets = entitlements.active_datasets(
+            db, bank.organization_id, as_of=determination.cob_date
+        )
+        scopes = entitlements.filter_scopes(all_scopes, datasets)
+        if not scopes:
+            results.append(
+                {
+                    "bank_id": bank.id,
+                    "status": "skipped",
+                    "error": "no entitled desk datasets for this institution",
+                }
+            )
+            continue
         try:
             slug = bank_slug(db, bank)
             pull = execute_pull(
@@ -124,7 +163,9 @@ def publish(db: Session, determination_id: Any, *, actor: str) -> DeskPublicatio
                 adapter_version=ADAPTER_VERSION,
                 scopes=scopes,
                 as_of_date=determination.cob_date,
-                extract=lambda scope: build_extraction(determination, scope),  # noqa: B023 - consumed synchronously inside execute_pull
+                extract=lambda scope, ds=datasets: _entitled_extraction(  # noqa: B023
+                    determination, scope, ds
+                ),
                 quota_units=0,
                 actor_user_id=None,
             )

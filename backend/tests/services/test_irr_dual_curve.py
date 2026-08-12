@@ -52,11 +52,11 @@ from app.services import regulatory_irr
 from app.services.fact_derivation import derive_facts
 from app.services.market_data import get_discount_curve
 from app.services.regulatory_irr import discount_curve_midpoints_pct
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 
@@ -281,7 +281,7 @@ def _seed_agd(db: Session, *, as_of: date = REPORTING_DATE) -> None:
 
 
 def test_get_discount_curve_prefers_the_desk_ois_by_name(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _seed_agd(db_session)
     # A fresher generic discount-type curve must NOT beat the named AGD.
     _seed_curve(
@@ -303,7 +303,7 @@ def test_get_discount_curve_prefers_the_desk_ois_by_name(db_session: Session) ->
 
 
 def test_get_discount_curve_falls_back_to_any_discount_type(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _seed_curve(
         db_session,
         SAMPLE_BANK_ID,
@@ -321,7 +321,7 @@ def test_get_discount_curve_falls_back_to_any_discount_type(db_session: Session)
 
 
 def test_get_discount_curve_is_none_without_discount_curves(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     # A projection-family curve never satisfies the discount selection.
     _seed_curve(
         db_session,
@@ -373,7 +373,7 @@ def _baseline_run(db: Session, period_id: UUID):
 
 
 def test_official_run_discounts_on_the_published_agd(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period = _period(db_session)
 
     before = _baseline_run(db_session, period.id)
@@ -423,7 +423,7 @@ def test_official_run_discounts_on_the_published_agd(db_session: Session) -> Non
 
 
 def test_workbench_parity_with_official_run_under_agd(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period = _period(db_session)
     _seed_agd(db_session)
 
@@ -463,7 +463,7 @@ DESK_SOV_RATES: dict[int, str] = {
 
 
 def test_ftp_curve_prefers_the_desk_sovereign_zero(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID)
     _seed_curve(

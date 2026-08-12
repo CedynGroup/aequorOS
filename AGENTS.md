@@ -27,6 +27,40 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   Changing the host touches `AUTH_URL`, `CORS_ORIGINS`, and `NEXT_PUBLIC_LOGIN_URL`
   on BOTH Coolify apps; the last is a **build arg** inlined at compile time, so
   it needs a rebuild, not a restart.
+- **Staff control plane (built 2026-08-09..11; specs docs/internal/developer.md +
+  staff_UI.md, both carry dated as-built notes).** The operator API is the backend's
+  THIRD entrypoint (`app/operator/`, uvicorn `app.operator.main:app` :8100, compose
+  service `risk-operator`; NEVER mounted on the tenant API — route-isolation test pins
+  it) with a cross-tenant BYPASSRLS session; the console is the separate `console/`
+  Next.js app (console.aequoros.com, all traffic via its `/api/op` proxy). Staff auth
+  mirrors the client model: email+password against GLOBAL `operator_users` (separate
+  from tenant identity by design; `operator_admin` = super admin, founder seeded),
+  OIDC SSO secondary, dev bearer token non-production-only. Tenant onboarding runs as
+  a saga through `provision_institution`; every operator mutation lands in append-only
+  `operator_audit_log`.
+- **Market research desk (built 2026-08-09..11; spec docs/internal/
+  AequorOS_Market_Data_and_Curve_Platform.md — its as-built header + calibration
+  deviation are authoritative).** Desk-as-vendor: approved determinations publish into
+  EVERY tenant through `pull_runner.execute_pull` as vendor `aequor_desk` (zero quota,
+  AEQ.* curve names so vendor rows coexist — supersession keys ignore source). Global
+  `desk_*` tables: methodology register (Track-1 weekly application vs Track-2
+  versioned parameter changes, maker-checker everywhere), bitemporal determinations,
+  silver captures. **Rates-first weekly flow (2026-08-11):** `desk_capture` stages a
+  pre-computed **draft** only (never auto-submits); Analyst reviews/adjusts then
+  submits; Supervisor approves. Determination-scoped `research_adjustments` (override /
+  additive_bps / assumption_note + rationale) enter `package_digest` and do not rewrite
+  the methodology register. Split QA: `rates_qa_passed` gates approve/submit/publish of
+  rates; `curves_qa_passed` is advisory for rates publish (curve scopes omitted when
+  false). Quant lib `app/domain/curves/` is pure. Nightly job behind
+  `DESK_CAPTURE_ENABLED`. **Entitlements (spec §10):** `market_data_entitlements`
+  grants org × dataset (tiers core/standard/premium); default standard when no rows;
+  publish + market-data reads filter AEQ curves / GHS indices accordingly.
+  **Stage 3** credit curve `AEQ.GHS.CORP` from liquid GFIM corporate yields when present;
+  **Stage 4** true OIS via methodology `discounting_mode=ois_bootstrap` + `GHS.OIS.*`
+  (falls back to synthetic AGD). Capture snippet viewer: `GET .../captures/{id}/content`.
+  Engines: `get_discount_curve` prefers AEQ.{ccy}.OIS — EVE/duration discount on it when
+  published, byte-identical fallback otherwise (the golden suites prove the fallback;
+  never edit goldens to make dual-curve changes fit).
 - **Coolify compose apps: never use dollar-brace variable interpolation in deploy compose
   files** (2026-07-21 incident: Coolify parses compose text — comments included — and
   auto-seeds a UI env row per reference; with required-with-message guards it stored the

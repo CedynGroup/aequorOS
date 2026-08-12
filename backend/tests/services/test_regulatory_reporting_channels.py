@@ -35,11 +35,11 @@ from app.services.regulatory_reporting.channels import (
     EmailFallbackChannel,
     OrassSandboxChannel,
 )
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.factories.attestation import relax_signing
 
@@ -250,7 +250,7 @@ def exporter_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 def _seed_approved_package(db: Session) -> RegulatoryPackage:
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     # This suite is about CHANNELS, not about who signed. Signing is required for
     # every return by default, so opt this one return out the way an
     # administrator would — rather than driving a two-officer ceremony through
@@ -511,7 +511,7 @@ def test_email_then_orass_reupload_clears_pending_flag(
 
 
 def test_unapproved_submit_is_409(db_session: Session, exporter_calls: list[str]) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period_id = db_session.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,

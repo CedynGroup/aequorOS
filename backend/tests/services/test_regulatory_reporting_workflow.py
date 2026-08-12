@@ -19,11 +19,11 @@ from app.schemas.regulatory_reporting import (
 )
 from app.services import regulatory_liquidity
 from app.services.regulatory_reporting import calendar, generation, validation, workflow
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.factories.attestation import relax_signing
 
@@ -36,7 +36,7 @@ REPORTING_DATE = date(2026, 3, 31)
 
 
 def _seed_with_baseline_run(db: Session) -> None:
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     # This suite is about the package state machine, and it drives the lifecycle
     # with bare approval decisions. Approving and signing are one act for a return
     # that requires signatures, so opt BSD3 out the way an administrator would;

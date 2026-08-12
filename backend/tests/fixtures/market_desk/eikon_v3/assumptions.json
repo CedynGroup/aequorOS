@@ -1,0 +1,107 @@
+{
+  "currency": "USD",
+  "calendar": "USA",
+  "as_of": "2023-12-29",
+  "instrument_families": [
+    {
+      "name": "USD - Depo, IRS vs 6M",
+      "ric_chain": "0#USDZ=R",
+      "frequency": "Semi-Annual",
+      "basis": null
+    },
+    {
+      "name": "USD - Swap vs 1M",
+      "ric_chain": "0#USDSBMLZ=R",
+      "frequency": "Monthly",
+      "basis": null
+    },
+    {
+      "name": "USD - Swap vs 3M",
+      "ric_chain": "0#USDSBQLZ=R",
+      "frequency": "Quarterly",
+      "basis": null
+    },
+    {
+      "name": "USD - Swap vs 6M",
+      "ric_chain": "0#USDSBSLZ=R",
+      "frequency": "Semi-Annual",
+      "basis": null
+    },
+    {
+      "name": "USD - Swap SOFR OIS",
+      "ric_chain": "0#USDSROISZ=R",
+      "frequency": "Monthly",
+      "basis": "SOFR"
+    },
+    {
+      "name": "USD SB 1M LIBOR",
+      "ric_chain": "0#USDSBMLDZ=R",
+      "frequency": "Monthly",
+      "basis": "1M LIBOR"
+    },
+    {
+      "name": "USD SB 3M LIBOR",
+      "ric_chain": "0#USDSBQLDZ=R",
+      "frequency": "Quarterly",
+      "basis": "3M LIBOR"
+    },
+    {
+      "name": "USD SB 6M LIBOR",
+      "ric_chain": "0#USDSBSLDZ=R",
+      "frequency": "Semi-Annual",
+      "basis": "6M LIBOR"
+    },
+    {
+      "name": "USD SB 1Y LIBOR",
+      "ric_chain": "0#USDSBALDZ=R",
+      "frequency": "Annual",
+      "basis": "12M LIBOR"
+    }
+  ],
+  "daycount_codes": [
+    {
+      "name": "Money market Actual/360",
+      "code": "MMA0"
+    },
+    {
+      "name": "Money market Actual/365",
+      "code": "MMA5"
+    },
+    {
+      "name": "Actual/Actual",
+      "code": "AA"
+    },
+    {
+      "name": "Actual/360",
+      "code": "A0"
+    },
+    {
+      "name": "Actual/365",
+      "code": "A5"
+    },
+    {
+      "name": "actual",
+      "code": "MMA0"
+    }
+  ],
+  "curve_defs": {
+    "Curve 1": {
+      "Payment Frequency": "Quarterly",
+      "Forward Curve": "3M LIBOR",
+      "Payment Interval (Months)": 3,
+      "Curve Frequency": "3M"
+    },
+    "Curve 2": {
+      "Payment Frequency": "Quarterly",
+      "Forward Curve": "3M LIBOR",
+      "Payment Interval (Months)": 3,
+      "Curve Frequency": "3M"
+    },
+    "Curve 3": {
+      "Payment Frequency": "Monthly",
+      "Forward Curve": "SOFR",
+      "Payment Interval (Months)": 1,
+      "Curve Frequency": "1M"
+    }
+  }
+}

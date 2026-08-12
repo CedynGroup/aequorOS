@@ -60,11 +60,11 @@ from app.services.regulatory_reporting import generation, workflow
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.registry import REGISTRY
 from app.services.regulatory_reporting.templates import CONSOLIDATED_BASIS
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.services.test_lrt_packs import (
     _seed_full_register,  # pyright: ignore[reportPrivateUsage]
@@ -85,7 +85,7 @@ def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
 
 
 def _seed_with_baseline_run(db: Session) -> None:
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,

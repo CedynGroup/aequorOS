@@ -75,11 +75,11 @@ from app.services.attestation import digests, pdf_signing, signing, stepup, veri
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.regulatory_reporting import generation, validation
 from app.services.regulatory_reporting.exports import export_package
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from app.storage.client import ObjectMetadata, StorageLocation
 from tests.storage.inmemory import InMemoryStorageClient
@@ -225,7 +225,7 @@ def attestation_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _seed(db: Session) -> RegulatoryPackage:
     """A validated BSD3 package with a real succeeded liquidity run behind it."""
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     if db.scalar(select(User.id).where(User.id == CHECKER_USER_ID)) is None:
         db.add(
             User(

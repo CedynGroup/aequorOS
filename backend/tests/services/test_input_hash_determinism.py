@@ -31,7 +31,7 @@ from app.services import (
     regulatory_liquidity,
 )
 from app.services.fact_derivation import derive_facts
-from app.services.sample_bank_seed import SAMPLE_BANK_ID, seed_sample_bank
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 
@@ -67,7 +67,7 @@ def _fact_values(db: Session, period_id: Any) -> dict[str, str]:
 
 
 def test_rederivation_reproduces_identical_facts_and_hashes(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     ctx = _ctx()
@@ -98,7 +98,7 @@ def test_rederivation_reproduces_identical_facts_and_hashes(db_session: Session)
 def test_current_input_hash_is_stable_without_rederivation(db_session: Session) -> None:
     """Two reads of the same persisted state must hash identically — the
     freshness comparison depends on it."""
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     ctx = _ctx()

@@ -10,7 +10,7 @@ from app.api.deps import TenantContext
 from app.models import Bank, Job
 from app.schemas.live import FreshnessModuleRead
 from app.services import freshness, job_queue, pipeline
-from app.services.sample_bank_seed import SAMPLE_BANK_ID, seed_sample_bank
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import (
     FIXTURE_AS_OF,
@@ -24,7 +24,7 @@ def _ctx() -> TenantContext:
 
 
 def _seed(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     db_session.commit()

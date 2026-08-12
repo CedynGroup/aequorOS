@@ -20,7 +20,7 @@ import { useBankFreshness } from '@/lib/api/hooks';
 import { fmtRelative, shortId } from '@/lib/api/values';
 import { LIVE_MODULE_LABELS } from '@/components/live/moduleDisplay';
 
-/** Short labels for the 6-up grid cells — the full LIVE_MODULE_LABELS
+/** Short labels for the live-module grid cells — the full LIVE_MODULE_LABELS
  * truncate to "CA…"/"INT…" at these widths. */
 const SHORT_MODULE_LABELS: Record<LiveModule, string> = {
   liquidity: 'Liquidity',
@@ -28,6 +28,7 @@ const SHORT_MODULE_LABELS: Record<LiveModule, string> = {
   irr: 'IRR',
   fx: 'FX',
   ftp: 'FTP',
+  rating: 'Rating',
   forecast: 'Forecast',
 };
 
@@ -69,10 +70,10 @@ export default function FreshnessStrip({
     >
       {freshness.isLoading ? (
         <div
-          className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-px bg-border-light"
+          className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-px bg-border-light"
           aria-busy="true"
         >
-          {[0, 1, 2, 3, 4, 5].map((i) => (
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => (
             <div key={i} className="bg-surface-raised px-3 py-3 space-y-2">
               <SkeletonLine width="60%" height={9} />
               <SkeletonLine width="80%" height={9} />
@@ -85,7 +86,7 @@ export default function FreshnessStrip({
           the first refresh.
         </p>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-px bg-border-light">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-px bg-border-light">
           {modules.map((m) => (
             <div key={m.module} className="bg-surface-raised px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">

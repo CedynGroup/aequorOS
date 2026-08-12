@@ -32,6 +32,7 @@ from app.models.canonical import (
 from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
 from app.models.capital_plan import CapitalPlan, IlaapSnapshot
 from app.models.database_connection import DatabaseDirectConnection
+from app.models.entitlements import MarketDataEntitlement
 from app.models.financial import (
     FinancialAccount,
     FinancialBalance,
@@ -45,6 +46,7 @@ from app.models.financial import (
     FinancialSourceRow,
     FinancialValidationIssue,
 )
+from app.models.implied_rating import ImpliedRatingRun
 from app.models.ingestion import (
     IngestionBatch,
     LineageRecord,
@@ -74,6 +76,7 @@ from app.models.market_data import (
     MarketDataOverlay,
     MarketDataQuotaUsage,
 )
+from app.models.market_data_sources import MarketDataSourcePreference
 from app.models.market_desk import (
     DeskDetermination,
     DeskMethodology,
@@ -81,8 +84,9 @@ from app.models.market_desk import (
     DeskPublication,
     DeskSourceCapture,
 )
+from app.models.market_desk_curves import DeskCurveDefinition
 from app.models.notification import Notification
-from app.models.operator import OperatorAuditLog, TenantStorage
+from app.models.operator import OperatorAuditLog, OperatorUser, TenantStorage
 from app.models.organization import Organization
 from app.models.regulatory import (
     Bank,
@@ -187,8 +191,11 @@ __all__ = [
     "MappingConfigRecord",
     "DatabaseDirectConnection",
     "MarketDataConnection",
+    "MarketDataEntitlement",
     "MarketDataOverlay",
     "MarketDataQuotaUsage",
+    "MarketDataSourcePreference",
+    "DeskCurveDefinition",
     "DeskDetermination",
     "DeskMethodology",
     "DeskObservation",
@@ -199,7 +206,9 @@ __all__ = [
     "LiquidityEwiIndicator",
     "Notification",
     "IntegrationKey",
+    "ImpliedRatingRun",
     "OperatorAuditLog",
+    "OperatorUser",
     "Organization",
     "TenantStorage",
     "PackageSignaturePlacement",

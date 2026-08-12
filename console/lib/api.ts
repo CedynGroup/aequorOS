@@ -19,9 +19,10 @@
  *   is `{ error: { code, message, ... } }` (app/core/errors.py); non-JSON
  *   bodies degrade to `http_<status>`.
  * - ALL operator API traffic goes through the console's own /api/op proxy
- *   (app/api/op/[...path]/route.ts), in both auth modes:
- *   - workforce OIDC: the id_token lives in an HttpOnly cookie the proxy
- *     turns into the bearer — browser JS never holds the credential;
+ *   (app/api/op/[...path]/route.ts), in all auth modes:
+ *   - password (primary): the operator session JWT lives in an HttpOnly
+ *     cookie the proxy turns into the bearer — browser JS never holds it;
+ *   - workforce OIDC (secondary): identical cookie mechanics, id_token;
  *   - dev token (local only): the sessionStorage token rides the
  *     Authorization header and the proxy forwards it verbatim (the backend
  *     hard-refuses dev auth when APP_ENV=production).
@@ -321,7 +322,7 @@ export interface DeskCurveBlock {
 export interface DeskRateEntry {
   value?: string;
   unit?: string;
-  /** pass_through | windowed | derived (methodology series treatment). */
+  /** pass_through | windowed | derived | research_override | research_spread. */
   treatment?: string;
   source_series?: string[];
   as_of?: string;
@@ -329,8 +330,23 @@ export interface DeskRateEntry {
   detail?: Record<string, unknown>;
 }
 
+/** Track-1 research judgment (Option B) — determination-scoped only. */
+export interface DeskResearchAdjustment {
+  series_code: string;
+  kind: 'override' | 'additive_bps' | 'assumption_note';
+  value?: string | null;
+  rationale: string;
+  applied_by?: string;
+  applied_at?: string;
+}
+
 export interface DeskDerivedValues {
+  /** Legacy key — follows rates_qa_passed after the rates soft-gate. */
   qa_passed?: boolean;
+  rates_qa_passed?: boolean;
+  curves_qa_passed?: boolean;
+  package_digest?: string;
+  research_adjustments?: DeskResearchAdjustment[];
   curves?: Record<string, DeskCurveBlock>;
   rates?: Record<string, DeskRateEntry>;
   reference_rates?: Record<string, string>;
@@ -367,7 +383,9 @@ export interface DeskQaFlag {
 
 export interface DeskQaResults {
   qa_passed?: boolean;
-  /** Hard pre-publish gates: gate name -> "pass" | "fail". */
+  rates_qa_passed?: boolean;
+  curves_qa_passed?: boolean;
+  /** Gate name -> "pass" | "fail" (rates_package, curve_build, forward_qa). */
   gates?: Record<string, string>;
   forward_qa?: DeskForwardQa | null;
   nss_fallback_used?: boolean;
@@ -388,6 +406,8 @@ export interface DeskDetermination {
   /** Empty object until the draft is computed. */
   derived_values: DeskDerivedValues;
   qa_results: DeskQaResults;
+  /** Determination-scoped research adjustments (empty until Analyst applies). */
+  research_adjustments: DeskResearchAdjustment[];
   // draft -> pending_review -> approved -> published; rejected; corrections
   // create a NEW draft carrying supersedes_id. Typed string for forward compat.
   status: string;
@@ -434,11 +454,158 @@ export interface DeskPublicationsResponse {
 }
 
 // --------------------------------------------------------------------------
+// Forward Curve Construction wire types
+// (snake_case, mirroring backend/app/schemas/market_desk_curves.py — FC-3/4).
+//
+// Governed curve DEFINITIONS (the Eikon "Curve 1/2/3" analogue, Track 2, dual
+// control, immutable after approval) plus the "Run construction" PREVIEW
+// (writes nothing) and the publish-to-golden-copy fan-out. Verified against
+// that schema file on 2026-08-11.
+// --------------------------------------------------------------------------
+
+/** curve_kind — a backend Literal, closed on both sides. */
+export type DeskCurveKind = 'forward' | 'zero' | 'discount';
+
+/** Which solved curve an instrument prices against (DeskCurveQuote.leg). */
+export type DeskCurveLeg = 'discount' | 'projection';
+
+/** One governed curve-definition version (DeskCurveDefinitionRead). */
+export interface DeskCurveDefinition {
+  id: string;
+  curve_code: string;
+  version: number;
+  // draft -> approved. Typed string for forward compatibility.
+  status: string;
+  currency: string;
+  calendar_name: string;
+  curve_kind: string;
+  projection_index: string | null;
+  discount_curve_code: string | null;
+  instrument_set_ref: string;
+  interpolation_method: string;
+  output_daycount: string;
+  payment_frequency: string | null;
+  payment_interval_months: number;
+  curve_frequency: string;
+  spot_lag_days: number;
+  roll_convention: string;
+  extrapolation_rule: string;
+  params: Record<string, unknown>;
+  change_rationale: string;
+  proposed_by: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  effective_from: string | null; // date
+  created_at: string;
+}
+
+export interface DeskCurveDefinitionsResponse {
+  definitions: DeskCurveDefinition[];
+  total: number;
+}
+
+/** The shared governed parameter surface (create + propose bodies). */
+export interface DeskCurveDefinitionFields {
+  currency: string; // ISO-4217, ^[A-Z]{3}$
+  calendar_name: string;
+  curve_kind: DeskCurveKind;
+  projection_index?: string | null;
+  discount_curve_code?: string | null;
+  instrument_set_ref: string;
+  interpolation_method: string;
+  output_daycount: string;
+  payment_frequency?: string | null;
+  payment_interval_months: number;
+  curve_frequency: string;
+  spot_lag_days: number;
+  roll_convention: string;
+  extrapolation_rule: string;
+  params?: Record<string, unknown>;
+  change_rationale: string;
+}
+
+/** DeskCurveDefinitionCreate — registers a NEW curve code at v1 (draft). */
+export interface DeskCurveDefinitionCreateRequest extends DeskCurveDefinitionFields {
+  curve_code: string;
+}
+
+/** DeskCurveDefinitionVersionPropose — drafts version+1 (code is a path param). */
+export type DeskCurveDefinitionProposeRequest = DeskCurveDefinitionFields;
+
+export interface DeskCurveDefinitionApproveRequest {
+  effective_from: string; // date
+}
+
+/** One instrument-grid quote — rate as a DECIMAL fraction (0.0533 = 5.33%). */
+export interface DeskCurveQuote {
+  instrument: string;
+  tenor: string;
+  quote: number;
+  leg: DeskCurveLeg;
+}
+
+export interface DeskCurveConstructRequest {
+  curve_code: string;
+  as_of: string; // date
+  quotes: DeskCurveQuote[];
+}
+
+export interface DeskCurvePublishRequest extends DeskCurveConstructRequest {
+  methodology_code?: string | null;
+}
+
+/** One row of the tenor-adjusted forward grid (the Eikon Start/End/DF/Yield). */
+export interface DeskCurveGridRow {
+  start: string; // date
+  end: string; // date
+  discount_factor: number;
+  forward_yield: number; // decimal fraction (× 100 for percent)
+}
+
+export interface DeskCurvePillarView {
+  instrument: string;
+  tenor: string;
+  leg: string;
+  pillar_date: string; // date — the adjusted maturity
+  quote: number;
+  discount_factor: number;
+  reprice_residual: number;
+}
+
+export interface DeskCurveQaView {
+  passed: boolean;
+  reprice_max_residual: number;
+  reprice_tolerance: number;
+  reprice_pass: boolean;
+  pillar_count: number;
+  pillar_min_count: number;
+  pillar_coverage_pass: boolean;
+  monotone_df_pass: boolean;
+  forward_positivity_pass: boolean;
+  forward_oscillation_pass: boolean;
+  forward_min: number; // decimal fraction
+  forward_total_variation_ratio: number;
+}
+
+/** The "Run construction" preview: forward grid + pillar nodes + QA (writes nothing). */
+export interface DeskCurveConstructResponse {
+  curve_code: string;
+  definition_version: number;
+  as_of: string; // date
+  output_basis: string; // the "Convert to" output day count, e.g. ACT/360
+  curve_frequency_months: number;
+  input_digest: string;
+  rows: DeskCurveGridRow[];
+  pillars: DeskCurvePillarView[];
+  qa: DeskCurveQaView;
+}
+
+// --------------------------------------------------------------------------
 // Core request helper
 // --------------------------------------------------------------------------
 
 interface RequestOptions {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PUT';
   body?: unknown;
   /** Default true — set false for the unauthenticated health probe. */
   auth?: boolean;
@@ -629,6 +796,113 @@ export function listDeskCaptures(sourceKey?: string): Promise<DeskCapturesRespon
   return request<DeskCapturesResponse>(`${DESK}/captures${query({ source_key: sourceKey })}`);
 }
 
+export interface DeskCaptureContentView {
+  capture_id: string;
+  source_key: string;
+  source_url: string | null;
+  as_of_date: string;
+  status: string;
+  content_sha256: string;
+  parser_version: string;
+  kind: string;
+  content_omitted: string | null;
+  content_available: boolean;
+  content_bytes: number;
+  text: string | null;
+  truncated: boolean;
+  snippet: string | null;
+  needle: string | null;
+  meta: Record<string, unknown>;
+}
+
+export interface DeskObservationSnippet {
+  capture_id: string;
+  source_key: string;
+  source_url: string | null;
+  kind: string;
+  content_available: boolean;
+  content_omitted: string | null;
+  snippet: string | null;
+  needle: string | null;
+  hint: string | null;
+}
+
+/** GET /desk/captures/{id}/content — decoded silver payload (+ optional needle). */
+export function getDeskCaptureContent(
+  captureId: string,
+  needle?: string,
+): Promise<DeskCaptureContentView> {
+  return request<DeskCaptureContentView>(
+    `${DESK}/captures/${encodeURIComponent(captureId)}/content${query({ needle })}`,
+  );
+}
+
+/** GET /desk/captures/{id}/snippet — field-level value window. */
+export function getDeskCaptureSnippet(
+  captureId: string,
+  value?: string,
+): Promise<DeskObservationSnippet> {
+  return request<DeskObservationSnippet>(
+    `${DESK}/captures/${encodeURIComponent(captureId)}/snippet${query({ value })}`,
+  );
+}
+
+export interface DeskEntitlement {
+  id: string;
+  organization_id: string;
+  dataset_code: string;
+  tier: string | null;
+  status: string;
+  effective_from: string;
+  effective_to: string | null;
+  granted_by: string;
+  revoked_by: string | null;
+  revoked_at: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface DeskEntitlementsResponse {
+  entitlements: DeskEntitlement[];
+  total: number;
+  catalog: {
+    datasets?: string[];
+    tiers?: Record<string, string[]>;
+    default_tier?: string;
+  };
+}
+
+export function listDeskEntitlements(opts?: {
+  organizationId?: string;
+  includeRevoked?: boolean;
+}): Promise<DeskEntitlementsResponse> {
+  return request<DeskEntitlementsResponse>(
+    `${DESK}/entitlements${query({
+      organization_id: opts?.organizationId,
+      include_revoked: opts?.includeRevoked ? true : undefined,
+    })}`,
+  );
+}
+
+export function grantDeskEntitlementTier(body: {
+  organization_id: string;
+  tier: 'core' | 'standard' | 'premium';
+  effective_from: string;
+  notes?: string;
+}): Promise<DeskEntitlementsResponse> {
+  return request<DeskEntitlementsResponse>(`${DESK}/entitlements/grant-tier`, {
+    method: 'POST',
+    body,
+  });
+}
+
+export function revokeDeskEntitlement(entitlementId: string): Promise<DeskEntitlement> {
+  return request<DeskEntitlement>(
+    `${DESK}/entitlements/${encodeURIComponent(entitlementId)}/revoke`,
+    { method: 'POST' },
+  );
+}
+
 /** GET /desk/determinations — newest COB first, optional cob_date/status filters. */
 export function listDeskDeterminations(opts?: {
   cobDate?: string;
@@ -643,6 +917,74 @@ export function listDeskDeterminations(opts?: {
 export function getDeskDetermination(determinationId: string): Promise<DeskDetermination> {
   return request<DeskDetermination>(
     `${DESK}/determinations/${encodeURIComponent(determinationId)}`,
+  );
+}
+
+/** Wizard package: completeness checklist, WoW deltas, input provenance. */
+export interface DeskPackageCompletenessItem {
+  series_code: string;
+  required: boolean;
+  status: 'present' | 'stale' | 'missing' | string;
+  as_of_date: string | null;
+  value: string | null;
+  unit: string | null;
+  age_days: number | null;
+  stale_limit_days: number;
+  provenance: {
+    source?: string;
+    capture_id?: string | null;
+    source_key?: string | null;
+    source_url?: string | null;
+    entered_by?: string | null;
+    quality_flags?: unknown[];
+    attributes?: Record<string, unknown>;
+  };
+}
+
+export interface DeskPackageView {
+  completeness: {
+    cob_date: string;
+    items: DeskPackageCompletenessItem[];
+    required_total: number;
+    required_present: number;
+    required_missing: string[];
+    required_stale: string[];
+    ready: boolean;
+    failed_captures: Array<{
+      id: string;
+      source_key: string;
+      as_of_date: string;
+      captured_at: string | null;
+      parse_error: string | null;
+    }>;
+  };
+  week_over_week: {
+    prior_determination_id: string | null;
+    prior_cob_date: string | null;
+    prior_published_at: string | null;
+    deltas: Array<{
+      series_code: string;
+      current: string | null;
+      prior: string | null;
+      delta_pp: string | null;
+      unit: string | null;
+    }>;
+  };
+  input_provenance: Array<{
+    series_code: string;
+    as_of_date?: string;
+    value?: string;
+    provenance: DeskPackageCompletenessItem['provenance'];
+  }>;
+  rates_qa_passed: boolean | null;
+  curves_qa_passed: boolean | null;
+  package_digest: string | null;
+}
+
+/** GET /desk/determinations/{id}/package — Research Desk wizard payload. */
+export function getDeskDeterminationPackage(determinationId: string): Promise<DeskPackageView> {
+  return request<DeskPackageView>(
+    `${DESK}/determinations/${encodeURIComponent(determinationId)}/package`,
   );
 }
 
@@ -662,6 +1004,26 @@ export function computeDeskDetermination(determinationId: string): Promise<DeskD
   return request<DeskDetermination>(
     `${DESK}/determinations/${encodeURIComponent(determinationId)}/compute`,
     { method: 'POST' },
+  );
+}
+
+/**
+ * PUT /desk/determinations/{id}/adjustments — replace research adjustments on a
+ * draft and recompute (Option B Track-1 judgment). Requires rationale on
+ * override / additive_bps entries.
+ */
+export function putDeskResearchAdjustments(
+  determinationId: string,
+  adjustments: Array<{
+    series_code: string;
+    kind: 'override' | 'additive_bps' | 'assumption_note';
+    value?: string | null;
+    rationale?: string;
+  }>,
+): Promise<DeskDetermination> {
+  return request<DeskDetermination>(
+    `${DESK}/determinations/${encodeURIComponent(determinationId)}/adjustments`,
+    { method: 'PUT', body: { adjustments } },
   );
 }
 
@@ -730,6 +1092,81 @@ export function listDeskPublications(
 }
 
 // --------------------------------------------------------------------------
+// Forward Curve Construction endpoints (backend/app/operator/features/curves.py)
+//
+// Definitions are Track-2 governed EXACTLY like the methodology register
+// (dual control, immutable after approval); /construct applies the ACTIVE
+// definition to a cob's quotes as a pure PREVIEW; /publish fans the
+// constructed curve out through the existing determination seam.
+// --------------------------------------------------------------------------
+
+const CURVES = '/operator/v1/curves';
+
+/** GET /curves/definitions — governed curve definitions, optionally one code. */
+export function listCurveDefinitions(
+  curveCode?: string,
+): Promise<DeskCurveDefinitionsResponse> {
+  return request<DeskCurveDefinitionsResponse>(
+    `${CURVES}/definitions${query({ curve_code: curveCode })}`,
+  );
+}
+
+/** POST /curves/definitions — register a NEW curve code at v1 (draft). 201. */
+export function createCurveDefinition(
+  body: DeskCurveDefinitionCreateRequest,
+): Promise<DeskCurveDefinition> {
+  return request<DeskCurveDefinition>(`${CURVES}/definitions`, { method: 'POST', body });
+}
+
+/** POST /curves/definitions/{code}/versions — Track 2: draft version+1 with a rationale. 201. */
+export function proposeCurveDefinitionVersion(
+  curveCode: string,
+  body: DeskCurveDefinitionProposeRequest,
+): Promise<DeskCurveDefinition> {
+  return request<DeskCurveDefinition>(
+    `${CURVES}/definitions/${encodeURIComponent(curveCode)}/versions`,
+    { method: 'POST', body },
+  );
+}
+
+/**
+ * POST /curves/definitions/{code}/versions/{version}/approve — Track-2 approval
+ * (dual control: 422 when the approver is the proposer).
+ */
+export function approveCurveDefinitionVersion(
+  curveCode: string,
+  version: number,
+  body: DeskCurveDefinitionApproveRequest,
+): Promise<DeskCurveDefinition> {
+  return request<DeskCurveDefinition>(
+    `${CURVES}/definitions/${encodeURIComponent(curveCode)}/versions/${version}/approve`,
+    { method: 'POST', body },
+  );
+}
+
+/**
+ * POST /curves/construct — run construction against the ACTIVE definition for a
+ * curve code + cob. A pure preview (writes no curve/determination state). 409
+ * when no approved definition is effective on the as-of; 422 when the solve or
+ * a convention/calendar resolution fails.
+ */
+export function constructCurve(
+  body: DeskCurveConstructRequest,
+): Promise<DeskCurveConstructResponse> {
+  return request<DeskCurveConstructResponse>(`${CURVES}/construct`, { method: 'POST', body });
+}
+
+/**
+ * POST /curves/publish — construct THEN publish the forward curve to golden copy
+ * through the desk determination fan-out (bitemporal + lineage + audit for
+ * free). 422 when a hard QA gate fails; 409 when no approved definition or
+ * methodology is effective on the as-of.
+ */
+export function publishCurve(body: DeskCurvePublishRequest): Promise<DeskPublication> {
+  return request<DeskPublication>(`${CURVES}/publish`, { method: 'POST', body });
+}
+
+// --------------------------------------------------------------------------
 // Workforce session (console-local /api/auth routes, not the operator API)
 // --------------------------------------------------------------------------
 
@@ -743,12 +1180,65 @@ export interface WorkforceSession {
   authenticated: boolean;
   email: string | null;
   expires_at: string | null;
+  /** Which sign-in produced the cookie session; null when unauthenticated. */
+  mode: 'password' | 'oidc' | null;
 }
 
 async function consoleJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { cache: 'no-store', ...init });
-  if (!res.ok) throw new ApiError(`http_${res.status}`, res.statusText, res.status);
+  let res: Response;
+  try {
+    res = await fetch(path, { cache: 'no-store', ...init });
+  } catch (err) {
+    throw new ApiError(
+      'network_error',
+      err instanceof Error ? err.message : 'fetch failed',
+      0,
+    );
+  }
+  if (!res.ok) {
+    // Console routes relay the backend envelope — surface its code/message
+    // (e.g. the login 401's deliberately generic text) when present.
+    let code = `http_${res.status}`;
+    let message = res.statusText || `HTTP ${res.status}`;
+    try {
+      const body: unknown = await res.json();
+      if (
+        body &&
+        typeof body === 'object' &&
+        'error' in body &&
+        body.error &&
+        typeof body.error === 'object'
+      ) {
+        const env = body.error as { code?: unknown; message?: unknown };
+        if (typeof env.code === 'string' && env.code) code = env.code;
+        if (typeof env.message === 'string' && env.message) message = env.message;
+      }
+    } catch {
+      // non-JSON error body — keep the http_<status> fallback
+    }
+    throw new ApiError(code, message, res.status);
+  }
   return (await res.json()) as T;
+}
+
+export interface PasswordLoginResult {
+  ok: boolean;
+  email: string;
+  role: string | null;
+}
+
+/**
+ * Staff email+password sign-in (primary path). Credentials go to the
+ * console's own /api/auth/password-login route, which relays them to the
+ * operator API server-side and sets the HttpOnly op_session cookie — the
+ * browser never holds the operator JWT.
+ */
+export function passwordLogin(email: string, password: string): Promise<PasswordLoginResult> {
+  return consoleJson<PasswordLoginResult>('/api/auth/password-login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
 }
 
 /** Which sign-in methods this deployment offers + the API host for badges. */

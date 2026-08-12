@@ -38,11 +38,11 @@ from app.services.regulatory_reporting import calendar, generation, validation
 from app.services.regulatory_reporting import packages as packages_service
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.registry import REGISTRY
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
@@ -255,7 +255,7 @@ def _seed_products(db: Session) -> None:
 
 
 def _seed_full_register(db: Session) -> dict[str, Any]:
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     _seed_profile(db)
     parties = _seed_parties(db)
     _seed_outlets(db)
@@ -366,7 +366,7 @@ def test_lrt_profile_pack_generates_validates_and_exports(
 
 
 def test_lrt_profile_409_without_profile(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     with pytest.raises(HTTPException) as exc_info:
         _generate(db_session, "LRT-PROFILE")
     assert exc_info.value.status_code == 409
@@ -468,7 +468,7 @@ def test_lrt_party_pack_resolves_ubo_and_grades_due_diligence(
 
 
 def test_lrt_party_409_without_parties(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _seed_profile(db_session)
     with pytest.raises(HTTPException) as exc_info:
         _generate(db_session, "LRT-PARTY")
@@ -510,7 +510,7 @@ def test_lrt_capital_pack_cross_foots_pct_total(
 
 
 def test_lrt_capital_409_without_profile(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     with pytest.raises(HTTPException) as exc_info:
         _generate(db_session, "LRT-CAPITAL")
     assert exc_info.value.status_code == 409
@@ -547,7 +547,7 @@ def test_lrt_product_pack_orders_by_status_and_exports(
 
 
 def test_lrt_product_409_without_products(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _seed_profile(db_session)
     with pytest.raises(HTTPException) as exc_info:
         _generate(db_session, "LRT-PRODUCT")

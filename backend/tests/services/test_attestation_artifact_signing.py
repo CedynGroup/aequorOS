@@ -61,11 +61,11 @@ from app.services.attestation.keys import SignerKeyService
 from app.services.attestation.signers import get_raw_signer
 from app.services.regulatory_reporting import artifact_versions, generation, validation
 from app.services.regulatory_reporting import workflow as reporting_workflow
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from app.storage.client import StorageLocation
 from tests.storage.inmemory import InMemoryStorageClient
@@ -118,7 +118,7 @@ def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
 
 def _seed(db: Session, *, require_signed_pdf: bool = True, roles: Any = None) -> RegulatoryPackage:
     """A validated BSD3 package under a policy that demands a signed PDF."""
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     if db.scalar(select(User.id).where(User.id == CHECKER_USER_ID)) is None:
         db.add(
             User(

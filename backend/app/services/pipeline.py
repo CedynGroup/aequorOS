@@ -36,6 +36,7 @@ from app.models import (
 )
 from app.services import (
     data_activation,
+    implied_rating,
     regulatory_capital,
     regulatory_ftp,
     regulatory_fx,
@@ -60,6 +61,7 @@ _CHEAP_MODULES: tuple[tuple[str, _ComputeLive], ...] = (
     ("irr", regulatory_irr.compute_live),
     ("fx", regulatory_fx.compute_live),
     ("ftp", regulatory_ftp.compute_live),
+    ("rating", implied_rating.compute_live),
 )
 
 

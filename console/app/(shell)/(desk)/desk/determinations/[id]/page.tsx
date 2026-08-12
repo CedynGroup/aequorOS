@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   Calculator,
   CheckCircle2,
   ChevronRight,
@@ -19,8 +20,10 @@ import {
   approveDeskDetermination,
   computeDeskDetermination,
   getDeskDetermination,
+  getDeskDeterminationPackage,
   listDeskPublications,
   publishDeskDetermination,
+  putDeskResearchAdjustments,
   rejectDeskDetermination,
   submitDeskDetermination,
   supersedeDeskDetermination,
@@ -28,12 +31,15 @@ import {
   type ApiError,
   type DeskCurveBlock,
   type DeskDetermination,
+  type DeskPackageView,
   type DeskPublication,
   type DeskRateEntry,
+  type DeskResearchAdjustment,
 } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { fmtDate, fmtTs, relTime, DASH } from '@/lib/format';
+import { fmtDate, DASH } from '@/lib/format';
 import {
+  CurvesQaBadge,
   DeterminationStatusPill,
   MethodologyChip,
   PublicationResults,
@@ -47,23 +53,21 @@ import {
   FieldRow,
   Skeleton,
   SkeletonRows,
-  StatusChip,
 } from '@/components/ui';
 
 /**
- * /desk/determinations/[id] — the weekly determination screen (spec §11a):
- * lifecycle rail with the CURRENT allowed actions, and — after compute — the
- * derived curves, QA-gate results, and rates exactly as the pipeline stored
- * them. Sources: GET /desk/determinations/{id} and GET /desk/publications.
- *
- * Maker-checker honesty: the two refusals the approve path can return —
- * reviewer == preparer, and qa_passed=false — are rendered as explicit,
- * explained states, never generic errors.
+ * Research Desk guided weekly rates workflow:
+ * 1 Capture & inputs → 2 Rates review (+ WoW) → 3 Adjustments →
+ * 4 Review & Confirm (submit) → 5 Supervisor (approve / publish).
  */
 
-// ---------------------------------------------------------------------------
-// Small tolerant helpers: derived_values/qa_results are pipeline-owned JSON.
-// ---------------------------------------------------------------------------
+const STEPS = [
+  { id: 1, key: 'inputs', label: 'Capture & inputs' },
+  { id: 2, key: 'rates', label: 'Rates review' },
+  { id: 3, key: 'adjust', label: 'Research adjustments' },
+  { id: 4, key: 'confirm', label: 'Review & Confirm' },
+  { id: 5, key: 'supervisor', label: 'Supervisor' },
+] as const;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -71,7 +75,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-/** Primitive → text, structure → compact JSON. Never fabricates. */
 function show(value: unknown): string {
   if (value === null || value === undefined) return DASH;
   if (typeof value === 'string') return value;
@@ -79,140 +82,79 @@ function show(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function PassFailChip({ pass, label }: { pass: boolean | undefined; label: string }) {
-  if (pass === undefined) return <Chip>{label}</Chip>;
-  return <Chip tone={pass ? 'ok' : 'crit'}>{`${label} · ${pass ? 'pass' : 'fail'}`}</Chip>;
+function defaultStep(status: string): number {
+  if (status === 'draft') return 1;
+  if (status === 'pending_review' || status === 'approved' || status === 'published') return 5;
+  if (status === 'rejected') return 4;
+  return 1;
 }
 
-// ---------------------------------------------------------------------------
-// Lifecycle rail: draft -> pending review -> approved -> published, with the
-// rejected branch off pending review and the supersede branch off published.
-// ---------------------------------------------------------------------------
-
-const MAIN_PATH = ['draft', 'pending_review', 'approved', 'published'] as const;
-
-function LifecycleRail({ status }: { status: string }) {
-  const idx = (MAIN_PATH as readonly string[]).indexOf(status);
-  const rejected = status === 'rejected';
-  // A rejected determination made it as far as pending review.
-  const reachedIdx = rejected ? 1 : idx;
-
+function StepRail({
+  step,
+  status,
+  onSelect,
+}: {
+  step: number;
+  status: string;
+  onSelect: (n: number) => void;
+}) {
+  const supervisorOnly = status !== 'draft' && status !== 'rejected';
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {MAIN_PATH.map((state, i) => {
-        const current = !rejected && i === idx;
-        const done = reachedIdx >= 0 && i < reachedIdx;
+      {STEPS.map((s, i) => {
+        const locked = supervisorOnly && s.id < 5 && status !== 'rejected';
+        // After submit, Analyst steps are still browsable read-only.
+        const current = s.id === step;
+        const done = s.id < step || (supervisorOnly && s.id < 5);
         const cls = current
           ? 'bg-action-light text-action border border-action/40'
           : done
             ? 'bg-success-light text-success border border-transparent'
             : 'bg-surface text-slate-light border border-border-light';
         return (
-          <span key={state} className="flex items-center gap-1.5">
+          <span key={s.id} className="flex items-center gap-1.5">
             {i > 0 && <ChevronRight size={13} className="text-slate-light" />}
-            <span
-              className={`rounded px-2 py-0.5 text-micro font-medium uppercase tracking-wide ${cls}`}
+            <button
+              type="button"
+              disabled={false}
+              onClick={() => onSelect(s.id)}
+              className={`rounded px-2.5 py-1 text-micro font-medium uppercase tracking-wide ${cls} ${
+                locked ? 'opacity-90' : 'hover:opacity-90'
+              }`}
+              title={locked ? 'Read-only after submit' : s.label}
             >
-              {state.replace(/_/g, ' ')}
-            </span>
+              {s.id}. {s.label}
+            </button>
           </span>
         );
       })}
-      <span className="ml-2 flex items-center gap-1.5 text-micro text-slate-light">
-        <span>branches:</span>
-        <span
-          className={`rounded px-2 py-0.5 font-medium uppercase tracking-wide ${
-            rejected
-              ? 'bg-critical-light text-critical'
-              : 'bg-surface text-slate-light border border-border-light'
-          }`}
-        >
-          rejected
-        </span>
-        <span className="rounded border border-border-light bg-surface px-2 py-0.5 font-medium uppercase tracking-wide">
-          superseded → new draft
-        </span>
-      </span>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Curves + rates rendering (honest tables straight from derived_values).
-// ---------------------------------------------------------------------------
+const CURVE_ORDER = [
+  'AEQ.GHS.SOV.ZERO',
+  'AEQ.GHS.SOV.FWD',
+  'AEQ.GHS.OIS',
+  'AEQ.GHS.CORP',
+];
+const TREATMENT_ORDER = [
+  'pass_through',
+  'windowed',
+  'derived',
+  'research_override',
+  'research_spread',
+  'research_adjustment',
+];
 
-// Spec §8 codes first; anything else after, in payload order.
-const CURVE_ORDER = ['AEQ.GHS.SOV.ZERO', 'AEQ.GHS.SOV.FWD', 'AEQ.GHS.OIS'];
-
-function CurveCard({ code, block }: { code: string; block: DeskCurveBlock }) {
-  const interpolation = asRecord(block.definition)?.interpolation;
-  return (
-    <div className="card p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Chip mono>{code}</Chip>
-        {block.curve_type && (
-          <span className="text-micro uppercase tracking-wide text-slate">{block.curve_type}</span>
-        )}
-        {typeof interpolation === 'string' && (
-          <span className="font-mono text-micro text-slate-light">{interpolation}</span>
-        )}
-        {block.digest && (
-          <span
-            className="ml-auto font-mono text-micro text-slate-light"
-            title={`curve build digest ${block.digest}`}
-          >
-            {block.digest.slice(0, 12)}…
-          </span>
-        )}
-      </div>
-
-      {block.build_error ? (
-        <div className="mt-3 flex items-start gap-2 rounded border border-critical/40 bg-critical-light p-3">
-          <XCircle size={14} className="mt-0.5 shrink-0 text-critical" />
-          <p className="min-w-0 break-words text-caption text-critical">{block.build_error}</p>
-        </div>
-      ) : (
-        <>
-          {(block.points?.length ?? 0) > 0 ? (
-            <table className="mt-3 w-full text-body">
-              <thead>
-                <tr className="border-b border-border-light text-left text-micro uppercase tracking-wide text-slate">
-                  <th className="py-1.5 pr-4 font-medium">Tenor (months)</th>
-                  <th className="py-1.5 font-medium text-right">Zero rate (%)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(block.points ?? []).map((p, i) => (
-                  <tr key={i} className="border-b border-border-light last:border-b-0">
-                    <td className="num py-1.5 pr-4 text-left text-ink">{show(p.tenor_months)}</td>
-                    <td className="num py-1.5 text-ink">{show(p.rate_pct)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="mt-3 text-caption text-slate">The pipeline emitted no curve points.</p>
-          )}
-          {block.overnight_anchor_pct && (
-            <p className="mt-2 text-caption text-slate">
-              Overnight anchor:{' '}
-              <span className="font-mono text-ink">{block.overnight_anchor_pct}%</span>
-            </p>
-          )}
-          {block.disclosure && (
-            <p className="mt-2 border-t border-border-light pt-2 text-caption text-slate">
-              {block.disclosure}
-            </p>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-const TREATMENT_ORDER = ['pass_through', 'windowed', 'derived'];
-
-function RatesSection({ rates }: { rates: Record<string, DeskRateEntry> }) {
+function RatesTable({
+  rates,
+  deltas,
+}: {
+  rates: Record<string, DeskRateEntry>;
+  deltas?: DeskPackageView['week_over_week']['deltas'];
+}) {
+  const deltaMap = new Map((deltas ?? []).map((d) => [d.series_code, d]));
   const entries = Object.entries(rates);
   const groups = new Map<string, [string, DeskRateEntry][]>();
   for (const [code, entry] of entries) {
@@ -228,9 +170,9 @@ function RatesSection({ rates }: { rates: Record<string, DeskRateEntry> }) {
 
   return (
     <div className="card">
-      <h2 className="border-b border-border-light px-5 py-3 text-h3 text-navy">Rates</h2>
+      <h2 className="border-b border-border-light px-5 py-3 text-h3 text-navy">Rates package</h2>
       {entries.length === 0 && (
-        <p className="px-5 py-4 text-caption text-slate">The pipeline emitted no rates.</p>
+        <p className="px-5 py-4 text-caption text-slate">No rates computed yet.</p>
       )}
       {orderedKeys.map((treatment) => (
         <div key={treatment} className="border-b border-border-light last:border-b-0">
@@ -238,34 +180,57 @@ function RatesSection({ rates }: { rates: Record<string, DeskRateEntry> }) {
             {treatment.replace(/_/g, ' ')}
           </div>
           <table className="w-full text-body">
+            <thead>
+              <tr className="border-b border-border-light text-left text-micro uppercase tracking-wide text-slate">
+                <th className="px-5 py-1.5 font-medium">Series</th>
+                <th className="px-3 py-1.5 font-medium text-right">Value</th>
+                <th className="px-3 py-1.5 font-medium text-right">Δ vs prior</th>
+                <th className="px-3 py-1.5 font-medium">As of</th>
+                <th className="px-5 py-1.5 font-medium">Freshness</th>
+              </tr>
+            </thead>
             <tbody>
-              {(groups.get(treatment) ?? []).map(([code, entry]) => (
-                <tr key={code} className="border-b border-border-light last:border-b-0">
-                  <td className="px-5 py-2">
-                    <span className="font-mono text-caption text-ink">{code}</span>
-                    {entry.source_series && entry.source_series.length > 0 && (
-                      <div
-                        className="max-w-md truncate font-mono text-micro text-slate-light"
-                        title={entry.source_series.join(', ')}
-                      >
-                        ← {entry.source_series.join(', ')}
-                      </div>
-                    )}
-                  </td>
-                  <td className="num px-3 py-2 text-ink">{show(entry.value)}</td>
-                  <td className="px-3 py-2 text-caption text-slate">{entry.unit ?? DASH}</td>
-                  <td className="px-3 py-2 text-caption text-slate">
-                    as of {fmtDate(entry.as_of)}
-                  </td>
-                  <td className="px-5 py-2 text-right">
-                    {entry.staleness_flag ? (
-                      <Chip tone="warn">stale carry-forward</Chip>
-                    ) : (
-                      <span className="text-micro text-slate-light">fresh</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {(groups.get(treatment) ?? []).map(([code, entry]) => {
+                const d = deltaMap.get(code);
+                const delta = d?.delta_pp != null ? Number(d.delta_pp) : null;
+                return (
+                  <tr key={code} className="border-b border-border-light last:border-b-0">
+                    <td className="px-5 py-2">
+                      <span className="font-mono text-caption text-ink">{code}</span>
+                      {entry.source_series && entry.source_series.length > 0 && (
+                        <div className="max-w-md truncate font-mono text-micro text-slate-light">
+                          ← {entry.source_series.join(', ')}
+                        </div>
+                      )}
+                    </td>
+                    <td className="num px-3 py-2 text-ink">{show(entry.value)}</td>
+                    <td className="num px-3 py-2 text-ink">
+                      {delta == null || Number.isNaN(delta) ? (
+                        <span className="text-slate-light">{DASH}</span>
+                      ) : (
+                        <span
+                          className={
+                            delta > 0 ? 'text-critical' : delta < 0 ? 'text-success' : 'text-slate'
+                          }
+                        >
+                          {delta > 0 ? '+' : ''}
+                          {delta.toFixed(2)} pp
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-caption text-slate">
+                      {entry.as_of ? fmtDate(entry.as_of) : DASH}
+                    </td>
+                    <td className="px-5 py-2">
+                      {entry.staleness_flag ? (
+                        <Chip tone="warn">stale</Chip>
+                      ) : (
+                        <span className="text-micro text-slate-light">fresh</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -274,9 +239,231 @@ function RatesSection({ rates }: { rates: Record<string, DeskRateEntry> }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// The page.
-// ---------------------------------------------------------------------------
+function CurveCard({ code, block }: { code: string; block: DeskCurveBlock }) {
+  const interpolation = asRecord(block.definition)?.interpolation;
+  return (
+    <div className="card p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Chip mono>{code}</Chip>
+        {block.curve_type && (
+          <span className="text-micro uppercase tracking-wide text-slate">{block.curve_type}</span>
+        )}
+        {typeof interpolation === 'string' && (
+          <span className="font-mono text-micro text-slate-light">{interpolation}</span>
+        )}
+      </div>
+      {block.build_error ? (
+        <p className="mt-3 text-caption text-critical">{block.build_error}</p>
+      ) : (block.points?.length ?? 0) > 0 ? (
+        <table className="mt-3 w-full text-body">
+          <thead>
+            <tr className="border-b border-border-light text-left text-micro uppercase tracking-wide text-slate">
+              <th className="py-1.5 pr-4 font-medium">Tenor (m)</th>
+              <th className="py-1.5 font-medium text-right">Zero %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(block.points ?? []).map((p, i) => (
+              <tr key={i} className="border-b border-border-light last:border-b-0">
+                <td className="num py-1.5 pr-4">{show(p.tenor_months)}</td>
+                <td className="num py-1.5 text-right">{show(p.rate_pct)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="mt-3 text-caption text-slate">No curve points.</p>
+      )}
+      {block.disclosure && (
+        <p className="mt-2 border-t border-border-light pt-2 text-caption text-slate">
+          {block.disclosure}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AdjustmentsPanel({
+  determination,
+  busy,
+  onSaved,
+}: {
+  determination: DeskDetermination;
+  busy: boolean;
+  onSaved: () => void;
+}) {
+  const existing = determination.research_adjustments ?? [];
+  const [seriesCode, setSeriesCode] = useState('GHS.LENDING.INDICATOR');
+  const [kind, setKind] = useState<DeskResearchAdjustment['kind']>('override');
+  const [value, setValue] = useState('');
+  const [rationale, setRationale] = useState('');
+  const [rows, setRows] = useState<DeskResearchAdjustment[]>(existing);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  useEffect(() => {
+    setRows(determination.research_adjustments ?? []);
+  }, [determination.research_adjustments]);
+
+  const inputClass =
+    'rounded-md border border-border bg-surface-base px-3 py-2 text-body text-ink focus:border-focus focus:outline-none';
+
+  function addRow() {
+    if (!seriesCode.trim()) return;
+    if ((kind === 'override' || kind === 'additive_bps') && (!rationale.trim() || !value.trim()))
+      return;
+    const next: DeskResearchAdjustment = {
+      series_code: seriesCode.trim(),
+      kind,
+      value: kind === 'assumption_note' ? null : value.trim(),
+      rationale: rationale.trim(),
+    };
+    setRows((prev) => {
+      const without = prev.filter((r) => r.series_code !== next.series_code);
+      return [...without, next].sort((a, b) => a.series_code.localeCompare(b.series_code));
+    });
+    setValue('');
+    setRationale('');
+  }
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      await putDeskResearchAdjustments(
+        determination.id,
+        rows.map((r) => ({
+          series_code: r.series_code,
+          kind: r.kind,
+          value: r.value,
+          rationale: r.rationale,
+        })),
+      );
+      onSaved();
+    } catch (err) {
+      setError(toApiError(err));
+    }
+    setSaving(false);
+  }
+
+  if (determination.status !== 'draft') {
+    return (
+      <div className="card">
+        <h2 className="border-b border-border-light px-5 py-3 text-h3 text-navy">
+          Research adjustments
+        </h2>
+        {(existing.length ?? 0) === 0 ? (
+          <p className="px-5 py-4 text-caption text-slate">No research adjustments on this package.</p>
+        ) : (
+          <table className="w-full text-body">
+            <tbody>
+              {existing.map((a, i) => (
+                <tr key={i} className="border-b border-border-light">
+                  <td className="px-5 py-2 font-mono text-caption">{a.series_code}</td>
+                  <td className="px-3 py-2 text-caption">{a.kind.replace(/_/g, ' ')}</td>
+                  <td className="num px-3 py-2">{a.value ?? DASH}</td>
+                  <td className="px-5 py-2 text-caption text-slate">{a.rationale}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="card p-5">
+      <h2 className="text-h3 text-navy">Research adjustments</h2>
+      <p className="mt-1 text-caption text-slate">
+        Track-1 weekly judgment only — does not rewrite the methodology register. Override and
+        additive bps require a numeric value and rationale. Saving recomputes the package digest.
+      </p>
+      {rows.length > 0 && (
+        <ul className="mt-3 divide-y divide-border-light rounded border border-border-light">
+          {rows.map((r) => (
+            <li key={r.series_code} className="flex flex-wrap items-center gap-2 px-3 py-2">
+              <span className="font-mono text-caption text-ink">{r.series_code}</span>
+              <Chip>{r.kind.replace(/_/g, ' ')}</Chip>
+              {r.value != null && r.value !== '' && (
+                <span className="font-mono text-caption">{r.value}</span>
+              )}
+              <span className="min-w-0 flex-1 truncate text-caption text-slate">{r.rationale}</span>
+              <button
+                type="button"
+                className="text-caption text-critical hover:underline"
+                onClick={() => setRows((p) => p.filter((x) => x.series_code !== r.series_code))}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <label className="block">
+          <span className="mb-1 block text-caption font-medium text-slate">Series</span>
+          <input
+            className={`${inputClass} w-56 font-mono`}
+            value={seriesCode}
+            onChange={(e) => setSeriesCode(e.target.value)}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-caption font-medium text-slate">Kind</span>
+          <select
+            className={inputClass}
+            value={kind}
+            onChange={(e) => setKind(e.target.value as DeskResearchAdjustment['kind'])}
+          >
+            <option value="override">override</option>
+            <option value="additive_bps">additive bps</option>
+            <option value="assumption_note">assumption note</option>
+          </select>
+        </label>
+        {kind !== 'assumption_note' && (
+          <label className="block">
+            <span className="mb-1 block text-caption font-medium text-slate">
+              {kind === 'additive_bps' ? 'Bps' : 'Value (%)'}
+            </span>
+            <input
+              className={`${inputClass} w-28 font-mono`}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+            />
+          </label>
+        )}
+        <label className="block min-w-[14rem] flex-1">
+          <span className="mb-1 block text-caption font-medium text-slate">Rationale</span>
+          <input
+            className={`${inputClass} w-full`}
+            value={rationale}
+            onChange={(e) => setRationale(e.target.value)}
+          />
+        </label>
+        <button type="button" onClick={addRow} className="btn-primary px-3 py-2 text-body">
+          Add
+        </button>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          disabled={busy || saving}
+          onClick={() => void save()}
+          className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body disabled:opacity-50"
+        >
+          {saving && <Loader2 size={14} className="animate-spin" />}
+          Save adjustments &amp; recompute
+        </button>
+      </div>
+      {error && (
+        <div className="mt-3">
+          <ErrorPanel error={error} context="Saving adjustments" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Action =
   | 'compute'
@@ -292,14 +479,27 @@ export default function DeterminationDetailPage() {
   const router = useRouter();
 
   const det = useApi(() => getDeskDetermination(id), [id]);
+  const pkg = useApi(() => getDeskDeterminationPackage(id), [id]);
   const pubs = useApi(() => listDeskPublications(id), [id]);
 
+  const [step, setStep] = useState(1);
   const [busy, setBusy] = useState<Action | null>(null);
   const [actionError, setActionError] = useState<{ action: Action; error: ApiError } | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [publishArmed, setPublishArmed] = useState(false);
   const [lastPublication, setLastPublication] = useState<DeskPublication | null>(null);
+  const [stepSynced, setStepSynced] = useState(false);
+
+  const d = det.data;
+  const status = d?.status ?? '';
+
+  useEffect(() => {
+    if (d && !stepSynced) {
+      setStep(defaultStep(d.status));
+      setStepSynced(true);
+    }
+  }, [d, stepSynced]);
 
   async function run(action: Action, call: () => Promise<unknown>) {
     setBusy(action);
@@ -307,9 +507,7 @@ export default function DeterminationDetailPage() {
     try {
       const result = await call();
       if (action === 'supersede') {
-        // The correction is a NEW draft — continue the maker-checker walk there.
-        const draft = result as DeskDetermination;
-        router.push(`/desk/determinations/${draft.id}`);
+        router.push(`/desk/determinations/${(result as DeskDetermination).id}`);
         return;
       }
       if (action === 'publish') {
@@ -321,18 +519,15 @@ export default function DeterminationDetailPage() {
         setRejectOpen(false);
         setRejectReason('');
       }
+      if (action === 'submit') setStep(5);
       det.reload();
+      pkg.reload();
     } catch (err) {
       setActionError({ action, error: toApiError(err) });
     }
     setBusy(null);
   }
 
-  const d = det.data;
-  const status = d?.status ?? '';
-
-  // The two approve refusals the backend can return, told apart by message —
-  // both must be explicit UI states, not generic errors.
   const approveError = actionError?.action === 'approve' ? actionError.error : null;
   const fourEyes =
     approveError !== null &&
@@ -341,7 +536,7 @@ export default function DeterminationDetailPage() {
   const qaGateRefused =
     approveError !== null &&
     approveError.status === 409 &&
-    /qa gate|qa_passed/i.test(approveError.message);
+    /rates_qa|qa gate|qa_passed/i.test(approveError.message);
 
   const computed = Boolean(d && d.derived_values && Object.keys(d.derived_values).length > 0);
   const curves = (d?.derived_values.curves ?? {}) as Record<string, DeskCurveBlock>;
@@ -349,13 +544,37 @@ export default function DeterminationDetailPage() {
     ...CURVE_ORDER.filter((c) => c in curves),
     ...Object.keys(curves).filter((c) => !CURVE_ORDER.includes(c)),
   ];
-  const qa = d?.qa_results ?? {};
-  const snapshotEntries = (d?.input_snapshot ?? [])
-    .map(asRecord)
-    .filter((e): e is Record<string, unknown> => e !== null);
+  const rates = d?.derived_values.rates ?? {};
+  const packageView = pkg.data;
+  const completeness = packageView?.completeness;
+  const wow = packageView?.week_over_week;
 
   const actionBtn =
     'inline-flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-body font-medium text-ink hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50';
+
+  function navButtons() {
+    return (
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border-light pt-4">
+        <button
+          type="button"
+          disabled={step <= 1}
+          onClick={() => setStep((s) => Math.max(1, s - 1))}
+          className={actionBtn}
+        >
+          <ArrowLeft size={14} /> Back
+        </button>
+        {step < 5 && (
+          <button
+            type="button"
+            onClick={() => setStep((s) => Math.min(5, s + 1))}
+            className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium"
+          >
+            Next <ArrowRight size={14} />
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -363,14 +582,13 @@ export default function DeterminationDetailPage() {
         href="/desk/determinations"
         className="mb-4 inline-flex items-center gap-1 text-caption text-slate hover:text-ink"
       >
-        <ArrowLeft size={13} /> All determinations
+        <ArrowLeft size={13} /> Research Desk queue
       </Link>
 
       {det.loading && (
         <div className="card space-y-3 p-5">
           <Skeleton className="h-7 w-72" />
           <Skeleton className="h-4 w-96" />
-          <Skeleton className="h-4 w-80" />
         </div>
       )}
       {det.error && (
@@ -378,31 +596,33 @@ export default function DeterminationDetailPage() {
       )}
 
       {d && (
-        <div className="space-y-6">
-          {/* ------------------------------------------------ header card */}
+        <div className="space-y-5">
+          {/* Header */}
           <div className="card p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h1 className="text-h1 text-navy">Determination · {fmtDate(d.cob_date)}</h1>
+                <h1 className="text-h1 text-navy">Weekly rates package · {fmtDate(d.cob_date)}</h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <DeterminationStatusPill status={d.status} />
                   <MethodologyChip code={d.methodology_code} version={d.methodology_version} />
                   <QaBadge determination={d} />
-                  {d.supersedes_id && (
-                    <Link href={`/desk/determinations/${d.supersedes_id}`}>
-                      <Chip tone="warn" title="This is a correction draft — it supersedes a published determination">
-                        supersedes {d.supersedes_id.slice(0, 8)}…
-                      </Chip>
-                    </Link>
+                  <CurvesQaBadge determination={d} />
+                  {(d.research_adjustments?.length ?? 0) > 0 && (
+                    <Chip tone="warn">{d.research_adjustments.length} research adj</Chip>
+                  )}
+                  {completeness && (
+                    <Chip tone={completeness.ready ? 'ok' : 'crit'}>
+                      {completeness.required_present}/{completeness.required_total} required series
+                    </Chip>
                   )}
                 </div>
               </div>
               <div className="flex items-center gap-2 text-caption text-slate">
                 <Users size={14} />
                 <span>
-                  prepared by <span className="font-mono text-ink">{d.prepared_by}</span>
+                  Analyst <span className="font-mono text-ink">{d.prepared_by}</span>
                   {' · '}
-                  reviewed by{' '}
+                  Supervisor{' '}
                   {d.reviewed_by ? (
                     <span className="font-mono text-ink">{d.reviewed_by}</span>
                   ) : (
@@ -413,261 +633,53 @@ export default function DeterminationDetailPage() {
             </div>
 
             <div className="mt-4 border-t border-border-light pt-4">
-              <LifecycleRail status={d.status} />
+              <StepRail step={step} status={d.status} onSelect={setStep} />
             </div>
 
             {d.status === 'rejected' && d.review_note && (
               <div className="mt-3 flex items-start gap-2 rounded border border-critical/40 bg-critical-light p-3">
                 <XCircle size={14} className="mt-0.5 shrink-0 text-critical" />
-                <p className="min-w-0 break-words text-caption text-critical">
+                <p className="text-caption text-critical">
                   Rejected by <span className="font-mono">{d.reviewed_by}</span>: {d.review_note}
                 </p>
               </div>
             )}
 
-            <div className="mt-4 grid gap-x-10 border-t border-border-light pt-3 sm:grid-cols-2">
-              <FieldRow label="Input digest">
-                <span className="inline-flex items-center gap-0.5">
-                  <span className="break-all font-mono text-caption">{d.input_digest}</span>
-                  <CopyButton value={d.input_digest} label="Copy input digest" />
-                </span>
-              </FieldRow>
-              <FieldRow label="Created">
-                <span title={fmtTs(d.created_at)}>{fmtDate(d.created_at)}</span>
-              </FieldRow>
-              <FieldRow label="Published at">
-                <span title={fmtTs(d.published_at)}>
-                  {d.published_at ? fmtTs(d.published_at) : DASH}
-                </span>
-              </FieldRow>
-              <FieldRow label="Snapshot entries">
-                <span className="font-mono">{snapshotEntries.length}</span>
-              </FieldRow>
-            </div>
-
-            {/* ------------------------------------------ current actions */}
-            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border-light pt-4">
-              {status === 'draft' && (
-                <>
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => void run('compute', () => computeDeskDetermination(id))}
-                    className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {busy === 'compute' ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Calculator size={14} />
-                    )}
-                    Compute
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => void run('submit', () => submitDeskDetermination(id))}
-                    className={actionBtn}
-                  >
-                    {busy === 'submit' ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Send size={14} />
-                    )}
-                    Submit for review
-                  </button>
-                  {!computed && (
-                    <span className="text-caption text-slate">
-                      Compute first — what the checker reviews is what was computed.
-                    </span>
-                  )}
-                </>
-              )}
-
-              {status === 'pending_review' && (
-                <>
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => void run('approve', () => approveDeskDetermination(id))}
-                    className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {busy === 'approve' ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <CheckCircle2 size={14} />
-                    )}
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => setRejectOpen((v) => !v)}
-                    className={actionBtn}
-                  >
-                    <XCircle size={14} /> Reject…
-                  </button>
-                  <span className="text-caption text-slate">
-                    Checker step: confirms correct application of{' '}
-                    <span className="font-mono">
-                      {d.methodology_code} v{d.methodology_version}
-                    </span>
-                    , not choice of assumptions.
-                  </span>
-                </>
-              )}
-
-              {status === 'approved' && (
-                <>
-                  {publishArmed ? (
-                    <>
-                      <button
-                        type="button"
-                        disabled={busy !== null}
-                        onClick={() => void run('publish', () => publishDeskDetermination(id))}
-                        className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {busy === 'publish' ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <Upload size={14} />
-                        )}
-                        Confirm — publish to every bank
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy !== null}
-                        onClick={() => setPublishArmed(false)}
-                        className={actionBtn}
-                      >
-                        Cancel
-                      </button>
-                    </>
+            {status === 'draft' && (
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border-light pt-4">
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => void run('compute', () => computeDeskDetermination(id))}
+                  className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
+                >
+                  {busy === 'compute' ? (
+                    <Loader2 size={14} className="animate-spin" />
                   ) : (
-                    <button
-                      type="button"
-                      disabled={busy !== null}
-                      onClick={() => setPublishArmed(true)}
-                      className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium"
-                    >
-                      <Upload size={14} /> Publish…
-                    </button>
+                    <Calculator size={14} />
                   )}
-                  <span className="text-caption text-slate">
-                    Publish is a deliberate, logged action — it fans out to every tenant.
-                  </span>
-                </>
-              )}
-
-              {status === 'published' && (
-                <>
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => void run('publish', () => publishDeskDetermination(id))}
-                    className={actionBtn}
-                  >
-                    {busy === 'publish' ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Upload size={14} />
-                    )}
-                    Re-publish
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => void run('supersede', () => supersedeDeskDetermination(id))}
-                    className={actionBtn}
-                  >
-                    {busy === 'supersede' ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <ChevronRight size={14} />
-                    )}
-                    Supersede (open correction draft)
-                  </button>
-                  <span className="text-caption text-slate">
-                    Published determinations are immutable — re-publish heals partial fan-outs;
-                    corrections walk the full maker-checker path as a new draft.
-                  </span>
-                </>
-              )}
-
-              {status === 'rejected' && (
+                  {computed ? 'Recompute' : 'Compute rates package'}
+                </button>
                 <span className="text-caption text-slate">
-                  Rejected determinations are terminal — open a new determination for this COB
-                  date from the list once the inputs are corrected.
+                  Capture stages a draft; Analyst computes, adjusts, then submits for Supervisor.
                 </span>
-              )}
-            </div>
-
-            {/* Reject reason (required by the API) */}
-            {rejectOpen && status === 'pending_review' && (
-              <div className="mt-3 rounded border border-border-light bg-surface p-3">
-                <label className="block">
-                  <span className="mb-1 block text-caption font-medium text-slate">
-                    Rejection reason (recorded on the determination)
-                  </span>
-                  <textarea
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    rows={2}
-                    className="w-full rounded-md border border-border bg-surface-base px-3 py-2 text-body text-ink placeholder:text-slate-light focus:border-focus focus:outline-none"
-                    placeholder="What is wrong with this determination?"
-                  />
-                </label>
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={busy !== null || rejectReason.trim() === ''}
-                    onClick={() =>
-                      void run('reject', () => rejectDeskDetermination(id, rejectReason.trim()))
-                    }
-                    className="btn-primary px-3 py-1.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {busy === 'reject' ? 'Rejecting…' : 'Reject determination'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRejectOpen(false)}
-                    className={actionBtn}
-                  >
-                    Cancel
-                  </button>
-                </div>
               </div>
             )}
 
-            {/* ------------------------------- action errors, told honestly */}
             {actionError && fourEyes && (
               <div className="mt-3 flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
                 <Users size={14} className="mt-0.5 shrink-0 text-warning" />
-                <div className="min-w-0">
-                  <p className="text-body font-medium text-navy">
-                    Four-eyes: the preparer cannot approve their own determination — sign in as a
-                    second operator.
-                  </p>
-                  <p className="mt-1 text-caption text-slate">
-                    Prepared by <span className="font-mono">{d.prepared_by}</span>, and that is
-                    who you are signed in as. API said: “{actionError.error.message}”
-                  </p>
-                </div>
+                <p className="text-body font-medium text-navy">
+                  Four-eyes: preparer cannot approve — sign in as Supervisor (second operator).
+                </p>
               </div>
             )}
             {actionError && qaGateRefused && (
               <div className="mt-3 flex items-start gap-2 rounded border border-critical/40 bg-critical-light p-3">
                 <AlertTriangle size={14} className="mt-0.5 shrink-0 text-critical" />
-                <div className="min-w-0">
-                  <p className="text-body font-medium text-navy">
-                    A hard QA gate failed (qa_passed = false) — this determination cannot be
-                    approved.
-                  </p>
-                  <p className="mt-1 text-caption text-slate">
-                    Correct the inputs and recompute (a rejected review sends it back to the
-                    preparer). The failed gates are itemized in the QA panel below. API said:
-                    “{actionError.error.message}”
-                  </p>
-                </div>
+                <p className="text-body font-medium text-navy">
+                  Rates package QA not ready — recompute after fixing inputs.
+                </p>
               </div>
             )}
             {actionError && !fourEyes && !qaGateRefused && (
@@ -680,254 +692,540 @@ export default function DeterminationDetailPage() {
             )}
           </div>
 
-          {/* ------------------------------------ publish fan-out results */}
-          {lastPublication && (
-            <div className="card p-5">
-              <h2 className="text-h3 text-navy">Publication fan-out</h2>
-              <p className="mt-1 text-caption text-slate">
-                Per-bank delivery results from the publish you just ran. Partial failure is
-                recorded, never rolled back — re-publish to heal failed banks.
-              </p>
-              <div className="mt-3">
-                <PublicationResults publication={lastPublication} />
+          {/* -------- Step 1: Capture & inputs -------- */}
+          {step === 1 && (
+            <div className="space-y-4">
+              <div className="card p-5">
+                <h2 className="text-h3 text-navy">Capture completeness</h2>
+                <p className="mt-1 text-caption text-slate">
+                  Required weekly rates series as of this COB. Missing series need manual entry
+                  under Observations, then Recompute.
+                </p>
+                {pkg.loading && <SkeletonRows rows={4} />}
+                {pkg.error && (
+                  <div className="mt-3">
+                    <ErrorPanel error={pkg.error} onRetry={pkg.reload} context="Package checklist" />
+                  </div>
+                )}
+                {completeness && (
+                  <>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Chip tone={completeness.ready ? 'ok' : 'crit'}>
+                        {completeness.ready ? 'required series complete' : 'required series missing'}
+                      </Chip>
+                      {completeness.required_stale.length > 0 && (
+                        <Chip tone="warn">{completeness.required_stale.length} stale</Chip>
+                      )}
+                    </div>
+                    <table className="mt-3 w-full text-body">
+                      <thead>
+                        <tr className="border-b border-border-light text-left text-micro uppercase tracking-wide text-slate">
+                          <th className="py-1.5 pr-3 font-medium">Series</th>
+                          <th className="py-1.5 pr-3 font-medium">Req</th>
+                          <th className="py-1.5 pr-3 font-medium">Status</th>
+                          <th className="py-1.5 pr-3 font-medium text-right">Value</th>
+                          <th className="py-1.5 pr-3 font-medium">As of</th>
+                          <th className="py-1.5 font-medium">Provenance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {completeness.items.map((item) => (
+                          <tr
+                            key={item.series_code}
+                            className="border-b border-border-light last:border-b-0"
+                          >
+                            <td className="py-1.5 pr-3 font-mono text-caption text-ink">
+                              {item.series_code}
+                            </td>
+                            <td className="py-1.5 pr-3 text-caption text-slate">
+                              {item.required ? 'yes' : 'opt'}
+                            </td>
+                            <td className="py-1.5 pr-3">
+                              <Chip
+                                tone={
+                                  item.status === 'present'
+                                    ? 'ok'
+                                    : item.status === 'stale'
+                                      ? 'warn'
+                                      : 'crit'
+                                }
+                              >
+                                {item.status}
+                              </Chip>
+                            </td>
+                            <td className="num py-1.5 pr-3 text-ink">{item.value ?? DASH}</td>
+                            <td className="py-1.5 pr-3 text-caption text-slate">
+                              {item.as_of_date ? fmtDate(item.as_of_date) : DASH}
+                            </td>
+                            <td className="py-1.5 text-caption text-slate">
+                              {item.provenance.source === 'manual' && (
+                                <span>
+                                  manual · <span className="font-mono">{item.provenance.entered_by}</span>
+                                </span>
+                              )}
+                              {item.provenance.source === 'capture' && (
+                                <span>
+                                  capture ·{' '}
+                                  <span className="font-mono">{item.provenance.source_key}</span>
+                                  {item.provenance.source_url && (
+                                    <a
+                                      href={item.provenance.source_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="ml-1 text-action hover:underline"
+                                    >
+                                      source
+                                    </a>
+                                  )}
+                                </span>
+                              )}
+                              {item.provenance.source === 'missing' && DASH}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {completeness.failed_captures.length > 0 && (
+                      <div className="mt-4 border-t border-border-light pt-3">
+                        <h3 className="text-body font-medium text-navy">Recent failed captures</h3>
+                        <ul className="mt-2 space-y-1">
+                          {completeness.failed_captures.map((c) => (
+                            <li key={c.id} className="text-caption text-critical">
+                              <span className="font-mono">{c.source_key}</span> · {c.as_of_date}:{' '}
+                              {c.parse_error ?? 'failed'}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
+
+              <div className="card">
+                <details open>
+                  <summary className="cursor-pointer px-5 py-3 text-h3 text-navy">
+                    Input snapshot &amp; field provenance · {packageView?.input_provenance.length ?? 0}{' '}
+                    entries
+                  </summary>
+                  {packageView && packageView.input_provenance.length > 0 ? (
+                    <div className="max-h-96 overflow-y-auto border-t border-border-light">
+                      <table className="w-full text-body">
+                        <thead>
+                          <tr className="sticky top-0 bg-surface text-left text-micro uppercase tracking-wide text-slate">
+                            <th className="px-5 py-1.5 font-medium">Series</th>
+                            <th className="px-3 py-1.5 font-medium">As of</th>
+                            <th className="px-3 py-1.5 font-medium text-right">Value</th>
+                            <th className="px-5 py-1.5 font-medium">Provenance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {packageView.input_provenance.map((e, i) => (
+                            <tr key={i} className="border-b border-border-light last:border-b-0">
+                              <td className="px-5 py-1.5 font-mono text-caption">{e.series_code}</td>
+                              <td className="px-3 py-1.5 text-caption text-slate">
+                                {e.as_of_date ? fmtDate(String(e.as_of_date)) : DASH}
+                              </td>
+                              <td className="num px-3 py-1.5">{show(e.value)}</td>
+                              <td className="px-5 py-1.5 text-caption text-slate">
+                                {e.provenance?.source ?? DASH}
+                                {e.provenance?.source_key && (
+                                  <span className="ml-1 font-mono">{e.provenance.source_key}</span>
+                                )}
+                                {e.provenance?.entered_by && (
+                                  <span className="ml-1 font-mono">{e.provenance.entered_by}</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="px-5 pb-4 text-caption text-slate">
+                      Snapshot is empty until Compute finalizes windowed inputs.
+                    </p>
+                  )}
+                </details>
+              </div>
+              {navButtons()}
             </div>
           )}
 
-          {/* ------------------------------------------------ derived data */}
-          {!computed ? (
-            <div className="card">
-              <EmptyState
-                title="Not computed yet"
-                hint="Run Compute to finalize the input snapshot and derive curves, rates, and QA results from the approved methodology parameters."
-              />
-            </div>
-          ) : (
-            <>
-              {/* QA gate results */}
-              <div className="card p-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-h3 text-navy">QA gate results</h2>
-                  {qa.qa_passed === true && <Chip tone="ok">qa passed</Chip>}
-                  {qa.qa_passed === false && <Chip tone="crit">qa failed</Chip>}
-                  {qa.nss_fallback_used === true && (
-                    <Chip tone="warn" title="Too few liquid points — parametric NSS fallback used">
-                      NSS fallback
-                    </Chip>
-                  )}
+          {/* -------- Step 2: Rates -------- */}
+          {step === 2 && (
+            <div className="space-y-4">
+              {!computed ? (
+                <div className="card">
+                  <EmptyState
+                    title="Not computed yet"
+                    hint="Run Compute rates package in the header, then review levels and week-over-week deltas."
+                  />
                 </div>
-
-                {qa.gates && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {Object.entries(qa.gates).map(([gate, verdict]) => (
-                      <Chip key={gate} tone={verdict === 'pass' ? 'ok' : 'crit'}>
-                        {gate.replace(/_/g, ' ')} · {verdict}
-                      </Chip>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-4 grid items-start gap-4 lg:grid-cols-3">
-                  {/* Forward QA (positivity + oscillation) */}
-                  <div className="rounded border border-border-light bg-surface p-3">
-                    <h3 className="text-body font-medium text-navy">Forward curve QA</h3>
-                    {qa.forward_qa ? (
-                      <div className="mt-1 divide-y divide-border-light">
-                        <FieldRow label="Min forward">
-                          <span className="font-mono">{show(qa.forward_qa.min_forward)}</span>
-                        </FieldRow>
-                        <FieldRow label="Positivity">
-                          <PassFailChip
-                            pass={qa.forward_qa.positivity_pass}
-                            label={
-                              qa.forward_qa.positivity_required === false
-                                ? 'not required'
-                                : 'required'
-                            }
-                          />
-                        </FieldRow>
-                        <FieldRow label="Slope sign changes">
-                          <span className="font-mono">{show(qa.forward_qa.slope_sign_changes)}</span>
-                        </FieldRow>
-                        <FieldRow label="Oscillation ratio">
-                          <span className="font-mono">
-                            {show(qa.forward_qa.total_variation_ratio)} /{' '}
-                            {show(qa.forward_qa.oscillation_tolerance)}
-                          </span>
-                        </FieldRow>
-                        <FieldRow label="Oscillation">
-                          <PassFailChip pass={qa.forward_qa.oscillation_pass} label="gate" />
-                        </FieldRow>
-                        <FieldRow label="Overall">
-                          <PassFailChip pass={qa.forward_qa.passed} label="forward QA" />
-                        </FieldRow>
-                      </div>
-                    ) : (
-                      <p className="mt-2 text-caption text-slate">
-                        No forward QA recorded — the sovereign curve did not build.
+              ) : (
+                <>
+                  {wow && (
+                    <div className="card p-4">
+                      <h2 className="text-h3 text-navy">Week-over-week context</h2>
+                      <p className="mt-1 text-caption text-slate">
+                        {wow.prior_cob_date
+                          ? `Compared to last published package COB ${fmtDate(wow.prior_cob_date)}.`
+                          : 'No prior published package — deltas will appear after the first publish.'}
                       </p>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                  <RatesTable rates={rates} deltas={wow?.deltas} />
+                </>
+              )}
+              {navButtons()}
+            </div>
+          )}
 
-                  {/* GRR cross-check */}
-                  <div className="rounded border border-border-light bg-surface p-3">
-                    <h3 className="text-body font-medium text-navy">GRR cross-check</h3>
-                    {qa.grr_check ? (
-                      <div className="mt-1 divide-y divide-border-light">
-                        <FieldRow label="Status">
-                          <StatusChip value={qa.grr_check.status} />
-                        </FieldRow>
-                        <FieldRow label="Published">
-                          <span className="font-mono">{show(qa.grr_check.published_pct)}</span>
-                        </FieldRow>
-                        <FieldRow label="Reconstructed">
-                          <span className="font-mono">{show(qa.grr_check.reconstructed_pct)}</span>
-                        </FieldRow>
-                        <FieldRow label="Delta (pp)">
-                          <span className="font-mono">
-                            {show(qa.grr_check.gap_pp)} (tol {show(qa.grr_check.tolerance_pp)})
-                          </span>
-                        </FieldRow>
-                        <FieldRow label="Reference month">
-                          {show(qa.grr_check.reference_month)}
-                        </FieldRow>
-                      </div>
-                    ) : (
-                      <p className="mt-2 text-caption text-slate">No GRR check recorded.</p>
-                    )}
-                  </div>
+          {/* -------- Step 3: Adjustments -------- */}
+          {step === 3 && (
+            <div className="space-y-4">
+              <AdjustmentsPanel
+                determination={d}
+                busy={busy !== null}
+                onSaved={() => {
+                  det.reload();
+                  pkg.reload();
+                }}
+              />
+              {navButtons()}
+            </div>
+          )}
 
-                  {/* Diagnostics: overnight spread + cointegration */}
-                  <div className="rounded border border-border-light bg-surface p-3">
-                    <h3 className="text-body font-medium text-navy">Diagnostics</h3>
-                    {qa.overnight_spread && (
-                      <div className="mt-1 divide-y divide-border-light">
-                        {Object.entries(qa.overnight_spread).map(([k, v]) => (
-                          <FieldRow key={k} label={k.replace(/_/g, ' ')}>
-                            <span className="font-mono text-caption">{show(v)}</span>
-                          </FieldRow>
-                        ))}
-                      </div>
-                    )}
-                    {qa.cointegration_diagnostic && (
-                      <div className="mt-3 border-t border-border-light pt-2">
-                        <div className="text-micro uppercase tracking-wide text-slate">
-                          Cointegration (diagnostic only)
-                        </div>
-                        <div className="divide-y divide-border-light">
-                          {Object.entries(qa.cointegration_diagnostic)
-                            .filter(([k]) => k !== 'note')
-                            .map(([k, v]) => (
-                              <FieldRow key={k} label={k.replace(/_/g, ' ')}>
-                                <span className="break-all font-mono text-caption">{show(v)}</span>
-                              </FieldRow>
-                            ))}
-                        </div>
-                        {typeof qa.cointegration_diagnostic.note === 'string' && (
-                          <p className="mt-1 text-micro text-slate-light">
-                            {qa.cointegration_diagnostic.note}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
+          {/* -------- Step 4: Review & Confirm -------- */}
+          {step === 4 && (
+            <div className="space-y-4">
+              <div className="card p-5">
+                <h2 className="text-h3 text-navy">Review &amp; Confirm</h2>
+                <p className="mt-1 text-caption text-slate">
+                  Confirm methodology applied correctly and research adjustments are intentional.
+                  Submit pushes the package to the Supervisor for four-eyes approval.
+                </p>
+                <div className="mt-3 grid gap-x-10 sm:grid-cols-2">
+                  <FieldRow label="COB">{fmtDate(d.cob_date)}</FieldRow>
+                  <FieldRow label="Methodology">
+                    {d.methodology_code} v{d.methodology_version}
+                  </FieldRow>
+                  <FieldRow label="Input digest">
+                    <span className="inline-flex items-center gap-0.5">
+                      <span className="break-all font-mono text-caption">
+                        {d.input_digest.slice(0, 16)}…
+                      </span>
+                      <CopyButton value={d.input_digest} label="Copy input digest" />
+                    </span>
+                  </FieldRow>
+                  <FieldRow label="Package digest">
+                    <span className="font-mono text-caption">
+                      {d.derived_values.package_digest
+                        ? `${d.derived_values.package_digest.slice(0, 16)}…`
+                        : DASH}
+                    </span>
+                  </FieldRow>
+                  <FieldRow label="Rates QA">
+                    <QaBadge determination={d} />
+                  </FieldRow>
+                  <FieldRow label="Curves QA">
+                    <CurvesQaBadge determination={d} />
+                    <span className="ml-2 text-caption text-slate">
+                      (does not block rates publish)
+                    </span>
+                  </FieldRow>
+                  <FieldRow label="Research adjustments">
+                    {d.research_adjustments?.length ?? 0}
+                  </FieldRow>
+                  <FieldRow label="Completeness">
+                    {completeness
+                      ? `${completeness.required_present}/${completeness.required_total} required`
+                      : DASH}
+                  </FieldRow>
                 </div>
 
-                {/* Steward flags */}
-                {(qa.flags?.length ?? 0) > 0 && (
+                {(d.research_adjustments?.length ?? 0) > 0 && (
                   <div className="mt-4 border-t border-border-light pt-3">
-                    <h3 className="text-body font-medium text-navy">Steward flags</h3>
+                    <h3 className="text-body font-medium text-navy">Adjustments to confirm</h3>
                     <ul className="mt-2 space-y-1">
-                      {(qa.flags ?? []).map((f, i) => (
-                        <li key={i} className="flex flex-wrap items-center gap-2">
-                          <Chip tone="warn">{f.flag?.replace(/_/g, ' ') ?? 'flag'}</Chip>
-                          <span className="font-mono text-caption text-ink">{f.series ?? DASH}</span>
-                          {f.detail && <span className="text-caption text-slate">{f.detail}</span>}
+                      {d.research_adjustments.map((a, i) => (
+                        <li key={i} className="text-caption text-slate">
+                          <span className="font-mono text-ink">{a.series_code}</span> · {a.kind} ·{' '}
+                          {a.value ?? 'note'} — {a.rationale}
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
+
+                {status === 'draft' && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border-light pt-4">
+                    <button
+                      type="button"
+                      disabled={busy !== null || !computed}
+                      onClick={() => void run('submit', () => submitDeskDetermination(id))}
+                      className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
+                    >
+                      {busy === 'submit' ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Send size={14} />
+                      )}
+                      Submit for Supervisor review
+                    </button>
+                    {!computed && (
+                      <span className="text-caption text-slate">
+                        Compute the rates package before submit.
+                      </span>
+                    )}
+                  </div>
+                )}
+                {status === 'pending_review' && (
+                  <p className="mt-4 text-caption text-slate">
+                    Submitted — awaiting Supervisor on step 5.
+                  </p>
+                )}
               </div>
-
-              {/* Curves */}
-              {curveCodes.length > 0 && (
-                <div className="grid items-start gap-4 lg:grid-cols-3">
-                  {curveCodes.map((code) => (
-                    <CurveCard key={code} code={code} block={curves[code]} />
-                  ))}
-                </div>
-              )}
-
-              {/* Rates grouped by treatment */}
-              {d.derived_values.rates && <RatesSection rates={d.derived_values.rates} />}
-            </>
+              {computed && <RatesTable rates={rates} deltas={wow?.deltas} />}
+              {navButtons()}
+            </div>
           )}
 
-          {/* ------------------------------------------------ input snapshot */}
-          <div className="card">
-            <details>
-              <summary className="cursor-pointer px-5 py-3 text-h3 text-navy">
-                Input snapshot · {snapshotEntries.length} entries
-              </summary>
-              {snapshotEntries.length === 0 ? (
-                <p className="px-5 pb-4 text-caption text-slate">The snapshot is empty.</p>
-              ) : (
-                <div className="max-h-96 overflow-y-auto border-t border-border-light">
-                  <table className="w-full text-body">
-                    <thead>
-                      <tr className="sticky top-0 bg-surface text-left text-micro uppercase tracking-wide text-slate">
-                        <th className="px-5 py-1.5 font-medium">Series</th>
-                        <th className="px-3 py-1.5 font-medium">As of</th>
-                        <th className="px-5 py-1.5 font-medium text-right">Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {snapshotEntries.map((e, i) => (
-                        <tr key={i} className="border-b border-border-light last:border-b-0">
-                          <td className="px-5 py-1.5 font-mono text-caption text-ink">
-                            {show(e.series_code)}
-                          </td>
-                          <td className="px-3 py-1.5 text-caption text-slate">
-                            {show(e.as_of_date)}
-                          </td>
-                          <td className="num px-5 py-1.5 text-ink">{show(e.value)}</td>
-                        </tr>
+          {/* -------- Step 5: Supervisor -------- */}
+          {step === 5 && (
+            <div className="space-y-4">
+              <div
+                className={`card p-5 ${
+                  status === 'pending_review' || status === 'approved'
+                    ? 'border-action/30 ring-1 ring-action/20'
+                    : ''
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-h3 text-navy">Supervisor review</h2>
+                  {(status === 'pending_review' || status === 'approved') && (
+                    <Chip tone="accent">checker mode</Chip>
+                  )}
+                </div>
+                <p className="mt-1 text-caption text-slate">
+                  Four-eyes: confirm correct application of{' '}
+                  <span className="font-mono">
+                    {d.methodology_code} v{d.methodology_version}
+                  </span>{' '}
+                  and that research adjustments are defensible. Approver must not be the preparer.
+                </p>
+
+                <div className="mt-3 grid gap-x-10 sm:grid-cols-2">
+                  <FieldRow label="Prepared by">
+                    <span className="font-mono">{d.prepared_by}</span>
+                  </FieldRow>
+                  <FieldRow label="Package digest">
+                    <span className="font-mono text-caption">
+                      {d.derived_values.package_digest?.slice(0, 20) ?? DASH}…
+                    </span>
+                  </FieldRow>
+                  <FieldRow label="Rates QA">
+                    <QaBadge determination={d} />
+                  </FieldRow>
+                  <FieldRow label="Curves QA">
+                    <CurvesQaBadge determination={d} />
+                  </FieldRow>
+                </div>
+
+                {(d.research_adjustments?.length ?? 0) > 0 && (
+                  <div className="mt-4 rounded border border-warning/40 bg-warning-light/40 p-3">
+                    <h3 className="text-body font-medium text-navy">
+                      Research adjustments requiring sign-off
+                    </h3>
+                    <ul className="mt-2 space-y-1">
+                      {d.research_adjustments.map((a, i) => (
+                        <li key={i} className="text-caption text-ink">
+                          <span className="font-mono">{a.series_code}</span> ·{' '}
+                          <strong>{a.kind}</strong> {a.value ?? ''} — {a.rationale}
+                          {a.applied_by && (
+                            <span className="text-slate"> · by {a.applied_by}</span>
+                          )}
+                        </li>
                       ))}
-                    </tbody>
-                  </table>
+                    </ul>
+                  </div>
+                )}
+
+                {status === 'pending_review' && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border-light pt-4">
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => void run('approve', () => approveDeskDetermination(id))}
+                      className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
+                    >
+                      {busy === 'approve' ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <CheckCircle2 size={14} />
+                      )}
+                      Approve rates package
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => setRejectOpen((v) => !v)}
+                      className={actionBtn}
+                    >
+                      <XCircle size={14} /> Reject…
+                    </button>
+                  </div>
+                )}
+
+                {rejectOpen && status === 'pending_review' && (
+                  <div className="mt-3 rounded border border-border-light bg-surface p-3">
+                    <label className="block">
+                      <span className="mb-1 block text-caption font-medium text-slate">
+                        Rejection reason
+                      </span>
+                      <textarea
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        rows={2}
+                        className="w-full rounded-md border border-border bg-surface-base px-3 py-2 text-body text-ink focus:border-focus focus:outline-none"
+                      />
+                    </label>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        disabled={busy !== null || !rejectReason.trim()}
+                        onClick={() =>
+                          void run('reject', () =>
+                            rejectDeskDetermination(id, rejectReason.trim()),
+                          )
+                        }
+                        className="btn-primary px-3 py-1.5 text-body disabled:opacity-50"
+                      >
+                        Reject determination
+                      </button>
+                      <button type="button" onClick={() => setRejectOpen(false)} className={actionBtn}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {status === 'approved' && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border-light pt-4">
+                    {publishArmed ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={busy !== null}
+                          onClick={() => void run('publish', () => publishDeskDetermination(id))}
+                          className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
+                        >
+                          {busy === 'publish' ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Upload size={14} />
+                          )}
+                          Confirm — publish to every bank
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPublishArmed(false)}
+                          className={actionBtn}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setPublishArmed(true)}
+                        className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium"
+                      >
+                        <Upload size={14} /> Publish…
+                      </button>
+                    )}
+                    <span className="text-caption text-slate">
+                      Deliberate action — fans rates (and curves if QA passed) to every tenant.
+                    </span>
+                  </div>
+                )}
+
+                {status === 'published' && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border-light pt-4">
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => void run('publish', () => publishDeskDetermination(id))}
+                      className={actionBtn}
+                    >
+                      {busy === 'publish' ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Upload size={14} />
+                      )}
+                      Re-publish
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => void run('supersede', () => supersedeDeskDetermination(id))}
+                      className={actionBtn}
+                    >
+                      Supersede (correction draft)
+                    </button>
+                  </div>
+                )}
+
+                {status === 'draft' && (
+                  <p className="mt-4 text-caption text-slate">
+                    Package is still with the Analyst — complete steps 1–4 and submit first.
+                  </p>
+                )}
+              </div>
+
+              {computed && <RatesTable rates={rates} deltas={wow?.deltas} />}
+
+              {curveCodes.length > 0 && (
+                <div>
+                  <h2 className="mb-2 text-h3 text-navy">Curves &amp; diagnostics (secondary)</h2>
+                  <div className="grid items-start gap-4 lg:grid-cols-3">
+                    {curveCodes.map((code) => (
+                      <CurveCard key={code} code={code} block={curves[code]} />
+                    ))}
+                  </div>
                 </div>
               )}
-            </details>
-          </div>
 
-          {/* ------------------------------------------- publication history */}
-          <div className="card">
-            <h2 className="border-b border-border-light px-5 py-3 text-h3 text-navy">
-              Publications of this determination
-            </h2>
-            {pubs.loading && <SkeletonRows rows={2} />}
-            {pubs.error && (
-              <div className="p-4">
-                <ErrorPanel error={pubs.error} onRetry={pubs.reload} context="Loading publications" />
+              {lastPublication && (
+                <div className="card p-5">
+                  <h2 className="text-h3 text-navy">Publication fan-out</h2>
+                  <div className="mt-3">
+                    <PublicationResults publication={lastPublication} />
+                  </div>
+                </div>
+              )}
+
+              <div className="card">
+                <h2 className="border-b border-border-light px-5 py-3 text-h3 text-navy">
+                  Publications of this determination
+                </h2>
+                {pubs.loading && <SkeletonRows rows={2} />}
+                {pubs.data && pubs.data.publications.length === 0 && (
+                  <EmptyState title="Not published yet" hint="Publish after Supervisor approval." />
+                )}
+                {pubs.data && pubs.data.publications.length > 0 && (
+                  <ul className="divide-y divide-border-light">
+                    {pubs.data.publications.map((p) => (
+                      <li key={p.id} className="px-5 py-3">
+                        <PublicationResults publication={p} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-            )}
-            {pubs.data && pubs.data.publications.length === 0 && (
-              <EmptyState
-                title="Not published yet"
-                hint="Publishing fans this determination's curves and rates out to every bank through the desk adapter."
-              />
-            )}
-            {pubs.data && pubs.data.publications.length > 0 && (
-              <ul className="divide-y divide-border-light">
-                {pubs.data.publications.map((p) => (
-                  <li key={p.id} className="px-5 py-3">
-                    <PublicationResults publication={p} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+              {navButtons()}
+            </div>
+          )}
         </div>
       )}
     </div>
