@@ -512,6 +512,9 @@ class WorkerSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
     run_inprocess_worker: bool = Field(default=False, alias="RUN_INPROCESS_WORKER")
+    #: Stable runtime label written to each claimed job. Deployments should set
+    #: this to a service/generation identifier; local workers fall back to host:PID.
+    worker_id: str | None = Field(default=None, max_length=160, alias="WORKER_ID")
     pipeline_debounce_seconds: int = Field(default=15, alias="PIPELINE_DEBOUNCE_SECONDS")
     worker_poll_seconds: float = Field(default=2.0, alias="WORKER_POLL_SECONDS")
     # A job stuck in ``running`` longer than this is treated as orphaned by a
@@ -533,7 +536,7 @@ class WorkerSettings(BaseSettings):
     # deployment whose main role already bypasses RLS).
     worker_database_url: str | None = Field(default=None, alias="WORKER_DATABASE_URL")
 
-    @field_validator("worker_database_url", mode="before")
+    @field_validator("worker_database_url", "worker_id", mode="before")
     @classmethod
     def empty_means_unconfigured(cls, value: str | None) -> str | None:
         """WORKER_DATABASE_URL="" falls back to DATABASE_URL (same rule as
@@ -555,6 +558,13 @@ class AuthSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
     jwt_secret: str | None = Field(default=None, alias="AUTH_JWT_SECRET")
+    #: Signs + verifies the operator "act-as-examiner" impersonation token — a
+    #: DEDICATED secret, never AUTH_JWT_SECRET or OPERATOR_JWT_SECRET, so an
+    #: impersonation token is worthless on the normal access-token path and a
+    #: normal access token can never masquerade as an impersonation token. Unset
+    #: FAILS CLOSED: the operator mint endpoint answers 503 and the tenant API's
+    #: accept branch is a no-op, so no impersonation is possible until it is set.
+    impersonation_jwt_secret: str | None = Field(default=None, alias="IMPERSONATION_JWT_SECRET")
     jwt_algorithm: str = Field(default="HS256", alias="AUTH_JWT_ALGORITHM")
     jwt_issuer: str = Field(default="aequoros", alias="AUTH_JWT_ISSUER")
     jwt_audience: str = Field(default="aequoros-api", alias="AUTH_JWT_AUDIENCE")
@@ -579,7 +589,7 @@ class AuthSettings(BaseSettings):
             return None
         return value
 
-    @field_validator("jwt_secret", mode="before")
+    @field_validator("jwt_secret", "impersonation_jwt_secret", mode="before")
     @classmethod
     def blank_secret_is_unset(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
@@ -691,6 +701,13 @@ class OperatorSettings(BaseSettings):
     oidc_issuer: str | None = Field(default=None, alias="OPERATOR_OIDC_ISSUER")
     oidc_client_id: str | None = Field(default=None, alias="OPERATOR_OIDC_CLIENT_ID")
     oidc_allowed_domain: str = Field(default="aequoros.com", alias="OPERATOR_OIDC_ALLOWED_DOMAIN")
+    #: Origin of the authenticated bank product (bank.aequoros.com). Returned as
+    #: ``dashboard_url`` by the act-as-examiner mint endpoint so the console knows
+    #: where to hand the operator off with the impersonation token. Never a
+    #: secret — just where the read-only examiner view is rendered.
+    bank_app_base_url: str = Field(
+        default="https://bank.aequoros.com", alias="BANK_APP_BASE_URL"
+    )
     #: Per-tenant KMS keys + SSE-KMS bucket encryption during provisioning
     #: (developer.md §2a). Off by default: MinIO deployments have no KMS, and
     #: the saga records the step as honestly skipped rather than pretending.
@@ -709,6 +726,15 @@ class OperatorSettings(BaseSettings):
         if value is not None and not value.strip():
             return None
         return value
+
+    @field_validator("bank_app_base_url", mode="before")
+    @classmethod
+    def default_bank_app_base_url(cls, value: str | None) -> str:
+        """Blank reads as "unset" (the documented default); trailing slashes are
+        trimmed so the console can safely join a handoff path."""
+        if value is None or not str(value).strip():
+            return "https://bank.aequoros.com"
+        return str(value).strip().rstrip("/")
 
     @property
     def cors_origins(self) -> list[str]:

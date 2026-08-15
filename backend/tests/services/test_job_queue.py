@@ -72,10 +72,13 @@ def test_claim_next_marks_running_and_respects_run_after(db_session: Session) ->
     ready = job_queue.enqueue(db_session, ORG_1, "pipeline_refresh", run_after=None)
     db_session.commit()
 
-    claimed = job_queue.claim_next(db_session, utc_now(), ("pipeline_refresh",))
+    claimed = job_queue.claim_next(
+        db_session, utc_now(), ("pipeline_refresh",), claimed_by="worker-test-a"
+    )
     assert claimed is not None
     assert claimed.id == ready.id
     assert claimed.status == "running"
+    assert claimed.claimed_by == "worker-test-a"
     assert claimed.started_at is not None
     assert claimed.id != future.id
 

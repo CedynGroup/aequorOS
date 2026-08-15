@@ -47,10 +47,12 @@ const PLACEMENT: Record<Placement, string> = {
 function InfoTip({
   label,
   placement = "bottom-start",
+  width = "w-72",
   children,
 }: {
   label: string;
   placement?: Placement;
+  width?: string;
   children: ReactNode;
 }) {
   const id = useId();
@@ -67,7 +69,7 @@ function InfoTip({
       <span
         role="tooltip"
         id={id}
-        className={`pointer-events-none absolute z-50 w-72 rounded border border-white/15 bg-nav px-3 py-2 text-caption font-normal normal-case leading-relaxed tracking-normal text-white/90 opacity-0 shadow-pop transition-opacity duration-150 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100 ${PLACEMENT[placement]}`}
+        className={`pointer-events-none absolute z-50 ${width} rounded border border-white/15 bg-nav px-3 py-2 text-caption font-normal normal-case leading-relaxed tracking-normal text-white/90 opacity-0 shadow-pop transition-opacity duration-150 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100 ${PLACEMENT[placement]}`}
       >
         {children}
       </span>
@@ -250,6 +252,46 @@ export default function ImpliedRatingCard({
     "accumulates over time, we expect these ranges to narrow. We would rather show an honest wide " +
     "range than a precise number we cannot defend.";
 
+  const methodologyTip = (
+    <span className="block space-y-1.5">
+      <span className="block">
+        Built only from your reported financials, using a documented method modeled
+        on the S&amp;P, Moody’s and Fitch frameworks:
+      </span>
+      <span className="block space-y-1">
+        <span className="block">
+          <span className="font-semibold text-white">Scorecard</span> — capital, asset
+          quality, earnings, funding &amp; liquidity are scored on the agency factor
+          framework to place a through-the-cycle (TTC) grade.
+        </span>
+        <span className="block">
+          <span className="font-semibold text-white">Master scale</span> — each grade maps
+          to an idealised one-year default rate (agency-aligned): the TTC anchor PD.
+        </span>
+        <span className="block">
+          <span className="font-semibold text-white">Point-in-time</span> — the anchor is
+          conditioned on the live operating-environment factor (Z) through a Vasicek
+          single-factor model, so a weaker environment lifts PIT above TTC.
+        </span>
+        <span className="block">
+          <span className="font-semibold text-white">Range, not a point</span> — a Bayesian
+          posterior band reflects thin local default history; a margin of conservatism sets
+          the upper figure used for capital decisions.
+        </span>
+        <span className="block">
+          <span className="font-semibold text-white">Floor &amp; ceiling</span> — no PD
+          falls below the Basel 0.03% floor, and the grade is capped near the sovereign
+          (a real risk shown by the DDEP).
+        </span>
+      </span>
+      {present(metrics.methodology_version) && (
+        <span className="block text-white/50">
+          Active methodology · version {metrics.methodology_version}
+        </span>
+      )}
+    </span>
+  );
+
   return (
     <div className="border border-border bg-surface-raised rounded-lg">
       <div className="grid grid-cols-1 lg:grid-cols-[11rem_minmax(0,1fr)]">
@@ -315,12 +357,17 @@ export default function ImpliedRatingCard({
                 {pdBandTip}
               </InfoTip>
             </p>
-            <div className="flex items-center gap-2">
-              {present(metrics.methodology_version) && (
-                <StatusPill tone="slate">
-                  Methodology v{metrics.methodology_version}
-                </StatusPill>
-              )}
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex items-center gap-1 text-micro font-medium uppercase tracking-wider text-slate">
+                Methodology
+                <InfoTip
+                  label="The methodology behind this assessment"
+                  placement="bottom-end"
+                  width="w-80"
+                >
+                  {methodologyTip}
+                </InfoTip>
+              </span>
               {present(metrics.ddep_eligible) && (
                 <StatusPill tone={ddepEligible ? "success" : "critical"}>
                   DDEP {ddepEligible ? "eligible" : "ineligible"}

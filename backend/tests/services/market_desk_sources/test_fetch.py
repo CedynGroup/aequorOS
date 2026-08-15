@@ -241,6 +241,51 @@ class TestFileBird:
             )
 
 
+class TestMonthlyStatusFetch:
+    def test_selects_newest_status_report_by_title(self) -> None:
+        # The monthly folder is pinned by title: the newest STATUS REPORT is
+        # taken, never whatever file happens to sort first.
+        page_html = read_fixture("gfim_monthly_reports_page.html").decode(errors="replace")
+        listing = json.loads(
+            read_fixture("gfim_filebird_get_attachments_monthly2026_response.json")
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if url.endswith("/monthly-reports/"):
+                return httpx.Response(200, text=page_html)
+            if url.endswith("/get-attachments"):
+                return httpx.Response(200, json=listing)
+            return httpx.Response(200, content=b"%PDF-1.4 status-report-bytes")
+
+        fetches = fetch.fetch_source("gfim_monthly_status", _session(handler))
+        reports = [f for f in fetches if f.meta.get("kind") == "report_file"]
+        assert len(reports) == 1
+        assert "Status Report" in str(reports[0].meta["title"])
+
+    def test_no_status_report_is_soft_not_yet_published(self) -> None:
+        # Folder resolves but carries no status report yet (early in the
+        # period): a soft SourceNotYetPublished, not a hard fetch failure.
+        page_html = read_fixture("gfim_monthly_reports_page.html").decode(errors="replace")
+        listing = {"files": [{"title": "Yield Curve Deck", "url": "https://gfim.com.gh/x.pdf"}]}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if url.endswith("/monthly-reports/"):
+                return httpx.Response(200, text=page_html)
+            if url.endswith("/get-attachments"):
+                return httpx.Response(200, json=listing)
+            return httpx.Response(200, content=b"pdf")
+
+        with pytest.raises(fetch.SourceNotYetPublished):
+            fetch.fetch_source("gfim_monthly_status", _session(handler))
+
+    def test_not_yet_published_is_a_fetch_error_subclass(self) -> None:
+        # Existing ``except FetchError`` sites keep catching it; the capture
+        # job special-cases it ahead of the generic handler.
+        assert issubclass(fetch.SourceNotYetPublished, fetch.FetchError)
+
+
 class TestAuctionFlow:
     def test_index_to_tender_page_to_pdf(self) -> None:
         index_html = read_fixture("bog_auction_results_index.html").decode(errors="replace")

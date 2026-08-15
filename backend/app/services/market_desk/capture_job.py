@@ -54,6 +54,7 @@ from app.services.market_desk.sources import SOURCE_REGISTRY, ingest_capture
 from app.services.market_desk.sources.fetch import (
     DeskSession,
     FetchError,
+    SourceNotYetPublished,
     client_kwargs,
     fetch_source,
 )
@@ -223,12 +224,25 @@ def _is_due(db: Session, spec: SourceSpec, cob: date, *, auction_pass: bool) -> 
 def _capture_source(db: Session, spec: SourceSpec, cob: date, due_reason: str) -> dict[str, Any]:
     """Fetch, persist, and ingest one source. Per-source failure is recorded
     on a ``failed`` DeskSourceCapture row and NEVER propagates — one broken
-    site must not cost the desk the rest of the night's data."""
+    site must not cost the desk the rest of the night's data.
+
+    A lagging publication that simply has no edition yet
+    (``SourceNotYetPublished``) is NOT a failure: it records a soft
+    ``pending`` in the summary and leaves NO capture row, so the source stays
+    due tomorrow (identical to a not-yet-due source) instead of paging the
+    morning desk for a normal BoG/GFIM publication lag."""
     try:
         fetches = _fetch(spec, cob)
         data_fetches = _data_fetches(fetches)
         if not data_fetches:
             raise FetchError("fetch returned no data artifact")
+    except SourceNotYetPublished as exc:
+        return {
+            "status": "pending",
+            "due": due_reason,
+            "reason": "not_yet_published",
+            "detail": str(exc),
+        }
     except Exception as exc:  # noqa: BLE001 - isolation is the contract here
         _record_failed_fetch(db, spec, cob, exc)
         return {
@@ -295,17 +309,35 @@ _MONTHLY_EDITION_LOOKBACK = 6
 def _fetch_monthly_edition(
     source_key: str, desk_session: DeskSession, cob: date
 ) -> list[RawFetch]:
-    """Try COB month, then prior months, until a publication URL succeeds."""
+    """Resolve the most-recent PUBLISHED edition, probing back a bounded window.
+
+    BoG publishes the APR / SEFD notices one to two months in arrears, so the
+    current month's slug legitimately 404s — that is the site working as
+    designed, not an error. We walk back month by month and return the newest
+    edition that actually resolves. If EVERY month in the window 404s, the
+    publication just is not out yet: raise ``SourceNotYetPublished`` (soft
+    ``pending``). A non-404 failure (bot filter, TLS, network, a page that
+    resolved but carried no PDF) is a genuine fault and is raised as-is once
+    the window is spent — but only if no edition resolved, so a transient
+    hiccup on an older month never masks a good current one.
+    """
     period = cob
-    last_error: Exception | None = None
+    hard_error: Exception | None = None
     for _ in range(_MONTHLY_EDITION_LOOKBACK):
         try:
             return fetch_source(source_key, desk_session, period=period)
-        except Exception as exc:  # noqa: BLE001 - try older edition
-            last_error = exc
-            period = _previous_month(period)
-    assert last_error is not None
-    raise last_error
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code != 404:
+                hard_error = exc  # a real HTTP fault, not a not-yet-published 404
+        except Exception as exc:  # noqa: BLE001 - remember, then try older edition
+            hard_error = exc
+        period = _previous_month(period)
+    if hard_error is not None:
+        raise hard_error
+    raise SourceNotYetPublished(
+        f"{source_key}: no published edition in the "
+        f"{_MONTHLY_EDITION_LOOKBACK} months through {cob.strftime('%B %Y')}"
+    )
 
 
 def _data_fetches(fetches: list[RawFetch]) -> list[RawFetch]:

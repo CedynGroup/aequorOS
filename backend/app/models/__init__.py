@@ -87,7 +87,12 @@ from app.models.market_desk import (
 )
 from app.models.market_desk_curves import DeskCurveDefinition
 from app.models.notification import Notification
-from app.models.operator import OperatorAuditLog, OperatorUser, TenantStorage
+from app.models.operator import (
+    OperatorAuditLog,
+    OperatorInspectorSession,
+    OperatorUser,
+    TenantStorage,
+)
 from app.models.organization import Organization
 from app.models.regulatory import (
     Bank,
@@ -210,6 +215,7 @@ __all__ = [
     "IntegrationKey",
     "ImpliedRatingRun",
     "OperatorAuditLog",
+    "OperatorInspectorSession",
     "OperatorUser",
     "Organization",
     "TenantStorage",

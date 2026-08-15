@@ -37,6 +37,9 @@ def test_operator_app_serves_only_operator_routes() -> None:
         # /operator/health, not under /v1: session issuance is not a resource.
         "/operator/auth/login",
         "/operator/health",
+        # Operator's OWN cross-tenant action log (operator_admin only) — distinct
+        # from a tenant's activity feed.
+        "/operator/v1/audit",
         # Forward-curve construction console (FC-3): construct is a preview, publish
         # fans out through the desk determination seam. Duplicate 'definitions' is
         # the GET+POST pair on the collection path.
@@ -45,7 +48,11 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/curves/definitions",
         "/operator/v1/curves/definitions/{curve_code}/versions",
         "/operator/v1/curves/definitions/{curve_code}/versions/{version}/approve",
-        "/operator/v1/curves/publish",
+        # Per-cob curve maker-checker lifecycle (FC-G2).
+        "/operator/v1/curves/determinations",
+        "/operator/v1/curves/determinations/{determination_id}/approve",
+        "/operator/v1/curves/determinations/{determination_id}/publish",
+        "/operator/v1/curves/determinations/{determination_id}/submit",
         "/operator/v1/data-engines",
         # Market research desk console (spec §11a): duplicates are GET+POST
         # pairs on the same path.
@@ -75,6 +82,17 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/desk/observations",
         "/operator/v1/desk/observations",
         "/operator/v1/desk/publications",
+        # FX outright forward construction preview.
+        "/operator/v1/fx-forward/construct",
+        # Tenant inspector: session TRACKING (duplicate 'sessions' is the GET+POST
+        # pair) plus the act-as-examiner handoff, which mints a READ-ONLY,
+        # session-bound, examiner-only impersonation token for the bank app.
+        "/operator/v1/inspector/sessions",
+        "/operator/v1/inspector/sessions",
+        "/operator/v1/inspector/sessions/{session_id}/act-token",
+        "/operator/v1/inspector/sessions/{session_id}/end",
+        # Cross-tenant worker/job wall.
+        "/operator/v1/jobs",
         # Operating-Environment desk console: compute-preview writes nothing,
         # the maker-checker lifecycle governs the [0,1] jurisdiction score, and
         # publish fans GHANA_OPERATING_ENVIRONMENT_SCORE out to every tenant.
@@ -93,7 +111,29 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/operators/{email}/deactivate",
         "/operator/v1/operators/{email}/reactivate",
         "/operator/v1/operators/{email}/reset-password",
+        # Console-home fleet rollup (counts only).
+        "/operator/v1/overview",
+        # Cross-tenant health board (GET list) + provisioning (POST) + per-tenant
+        # detail reads. The fleet-metadata pair (GET list, GET {org_id} header)
+        # stays OPEN; every deeper per-tenant read is gated on an active Tenant
+        # Inspector session (app.operator.inspection) and audited.
         "/operator/v1/tenants",
         "/operator/v1/tenants",
+        "/operator/v1/tenants/{org_id}",
         "/operator/v1/tenants/{org_id}/activity",
+        "/operator/v1/tenants/{org_id}/config",
+        "/operator/v1/tenants/{org_id}/entitlements",
+        "/operator/v1/tenants/{org_id}/findings",
+        # Tenant inspector FIX (write side): each requires an active inspection
+        # session and is audited as inspector.fix.*; every write runs on the
+        # operator's cross-tenant session, never a tenant impersonation token.
+        "/operator/v1/tenants/{org_id}/fix/config",
+        "/operator/v1/tenants/{org_id}/fix/official-run",
+        "/operator/v1/tenants/{org_id}/fix/recompute",
+        "/operator/v1/tenants/{org_id}/fix/rerun-ingestion",
+        "/operator/v1/tenants/{org_id}/ingestion",
+        "/operator/v1/tenants/{org_id}/ingestion/{batch_id}",
+        "/operator/v1/tenants/{org_id}/metrics",
+        "/operator/v1/tenants/{org_id}/storage",
+        "/operator/v1/tenants/{org_id}/users",
     ]

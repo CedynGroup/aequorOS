@@ -15,7 +15,7 @@ from app.models import (
     MarketDataConnection,
     OperatorAuditLog,
 )
-from tests.operator.conftest import operator_headers, provision_payload
+from tests.operator.conftest import operator_headers, provision_payload, start_inspection
 
 
 def _provision(operator_client: TestClient) -> tuple[str, str]:
@@ -95,6 +95,7 @@ def test_activity_feed_merges_sources_newest_first(
     )
     operator_db.commit()
 
+    start_inspection(operator_client, organization_id)
     response = operator_client.get(
         f"/operator/v1/tenants/{organization_id}/activity", headers=operator_headers()
     )
@@ -118,6 +119,7 @@ def test_activity_respects_limit(operator_client: TestClient, operator_db: Sessi
         )
     operator_db.commit()
 
+    start_inspection(operator_client, organization_id)
     response = operator_client.get(
         f"/operator/v1/tenants/{organization_id}/activity?limit=3",
         headers=operator_headers(),
@@ -126,12 +128,14 @@ def test_activity_respects_limit(operator_client: TestClient, operator_db: Sessi
     assert len(response.json()["items"]) == 3
 
 
-def test_activity_unknown_org_is_404(operator_client: TestClient) -> None:
+def test_activity_unknown_org_is_403_without_a_session(operator_client: TestClient) -> None:
+    # Gated read: no session can exist for an unknown org, so it 403s rather
+    # than revealing (via 404) that the org is unknown.
     response = operator_client.get(
         "/operator/v1/tenants/OR-00000000/activity", headers=operator_headers()
     )
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "not_found"
+    assert response.status_code == 403
+    assert response.json()["error"]["details"]["code"] == "inspection_required"
 
 
 def test_data_engines_exposes_metadata_and_never_credentials(

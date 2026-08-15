@@ -39,6 +39,11 @@ import {
 } from '@aequoros/risk-service-api';
 import { getSession } from 'next-auth/react';
 import { getAccessToken, setAccessToken } from './token';
+import {
+  getImpersonationBearer,
+  impersonationMarkerPresent,
+  markImpersonationExpired,
+} from './impersonation';
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
@@ -64,6 +69,16 @@ export const apiOrigin = baseUrl.replace(/\/api\/v1\/?$/, '');
 export const configuration = new Configuration({
   basePath: apiOrigin,
   accessToken: async () => {
+    // Act-as-examiner (additive, cookie-gated): when a staff inspection hand-off
+    // is active, the impersonation token is the bearer and the tenant API serves
+    // read-only for that org. `impersonationMarkerPresent()` is a synchronous
+    // document.cookie check that is false on every normal session — so absent a
+    // hand-off this whole branch is skipped and the selection below is
+    // byte-identical to the tenant login path.
+    if (impersonationMarkerPresent()) {
+      const impersonationToken = await getImpersonationBearer();
+      if (impersonationToken) return impersonationToken;
+    }
     const cached = getAccessToken();
     if (cached) return cached;
     const session = await getSession();
@@ -71,6 +86,19 @@ export const configuration = new Configuration({
     if (token) setAccessToken(token);
     return token;
   },
+  // Detect an expired/revoked hand-off precisely: a 401 seen while inspecting
+  // flips the store to the "ended" state so the operator gets a clear message
+  // and a way out. On a normal session the marker gate makes this a no-op, and
+  // returning nothing leaves the response untouched.
+  middleware: [
+    {
+      post: async ({ response }) => {
+        if (impersonationMarkerPresent() && response.status === 401) {
+          markImpersonationExpired();
+        }
+      },
+    },
+  ],
 });
 
 export const authApi = new AuthApi(configuration);

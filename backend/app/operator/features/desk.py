@@ -18,7 +18,7 @@ from datetime import date
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.models import (
     DeskDetermination,
@@ -272,17 +272,35 @@ def list_observations(
     db: OperatorDb,
     _operator: Operator,
     series_code: str | None = None,
-    as_of_date: date | None = None,
+    as_of_from: date | None = None,
+    as_of_to: date | None = None,
     include_superseded: bool = False,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
 ) -> DeskObservationListRead:
+    """Paginated observation ledger. ``total`` is the real filtered count (the
+    table runs to hundreds of thousands of rows), never the page length."""
     rows = observations.list_observations(
         db,
         series_code=series_code,
-        as_of_date=as_of_date,
+        as_of_from=as_of_from,
+        as_of_to=as_of_to,
+        include_superseded=include_superseded,
+        limit=limit,
+        offset=offset,
+    )
+    total = observations.count_observations(
+        db,
+        series_code=series_code,
+        as_of_from=as_of_from,
+        as_of_to=as_of_to,
         include_superseded=include_superseded,
     )
     return DeskObservationListRead(
-        observations=[_observation_read(row) for row in rows], total=len(rows)
+        observations=[_observation_read(row) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
     )
 
 

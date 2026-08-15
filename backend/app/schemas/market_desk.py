@@ -95,7 +95,11 @@ class DeskObservationRead(ClosedModel):
 
 class DeskObservationListRead(ClosedModel):
     observations: list[DeskObservationRead]
+    #: Full count of rows matching the filters, BEFORE limit/offset.
     total: int
+    #: Page window echoed back so the console can paginate without re-deriving.
+    limit: int
+    offset: int
 
 
 class DeskCaptureRead(ClosedModel):

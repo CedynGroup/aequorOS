@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
-import { Chip } from '@/components/ui';
+import { AlertTriangle } from 'lucide-react';
+import { Button, Field, FormError, Input, Select, StatusPill, Textarea } from '@/components/ui';
 import type {
   DeskCurveDefinition,
   DeskCurveDefinitionFields,
@@ -14,7 +14,7 @@ import type {
  *
  * The option vocabularies below MIRROR the backend's governed resolvers
  * (app/services/market_desk/curve_construction.py + app/domain/curves/*): the
- * two seeded calendars, the four interpolators, the DayCount enum, the
+ * seeded holiday calendars, the four interpolators, the DayCount enum, the
  * BusinessDayConvention enum, and the two extrapolation rules. A value the
  * backend cannot resolve is a 422 on save, so we constrain the pickers to
  * exactly what it accepts rather than inventing options.
@@ -24,7 +24,12 @@ import type {
 // Governed option vocabularies (mirrored from the backend resolvers)
 // ---------------------------------------------------------------------------
 
-export const CALENDAR_OPTIONS = ['GHANA', 'USA'] as const;
+/**
+ * The seeded holiday calendars. SINGLE SOURCE OF TRUTH — the definition form
+ * and the FX-forward grid both import this so a new calendar is added in one
+ * place, not diverged per page.
+ */
+export const CALENDAR_OPTIONS = ['GHANA', 'USA', 'NIGERIA', 'KENYA', 'SOUTH_AFRICA'] as const;
 
 export const CURVE_KIND_OPTIONS: { value: DeskCurveKind; label: string }[] = [
   { value: 'forward', label: 'Forward' },
@@ -75,11 +80,11 @@ export const ENTITLEMENT_TIER_OPTIONS: {
 // Status + ceremony
 // ---------------------------------------------------------------------------
 
-/** Curve-definition lifecycle chip: draft ▸ approved. */
+/** Curve-definition lifecycle pill: draft ▸ approved. */
 export function CurveDefinitionStatusPill({ status }: { status: string }) {
-  if (status === 'approved') return <Chip tone="ok">approved</Chip>;
-  if (status === 'draft') return <Chip>draft</Chip>;
-  return <Chip tone="warn">{status.replace(/_/g, ' ')}</Chip>;
+  if (status === 'approved') return <StatusPill tone="success">approved</StatusPill>;
+  if (status === 'draft') return <StatusPill tone="pending">draft</StatusPill>;
+  return <StatusPill tone="amber">{status.replace(/_/g, ' ')}</StatusPill>;
 }
 
 /**
@@ -118,27 +123,6 @@ export function activeDefinitionFor(
 // ---------------------------------------------------------------------------
 // The governed definition form (create + propose)
 // ---------------------------------------------------------------------------
-
-const inputClass =
-  'w-full rounded-md border border-border bg-surface-base px-3 py-2 text-body text-ink placeholder:text-slate-light focus:border-focus focus:outline-none';
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-caption font-medium text-slate">{label}</span>
-      {children}
-      {hint && <span className="mt-1 block text-micro text-slate-light">{hint}</span>}
-    </label>
-  );
-}
 
 export interface DefinitionFormValue extends DeskCurveDefinitionFields {
   curve_code: string;
@@ -250,13 +234,20 @@ export function DefinitionForm({
     );
   }
 
+  const intervalInvalid = paymentIntervalMonths.trim() !== '' && !(Number.isInteger(interval) && interval > 0);
+  const lagInvalid = spotLagDays.trim() !== '' && !(Number.isInteger(lag) && lag >= 0);
+
   return (
     <div className="space-y-4">
       <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
         {mode === 'create' && (
-          <Field label="Curve code" hint="AEQ.* golden-copy name — immutable once created">
-            <input
-              className={`${inputClass} font-mono`}
+          <Field
+            label="Curve code"
+            required
+            hint="AEQ.* golden-copy name — immutable once created"
+          >
+            <Input
+              className="font-mono"
               value={curveCode}
               onChange={(e) => setCurveCode(e.target.value)}
               placeholder="AEQ.GHS.SOV.FWD"
@@ -264,40 +255,42 @@ export function DefinitionForm({
             />
           </Field>
         )}
-        <Field label="Currency" hint="ISO-4217 (3 letters)">
-          <input
-            className={`${inputClass} font-mono uppercase`}
+        <Field
+          label="Currency"
+          required
+          hint="ISO-4217 (3 letters)"
+          error={currency.trim() !== '' && !currencyOk ? 'Must be exactly three letters.' : undefined}
+        >
+          <Input
+            className="font-mono uppercase"
             value={currency}
             maxLength={3}
+            invalid={currency.trim() !== '' && !currencyOk}
             onChange={(e) => setCurrency(e.target.value.toUpperCase())}
             placeholder="GHS"
           />
         </Field>
         <Field label="Calendar">
-          <select className={inputClass} value={calendar} onChange={(e) => setCalendar(e.target.value)}>
+          <Select value={calendar} onChange={(e) => setCalendar(e.target.value)}>
             {CALENDAR_OPTIONS.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Curve kind">
-          <select
-            className={inputClass}
-            value={kind}
-            onChange={(e) => setKind(e.target.value as DeskCurveKind)}
-          >
+          <Select value={kind} onChange={(e) => setKind(e.target.value as DeskCurveKind)}>
             {CURVE_KIND_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Projection index" hint="Forward Curve — e.g. GHS-SOV, SOFR (optional)">
-          <input
-            className={`${inputClass} font-mono`}
+          <Input
+            className="font-mono"
             value={projectionIndex ?? ''}
             onChange={(e) => setProjectionIndex(e.target.value)}
             placeholder="GHS-SOV"
@@ -305,17 +298,17 @@ export function DefinitionForm({
           />
         </Field>
         <Field label="Discount curve" hint="OIS / AGD code (optional — self-discounting if unset)">
-          <input
-            className={`${inputClass} font-mono`}
+          <Input
+            className="font-mono"
             value={discountCurveCode ?? ''}
             onChange={(e) => setDiscountCurveCode(e.target.value)}
             placeholder="AEQ.GHS.OIS"
             spellCheck={false}
           />
         </Field>
-        <Field label="Instrument set" hint="Governed 'Swap style' identifier">
-          <input
-            className={`${inputClass} font-mono`}
+        <Field label="Instrument set" required hint="Governed 'Swap style' identifier">
+          <Input
+            className="font-mono"
             value={instrumentSetRef}
             onChange={(e) => setInstrumentSetRef(e.target.value)}
             placeholder="GHS.SOV.BILLS_BONDS"
@@ -323,101 +316,96 @@ export function DefinitionForm({
           />
         </Field>
         <Field label="Interpolation">
-          <select
-            className={inputClass}
-            value={interpolation}
-            onChange={(e) => setInterpolation(e.target.value)}
-          >
+          <Select value={interpolation} onChange={(e) => setInterpolation(e.target.value)}>
             {INTERPOLATION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Output basis (Convert to)">
-          <select
-            className={inputClass}
-            value={outputDaycount}
-            onChange={(e) => setOutputDaycount(e.target.value)}
-          >
+          <Select value={outputDaycount} onChange={(e) => setOutputDaycount(e.target.value)}>
             {DAYCOUNT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
-        <Field label="Curve frequency" hint="Forward-grid period length, e.g. 3M / 1M">
-          <input
-            className={`${inputClass} font-mono`}
+        <Field label="Curve frequency" required hint="Forward-grid period length, e.g. 3M / 1M">
+          <Input
+            className="font-mono"
             value={curveFrequency}
             onChange={(e) => setCurveFrequency(e.target.value)}
             placeholder="3M"
           />
         </Field>
-        <Field label="Payment interval (months)">
-          <input
+        <Field
+          label="Payment interval (months)"
+          error={intervalInvalid ? 'Must be a positive whole number.' : undefined}
+        >
+          <Input
             type="number"
             min={1}
-            className={`${inputClass} font-mono`}
+            className="font-mono"
+            invalid={intervalInvalid}
             value={paymentIntervalMonths}
             onChange={(e) => setPaymentIntervalMonths(e.target.value)}
           />
         </Field>
         <Field label="Payment frequency" hint="Descriptive label (optional)">
-          <input
-            className={inputClass}
+          <Input
             value={paymentFrequency ?? ''}
             onChange={(e) => setPaymentFrequency(e.target.value)}
             placeholder="quarterly"
           />
         </Field>
-        <Field label="Spot lag (days)">
-          <input
+        <Field
+          label="Spot lag (days)"
+          error={lagInvalid ? 'Must be zero or a positive whole number.' : undefined}
+        >
+          <Input
             type="number"
             min={0}
-            className={`${inputClass} font-mono`}
+            className="font-mono"
+            invalid={lagInvalid}
             value={spotLagDays}
             onChange={(e) => setSpotLagDays(e.target.value)}
           />
         </Field>
         <Field label="Roll convention">
-          <select className={inputClass} value={roll} onChange={(e) => setRoll(e.target.value)}>
+          <Select value={roll} onChange={(e) => setRoll(e.target.value)}>
             {ROLL_CONVENTION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Extrapolation">
-          <select
-            className={inputClass}
-            value={extrapolation}
-            onChange={(e) => setExtrapolation(e.target.value)}
-          >
+          <Select value={extrapolation} onChange={(e) => setExtrapolation(e.target.value)}>
             {EXTRAPOLATION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
-        <Field label="Entitlement tier" hint="Distribution tier a tenant needs to receive this curve">
-          <select
-            className={inputClass}
+        <Field
+          label="Entitlement tier"
+          hint="Distribution tier a tenant needs to receive this curve"
+        >
+          <Select
             value={entitlementTier}
-            onChange={(e) =>
-              setEntitlementTier(e.target.value as 'core' | 'standard' | 'premium')
-            }
+            onChange={(e) => setEntitlementTier(e.target.value as 'core' | 'standard' | 'premium')}
           >
             {ENTITLEMENT_TIER_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       </div>
 
@@ -426,16 +414,15 @@ export function DefinitionForm({
           Advanced params (JSON — QA tolerances, grid overrides)
         </summary>
         <div className="px-3 pb-3">
-          <textarea
+          <Textarea
             rows={6}
             spellCheck={false}
-            className={`${inputClass} font-mono text-caption`}
+            className="font-mono text-caption"
+            invalid={!paramsParse.ok}
             value={paramsText}
             onChange={(e) => setParamsText(e.target.value)}
           />
-          {!paramsParse.ok && (
-            <p className="mt-1 text-caption text-critical">JSON error: {paramsParse.error}</p>
-          )}
+          {!paramsParse.ok && <FormError>JSON error: {paramsParse.error}</FormError>}
           <p className="mt-1 text-micro text-slate-light">
             Optional overrides: grid_periods, qa_grid_points, oscillation_tolerance,
             pillar_min_count, enforce_positive_forwards, end_of_month.
@@ -443,46 +430,32 @@ export function DefinitionForm({
         </div>
       </details>
 
-      <label className="block">
-        <span className="mb-1 block text-caption font-medium text-slate">
-          Change rationale (required — recorded in the register)
-        </span>
-        <textarea
+      <Field
+        label="Change rationale (required — recorded in the register)"
+        required
+      >
+        <Textarea
           rows={2}
-          className={inputClass}
           value={rationale}
           onChange={(e) => setRationale(e.target.value)}
           placeholder="Why this definition / this change? Cite the methodology basis."
         />
-      </label>
-      {currency.trim() !== '' && !currencyOk && (
-        <p className="text-caption text-critical">Currency must be exactly three letters.</p>
-      )}
+      </Field>
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={busy || !valid}
-          onClick={submit}
-          className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy && <Loader2 size={14} className="animate-spin" />}
+        <Button loading={busy} disabled={!valid} onClick={submit}>
           {submitLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded border border-border px-4 py-2 text-body font-medium text-ink hover:bg-surface"
-        >
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Inline SVG line chart (no external deps — console has no chart lib)
+// Inline SVG line chart (dependency-free spark)
 // ---------------------------------------------------------------------------
 
 export interface ChartPoint {
@@ -491,10 +464,11 @@ export interface ChartPoint {
 }
 
 /**
- * A small, clean single-series line chart for the research-desk results view:
- * yield-vs-tenor and the discount-factor curve. Deliberately dependency-free —
- * the console ships no chart library — and theme-driven through the --chart-*
- * CSS tokens.
+ * A small, dependency-free single-series SVG line chart, retained for trivial
+ * inline sparks. The interactive workspace/FX visuals use recharts through the
+ * ChartFrame primitive (see components/curves/CurveResultCharts + FxForwardChart);
+ * this stays for lightweight, no-tooltip spark cases. Theme-driven through the
+ * --chart-* CSS tokens.
  */
 export function LineChart({
   points,

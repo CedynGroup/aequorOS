@@ -20,6 +20,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // `navy` is the SHARED heading alias with the bank dashboard: despite
+        // the name it maps to --heading (near-white in this dark-only console),
+        // used for headings and primary emphasis. DO NOT rename it — every page
+        // (here and in the dashboard) reads `text-navy`, so a rename breaks
+        // product parity and hundreds of call sites.
         navy: {
           DEFAULT: 'rgb(var(--heading) / <alpha-value>)',
           900: 'rgb(var(--nav-bg) / <alpha-value>)',

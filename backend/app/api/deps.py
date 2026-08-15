@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import security
+from app.core.config import get_settings
 from app.db.session import get_sessionmaker
 from app.integrations.storage.base import ObjectStorage
 from app.integrations.storage.s3 import get_object_storage
@@ -27,6 +28,14 @@ class TenantContext:
     organization_id: str
     actor_user_id: UUID | None = None
     roles: tuple[str, ...] = ()
+    # Set ONLY under operator act-as-examiner impersonation: the originating
+    # inspector session id. Its presence marks the principal as a read-only
+    # operator view (actor_user_id is None — the actor is staff, not a tenant
+    # user). RLS still pins to ``organization_id``, so a single-tenant view.
+    impersonation_context: str | None = None
+    # The email of the operator acting as examiner (impersonation only) —
+    # provenance for audit; never a tenant identity.
+    actor_operator: str | None = None
 
 
 def get_current_principal(
@@ -58,6 +67,39 @@ def get_current_principal(
             return authenticate_key(session, credentials.credentials)
         finally:
             session.close()
+    # Operator act-as-examiner impersonation (a THIRD bearer credential, tried
+    # before the normal access-token decode). FAILS CLOSED: when the dedicated
+    # secret is unset, this branch is skipped entirely, so no impersonation is
+    # possible. `decode_impersonation_token` returns None for anything that is
+    # not an impersonation token (a normal access token verifies against a
+    # DIFFERENT secret and lands here as None) so the request falls through to
+    # the existing decode with no regression; it raises only for a token that
+    # IS an impersonation token but is expired/invalid.
+    impersonation_secret = get_settings().auth.impersonation_jwt_secret
+    if impersonation_secret:
+        try:
+            impersonation_claims = security.decode_impersonation_token(
+                credentials.credentials,
+                secret=impersonation_secret,
+            )
+        except security.AuthError as exc:  # expired/invalid impersonation token
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token.",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+        if impersonation_claims is not None:
+            # The role is PINNED to examiner here, never taken from the claim:
+            # the tenant API decides what an impersonation session may do, and
+            # examiner sits in no mutation ladder (read everything, mutate
+            # nothing). actor_user_id stays None — the actor is an operator.
+            return TenantContext(
+                organization_id=str(impersonation_claims["org"]),
+                actor_user_id=None,
+                roles=("examiner",),
+                impersonation_context=str(impersonation_claims["session_id"]),
+                actor_operator=str(impersonation_claims["act_operator"]),
+            )
     try:
         claims = security.decode_token(credentials.credentials, expected_type="access")
     except security.AuthConfigError as exc:  # signing secret unset — fail closed
@@ -110,6 +152,15 @@ def get_mutation_tenant_context(
     """Tenant context for a mutating request: requires an acting user AND the
     ``analyst`` role (or higher). This single gate makes ``viewer`` accounts strictly
     read-only across every mutation endpoint (RBAC — the write side of the model)."""
+    # Act-as-examiner impersonation is strictly read-only: an operator viewing a
+    # tenant may NEVER mutate its state. Refuse here — before the actor/role
+    # checks — so the reason is explicit and unmistakable. Defense in depth: the
+    # role is also pinned to ``examiner``, which sits in no mutation ladder.
+    if principal.impersonation_context is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Impersonation sessions are read-only; this action is not permitted.",
+        )
     if principal.actor_user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required."
@@ -146,6 +197,13 @@ def validate_tenant_context(session: Session, ctx: TenantContext) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tenant context is not valid.",
         )
+
+    # Act-as-examiner impersonation: the actor is an OPERATOR, not a tenant user,
+    # so there is no ``users`` row to validate — but the org must still exist
+    # (checked above) and RLS still pins the session to that single org. Skip the
+    # user check; keep the org check.
+    if ctx.impersonation_context is not None:
+        return
 
     if ctx.actor_user_id is None:
         return

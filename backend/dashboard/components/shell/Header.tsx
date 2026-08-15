@@ -26,6 +26,8 @@ import { useLiveSummary, useRefreshBankData } from '@/lib/api/hooks';
 import CommandPalette from './CommandPalette';
 import UnifiedBell from '@/components/shell/UnifiedBell';
 import { regShort } from '@/lib/format';
+import { useImpersonation } from '@/components/impersonation/useImpersonation';
+import { leaveImpersonation } from '@/lib/api/impersonation';
 
 export default function Header({
   onMobileMenu,
@@ -34,6 +36,7 @@ export default function Header({
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { bank } = useBankContext();
+  const { impersonating } = useImpersonation();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -47,7 +50,12 @@ export default function Header({
   }, []);
 
   return (
-    <header className="h-16 bg-surface-raised border-b border-border-light flex items-center justify-between px-4 md:px-6 sticky top-0 z-30">
+    // While inspecting, drop the sticky header below the fixed staff banner
+    // (2.5rem) so the two never overlap. No offset on a normal session.
+    <header
+      style={impersonating ? { top: '2.5rem' } : undefined}
+      className="h-16 bg-surface-raised border-b border-border-light flex items-center justify-between px-4 md:px-6 sticky top-0 z-30"
+    >
       <div className="flex items-center gap-3 min-w-0">
         {onMobileMenu && (
           <button
@@ -122,11 +130,26 @@ const LIVE_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
  * has not recomputed recently"; the click is a manual recompute. */
 function LiveFreshnessPill() {
   const { bank, period } = useBankContext();
+  const { impersonating } = useImpersonation();
   const summary = useLiveSummary(bank?.id);
   const refresh = useRefreshBankData(bank?.id);
 
   const modules = summary.data?.modules ?? [];
   if (modules.length === 0) return null;
+
+  // Read-only staff view: never surface the recompute action (a mutation the
+  // backend would 403). Show a static liveness pill instead of a dead button.
+  if (impersonating) {
+    return (
+      <span
+        title="Live figures — read-only staff inspection."
+        className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-success/30 bg-success-light text-success text-caption font-medium whitespace-nowrap"
+      >
+        <RadioTower size={11} aria-hidden />
+        Live
+      </span>
+    );
+  }
 
   const latest = modules.reduce<Date | null>((acc, m) => {
     if (!m.computedAt) return acc;
@@ -199,18 +222,28 @@ function UserMenu() {
   const ref = useRef<HTMLDivElement>(null);
   const { data: session } = useSession();
   const { profile } = useUserProfile();
+  const { impersonating, operator } = useImpersonation();
 
-  const email = profile?.email ?? session?.user?.email ?? '';
-  const name =
-    profile?.displayName || session?.user?.name || email || 'Signed in';
+  // While inspecting there is no tenant session; show the operator's identity
+  // and a "read-only" role so the avatar menu is never a confusing blank.
+  const email = impersonating
+    ? (operator ?? '')
+    : (profile?.email ?? session?.user?.email ?? '');
   const roles = session?.user?.roles ?? [];
-  const role = profile?.role
-    ? roleLabel(profile.role)
-    : roles.length
-      ? roleLabel(roles[0])
-      : 'Signed in';
+  const name = impersonating
+    ? (operator ?? 'AequorOS staff')
+    : profile?.displayName || session?.user?.name || email || 'Signed in';
+  const role = impersonating
+    ? 'Staff inspection · read-only'
+    : profile?.role
+      ? roleLabel(profile.role)
+      : roles.length
+        ? roleLabel(roles[0])
+        : 'Signed in';
   const initials = initialsFrom(name);
-  const avatarBackground = avatarColor(profile?.userId ?? email);
+  const avatarBackground = avatarColor(
+    impersonating ? (operator ?? 'AequorOS staff') : (profile?.userId ?? email),
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -269,27 +302,49 @@ function UserMenu() {
             </p>
           </div>
           <div className="py-1">
-            <a
-              href="/settings/profile"
-              role="menuitem"
-              className="flex items-center gap-2.5 px-4 py-2 text-body text-navy/85 hover:bg-surface"
-              onClick={() => setOpen(false)}
-            >
-              <UserRound size={14} className="text-slate" aria-hidden />
-              Profile &amp; preferences
-            </a>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                void signOut({ redirectTo: LOGIN_URL });
-              }}
-              className="w-full flex items-center gap-2.5 px-4 py-2 text-body text-navy/85 hover:bg-surface"
-            >
-              <LogOut size={14} className="text-slate" aria-hidden />
-              Sign out
-            </button>
+            {impersonating ? (
+              // Read-only staff view: no profile edits (they would 403), and
+              // "sign out" is meaningless with no tenant session — leaving the
+              // inspection is the only exit.
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  void leaveImpersonation().then(() => {
+                    window.location.href = LOGIN_URL;
+                  });
+                }}
+                className="w-full flex items-center gap-2.5 px-4 py-2 text-body text-navy/85 hover:bg-surface"
+              >
+                <LogOut size={14} className="text-slate" aria-hidden />
+                Leave inspection
+              </button>
+            ) : (
+              <>
+                <a
+                  href="/settings/profile"
+                  role="menuitem"
+                  className="flex items-center gap-2.5 px-4 py-2 text-body text-navy/85 hover:bg-surface"
+                  onClick={() => setOpen(false)}
+                >
+                  <UserRound size={14} className="text-slate" aria-hidden />
+                  Profile &amp; preferences
+                </a>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpen(false);
+                    void signOut({ redirectTo: LOGIN_URL });
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2 text-body text-navy/85 hover:bg-surface"
+                >
+                  <LogOut size={14} className="text-slate" aria-hidden />
+                  Sign out
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

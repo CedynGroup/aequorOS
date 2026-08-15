@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Calculator, Info, Loader2 } from 'lucide-react';
+import { Calculator } from 'lucide-react';
 import {
   constructFxForward,
   listCurveDefinitions,
@@ -9,12 +9,40 @@ import {
   toApiError,
   type ApiError,
   type FxForwardConstructResponse,
+  type FxForwardRow,
 } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { DASH, fmtDate } from '@/lib/format';
-import { Chip, ErrorPanel, PageHeader, SkeletonRows } from '@/components/ui';
+import { fmtDate } from '@/lib/format';
+import { CALENDAR_OPTIONS } from '@/components/curves';
+import { FxForwardChart } from '@/components/curves/FxForwardChart';
+import {
+  Button,
+  Chip,
+  type Column,
+  DataTable,
+  EmptyState,
+  ErrorPanel,
+  Field,
+  Input,
+  PageHeader,
+  SectionCard,
+  Select,
+  SkeletonRows,
+} from '@/components/ui';
 
 const DEFAULT_TENORS = '1M, 3M, 6M, 12M';
+
+/**
+ * FX-forward day counts — the three DayCount enum members the resolver accepts
+ * (app/services/market_desk/fx_forward.py::_resolve_day_count matches on the
+ * enum NAME). Deliberately NOT the curve DAYCOUNT_OPTIONS, whose 30/360 and
+ * ACT/ACT values the FX resolver would reject.
+ */
+const FX_DAY_COUNT_OPTIONS: { value: string; label: string }[] = [
+  { value: 'ACT_365F', label: 'Actual/365 Fixed' },
+  { value: 'ACT_360', label: 'Actual/360 — money-market' },
+  { value: 'ACT_364', label: 'Actual/364 — GFIM standard' },
+];
 
 function parseTenors(value: string): string[] {
   return value
@@ -35,7 +63,10 @@ export default function FxForwardsPage() {
     [definitions.data],
   );
   const publishedCobs = useMemo(
-    () => [...new Set((determinations.data?.determinations ?? []).map((row) => row.cob_date))].sort().reverse(),
+    () =>
+      [...new Set((determinations.data?.determinations ?? []).map((row) => row.cob_date))]
+        .sort()
+        .reverse(),
     [determinations.data],
   );
   const [baseCcy, setBaseCcy] = useState('USD');
@@ -47,6 +78,7 @@ export default function FxForwardsPage() {
   const [baseCurve, setBaseCurve] = useState('');
   const [quoteCurve, setQuoteCurve] = useState('');
   const [basisBps, setBasisBps] = useState('0');
+  const [dayCount, setDayCount] = useState('ACT_365F');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<FxForwardConstructResponse | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
@@ -83,7 +115,7 @@ export default function FxForwardsPage() {
           base_leg: { source: 'published', curve_code: baseCurve },
           quote_leg: { source: 'published', curve_code: quoteCurve },
           basis_bps: Number.isFinite(parsedBasis) ? parsedBasis : 0,
-          day_count: 'ACT_365F',
+          day_count: dayCount,
           tenor_grid: parseTenors(tenors),
           grid_calendar: calendar,
           grid_spot_lag_days: 2,
@@ -103,6 +135,34 @@ export default function FxForwardsPage() {
     !Number.isFinite(Number(spot)) ||
     Number(spot) <= 0;
 
+  const missingCurve = baseCurves.length === 0 || quoteCurves.length === 0;
+
+  const resultColumns: Column<FxForwardRow>[] = [
+    { key: 'date', header: 'Value date', render: (r) => <span className="font-mono text-caption text-ink">{fmtDate(r.date)}</span> },
+    { key: 'forward', header: 'Forward', numeric: true, render: (r) => r.forward_rate.toFixed(4) },
+    {
+      key: 'points',
+      header: 'Points',
+      numeric: true,
+      render: (r) => (
+        <span className="text-slate">
+          {r.forward_points >= 0 ? '+' : ''}
+          {r.forward_points.toFixed(4)}
+        </span>
+      ),
+    },
+    {
+      key: 'df',
+      header: 'DF base / quote',
+      numeric: true,
+      render: (r) => (
+        <span className="text-caption text-slate">
+          {r.df_base.toFixed(6)} / {r.df_quote.toFixed(6)}
+        </span>
+      ),
+    },
+  ];
+
   return (
     <div>
       <PageHeader
@@ -110,48 +170,190 @@ export default function FxForwardsPage() {
         sub="Covered-interest-parity outright-forward preview from two approved published curves and an FX spot. This is an auditable staff preview; publication remains a separate governed desk action."
       />
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(26rem,1.1fr)]">
-        <section className="card overflow-hidden">
-          <div className="border-b border-border-light px-5 py-4">
-            <h2 className="text-h3 text-navy">Construction inputs</h2>
-            <p className="mt-1 text-caption text-slate">Use approved, currency-matched discount curves at a published COB. A non-zero basis is an explicit assumption, not a calibrated cross-currency basis.</p>
-          </div>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(28rem,1.1fr)]">
+        <SectionCard
+          title="Construction inputs"
+          subtitle="Use approved, currency-matched discount curves at a published COB. A non-zero basis is an explicit assumption, not a calibrated cross-currency basis."
+        >
           {definitions.loading && <SkeletonRows rows={5} />}
-          {definitions.error && <div className="p-4"><ErrorPanel error={definitions.error} onRetry={definitions.reload} context="Loading published curves" /></div>}
+          {definitions.error && (
+            <ErrorPanel
+              error={definitions.error}
+              onRetry={definitions.reload}
+              context="Loading published curves"
+            />
+          )}
           {definitions.data && (
-            <div className="grid gap-4 p-5 sm:grid-cols-2">
-              <label className="block space-y-1"><span className="text-caption font-medium text-slate">Base currency</span><input value={baseCcy} onChange={(e) => setBaseCcy(e.target.value.toUpperCase())} maxLength={3} className="w-full rounded border border-border bg-surface-base px-3 py-2 font-mono text-body text-ink" /></label>
-              <label className="block space-y-1"><span className="text-caption font-medium text-slate">Quote currency</span><input value={quoteCcy} onChange={(e) => setQuoteCcy(e.target.value.toUpperCase())} maxLength={3} className="w-full rounded border border-border bg-surface-base px-3 py-2 font-mono text-body text-ink" /></label>
-              <label className="block space-y-1"><span className="text-caption font-medium text-slate">Spot (quote per base)</span><input value={spot} onChange={(e) => setSpot(e.target.value)} inputMode="decimal" placeholder="e.g. 12.8500" className="w-full rounded border border-border bg-surface-base px-3 py-2 font-mono text-body text-ink" /></label>
-              <label className="block space-y-1"><span className="text-caption font-medium text-slate">Published COB</span><select value={asOf} onChange={(e) => setAsOf(e.target.value)} className="w-full rounded border border-border bg-surface-base px-3 py-2 text-body text-ink"><option value="">Select published COB</option>{publishedCobs.map((cob) => <option key={cob} value={cob}>{fmtDate(cob)}</option>)}</select></label>
-              <label className="block space-y-1"><span className="text-caption font-medium text-slate">Base discount curve ({baseCcy})</span><select value={baseCurve} onChange={(e) => setBaseCurve(e.target.value)} className="w-full rounded border border-border bg-surface-base px-3 py-2 font-mono text-body text-ink"><option value="">Select {baseCcy} discount curve</option>{baseCurves.map((curve) => <option key={curve.id} value={curve.curve_code}>{curve.curve_code} · v{curve.version}</option>)}</select></label>
-              <label className="block space-y-1"><span className="text-caption font-medium text-slate">Quote discount curve ({quoteCcy})</span><select value={quoteCurve} onChange={(e) => setQuoteCurve(e.target.value)} className="w-full rounded border border-border bg-surface-base px-3 py-2 font-mono text-body text-ink"><option value="">Select {quoteCcy} discount curve</option>{quoteCurves.map((curve) => <option key={curve.id} value={curve.curve_code}>{curve.curve_code} · v{curve.version}</option>)}</select></label>
-              <label className="block space-y-1"><span className="text-caption font-medium text-slate">Grid calendar</span><select value={calendar} onChange={(e) => setCalendar(e.target.value)} className="w-full rounded border border-border bg-surface-base px-3 py-2 text-body text-ink"><option>GHANA</option><option>USA</option><option>NIGERIA</option><option>KENYA</option><option>SOUTH_AFRICA</option></select></label>
-              <label className="block space-y-1"><span className="text-caption font-medium text-slate">Basis bps</span><input value={basisBps} onChange={(e) => setBasisBps(e.target.value)} inputMode="decimal" className="w-full rounded border border-border bg-surface-base px-3 py-2 font-mono text-body text-ink" /></label>
-              <label className="block space-y-1 sm:col-span-2"><span className="text-caption font-medium text-slate">Forward tenors</span><input value={tenors} onChange={(e) => setTenors(e.target.value)} className="w-full rounded border border-border bg-surface-base px-3 py-2 font-mono text-body text-ink" /><span className="block text-micro text-slate">Comma-separated, ascending tenors such as 1M, 3M, 6M, 12M.</span></label>
-              <div className="sm:col-span-2 flex items-center justify-between gap-3 border-t border-border-light pt-4">
-                <p className="text-caption text-slate">{baseCurves.length === 0 || quoteCurves.length === 0 ? `No approved discount curve is available for ${baseCurves.length === 0 ? baseCcy : quoteCcy}. Register and approve one before constructing.` : 'The result records the input digest and operator audit event. It is not automatically delivered to banks.'}</p>
-                <button type="button" onClick={() => void construct()} disabled={disabled} className="btn-primary inline-flex shrink-0 items-center gap-1.5 px-3 py-2 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50">{busy ? <Loader2 size={14} className="animate-spin" /> : <Calculator size={14} />} Construct</button>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Base currency">
+                <Input
+                  value={baseCcy}
+                  onChange={(e) => setBaseCcy(e.target.value.toUpperCase())}
+                  maxLength={3}
+                  className="font-mono uppercase"
+                />
+              </Field>
+              <Field label="Quote currency">
+                <Input
+                  value={quoteCcy}
+                  onChange={(e) => setQuoteCcy(e.target.value.toUpperCase())}
+                  maxLength={3}
+                  className="font-mono uppercase"
+                />
+              </Field>
+              <Field label="Spot (quote per base)">
+                <Input
+                  value={spot}
+                  onChange={(e) => setSpot(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="e.g. 12.8500"
+                  className="font-mono"
+                />
+              </Field>
+              <Field label="Published COB">
+                <Select value={asOf} onChange={(e) => setAsOf(e.target.value)}>
+                  <option value="">Select published COB</option>
+                  {publishedCobs.map((cob) => (
+                    <option key={cob} value={cob}>
+                      {fmtDate(cob)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label={`Base discount curve (${baseCcy})`}>
+                <Select
+                  value={baseCurve}
+                  onChange={(e) => setBaseCurve(e.target.value)}
+                  className="font-mono"
+                >
+                  <option value="">Select {baseCcy} discount curve</option>
+                  {baseCurves.map((curve) => (
+                    <option key={curve.id} value={curve.curve_code}>
+                      {curve.curve_code} · v{curve.version}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label={`Quote discount curve (${quoteCcy})`}>
+                <Select
+                  value={quoteCurve}
+                  onChange={(e) => setQuoteCurve(e.target.value)}
+                  className="font-mono"
+                >
+                  <option value="">Select {quoteCcy} discount curve</option>
+                  {quoteCurves.map((curve) => (
+                    <option key={curve.id} value={curve.curve_code}>
+                      {curve.curve_code} · v{curve.version}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Grid calendar">
+                <Select value={calendar} onChange={(e) => setCalendar(e.target.value)}>
+                  {CALENDAR_OPTIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Day count">
+                <Select value={dayCount} onChange={(e) => setDayCount(e.target.value)}>
+                  {FX_DAY_COUNT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field
+                label="Basis bps"
+                hint="Explicit additive spread on the base leg — 0 is textbook CIP."
+              >
+                <Input
+                  value={basisBps}
+                  onChange={(e) => setBasisBps(e.target.value)}
+                  inputMode="decimal"
+                  className="font-mono"
+                />
+              </Field>
+              <Field
+                label="Forward tenors"
+                hint="Comma-separated, ascending tenors such as 1M, 3M, 6M, 12M."
+                className="sm:col-span-2"
+              >
+                <Input
+                  value={tenors}
+                  onChange={(e) => setTenors(e.target.value)}
+                  className="font-mono"
+                />
+              </Field>
+              <div className="flex items-center justify-between gap-3 border-t border-border-light pt-4 sm:col-span-2">
+                <p className="text-caption text-slate">
+                  {missingCurve
+                    ? `No approved discount curve is available for ${
+                        baseCurves.length === 0 ? baseCcy : quoteCcy
+                      }. Register and approve one before constructing.`
+                    : 'The result records the input digest and operator audit event. It is not automatically delivered to banks.'}
+                </p>
+                <Button
+                  icon={<Calculator size={14} />}
+                  loading={busy}
+                  disabled={disabled}
+                  onClick={() => void construct()}
+                >
+                  Construct
+                </Button>
               </div>
+              {error && (
+                <div className="sm:col-span-2">
+                  <ErrorPanel error={error} context="Constructing FX forwards" />
+                </div>
+              )}
             </div>
           )}
-          {error && <div className="px-5 pb-5"><ErrorPanel error={error} context="Constructing FX forwards" /></div>}
-        </section>
+        </SectionCard>
 
-        <section className="card overflow-hidden">
-          <div className="border-b border-border-light px-5 py-4">
-            <h2 className="text-h3 text-navy">Outright forward result</h2>
-            <p className="mt-1 text-caption text-slate">CIP forward = spot × DF base / DF quote. Forward points are outright minus spot.</p>
-          </div>
-          {!result && <div className="flex min-h-72 items-center justify-center p-8 text-center"><div><Info size={20} className="mx-auto text-slate-light" /><p className="mt-3 text-body font-medium text-navy">No FX forward constructed</p><p className="mt-1 text-caption text-slate">Choose two approved curves and construct a tenor grid.</p></div></div>}
-          {result && (
-            <div>
-              <div className="flex flex-wrap gap-2 border-b border-border-light px-5 py-3"><Chip mono>{result.pair}</Chip><Chip tone="accent">{result.day_count}</Chip><Chip tone={result.basis_calibrated ? 'ok' : 'warn'}>{result.basis_calibrated ? 'basis calibrated' : 'basis assumption'}</Chip><span className="ml-auto text-caption text-slate">as of {fmtDate(result.as_of)}</span></div>
-              <table className="w-full text-body"><thead><tr className="bg-surface text-left text-micro uppercase tracking-wide text-slate"><th className="px-5 py-2.5 font-medium">Date</th><th className="px-3 py-2.5 text-right font-medium">Forward</th><th className="px-3 py-2.5 text-right font-medium">Points</th><th className="px-5 py-2.5 text-right font-medium">DF base / quote</th></tr></thead><tbody>{result.rows.map((row) => <tr key={row.date} className="border-t border-border-light"><td className="px-5 py-2.5 font-mono text-caption text-ink">{fmtDate(row.date)}</td><td className="px-3 py-2.5 text-right font-mono text-ink">{row.forward_rate.toFixed(4)}</td><td className="px-3 py-2.5 text-right font-mono text-slate">{row.forward_points >= 0 ? '+' : ''}{row.forward_points.toFixed(4)}</td><td className="px-5 py-2.5 text-right font-mono text-caption text-slate">{row.df_base.toFixed(6)} / {row.df_quote.toFixed(6)}</td></tr>)}</tbody></table>
-              <div className="border-t border-border-light px-5 py-3 text-micro text-slate">Digest <span className="font-mono text-ink">{result.input_digest}</span></div>
-            </div>
+        <div className="space-y-5">
+          {!result ? (
+            <SectionCard title="Outright forward result" noPadding>
+              <EmptyState
+                title="No FX forward constructed"
+                description="Choose two approved curves and construct a tenor grid. The result records the input digest and an operator audit event."
+              />
+            </SectionCard>
+          ) : (
+            <>
+              <FxForwardChart result={result} />
+              <SectionCard
+                title="Outright forward result"
+                subtitle="CIP forward = spot × DF base / DF quote. Forward points are outright minus spot."
+                actions={
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Chip mono>{result.pair}</Chip>
+                    <Chip tone="accent">{result.day_count}</Chip>
+                    <Chip tone={result.basis_calibrated ? 'ok' : 'warn'}>
+                      {result.basis_calibrated ? 'basis calibrated' : 'basis assumption'}
+                    </Chip>
+                  </div>
+                }
+                noPadding
+                footer={
+                  <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span>
+                      as of <span className="font-mono text-ink">{fmtDate(result.as_of)}</span>
+                    </span>
+                    <span>
+                      digest <span className="font-mono text-ink">{result.input_digest}</span>
+                    </span>
+                  </span>
+                }
+              >
+                <DataTable columns={resultColumns} rows={result.rows} density="compact" />
+              </SectionCard>
+            </>
           )}
-        </section>
+        </div>
       </div>
     </div>
   );

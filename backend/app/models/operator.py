@@ -30,6 +30,11 @@ OPERATOR_ROLES: tuple[str, ...] = ("developer", "operator_admin", "super_admin")
 #: touch super_admin or operator_admin rows' credentials/status).
 OPERATOR_ROLE_RANK: dict[str, int] = {role: rank for rank, role in enumerate(OPERATOR_ROLES)}
 TENANT_STORAGE_PROVIDERS: tuple[str, ...] = ("minio", "aws")
+#: Tenant-inspector session modes. ``consent`` is the routine path (the tenant
+#: asked for support); ``break_glass`` is the emergency, admin-gated path. Both
+#: are READ-ONLY session tracking this wave — the row + audit + UI banner are the
+#: control; no act-as-user token is ever minted.
+OPERATOR_INSPECTOR_MODES: tuple[str, ...] = ("consent", "break_glass")
 
 
 def _values(values: tuple[str, ...]) -> str:
@@ -134,3 +139,51 @@ class TenantStorage(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     provisioned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
+
+
+class OperatorInspectorSession(UuidV4PrimaryKeyMixin, Base):
+    """One READ-ONLY tenant-inspector session (staff_UI.md tenant inspector).
+
+    Append-only session TRACKING, not an access grant: opening a session mints
+    NO tenant token and no act-as-user claim — the console renders tenant data
+    through the operator read endpoints, and this row (plus its
+    ``operator_audit_log`` entries and the UI banner) is the diligence control
+    that says WHO looked at WHICH tenant, WHEN, WHY, and under which mode. True
+    act-as-user sign-in is deliberately out of scope (separate security review),
+    so ``read_only`` is always true this wave.
+
+    GLOBAL table, deliberately NOT RLS-forced (the operator-control-plane
+    precedent): these are staff records owned by the operator role.
+    """
+
+    __tablename__ = "operator_inspector_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            f"mode IN ({_values(OPERATOR_INSPECTOR_MODES)})",
+            name="ck_operator_inspector_sessions_mode",
+        ),
+        Index(
+            "ix_operator_inspector_sessions_org_started",
+            "organization_id",
+            "started_at",
+        ),
+        Index("ix_operator_inspector_sessions_started_at", "started_at"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(
+        String(16),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    started_by: Mapped[str] = mapped_column(String(320), nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason: Mapped[str] = mapped_column(String, nullable=False)
+    read_only: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=sql_text("true"), nullable=False
+    )
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_by: Mapped[str | None] = mapped_column(String(320), nullable=True)

@@ -9,7 +9,7 @@ architecture. Scope priority: **Rates → Forward Curves** first.*
 
 ## As-built Status (2026-08-12)
 
-FC-0 through FC-4 are implemented: the pure calendar/schedule and rate-helper
+FC-0 through FC-5 are implemented: the pure calendar/schedule and rate-helper
 layers live in `app/domain/curves/`; the simultaneous multi-curve solver and
 tenor-adjusted grid are in `multicurve.py`; governed, versioned curve definitions
 and the desk construction workspace are live through the operator API and
@@ -30,6 +30,11 @@ discount curve, payment interval/frequency, curve frequency, interpolation, and
 roll convention are displayed read-only from the approved definition. Altering
 those construction assumptions is a Track-2 desk action, never an ungoverned
 tenant-side calculation.
+
+**Status boundary.** §1 is the pre-implementation gap assessment retained for
+decision history. It does not describe the current platform. FC-6 remains partial:
+full OIS-market bootstrap, broader cross-currency construction, and further
+instrument breadth follow available market data and licensing.
 
 ---
 
@@ -70,7 +75,7 @@ discount curve; `Convert to` is the yield's output basis.
 
 ---
 
-## 1. GAP ANALYSIS
+## 1. HISTORICAL GAP ANALYSIS (PRE-2026-08-12)
 
 ### 1.1 What already exists and is directly reusable
 

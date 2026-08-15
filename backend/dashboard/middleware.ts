@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextFetchEvent, NextRequest } from 'next/server';
 import { auth } from '@/auth';
 import { LOGIN_URL } from '@/lib/loginUrl';
+import { IMPERSONATION_COOKIE } from '@/lib/impersonation-cookies';
 
 // Gate every matched route behind a session. Unauthenticated visitors are sent
 // to the sign-in page — in production that is the ROOT-level
@@ -14,6 +15,11 @@ import { LOGIN_URL } from '@/lib/loginUrl';
 // middleware or a default function"), so resolve it inside a real function.
 const gate = auth((req) => {
   if (req.auth?.user) return NextResponse.next();
+  // Act-as-examiner (additive): an operator inspecting a tenant has no NextAuth
+  // session — only the HttpOnly hand-off cookie. Let them through on its
+  // presence; the tenant API still serves read-only (examiner) and 403s every
+  // mutation. Absent → identical to before: redirect to sign-in.
+  if (req.cookies.get(IMPERSONATION_COOKIE)) return NextResponse.next();
   const login = new URL(LOGIN_URL, req.nextUrl.origin);
   login.searchParams.set('callbackUrl', req.url);
   return NextResponse.redirect(login);
@@ -25,7 +31,11 @@ export default async function middleware(req: NextRequest, event: NextFetchEvent
   return (await gate)(req, event);
 }
 
-// Protect everything except the login page, the NextAuth routes, and static assets.
+// Protect everything except the login page, the NextAuth routes, the operator
+// inspection hand-off (its accept page + API run before any cookie/session
+// exists), and static assets.
 export const config = {
-  matcher: ['/((?!login|api/auth|_next/static|_next/image|favicon.ico|icon.svg).*)'],
+  matcher: [
+    '/((?!login|inspect|api/auth|api/impersonation|_next/static|_next/image|favicon.ico|icon.svg).*)',
+  ],
 };

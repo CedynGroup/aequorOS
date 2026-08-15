@@ -140,11 +140,18 @@ def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
     return job
 
 
-def claim_next(db: Session, now: datetime, job_types: tuple[str, ...]) -> Job | None:
+def claim_next(
+    db: Session,
+    now: datetime,
+    job_types: tuple[str, ...],
+    *,
+    claimed_by: str | None = None,
+) -> Job | None:
     """Claim the oldest due, queued job of one of ``job_types``.
 
     Uses ``FOR UPDATE SKIP LOCKED`` on Postgres so concurrent workers never
     claim the same row; the claim (status → running) is committed before return.
+    ``claimed_by`` identifies the worker runtime for operator incident review.
     """
     for job_type in job_types:
         _validate_job_type(job_type)
@@ -164,6 +171,7 @@ def claim_next(db: Session, now: datetime, job_types: tuple[str, ...]) -> Job | 
     if job is None:
         return None
     job.status = "running"
+    job.claimed_by = claimed_by
     job.started_at = now
     db.commit()
     return job

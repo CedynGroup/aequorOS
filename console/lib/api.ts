@@ -154,6 +154,26 @@ export interface DataEnginesResponse {
   connections: DataEngineConnection[];
 }
 
+export interface OperatorJob {
+  id: string;
+  organization_id: string;
+  bank_id: string | null;
+  job_type: string;
+  status: string;
+  claimed_by: string | null;
+  attempts: number;
+  max_attempts: number;
+  queued_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  run_after: string | null;
+  error: string | null;
+}
+
+export interface OperatorJobsResponse {
+  jobs: OperatorJob[];
+}
+
 export interface ProvisionTenantRequest {
   organization_name: string;
   bank_name: string;
@@ -262,7 +282,12 @@ export interface DeskObservation {
 
 export interface DeskObservationsResponse {
   observations: DeskObservation[];
+  /** Total rows matching the filters (across all pages), for the pager. */
   total: number;
+  /** Page size the server honoured (defaults to 100, capped at 500). */
+  limit: number;
+  /** Row offset of this page. */
+  offset: number;
 }
 
 export interface DeskObservationCreateRequest {
@@ -701,6 +726,16 @@ export function listDataEngines(): Promise<DataEnginesResponse> {
   return request<DataEnginesResponse>('/operator/v1/data-engines');
 }
 
+/** GET /operator/v1/jobs — cross-tenant queue state and worker attribution. */
+export function listOperatorJobs(
+  limit = 100,
+  status?: string,
+): Promise<OperatorJobsResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (status) params.set('status', status);
+  return request<OperatorJobsResponse>(`/operator/v1/jobs?${params.toString()}`);
+}
+
 /** POST /operator/v1/tenants — run the provisioning saga. Returns the step record either way. */
 export function provisionTenant(body: ProvisionTenantRequest): Promise<ProvisionTenantResponse> {
   return request<ProvisionTenantResponse>('/operator/v1/tenants', { method: 'POST', body });
@@ -712,7 +747,7 @@ export function provisionTenant(body: ProvisionTenantRequest): Promise<Provision
 
 const DESK = '/operator/v1/desk';
 
-function query(params: Record<string, string | boolean | undefined>): string {
+function query(params: Record<string, string | number | boolean | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== '') search.set(key, String(value));
@@ -772,19 +807,27 @@ export function approveDeskMethodologyVersion(
 }
 
 /**
- * GET /desk/observations — series_code and as_of_date are EXACT-match
- * backend filters; prefix/range narrowing is done client-side.
+ * GET /desk/observations — server-side filtered AND paginated. `seriesCode` is
+ * a prefix match, `asOfFrom`/`asOfTo` bound the as-of range (all applied on the
+ * backend); rows come back newest as-of first. Page with `limit` (default 100,
+ * max 500) + `offset`; the response echoes `total`/`limit`/`offset` for the pager.
  */
 export function listDeskObservations(opts?: {
   seriesCode?: string;
-  asOfDate?: string;
+  asOfFrom?: string;
+  asOfTo?: string;
   includeSuperseded?: boolean;
+  limit?: number;
+  offset?: number;
 }): Promise<DeskObservationsResponse> {
   return request<DeskObservationsResponse>(
     `${DESK}/observations${query({
       series_code: opts?.seriesCode,
-      as_of_date: opts?.asOfDate,
+      as_of_from: opts?.asOfFrom,
+      as_of_to: opts?.asOfTo,
       include_superseded: opts?.includeSuperseded ? true : undefined,
+      limit: opts?.limit,
+      offset: opts?.offset,
     })}`,
   );
 }
@@ -1514,6 +1557,650 @@ export function publishOperatingEnvironmentAssessment(
     `${OPERATING_ENVIRONMENT}/assessments/${encodeURIComponent(assessmentId)}/publish`,
     { method: 'POST' },
   );
+}
+
+// --------------------------------------------------------------------------
+// Operators (staff identity management — backend/app/operator)
+//
+// GLOBAL operator_users, separate from tenant identity by design. Shapes are
+// the agreed contract; the BACKEND agent builds these routes to match.
+// --------------------------------------------------------------------------
+
+const OPERATORS = '/operator/v1/operators';
+
+export interface OperatorUser {
+  email: string;
+  display_name: string | null;
+  /** operator_admin | operator (service-owned vocabulary — typed string). */
+  role: string;
+  /** password | oidc | dev — how the operator authenticates. */
+  auth_provider: string;
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface OperatorsResponse {
+  operators: OperatorUser[];
+  total: number;
+}
+
+/** A newly-created operator plus the one-time password shown exactly once. */
+export interface OperatorCreateResult extends OperatorUser {
+  /** Plaintext shown once; only a hash is stored server-side. */
+  one_time_password: string | null;
+}
+
+export interface OperatorPasswordResetResult {
+  email: string;
+  /** Plaintext shown once; only a hash is stored server-side. */
+  one_time_password: string;
+}
+
+/** GET /operator/v1/operators — all staff operators. */
+export function listOperators(): Promise<OperatorsResponse> {
+  return request<OperatorsResponse>(OPERATORS);
+}
+
+/** POST /operator/v1/operators — create an operator; returns the one-time password. 201. */
+export async function createOperator(body: {
+  email: string;
+  display_name: string;
+  role: string;
+}): Promise<OperatorCreateResult> {
+  // Backend returns nested {operator, one_time_password}; flatten for the UI.
+  const r = await request<{ operator: OperatorUser; one_time_password: string }>(OPERATORS, {
+    method: 'POST',
+    body,
+  });
+  return { ...r.operator, one_time_password: r.one_time_password };
+}
+
+/** POST /operator/v1/operators/{email}/reset-password — mint a new one-time password. */
+export async function resetOperatorPassword(
+  email: string,
+): Promise<OperatorPasswordResetResult> {
+  // Backend returns nested {operator, one_time_password}; flatten for the UI.
+  const r = await request<{ operator: OperatorUser; one_time_password: string }>(
+    `${OPERATORS}/${encodeURIComponent(email)}/reset-password`,
+    { method: 'POST' },
+  );
+  return { email: r.operator.email, one_time_password: r.one_time_password };
+}
+
+/** POST /operator/v1/operators/{email}/deactivate — disable sign-in for an operator. */
+export function deactivateOperator(email: string): Promise<OperatorUser> {
+  return request<OperatorUser>(`${OPERATORS}/${encodeURIComponent(email)}/deactivate`, {
+    method: 'POST',
+  });
+}
+
+/** POST /operator/v1/operators/{email}/reactivate — re-enable a deactivated operator. */
+export function reactivateOperator(email: string): Promise<OperatorUser> {
+  return request<OperatorUser>(`${OPERATORS}/${encodeURIComponent(email)}/reactivate`, {
+    method: 'POST',
+  });
+}
+
+// --------------------------------------------------------------------------
+// Operator cockpit overview + audit log (NEW backend endpoints — contracts
+// fixed here; the BACKEND agent builds them to match).
+// --------------------------------------------------------------------------
+
+export interface OverviewNeedsAttentionItem {
+  kind: string;
+  summary: string;
+  /** ok | warn | crit (typed string for forward compat). */
+  severity: string;
+  href?: string | null;
+}
+
+export interface OverviewResponse {
+  tenants: {
+    total: number;
+    banks_live: number;
+    banks_empty: number;
+    stale_count: number;
+  };
+  ingestion: { failed_24h: number };
+  jobs: { failed_24h: number; running: number };
+  connections: { ok: number; warn: number; crit: number };
+  desk: {
+    pending_determinations: number;
+    pending_curve_determinations: number;
+    pending_oe_assessments: number;
+  };
+  needs_attention: OverviewNeedsAttentionItem[];
+}
+
+/** GET /operator/v1/overview — the home cockpit rollup. */
+export function getOverview(): Promise<OverviewResponse> {
+  return request<OverviewResponse>('/operator/v1/overview');
+}
+
+export interface AuditLogItem {
+  id: string;
+  operator_email: string;
+  /** password | oidc | dev | integration_key — how the actor authenticated. */
+  auth_mode: string;
+  action: string;
+  target_org: string | null;
+  detail: string;
+  created_at: string;
+}
+
+export interface AuditLogResponse {
+  items: AuditLogItem[];
+  total: number;
+}
+
+/** GET /operator/v1/audit — the append-only operator_audit_log, filterable. */
+export function getAudit(opts?: {
+  operatorEmail?: string;
+  targetOrg?: string;
+  action?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<AuditLogResponse> {
+  return request<AuditLogResponse>(
+    `/operator/v1/audit${query({
+      operator_email: opts?.operatorEmail,
+      target_org: opts?.targetOrg,
+      action: opts?.action,
+      from: opts?.from,
+      to: opts?.to,
+      limit: opts?.limit,
+      offset: opts?.offset,
+    })}`,
+  );
+}
+
+// --------------------------------------------------------------------------
+// Per-tenant detail (NEW backend endpoints — contracts fixed here).
+// --------------------------------------------------------------------------
+
+/** GET /operator/v1/tenants/{org_id} — one tenant (same shape as a list row). */
+export function getTenant(orgId: string): Promise<OperatorTenant> {
+  return request<OperatorTenant>(`/operator/v1/tenants/${encodeURIComponent(orgId)}`);
+}
+
+export interface TenantUser {
+  email: string;
+  full_name: string | null;
+  role: string;
+  auth_provider: string;
+  is_active: boolean;
+  last_login_at?: string | null;
+  created_at: string;
+}
+
+export interface TenantUsersResponse {
+  users: TenantUser[];
+}
+
+/** GET /operator/v1/tenants/{org_id}/users — the tenant's own users. */
+export function getTenantUsers(orgId: string): Promise<TenantUsersResponse> {
+  return request<TenantUsersResponse>(
+    `/operator/v1/tenants/${encodeURIComponent(orgId)}/users`,
+  );
+}
+
+export interface TenantEntitlementsResponse {
+  entitlements: DeskEntitlement[];
+  catalog: DeskEntitlementsResponse['catalog'];
+}
+
+/** GET /operator/v1/tenants/{org_id}/entitlements — desk entitlements + catalog. */
+export function getTenantEntitlements(orgId: string): Promise<TenantEntitlementsResponse> {
+  return request<TenantEntitlementsResponse>(
+    `/operator/v1/tenants/${encodeURIComponent(orgId)}/entitlements`,
+  );
+}
+
+export interface TenantStorageResponse {
+  provider?: string | null;
+  bucket?: string | null;
+  object_count?: number | null;
+  bytes?: number | null;
+  kms_key_state?: string | null;
+  note?: string | null;
+}
+
+/** GET /operator/v1/tenants/{org_id}/storage — object-store footprint + KMS state. */
+export function getTenantStorage(orgId: string): Promise<TenantStorageResponse> {
+  return request<TenantStorageResponse>(
+    `/operator/v1/tenants/${encodeURIComponent(orgId)}/storage`,
+  );
+}
+
+// --------------------------------------------------------------------------
+// Session-gated deep tenant reads (Tenant Inspector, step 1).
+//
+// Every endpoint below is a diagnostic look INSIDE one tenant and 403s with
+// `{ code: "inspection_required" }` unless the caller holds an ACTIVE inspector
+// session for the org (backend/app/operator/features/inspector_reads.py). The
+// wire shapes mirror the new Read models in backend/app/schemas/operator.py
+// (Tenant*Metric/Finding/Ingestion/Config), verified on 2026-08-15. No secret,
+// credential, or vault material is ever returned by any of these.
+// --------------------------------------------------------------------------
+
+/** Latest LiveMetric for one (bank, module) — the always-fresh baseline view. */
+export interface TenantLiveMetric {
+  bank_id: string;
+  module: string;
+  status: string;
+  /** Module-defined output object (LCR ratio, buffers, etc.). Shape varies by module. */
+  metrics: Record<string, unknown>;
+  reporting_period_id: string;
+  computed_from_input_hash: string | null;
+  computed_at: string;
+}
+
+/** Latest immutable RegulatoryRun for one (bank, module/family). */
+export interface TenantRegulatoryRun {
+  run_id: string;
+  bank_id: string;
+  module: string;
+  scenario_code: string;
+  status: string;
+  input_hash: string;
+  reporting_period_id: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error_code: string | null;
+}
+
+export interface TenantMetricsResponse {
+  organization_id: string;
+  live_metrics: TenantLiveMetric[];
+  regulatory_runs: TenantRegulatoryRun[];
+}
+
+/** GET /operator/v1/tenants/{org_id}/metrics — computed module outputs. Session-gated. */
+export function getTenantMetrics(orgId: string): Promise<TenantMetricsResponse> {
+  return request<TenantMetricsResponse>(
+    `/operator/v1/tenants/${encodeURIComponent(orgId)}/metrics`,
+  );
+}
+
+export interface TenantFinding {
+  bank_id: string;
+  module: string;
+  rule_id: string;
+  severity: string;
+  status: string;
+  message: string;
+  metric: string | null;
+  reporting_period_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenantFindingsResponse {
+  organization_id: string;
+  findings: TenantFinding[];
+  open_count: number;
+}
+
+/** GET /operator/v1/tenants/{org_id}/findings?limit=N — live findings/alerts. Session-gated. */
+export function getTenantFindings(orgId: string, limit = 100): Promise<TenantFindingsResponse> {
+  return request<TenantFindingsResponse>(
+    `/operator/v1/tenants/${encodeURIComponent(orgId)}/findings${query({ limit })}`,
+  );
+}
+
+export interface TenantIngestionBatch {
+  batch_id: string;
+  bank_id: string;
+  source_system: string;
+  adapter_version: string;
+  extraction_mode: string;
+  status: string;
+  as_of_date: string; // date
+  records_extracted: number;
+  records_translated: number;
+  records_accepted: number;
+  records_warning: number;
+  records_error: number;
+  records_blocked: number;
+  error_code: string | null;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface TenantIngestionListResponse {
+  organization_id: string;
+  batches: TenantIngestionBatch[];
+}
+
+/** GET /operator/v1/tenants/{org_id}/ingestion?limit=N — recent batches. Session-gated. */
+export function getTenantIngestion(
+  orgId: string,
+  limit = 100,
+): Promise<TenantIngestionListResponse> {
+  return request<TenantIngestionListResponse>(
+    `/operator/v1/tenants/${encodeURIComponent(orgId)}/ingestion${query({ limit })}`,
+  );
+}
+
+/**
+ * One raw source record that failed translation — the "why did this upload
+ * fail" detail. `raw_record` is the tenant's own business data (never a
+ * credential).
+ */
+export interface TenantTranslationFailure {
+  entity_type: string;
+  source_locator: string;
+  error_code: string;
+  error_message: string;
+  raw_record: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface TenantIngestionBatchDetail {
+  batch: TenantIngestionBatch;
+  validation_report: Record<string, unknown>;
+  etl_report: Record<string, unknown> | null;
+  translation_failures: TenantTranslationFailure[];
+}
+
+/**
+ * GET /operator/v1/tenants/{org_id}/ingestion/{batch_id} — batch detail with
+ * validation/ETL reports and per-row translation failures. Session-gated; 404
+ * if the batch is unknown or belongs to another tenant.
+ */
+export function getTenantIngestionBatch(
+  orgId: string,
+  batchId: string,
+): Promise<TenantIngestionBatchDetail> {
+  return request<TenantIngestionBatchDetail>(
+    `/operator/v1/tenants/${encodeURIComponent(orgId)}/ingestion/${encodeURIComponent(batchId)}`,
+  );
+}
+
+export interface TenantConfigBank {
+  bank_id: string;
+  name: string;
+  jurisdiction_code: string;
+  currency: string;
+  license_type: string;
+}
+
+export interface TenantMappingConfig {
+  /** MappingConfigRecord.id (UUID) — the fix/config `target_id` for this mapping. */
+  id: string;
+  bank_id: string;
+  source_system: string;
+  source_ref: string;
+  version: number;
+  name: string;
+  status: string;
+  config: Record<string, unknown>;
+}
+
+export interface TenantLiquidityThreshold {
+  /** Threshold record id (UUID) — the fix/config `target_id` for this threshold. */
+  id: string;
+  institution_class: string;
+  threshold_code: string;
+  threshold_pct: number;
+  effective_from: string; // date
+  effective_to: string | null;
+  approved_by: string;
+}
+
+export interface TenantCapitalThreshold {
+  /** Threshold record id (UUID) — the fix/config `target_id` for this threshold. */
+  id: string;
+  threshold_code: string;
+  value_pct: number;
+  effective_from: string; // date
+  effective_to: string | null;
+  approved_by: string;
+}
+
+export interface TenantThresholdRegister {
+  liquidity: TenantLiquidityThreshold[];
+  capital: TenantCapitalThreshold[];
+}
+
+/** OIDC connection diagnostics — NEVER the client secret (`secret_configured` only). */
+export interface TenantSsoConfig {
+  issuer: string;
+  client_id: string;
+  allowed_email_domains: string[];
+  enabled: boolean;
+  jit_enabled: boolean;
+  secret_configured: boolean;
+}
+
+/** Integration-key metadata only — the SHA-256 hash and raw key are NEVER returned. */
+export interface TenantIntegrationKey {
+  label: string;
+  key_prefix: string;
+  status: 'active' | 'revoked';
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface TenantConfigResponse {
+  organization_id: string;
+  banks: TenantConfigBank[];
+  active_mappings: TenantMappingConfig[];
+  threshold_register: TenantThresholdRegister;
+  sso: TenantSsoConfig | null;
+  integration_keys: TenantIntegrationKey[];
+}
+
+/** GET /operator/v1/tenants/{org_id}/config — non-secret diagnostic config. Session-gated. */
+export function getTenantConfig(orgId: string): Promise<TenantConfigResponse> {
+  return request<TenantConfigResponse>(
+    `/operator/v1/tenants/${encodeURIComponent(orgId)}/config`,
+  );
+}
+
+// --------------------------------------------------------------------------
+// Tenant Inspector sessions (NEW backend endpoints — contracts fixed here).
+//
+// A time-boxed, audited cross-tenant read (or read/write) session an operator
+// opens against one org. The console surfaces the active session as an
+// un-dismissable banner (see lib/inspector.tsx).
+// --------------------------------------------------------------------------
+
+const INSPECTOR = '/operator/v1/inspector/sessions';
+
+// Backend `OPERATOR_INSPECTOR_MODES`: `consent` = routine access with the
+// tenant's knowledge; `break_glass` = emergency, admin-gated access without
+// consent. Both are READ-ONLY this wave (the session's `read_only` is always
+// true); the mode is the access-justification, not a write grant.
+export type InspectorMode = 'consent' | 'break_glass';
+
+export interface InspectorSession {
+  session_id: string;
+  organization_id: string;
+  mode: string;
+  read_only: boolean;
+  started_by: string;
+  started_at: string;
+  expires_at: string;
+  reason: string;
+  ended_at: string | null;
+  ended_by: string | null;
+}
+
+export interface InspectorSessionsResponse {
+  sessions: InspectorSession[];
+  total: number;
+}
+
+/** POST /operator/v1/inspector/sessions — open a time-boxed inspector session. 201. */
+export function startInspectorSession(body: {
+  organization_id: string;
+  reason: string;
+  mode: InspectorMode;
+  ttl_minutes: number;
+}): Promise<InspectorSession> {
+  return request<InspectorSession>(INSPECTOR, { method: 'POST', body });
+}
+
+/** GET /operator/v1/inspector/sessions — sessions, optionally only active / one org. */
+export function listInspectorSessions(opts?: {
+  active?: boolean;
+  organizationId?: string;
+  limit?: number;
+}): Promise<InspectorSessionsResponse> {
+  return request<InspectorSessionsResponse>(
+    `${INSPECTOR}${query({
+      active: opts?.active ? true : undefined,
+      organization_id: opts?.organizationId,
+      limit: opts?.limit,
+    })}`,
+  );
+}
+
+/** POST /operator/v1/inspector/sessions/{id}/end — end a session early. */
+export function endInspectorSession(sessionId: string): Promise<InspectorSession> {
+  return request<InspectorSession>(
+    `${INSPECTOR}/${encodeURIComponent(sessionId)}/end`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * A short-lived (≤15 min) read-only examiner token minted against an active
+ * inspection session — the act-as-examiner hand-off to the bank's own
+ * dashboard. `dashboard_url` is that tenant's dashboard origin; the token is
+ * carried to it in the URL FRAGMENT, never a query param.
+ */
+export interface InspectorActToken {
+  act_token: string;
+  expires_at: string;
+  dashboard_url: string;
+}
+
+/**
+ * POST /operator/v1/inspector/sessions/{id}/act-token — mint a read-only
+ * examiner token for the session's org. 503 when impersonation is not
+ * configured on this environment; 404 unknown session; 403 non-owner; 409 the
+ * session has ended or expired.
+ */
+export function mintInspectorActToken(sessionId: string): Promise<InspectorActToken> {
+  return request<InspectorActToken>(
+    `${INSPECTOR}/${encodeURIComponent(sessionId)}/act-token`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * POST /desk/entitlements/grant-dataset — grant one org access to one dataset
+ * (org × dataset, spec §10). Companion to grantDeskEntitlementTier.
+ */
+export function grantDeskEntitlementDataset(body: {
+  organization_id: string;
+  dataset_code: string;
+  effective_from: string;
+  notes?: string;
+}): Promise<DeskEntitlementsResponse> {
+  return request<DeskEntitlementsResponse>(`${DESK}/entitlements/grant-dataset`, {
+    method: 'POST',
+    body,
+  });
+}
+
+// --------------------------------------------------------------------------
+// Tenant remediation (fix) — the WRITE side of the Tenant Inspector.
+//
+// Every endpoint is under /operator/v1/tenants/{org}/fix, requires an ACTIVE
+// inspection session for the org (403 `inspection_required` otherwise), and
+// takes a REQUIRED `note` written to the operator audit log against that
+// session. Each is a single, confirmed, audited operation.
+//
+// NOTE (2026-08-15): these routes are being built in the backend in parallel —
+// the TenantFix* Read models are NOT yet in backend/app/schemas/operator.py.
+// The shapes below are typed from the agreed contract; reconcile once they land.
+// --------------------------------------------------------------------------
+
+function tenantFix(orgId: string): string {
+  return `/operator/v1/tenants/${encodeURIComponent(orgId)}/fix`;
+}
+
+/**
+ * A queued background job spawned by a fix action. `job_type` is
+ * "pipeline_refresh" for a recompute and "official_run" for an official run;
+ * the re-run-ingestion job may omit it (typed optional for that reason).
+ *
+ * rerun-ingestion additionally returns `batch_id` (the re-derived batch) and
+ * `detail`: ingestion batches are IMMUTABLE, so the re-run re-derives via
+ * pipeline_refresh and `detail` explains that fixing a source-parsing problem
+ * still requires a fresh upload through the Data Engine. Surface it verbatim.
+ */
+export interface TenantFixJob {
+  job_id: string;
+  job_type?: string;
+  status: string;
+  /** rerun-ingestion only: the id of the batch that was re-derived. */
+  batch_id?: string;
+  /** rerun-ingestion only: the immutability / re-upload caveat, shown verbatim. */
+  detail?: string;
+}
+
+/** POST …/fix/recompute — re-derive this bank's live metrics (debounced pipeline_refresh). */
+export function fixRecompute(orgId: string, body: { note: string }): Promise<TenantFixJob> {
+  return request<TenantFixJob>(`${tenantFix(orgId)}/recompute`, { method: 'POST', body });
+}
+
+/** POST …/fix/official-run — mint an immutable official run (optional as-of date). */
+export function fixOfficialRun(
+  orgId: string,
+  body: { as_of_date?: string; note: string },
+): Promise<TenantFixJob> {
+  return request<TenantFixJob>(`${tenantFix(orgId)}/official-run`, { method: 'POST', body });
+}
+
+/** POST …/fix/rerun-ingestion — re-run one ingestion batch by id (the failed-upload fix). */
+export function fixRerunIngestion(
+  orgId: string,
+  body: { batch_id: string; note: string },
+): Promise<TenantFixJob> {
+  return request<TenantFixJob>(`${tenantFix(orgId)}/rerun-ingestion`, { method: 'POST', body });
+}
+
+/** The two config surfaces a fix may touch (backend Literal — closed on both sides). */
+export type TenantFixConfigKind = 'mapping_active' | 'threshold_value';
+
+export interface TenantFixConfigRequest {
+  kind: TenantFixConfigKind;
+  /**
+   * The UUID `id` of the record to change — `TenantMappingConfig.id` for a
+   * mapping, or the liquidity/capital threshold's `.id`. The Config Read now
+   * carries this id on every mapping and threshold; the backend resolves
+   * `target_id` against it (NOT source_ref / threshold_code).
+   */
+  target_id: string;
+  /** Boolean active-flag for `mapping_active`; numeric pct for `threshold_value`. */
+  value: boolean | number | string;
+  note: string;
+}
+
+/** The updated record echoed back by a config fix. Shape is backend-defined; kept loose. */
+export interface TenantFixConfigResult {
+  kind: string;
+  target_id: string;
+  status?: string;
+  detail?: string;
+}
+
+/** POST …/fix/config — change one non-secret config value (mapping active flag or threshold). */
+export function fixConfig(
+  orgId: string,
+  body: TenantFixConfigRequest,
+): Promise<TenantFixConfigResult> {
+  return request<TenantFixConfigResult>(`${tenantFix(orgId)}/config`, { method: 'POST', body });
 }
 
 // --------------------------------------------------------------------------

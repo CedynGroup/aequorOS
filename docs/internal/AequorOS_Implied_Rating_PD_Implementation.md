@@ -393,7 +393,7 @@ This definition is what §5's PD estimates and §9's back-tests are measured aga
 Ship the CAMELS/agency scorecard (§3), master-scale mapping and sovereign ceiling (§4), and an indicative PD band via Pluto–Tasche + MoC + Basel floor (§5), calibrated using shadow ratings (replicate any agency-rated Ghanaian/regional banks), agency default-rate anchors, and regional benchmarks. Ship the full explainability layer (§10). Fully defensible today despite zero internal defaults. *Advance when:* methodology documented and independently reviewed for conceptual soundness.
 
 **Stage 2 — Statistical recalibration (12–36 months).**
-As the panel of bank-years and distress/near-miss events accrues (regulatory breaches, DDEP-type impairments, recapitalizations as default proxies), fit the Shumway hazard/logit (§7), re-estimate transforms/weights on local data, tighten the bands, add the PIT/TTC split, stand up an ML challenger for benchmarking only. *Advance when:* enough events for statistically meaningful discrimination testing.
+As the panel of bank-years and distress/near-miss events accrues (regulatory breaches, DDEP-type impairments, recapitalizations as default proxies), fit the Shumway hazard/logit (§7), re-estimate transforms/weights on local data, tighten the bands, refine the existing PIT/TTC calibration, and stand up an ML challenger for benchmarking only. *Advance when:* enough events for statistically meaningful discrimination testing.
 
 **Stage 3 — Full IRB-grade PD (mature).**
 Calibrate to observed central tendencies, run full discrimination/calibration/stability back-testing, narrow the MoC. *Trigger:* sufficient default/distress observations for meaningful central-tendency calibration.
