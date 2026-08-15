@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
+import httpx
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -230,6 +231,72 @@ def test_run_desk_capture_isolates_a_failing_source(
         select(DeskObservation).where(DeskObservation.series_code == "GHS.INTERBANK.ON")
     ).all()
     assert len(observations) == 2
+    get_settings.cache_clear()
+
+
+def _http_error(url: str, status_code: int) -> httpx.HTTPStatusError:
+    request = httpx.Request("GET", url)
+    response = httpx.Response(status_code, request=request)
+    return httpx.HTTPStatusError(f"HTTP {status_code}", request=request, response=response)
+
+
+def test_not_yet_published_monthly_edition_is_soft_pending(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BoG publishes the APR notice one to two months in arrears, so the
+    current month's slug 404s as a matter of course. A whole probe window of
+    404s means 'not published yet' — a soft ``pending`` with a classified
+    reason, NEVER a ``failed`` capture that pages the morning desk, and NEVER
+    a lineage row (the source stays due next run, like a fresh source)."""
+    _enable(monkeypatch, DESK_CAPTURE_SOURCES="bog_apr_pdf")
+    attempts: list[str] = []
+
+    def fake_fetch_source(source_key: str, session: Any, **kwargs: Any) -> list[RawFetch]:
+        attempts.append(source_key)
+        raise _http_error(
+            "https://www.bog.gov.gh/notice/"
+            "annual-percentage-rates-apr-of-banks-as-at-august-2026/",
+            404,
+        )
+
+    monkeypatch.setattr(capture_job, "fetch_source", fake_fetch_source)
+    job = _desk_job(db_session, {"cob_date": "2026-08-14"})
+
+    run_desk_capture(db_session, job)
+
+    summary = job.progress["sources"]["bog_apr_pdf"]
+    assert summary["status"] == "pending"
+    assert summary["reason"] == "not_yet_published"
+    # Bounded probe: exactly the lookback window, no hammering of the site.
+    assert len(attempts) == capture_job._MONTHLY_EDITION_LOOKBACK
+    # A soft outcome leaves NO capture row (no red 'failed' for the desk).
+    assert db_session.scalar(select(func.count()).select_from(DeskSourceCapture)) == 0
+    get_settings.cache_clear()
+
+
+def test_real_http_error_on_monthly_edition_still_fails_hard(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-404 fault (5xx, bot filter, TLS) is a genuine failure: the whole
+    window is spent and it records a ``failed`` capture so the desk knows the
+    source needs the manual fallback — not a soft 'not published yet'."""
+    _enable(monkeypatch, DESK_CAPTURE_SOURCES="bog_apr_pdf")
+
+    def fake_fetch_source(source_key: str, session: Any, **kwargs: Any) -> list[RawFetch]:
+        raise _http_error("https://www.bog.gov.gh/notice/apr/", 503)
+
+    monkeypatch.setattr(capture_job, "fetch_source", fake_fetch_source)
+    job = _desk_job(db_session, {"cob_date": "2026-08-14"})
+
+    run_desk_capture(db_session, job)
+
+    summary = job.progress["sources"]["bog_apr_pdf"]
+    assert summary["status"] == "failed"
+    assert "HTTPStatusError" in summary["error"]
+    failed = db_session.scalar(
+        select(DeskSourceCapture).where(DeskSourceCapture.source_key == "bog_apr_pdf")
+    )
+    assert failed is not None and failed.status == "failed"
     get_settings.cache_clear()
 
 

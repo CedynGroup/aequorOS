@@ -169,6 +169,33 @@ table {
   background-clip: padding-box;
 }
 
+/* Recharts theme overrides — read tokens at render time (ported from the
+   dashboard; consumed by ChartFrame + lib/chartTheme.ts). */
+.recharts-cartesian-axis-tick text,
+.recharts-legend-item-text,
+.recharts-tooltip-label,
+.recharts-tooltip-item {
+  font-family: var(--font-inter), sans-serif !important;
+  font-size: 11px !important;
+  fill: rgb(var(--text-muted)) !important;
+}
+.recharts-legend-item-text {
+  color: rgb(var(--text-muted)) !important;
+}
+.recharts-cartesian-grid line {
+  stroke: var(--chart-grid);
+}
+.recharts-default-tooltip {
+  background: rgb(var(--surface-raised)) !important;
+  border: 1px solid rgb(var(--line-strong)) !important;
+  border-radius: 6px !important;
+  box-shadow: var(--shadow-pop) !important;
+  font-family: var(--font-inter), sans-serif !important;
+}
+.recharts-default-tooltip .recharts-tooltip-label {
+  color: rgb(var(--heading)) !important;
+}
+
 /* Loading skeleton shimmer */
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 0.55; }

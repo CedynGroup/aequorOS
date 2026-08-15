@@ -19,7 +19,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import TenantContext
 from app.core.config import Settings, get_settings
@@ -32,6 +32,7 @@ from app.main import create_app
 from app.models import Jurisdiction, Organization, User
 from tests.api.factories import ApiFactories
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.real_data import REAL_DATA_DATABASE_URL
 from tests.storage.inmemory import InMemoryStorageClient
 
 
@@ -67,8 +68,30 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # blanked database — hundreds of "Worker poll iteration failed" logs and
     # cross-test flakiness. Tests exercise worker handlers directly instead.
     monkeypatch.setenv("RUN_INPROCESS_WORKER", "0")
+    # Same .env-leak guard for every scheduled-feature flag (the set behind
+    # scheduler.any_scheduling_enabled). A developer who has opted a machine into
+    # nightly runs/pulls/captures — e.g. DESK_CAPTURE_ENABLED=1 — would otherwise
+    # flip the tests that assert the "disabled / inert / kill-switch" paths, so
+    # they'd pass or fail depending on whose .env ran them. All default to off in
+    # the product; tests that need one ON set it themselves via monkeypatch.
+    for _scheduling_flag in (
+        "OFFICIAL_RUN_ENABLED",
+        "MARKET_DATA_PULL_ENABLED",
+        "TEMENOS_PULL_ENABLED",
+        "DATABASE_DIRECT_HEALTH_ENABLED",
+        "LIVE_REFRESH_ENABLED",
+        "DESK_CAPTURE_ENABLED",
+    ):
+        monkeypatch.setenv(_scheduling_flag, "0")
     # A signing secret so the auth layer is exercised in tests (prod sets its own).
     monkeypatch.setenv("AUTH_JWT_SECRET", "test-jwt-signing-secret-not-for-production-00")
+    # Dedicated secret for the operator act-as-examiner impersonation token —
+    # DISTINCT from AUTH_JWT_SECRET so a normal access token can never decode as
+    # impersonation and vice versa. Pinned to a real value so the accept branch
+    # is exercised suite-wide; the fail-closed tests override it to "" (unset).
+    monkeypatch.setenv(
+        "IMPERSONATION_JWT_SECRET", "test-impersonation-secret-distinct-from-auth-01"
+    )
     # Same .env-leak guard for attestation signing. A developer who has enabled
     # local signing would otherwise flip every test that asserts the
     # "this deployment cannot sign" path into the configured branch — and those
@@ -365,3 +388,72 @@ def db_session(
         get_engine.cache_clear()
         if test_database_url is not None:
             _drop_postgres_schema(test_database_url, schema_name)
+
+
+# ---------------------------------------------------------------------------
+# DB-backed real-data suite (opt-in): the shared real-tenant identities, the
+# auth-header helper, and the skip marker live in tests/real_data.py. These
+# fixtures wire the app to the ACTUAL primary through ONE connection whose outer
+# transaction is rolled back on teardown — reads see real data, writes are
+# visible within the test (SQLAlchemy ``create_savepoint`` turns each request's
+# ``commit()`` into a savepoint release), and the primary is never mutated.
+# ``real_client`` is the API surface; ``real_session`` shares the same
+# transaction for the few tests that manipulate rows directly (e.g. deleting a
+# parameter to force a failed run).
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def _real_bound_sessionmaker(monkeypatch: pytest.MonkeyPatch) -> Iterator[sessionmaker]:
+    if not REAL_DATA_DATABASE_URL:
+        pytest.skip("REAL_DATA_DATABASE_URL not set")
+    import app.api.deps as deps_mod
+
+    monkeypatch.setenv("DATABASE_URL", REAL_DATA_DATABASE_URL)
+    monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+
+    engine = get_engine(REAL_DATA_DATABASE_URL)
+    connection = engine.connect()
+    outer = connection.begin()  # NEVER committed -> the primary is never mutated
+    bound_sessionmaker = sessionmaker(
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+        autoflush=False,
+        expire_on_commit=False,
+    )
+    # deps.py imported get_sessionmaker by name, so patch it there (the API path).
+    monkeypatch.setattr(deps_mod, "get_sessionmaker", lambda: bound_sessionmaker)
+    try:
+        yield bound_sessionmaker
+    finally:
+        outer.rollback()
+        connection.close()
+        engine.dispose()
+        get_settings.cache_clear()
+        get_engine.cache_clear()
+
+
+@pytest.fixture
+def real_client(
+    _real_bound_sessionmaker: sessionmaker,
+    fake_storage: FakeStorage,
+    storage_engine: InMemoryStorageClient,
+) -> Iterator[TestClient]:
+    """A TestClient wired to the ACTUAL primary, transaction-isolated."""
+    app = create_app()
+    app.dependency_overrides[get_object_storage] = lambda: fake_storage
+    app.dependency_overrides[get_ingestion_storage] = lambda: storage_engine
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def real_session(_real_bound_sessionmaker: sessionmaker) -> Iterator[Session]:
+    """A DB session sharing ``real_client``'s rolled-back transaction, for tests
+    that read or manipulate rows directly. Set ``session.info['organization_id']``
+    before querying RLS-forced tables."""
+    session = _real_bound_sessionmaker()
+    try:
+        yield session
+    finally:
+        session.close()

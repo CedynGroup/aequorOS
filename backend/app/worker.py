@@ -12,6 +12,8 @@ work then runs on a session scoped to that job's organization.
 from __future__ import annotations
 
 import logging
+import os
+import socket
 import threading
 import time
 from collections.abc import Callable
@@ -67,11 +69,25 @@ def _new_session(organization_id=None) -> Session:
     return session
 
 
-def run_once(job_types: tuple[str, ...] | None = None) -> bool:
+def _runtime_identity() -> str:
+    configured = get_settings().worker.worker_id
+    if configured is not None:
+        return configured
+    return f"{socket.gethostname()}:{os.getpid()}"
+
+
+def run_once(
+    job_types: tuple[str, ...] | None = None,
+    *,
+    worker_id: str | None = None,
+) -> bool:
     """Claim and dispatch a single job. Returns True if one was processed."""
     job_types = job_types or tuple(HANDLERS)
+    worker_id = worker_id or _runtime_identity()
     with _new_session() as claim_session:
-        job = job_queue.claim_next(claim_session, utc_now(), job_types)
+        job = job_queue.claim_next(
+            claim_session, utc_now(), job_types, claimed_by=worker_id
+        )
         if job is None:
             return False
         organization_id = job.organization_id
@@ -120,6 +136,7 @@ def run_worker(
     stale_after = timedelta(seconds=settings.worker.worker_stale_job_seconds)
     reap_interval = max(stale_after.total_seconds() / 2, poll_interval)
     job_types = job_types or tuple(HANDLERS)
+    worker_id = _runtime_identity()
     # Seed when ANY scheduled feature is on — gating this on official runs
     # alone stranded every other scheduled feature (live refresh, connection
     # probes, vendor pulls) with no tick chain to run them.
@@ -138,7 +155,7 @@ def run_worker(
     )
     while stop_event is None or not stop_event.is_set():
         try:
-            worked = run_once(job_types)
+            worked = run_once(job_types, worker_id=worker_id)
         except Exception:  # noqa: BLE001 - a claim failure must not kill the loop
             logger.exception("Worker poll iteration failed")
             worked = False

@@ -1,27 +1,34 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Loader2, ScrollText, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, GitCompare, Plus, ScrollText, ShieldCheck } from 'lucide-react';
 import {
   approveDeskMethodologyVersion,
   ensureDefaultDeskMethodology,
   listDeskMethodologies,
   proposeDeskMethodologyVersion,
-  toApiError,
-  type ApiError,
   type DeskMethodology,
 } from '@/lib/api';
-import { useApi } from '@/lib/use-api';
+import { useApi, useMutation } from '@/lib/use-api';
 import { fmtDate, fmtTs, DASH } from '@/lib/format';
 import {
+  Button,
   Chip,
   EmptyState,
   ErrorPanel,
+  Field,
   FieldRow,
+  Input,
+  Modal,
   PageHeader,
+  SectionCard,
   SkeletonRows,
   StatusChip,
+  Textarea,
 } from '@/components/ui';
+import { CeremonyBanner } from '@/components/curves';
+import { MethodologyVersionDiff } from '@/components/deskdata/MethodologyVersionDiff';
+import { NewMethodologyDialog } from '@/components/deskdata/NewMethodologyDialog';
 
 /**
  * /desk/methodology — the methodology register (spec §5): for each code,
@@ -31,7 +38,8 @@ import {
  *
  * Track 2 is DELIBERATELY heavier than the weekly screen (spec §11a: "the
  * two must be visibly different actions"): proposing or approving a version
- * goes through an amber ceremony panel, never a one-click affordance.
+ * runs through an amber-ceremony MODAL, never a one-click affordance. A
+ * side-by-side VersionDiff makes every parameter change legible.
  *
  * Source: GET/POST /operator/v1/desk/methodologies…
  */
@@ -188,10 +196,7 @@ function SeriesTreatmentsTable({ table }: { table: Record<string, unknown> }) {
                   {rest.length === 0
                     ? DASH
                     : rest
-                        .map(
-                          ([k, v]) =>
-                            `${k}=${isPrimitive(v) ? String(v) : JSON.stringify(v)}`,
-                        )
+                        .map(([k, v]) => `${k}=${isPrimitive(v) ? String(v) : JSON.stringify(v)}`)
                         .join(' · ')}
                 </td>
               </tr>
@@ -223,9 +228,7 @@ function ParameterTree({ parameters }: { parameters: Record<string, unknown> }) 
             <div className="divide-y divide-border-light">
               {present.map((key) => (
                 <div key={key} className="flex items-baseline justify-between gap-4 py-1.5">
-                  <span className="shrink-0 text-caption text-slate">
-                    {key.replace(/_/g, ' ')}
-                  </span>
+                  <span className="shrink-0 text-caption text-slate">{key.replace(/_/g, ' ')}</span>
                   <span className="min-w-0 text-right">
                     <ParamValue value={parameters[key]} />
                   </span>
@@ -267,20 +270,6 @@ function ParameterTree({ parameters }: { parameters: Record<string, unknown> }) 
 }
 
 // ---------------------------------------------------------------------------
-// The Track-2 ceremony banner — the visual weight that separates a
-// methodology change from daily work.
-// ---------------------------------------------------------------------------
-
-function CeremonyBanner({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
-      <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
-      <div className="min-w-0 text-caption text-slate">{children}</div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // The page.
 // ---------------------------------------------------------------------------
 
@@ -310,37 +299,41 @@ export default function MethodologyPage() {
     return found ?? currentApproved(versions) ?? versions[versions.length - 1];
   }
 
+  // ---- create a new methodology code (Track-2 register write) --------------
+  const [newCodeOpen, setNewCodeOpen] = useState(false);
+
   // ---- bootstrap (empty register) ----------------------------------------
-  const [seeding, setSeeding] = useState(false);
-  const [seedError, setSeedError] = useState<ApiError | null>(null);
-  async function seedDefault() {
-    setSeeding(true);
-    setSeedError(null);
-    try {
-      await ensureDefaultDeskMethodology();
-      reload();
-    } catch (err) {
-      setSeedError(toApiError(err));
-    }
-    setSeeding(false);
-  }
+  const seed = useMutation(ensureDefaultDeskMethodology, {
+    successMessage: 'Seeded AEQ-GHS-CURVES v1 (draft)',
+    errorContext: 'Seed methodology',
+    onSuccess: () => reload(),
+  });
 
   // ---- Track 2: propose ----------------------------------------------------
   const [proposeFor, setProposeFor] = useState<string | null>(null);
   const [rationale, setRationale] = useState('');
   const [paramsText, setParamsText] = useState('');
-  const [proposeError, setProposeError] = useState<ApiError | null>(null);
-  const [proposing, setProposing] = useState(false);
+
+  const propose = useMutation(proposeDeskMethodologyVersion, {
+    successMessage: (row) => `Proposed ${row.methodology_code} v${row.version} (draft)`,
+    errorContext: 'Propose version',
+    onSuccess: () => {
+      setProposeFor(null);
+      reload();
+    },
+  });
 
   function openPropose(code: string, versions: DeskMethodology[]) {
     const base = selectedVersion(code, versions);
     setProposeFor(code);
     setRationale('');
     setParamsText(JSON.stringify(base.parameters, null, 2));
-    setProposeError(null);
+    propose.reset();
   }
 
-  const paramsParse = useMemo((): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } => {
+  const paramsParse = useMemo(():
+    | { ok: true; value: Record<string, unknown> }
+    | { ok: false; error: string } => {
     if (proposeFor === null) return { ok: false, error: '' };
     try {
       const parsed: unknown = JSON.parse(paramsText);
@@ -353,60 +346,56 @@ export default function MethodologyPage() {
     }
   }, [proposeFor, paramsText]);
 
-  async function submitPropose() {
-    if (proposeFor === null || !paramsParse.ok) return;
-    setProposing(true);
-    setProposeError(null);
-    try {
-      await proposeDeskMethodologyVersion(proposeFor, {
-        parameters: paramsParse.value,
-        change_rationale: rationale.trim(),
-      });
-      setProposeFor(null);
-      reload();
-    } catch (err) {
-      setProposeError(toApiError(err));
-    }
-    setProposing(false);
+  function submitPropose() {
+    if (proposeFor === null || !paramsParse.ok || rationale.trim() === '') return;
+    void propose.mutate(proposeFor, {
+      parameters: paramsParse.value,
+      change_rationale: rationale.trim(),
+    });
   }
+
+  const proposeVersions = proposeFor !== null ? byCode.get(proposeFor) ?? [] : [];
+  const proposeNextVersion =
+    (proposeVersions[proposeVersions.length - 1]?.version ?? 0) + 1;
 
   // ---- Track 2: approve ----------------------------------------------------
   const [approveFor, setApproveFor] = useState<{ code: string; version: number } | null>(null);
-  const [effectiveFrom, setEffectiveFrom] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
-  const [approveError, setApproveError] = useState<ApiError | null>(null);
-  const [approving, setApproving] = useState(false);
+  const [effectiveFrom, setEffectiveFrom] = useState(() => new Date().toISOString().slice(0, 10));
 
-  const approveDualControl =
-    approveError !== null &&
-    (approveError.status === 409 || approveError.status === 422) &&
-    /proposer/i.test(approveError.message);
-
-  async function submitApprove() {
-    if (approveFor === null) return;
-    setApproving(true);
-    setApproveError(null);
-    try {
-      await approveDeskMethodologyVersion(approveFor.code, approveFor.version, {
-        effective_from: effectiveFrom,
-      });
+  const approve = useMutation(approveDeskMethodologyVersion, {
+    successMessage: (row) => `Approved ${row.methodology_code} v${row.version}`,
+    errorContext: 'Approve version',
+    onSuccess: () => {
       setApproveFor(null);
       reload();
-    } catch (err) {
-      setApproveError(toApiError(err));
-    }
-    setApproving(false);
+    },
+  });
+
+  const approveDualControl =
+    approve.error !== null &&
+    (approve.error.status === 409 || approve.error.status === 422) &&
+    /proposer/i.test(approve.error.message);
+
+  function openApprove(code: string, version: number) {
+    setApproveFor({ code, version });
+    approve.reset();
   }
 
-  const inputClass =
-    'w-full rounded-md border border-border bg-surface-base px-3 py-2 text-body text-ink placeholder:text-slate-light focus:border-focus focus:outline-none';
+  function submitApprove() {
+    if (approveFor === null || !effectiveFrom) return;
+    void approve.mutate(approveFor.code, approveFor.version, { effective_from: effectiveFrom });
+  }
 
   return (
     <div>
       <PageHeader
         title="Methodology register"
         sub="Track 2: versioned parameters under dual control. The weekly run READS from this register; changing it is a rare, documented, effective-dated event — never something done in passing during a publish."
+        action={
+          <Button icon={<Plus size={15} />} onClick={() => setNewCodeOpen(true)}>
+            New methodology code
+          </Button>
+        }
       />
 
       {loading && (
@@ -417,28 +406,17 @@ export default function MethodologyPage() {
       {error && <ErrorPanel error={error} onRetry={reload} context="Loading the register" />}
 
       {data && data.methodologies.length === 0 && (
-        <div className="card p-5">
+        <SectionCard title="No methodologies registered">
           <EmptyState
             title="No methodologies registered"
-            hint="Seed the default AEQ-GHS-CURVES v1 draft below. Seeding only creates the DRAFT — a second operator must approve it (Track 2) before any determination can run."
+            hint="Seed the default AEQ-GHS-CURVES v1 draft, or register a new code. Seeding only creates the DRAFT — a second operator must approve it (Track 2) before any determination can run."
+            action={
+              <Button loading={seed.loading} onClick={() => void seed.mutate()}>
+                Seed default methodology (v1 draft)
+              </Button>
+            }
           />
-          <div className="flex justify-center pb-6">
-            <button
-              type="button"
-              disabled={seeding}
-              onClick={() => void seedDefault()}
-              className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium disabled:opacity-50"
-            >
-              {seeding && <Loader2 size={14} className="animate-spin" />}
-              Seed default methodology (v1 draft)
-            </button>
-          </div>
-          {seedError && (
-            <div className="px-5 pb-5">
-              <ErrorPanel error={seedError} context="Seeding the default methodology" />
-            </div>
-          )}
-        </div>
+        </SectionCard>
       )}
 
       {data &&
@@ -461,15 +439,15 @@ export default function MethodologyPage() {
                 ) : (
                   <Chip tone="warn">no approved version — determinations will be refused</Chip>
                 )}
-                <button
-                  type="button"
-                  onClick={() =>
-                    proposeFor === code ? setProposeFor(null) : openPropose(code, versions)
-                  }
-                  className="ml-auto inline-flex items-center gap-1.5 rounded border border-warning/60 bg-warning-light px-3 py-1.5 text-caption font-medium text-warning hover:opacity-90"
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<AlertTriangle size={13} className="text-warning" />}
+                  className="ml-auto border-warning/60 bg-warning-light text-warning hover:bg-warning-light"
+                  onClick={() => openPropose(code, versions)}
                 >
-                  <AlertTriangle size={13} /> Propose new version (Track 2)
-                </button>
+                  Propose new version (Track 2)
+                </Button>
               </div>
 
               {/* ------------------------------------------- version list */}
@@ -523,21 +501,18 @@ export default function MethodologyPage() {
                           </td>
                           <td className="px-5 py-2 text-right">
                             {v.status === 'draft' && (
-                              <button
-                                type="button"
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                icon={<ShieldCheck size={12} className="text-warning" />}
+                                className="border-warning/60 bg-warning-light text-warning hover:bg-warning-light"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setApproveFor(
-                                    approveFor?.code === code && approveFor.version === v.version
-                                      ? null
-                                      : { code, version: v.version },
-                                  );
-                                  setApproveError(null);
+                                  openApprove(code, v.version);
                                 }}
-                                className="inline-flex items-center gap-1 rounded border border-warning/60 bg-warning-light px-2.5 py-1 text-micro font-medium uppercase tracking-wide text-warning hover:opacity-90"
                               >
-                                <ShieldCheck size={12} /> Approve…
-                              </button>
+                                Approve…
+                              </Button>
                             )}
                           </td>
                         </tr>
@@ -547,133 +522,16 @@ export default function MethodologyPage() {
                 </table>
               </div>
 
-              {/* ----------------------------------------- approve ceremony */}
-              {approveFor?.code === code && (
-                <div className="space-y-3 border-b border-border-light px-5 py-4">
-                  <CeremonyBanner>
-                    <p className="font-medium text-navy">
-                      Track-2 approval — v{approveFor.version} of{' '}
-                      <span className="font-mono">{code}</span>
-                    </p>
-                    <p className="mt-1">
-                      Approving makes this parameter set the governing methodology from its
-                      effective date. Dual control applies: the proposer cannot approve their own
-                      version. This is an audited, effective-dated event; history is never
-                      silently altered.
-                    </p>
-                  </CeremonyBanner>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <label className="block">
-                      <span className="mb-1 block text-caption font-medium text-slate">
-                        Effective from
-                      </span>
-                      <input
-                        type="date"
-                        className={inputClass}
-                        value={effectiveFrom}
-                        onChange={(e) => setEffectiveFrom(e.target.value)}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      disabled={approving || !effectiveFrom}
-                      onClick={() => void submitApprove()}
-                      className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium disabled:opacity-50"
-                    >
-                      {approving && <Loader2 size={14} className="animate-spin" />}
-                      Approve v{approveFor.version}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setApproveFor(null)}
-                      className="rounded border border-border px-4 py-2 text-body font-medium text-ink hover:bg-surface"
-                    >
-                      Cancel
-                    </button>
+              {/* ------------------------------------- version comparison */}
+              {versions.length >= 2 && (
+                <details className="border-b border-border-light px-5 py-3">
+                  <summary className="flex cursor-pointer items-center gap-2 text-caption font-medium text-slate">
+                    <GitCompare size={14} aria-hidden /> Compare versions (parameter diff)
+                  </summary>
+                  <div className="mt-3">
+                    <MethodologyVersionDiff versions={versions} />
                   </div>
-                  {approveError && approveDualControl && (
-                    <div className="flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
-                      <ShieldCheck size={14} className="mt-0.5 shrink-0 text-warning" />
-                      <div className="min-w-0">
-                        <p className="text-body font-medium text-navy">
-                          Dual control: the proposer cannot approve their own methodology version
-                          — sign in as a second operator.
-                        </p>
-                        <p className="mt-1 text-caption text-slate">
-                          API said: “{approveError.message}”
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  {approveError && !approveDualControl && (
-                    <ErrorPanel error={approveError} context="Approving the version" />
-                  )}
-                </div>
-              )}
-
-              {/* ----------------------------------------- propose ceremony */}
-              {proposeFor === code && (
-                <div className="space-y-3 border-b border-border-light px-5 py-4">
-                  <CeremonyBanner>
-                    <p className="font-medium text-navy">
-                      Track-2 methodology change — this is NOT part of a weekly publish
-                    </p>
-                    <p className="mt-1">
-                      Changing any versioned parameter or formula is a controlled event: it
-                      drafts v{versions[versions.length - 1].version + 1} with a documented
-                      rationale, requires approval by a second operator at a higher bar, and is
-                      effective-dated. Running determinations keep their bound version.
-                    </p>
-                  </CeremonyBanner>
-                  <label className="block">
-                    <span className="mb-1 block text-caption font-medium text-slate">
-                      Change rationale (required — recorded in the register)
-                    </span>
-                    <textarea
-                      rows={3}
-                      className={inputClass}
-                      value={rationale}
-                      onChange={(e) => setRationale(e.target.value)}
-                      placeholder="Why is this parameter set changing? Cite re-estimation evidence."
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1 block text-caption font-medium text-slate">
-                      Parameters (JSON — prefilled from v{shown.version})
-                    </span>
-                    <textarea
-                      rows={16}
-                      spellCheck={false}
-                      className={`${inputClass} font-mono text-caption`}
-                      value={paramsText}
-                      onChange={(e) => setParamsText(e.target.value)}
-                    />
-                  </label>
-                  {!paramsParse.ok && paramsParse.error && (
-                    <p className="text-caption text-critical">JSON error: {paramsParse.error}</p>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={proposing || rationale.trim() === '' || !paramsParse.ok}
-                      onClick={() => void submitPropose()}
-                      className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {proposing && <Loader2 size={14} className="animate-spin" />}
-                      Propose v{versions[versions.length - 1].version + 1}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setProposeFor(null)}
-                      className="rounded border border-border px-4 py-2 text-body font-medium text-ink hover:bg-surface"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  {proposeError && (
-                    <ErrorPanel error={proposeError} context="Proposing the version" />
-                  )}
-                </div>
+                </details>
               )}
 
               {/* --------------------------------------- parameter set view */}
@@ -709,6 +567,158 @@ export default function MethodologyPage() {
             </section>
           );
         })}
+
+      {/* ================================================== ceremony modals */}
+
+      {/* Track-2 propose */}
+      <Modal
+        open={proposeFor !== null}
+        onClose={() => setProposeFor(null)}
+        size="lg"
+        title="Propose new version (Track 2)"
+        description={
+          proposeFor !== null ? (
+            <span>
+              <span className="font-mono">{proposeFor}</span> · drafts v{proposeNextVersion}
+            </span>
+          ) : undefined
+        }
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setProposeFor(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="methodology-propose-form"
+              loading={propose.loading}
+              disabled={rationale.trim() === '' || !paramsParse.ok}
+            >
+              Propose v{proposeNextVersion}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="methodology-propose-form"
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitPropose();
+          }}
+        >
+          <CeremonyBanner>
+            <p className="font-medium text-navy">
+              Track-2 methodology change — this is NOT part of a weekly publish
+            </p>
+            <p className="mt-1">
+              Changing any versioned parameter or formula is a controlled event: it drafts v
+              {proposeNextVersion} with a documented rationale, requires approval by a second
+              operator at a higher bar, and is effective-dated. Running determinations keep their
+              bound version.
+            </p>
+          </CeremonyBanner>
+          <Field label="Change rationale" required hint="Recorded in the register.">
+            <Textarea
+              rows={3}
+              value={rationale}
+              onChange={(e) => setRationale(e.target.value)}
+              placeholder="Why is this parameter set changing? Cite re-estimation evidence."
+            />
+          </Field>
+          <Field
+            label="Parameters (JSON)"
+            error={!paramsParse.ok && paramsParse.error ? `JSON error: ${paramsParse.error}` : undefined}
+            hint={paramsParse.ok ? 'Prefilled from the shown version — edit only what changes.' : undefined}
+          >
+            <Textarea
+              rows={16}
+              spellCheck={false}
+              className="font-mono text-caption"
+              value={paramsText}
+              onChange={(e) => setParamsText(e.target.value)}
+            />
+          </Field>
+          {propose.error && <ErrorPanel error={propose.error} context="Proposing the version" />}
+        </form>
+      </Modal>
+
+      {/* Track-2 approve */}
+      <Modal
+        open={approveFor !== null}
+        onClose={() => setApproveFor(null)}
+        size="md"
+        title="Approve version (Track 2)"
+        description={
+          approveFor !== null ? (
+            <span>
+              v{approveFor.version} of <span className="font-mono">{approveFor.code}</span>
+            </span>
+          ) : undefined
+        }
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setApproveFor(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="methodology-approve-form"
+              loading={approve.loading}
+              disabled={!effectiveFrom}
+            >
+              Approve{approveFor ? ` v${approveFor.version}` : ''}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="methodology-approve-form"
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitApprove();
+          }}
+        >
+          <CeremonyBanner>
+            <p className="font-medium text-navy">Track-2 approval</p>
+            <p className="mt-1">
+              Approving makes this parameter set the governing methodology from its effective date.
+              Dual control applies: the proposer cannot approve their own version. This is an
+              audited, effective-dated event; history is never silently altered.
+            </p>
+          </CeremonyBanner>
+          <Field label="Effective from" required>
+            <Input
+              type="date"
+              value={effectiveFrom}
+              onChange={(e) => setEffectiveFrom(e.target.value)}
+            />
+          </Field>
+          {approve.error && approveDualControl && (
+            <div className="flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
+              <ShieldCheck size={14} className="mt-0.5 shrink-0 text-warning" />
+              <div className="min-w-0">
+                <p className="text-body font-medium text-navy">
+                  Dual control: the proposer cannot approve their own methodology version — sign in
+                  as a second operator.
+                </p>
+                <p className="mt-1 text-caption text-slate">API said: “{approve.error.message}”</p>
+              </div>
+            </div>
+          )}
+          {approve.error && !approveDualControl && (
+            <ErrorPanel error={approve.error} context="Approving the version" />
+          )}
+        </form>
+      </Modal>
+
+      {/* Create a new methodology code */}
+      <NewMethodologyDialog
+        open={newCodeOpen}
+        onClose={() => setNewCodeOpen(false)}
+        onCreated={() => reload()}
+      />
     </div>
   );
 }

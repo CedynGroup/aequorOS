@@ -9,7 +9,6 @@ import {
   Gauge,
   Info,
   Landmark,
-  Loader2,
   ShieldCheck,
   Upload,
   XCircle,
@@ -27,6 +26,7 @@ import {
   type OperatingEnvironmentAssessment,
   type OperatingEnvironmentBreakdown,
   type OperatingEnvironmentComputeRequest,
+  type OperatingEnvironmentInputScore,
   type OperatingEnvironmentInputsBody,
   type OperatingEnvironmentPreview,
   type OperatingEnvironmentProvenance,
@@ -35,13 +35,25 @@ import {
 import { useApi } from '@/lib/use-api';
 import { fmtDate, fmtTs, relTime, DASH } from '@/lib/format';
 import { DeterminationStatusPill } from '@/components/desk';
+import { CeremonyBanner } from '@/components/curves';
+import { OeScoreGauge } from '@/components/deskdata/OeScoreGauge';
 import {
+  Button,
   Chip,
+  type Column,
   CopyButton,
+  DataTable,
   EmptyState,
   ErrorPanel,
+  Field,
+  Input,
   PageHeader,
+  SectionCard,
+  Select,
   SkeletonRows,
+  type Step,
+  type StepStatus,
+  Stepper,
   StatusChip,
   type Tone,
 } from '@/components/ui';
@@ -52,22 +64,16 @@ import {
  *
  * The desk's surface for the governed, data-derived jurisdiction
  * operating-environment score (GHANA_OPERATING_ENVIRONMENT_SCORE ∈ [0,1], one
- * value for the whole banking system). Deliberately mirrors the Curve
- * Construction workspace: an inputs panel (the observable BICRA sub-factor
- * inputs, grouped by the two pillars; sovereign rating + policy rate shown
- * auto-pulled; the one analyst judgment marked), a live compute that renders
- * the full breakdown (input → sub-score → sub-factor → pillar → composite →
- * [0,1] strength, capped by the sovereign governor), a read-only assumptions
- * panel (the versioned methodology parameters, Track-2 to change), and the
- * maker-checker lifecycle rail draft → submit → approve → publish with
- * four-eyes enforced visually.
+ * value for the whole banking system): an inputs panel (the observable BICRA
+ * sub-factor inputs grouped by the two pillars; sovereign rating + policy rate
+ * auto-pulled), a live compute rendering the full breakdown (input → sub-score
+ * → sub-factor → pillar → composite → [0,1] strength, capped by the sovereign
+ * governor), a read-only assumptions panel, and the maker-checker lifecycle
+ * (draft → submit → approve → publish, four-eyes enforced).
  */
 
 // ---------------------------------------------------------------------------
 // Input metadata — mirrors app/domain/rating/operating_environment.py
-// (DEFAULT_PARAMETERS): the two pillars, their sub-factors, and the observable
-// inputs. policy_rate_pct and sovereign_rating are auto-pulled overrides and
-// are handled apart from the desk-entered fields.
 // ---------------------------------------------------------------------------
 
 interface FieldMeta {
@@ -182,7 +188,6 @@ const THRESHOLD_FIELD_CODES: string[] = PILLARS.flatMap((p) =>
   p.subFactors.flatMap((sf) => sf.fields.map((f) => f.code)),
 );
 
-/** Pretty labels for the breakdown view (includes the auto-pulled codes). */
 const INPUT_LABELS: Record<string, string> = {
   real_gdp_growth_pct: 'Real GDP growth',
   gdp_per_capita_usd: 'GDP per capita',
@@ -229,9 +234,6 @@ const INPUT_UNITS: Record<string, string> = {
   external_funding_pct: '%',
 };
 
-const inputClass =
-  'rounded-md border border-border bg-surface-base px-2.5 py-1.5 text-body text-ink focus:border-focus focus:outline-none';
-
 // ---------------------------------------------------------------------------
 // Display helpers
 // ---------------------------------------------------------------------------
@@ -267,31 +269,13 @@ function riskTone(value: number): Tone {
   return 'crit';
 }
 
-// ---------------------------------------------------------------------------
-// Small presentational helpers (local, matching the curve workspace)
-// ---------------------------------------------------------------------------
-
-function RailStep({
-  n,
-  label,
-  state,
-}: {
-  n: number;
-  label: string;
-  state: 'done' | 'current' | 'todo';
-}) {
-  const cls =
-    state === 'done'
-      ? 'bg-success-light text-success border-transparent'
-      : state === 'current'
-        ? 'bg-action-light text-action border-action/40'
-        : 'bg-surface text-slate-light border-border-light';
-  return (
-    <span className={`rounded border px-2.5 py-1 text-micro font-medium uppercase tracking-wide ${cls}`}>
-      {n}. {label}
-    </span>
-  );
+function mapStep(state: 'done' | 'current' | 'todo'): StepStatus {
+  return state === 'done' ? 'complete' : state === 'current' ? 'current' : 'upcoming';
 }
+
+// ---------------------------------------------------------------------------
+// Small presentational helpers
+// ---------------------------------------------------------------------------
 
 function StatCell({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
@@ -305,9 +289,7 @@ function StatCell({ label, children, hint }: { label: string; children: ReactNod
 
 function RiskChip({ value }: { value: number }) {
   return (
-    <Chip tone={riskTone(value)}>
-      {Number.isInteger(value) ? value : value.toFixed(2)} / 6
-    </Chip>
+    <Chip tone={riskTone(value)}>{Number.isInteger(value) ? value : value.toFixed(2)} / 6</Chip>
   );
 }
 
@@ -470,8 +452,7 @@ export default function OperatingEnvironmentPage() {
     const nextReg = String(snap.judgments.regulatory_quality_score ?? 4);
     const sovProv = snap.provenance?.sovereign;
     const rateProv = snap.provenance?.policy_rate;
-    const nextSov =
-      sovProv?.source === 'desk_entered' ? (sovProv.rating ?? '') : '';
+    const nextSov = sovProv?.source === 'desk_entered' ? (sovProv.rating ?? '') : '';
     const nextRate =
       rateProv?.source === 'desk_entered' ? (snap.observations.policy_rate_pct ?? '') : '';
 
@@ -518,11 +499,41 @@ export default function OperatingEnvironmentPage() {
   const breakdown = preview?.breakdown ?? null;
 
   // lifecycle rail states
-  const stepCompute: 'done' | 'current' | 'todo' = preview !== null && !stale ? 'done' : inputsReady ? 'current' : 'todo';
+  const stepCompute: 'done' | 'current' | 'todo' =
+    preview !== null && !stale ? 'done' : inputsReady ? 'current' : 'todo';
   const stepStage = assessment !== null;
-  const stepSubmitted = status === 'pending_review' || status === 'approved' || status === 'published';
+  const stepSubmitted =
+    status === 'pending_review' || status === 'approved' || status === 'published';
   const stepApproved = status === 'approved' || status === 'published';
   const stepPublished = publication !== null || status === 'published';
+
+  const lifecycleSteps: Step[] = [
+    { key: 'compute', label: 'Compute', description: 'run the score', status: mapStep(stepCompute) },
+    {
+      key: 'stage',
+      label: 'Stage draft',
+      description: 'open determination',
+      status: mapStep(stepStage ? 'done' : stepCompute === 'done' ? 'current' : 'todo'),
+    },
+    {
+      key: 'submit',
+      label: 'Submit',
+      description: 'for review',
+      status: mapStep(stepSubmitted ? 'done' : status === 'draft' ? 'current' : 'todo'),
+    },
+    {
+      key: 'approve',
+      label: 'Approve',
+      description: 'four-eyes',
+      status: mapStep(stepApproved ? 'done' : status === 'pending_review' ? 'current' : 'todo'),
+    },
+    {
+      key: 'publish',
+      label: 'Publish',
+      description: 'fan out to tenants',
+      status: mapStep(stepPublished ? 'done' : status === 'approved' ? 'current' : 'todo'),
+    },
+  ];
 
   return (
     <div className="space-y-5">
@@ -532,76 +543,44 @@ export default function OperatingEnvironmentPage() {
       />
 
       {/* Lifecycle rail */}
-      <div className="card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Gauge size={18} className="text-slate" />
-              <h2 className="text-h3 text-navy">Determination lifecycle</h2>
-              {assessment ? (
-                <DeterminationStatusPill status={assessment.status} />
-              ) : preview ? (
-                <Chip tone="accent">computed — not yet staged</Chip>
-              ) : (
-                <Chip>no computation yet</Chip>
-              )}
-            </div>
-            <p className="mt-1 text-caption text-slate">
-              Maker-checker, four-eyes: an analyst computes and stages a draft, submits it, a{' '}
-              <span className="font-medium">distinct</span> supervisor approves, and only then does it
-              publish to every tenant. History is never rewritten.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <RailStep n={1} label="Compute" state={stepCompute} />
-            <RailStep n={2} label="Stage draft" state={stepStage ? 'done' : stepCompute === 'done' ? 'current' : 'todo'} />
-            <RailStep
-              n={3}
-              label="Submit"
-              state={stepSubmitted ? 'done' : status === 'draft' ? 'current' : 'todo'}
-            />
-            <RailStep
-              n={4}
-              label="Approve"
-              state={stepApproved ? 'done' : status === 'pending_review' ? 'current' : 'todo'}
-            />
-            <RailStep
-              n={5}
-              label="Publish"
-              state={stepPublished ? 'done' : status === 'approved' ? 'current' : 'todo'}
-            />
-          </div>
-        </div>
-      </div>
+      <SectionCard
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Gauge size={18} className="text-slate" /> Determination lifecycle
+            {assessment ? (
+              <DeterminationStatusPill status={assessment.status} />
+            ) : preview ? (
+              <Chip tone="accent">computed — not yet staged</Chip>
+            ) : (
+              <Chip>no computation yet</Chip>
+            )}
+          </span>
+        }
+        subtitle="Maker-checker, four-eyes: an analyst computes and stages a draft, submits it, a distinct supervisor approves, and only then does it publish to every tenant. History is never rewritten."
+      >
+        <Stepper steps={lifecycleSteps} />
+      </SectionCard>
 
       {/* Inputs panel */}
-      <div className="card">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-light px-5 py-3">
-          <h2 className="text-h3 text-navy">Observable inputs</h2>
-          <Chip tone="warn">desk-entered · v1 (BoG feed ingestion later)</Chip>
-        </div>
-
+      <SectionCard
+        title="Observable inputs"
+        actions={<Chip tone="warn">desk-entered · v1 (BoG feed ingestion later)</Chip>}
+        noPadding
+      >
         <div className="grid gap-4 border-b border-border-light px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <div className="text-micro uppercase tracking-wide text-slate-light">Jurisdiction</div>
-            <input
+          <Field label="Jurisdiction">
+            <Input
               value={jurisdiction}
               onChange={(e) => setJurisdiction(e.target.value.toUpperCase())}
               maxLength={8}
-              className={`${inputClass} mt-1 w-full font-mono uppercase`}
+              className="font-mono uppercase"
               placeholder="GH"
             />
-          </div>
-          <div>
-            <div className="text-micro uppercase tracking-wide text-slate-light">COB date</div>
-            <input
-              type="date"
-              value={cobDate}
-              onChange={(e) => setCobDate(e.target.value)}
-              className={`${inputClass} mt-1 w-full`}
-            />
-          </div>
-          <div className="sm:col-span-2 lg:col-span-2 flex items-end">
+          </Field>
+          <Field label="COB date">
+            <Input type="date" value={cobDate} onChange={(e) => setCobDate(e.target.value)} />
+          </Field>
+          <div className="flex items-end sm:col-span-2">
             <p className="text-caption text-slate">
               One value for the whole system. Enter the economic and banking-system aggregates below;
               the sovereign rating and policy rate are auto-pulled from published data unless you
@@ -617,7 +596,7 @@ export default function OperatingEnvironmentPage() {
             return (
               <div
                 key={pillar.code}
-                className={`px-5 py-4 ${pi === 0 ? 'lg:border-r border-border-light' : ''}`}
+                className={`px-5 py-4 ${pi === 0 ? 'border-border-light lg:border-r' : ''}`}
               >
                 <div className="mb-3 flex items-center gap-2">
                   <Icon size={15} className="text-slate" />
@@ -632,41 +611,31 @@ export default function OperatingEnvironmentPage() {
                       Institutional framework
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="block">
-                        <span className="mb-1 flex items-center gap-1.5 text-caption font-medium text-slate">
-                          Regulatory quality
-                          <Chip tone="accent">analyst judgment</Chip>
-                        </span>
-                        <select
-                          value={regQuality}
-                          onChange={(e) => setRegQuality(e.target.value)}
-                          className={`${inputClass} w-full`}
-                        >
+                      <Field
+                        label={
+                          <span className="inline-flex items-center gap-1.5">
+                            Regulatory quality <Chip tone="accent">analyst judgment</Chip>
+                          </span>
+                        }
+                        hint="1 = lowest risk … 6 = highest risk (documented judgment sub-score)."
+                      >
+                        <Select value={regQuality} onChange={(e) => setRegQuality(e.target.value)}>
                           {[1, 2, 3, 4, 5, 6].map((n) => (
                             <option key={n} value={n}>
                               {n} — {n <= 2 ? 'strong' : n <= 4 ? 'adequate' : 'weak'}
                             </option>
                           ))}
-                        </select>
-                        <span className="mt-1 block text-micro text-slate-light">
-                          1 = lowest risk … 6 = highest risk (documented judgment sub-score).
-                        </span>
-                      </label>
-                      <label className="block">
-                        <span className="mb-1 block text-caption font-medium text-slate">
-                          Sovereign rating
-                        </span>
-                        <input
+                        </Select>
+                      </Field>
+                      <Field label="Sovereign rating" hint="Blank → pulled from the published sovereign rating.">
+                        <Input
                           value={sovereignRating}
                           onChange={(e) => setSovereignRating(e.target.value)}
-                          className={`${inputClass} w-full font-mono`}
+                          className="font-mono"
                           placeholder="auto-pull (e.g. BBB-)"
                           spellCheck={false}
                         />
-                        <span className="mt-1 block text-micro text-slate-light">
-                          Blank → pulled from the published sovereign rating.
-                        </span>
-                      </label>
+                      </Field>
                     </div>
                   </div>
                 )}
@@ -679,36 +648,41 @@ export default function OperatingEnvironmentPage() {
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         {sf.fields.map((f) => (
-                          <label key={f.code} className="block">
-                            <span className="mb-1 block text-caption font-medium text-slate">
-                              {f.label} <span className="text-slate-light">({f.unit})</span>
-                            </span>
-                            <input
+                          <Field
+                            key={f.code}
+                            label={
+                              <>
+                                {f.label} <span className="text-slate-light">({f.unit})</span>
+                              </>
+                            }
+                          >
+                            <Input
                               value={values[f.code]}
                               onChange={(e) => updateValue(f.code, e.target.value)}
                               inputMode="decimal"
                               placeholder={f.placeholder}
-                              className={`${inputClass} w-full text-right font-mono`}
+                              className="text-right font-mono"
                             />
-                          </label>
+                          </Field>
                         ))}
                         {/* policy rate rides economic_imbalances but is auto-pulled */}
                         {sf.code === 'economic_imbalances' && (
-                          <label className="block">
-                            <span className="mb-1 block text-caption font-medium text-slate">
-                              Policy rate / MPR <span className="text-slate-light">(%)</span>
-                            </span>
-                            <input
+                          <Field
+                            label={
+                              <>
+                                Policy rate / MPR <span className="text-slate-light">(%)</span>
+                              </>
+                            }
+                            hint="Blank → pulled from the published MPR."
+                          >
+                            <Input
                               value={policyRate}
                               onChange={(e) => setPolicyRate(e.target.value)}
                               inputMode="decimal"
                               placeholder="auto-pull"
-                              className={`${inputClass} w-full text-right font-mono`}
+                              className="text-right font-mono"
                             />
-                            <span className="mt-1 block text-micro text-slate-light">
-                              Blank → pulled from the published MPR.
-                            </span>
-                          </label>
+                          </Field>
                         )}
                       </div>
                     </div>
@@ -721,15 +695,14 @@ export default function OperatingEnvironmentPage() {
 
         {/* Compute action */}
         <div className="flex flex-wrap items-center gap-3 border-t border-border-light px-5 py-3">
-          <button
-            type="button"
-            disabled={computeBusy || !inputsReady}
+          <Button
+            icon={<Calculator size={14} />}
+            loading={computeBusy}
+            disabled={!inputsReady}
             onClick={() => void runCompute()}
-            className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {computeBusy ? <Loader2 size={14} className="animate-spin" /> : <Calculator size={14} />}
             Compute
-          </button>
+          </Button>
           {inputsReady ? (
             <span className="text-caption text-slate">
               12 observable inputs + 1 judgment ready · sovereign &amp; policy rate{' '}
@@ -753,7 +726,7 @@ export default function OperatingEnvironmentPage() {
             )}
           </div>
         )}
-      </div>
+      </SectionCard>
 
       {/* Result breakdown */}
       {preview && breakdown && (
@@ -775,16 +748,17 @@ export default function OperatingEnvironmentPage() {
           <ProvenancePanel provenance={breakdown.provenance} />
 
           {/* Governance & publication */}
-          <div className="card p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-h3 text-navy">Governance &amp; publication</h2>
-              {assessment ? (
+          <SectionCard
+            title="Governance & publication"
+            actions={
+              assessment ? (
                 <DeterminationStatusPill status={assessment.status} />
               ) : (
                 <Chip tone="ok">ready to stage</Chip>
-              )}
-            </div>
-            <p className="mt-1 text-caption text-slate">
+              )
+            }
+          >
+            <p className="text-caption text-slate">
               Staging opens a governed determination. It moves draft → submit → approve → publish;
               publishing fans{' '}
               <span className="font-mono text-ink">GHANA_OPERATING_ENVIRONMENT_SCORE</span> out to
@@ -795,19 +769,13 @@ export default function OperatingEnvironmentPage() {
             {!assessment && (
               <div className="mt-4 border-t border-border-light pt-4">
                 {canStage ? (
-                  <button
-                    type="button"
-                    disabled={lifecycleBusy}
+                  <Button
+                    icon={<FileText size={14} />}
+                    loading={lifecycleBusy}
                     onClick={() => void stageDraft()}
-                    className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
                   >
-                    {lifecycleBusy ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <FileText size={14} />
-                    )}
                     Stage draft assessment
-                  </button>
+                  </Button>
                 ) : (
                   <p className="text-caption text-slate">
                     Re-compute on the current inputs to stage a draft.
@@ -821,7 +789,8 @@ export default function OperatingEnvironmentPage() {
               <div className="mt-4 space-y-3 border-t border-border-light pt-4">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-micro text-slate">
                   <span>
-                    assessment <span className="font-mono text-ink">{assessment.id.slice(0, 8)}…</span>
+                    assessment{' '}
+                    <span className="font-mono text-ink">{assessment.id.slice(0, 8)}…</span>
                   </span>
                   <span>
                     proposed by <span className="font-mono text-ink">{assessment.proposed_by}</span>
@@ -836,36 +805,25 @@ export default function OperatingEnvironmentPage() {
                 </div>
 
                 {assessment.status === 'draft' && (
-                  <button
-                    type="button"
-                    disabled={lifecycleBusy}
+                  <Button
+                    icon={<Upload size={14} />}
+                    loading={lifecycleBusy}
                     onClick={() => void submitDraft()}
-                    className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
                   >
-                    {lifecycleBusy ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Upload size={14} />
-                    )}
                     Submit for review
-                  </button>
+                  </Button>
                 )}
 
                 {assessment.status === 'pending_review' && (
                   <div className="space-y-2">
-                    <button
-                      type="button"
-                      disabled={lifecycleBusy || isProposer}
+                    <Button
+                      icon={<ShieldCheck size={14} />}
+                      loading={lifecycleBusy}
+                      disabled={isProposer}
                       onClick={() => void approveDraft()}
-                      className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {lifecycleBusy ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <ShieldCheck size={14} />
-                      )}
                       Approve (four-eyes)
-                    </button>
+                    </Button>
                     {isProposer && (
                       <p className="flex items-center gap-1.5 text-caption text-warning">
                         <XCircle size={13} className="shrink-0" />
@@ -877,32 +835,23 @@ export default function OperatingEnvironmentPage() {
 
                 {assessment.status === 'approved' && (
                   <div className="space-y-3">
-                    <div className="flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
-                      <ShieldCheck size={15} className="mt-0.5 shrink-0 text-warning" />
-                      <div className="min-w-0 text-caption text-slate">
-                        <p className="font-medium text-navy">
-                          Approved — publishing writes the jurisdiction index for every tenant
-                        </p>
-                        <p className="mt-1">
-                          Score {fmtScore(assessment.score)} for {assessment.jurisdiction_code} as of{' '}
-                          {fmtDate(assessment.cob_date)}. Per-tenant failures are recorded, not rolled
-                          back; re-publishing heals a partial fan-out.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={lifecycleBusy}
+                    <CeremonyBanner>
+                      <p className="font-medium text-navy">
+                        Approved — publishing writes the jurisdiction index for every tenant
+                      </p>
+                      <p className="mt-1">
+                        Score {fmtScore(assessment.score)} for {assessment.jurisdiction_code} as of{' '}
+                        {fmtDate(assessment.cob_date)}. Per-tenant failures are recorded, not rolled
+                        back; re-publishing heals a partial fan-out.
+                      </p>
+                    </CeremonyBanner>
+                    <Button
+                      icon={<Upload size={14} />}
+                      loading={lifecycleBusy}
                       onClick={() => void publishDraft()}
-                      className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
                     >
-                      {lifecycleBusy ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Upload size={14} />
-                      )}
                       Publish to every tenant
-                    </button>
+                    </Button>
                   </div>
                 )}
 
@@ -917,7 +866,10 @@ export default function OperatingEnvironmentPage() {
 
             {lifecycleError && (
               <div className="mt-3">
-                <ErrorPanel error={lifecycleError} context="Operating-environment governance action" />
+                <ErrorPanel
+                  error={lifecycleError}
+                  context="Operating-environment governance action"
+                />
               </div>
             )}
 
@@ -926,16 +878,16 @@ export default function OperatingEnvironmentPage() {
                 <PublishFanout publication={publication} />
               </div>
             )}
-          </div>
+          </SectionCard>
         </>
       )}
 
       {/* Assumptions panel */}
-      <div className="card">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-light px-5 py-3">
-          <h2 className="text-h3 text-navy">Assumptions</h2>
-          <Chip tone="warn">Track-2 governed · read-only</Chip>
-        </div>
+      <SectionCard
+        title="Assumptions"
+        actions={<Chip tone="warn">Track-2 governed · read-only</Chip>}
+        noPadding
+      >
         <div className="grid gap-4 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCell label="Methodology version">
             <span className="font-mono text-body">{breakdown?.methodology_version ?? DASH}</span>
@@ -957,16 +909,18 @@ export default function OperatingEnvironmentPage() {
           calibration placeholders pending independent validation). Changing any of them is a Track-2
           event under the methodology register — never a per-run edit.
         </div>
-      </div>
+      </SectionCard>
 
       {/* Recent assessments */}
-      <div className="card">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-light px-5 py-3">
-          <h2 className="text-h3 text-navy">Recent assessments</h2>
-          <span className="text-caption text-slate">
+      <SectionCard
+        title="Recent assessments"
+        actions={
+          <span className="text-caption text-slate tnum">
             {jurisdiction} · {recent.data?.total ?? 0} total
           </span>
-        </div>
+        }
+        noPadding
+      >
         {recent.loading && <SkeletonRows rows={4} />}
         {recent.error && (
           <div className="p-5">
@@ -980,68 +934,83 @@ export default function OperatingEnvironmentPage() {
           />
         )}
         {recent.data && recent.data.assessments.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-body">
-              <thead>
-                <tr className="border-b border-border-light bg-surface text-left text-micro uppercase tracking-wide text-slate">
-                  <th className="px-5 py-2 font-medium">COB</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium text-right">Score</th>
-                  <th className="px-3 py-2 font-medium">Methodology</th>
-                  <th className="px-3 py-2 font-medium">Proposed by</th>
-                  <th className="px-3 py-2 font-medium">Approved by</th>
-                  <th className="px-3 py-2 font-medium">Created</th>
-                  <th className="px-5 py-2 font-medium" />
-                </tr>
-              </thead>
-              <tbody>
-                {recent.data.assessments.map((a) => {
-                  const isOpen = assessment?.id === a.id;
-                  return (
-                    <tr
-                      key={a.id}
-                      className={`border-b border-border-light last:border-b-0 ${
-                        isOpen ? 'bg-action-light/30' : ''
-                      }`}
-                    >
-                      <td className="px-5 py-2 font-mono text-caption text-ink">
-                        {fmtDate(a.cob_date)}
-                      </td>
-                      <td className="px-3 py-2">
-                        <DeterminationStatusPill status={a.status} />
-                      </td>
-                      <td className="num px-3 py-2 text-right text-ink">{fmtScore(a.score)}</td>
-                      <td className="px-3 py-2 font-mono text-micro text-slate">
-                        {a.methodology_version}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-micro text-slate">{a.proposed_by}</td>
-                      <td className="px-3 py-2 font-mono text-micro text-slate">
-                        {a.approved_by ? (
-                          <span title={fmtTs(a.approved_at)}>{a.approved_by}</span>
-                        ) : (
-                          DASH
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-micro text-slate" title={fmtTs(a.created_at)}>
-                        {relTime(a.created_at)}
-                      </td>
-                      <td className="px-5 py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => loadAssessment(a)}
-                          className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1 text-micro font-medium text-ink hover:bg-surface"
-                        >
-                          {isOpen ? 'Loaded' : 'Load'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rows={recent.data.assessments}
+            density="compact"
+            pageSize={10}
+            rowClassName={(a) => (assessment?.id === a.id ? 'bg-action-light/30' : '')}
+            columns={[
+              {
+                key: 'cob',
+                header: 'COB',
+                sortable: true,
+                sortAccessor: (a) => a.cob_date,
+                render: (a) => <span className="font-mono text-caption text-ink">{fmtDate(a.cob_date)}</span>,
+              },
+              {
+                key: 'status',
+                header: 'Status',
+                render: (a) => <DeterminationStatusPill status={a.status} />,
+              },
+              {
+                key: 'score',
+                header: 'Score',
+                numeric: true,
+                sortable: true,
+                sortAccessor: (a) => toNum(a.score),
+                render: (a) => fmtScore(a.score),
+              },
+              {
+                key: 'methodology',
+                header: 'Methodology',
+                render: (a) => <span className="font-mono text-micro text-slate">{a.methodology_version}</span>,
+              },
+              {
+                key: 'proposed_by',
+                header: 'Proposed by',
+                render: (a) => <span className="font-mono text-micro text-slate">{a.proposed_by}</span>,
+              },
+              {
+                key: 'approved_by',
+                header: 'Approved by',
+                render: (a) =>
+                  a.approved_by ? (
+                    <span className="font-mono text-micro text-slate" title={fmtTs(a.approved_at)}>
+                      {a.approved_by}
+                    </span>
+                  ) : (
+                    <span className="text-slate-light">{DASH}</span>
+                  ),
+              },
+              {
+                key: 'created',
+                header: 'Created',
+                sortable: true,
+                sortAccessor: (a) => a.created_at,
+                render: (a) => (
+                  <span className="text-micro text-slate" title={fmtTs(a.created_at)}>
+                    {relTime(a.created_at)}
+                  </span>
+                ),
+              },
+              {
+                key: 'actions',
+                header: '',
+                align: 'right',
+                render: (a) => (
+                  <Button
+                    size="sm"
+                    variant={assessment?.id === a.id ? 'ghost' : 'secondary'}
+                    onClick={() => loadAssessment(a)}
+                  >
+                    {assessment?.id === a.id ? 'Loaded' : 'Load'}
+                  </Button>
+                ),
+              },
+            ]}
+          />
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }
@@ -1057,29 +1026,21 @@ function ScoreCard({
   breakdown: OperatingEnvironmentBreakdown;
   inputDigest: string;
 }) {
-  const score = toNum(breakdown.score);
-  const pct = Number.isFinite(score) ? Math.max(0, Math.min(1, score)) * 100 : 0;
   const governor = breakdown.governor_applied;
   return (
-    <div className="card p-5">
-      <div className="flex flex-wrap items-start justify-between gap-6">
-        <div className="min-w-0">
-          <div className="text-micro uppercase tracking-wide text-slate-light">
-            Operating-environment strength
-          </div>
-          <div className="num mt-1 text-[2.75rem] leading-none text-navy">{fmtScore(breakdown.score)}</div>
-          <p className="mt-1 text-caption text-slate">
-            0–1, higher = stronger banking system. Feeds every tenant&apos;s implied-rating model.
-          </p>
-          {/* [0,1] meter */}
-          <div className="mt-3 h-2 w-64 max-w-full overflow-hidden rounded-full bg-surface">
-            <div
-              className="h-full rounded-full bg-[color:rgb(var(--accent))]"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_1fr]">
+      {/* Gauge replaces the old flat meter + duplicate figure. */}
+      <OeScoreGauge
+        score={toNum(breakdown.score)}
+        governorCap={toNum(breakdown.governor_cap)}
+        governorApplied={breakdown.governor_applied}
+      />
+
+      <div className="card p-5">
+        <p className="text-caption text-slate">
+          0–1, higher = stronger banking system. Feeds every tenant&apos;s implied-rating model.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3">
           <StatCell label="Composite risk" hint="1 (low) – 6 (high)">
             {fmtRisk(breakdown.composite_risk)}
           </StatCell>
@@ -1110,27 +1071,69 @@ function ScoreCard({
             </div>
           </div>
         </div>
+        {governor && (
+          <p className="mt-4 flex items-start gap-1.5 border-t border-border-light pt-3 text-caption text-slate">
+            <Info size={13} className="mt-0.5 shrink-0 text-warning" />
+            The sovereign governor is binding: raw strength {fmtScore(breakdown.strength_raw)}{' '}
+            exceeds the {breakdown.sovereign_category.toUpperCase()} cap of{' '}
+            {fmtScore(breakdown.governor_cap)}, so the published score is held at the cap — a banking
+            system can&apos;t be much stronger than its sovereign.
+          </p>
+        )}
       </div>
-      {governor && (
-        <p className="mt-4 flex items-start gap-1.5 border-t border-border-light pt-3 text-caption text-slate">
-          <Info size={13} className="mt-0.5 shrink-0 text-warning" />
-          The sovereign governor is binding: raw strength {fmtScore(breakdown.strength_raw)} exceeds
-          the {breakdown.sovereign_category.toUpperCase()} cap of {fmtScore(breakdown.governor_cap)},
-          so the published score is held at the cap — a banking system can&apos;t be much stronger
-          than its sovereign.
-        </p>
-      )}
     </div>
   );
 }
 
+function inputColumns(sovereignCategory: string): Column<OperatingEnvironmentInputScore>[] {
+  return [
+    {
+      key: 'input',
+      header: 'Input',
+      render: (item) => (
+        <span className="text-caption text-ink">{labelFor(INPUT_LABELS, item.code)}</span>
+      ),
+    },
+    {
+      key: 'kind',
+      header: 'Kind',
+      render: (item) => (
+        <Chip tone={item.kind === 'judgment' ? 'accent' : 'neutral'}>{item.kind}</Chip>
+      ),
+    },
+    {
+      key: 'observed',
+      header: 'Observed',
+      align: 'right',
+      render: (item) => (
+        <span className="num text-ink">
+          {inputValueDisplay(item.code, item.kind, item.value, sovereignCategory)}
+        </span>
+      ),
+    },
+    {
+      key: 'sub_score',
+      header: 'Sub-score',
+      align: 'right',
+      render: (item) => <RiskChip value={item.sub_score} />,
+    },
+    {
+      key: 'weight',
+      header: 'Weight',
+      numeric: true,
+      render: (item) => fmtWeight(item.weight),
+    },
+  ];
+}
+
 function PillarBreakdown({ breakdown }: { breakdown: OperatingEnvironmentBreakdown }) {
+  const cols = inputColumns(breakdown.sovereign_category);
   return (
-    <div className="card">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-light px-5 py-3">
-        <h2 className="text-h3 text-navy">Breakdown</h2>
-        <span className="text-caption text-slate">input → sub-score → sub-factor → pillar</span>
-      </div>
+    <SectionCard
+      title="Breakdown"
+      actions={<span className="text-caption text-slate">input → sub-score → sub-factor → pillar</span>}
+      noPadding
+    >
       <div className="space-y-0">
         {breakdown.pillars.map((pillar, pi) => (
           <div key={pillar.code} className={pi > 0 ? 'border-t border-border-light' : ''}>
@@ -1139,9 +1142,7 @@ function PillarBreakdown({ breakdown }: { breakdown: OperatingEnvironmentBreakdo
                 <h3 className="text-body font-medium text-navy">
                   {labelFor(PILLAR_LABELS, pillar.code)}
                 </h3>
-                <span className="text-micro text-slate-light">
-                  weight {fmtWeight(pillar.weight)}
-                </span>
+                <span className="text-micro text-slate-light">weight {fmtWeight(pillar.weight)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-micro uppercase tracking-wide text-slate-light">
@@ -1169,53 +1170,13 @@ function PillarBreakdown({ breakdown }: { breakdown: OperatingEnvironmentBreakdo
                     <RiskChip value={toNum(sf.score)} />
                   </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-body">
-                    <thead>
-                      <tr className="border-b border-border-light text-left text-micro uppercase tracking-wide text-slate">
-                        <th className="py-1.5 pr-4 font-medium">Input</th>
-                        <th className="py-1.5 pr-4 font-medium">Kind</th>
-                        <th className="py-1.5 pr-4 font-medium text-right">Observed</th>
-                        <th className="py-1.5 pr-4 font-medium text-right">Sub-score</th>
-                        <th className="py-1.5 font-medium text-right">Weight</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sf.inputs.map((item) => (
-                        <tr key={item.code} className="border-b border-border-light last:border-b-0">
-                          <td className="py-1.5 pr-4 text-caption text-ink">
-                            {labelFor(INPUT_LABELS, item.code)}
-                          </td>
-                          <td className="py-1.5 pr-4">
-                            <Chip tone={item.kind === 'judgment' ? 'accent' : 'neutral'}>
-                              {item.kind}
-                            </Chip>
-                          </td>
-                          <td className="num py-1.5 pr-4 text-right text-ink">
-                            {inputValueDisplay(
-                              item.code,
-                              item.kind,
-                              item.value,
-                              breakdown.sovereign_category,
-                            )}
-                          </td>
-                          <td className="py-1.5 pr-4 text-right">
-                            <RiskChip value={item.sub_score} />
-                          </td>
-                          <td className="num py-1.5 text-right text-slate">
-                            {fmtWeight(item.weight)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable columns={cols} rows={sf.inputs} density="compact" />
               </div>
             ))}
           </div>
         ))}
       </div>
-    </div>
+    </SectionCard>
   );
 }
 
@@ -1225,12 +1186,11 @@ function ProvenancePanel({ provenance }: { provenance: OperatingEnvironmentProve
     { label: 'Policy rate (MPR)', data: provenance.policy_rate },
   ];
   return (
-    <div className="card">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-light px-5 py-3">
-        <h2 className="text-h3 text-navy">Input provenance</h2>
-        <span className="text-caption text-slate">auto-pulled unless desk-entered</span>
-      </div>
-      <div className="grid gap-4 px-5 py-4 sm:grid-cols-2">
+    <SectionCard
+      title="Input provenance"
+      actions={<span className="text-caption text-slate">auto-pulled unless desk-entered</span>}
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
         {rows.map((row) => (
           <div key={row.label} className="rounded border border-border-light bg-surface/40 p-3">
             <div className="mb-1 text-caption font-medium text-navy">{row.label}</div>
@@ -1251,7 +1211,7 @@ function ProvenancePanel({ provenance }: { provenance: OperatingEnvironmentProve
           </div>
         ))}
       </div>
-    </div>
+    </SectionCard>
   );
 }
 

@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import {
   createDeskDetermination,
   listDeskDeterminations,
@@ -19,15 +19,39 @@ import {
   MethodologyChip,
   QaBadge,
 } from '@/components/desk';
-import { Chip, EmptyState, ErrorPanel, PageHeader, SkeletonRows } from '@/components/ui';
+import {
+  Button,
+  Chip,
+  DataTable,
+  EmptyState,
+  ErrorPanel,
+  Field,
+  Input,
+  KpiStat,
+  PageHeader,
+  SectionCard,
+  Select,
+  SkeletonRows,
+  type Column,
+} from '@/components/ui';
 
 /**
  * /desk/determinations — Research Desk work queue (Track 1 weekly rates).
- * Capture job stages drafts for the Analyst; never auto-submits.
+ * Capture job stages drafts for the Analyst; never auto-submits. The status +
+ * COB filters are wired to the API's server-side query params.
  * Source: GET /operator/v1/desk/determinations.
  */
 
 const CAPTURE_IDENTITY = 'desk-capture-job@aequoros.system';
+
+const STATUS_OPTIONS = [
+  { value: '', label: 'All statuses' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'pending_review', label: 'Pending review' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'published', label: 'Published' },
+  { value: 'rejected', label: 'Rejected' },
+];
 
 function queueOf(d: DeskDetermination): 'analyst' | 'supervisor' | 'published' | 'other' {
   if (d.status === 'draft') return 'analyst';
@@ -38,24 +62,37 @@ function queueOf(d: DeskDetermination): 'analyst' | 'supervisor' | 'published' |
 
 export default function DeterminationsPage() {
   const router = useRouter();
-  const { data, error, loading, reload } = useApi(() => listDeskDeterminations());
+
+  // Unfiltered fetch drives the KPI counts + weekly-capture callout.
+  const all = useApi(() => listDeskDeterminations());
+
+  // Filter bar — wired to the API's server-side cob_date / status params.
+  const [statusFilter, setStatusFilter] = useState('');
+  const [cobFilter, setCobFilter] = useState('');
+  const filtersActive = statusFilter !== '' || cobFilter !== '';
+  const queue = useApi(
+    () =>
+      listDeskDeterminations({
+        status: statusFilter || undefined,
+        cobDate: cobFilter || undefined,
+      }),
+    [statusFilter, cobFilter],
+  );
 
   const [creating, setCreating] = useState(false);
   const [cobDate, setCobDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
   const [createError, setCreateError] = useState<ApiError | null>(null);
 
-  const queues = useMemo(() => {
-    const rows = data?.determinations ?? [];
+  const counts = useMemo(() => {
+    const rows = all.data?.determinations ?? [];
     return {
-      analyst: rows.filter((d) => queueOf(d) === 'analyst'),
-      supervisor: rows.filter((d) => queueOf(d) === 'supervisor'),
-      published: rows.filter((d) => queueOf(d) === 'published'),
-      newCapture: rows.filter(
-        (d) => d.status === 'draft' && d.prepared_by === CAPTURE_IDENTITY,
-      ),
+      analyst: rows.filter((d) => queueOf(d) === 'analyst').length,
+      supervisor: rows.filter((d) => queueOf(d) === 'supervisor').length,
+      published: rows.filter((d) => queueOf(d) === 'published').length,
+      newCapture: rows.filter((d) => d.status === 'draft' && d.prepared_by === CAPTURE_IDENTITY),
     };
-  }, [data]);
+  }, [all.data]);
 
   async function create() {
     setSubmitting(true);
@@ -69,33 +106,107 @@ export default function DeterminationsPage() {
     }
   }
 
+  const columns: Column<DeskDetermination>[] = [
+    {
+      key: 'cob',
+      header: 'COB date',
+      sortable: true,
+      sortAccessor: (d) => d.cob_date,
+      render: (d) => (
+        <div>
+          <span className="font-medium text-navy">{fmtDate(d.cob_date)}</span>
+          <div className="font-mono text-micro text-slate" title={d.input_digest}>
+            {d.input_digest.slice(0, 12)}…
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortable: true,
+      sortAccessor: (d) => d.status,
+      render: (d) => <DeterminationStatusPill status={d.status} />,
+    },
+    {
+      key: 'methodology',
+      header: 'Methodology',
+      render: (d) => <MethodologyChip code={d.methodology_code} version={d.methodology_version} />,
+    },
+    {
+      key: 'qa',
+      header: 'Rates / curves',
+      render: (d) => (
+        <div className="flex flex-wrap gap-1">
+          <QaBadge determination={d} />
+          <CurvesQaBadge determination={d} />
+          {d.prepared_by === CAPTURE_IDENTITY && d.status === 'draft' && (
+            <Chip tone="accent">new capture</Chip>
+          )}
+          {(d.research_adjustments?.length ?? 0) > 0 && (
+            <Chip tone="warn">{d.research_adjustments.length} adj</Chip>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'prepared',
+      header: 'Prepared by',
+      sortable: true,
+      sortAccessor: (d) => d.prepared_by,
+      render: (d) => <span className="font-mono text-caption text-ink">{d.prepared_by}</span>,
+    },
+    {
+      key: 'reviewed',
+      header: 'Reviewed by',
+      render: (d) => <span className="font-mono text-caption text-ink">{d.reviewed_by ?? DASH}</span>,
+    },
+    {
+      key: 'published',
+      header: 'Published',
+      sortable: true,
+      sortAccessor: (d) => d.published_at ?? '',
+      render: (d) => <span className="text-caption text-ink">{fmtDate(d.published_at)}</span>,
+    },
+    {
+      key: 'correction',
+      header: 'Correction',
+      render: (d) =>
+        d.supersedes_id ? (
+          <Chip tone="warn" title={`supersedes ${d.supersedes_id}`}>
+            supersedes
+          </Chip>
+        ) : (
+          <span className="text-slate-light">{DASH}</span>
+        ),
+    },
+  ];
+
+  const queueRows = queue.data?.determinations ?? [];
+
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
-        <PageHeader
-          title="Research Desk"
-          sub="Weekly rates workflow: capture stages a draft for the Analyst → review & adjustments → submit → Supervisor approve → publish. Track 2 methodology changes live under Methodology."
-        />
-        <button
-          type="button"
-          onClick={() => setCreating((v) => !v)}
-          className="btn-primary inline-flex shrink-0 items-center gap-1.5 px-3 py-2 text-body font-medium"
-        >
-          <Plus size={15} /> New determination
-        </button>
-      </div>
+      <PageHeader
+        title="Research Desk"
+        sub="Weekly rates workflow: capture stages a draft for the Analyst → review & adjustments → submit → Supervisor approve → publish. Track 2 methodology changes live under Methodology."
+        action={
+          <Button icon={<Plus size={15} />} onClick={() => setCreating((v) => !v)}>
+            New determination
+          </Button>
+        }
+      />
 
-      {queues.newCapture.length > 0 && (
+      {counts.newCapture.length > 0 && (
         <div className="card mb-5 border-action/40 bg-action-light/40 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <Chip tone="accent">New weekly capture</Chip>
             <span className="text-body font-medium text-navy">
-              {queues.newCapture.length} package
-              {queues.newCapture.length === 1 ? '' : 's'} waiting for Analyst review
+              {counts.newCapture.length} package
+              {counts.newCapture.length === 1 ? '' : 's'} waiting for Analyst review
             </span>
           </div>
           <ul className="mt-2 space-y-1">
-            {queues.newCapture.slice(0, 5).map((d) => (
+            {counts.newCapture.slice(0, 5).map((d) => (
               <li key={d.id}>
                 <Link
                   href={`/desk/determinations/${d.id}`}
@@ -110,48 +221,38 @@ export default function DeterminationsPage() {
       )}
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
-        <div className="card p-3">
-          <div className="text-micro uppercase tracking-wide text-slate">Awaiting analyst</div>
-          <div className="mt-1 font-mono text-h2 text-navy">{queues.analyst.length}</div>
-          <p className="text-caption text-slate">Draft packages to review & adjust</p>
-        </div>
-        <div className="card p-3">
-          <div className="text-micro uppercase tracking-wide text-slate">Awaiting supervisor</div>
-          <div className="mt-1 font-mono text-h2 text-navy">{queues.supervisor.length}</div>
-          <p className="text-caption text-slate">Submitted for four-eyes approval</p>
-        </div>
-        <div className="card p-3">
-          <div className="text-micro uppercase tracking-wide text-slate">Published</div>
-          <div className="mt-1 font-mono text-h2 text-navy">{queues.published.length}</div>
-          <p className="text-caption text-slate">Live on client Markets tabs</p>
-        </div>
+        <KpiStat
+          label="Awaiting analyst"
+          value={counts.analyst}
+          status={counts.analyst > 0 ? 'warn' : 'ok'}
+          hint="Draft packages to review & adjust"
+        />
+        <KpiStat
+          label="Awaiting supervisor"
+          value={counts.supervisor}
+          status={counts.supervisor > 0 ? 'warn' : 'ok'}
+          hint="Submitted for four-eyes approval"
+        />
+        <KpiStat label="Published" value={counts.published} hint="Live on client Markets tabs" />
       </div>
 
       {creating && (
-        <div className="card mb-5 p-4">
+        <SectionCard title="Open a draft determination" className="mb-5">
           <div className="flex flex-wrap items-end gap-3">
-            <label className="block">
-              <span className="mb-1 block text-caption font-medium text-slate">COB date</span>
-              <input
-                type="date"
-                value={cobDate}
-                onChange={(e) => setCobDate(e.target.value)}
-                className="rounded-md border border-border bg-surface-base px-3 py-2 text-body text-ink focus:border-focus focus:outline-none"
-              />
-            </label>
-            <button
-              type="button"
-              disabled={submitting || !cobDate}
+            <Field label="COB date" className="w-48">
+              <Input type="date" value={cobDate} onChange={(e) => setCobDate(e.target.value)} />
+            </Field>
+            <Button
               onClick={() => void create()}
-              className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              loading={submitting}
+              disabled={submitting || !cobDate}
             >
-              {submitting && <Loader2 size={14} className="animate-spin" />}
               Open draft
-            </button>
-            <p className="text-caption text-slate">
-              Opens a draft bound to the methodology version effective on this date and snapshots
-              the current observations. The API refuses when no approved methodology is effective
-              or no observations exist on or before the date.
+            </Button>
+            <p className="max-w-xl text-caption text-slate">
+              Opens a draft bound to the methodology version effective on this date and snapshots the
+              current observations. The API refuses when no approved methodology is effective or no
+              observations exist on or before the date.
             </p>
           </div>
           {createError && (
@@ -173,98 +274,77 @@ export default function DeterminationsPage() {
               )}
             </div>
           )}
-        </div>
+        </SectionCard>
       )}
 
-      <div className="card overflow-x-auto">
-        {loading && <SkeletonRows rows={6} />}
+      <SectionCard
+        title="Determinations"
+        subtitle="Newest COB first. Status and COB filters query the desk API server-side."
+        noPadding
+      >
+        <div className="flex flex-wrap items-end gap-3 border-b border-border-light px-4 py-3">
+          <Field label="Status" className="w-44">
+            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              {STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="COB date" className="w-44">
+            <Input type="date" value={cobFilter} onChange={(e) => setCobFilter(e.target.value)} />
+          </Field>
+          {filtersActive && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<X size={13} />}
+              onClick={() => {
+                setStatusFilter('');
+                setCobFilter('');
+              }}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
 
-        {error && (
+        {queue.loading && <SkeletonRows rows={6} />}
+
+        {queue.error && (
           <div className="p-4">
-            <ErrorPanel error={error} onRetry={reload} context="Loading determinations" />
+            <ErrorPanel error={queue.error} onRetry={queue.reload} context="Loading determinations" />
           </div>
         )}
 
-        {data && data.determinations.length === 0 && (
+        {queue.data && queueRows.length === 0 && (
           <EmptyState
-            title="No determinations yet"
-            hint="Open a draft for a COB date to start the weekly Track-1 run. It needs an approved methodology and captured observations."
+            title={filtersActive ? 'No determinations match these filters' : 'No determinations yet'}
+            hint={
+              filtersActive
+                ? 'Clear the status / COB filters to see the full queue.'
+                : 'Open a draft for a COB date to start the weekly Track-1 run. It needs an approved methodology and captured observations.'
+            }
           />
         )}
 
-        {data && data.determinations.length > 0 && (
-          <table className="w-full text-body">
-            <thead>
-              <tr className="border-b border-border-light bg-surface text-left text-micro uppercase tracking-wide text-slate">
-                <th className="px-4 py-2.5 font-medium">COB date</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 font-medium">Methodology</th>
-                <th className="px-4 py-2.5 font-medium">Rates / curves</th>
-                <th className="px-4 py-2.5 font-medium">Prepared by</th>
-                <th className="px-4 py-2.5 font-medium">Reviewed by</th>
-                <th className="px-4 py-2.5 font-medium">Published</th>
-                <th className="px-4 py-2.5 font-medium">Correction</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.determinations.map((d) => (
-                <tr
-                  key={d.id}
-                  onClick={() => router.push(`/desk/determinations/${d.id}`)}
-                  className="cursor-pointer border-b border-border-light last:border-b-0 hover:bg-surface"
-                >
-                  <td className="px-4 py-2.5">
-                    <Link
-                      href={`/desk/determinations/${d.id}`}
-                      className="font-medium text-navy hover:text-action"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {fmtDate(d.cob_date)}
-                    </Link>
-                    <div className="font-mono text-micro text-slate" title={d.input_digest}>
-                      {d.input_digest.slice(0, 12)}…
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <DeterminationStatusPill status={d.status} />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <MethodologyChip code={d.methodology_code} version={d.methodology_version} />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex flex-wrap gap-1">
-                      <QaBadge determination={d} />
-                      <CurvesQaBadge determination={d} />
-                      {d.prepared_by === CAPTURE_IDENTITY && d.status === 'draft' && (
-                        <Chip tone="accent">new capture</Chip>
-                      )}
-                      {(d.research_adjustments?.length ?? 0) > 0 && (
-                        <Chip tone="warn">{d.research_adjustments.length} adj</Chip>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-caption text-ink">{d.prepared_by}</td>
-                  <td className="px-4 py-2.5 font-mono text-caption text-ink">
-                    {d.reviewed_by ?? DASH}
-                  </td>
-                  <td className="px-4 py-2.5 text-caption text-ink">
-                    {fmtDate(d.published_at)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {d.supersedes_id ? (
-                      <Chip tone="warn" title={`supersedes ${d.supersedes_id}`}>
-                        supersedes
-                      </Chip>
-                    ) : (
-                      <span className="text-slate-light">{DASH}</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {queue.data && queueRows.length > 0 && (
+          <DataTable
+            columns={columns}
+            rows={queueRows}
+            density="compact"
+            pageSize={15}
+            onRowClick={(d) => router.push(`/desk/determinations/${d.id}`)}
+            getFilterText={(d) =>
+              `${fmtDate(d.cob_date)} ${d.status} ${d.methodology_code} ${d.prepared_by} ${
+                d.reviewed_by ?? ''
+              }`
+            }
+            filterPlaceholder="Filter by COB, methodology, operator…"
+          />
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import io
 import re
+from collections import Counter
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -198,17 +199,24 @@ def parse_gfim_daily_xlsx(raw: bytes, *, context: ParseContext) -> ParseResult: 
 # The TOC also lists this heading (with dotted leaders); the body occurrence
 # is the LAST match. '-GHS' may or may not ride on the heading itself.
 _STATS_HEADING_RE = re.compile(r"B\.\s+SUMMARY\s+OF\s+TRADE\s+STATISTICS(?:-?\s*GHS)?")
-# Live PDFs use several month phrasings; fixtures use clean text extracts.
-_REPORT_MONTH_RES: tuple[re.Pattern[str], ...] = (
-    re.compile(r"MARKET\s+STATISTICS\s+FOR\s+([A-Z]+)\s+(\d{4})"),
-    re.compile(r"SECURITIES\s+TRADED\s+FOR\s+([A-Z]+)\s+(\d{4})"),
-    re.compile(r"STATUS\s+REPORT\s*[-–—]?\s*([A-Z]+)\s+(\d{4})", re.I),
-    re.compile(r"\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)(\d{4})\b"),
-    re.compile(
-        r"\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+(\d{4})\b",
-        re.I,
-    ),
+
+_MONTH_NAMES = (
+    "JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|"
+    "NOVEMBER|DECEMBER"
 )
+# A month name directly followed by a 4-digit year. ``\s*`` (not ``\s+``)
+# tolerates every layout the reconstructor produces: the spaced headings
+# ("SECURITIES TRADED FOR JULY 2026"), the double-spaced ones ("JAN- JULY
+#  2026") and the drop-cap title banner where the glyphs collapse
+# ("JUNE2026"). The report month saturates the document — TOC, section
+# headings and every table repeat it — while a stray prior-year comparison
+# ("... AS AT JULY 2025") shows up once, so the resolver takes the majority
+# vote rather than the first hit (verified 37:1 on the real July-2026 report).
+_MONTH_YEAR_RE = re.compile(rf"\b({_MONTH_NAMES})\s*(\d{{4}})\b")
+# Filename fallback: the FileBird upload name reliably carries the month
+# ("…/GFIM-Status-Report-July-2026.pdf"), the last-ditch anchor when a future
+# layout change shatters the in-document banner.
+_URL_MONTH_RE = re.compile(rf"({_MONTH_NAMES})[-_ ]+(\d{{4}})", re.IGNORECASE)
 _STAT_ROWS: tuple[tuple[str, str, str], ...] = (
     ("Volume Traded", "GHS.GFIM.MONTHLY.VOLUME", "ghs"),
     ("Value Traded (GHS)", "GHS.GFIM.MONTHLY.VALUE_GHS", "ghs"),
@@ -226,18 +234,30 @@ def _status_report_text(raw: bytes) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
-def _resolve_report_month(text: str) -> date | None:
-    upper = text.upper()
-    for pattern in _REPORT_MONTH_RES:
-        match = pattern.search(upper)
-        if match is None:
-            continue
-        month_token = match.group(1).title()
-        year_token = match.group(2)
-        try:
-            return datetime.strptime(f"01 {month_token} {year_token}", "%d %B %Y").date()
-        except ValueError:
-            continue
+def _month_year_to_date(month_token: str, year_token: str) -> date | None:
+    try:
+        return datetime.strptime(f"01 {month_token.title()} {year_token}", "%d %B %Y").date()
+    except ValueError:
+        return None
+
+
+def _resolve_report_month(text: str, *, source_url: str | None = None) -> date | None:
+    """The report month, robust to case / spacing / drop-cap format variance.
+
+    Majority vote over every ``<MONTH> <YEAR>`` in the document (the report
+    month dominates; stray comparison years lose), falling back to the month
+    encoded in the source filename when the text carries no banner at all.
+    """
+    counts: Counter[tuple[str, str]] = Counter(_MONTH_YEAR_RE.findall(text.upper()))
+    if counts:
+        (month_token, year_token), _ = counts.most_common(1)[0]
+        resolved = _month_year_to_date(month_token, year_token)
+        if resolved is not None:
+            return resolved
+    if source_url:
+        url_match = _URL_MONTH_RE.search(source_url)
+        if url_match:
+            return _month_year_to_date(url_match.group(1), url_match.group(2))
     return None
 
 
@@ -252,15 +272,14 @@ def parse_gfim_status_report(raw: bytes, *, context: ParseContext) -> ParseResul
     Live captures are PDFs (FileBird); fixtures ship pre-extracted ``.txt``.
     Both paths are supported.
     """
-    del context
     result = ParseResult()
     text = _status_report_text(raw)
 
-    report_month = _resolve_report_month(text)
+    report_month = _resolve_report_month(text, source_url=context.source_url)
     if report_month is None:
         result.errors.append(
-            "report month not found (no 'MARKET STATISTICS FOR <MONTH> <YEAR>' "
-            "or equivalent month/year banner)"
+            "report month not found: no '<MONTH> <YEAR>' banner in the document "
+            "and no month in the source filename"
         )
         return result
 

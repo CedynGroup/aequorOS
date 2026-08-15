@@ -3,10 +3,13 @@ import Image from 'next/image';
 export default function BrandLogo({
   inverse = false,
   subtitle,
+  markOnly = false,
   className = '',
 }: {
   inverse?: boolean;
   subtitle?: string;
+  /** Render only the mark (collapsed rail) — hides the wordmark + subtitle. */
+  markOnly?: boolean;
   className?: string;
 }) {
   return (
@@ -19,6 +22,7 @@ export default function BrandLogo({
         priority
         className="h-8 w-8 shrink-0"
       />
+      {markOnly ? null : (
       <div className="min-w-0 leading-none">
         <div className={`font-serif text-xl font-semibold ${inverse ? 'text-white' : 'text-navy'}`}>
           AequorOS
@@ -33,6 +37,7 @@ export default function BrandLogo({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

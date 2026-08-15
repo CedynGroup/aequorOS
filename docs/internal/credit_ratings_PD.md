@@ -3,7 +3,9 @@
 ## TL;DR
 - **Build a transparent, CAMELS-anchored scorecard that mirrors the published Moody's/S&P/Fitch bank frameworks, calibrate it to an ordinal rating scale now, and treat the PD as an explicitly uncertain, conservatively-bounded quantity — not a precise number — because single-market African banks are a textbook "low-default portfolio" (LDP) where naive default-frequency estimation is statistically indefensible.**
 - **The central technical obstacle is the low-default problem: use the Pluto–Tasche most-prudent (upper-confidence-bound) estimator, Bayesian priors, and external benchmark/pooling anchored to agency default studies, and apply an explicit EBA-style Margin of Conservatism — with the Ghanaian sovereign (which defaulted in 2022 and forced the DDEP that impaired 22 banks by GH¢37.7bn) acting as a hard ceiling and dominant systematic risk factor.**
-- **Stage the build: (1) a defensible, versioned, expert-anchored scorecard producing an indicative rating + PD band feeding conservative repo haircuts and counterparty limits today; (2) statistical recalibration as data accumulates; govern the whole thing under SR 11-7 with discrimination (AUC/Gini), calibration (binomial/Hosmer–Lemeshow/traffic-light) and stability (PSI) testing.**
+- **Stage the build: (1) a defensible, versioned, expert-anchored scorecard producing an indicative rating + PD band for internal benchmarking and early warning; (2) statistical recalibration as data accumulates; govern the whole thing under SR 11-7 with discrimination (AUC/Gini), calibration (binomial/Hosmer–Lemeshow/traffic-light) and stability (PSI) testing. Repo haircuts, limits, and eligibility gates remain disabled until the calibrated methodology has independently passed the release gate in the implementation specification.**
+
+**Release gate for money-moving use.** Stage-1 ratings may inform private monitoring immediately, but they must not set live repo haircuts, counterparty limits, eligibility, or on-chain parameters until AequorOS has approved calibration evidence, an independent validation record, a named model owner, and the required data-quality sign-off. The authoritative gate is `AequorOS_Implied_Rating_PD_Implementation.md` §15.
 
 ## Key Findings
 
@@ -126,7 +128,7 @@ With few or zero defaults, the naive estimator (defaults/obligors ≈ 0) has no 
 
 **Staged roadmap:**
 - **Stage 1 (now): Defensible expert-anchored scorecard.** Ship the CAMELS/agency scorecard producing an indicative rating + conservative PD band. Calibrate via shadow ratings (replicate any agency-rated Ghanaian/regional banks) + Pluto–Tasche + regional benchmarks + MoC. This is fully defensible today despite zero internal defaults.
-- **Stage 2 (12–36 months): statistical recalibration.** As AequorOS accumulates a panel of bank-years and distress/near-miss events (regulatory breaches, DDEP-type impairments, recapitalizations as default proxies), fit a discrete-time hazard/logit (Shumway form), re-estimate transforms and weights, tighten confidence bounds, add PIT/TTC dual calibration, and stand up the challenger ML benchmark.
+- **Stage 2 (12–36 months): statistical recalibration.** As AequorOS accumulates a panel of bank-years and distress/near-miss events (regulatory breaches, DDEP-type impairments, recapitalizations as default proxies), fit a discrete-time hazard/logit (Shumway form), re-estimate transforms and weights, tighten confidence bounds, refine PIT/TTC calibration, and stand up the challenger ML benchmark.
 - **Stage 3 (mature): full IRB-grade PD.** Once defaults/distress events are statistically sufficient, calibrate to observed central tendencies, run full discrimination/calibration/stability backtesting, and narrow the MoC.
 
 **Connection to repo collateral and counterparty limits.** The implied rating and PD band should drive: (i) **haircuts** on repo collateral and on the counterparty's own credit (higher PD → higher haircut; use the upper PD bound, not the mid, for haircut sizing so uncertainty is priced conservatively); (ii) **counterparty exposure limits** (limit tiers by rating grade); (iii) **eligibility gates** (below a grade/above a PD ⇒ ineligible or punitive terms); and (iv) **wrong-way-risk controls** given sovereign–bank correlation (concentration limits on banks with heavy sovereign exposure, since a Ghana sovereign event hits collateral value and counterparty PD simultaneously). For the tokenized-repo partner, the versioned methodology and reproducible lineage are what make on-chain haircut/limit parameters auditable and defensible.
@@ -143,7 +145,7 @@ With few or zero defaults, the naive estimator (defaults/obligors ≈ 0) has no 
 
 5. **Stage toward a calibrated PD as data accrue (Stages 2–3).** Capture distress/near-miss events as default proxies, fit a Shumway hazard/logit, add PIT (for live repo pricing) and TTC (for limits) calibrations, and keep an ML challenger for benchmarking only. *Threshold to Stage 3:* sufficient default/distress observations for statistically meaningful central-tendency calibration.
 
-6. **Wire outputs to repo mechanics conservatively.** Size haircuts and limits off the upper PD bound; gate eligibility by grade; enforce sovereign-concentration/wrong-way-risk limits. Expose the versioned methodology to the tokenized-repo partner for on-chain auditability.
+6. **Prepare outputs for conservative repo mechanics, then activate only after validation.** The eventual integration sizes haircuts and limits off the upper PD bound, gates eligibility by grade, and enforces sovereign-concentration/wrong-way-risk limits. Do not activate it until the release gate above is satisfied; then expose the versioned methodology to the tokenized-repo partner for on-chain auditability.
 
 ## Caveats
 

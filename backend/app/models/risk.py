@@ -405,5 +405,9 @@ class Job(UuidV4PrimaryKeyMixin, Base):
     queued_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
+    # Runtime identity that most recently transitioned this row to running.
+    # Retained across retries so an orphaned job remains attributable until a
+    # subsequent worker claims it.
+    claimed_by: Mapped[str | None] = mapped_column(String(160), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

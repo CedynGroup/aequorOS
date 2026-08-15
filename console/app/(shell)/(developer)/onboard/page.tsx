@@ -2,31 +2,40 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import {
-  AlertTriangle,
-  Check,
-  Eye,
-  Loader2,
-  Minus,
-  Undo2,
-  X,
-} from 'lucide-react';
+import { AlertTriangle, Eye, Loader2 } from 'lucide-react';
 import {
   ApiError,
   provisionTenant,
   toApiError,
-  type ProvisionStep,
+  type ProvisionStepStatus,
   type ProvisionTenantRequest,
   type ProvisionTenantResponse,
 } from '@/lib/api';
-import { CopyButton, ErrorPanel, FieldRow, MonoId, PageHeader } from '@/components/ui';
+import {
+  Button,
+  CopyButton,
+  ErrorPanel,
+  Field,
+  FieldRow,
+  Input,
+  MonoId,
+  PageHeader,
+  SectionCard,
+  Select,
+  StatusPill,
+  Stepper,
+  type Step,
+  type StepStatus,
+  type StatusTone,
+} from '@/components/ui';
 
 /**
  * /onboard — tenant provisioning.
- * Source: POST /operator/v1/tenants (the saga endpoint). The step list is
- * rendered exactly as the API returns it — succeeded / failed / skipped /
- * rolled_back — and the handoff panel only appears when the API returned
- * real identifiers.
+ * Source: POST /operator/v1/tenants (the saga endpoint). The saga logic is
+ * unchanged from the original page — this refit only re-skins it onto the
+ * Stepper / SectionCard / Form primitives. The step list is rendered exactly as
+ * the API returns it (succeeded / failed / skipped / rolled_back) and the
+ * handoff panel only appears when the API returned real identifiers.
  */
 
 // Hardcoded: the four codes seeded in the global `jurisdictions` registry
@@ -56,24 +65,13 @@ const EMPTY_FORM: ProvisionTenantRequest = {
   admin_full_name: '',
 };
 
-function StepIcon({ status }: { status: ProvisionStep['status'] }) {
-  switch (status) {
-    case 'succeeded':
-      return <Check size={15} className="text-success" />;
-    case 'failed':
-      return <X size={15} className="text-critical" />;
-    case 'rolled_back':
-      return <Undo2 size={15} className="text-warning" />;
-    case 'skipped':
-      return <Minus size={15} className="text-slate-light" />;
-  }
-}
+const PHASE_INDEX: Record<Phase, number> = { form: 0, review: 1, submitting: 2, done: 3 };
 
-const STEP_STATUS_CLASS: Record<ProvisionStep['status'], string> = {
-  succeeded: 'text-success',
-  failed: 'text-critical',
-  rolled_back: 'text-warning',
-  skipped: 'text-slate-light',
+const STEP_TONE: Record<ProvisionStepStatus, StatusTone> = {
+  succeeded: 'success',
+  failed: 'critical',
+  rolled_back: 'amber',
+  skipped: 'slate',
 };
 
 export default function OnboardPage() {
@@ -138,138 +136,157 @@ export default function OnboardPage() {
   const succeeded = Boolean(result?.succeeded && result.organization_id && result.bank_id);
   const failedStep = result?.steps.find((s) => s.status === 'failed') ?? null;
   const handoffEmail = result?.admin_email ?? form.admin_email;
+  const failedRun = phase === 'done' && (Boolean(submitError) || Boolean(result && !succeeded));
 
-  const inputClass =
-    'w-full rounded-md border border-border bg-surface-base px-3 py-2 text-body text-ink placeholder:text-slate-light focus:border-focus focus:outline-none';
-  const labelClass = 'mb-1 block text-caption font-medium text-slate';
+  function resetAll() {
+    setForm(EMPTY_FORM);
+    setCurrencyTouched(false);
+    setResult(null);
+    setSubmitError(null);
+    setOtpRevealed(false);
+    setPhase('form');
+  }
+
+  const steps: Step[] = [
+    { key: 'form', label: 'Details' },
+    { key: 'review', label: 'Review' },
+    {
+      key: 'provision',
+      label: 'Provision',
+      status: failedRun ? ('error' as StepStatus) : undefined,
+    },
+    {
+      key: 'done',
+      label: 'Complete',
+      status: failedRun ? ('error' as StepStatus) : undefined,
+    },
+  ];
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-3xl">
       <PageHeader
         title="Onboard a tenant"
-        sub="Provisions the organization, bank, and first admin through the operator API's saga. Nothing is created until you confirm the review step."
+        subtitle="Provisions the organization, bank, and first admin through the operator API's saga. Nothing is created until you confirm the review step."
       />
+
+      <div className="card mb-6 px-5 py-4">
+        <Stepper steps={steps} current={PHASE_INDEX[phase]} />
+      </div>
 
       {/* ---------------------------------------------------------- form */}
       {phase === 'form' && (
         <form
-          className="card space-y-4 p-5"
           onSubmit={(e) => {
             e.preventDefault();
             if (formComplete) setPhase('review');
           }}
         >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className={labelClass}>Organization name</span>
-              <input
-                className={inputClass}
-                value={form.organization_name}
-                onChange={(e) => set('organization_name', e.target.value)}
-                placeholder="e.g. Horizon Financial Group"
-                required
-              />
-            </label>
-            <label className="block">
-              <span className={labelClass}>Bank name</span>
-              <input
-                className={inputClass}
-                value={form.bank_name}
-                onChange={(e) => set('bank_name', e.target.value)}
-                placeholder="e.g. Horizon Bank Ghana"
-                required
-              />
-            </label>
-            <label className="block">
-              <span className={labelClass}>License type</span>
-              <input
-                className={inputClass}
-                value={form.license_type}
-                onChange={(e) => set('license_type', e.target.value)}
-                list="license-presets"
-                placeholder="e.g. universal"
-                required
-              />
-              <datalist id="license-presets">
-                {LICENSE_PRESETS.map((l) => (
-                  <option key={l} value={l} />
-                ))}
-              </datalist>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Jurisdiction</span>
-              <select
-                className={inputClass}
-                value={form.jurisdiction_code}
-                onChange={(e) => onJurisdictionChange(e.target.value)}
-              >
-                {JURISDICTIONS.map((j) => (
-                  <option key={j.code} value={j.code}>
-                    {j.code} — {j.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Reporting currency</span>
-              <input
-                className={`${inputClass} font-mono uppercase ${
-                  form.currency && !currencyValid ? 'border-critical' : ''
-                }`}
-                value={form.currency}
-                maxLength={3}
-                onChange={(e) => {
-                  setCurrencyTouched(true);
-                  set('currency', e.target.value.toUpperCase());
-                }}
-                placeholder="GHS"
-                required
-              />
-              <span className="mt-1 block text-micro text-slate-light">
-                Prefilled from the jurisdiction; override deliberately — the backend has no
-                default and will report in exactly this unit.
+          <SectionCard
+            title="Institution details"
+            subtitle="Jurisdictions are the four seeded in the registry (GH/NG/KE/ZA); no jurisdictions endpoint exists yet."
+            footer={
+              <span className="text-caption text-slate">
+                A bank has no default currency — it reports in exactly the unit set here.
               </span>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Admin email</span>
-              <input
-                type="email"
-                className={inputClass}
-                value={form.admin_email}
-                onChange={(e) => set('admin_email', e.target.value)}
-                placeholder="admin@bank.example"
+            }
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Organization name" required>
+                <Input
+                  value={form.organization_name}
+                  onChange={(e) => set('organization_name', e.target.value)}
+                  placeholder="e.g. Horizon Financial Group"
+                  required
+                />
+              </Field>
+              <Field label="Bank name" required>
+                <Input
+                  value={form.bank_name}
+                  onChange={(e) => set('bank_name', e.target.value)}
+                  placeholder="e.g. Horizon Bank Ghana"
+                  required
+                />
+              </Field>
+              <Field label="License type" required hint="Free text; presets are suggestions.">
+                <Input
+                  value={form.license_type}
+                  onChange={(e) => set('license_type', e.target.value)}
+                  list="license-presets"
+                  placeholder="e.g. universal"
+                  required
+                />
+                <datalist id="license-presets">
+                  {LICENSE_PRESETS.map((l) => (
+                    <option key={l} value={l} />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="Jurisdiction" required>
+                <Select
+                  value={form.jurisdiction_code}
+                  onChange={(e) => onJurisdictionChange(e.target.value)}
+                >
+                  {JURISDICTIONS.map((j) => (
+                    <option key={j.code} value={j.code}>
+                      {j.code} — {j.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field
+                label="Reporting currency"
                 required
-              />
-            </label>
-            <label className="block sm:col-span-2">
-              <span className={labelClass}>Admin full name</span>
-              <input
-                className={inputClass}
-                value={form.admin_full_name}
-                onChange={(e) => set('admin_full_name', e.target.value)}
-                placeholder="First admin of the institution"
-                required
-              />
-            </label>
-          </div>
+                error={form.currency && !currencyValid ? 'Must be a 3-letter ISO-4217 code.' : undefined}
+                hint="Prefilled from the jurisdiction; override deliberately — the backend has no default."
+              >
+                <Input
+                  className="font-mono uppercase"
+                  value={form.currency}
+                  maxLength={3}
+                  invalid={Boolean(form.currency) && !currencyValid}
+                  onChange={(e) => {
+                    setCurrencyTouched(true);
+                    set('currency', e.target.value.toUpperCase());
+                  }}
+                  placeholder="GHS"
+                  required
+                />
+              </Field>
+              <Field label="Admin email" required>
+                <Input
+                  type="email"
+                  value={form.admin_email}
+                  onChange={(e) => set('admin_email', e.target.value)}
+                  placeholder="admin@bank.example"
+                  required
+                />
+              </Field>
+              <Field label="Admin full name" required className="sm:col-span-2">
+                <Input
+                  value={form.admin_full_name}
+                  onChange={(e) => set('admin_full_name', e.target.value)}
+                  placeholder="First admin of the institution"
+                  required
+                />
+              </Field>
+            </div>
 
-          <div className="flex justify-end border-t border-border-light pt-4">
-            <button
-              type="submit"
-              disabled={!formComplete}
-              className="btn-primary px-4 py-2 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Review
-            </button>
-          </div>
+            <div className="mt-4 flex justify-end border-t border-border-light pt-4">
+              <Button type="submit" disabled={!formComplete}>
+                Review
+              </Button>
+            </div>
+          </SectionCard>
         </form>
       )}
 
       {/* -------------------------------------------------------- review */}
       {phase === 'review' && (
-        <div className="card p-5">
-          <h2 className="text-h3 text-navy">This will create…</h2>
-          <div className="mt-3 divide-y divide-border-light">
+        <SectionCard
+          title="This will create…"
+          subtitle="The API runs this as a saga: organization → bank → admin. Each step reports its own outcome, and a failure rolls back what preceded it."
+        >
+          <div className="divide-y divide-border-light">
             <FieldRow label="Organization">{form.organization_name}</FieldRow>
             <FieldRow label="Bank">{form.bank_name}</FieldRow>
             <FieldRow label="License type">{form.license_type}</FieldRow>
@@ -284,33 +301,19 @@ export default function OnboardPage() {
               {form.admin_full_name} · <span className="font-mono">{form.admin_email}</span>
             </FieldRow>
           </div>
-          <p className="mt-4 text-caption text-slate">
-            The API runs this as a saga: organization → bank → admin account. Each step reports
-            its own outcome below, and a failure rolls back what preceded it.
-          </p>
           <div className="mt-4 flex justify-between border-t border-border-light pt-4">
-            <button
-              type="button"
-              onClick={() => setPhase('form')}
-              className="rounded border border-border px-4 py-2 text-body font-medium text-ink hover:bg-surface"
-            >
+            <Button variant="secondary" onClick={() => setPhase('form')}>
               Back
-            </button>
-            <button
-              type="button"
-              onClick={() => void provision()}
-              className="btn-primary px-4 py-2 text-body font-medium"
-            >
-              Provision tenant
-            </button>
+            </Button>
+            <Button onClick={() => void provision()}>Provision tenant</Button>
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* ------------------------------------------- submitting / result */}
       {phase === 'submitting' && (
         <div className="card flex items-center gap-3 p-5">
-          <Loader2 size={18} className="animate-spin text-action" />
+          <Loader2 size={18} className="animate-spin text-action" aria-hidden />
           <div>
             <p className="text-body font-medium text-navy">Provisioning…</p>
             <p className="text-caption text-slate">
@@ -331,52 +334,36 @@ export default function OnboardPage() {
             </Link>{' '}
             before retrying.
           </p>
-          <button
-            type="button"
-            onClick={() => setPhase('review')}
-            className="rounded border border-border px-4 py-2 text-body font-medium text-ink hover:bg-surface"
-          >
+          <Button variant="secondary" onClick={() => setPhase('review')}>
             Back to review
-          </button>
+          </Button>
         </div>
       )}
 
       {phase === 'done' && result && (
         <div className="space-y-4">
           {/* Saga step record — rendered verbatim from the API */}
-          <div className="card">
-            <h2 className="border-b border-border-light px-5 py-3 text-h3 text-navy">
-              Provisioning steps
-            </h2>
+          <SectionCard title="Provisioning steps" noPadding>
             <ul className="divide-y divide-border-light">
               {result.steps.map((s, i) => (
-                <li key={`${s.step}-${i}`} className="flex items-start gap-3 px-5 py-3">
-                  <span className="mt-0.5 shrink-0">
-                    <StepIcon status={s.status} />
-                  </span>
+                <li key={`${s.step}-${i}`} className="flex items-start justify-between gap-3 px-5 py-3">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-body text-ink">{s.step}</span>
-                      <span
-                        className={`text-micro font-medium uppercase tracking-wide ${STEP_STATUS_CLASS[s.status]}`}
-                      >
-                        {s.status.replace('_', ' ')}
-                      </span>
-                    </div>
+                    <span className="font-mono text-body text-ink">{s.step}</span>
                     {s.detail && (
                       <p className="mt-0.5 break-words text-caption text-slate">{s.detail}</p>
                     )}
                   </div>
+                  <StatusPill tone={STEP_TONE[s.status]}>{s.status.replace(/_/g, ' ')}</StatusPill>
                 </li>
               ))}
             </ul>
-          </div>
+          </SectionCard>
 
           {/* API warnings — rendered verbatim, success or not */}
           {result.warnings.length > 0 && (
             <div className="card border-warning/40 p-4">
               <div className="flex items-start gap-2">
-                <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
+                <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
                 <div className="min-w-0 flex-1">
                   <p className="text-body font-medium text-navy">Warnings from the API</p>
                   <ul className="mt-1 list-disc space-y-0.5 pl-5 text-caption text-slate">
@@ -409,16 +396,16 @@ export default function OnboardPage() {
               {/* One-time admin password — reveal once, copy now */}
               <div className="mt-4 rounded-md border border-warning/50 bg-warning-light p-4">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
+                  <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <p className="text-body font-medium text-navy">
                       One-time admin password — copy it NOW
                     </p>
                     <p className="mt-1 text-caption text-slate">
-                      This is the only time the operator API will ever show this password — only
-                      a hash is stored server-side. Copy it and hand it to{' '}
-                      <span className="font-medium">{handoffEmail}</span> over a secure channel;
-                      it leaves this screen forever when you navigate away.
+                      This is the only time the operator API will ever show this password — only a
+                      hash is stored server-side. Copy it and hand it to{' '}
+                      <span className="font-medium">{handoffEmail}</span> over a secure channel; it
+                      leaves this screen forever when you navigate away.
                     </p>
                     <div className="mt-3">
                       {result.admin_one_time_password === null ? (
@@ -436,13 +423,14 @@ export default function OnboardPage() {
                           />
                         </div>
                       ) : (
-                        <button
-                          type="button"
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={<Eye size={13} aria-hidden />}
                           onClick={() => setOtpRevealed(true)}
-                          className="inline-flex items-center gap-1.5 rounded border border-border bg-surface-base px-3 py-1.5 text-caption font-medium text-ink hover:bg-surface"
                         >
-                          <Eye size={13} /> Reveal one-time password
-                        </button>
+                          Reveal one-time password
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -477,9 +465,9 @@ export default function OnboardPage() {
                     Hand the admin their credentials. On first sign-in they set a real password.
                   </li>
                   <li>
-                    The bank&apos;s IT completes SSO in the product under Settings →
-                    Authentication (issuer, client id/secret, allowed domains — and the redirect
-                    URIs above registered at their IdP; sign-in AND signing step-up).
+                    The bank&apos;s IT completes SSO in the product under Settings → Authentication
+                    (issuer, client id/secret, allowed domains — and the redirect URIs above
+                    registered at their IdP; sign-in AND signing step-up).
                   </li>
                   <li>
                     The bank goes live on its first ingestion — there is no seeded data; the Data
@@ -491,23 +479,13 @@ export default function OnboardPage() {
               <div className="mt-4 flex gap-2">
                 <Link
                   href={`/tenants/${result.organization_id}`}
-                  className="btn-primary px-4 py-2 text-body font-medium"
+                  className="btn-primary inline-flex items-center justify-center rounded-md px-4 py-2 text-body font-medium text-white"
                 >
                   Open tenant
                 </Link>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForm(EMPTY_FORM);
-                    setCurrencyTouched(false);
-                    setResult(null);
-                    setOtpRevealed(false);
-                    setPhase('form');
-                  }}
-                  className="rounded border border-border px-4 py-2 text-body font-medium text-ink hover:bg-surface"
-                >
+                <Button variant="secondary" onClick={resetAll}>
                   Onboard another
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -536,22 +514,16 @@ export default function OnboardPage() {
                 </p>
               )}
               <p className="mt-2 text-caption text-slate">
-                Steps marked <span className="font-medium text-warning">rolled back</span> above
-                were undone by the saga; anything marked{' '}
+                Steps marked <span className="font-medium text-warning">rolled back</span> above were
+                undone by the saga; anything marked{' '}
                 <span className="font-medium text-success">succeeded</span> without a rollback may
                 still exist — check the tenant list before re-running.
               </p>
               <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPhase('review')}
-                  className="btn-primary px-4 py-2 text-body font-medium"
-                >
-                  Back to review
-                </button>
+                <Button onClick={() => setPhase('review')}>Back to review</Button>
                 <Link
                   href="/tenants"
-                  className="rounded border border-border px-4 py-2 text-body font-medium text-ink hover:bg-surface"
+                  className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-body font-medium text-ink hover:bg-surface"
                 >
                   Check tenant list
                 </Link>

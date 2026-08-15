@@ -125,3 +125,47 @@ class TestMonthlyStatusReport:
             read_fixture("gfim_status_report_2026-06.txt"), context=CTX
         )
         assert any("unsupported" in w for w in result.warnings)
+
+    def test_month_resolves_by_majority_vote_over_comparison_years(self) -> None:
+        # The reconstructed banner collapses the drop-cap ('JULY2026'), and a
+        # lone prior-year comparison ('AS AT JULY 2025') sits beside the report
+        # month — the majority vote must land on the report month regardless.
+        text = (
+            "JULY2026\n"
+            "AS AT JULY 2025 AS AT JULY 2026\n"
+            "OTHER MARKET STATISTICS FOR JULY 2026 Vs 2025\n"
+            "L.    SECURITIES TRADED FOR JULY 2026\n"
+            "B.  SUMMARY OF TRADE STATISTICS\n"
+            "Volume Traded 1,000\n"
+            "Value Traded (GHS) 2,000\n"
+            "No. of Trades 5\n"
+        )
+        result = gfim.parse_gfim_status_report(text.encode(), context=CTX)
+        assert result.errors == []
+        assert {o.as_of_date for o in result.observations} == {date(2026, 7, 1)}
+
+    def test_month_falls_back_to_source_filename(self) -> None:
+        # A layout change that shatters the in-document banner still resolves
+        # from the FileBird upload name carried on the capture.
+        text = (
+            "B.  SUMMARY OF TRADE STATISTICS\n"
+            "Volume Traded 1,000\n"
+            "Value Traded (GHS) 2,000\n"
+            "No. of Trades 5\n"
+        )
+        ctx = ParseContext(
+            as_of_date=date(2026, 8, 14),
+            source_url=(
+                "https://gfim.com.gh/wp-content/uploads/2026/08/"
+                "GFIM-Status-Report-July-2026.pdf"
+            ),
+        )
+        result = gfim.parse_gfim_status_report(text.encode(), context=ctx)
+        assert result.errors == []
+        assert {o.as_of_date for o in result.observations} == {date(2026, 7, 1)}
+
+    def test_no_month_anywhere_is_a_clean_error(self) -> None:
+        result = gfim.parse_gfim_status_report(b"no month, no filename", context=CTX)
+        assert result.observations == []
+        assert len(result.errors) == 1
+        assert "report month not found" in result.errors[0]

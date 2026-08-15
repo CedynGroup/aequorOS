@@ -53,6 +53,30 @@ def provision_payload(**overrides: Any) -> dict[str, Any]:
     return payload
 
 
+def start_inspection(
+    client: TestClient,
+    organization_id: str,
+    *,
+    mode: str = "consent",
+    token: str = DEV_TOKEN,
+) -> str:
+    """Open an ACTIVE Tenant Inspector session and return its session_id.
+
+    The deep per-tenant read endpoints are gated on such a session; tests that
+    exercise a 200 read open one first through this helper."""
+    response = client.post(
+        "/operator/v1/inspector/sessions",
+        json={
+            "organization_id": organization_id,
+            "reason": "test inspection",
+            "mode": mode,
+        },
+        headers=operator_headers(token),
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["session_id"]
+
+
 def fake_storage_settings() -> StorageEngineSettings:
     """Explicit settings, .env loading disabled — a developer's local S3
     values can never leak into the fake-client tests."""

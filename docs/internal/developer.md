@@ -109,6 +109,14 @@ The design that does this with the smallest secret surface:
   with the MinIO retirement date (2027-01-14) — the migration is then
   "move two dev-era tenants", not a fleet.
 
+**Production acceptance gate.** Code and hermetic tests are not evidence that
+the AWS path is operational. Before an AWS-provisioned tenant is represented as
+crypto-shred-capable, run and retain evidence for one real non-production AWS
+onboarding: bucket creation in the target region, bucket policy and SSE-KMS
+inspection on all four buckets, write/GET/delete probe, `tenant_storage` ARN
+record, and a controlled `ScheduleKeyDeletion` drill. The existing MinIO
+onboarding proof does not satisfy this gate.
+
 ## 3. Backend: operator read APIs (CP-2 ops slice)
 
 All read-only in this phase, all cross-tenant, all through the operator
@@ -119,9 +127,9 @@ BFF's own DB role:
   live-engine freshness per module, SSO state (stub/enabled), last
   ingestion batch outcome.
 - `GET /operator/tenants/{org}/activity` — unified feed: ingestion batches
-  (with the 4-state outcomes), jobs (queued/running/succeeded/failed —
-  including which worker generation claimed them, once the job row carries
-  it; today claimant identity is a gap worth one added column, see §6),
+  (with the 4-state outcomes), jobs (queued/running/succeeded/failed, the
+  runtime that most recently claimed each job, retry count, and failure
+  detail),
   official runs minted, packages generated/submitted, audit_events tail.
 - `GET /operator/data-engines` — cross-tenant connection health: every
   Database-Direct/T24/market-data connection's lifecycle status, last sync,
@@ -162,6 +170,10 @@ BFF's own DB role:
   The founder (`eric@aequoros.com`) is seeded as `operator_admin`.
   Scheduled hardening, not blockers: MFA/TOTP on password accounts and/or
   IdP enforcement once a Workspace exists; IP allowlisting per staff_UI.md.
+- **Worker attribution (built 2026-08-15):** every worker claim persists
+  `jobs.claimed_by`; set `WORKER_ID` to a deployment/runtime identifier for
+  durable fleet attribution (host:PID is the local fallback). The Operations
+  board lists cross-tenant job history with this claimant metadata.
 - **Audit**: every BFF request writes an `audit_events` row with
   `operator_context` (operator email, request id); provisioning steps each
   write their own. The append-only trigger already guarantees immutability.
@@ -183,15 +195,12 @@ BFF endpoints:
    ending with the handoff pack: platform IDs, the two OIDC redirect URIs,
    the first-admin credential flow, and "bank goes live on first
    ingestion".
-3. **Operations** — cross-tenant jobs/batches board (the shared-jobs-table
-   race becomes VISIBLE here: which runtime claimed each job), data-engine
+3. **Operations** — cross-tenant jobs/batches board (including the runtime
+  that claimed each job), data-engine
    connection wall, invariant dashboard.
 
 ## 6. Known gaps this spec does NOT close (tracked, ordered)
 
-- **Job claimant identity**: jobs don't record which worker/runtime claimed
-  them — one column + worker stamp makes the prod/local race observable in
-  the console. Small backend change, high ops value; do it with CP-2.
 - **Impersonation** (CP-2b): read-only first, examiner-role shaped, dual
   identity `act` token, banner, separate audit stream — per staff_UI.md §5.
   Not in this phase.
@@ -211,11 +220,13 @@ BFF endpoints:
 2. Operator BFF skeleton + workforce login + audit context.
 3. Read APIs + Tenants/Operations screens.
 4. Onboard-bank screen over the saga.
-5. Job-claimant column + race visibility.
+5. Job-claimant column + race visibility — **BUILT 2026-08-15**.
 
 ## 8. As-built status (2026-08-11)
 
-Everything in §7 items 0–4 is BUILT and on main, proven live:
+Everything in §7 items 0–4 is implemented and covered by the deployed control
+plane or hermetic tests. The AWS KMS path remains subject to the production
+acceptance gate in §2a; the MinIO proof below is not an AWS certification:
 
 - **CP-1**: provisioning saga end-to-end (first real tenant BK-7CF5N6KS
   provisioned from the console with 4 MinIO buckets + probe + SSO stub +
@@ -240,5 +251,4 @@ Everything in §7 items 0–4 is BUILT and on main, proven live:
   determination published to the primary 2026-08-09 (447k observations,
   593 series).
 - Still open: CP-2b impersonation; CP-4 crypto-shred for MinIO-resident
-  tenants; job-claimant column (§7 item 5); MFA/TOTP hardening on
-  password accounts; billing.
+  tenants; MFA/TOTP hardening on password accounts; billing.

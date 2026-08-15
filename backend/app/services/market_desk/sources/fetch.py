@@ -72,6 +72,19 @@ class FetchError(RuntimeError):
     """A source's published mechanics did not hold on this fetch."""
 
 
+class SourceNotYetPublished(FetchError):
+    """A lagging publication legitimately has no edition yet for the requested
+    (or any recent) period — an EXPECTED, soft outcome, not a fetch failure.
+
+    BoG publishes the monthly APR / SEFD notices one to two months in arrears,
+    so the current month's slug 404s as a matter of course; likewise a GFIM
+    monthly folder may not carry this month's status report yet. Subclassing
+    ``FetchError`` keeps existing ``except FetchError`` sites working, while
+    the capture job special-cases it into a ``pending`` summary (no ``failed``
+    capture row) so the morning desk is not paged for a normal lag.
+    """
+
+
 @dataclass(frozen=True)
 class RawFetch:
     """One raw response, exactly as fetched — the future capture payload."""
@@ -513,6 +526,17 @@ BOG_AUCTION_INDEX_URL = "https://www.bog.gov.gh/bog_auction_results/"
 GFIM_DAILY_REPORTS_URL = "https://gfim.com.gh/daily-trading-reports/"
 GFIM_MONTHLY_REPORTS_URL = "https://gfim.com.gh/monthly-reports/"
 
+# The monthly folder holds only "GFIM Status Report - <Month> <Year>" PDFs
+# today, but pinning the target by title (rather than blindly taking the
+# newest file) survives the day GFIM drops a stray non-status file in front:
+# we always pick the newest STATUS REPORT, never a yield-curve deck or a
+# corporate-admissions circular that happened to sort first.
+_STATUS_REPORT_TITLE_RE = re.compile(r"status\s+report", re.IGNORECASE)
+
+
+def is_status_report_title(title: str) -> bool:
+    return bool(_STATUS_REPORT_TITLE_RE.search(title))
+
 
 def fetch_source(  # noqa: PLR0911, PLR0913 - one dispatch arm/knob per protocol
     source_key: str,
@@ -554,9 +578,20 @@ def fetch_source(  # noqa: PLR0911, PLR0913 - one dispatch arm/knob per protocol
             session, page_url=GFIM_DAILY_REPORTS_URL, year=year, limit=limit
         )
     if source_key == "gfim_monthly_status":
-        return fetch_filebird_files(
-            session, page_url=GFIM_MONTHLY_REPORTS_URL, year=year, limit=limit
+        fetches = fetch_filebird_files(
+            session,
+            page_url=GFIM_MONTHLY_REPORTS_URL,
+            year=year,
+            limit=limit,
+            name_filter=is_status_report_title,
         )
+        if not any(item.meta.get("kind") == "report_file" for item in fetches):
+            # Folder resolved but carries no status report for this year yet:
+            # a normal early-in-the-period lag, not a broken fetch.
+            raise SourceNotYetPublished(
+                "gfim_monthly_status: monthly folder has no status-report file yet"
+            )
+        return fetches
     if source_key == "gss_interest_px":
         return fetch_pxweb_table(session)
     raise FetchError(f"no fetch mechanics registered for source_key={source_key!r}")

@@ -153,6 +153,81 @@ def decode_token(
     return claims
 
 
+# -- impersonation (act-as-examiner) -----------------------------------------
+# A cross-app token minted by the operator control plane and accepted by the
+# tenant API to open a READ-ONLY, session-bound examiner view into ONE tenant.
+# Signed with a DEDICATED secret (``AuthSettings.impersonation_jwt_secret``) so
+# it is worthless on the normal access-token path and a normal access token can
+# never masquerade as one. The tenant API pins the role to ``examiner``
+# regardless of the claim; the token merely carries provenance (which operator,
+# which inspector session, which tenant).
+IMPERSONATION_TOKEN_TYP = "impersonation"
+
+
+def mint_impersonation_token(
+    *,
+    organization_id: str,
+    act_operator: str,
+    session_id: str,
+    secret: str,
+    issued_at: dt.datetime,
+    expires_at: dt.datetime,
+    roles: list[str] | None = None,
+) -> str:
+    """Sign an act-as-examiner impersonation token for one tenant.
+
+    ``expires_at`` is supplied already clamped to the originating inspector
+    session's window (the operator endpoint does the clamping); this function
+    signs exactly what it is given so the crypto stays policy-free.
+    """
+    payload: dict[str, Any] = {
+        "typ": IMPERSONATION_TOKEN_TYP,
+        "org": str(organization_id),
+        "act_operator": act_operator,
+        "session_id": str(session_id),
+        "roles": list(roles) if roles is not None else ["examiner"],
+        "iat": int(issued_at.timestamp()),
+        "exp": int(expires_at.timestamp()),
+    }
+    return jwt.encode(payload, secret, algorithm="HS256")
+
+
+def decode_impersonation_token(token: str, *, secret: str) -> dict[str, Any] | None:
+    """Decode an impersonation token, distinguishing "not ours" from "invalid".
+
+    Returns the claims when ``token`` is a valid, unexpired impersonation token
+    signed by ``secret``.
+
+    Returns ``None`` when the token is NOT an impersonation token at all — its
+    signature does not verify against ``secret`` (a normal tenant access token,
+    signed with a DIFFERENT secret, lands here), or it is malformed, or it lacks
+    the ``impersonation`` typ. The caller then falls through to the normal
+    access-token path with NO regression.
+
+    Raises :class:`TokenInvalidError` when the token IS an impersonation token
+    (its signature verifies against ``secret``) but fails a check — an EXPIRED
+    impersonation token above all. An expired impersonation token must be
+    rejected, never fall through.
+    """
+    try:
+        claims: dict[str, Any] = jwt.decode(
+            token,
+            secret,
+            algorithms=["HS256"],
+            options={"require": ["exp", "iat", "typ", "org"]},
+        )
+    except jwt.ExpiredSignatureError as exc:
+        # Signature matched the impersonation secret → this IS an impersonation
+        # token, but it has expired. Reject; do not fall through.
+        raise TokenInvalidError("impersonation token expired") from exc
+    except jwt.PyJWTError:
+        # Wrong signature / malformed / missing required claim → not one of ours.
+        return None
+    if claims.get("typ") != IMPERSONATION_TOKEN_TYP:
+        return None
+    return claims
+
+
 @lru_cache(maxsize=8)
 def _jwks_client(jwks_url: str) -> PyJWKClient:
     from jwt import PyJWKClient  # noqa: PLC0415 - lazy; only the SSO path needs it

@@ -37,3 +37,31 @@ export function fmtTs(iso: string | null | undefined): string {
   if (Number.isNaN(t)) return iso;
   return new Date(t).toISOString().replace('T', ' ').replace(/\.\d+Z$/, 'Z');
 }
+
+/**
+ * Compact timestamp for footer/meta rows — YYYY-MM-DD HH:MM (UTC); DASH when
+ * absent. Accepts either an ISO string or a Date (the SectionCard/RunBadge
+ * grammar ported from the dashboard hands in Dates).
+ */
+export function fmtTimestamp(input: string | Date | null | undefined): string {
+  if (input === null || input === undefined) return DASH;
+  const t = input instanceof Date ? input.getTime() : Date.parse(input);
+  if (Number.isNaN(t)) return typeof input === 'string' ? input : DASH;
+  return new Date(t).toISOString().replace('T', ' ').replace(/:\d{2}\.\d+Z$/, 'Z');
+}
+
+/** Truncate a long id/hash for display (keeps the leading `len` chars + ellipsis). */
+export function shortId(value: string | null | undefined, len = 8): string {
+  if (!value) return DASH;
+  return value.length <= len ? value : `${value.slice(0, len)}…`;
+}
+
+/**
+ * Coerce a decimal-as-string (the desk wire convention — values ride as JSON
+ * strings to preserve precision) or a number to a JS number; 0 when unparseable.
+ */
+export function num(value: string | number | null | undefined): number {
+  if (value === null || value === undefined || value === '') return 0;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}

@@ -8,12 +8,8 @@ import {
   Calculator,
   CheckCircle2,
   FileText,
-  Loader2,
   Plus,
-  Table2,
   Trash2,
-  TrendingUp,
-  Upload,
   Waypoints,
   XCircle,
 } from 'lucide-react';
@@ -29,7 +25,9 @@ import {
   type ApiError,
   type DeskCurveConstructResponse,
   type DeskCurveDefinition,
+  type DeskCurveGridRow,
   type DeskCurveLeg,
+  type DeskCurvePillarView,
   type DeskCurveQuote,
   type DeskDetermination,
   type DeskPublication,
@@ -39,27 +37,40 @@ import { fmtDate, DASH } from '@/lib/format';
 import {
   CeremonyBanner,
   CurveDefinitionStatusPill,
-  LineChart,
   activeDefinitionFor,
 } from '@/components/curves';
-import { PublicationResults } from '@/components/desk';
+import { CurveResultCharts } from '@/components/curves/CurveResultCharts';
+import { DeterminationStatusPill, PublicationResults } from '@/components/desk';
 import {
+  Button,
   Chip,
+  type Column,
   CopyButton,
+  DataTable,
   EmptyState,
   ErrorPanel,
-  SkeletonRows,
+  Field,
+  InfoTip,
+  Input,
+  QueryBoundary,
+  SectionCard,
+  Select,
+  StatusPill,
+  Stepper,
+  SubTabs,
+  type Step,
+  type Tone,
 } from '@/components/ui';
 
 /**
  * /desk/curves/[curveCode] — the Curve Construction workspace (FC-4, spec §4.1).
  *
- * The Refinitiv-familiar surface: an Assumptions-analogue parameter panel
- * (fields DERIVED from the approved definition, read-only because Track-2 governs
- * them; As-of Date + the quote grid are the Track-1 run inputs), a live
- * instrument grid, and the three linked results views — the tenor-adjusted
- * forward grid (Start/End/DF/Yield), charts, and pillar nodes — with the hard QA
- * gates gating publish to golden copy.
+ * The Eikon-familiar surface: an Assumptions-analogue parameter panel (fields
+ * DERIVED from the approved definition, read-only because Track-2 governs them;
+ * As-of Date + the quote grid are the Track-1 run inputs), a live instrument
+ * grid, and the three linked results views — the tenor-adjusted forward grid
+ * (Start/End/DF/Yield), interactive charts, and pillar nodes — with the hard QA
+ * gates gating publish to golden copy through the FC-G2 per-cob maker-checker.
  */
 
 const INSTRUMENT_KINDS: { value: string; label: string }[] = [
@@ -89,14 +100,14 @@ function fmtPct(dec: number, digits = 3): string {
   return `${(dec * 100).toFixed(digits)}%`;
 }
 
-function fmtMonths(months: number): string {
-  if (months <= 0) return 'spot';
-  if (months % 12 === 0) return `${months / 12}y`;
-  return `${months}m`;
+// Per-row readiness of an instrument entry, surfaced as a state chip.
+function rowState(r: GridRow): { tone: Tone; label: string } {
+  if (!r.include) return { tone: 'neutral', label: 'excluded' };
+  const q = Number(r.quotePct);
+  if (r.quotePct.trim() !== '' && Number.isNaN(q)) return { tone: 'crit', label: 'bad quote' };
+  if (r.tenor.trim() === '' || r.quotePct.trim() === '') return { tone: 'warn', label: 'incomplete' };
+  return { tone: 'ok', label: 'ready' };
 }
-
-const inputClass =
-  'rounded-md border border-border bg-surface-base px-2.5 py-1.5 text-body text-ink focus:border-focus focus:outline-none';
 
 // ---------------------------------------------------------------------------
 // Small presentational helpers
@@ -125,42 +136,6 @@ function QaGate({ ok, label, measure }: { ok: boolean; label: string; measure: s
       <span className="num text-caption text-slate">{measure}</span>
     </div>
   );
-}
-
-function RailStep({
-  n,
-  label,
-  state,
-}: {
-  n: number;
-  label: string;
-  state: 'done' | 'current' | 'todo' | 'fail';
-}) {
-  const cls =
-    state === 'done'
-      ? 'bg-success-light text-success border-transparent'
-      : state === 'current'
-        ? 'bg-action-light text-action border-action/40'
-        : state === 'fail'
-          ? 'bg-critical-light text-critical border-transparent'
-          : 'bg-surface text-slate-light border-border-light';
-  return (
-    <span
-      className={`rounded border px-2.5 py-1 text-micro font-medium uppercase tracking-wide ${cls}`}
-    >
-      {n}. {label}
-    </span>
-  );
-}
-
-/** The staged determination's lifecycle status, as a toned chip. */
-function DeterminationStatusChip({ status }: { status: string }) {
-  if (status === 'published') return <Chip tone="ok">published</Chip>;
-  if (status === 'approved') return <Chip tone="accent">approved</Chip>;
-  if (status === 'pending_review') return <Chip tone="warn">pending review</Chip>;
-  if (status === 'rejected') return <Chip tone="crit">rejected</Chip>;
-  if (status === 'draft') return <Chip>draft</Chip>;
-  return <Chip tone="neutral">{status.replace(/_/g, ' ')}</Chip>;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +201,7 @@ export default function CurveWorkspacePage() {
   const currentSig = useMemo(() => JSON.stringify({ asOf, quotes }), [asOf, quotes]);
   const stale = result !== null && resultSig !== currentSig;
   const hasProjectionLeg = quotes.some((q) => q.leg === 'projection');
+  const incompleteCount = rows.filter((r) => r.include && rowState(r).label !== 'ready').length;
 
   function updateRow(key: string, patch: Partial<GridRow>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -297,9 +273,8 @@ export default function CurveWorkspacePage() {
   const canStage =
     active !== null && result !== null && result.qa.passed && !stale && determination === null;
 
-  // lifecycle rail states (determination-status driven)
+  // Lifecycle rail states (determination-status driven).
   const detStatus = determination?.status ?? null;
-  const stepDef: 'done' | 'fail' = active ? 'done' : 'fail';
   const stepConstruct = result !== null && !stale;
   const stepQaFail = result !== null && !result.qa.passed;
   const stepStaged = determination !== null;
@@ -307,6 +282,95 @@ export default function CurveWorkspacePage() {
     detStatus === 'pending_review' || detStatus === 'approved' || detStatus === 'published';
   const stepApproved = detStatus === 'approved' || detStatus === 'published';
   const stepPublished = publication !== null || detStatus === 'published';
+
+  const steps: Step[] = [
+    { key: 'def', label: 'Definition', status: active ? 'complete' : 'error' },
+    {
+      key: 'construct',
+      label: 'Construct',
+      status: stepQaFail
+        ? 'error'
+        : stepConstruct
+          ? 'complete'
+          : quotes.length
+            ? 'current'
+            : 'upcoming',
+    },
+    {
+      key: 'stage',
+      label: 'Stage draft',
+      status: stepStaged ? 'complete' : stepConstruct && result?.qa.passed ? 'current' : 'upcoming',
+    },
+    {
+      key: 'submit',
+      label: 'Submit',
+      status:
+        detStatus === 'rejected'
+          ? 'error'
+          : stepSubmitted
+            ? 'complete'
+            : detStatus === 'draft'
+              ? 'current'
+              : 'upcoming',
+    },
+    {
+      key: 'approve',
+      label: 'Approve',
+      status: stepApproved ? 'complete' : detStatus === 'pending_review' ? 'current' : 'upcoming',
+    },
+    {
+      key: 'publish',
+      label: 'Publish',
+      status: stepPublished ? 'complete' : detStatus === 'approved' ? 'current' : 'upcoming',
+    },
+  ];
+
+  const gridColumns: Column<DeskCurveGridRow & { idx: number }>[] = [
+    {
+      key: 'idx',
+      header: '#',
+      render: (r) => (
+        <span className="font-mono text-micro text-slate">{r.idx === 0 ? 'spot' : r.idx}</span>
+      ),
+    },
+    { key: 'start', header: 'Start date', render: (r) => <span className="font-mono text-caption text-ink">{fmtDate(r.start)}</span> },
+    { key: 'end', header: 'End date', render: (r) => <span className="font-mono text-caption text-ink">{fmtDate(r.end)}</span> },
+    {
+      key: 'df',
+      header: 'Discount factor',
+      numeric: true,
+      render: (r) => r.discount_factor.toFixed(7),
+    },
+    {
+      key: 'yield',
+      header: 'Yield',
+      numeric: true,
+      render: (r) => (r.idx === 0 ? DASH : fmtPct(r.forward_yield)),
+    },
+  ];
+
+  const pillarColumns: Column<DeskCurvePillarView>[] = [
+    { key: 'instrument', header: 'Instrument', render: (p) => <span className="text-caption text-ink">{p.instrument}</span> },
+    { key: 'tenor', header: 'Tenor', render: (p) => <span className="font-mono text-caption text-ink">{p.tenor}</span> },
+    {
+      key: 'leg',
+      header: 'Leg',
+      render: (p) => <Chip tone={p.leg === 'projection' ? 'accent' : 'neutral'}>{p.leg}</Chip>,
+    },
+    {
+      key: 'maturity',
+      header: 'Adjusted maturity',
+      render: (p) => <span className="font-mono text-caption text-ink">{fmtDate(p.pillar_date)}</span>,
+    },
+    { key: 'quote', header: 'Quote', numeric: true, render: (p) => fmtPct(p.quote) },
+    { key: 'dfp', header: 'Discount factor', numeric: true, render: (p) => p.discount_factor.toFixed(7) },
+    {
+      key: 'residual',
+      header: 'Reprice residual',
+      numeric: true,
+      render: (p) => <span className="text-slate">{p.reprice_residual.toExponential(2)}</span>,
+    },
+  ];
 
   return (
     <div>
@@ -317,360 +381,301 @@ export default function CurveWorkspacePage() {
         <ArrowLeft size={13} /> Curve definitions
       </Link>
 
-      {defs.loading && (
-        <div className="card space-y-3 p-5">
-          <SkeletonRows rows={5} />
-        </div>
-      )}
-      {defs.error && (
-        <ErrorPanel error={defs.error} onRetry={defs.reload} context="Loading curve definitions" />
-      )}
-
-      {defs.data && definitions.length === 0 && (
-        <div className="card p-5">
-          <EmptyState
-            title={`No definition named ${curveCode}`}
-            hint={
-              <>
-                This curve code is not in the register.{' '}
-                <Link href="/desk/curves" className="text-action hover:underline">
-                  Back to definitions
-                </Link>{' '}
-                to create one.
-              </>
-            }
-          />
-        </div>
-      )}
-
-      {defs.data && definitions.length > 0 && (
-        <div className="space-y-5">
-          {/* Header */}
-          <div className="card p-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Waypoints size={18} className="text-slate" />
-                  <h1 className="text-h1 text-navy">Curve construction</h1>
-                  <Chip mono>{curveCode}</Chip>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {active ? (
-                    <>
-                      <CurveDefinitionStatusPill status="approved" />
-                      <Chip tone="accent">applying v{active.version}</Chip>
-                      {active.effective_from && (
-                        <span className="text-caption text-slate">
-                          effective {fmtDate(active.effective_from)}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <Chip tone="warn">no approved definition effective on {asOf}</Chip>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <RailStep n={1} label="Definition" state={stepDef} />
-                <RailStep
-                  n={2}
-                  label="Construct"
-                  state={
-                    stepQaFail ? 'fail' : stepConstruct ? 'done' : quotes.length ? 'current' : 'todo'
-                  }
-                />
-                <RailStep
-                  n={3}
-                  label="Stage draft"
-                  state={stepStaged ? 'done' : stepConstruct && result?.qa.passed ? 'current' : 'todo'}
-                />
-                <RailStep
-                  n={4}
-                  label="Submit"
-                  state={
-                    detStatus === 'rejected'
-                      ? 'fail'
-                      : stepSubmitted
-                        ? 'done'
-                        : detStatus === 'draft'
-                          ? 'current'
-                          : 'todo'
-                  }
-                />
-                <RailStep
-                  n={5}
-                  label="Approve"
-                  state={
-                    stepApproved ? 'done' : detStatus === 'pending_review' ? 'current' : 'todo'
-                  }
-                />
-                <RailStep
-                  n={6}
-                  label="Publish"
-                  state={stepPublished ? 'done' : detStatus === 'approved' ? 'current' : 'todo'}
-                />
-              </div>
-            </div>
-          </div>
-
-          {!active && (
-            <div className="card p-5">
-              <CeremonyBanner>
-                <p className="font-medium text-navy">No approved definition for this as-of date</p>
-                <p className="mt-1">
-                  Construction applies the latest APPROVED version whose effective date is on or
-                  before the cob. Approve a version under{' '}
+      <QueryBoundary
+        loading={defs.loading}
+        error={defs.error}
+        onRetry={defs.reload}
+        context="Loading curve definitions"
+      >
+        {definitions.length === 0 ? (
+          <SectionCard title="Not found" noPadding>
+            <EmptyState
+              title={`No definition named ${curveCode}`}
+              description={
+                <>
+                  This curve code is not in the register.{' '}
                   <Link href="/desk/curves" className="text-action hover:underline">
-                    Curve definitions
+                    Back to definitions
                   </Link>{' '}
-                  or pick an as-of date on or after an approved version&apos;s effective date.
-                  {latest && (
-                    <>
-                      {' '}
-                      Latest version is v{latest.version} ({latest.status}).
-                    </>
-                  )}
-                </p>
-              </CeremonyBanner>
-            </div>
-          )}
-
-          {/* Parameter panel (Assumptions analogue) */}
-          <div className="card">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-light px-5 py-3">
-              <h2 className="text-h3 text-navy">Assumptions</h2>
-              <Chip tone="warn">Track-2 governed · read-only</Chip>
-            </div>
-            <div className="grid gap-4 p-5 sm:grid-cols-2">
-              <div>
-                <div className="text-micro uppercase tracking-wide text-slate-light">
-                  As-of date (cob)
+                  to create one.
+                </>
+              }
+            />
+          </SectionCard>
+        ) : (
+          <div className="space-y-5">
+            {/* Header + lifecycle stepper */}
+            <div className="card p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Waypoints size={18} className="text-slate" aria-hidden />
+                    <h1 className="text-h1 text-navy">Curve construction</h1>
+                    <Chip mono>{curveCode}</Chip>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {active ? (
+                      <>
+                        <CurveDefinitionStatusPill status="approved" />
+                        <Chip tone="accent">applying v{active.version}</Chip>
+                        {active.effective_from && (
+                          <span className="text-caption text-slate">
+                            effective {fmtDate(active.effective_from)}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <StatusPill tone="amber">no approved definition effective on {asOf}</StatusPill>
+                    )}
+                  </div>
                 </div>
-                <input
-                  type="date"
-                  value={asOf}
-                  onChange={(e) => setAsOf(e.target.value)}
-                  className={`${inputClass} mt-1`}
-                />
-                <p className="mt-1 text-micro text-slate-light">
-                  Track-1 run input — valuation date; resolves the effective definition.
-                </p>
               </div>
-              <div className="flex items-end">
-                <p className="text-caption text-slate">
+              <div className="mt-5 overflow-x-auto border-t border-border-light pt-5">
+                <Stepper steps={steps} className="min-w-[680px]" />
+              </div>
+            </div>
+
+            {!active && (
+              <div className="card p-5">
+                <CeremonyBanner>
+                  <p className="font-medium text-navy">No approved definition for this as-of date</p>
+                  <p className="mt-1">
+                    Construction applies the latest APPROVED version whose effective date is on or
+                    before the cob. Approve a version under{' '}
+                    <Link href="/desk/curves" className="text-action hover:underline">
+                      Curve definitions
+                    </Link>{' '}
+                    or pick an as-of date on or after an approved version&apos;s effective date.
+                    {latest && (
+                      <>
+                        {' '}
+                        Latest version is v{latest.version} ({latest.status}).
+                      </>
+                    )}
+                  </p>
+                </CeremonyBanner>
+              </div>
+            )}
+
+            {/* Parameter panel (Assumptions analogue) */}
+            <SectionCard
+              title={
+                <span className="inline-flex items-center gap-1.5">
+                  Assumptions
+                  <InfoTip label="About the assumptions panel">
+                    Every field except the as-of date is derived from the approved definition.
+                    Changing one is a Track-2 governance event on the definitions page — never a
+                    run-time input here.
+                  </InfoTip>
+                </span>
+              }
+              actions={<Chip tone="warn">Track-2 governed · read-only</Chip>}
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="As-of date (cob)"
+                  hint="Track-1 run input — valuation date; resolves the effective definition."
+                  className="max-w-xs"
+                >
+                  <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+                </Field>
+                <p className="flex items-end text-caption text-slate">
                   Every field below is derived from the approved definition. Changing one is a
                   Track-2 event under{' '}
-                  <Link href="/desk/curves" className="text-action hover:underline">
+                  <Link href="/desk/curves" className="ml-1 text-action hover:underline">
                     Curve definitions
                   </Link>
                   .
                 </p>
               </div>
-            </div>
-            {active && (
-              <div className="grid gap-4 border-t border-border-light px-5 py-4 sm:grid-cols-3 lg:grid-cols-4">
-                <ParamCell label="Currency" mono>
-                  {active.currency}
-                </ParamCell>
-                <ParamCell label="Calendar">{active.calendar_name}</ParamCell>
-                <ParamCell label="Curve definition" mono>
-                  {active.curve_code} v{active.version}
-                </ParamCell>
-                <ParamCell label="Curve kind">{active.curve_kind}</ParamCell>
-                <ParamCell label="Projection index" mono>
-                  {active.projection_index ?? DASH}
-                </ParamCell>
-                <ParamCell label="Discount curve" mono>
-                  {active.discount_curve_code ?? DASH}
-                </ParamCell>
-                <ParamCell label="Payment frequency">
-                  {active.payment_frequency ?? DASH}
-                </ParamCell>
-                <ParamCell label="Payment interval">{active.payment_interval_months}m</ParamCell>
-                <ParamCell label="Curve frequency" mono>
-                  {active.curve_frequency}
-                </ParamCell>
-                <ParamCell label="Interpolation">{active.interpolation_method}</ParamCell>
-                <ParamCell label="Output basis (Convert to)" mono>
-                  {active.output_daycount}
-                </ParamCell>
-                <ParamCell label="Spot lag">{active.spot_lag_days}d</ParamCell>
-                <ParamCell label="Roll convention">{active.roll_convention}</ParamCell>
-                <ParamCell label="Extrapolation">{active.extrapolation_rule}</ParamCell>
-                <ParamCell label="Instrument set" mono>
-                  {active.instrument_set_ref}
-                </ParamCell>
-              </div>
-            )}
-          </div>
-
-          {/* Instrument grid */}
-          <div className="card">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-light px-5 py-3">
-              <div>
-                <h2 className="text-h3 text-navy">Instrument grid</h2>
-                <p className="mt-0.5 text-caption text-slate">
-                  Enter this cob&apos;s quotes. Rate is a percentage; the OIS/discount leg defines
-                  the discounting curve, the projection leg the forward index.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={addRow}
-                className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-caption font-medium text-ink hover:bg-surface"
-              >
-                <Plus size={13} /> Add instrument
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-body">
-                <thead>
-                  <tr className="border-b border-border-light bg-surface text-left text-micro uppercase tracking-wide text-slate">
-                    <th className="px-3 py-2 font-medium">Include</th>
-                    <th className="px-3 py-2 font-medium">Instrument</th>
-                    <th className="px-3 py-2 font-medium">Tenor</th>
-                    <th className="px-3 py-2 font-medium text-right">Quote %</th>
-                    <th className="px-3 py-2 font-medium">Leg</th>
-                    <th className="px-3 py-2 font-medium" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.key} className="border-b border-border-light last:border-b-0">
-                      <td className="px-3 py-1.5">
-                        <input
-                          type="checkbox"
-                          checked={r.include}
-                          onChange={(e) => updateRow(r.key, { include: e.target.checked })}
-                          className="h-4 w-4 accent-[color:rgb(var(--accent))]"
-                          aria-label="Include in construction"
-                        />
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <select
-                          value={r.instrument}
-                          onChange={(e) => updateRow(r.key, { instrument: e.target.value })}
-                          className={inputClass}
-                        >
-                          {INSTRUMENT_KINDS.map((k) => (
-                            <option key={k.value} value={k.value}>
-                              {k.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <input
-                          value={r.tenor}
-                          onChange={(e) => updateRow(r.key, { tenor: e.target.value })}
-                          placeholder={r.instrument === 'fra' ? '3x6' : '3M'}
-                          className={`${inputClass} w-24 font-mono`}
-                        />
-                      </td>
-                      <td className="px-3 py-1.5 text-right">
-                        <input
-                          value={r.quotePct}
-                          onChange={(e) => updateRow(r.key, { quotePct: e.target.value })}
-                          inputMode="decimal"
-                          placeholder="0.000"
-                          className={`${inputClass} w-24 text-right font-mono`}
-                        />
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <select
-                          value={r.leg}
-                          onChange={(e) =>
-                            updateRow(r.key, { leg: e.target.value as DeskCurveLeg })
-                          }
-                          className={inputClass}
-                        >
-                          <option value="discount">discount</option>
-                          <option value="projection">projection</option>
-                        </select>
-                      </td>
-                      <td className="px-3 py-1.5 text-right">
-                        <button
-                          type="button"
-                          onClick={() => removeRow(r.key)}
-                          className="rounded p-1 text-slate hover:bg-surface hover:text-critical"
-                          aria-label="Remove instrument"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {rows.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-3 py-4 text-center text-caption text-slate">
-                        No instruments — add at least one discount-leg quote.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 border-t border-border-light px-5 py-3">
-              <button
-                type="button"
-                disabled={constructBusy || quotes.length === 0 || !active}
-                onClick={() => void runConstruction()}
-                className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {constructBusy ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Calculator size={14} />
-                )}
-                Run construction
-              </button>
-              <span className="text-caption text-slate">
-                {quotes.length} quote{quotes.length === 1 ? '' : 's'} ready
-                {hasProjectionLeg ? ' · multi-curve (projection on discount)' : ' · self-discounting'}
-              </span>
-              {stale && (
-                <Chip tone="warn">inputs changed — re-run construction</Chip>
+              {active && (
+                <div className="mt-4 grid gap-4 border-t border-border-light pt-4 sm:grid-cols-3 lg:grid-cols-4">
+                  <ParamCell label="Currency" mono>{active.currency}</ParamCell>
+                  <ParamCell label="Calendar">{active.calendar_name}</ParamCell>
+                  <ParamCell label="Curve definition" mono>{active.curve_code} v{active.version}</ParamCell>
+                  <ParamCell label="Curve kind">{active.curve_kind}</ParamCell>
+                  <ParamCell label="Projection index" mono>{active.projection_index ?? DASH}</ParamCell>
+                  <ParamCell label="Discount curve" mono>{active.discount_curve_code ?? DASH}</ParamCell>
+                  <ParamCell label="Payment frequency">{active.payment_frequency ?? DASH}</ParamCell>
+                  <ParamCell label="Payment interval">{active.payment_interval_months}m</ParamCell>
+                  <ParamCell label="Curve frequency" mono>{active.curve_frequency}</ParamCell>
+                  <ParamCell label="Interpolation">{active.interpolation_method}</ParamCell>
+                  <ParamCell label="Output basis (Convert to)" mono>{active.output_daycount}</ParamCell>
+                  <ParamCell label="Spot lag">{active.spot_lag_days}d</ParamCell>
+                  <ParamCell label="Roll convention">{active.roll_convention}</ParamCell>
+                  <ParamCell label="Extrapolation">{active.extrapolation_rule}</ParamCell>
+                  <ParamCell label="Instrument set" mono>{active.instrument_set_ref}</ParamCell>
+                </div>
               )}
-            </div>
-            {constructError && (
-              <div className="px-5 pb-5">
-                <ErrorPanel error={constructError} context="Running construction" />
-                {constructError.status === 409 && (
-                  <p className="mt-2 text-caption text-slate">
-                    No approved definition is effective on {asOf} — approve one under{' '}
-                    <Link href="/desk/curves" className="text-action hover:underline">
-                      Curve definitions
-                    </Link>
-                    .
-                  </p>
-                )}
+            </SectionCard>
+
+            {/* Instrument grid */}
+            <SectionCard
+              title="Instrument grid"
+              subtitle="Enter this cob's quotes. Rate is a percentage; the discount leg defines the discounting curve, the projection leg the forward index."
+              actions={
+                <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={addRow}>
+                  Add instrument
+                </Button>
+              }
+              noPadding
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-body">
+                  <thead>
+                    <tr className="border-b border-border-light bg-surface text-left text-micro uppercase tracking-wide text-slate">
+                      <th className="px-3 py-2 font-medium">Include</th>
+                      <th className="px-3 py-2 font-medium">Instrument</th>
+                      <th className="px-3 py-2 font-medium">Tenor</th>
+                      <th className="px-3 py-2 text-right font-medium">Quote %</th>
+                      <th className="px-3 py-2 font-medium">Leg</th>
+                      <th className="px-3 py-2 font-medium">State</th>
+                      <th className="px-3 py-2 font-medium" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const st = rowState(r);
+                      const quoteInvalid = r.quotePct.trim() !== '' && Number.isNaN(Number(r.quotePct));
+                      return (
+                        <tr key={r.key} className="border-b border-border-light last:border-b-0">
+                          <td className="px-3 py-1.5">
+                            <input
+                              type="checkbox"
+                              checked={r.include}
+                              onChange={(e) => updateRow(r.key, { include: e.target.checked })}
+                              className="h-4 w-4 accent-[color:rgb(var(--accent))]"
+                              aria-label="Include in construction"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <Select
+                              value={r.instrument}
+                              onChange={(e) => updateRow(r.key, { instrument: e.target.value })}
+                              className="py-1.5"
+                            >
+                              {INSTRUMENT_KINDS.map((k) => (
+                                <option key={k.value} value={k.value}>
+                                  {k.label}
+                                </option>
+                              ))}
+                            </Select>
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <Input
+                              value={r.tenor}
+                              onChange={(e) => updateRow(r.key, { tenor: e.target.value })}
+                              placeholder={r.instrument === 'fra' ? '3x6' : '3M'}
+                              className="w-24 py-1.5 font-mono"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5 text-right">
+                            <Input
+                              value={r.quotePct}
+                              onChange={(e) => updateRow(r.key, { quotePct: e.target.value })}
+                              inputMode="decimal"
+                              placeholder="0.000"
+                              invalid={quoteInvalid}
+                              className="w-24 py-1.5 text-right font-mono"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <Select
+                              value={r.leg}
+                              onChange={(e) => updateRow(r.key, { leg: e.target.value as DeskCurveLeg })}
+                              className="py-1.5"
+                            >
+                              <option value="discount">discount</option>
+                              <option value="projection">projection</option>
+                            </Select>
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <Chip tone={st.tone}>{st.label}</Chip>
+                          </td>
+                          <td className="px-3 py-1.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => removeRow(r.key)}
+                              className="rounded p-1 text-slate hover:bg-surface hover:text-critical"
+                              aria-label="Remove instrument"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {rows.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-3 py-4 text-center text-caption text-slate">
+                          No instruments — add at least one discount-leg quote.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
-          </div>
-
-          {/* Results */}
-          {result && (
-            <>
-              {stale && (
-                <CeremonyBanner>
-                  <p className="text-navy">
-                    The grid or as-of date changed since this result was computed. Re-run
-                    construction before publishing — the figures below are from the previous inputs.
-                  </p>
-                </CeremonyBanner>
-              )}
-
-              {/* QA panel */}
-              <div className="card">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-light px-5 py-3">
-                  <h2 className="text-h3 text-navy">QA gates</h2>
-                  {result.qa.passed ? (
-                    <Chip tone="ok">all hard gates pass</Chip>
-                  ) : (
-                    <Chip tone="crit">hard gate failed — publish blocked</Chip>
+              <div className="flex flex-wrap items-center gap-3 border-t border-border-light px-5 py-3">
+                <Button
+                  icon={<Calculator size={14} />}
+                  loading={constructBusy}
+                  disabled={quotes.length === 0 || !active}
+                  onClick={() => void runConstruction()}
+                >
+                  Run construction
+                </Button>
+                <span className="text-caption text-slate">
+                  {quotes.length} quote{quotes.length === 1 ? '' : 's'} ready
+                  {hasProjectionLeg
+                    ? ' · multi-curve (projection on discount)'
+                    : ' · self-discounting'}
+                </span>
+                {incompleteCount > 0 && (
+                  <Chip tone="warn">
+                    {incompleteCount} included row{incompleteCount === 1 ? '' : 's'} incomplete — excluded
+                  </Chip>
+                )}
+                {stale && <Chip tone="warn">inputs changed — re-run construction</Chip>}
+              </div>
+              {constructError && (
+                <div className="px-5 pb-5">
+                  <ErrorPanel error={constructError} context="Running construction" />
+                  {constructError.status === 409 && (
+                    <p className="mt-2 text-caption text-slate">
+                      No approved definition is effective on {asOf} — approve one under{' '}
+                      <Link href="/desk/curves" className="text-action hover:underline">
+                        Curve definitions
+                      </Link>
+                      .
+                    </p>
                   )}
                 </div>
-                <div className="px-5 py-2">
+              )}
+            </SectionCard>
+
+            {/* Results */}
+            {result && (
+              <>
+                {stale && (
+                  <CeremonyBanner>
+                    <p className="text-navy">
+                      The grid or as-of date changed since this result was computed. Re-run
+                      construction before publishing — the figures below are from the previous inputs.
+                    </p>
+                  </CeremonyBanner>
+                )}
+
+                {/* QA panel */}
+                <SectionCard
+                  title="QA gates"
+                  actions={
+                    result.qa.passed ? (
+                      <StatusPill tone="success">all hard gates pass</StatusPill>
+                    ) : (
+                      <StatusPill tone="critical">hard gate failed — publish blocked</StatusPill>
+                    )
+                  }
+                >
                   <QaGate
                     ok={result.qa.reprice_pass}
                     label="Instrument reprice residuals"
@@ -692,405 +697,253 @@ export default function CurveWorkspacePage() {
                     label="Pillar coverage"
                     measure={`${result.qa.pillar_count} ≥ ${result.qa.pillar_min_count}`}
                   />
-                </div>
-              </div>
+                </SectionCard>
 
-              {/* Results tabs */}
-              <div className="card">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-light px-5 py-3">
-                  <div className="flex items-end gap-1">
-                    {(
-                      [
-                        { id: 'grid', label: 'Forward grid', icon: Table2 },
-                        { id: 'charts', label: 'Charts', icon: TrendingUp },
-                        { id: 'pillars', label: 'Pillar nodes', icon: Waypoints },
-                      ] as const
-                    ).map(({ id, label, icon: Icon }) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => setTab(id)}
-                        className={`-mb-px inline-flex items-center gap-1.5 rounded-t border-b-2 px-3 py-1.5 text-caption font-medium ${
-                          tab === id
-                            ? 'border-action text-action'
-                            : 'border-transparent text-slate hover:text-ink'
-                        }`}
-                      >
-                        <Icon size={13} /> {label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2 text-micro text-slate">
-                    <span>
-                      yields in <span className="font-mono text-ink">{result.output_basis}</span>
-                    </span>
-                    <span>· digest</span>
-                    <span className="inline-flex items-center gap-0.5">
+                {/* Results tabs */}
+                <SectionCard
+                  title="Construction results"
+                  subtitle={
+                    <>
+                      Applying v{result.definition_version} · as of {fmtDate(result.as_of)} · yields
+                      in <span className="font-mono text-ink">{result.output_basis}</span>
+                    </>
+                  }
+                  actions={
+                    <span className="inline-flex items-center gap-1 text-micro text-slate">
+                      digest
                       <span className="font-mono text-caption text-ink">
                         {result.input_digest.slice(0, 12)}…
                       </span>
                       <CopyButton value={result.input_digest} label="Copy input digest" />
                     </span>
-                  </div>
-                </div>
-
-                {/* Forward grid table */}
-                {tab === 'grid' && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-body">
-                      <thead>
-                        <tr className="border-b border-border-light bg-surface text-left text-micro uppercase tracking-wide text-slate">
-                          <th className="px-4 py-2 font-medium">#</th>
-                          <th className="px-4 py-2 font-medium">Start date</th>
-                          <th className="px-4 py-2 font-medium">End date</th>
-                          <th className="px-4 py-2 font-medium text-right">Discount factor</th>
-                          <th className="px-4 py-2 font-medium text-right">Yield</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.rows.map((row, i) => (
-                          <tr
-                            key={i}
-                            className={`border-b border-border-light last:border-b-0 ${
-                              i === 0 ? 'bg-surface/60' : ''
-                            }`}
-                          >
-                            <td className="px-4 py-1.5 font-mono text-micro text-slate">
-                              {i === 0 ? 'spot' : i}
-                            </td>
-                            <td className="px-4 py-1.5 font-mono text-caption text-ink">
-                              {fmtDate(row.start)}
-                            </td>
-                            <td className="px-4 py-1.5 font-mono text-caption text-ink">
-                              {fmtDate(row.end)}
-                            </td>
-                            <td className="num px-4 py-1.5 text-ink">
-                              {row.discount_factor.toFixed(7)}
-                            </td>
-                            <td className="num px-4 py-1.5 text-ink">
-                              {i === 0 ? DASH : fmtPct(row.forward_yield)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* Charts */}
-                {tab === 'charts' && (
-                  <div className="grid gap-6 p-5 lg:grid-cols-2">
-                    <div>
-                      <h3 className="mb-2 text-body font-medium text-navy">
-                        Forward yield vs tenor
-                      </h3>
-                      <LineChart
-                        ariaLabel="Forward yield versus tenor"
-                        color="var(--chart-1)"
-                        points={result.rows
-                          .slice(1)
-                          .map((row, i) => ({
-                            x: (i + 1) * result.curve_frequency_months,
-                            y: row.forward_yield * 100,
-                          }))}
-                        yFormat={(v) => `${v.toFixed(2)}%`}
-                        xFormat={(v) => fmtMonths(v)}
-                      />
-                    </div>
-                    <div>
-                      <h3 className="mb-2 text-body font-medium text-navy">Discount factor curve</h3>
-                      <LineChart
-                        ariaLabel="Discount factor curve"
-                        color="var(--chart-3)"
-                        points={result.rows.map((row, i) => ({
-                          x: i * result.curve_frequency_months,
-                          y: row.discount_factor,
-                        }))}
-                        yFormat={(v) => v.toFixed(4)}
-                        xFormat={(v) => fmtMonths(v)}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Pillar nodes */}
-                {tab === 'pillars' && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-body">
-                      <thead>
-                        <tr className="border-b border-border-light bg-surface text-left text-micro uppercase tracking-wide text-slate">
-                          <th className="px-4 py-2 font-medium">Instrument</th>
-                          <th className="px-4 py-2 font-medium">Tenor</th>
-                          <th className="px-4 py-2 font-medium">Leg</th>
-                          <th className="px-4 py-2 font-medium">Adjusted maturity</th>
-                          <th className="px-4 py-2 font-medium text-right">Quote</th>
-                          <th className="px-4 py-2 font-medium text-right">Discount factor</th>
-                          <th className="px-4 py-2 font-medium text-right">Reprice residual</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.pillars.map((p, i) => (
-                          <tr key={i} className="border-b border-border-light last:border-b-0">
-                            <td className="px-4 py-1.5 text-caption text-ink">{p.instrument}</td>
-                            <td className="px-4 py-1.5 font-mono text-caption text-ink">{p.tenor}</td>
-                            <td className="px-4 py-1.5">
-                              <Chip tone={p.leg === 'projection' ? 'accent' : 'neutral'}>{p.leg}</Chip>
-                            </td>
-                            <td className="px-4 py-1.5 font-mono text-caption text-ink">
-                              {fmtDate(p.pillar_date)}
-                            </td>
-                            <td className="num px-4 py-1.5 text-ink">{fmtPct(p.quote)}</td>
-                            <td className="num px-4 py-1.5 text-ink">{p.discount_factor.toFixed(7)}</td>
-                            <td className="num px-4 py-1.5 text-slate">
-                              {p.reprice_residual.toExponential(2)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {/* Governance & publication — the per-cob maker-checker (FC-G2) */}
-              <div className="card p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-h3 text-navy">Governance &amp; publication</h2>
-                  {determination ? (
-                    <DeterminationStatusChip status={determination.status} />
-                  ) : result.qa.passed ? (
-                    <Chip tone="ok">QA green — ready to stage</Chip>
-                  ) : (
-                    <Chip tone="crit">QA blocks the draft</Chip>
+                  }
+                  noPadding
+                >
+                  <SubTabs
+                    items={[
+                      { key: 'grid', label: 'Forward grid' },
+                      { key: 'charts', label: 'Charts' },
+                      { key: 'pillars', label: 'Pillar nodes' },
+                    ]}
+                    active={tab}
+                    onChange={(k) => setTab(k as 'grid' | 'charts' | 'pillars')}
+                  />
+                  {tab === 'grid' && (
+                    <DataTable
+                      columns={gridColumns}
+                      rows={result.rows.map((row, i) => ({ ...row, idx: i }))}
+                      density="compact"
+                      rowClassName={(r) => (r.idx === 0 ? 'bg-surface/60' : '')}
+                    />
                   )}
-                </div>
-                <p className="mt-1 text-caption text-slate">
-                  A weekly build is a per-cob determination under maker-checker: stage a draft, an
-                  analyst submits it, a <span className="font-medium">distinct</span> supervisor
-                  approves it, and only then does it fan out to every bank under{' '}
-                  <span className="font-mono text-ink">{curveCode}</span> (bitemporal + lineage +
-                  audit). Definition-level dual control still applies underneath.
-                </p>
+                  {tab === 'charts' && <CurveResultCharts result={result} />}
+                  {tab === 'pillars' && (
+                    <DataTable columns={pillarColumns} rows={result.pillars} density="compact" />
+                  )}
+                </SectionCard>
 
-                {/* Stage: available only after a QA-green construction */}
-                {!determination && (
-                  <div className="mt-4 border-t border-border-light pt-4">
-                    {canStage ? (
-                      <button
-                        type="button"
-                        disabled={lifecycleBusy}
-                        onClick={() => void stageDraft()}
-                        className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
-                      >
-                        {lifecycleBusy ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <FileText size={14} />
-                        )}
-                        Stage draft determination
-                      </button>
+                {/* Governance & publication — the per-cob maker-checker (FC-G2) */}
+                <SectionCard
+                  title="Governance & publication"
+                  actions={
+                    determination ? (
+                      <DeterminationStatusPill status={determination.status} />
+                    ) : result.qa.passed ? (
+                      <StatusPill tone="success">QA green — ready to stage</StatusPill>
                     ) : (
-                      <p className="text-caption text-slate">
-                        {stale
-                          ? 'Re-run construction on the current inputs to stage a draft.'
-                          : result.qa.passed
-                            ? 'Staging needs an approved definition effective on the as-of date.'
-                            : 'Staging is disabled until every hard QA gate passes.'}
-                      </p>
-                    )}
-                  </div>
-                )}
+                      <StatusPill tone="critical">QA blocks the draft</StatusPill>
+                    )
+                  }
+                >
+                  <p className="text-caption text-slate">
+                    A weekly build is a per-cob determination under maker-checker: stage a draft, an
+                    analyst submits it, a <span className="font-medium">distinct</span> supervisor
+                    approves it, and only then does it fan out to every bank under{' '}
+                    <span className="font-mono text-ink">{curveCode}</span> (bitemporal + lineage +
+                    audit). Definition-level dual control still applies underneath.
+                  </p>
 
-                {/* Lifecycle actions once a draft exists */}
-                {determination && (
-                  <div className="mt-4 space-y-3 border-t border-border-light pt-4">
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-micro text-slate">
-                      <span>
-                        determination{' '}
-                        <span className="font-mono text-ink">{determination.id.slice(0, 8)}…</span>
-                      </span>
-                      <span>
-                        prepared by{' '}
-                        <span className="font-mono text-ink">{determination.prepared_by}</span>
-                      </span>
-                      {determination.reviewed_by && (
-                        <span>
-                          approved by{' '}
-                          <span className="font-mono text-ink">{determination.reviewed_by}</span>
-                        </span>
+                  {/* Stage: available only after a QA-green construction */}
+                  {!determination && (
+                    <div className="mt-4 border-t border-border-light pt-4">
+                      {canStage ? (
+                        <Button
+                          icon={<FileText size={14} />}
+                          loading={lifecycleBusy}
+                          onClick={() => void stageDraft()}
+                        >
+                          Stage draft determination
+                        </Button>
+                      ) : (
+                        <p className="text-caption text-slate">
+                          {stale
+                            ? 'Re-run construction on the current inputs to stage a draft.'
+                            : result.qa.passed
+                              ? 'Staging needs an approved definition effective on the as-of date.'
+                              : 'Staging is disabled until every hard QA gate passes.'}
+                        </p>
                       )}
                     </div>
+                  )}
 
-                    {determination.status === 'draft' && (
-                      <button
-                        type="button"
-                        disabled={lifecycleBusy}
-                        onClick={() => void submitDraft()}
-                        className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
-                      >
-                        {lifecycleBusy ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <Upload size={14} />
-                        )}
-                        Submit for review
-                      </button>
-                    )}
-
-                    {determination.status === 'pending_review' && (
-                      <div className="space-y-2">
-                        <button
-                          type="button"
-                          disabled={lifecycleBusy || isProposer}
-                          onClick={() => void approveDraft()}
-                          className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {lifecycleBusy ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : (
-                            <CheckCircle2 size={14} />
-                          )}
-                          Approve (four-eyes)
-                        </button>
-                        {isProposer && (
-                          <p className="flex items-center gap-1.5 text-caption text-warning">
-                            <XCircle size={13} className="shrink-0" />
-                            You staged this determination — a different supervisor must approve it.
-                          </p>
+                  {/* Lifecycle actions once a draft exists */}
+                  {determination && (
+                    <div className="mt-4 space-y-3 border-t border-border-light pt-4">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-micro text-slate">
+                        <span>
+                          determination{' '}
+                          <span className="font-mono text-ink">{determination.id.slice(0, 8)}…</span>
+                        </span>
+                        <span>
+                          prepared by{' '}
+                          <span className="font-mono text-ink">{determination.prepared_by}</span>
+                        </span>
+                        {determination.reviewed_by && (
+                          <span>
+                            approved by{' '}
+                            <span className="font-mono text-ink">{determination.reviewed_by}</span>
+                          </span>
                         )}
                       </div>
-                    )}
 
-                    {determination.status === 'approved' && (
-                      <div className="space-y-3">
-                        <CeremonyBanner>
-                          <p className="font-medium text-navy">
-                            Approved — publishing writes golden copy for every tenant
-                          </p>
-                          <p className="mt-1">
-                            Curve <span className="font-mono">{curveCode}</span> v{active?.version} as
-                            of {asOf}. Per-bank failures are recorded, not rolled back; re-publishing
-                            heals a partial fan-out.
-                          </p>
-                        </CeremonyBanner>
-                        <button
-                          type="button"
-                          disabled={lifecycleBusy}
-                          onClick={() => void publishDraft()}
-                          className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
+                      {determination.status === 'draft' && (
+                        <Button
+                          icon={<FileText size={14} />}
+                          loading={lifecycleBusy}
+                          onClick={() => void submitDraft()}
                         >
-                          {lifecycleBusy ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : (
-                            <Upload size={14} />
+                          Submit for review
+                        </Button>
+                      )}
+
+                      {determination.status === 'pending_review' && (
+                        <div className="space-y-2">
+                          <Button
+                            icon={<CheckCircle2 size={14} />}
+                            loading={lifecycleBusy}
+                            disabled={isProposer}
+                            onClick={() => void approveDraft()}
+                          >
+                            Approve (four-eyes)
+                          </Button>
+                          {isProposer && (
+                            <p className="flex items-center gap-1.5 text-caption text-warning">
+                              <XCircle size={13} className="shrink-0" />
+                              You staged this determination — a different supervisor must approve it.
+                            </p>
                           )}
-                          Publish to every bank
-                        </button>
-                      </div>
-                    )}
+                        </div>
+                      )}
 
-                    {determination.status === 'rejected' && (
-                      <p className="text-caption text-critical">
-                        This determination was rejected
-                        {determination.review_note ? `: ${determination.review_note}` : ''}. Re-run
-                        construction to stage a fresh draft.
-                      </p>
-                    )}
+                      {determination.status === 'approved' && (
+                        <div className="space-y-3">
+                          <CeremonyBanner>
+                            <p className="font-medium text-navy">
+                              Approved — publishing writes golden copy for every tenant
+                            </p>
+                            <p className="mt-1">
+                              Curve <span className="font-mono">{curveCode}</span> v{active?.version}{' '}
+                              as of {asOf}. Per-bank failures are recorded, not rolled back;
+                              re-publishing heals a partial fan-out.
+                            </p>
+                          </CeremonyBanner>
+                          <Button
+                            icon={<CheckCircle2 size={14} />}
+                            loading={lifecycleBusy}
+                            onClick={() => void publishDraft()}
+                          >
+                            Publish to every bank
+                          </Button>
+                        </div>
+                      )}
 
-                    {determination.status === 'published' && !publication && (
-                      <p className="flex items-center gap-1.5 text-caption text-success">
-                        <CheckCircle2 size={13} className="shrink-0" /> Published to golden copy.
-                      </p>
-                    )}
-                  </div>
-                )}
+                      {determination.status === 'rejected' && (
+                        <p className="text-caption text-critical">
+                          This determination was rejected
+                          {determination.review_note ? `: ${determination.review_note}` : ''}. Re-run
+                          construction to stage a fresh draft.
+                        </p>
+                      )}
 
-                {lifecycleError && (
-                  <div className="mt-3">
-                    <ErrorPanel error={lifecycleError} context="Curve governance action" />
-                  </div>
-                )}
-
-                {publication && (
-                  <div className="mt-4 border-t border-border-light pt-4">
-                    <h3 className="mb-2 text-body font-medium text-navy">Publication fan-out</h3>
-                    <PublicationResults publication={publication} />
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          {!result && active && (
-            <div className="card">
-              <EmptyState
-                title="No construction yet"
-                hint="Enter this cob's quotes in the instrument grid above and Run construction to preview the forward grid, charts, pillar nodes and QA."
-              />
-            </div>
-          )}
-
-          {/* Methodology transparency drawer */}
-          {active && (
-            <div className="card">
-              <details>
-                <summary className="flex cursor-pointer items-center gap-2 px-5 py-3 text-h3 text-navy">
-                  <FileText size={15} className="text-slate" />
-                  Methodology — the exact recipe (v{active.version})
-                </summary>
-                <div className="space-y-4 border-t border-border-light px-5 py-4">
-                  <p className="rounded border border-border-light bg-surface p-3 text-caption text-slate">
-                    <span className="font-medium text-ink">Rationale:</span>{' '}
-                    {active.change_rationale}
-                  </p>
-                  <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                    <ParamCell label="Instrument set" mono>
-                      {active.instrument_set_ref}
-                    </ParamCell>
-                    <ParamCell label="Interpolation">{active.interpolation_method}</ParamCell>
-                    <ParamCell label="Output basis" mono>
-                      {active.output_daycount}
-                    </ParamCell>
-                    <ParamCell label="Calendar">{active.calendar_name}</ParamCell>
-                    <ParamCell label="Curve frequency" mono>
-                      {active.curve_frequency}
-                    </ParamCell>
-                    <ParamCell label="Payment interval">
-                      {active.payment_interval_months}m
-                    </ParamCell>
-                    <ParamCell label="Spot lag">{active.spot_lag_days}d</ParamCell>
-                    <ParamCell label="Roll convention">{active.roll_convention}</ParamCell>
-                    <ParamCell label="Extrapolation">{active.extrapolation_rule}</ParamCell>
-                    <ParamCell label="Projection index" mono>
-                      {active.projection_index ?? DASH}
-                    </ParamCell>
-                    <ParamCell label="Discount curve" mono>
-                      {active.discount_curve_code ?? DASH}
-                    </ParamCell>
-                    <ParamCell label="Proposed by" mono>
-                      {active.proposed_by}
-                    </ParamCell>
-                    <ParamCell label="Approved by" mono>
-                      {active.approved_by ?? DASH}
-                    </ParamCell>
-                    <ParamCell label="Effective from">{fmtDate(active.effective_from)}</ParamCell>
-                  </div>
-                  {Object.keys(active.params).length > 0 && (
-                    <div>
-                      <div className="mb-1 text-micro uppercase tracking-wide text-slate-light">
-                        Advanced params
-                      </div>
-                      <pre className="overflow-x-auto rounded border border-border-light bg-surface p-3 font-mono text-caption text-ink">
-                        {JSON.stringify(active.params, null, 2)}
-                      </pre>
+                      {determination.status === 'published' && !publication && (
+                        <p className="flex items-center gap-1.5 text-caption text-success">
+                          <CheckCircle2 size={13} className="shrink-0" /> Published to golden copy.
+                        </p>
+                      )}
                     </div>
                   )}
-                </div>
-              </details>
-            </div>
-          )}
-        </div>
-      )}
+
+                  {lifecycleError && (
+                    <div className="mt-3">
+                      <ErrorPanel error={lifecycleError} context="Curve governance action" />
+                    </div>
+                  )}
+
+                  {publication && (
+                    <div className="mt-4 border-t border-border-light pt-4">
+                      <h3 className="mb-2 text-body font-medium text-navy">Publication fan-out</h3>
+                      <PublicationResults publication={publication} />
+                    </div>
+                  )}
+                </SectionCard>
+              </>
+            )}
+
+            {!result && active && (
+              <SectionCard title="Results" noPadding>
+                <EmptyState
+                  title="No construction yet"
+                  description="Enter this cob's quotes in the instrument grid above and Run construction to preview the forward grid, charts, pillar nodes and QA."
+                />
+              </SectionCard>
+            )}
+
+            {/* Methodology transparency */}
+            {active && (
+              <div className="card">
+                <details>
+                  <summary className="flex cursor-pointer items-center gap-2 px-5 py-3 text-h3 text-navy">
+                    <FileText size={15} className="text-slate" />
+                    Methodology — the exact recipe (v{active.version})
+                  </summary>
+                  <div className="space-y-4 border-t border-border-light px-5 py-4">
+                    <p className="rounded border border-border-light bg-surface p-3 text-caption text-slate">
+                      <span className="font-medium text-ink">Rationale:</span>{' '}
+                      {active.change_rationale}
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                      <ParamCell label="Instrument set" mono>{active.instrument_set_ref}</ParamCell>
+                      <ParamCell label="Interpolation">{active.interpolation_method}</ParamCell>
+                      <ParamCell label="Output basis" mono>{active.output_daycount}</ParamCell>
+                      <ParamCell label="Calendar">{active.calendar_name}</ParamCell>
+                      <ParamCell label="Curve frequency" mono>{active.curve_frequency}</ParamCell>
+                      <ParamCell label="Payment interval">{active.payment_interval_months}m</ParamCell>
+                      <ParamCell label="Spot lag">{active.spot_lag_days}d</ParamCell>
+                      <ParamCell label="Roll convention">{active.roll_convention}</ParamCell>
+                      <ParamCell label="Extrapolation">{active.extrapolation_rule}</ParamCell>
+                      <ParamCell label="Projection index" mono>{active.projection_index ?? DASH}</ParamCell>
+                      <ParamCell label="Discount curve" mono>{active.discount_curve_code ?? DASH}</ParamCell>
+                      <ParamCell label="Proposed by" mono>{active.proposed_by}</ParamCell>
+                      <ParamCell label="Approved by" mono>{active.approved_by ?? DASH}</ParamCell>
+                      <ParamCell label="Effective from">{fmtDate(active.effective_from)}</ParamCell>
+                    </div>
+                    {Object.keys(active.params).length > 0 && (
+                      <div>
+                        <div className="mb-1 text-micro uppercase tracking-wide text-slate-light">
+                          Advanced params
+                        </div>
+                        <pre className="overflow-x-auto rounded border border-border-light bg-surface p-3 font-mono text-caption text-ink">
+                          {JSON.stringify(active.params, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                </details>
+              </div>
+            )}
+          </div>
+        )}
+      </QueryBoundary>
     </div>
   );
 }

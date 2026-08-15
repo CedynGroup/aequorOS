@@ -7,7 +7,7 @@ publish must fan out through the adapter seam into canonical state.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -20,10 +20,12 @@ from app.models import (
     Bank,
     CanonicalYieldCurve,
     DeskDetermination,
+    DeskObservation,
     DeskSourceCapture,
     OperatorAuditLog,
     Organization,
 )
+from app.services.market_desk import observations as observations_service
 from tests.operator.conftest import operator_headers
 from tests.storage.inmemory import InMemoryStorageClient
 
@@ -200,6 +202,165 @@ def test_manual_observation_entry_and_append_only_correction(
     assert everything["total"] == 2
 
     assert _audit_actions(operator_db).count("desk.observation.manual_entry") == 2
+
+
+def _seed_observations(
+    db: Session,
+    *,
+    series_code: str,
+    count: int,
+    base: date = date(2026, 1, 1),
+) -> None:
+    """Insert ``count`` CURRENT observations on distinct as-of dates (so the
+    partial unique index leaves them all non-superseded)."""
+    db.add_all(
+        DeskObservation(
+            series_code=series_code,
+            as_of_date=base + timedelta(days=i),
+            value=Decimal("15.00"),
+            unit="pct",
+            entered_by=DEV_EMAIL,
+        )
+        for i in range(count)
+    )
+    db.commit()
+
+
+def test_observations_pagination_caps_and_offsets(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    _seed_observations(operator_db, series_code="GHS.MPR", count=150)
+
+    # Default page is capped at 100; total is the FULL filtered count.
+    page1 = operator_client.get(
+        f"{BASE}/observations",
+        headers=operator_headers(),
+        params={"series_code": "GHS.MPR"},
+    ).json()
+    assert page1["total"] == 150
+    assert len(page1["observations"]) == 100
+    assert page1["limit"] == 100
+    assert page1["offset"] == 0
+
+    # Newest as_of_date first (total, stable ordering).
+    dates = [o["as_of_date"] for o in page1["observations"]]
+    assert dates == sorted(dates, reverse=True)
+    assert dates[0] == (date(2026, 1, 1) + timedelta(days=149)).isoformat()
+
+    # Offset paginates to the remaining 50 with no overlap.
+    page2 = operator_client.get(
+        f"{BASE}/observations",
+        headers=operator_headers(),
+        params={"series_code": "GHS.MPR", "limit": 100, "offset": 100},
+    ).json()
+    assert page2["total"] == 150
+    assert len(page2["observations"]) == 50
+    assert page2["offset"] == 100
+    assert {o["id"] for o in page1["observations"]}.isdisjoint(
+        o["id"] for o in page2["observations"]
+    )
+
+    # The API validator rejects an over-max page size (le=500).
+    assert (
+        operator_client.get(
+            f"{BASE}/observations", headers=operator_headers(), params={"limit": 501}
+        ).status_code
+        == 422
+    )
+
+
+def test_list_observations_service_clamps_limit_to_max(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    # The endpoint's Query gate rejects limit>500; the SERVICE must clamp too so
+    # a direct caller can never trigger the old unbounded read.
+    _ = operator_client  # ensures the DB/schema fixture is set up
+    _seed_observations(operator_db, series_code="GHS.SERVICE", count=505)
+
+    page = observations_service.list_observations(
+        operator_db, series_code="GHS.SERVICE", limit=10_000
+    )
+    assert len(page) == observations_service.MAX_PAGE_SIZE == 500
+    assert (
+        observations_service.count_observations(operator_db, series_code="GHS.SERVICE") == 505
+    )
+
+
+def test_observation_filters_apply_with_count(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    # Series prefix + date range are SERVER-side and must be reflected in total.
+    for series, d, value in (
+        ("GHS.TBILL.91.DISCOUNT", date(2026, 7, 1), "20.00"),
+        ("GHS.TBILL.91.DISCOUNT", date(2026, 7, 8), "20.50"),
+        ("GHS.TBILL.182.DISCOUNT", date(2026, 7, 1), "21.00"),
+        ("GHS.MPR", date(2026, 7, 1), "15.00"),
+    ):
+        operator_db.add(
+            DeskObservation(
+                series_code=series,
+                as_of_date=d,
+                value=Decimal(value),
+                unit="pct",
+                entered_by=DEV_EMAIL,
+            )
+        )
+    operator_db.commit()
+
+    # Prefix match spans both TBILL tenors, excludes GHS.MPR.
+    tbill = operator_client.get(
+        f"{BASE}/observations",
+        headers=operator_headers(),
+        params={"series_code": "GHS.TBILL"},
+    ).json()
+    assert tbill["total"] == 3
+    assert len(tbill["observations"]) == 3
+    assert {o["series_code"] for o in tbill["observations"]} == {
+        "GHS.TBILL.91.DISCOUNT",
+        "GHS.TBILL.182.DISCOUNT",
+    }
+
+    # Inclusive date range narrows the same prefix — count follows the filter.
+    ranged = operator_client.get(
+        f"{BASE}/observations",
+        headers=operator_headers(),
+        params={
+            "series_code": "GHS.TBILL",
+            "as_of_from": "2026-07-05",
+            "as_of_to": "2026-07-10",
+        },
+    ).json()
+    assert ranged["total"] == 1
+    assert ranged["observations"][0]["as_of_date"] == "2026-07-08"
+
+    # include_superseded still applies alongside the count. A correction on a
+    # fresh series supersedes append-only (via the API's manual-entry path).
+    for value in ("9.00", "9.25"):
+        posted = operator_client.post(
+            f"{BASE}/observations",
+            headers=operator_headers(),
+            json={
+                "series_code": "GHS.INTERBANK.ON",
+                "as_of_date": "2026-07-15",
+                "value": value,
+                "unit": "pct",
+            },
+        )
+        assert posted.status_code == 201, posted.text
+
+    current = operator_client.get(
+        f"{BASE}/observations",
+        headers=operator_headers(),
+        params={"series_code": "GHS.INTERBANK.ON"},
+    ).json()
+    assert current["total"] == 1
+
+    everything = operator_client.get(
+        f"{BASE}/observations",
+        headers=operator_headers(),
+        params={"series_code": "GHS.INTERBANK.ON", "include_superseded": "true"},
+    ).json()
+    assert everything["total"] == 2
 
 
 def test_captures_listing(operator_client: TestClient, operator_db: Session) -> None:
