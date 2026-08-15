@@ -490,6 +490,8 @@ export interface DeskCurveDefinition {
   spot_lag_days: number;
   roll_convention: string;
   extrapolation_rule: string;
+  /** FC-6d distribution tier: core < standard < premium (default standard). */
+  entitlement_tier: string;
   params: Record<string, unknown>;
   change_rationale: string;
   proposed_by: string;
@@ -520,6 +522,8 @@ export interface DeskCurveDefinitionFields {
   spot_lag_days: number;
   roll_convention: string;
   extrapolation_rule: string;
+  /** FC-6d distribution tier; omitted defaults to standard server-side. */
+  entitlement_tier?: 'core' | 'standard' | 'premium';
   params?: Record<string, unknown>;
   change_rationale: string;
 }
@@ -552,6 +556,11 @@ export interface DeskCurveConstructRequest {
 
 export interface DeskCurvePublishRequest extends DeskCurveConstructRequest {
   methodology_code?: string | null;
+}
+
+/** Construct + stage a DRAFT determination for per-cob maker-checker (FC-G2). */
+export interface DeskCurveStageRequest extends DeskCurvePublishRequest {
+  research_adjustments?: DeskResearchAdjustment[];
 }
 
 /** One row of the tenor-adjusted forward grid (the Eikon Start/End/DF/Yield). */
@@ -1157,13 +1166,354 @@ export function constructCurve(
 }
 
 /**
- * POST /curves/publish — construct THEN publish the forward curve to golden copy
- * through the desk determination fan-out (bitemporal + lineage + audit for
- * free). 422 when a hard QA gate fails; 409 when no approved definition or
- * methodology is effective on the as-of.
+ * POST /curves/determinations — construct THEN stage a DRAFT determination for
+ * this cob (FC-G2 per-cob maker-checker). Writes a draft only: never approved,
+ * never published. 409 when no approved definition/methodology is effective on
+ * the as-of; 422 when the solve or a convention/calendar resolution fails. 201.
  */
-export function publishCurve(body: DeskCurvePublishRequest): Promise<DeskPublication> {
-  return request<DeskPublication>(`${CURVES}/publish`, { method: 'POST', body });
+export function stageCurveDetermination(
+  body: DeskCurveStageRequest,
+): Promise<DeskDetermination> {
+  return request<DeskDetermination>(`${CURVES}/determinations`, { method: 'POST', body });
+}
+
+/**
+ * POST /curves/determinations/{id}/submit — maker step: draft -> pending_review.
+ * The hard QA gate is enforced here (422 when a gate failed).
+ */
+export function submitCurveDetermination(determinationId: string): Promise<DeskDetermination> {
+  return request<DeskDetermination>(
+    `${CURVES}/determinations/${encodeURIComponent(determinationId)}/submit`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * POST /curves/determinations/{id}/approve — checker step: pending_review ->
+ * approved. Four-eyes: 422 when the approver is the preparer.
+ */
+export function approveCurveDetermination(determinationId: string): Promise<DeskDetermination> {
+  return request<DeskDetermination>(
+    `${CURVES}/determinations/${encodeURIComponent(determinationId)}/approve`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * POST /curves/determinations/{id}/publish — publish step: only an APPROVED
+ * determination fans out to golden copy. 409 before approval.
+ */
+export function publishCurveDetermination(determinationId: string): Promise<DeskPublication> {
+  return request<DeskPublication>(
+    `${CURVES}/determinations/${encodeURIComponent(determinationId)}/publish`,
+    { method: 'POST' },
+  );
+}
+
+// --------------------------------------------------------------------------
+// FX-forward construction (operator FX-forward preview, FC-6b).
+// --------------------------------------------------------------------------
+
+const FX_FORWARD = '/operator/v1/fx-forward';
+
+export interface FxForwardLeg {
+  source: 'published';
+  curve_code: string;
+}
+
+export interface FxForwardConstructRequest {
+  base_ccy: string;
+  quote_ccy: string;
+  spot: number;
+  as_of: string;
+  base_leg: FxForwardLeg;
+  quote_leg: FxForwardLeg;
+  basis_bps?: number;
+  day_count?: string;
+  tenor_grid: string[];
+  grid_calendar: string;
+  grid_spot_lag_days?: number;
+}
+
+export interface FxForwardRow {
+  date: string;
+  year_fraction: number;
+  df_base: number;
+  df_quote: number;
+  forward_rate: number;
+  forward_points: number;
+}
+
+export interface FxForwardConstructResponse {
+  base_ccy: string;
+  quote_ccy: string;
+  pair: string;
+  spot: number;
+  as_of: string;
+  basis_bps: number;
+  basis_calibrated: boolean;
+  day_count: string;
+  base_source: string;
+  quote_source: string;
+  input_digest: string;
+  rows: FxForwardRow[];
+}
+
+/** CIP outright-forward preview. This operator endpoint deliberately does not publish. */
+export function constructFxForward(
+  body: FxForwardConstructRequest,
+): Promise<FxForwardConstructResponse> {
+  return request<FxForwardConstructResponse>(`${FX_FORWARD}/construct`, {
+    method: 'POST',
+    body,
+  });
+}
+
+// --------------------------------------------------------------------------
+// Operating-Environment desk endpoints
+// (backend/app/operator/features/operating_environment.py — spec
+// docs/internal/operating_environment_score.md).
+//
+// The governed, data-derived jurisdiction operating-environment score
+// (GHANA_OPERATING_ENVIRONMENT_SCORE ∈ [0,1]): a pure compute-preview, the
+// maker-checker lifecycle (stage draft → submit → approve[≠proposer] →
+// publish), and list/get. Verified against
+// backend/app/schemas/market_desk_operating_environment.py on 2026-08-14.
+//
+// Decimal fields (score, and every numeric in the breakdown) arrive as JSON
+// STRINGS — the same convention as DeskObservation.value; coerce with Number()
+// at the display edge, never store as a float.
+// --------------------------------------------------------------------------
+
+const OPERATING_ENVIRONMENT = '/operator/v1/operating-environment';
+
+/**
+ * The observable inputs for one jurisdiction / COB. The twelve economic +
+ * banking-system aggregates ride as decimal STRINGS (precision-preserving);
+ * `regulatory_quality_score` is the one analyst judgment sub-score (1–6 int).
+ * `sovereign_rating` and `policy_rate_pct` are OPTIONAL overrides — omit them
+ * to auto-pull the published sovereign rating and MPR. The backend model is
+ * closed (extra="forbid"), so never send keys outside this shape.
+ */
+export interface OperatingEnvironmentInputsBody {
+  // Pillar 1 — economic risk
+  real_gdp_growth_pct: string;
+  gdp_per_capita_usd: string;
+  cpi_inflation_pct: string;
+  private_credit_to_gdp_growth_pct: string;
+  system_npl_pct: string;
+  private_debt_to_gdp_pct: string;
+  // Pillar 2 — industry risk
+  regulatory_quality_score: number; // 1..6 judgment
+  system_roa_pct: string;
+  system_credit_growth_pct: string;
+  system_loan_to_deposit_pct: string;
+  system_car_pct: string;
+  external_funding_pct: string;
+  // Auto-pulled unless provided.
+  sovereign_rating?: string;
+  policy_rate_pct?: string;
+}
+
+export interface OperatingEnvironmentComputeRequest {
+  jurisdiction_code: string;
+  cob_date: string; // date
+  inputs: OperatingEnvironmentInputsBody;
+}
+
+/** One observable/judgment/sovereign input → its 1..6 risk sub-score. */
+export interface OperatingEnvironmentInputScore {
+  code: string;
+  /** threshold | judgment | sovereign. */
+  kind: string;
+  value: string;
+  sub_score: number;
+  weight: string;
+}
+
+export interface OperatingEnvironmentSubFactorScore {
+  code: string;
+  score: string;
+  weight: string;
+  inputs: OperatingEnvironmentInputScore[];
+}
+
+export interface OperatingEnvironmentPillarScore {
+  code: string;
+  score: string;
+  weight: string;
+  sub_factors: OperatingEnvironmentSubFactorScore[];
+}
+
+/** How an auto-pulled/desk-entered input was sourced (sovereign, policy rate). */
+export interface OperatingEnvironmentProvenance {
+  sovereign?: Record<string, string>;
+  policy_rate?: Record<string, string>;
+}
+
+/** Value-based input snapshot — what actually went into the computation. */
+export interface OperatingEnvironmentInputSnapshot {
+  jurisdiction_code: string;
+  cob_date: string;
+  observations: Record<string, string>;
+  judgments: Record<string, number>;
+  sovereign_category: string;
+  provenance: OperatingEnvironmentProvenance;
+}
+
+/** The full BICRA breakdown — mirrors domain OperatingEnvironmentResult. */
+export interface OperatingEnvironmentBreakdown {
+  methodology_version: string;
+  score: string;
+  strength_raw: string;
+  composite_risk: string;
+  risk_min: string;
+  risk_max: string;
+  sovereign_category: string;
+  governor_cap: string;
+  governor_applied: boolean;
+  input_digest?: string;
+  provenance: OperatingEnvironmentProvenance;
+  pillars: OperatingEnvironmentPillarScore[];
+}
+
+/** Compute-preview result — persists no assessment state. */
+export interface OperatingEnvironmentPreview {
+  jurisdiction_code: string;
+  cob_date: string;
+  methodology_version: string;
+  score: string; // Decimal → JSON string
+  input_digest: string;
+  inputs: OperatingEnvironmentInputSnapshot;
+  breakdown: OperatingEnvironmentBreakdown;
+}
+
+/** A governed assessment row (the persisted determination). */
+export interface OperatingEnvironmentAssessment {
+  id: string;
+  jurisdiction_code: string;
+  cob_date: string;
+  methodology_version: string;
+  score: string; // Decimal → JSON string
+  // draft -> pending_review -> approved -> published. Typed string for forward compat.
+  status: string;
+  input_digest: string;
+  inputs: OperatingEnvironmentInputSnapshot;
+  breakdown: OperatingEnvironmentBreakdown;
+  proposed_by: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  published_at: string | null;
+  created_at: string;
+}
+
+export interface OperatingEnvironmentAssessmentsResponse {
+  assessments: OperatingEnvironmentAssessment[];
+  total: number;
+}
+
+/** One bank's fan-out result (shape shared with the desk publication path). */
+export interface OperatingEnvironmentPublishBankResult {
+  bank_id?: string;
+  ingestion_batch_id?: string;
+  status?: string;
+  error?: string;
+}
+
+export interface OperatingEnvironmentPublishResult {
+  assessment_id: string;
+  /** complete | partial | failed (per-bank failures are the contract). */
+  status: string;
+  banks: number;
+  results: OperatingEnvironmentPublishBankResult[];
+}
+
+/**
+ * POST /operating-environment/compute-preview — resolve inputs, compute, and
+ * return the breakdown. Writes NO assessment state (only a staff audit row).
+ * 409 when an auto-pulled sovereign/MPR input is missing and not provided;
+ * 422 on a bad/incomplete input.
+ */
+export function computeOperatingEnvironmentPreview(
+  body: OperatingEnvironmentComputeRequest,
+): Promise<OperatingEnvironmentPreview> {
+  return request<OperatingEnvironmentPreview>(`${OPERATING_ENVIRONMENT}/compute-preview`, {
+    method: 'POST',
+    body,
+  });
+}
+
+/**
+ * POST /operating-environment/assessments — stage a DRAFT assessment (computed
+ * and persisted; never approved, never published). Same 409/422 as the
+ * preview. 201.
+ */
+export function stageOperatingEnvironmentAssessment(
+  body: OperatingEnvironmentComputeRequest,
+): Promise<OperatingEnvironmentAssessment> {
+  return request<OperatingEnvironmentAssessment>(`${OPERATING_ENVIRONMENT}/assessments`, {
+    method: 'POST',
+    body,
+  });
+}
+
+/** GET /operating-environment/assessments — newest COB first, optional filters. */
+export function listOperatingEnvironmentAssessments(opts?: {
+  jurisdictionCode?: string;
+  status?: string;
+}): Promise<OperatingEnvironmentAssessmentsResponse> {
+  return request<OperatingEnvironmentAssessmentsResponse>(
+    `${OPERATING_ENVIRONMENT}/assessments${query({
+      jurisdiction_code: opts?.jurisdictionCode,
+      status: opts?.status,
+    })}`,
+  );
+}
+
+/** GET /operating-environment/assessments/{id} — one assessment with breakdown. */
+export function getOperatingEnvironmentAssessment(
+  assessmentId: string,
+): Promise<OperatingEnvironmentAssessment> {
+  return request<OperatingEnvironmentAssessment>(
+    `${OPERATING_ENVIRONMENT}/assessments/${encodeURIComponent(assessmentId)}`,
+  );
+}
+
+/** POST /operating-environment/assessments/{id}/submit — maker step: draft → pending_review. */
+export function submitOperatingEnvironmentAssessment(
+  assessmentId: string,
+): Promise<OperatingEnvironmentAssessment> {
+  return request<OperatingEnvironmentAssessment>(
+    `${OPERATING_ENVIRONMENT}/assessments/${encodeURIComponent(assessmentId)}/submit`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * POST /operating-environment/assessments/{id}/approve — checker step:
+ * pending_review → approved. Four-eyes: 422 when the approver is the proposer.
+ */
+export function approveOperatingEnvironmentAssessment(
+  assessmentId: string,
+): Promise<OperatingEnvironmentAssessment> {
+  return request<OperatingEnvironmentAssessment>(
+    `${OPERATING_ENVIRONMENT}/assessments/${encodeURIComponent(assessmentId)}/approve`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * POST /operating-environment/assessments/{id}/publish — fan the approved
+ * score out to EVERY tenant as GHANA_OPERATING_ENVIRONMENT_SCORE. Partial
+ * failure is the contract; re-publishing heals a partial fan-out.
+ */
+export function publishOperatingEnvironmentAssessment(
+  assessmentId: string,
+): Promise<OperatingEnvironmentPublishResult> {
+  return request<OperatingEnvironmentPublishResult>(
+    `${OPERATING_ENVIRONMENT}/assessments/${encodeURIComponent(assessmentId)}/publish`,
+    { method: 'POST' },
+  );
 }
 
 // --------------------------------------------------------------------------

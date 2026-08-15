@@ -18,6 +18,13 @@ import {
   TimezoneToJSON,
   TimezoneToJSONTyped,
 } from "./Timezone";
+import type { SovereignRatingIssuer } from "./SovereignRatingIssuer";
+import {
+  SovereignRatingIssuerFromJSON,
+  SovereignRatingIssuerFromJSONTyped,
+  SovereignRatingIssuerToJSON,
+  SovereignRatingIssuerToJSONTyped,
+} from "./SovereignRatingIssuer";
 import type { SubmissionPortal } from "./SubmissionPortal";
 import {
   SubmissionPortalFromJSON,
@@ -77,6 +84,12 @@ export interface JurisdictionRead {
   regulatorShort: string;
   /**
    *
+   * @type {SovereignRatingIssuer}
+   * @memberof JurisdictionRead
+   */
+  sovereignRatingIssuer?: SovereignRatingIssuer;
+  /**
+   *
    * @type {SubmissionPortal}
    * @memberof JurisdictionRead
    */
@@ -133,6 +146,10 @@ export function JurisdictionReadFromJSONTyped(
     currencyName: json["currency_name"],
     locale: json["locale"],
     regulatorShort: json["regulator_short"],
+    sovereignRatingIssuer:
+      json["sovereign_rating_issuer"] == null
+        ? undefined
+        : SovereignRatingIssuerFromJSON(json["sovereign_rating_issuer"]),
     submissionPortal: SubmissionPortalFromJSON(json["submission_portal"]),
     timezone: TimezoneFromJSON(json["timezone"]),
   };
@@ -158,6 +175,9 @@ export function JurisdictionReadToJSONTyped(
     currency_name: value["currencyName"],
     locale: value["locale"],
     regulator_short: value["regulatorShort"],
+    sovereign_rating_issuer: SovereignRatingIssuerToJSON(
+      value["sovereignRatingIssuer"],
+    ),
     submission_portal: SubmissionPortalToJSON(value["submissionPortal"]),
     timezone: TimezoneToJSON(value["timezone"]),
   };

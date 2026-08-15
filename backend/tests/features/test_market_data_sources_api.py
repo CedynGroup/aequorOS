@@ -259,6 +259,8 @@ def test_get_forward_grid(db_client: TestClient) -> None:
     assert body["currency"] == "GHS"
     assert body["methodology_ref"] == "GHS_CURVE_V1 v3"
     assert body["grid_is_authoritative"] is False
+    assert body["frequency"] == "3M"
+    assert body["available_frequencies"] == ["3M"]
     assert body["assumptions"] is None
     assert len(body["rows"]) == 2
     assert body["rows"][0]["start"] == AS_OF.isoformat()

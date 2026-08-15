@@ -18,15 +18,20 @@ import {
   XCircle,
 } from 'lucide-react';
 import {
+  approveCurveDetermination,
   constructCurve,
+  getWorkforceSession,
   listCurveDefinitions,
-  publishCurve,
+  publishCurveDetermination,
+  stageCurveDetermination,
+  submitCurveDetermination,
   toApiError,
   type ApiError,
   type DeskCurveConstructResponse,
   type DeskCurveDefinition,
   type DeskCurveLeg,
   type DeskCurveQuote,
+  type DeskDetermination,
   type DeskPublication,
 } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
@@ -148,6 +153,16 @@ function RailStep({
   );
 }
 
+/** The staged determination's lifecycle status, as a toned chip. */
+function DeterminationStatusChip({ status }: { status: string }) {
+  if (status === 'published') return <Chip tone="ok">published</Chip>;
+  if (status === 'approved') return <Chip tone="accent">approved</Chip>;
+  if (status === 'pending_review') return <Chip tone="warn">pending review</Chip>;
+  if (status === 'rejected') return <Chip tone="crit">rejected</Chip>;
+  if (status === 'draft') return <Chip>draft</Chip>;
+  return <Chip tone="neutral">{status.replace(/_/g, ' ')}</Chip>;
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -173,10 +188,16 @@ export default function CurveWorkspacePage() {
   const [constructBusy, setConstructBusy] = useState(false);
   const [constructError, setConstructError] = useState<ApiError | null>(null);
 
-  const [publishArmed, setPublishArmed] = useState(false);
-  const [publishBusy, setPublishBusy] = useState(false);
-  const [publishError, setPublishError] = useState<ApiError | null>(null);
+  // FC-G2 per-cob maker-checker lifecycle: a staged DRAFT determination that
+  // walks stage -> submit -> approve -> publish, four-eyes enforced server-side.
+  const [determination, setDetermination] = useState<DeskDetermination | null>(null);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState<ApiError | null>(null);
   const [publication, setPublication] = useState<DeskPublication | null>(null);
+
+  // The signed-in operator, for the four-eyes visual (a proposer may not approve).
+  const session = useApi(() => getWorkforceSession(), []);
+  const operatorEmail = session.data?.email ?? null;
 
   const definitions = defs.data?.definitions ?? [];
   const active = useMemo(() => activeDefinitionFor(definitions, asOf), [definitions, asOf]);
@@ -220,8 +241,11 @@ export default function CurveWorkspacePage() {
     if (quotes.length === 0) return;
     setConstructBusy(true);
     setConstructError(null);
+    // A fresh construction discards any staged determination — the governed
+    // artifact must always reflect the inputs that were reviewed.
     setPublication(null);
-    setPublishArmed(false);
+    setDetermination(null);
+    setLifecycleError(null);
     try {
       const res = await constructCurve({ curve_code: curveCode, as_of: asOf, quotes });
       setResult(res);
@@ -233,28 +257,56 @@ export default function CurveWorkspacePage() {
     setConstructBusy(false);
   }
 
-  async function runPublish() {
-    if (quotes.length === 0) return;
-    setPublishBusy(true);
-    setPublishError(null);
+  async function runLifecycle(step: () => Promise<void>) {
+    setLifecycleBusy(true);
+    setLifecycleError(null);
     try {
-      const pub = await publishCurve({ curve_code: curveCode, as_of: asOf, quotes });
-      setPublication(pub);
-      setPublishArmed(false);
+      await step();
     } catch (err) {
-      setPublishError(toApiError(err));
+      setLifecycleError(toApiError(err));
     }
-    setPublishBusy(false);
+    setLifecycleBusy(false);
   }
 
-  const canPublish = active !== null && result !== null && result.qa.passed && !stale;
+  const stageDraft = () =>
+    runLifecycle(async () => {
+      const det = await stageCurveDetermination({ curve_code: curveCode, as_of: asOf, quotes });
+      setDetermination(det);
+    });
+  const submitDraft = () =>
+    runLifecycle(async () => {
+      if (!determination) return;
+      setDetermination(await submitCurveDetermination(determination.id));
+    });
+  const approveDraft = () =>
+    runLifecycle(async () => {
+      if (!determination) return;
+      setDetermination(await approveCurveDetermination(determination.id));
+    });
+  const publishDraft = () =>
+    runLifecycle(async () => {
+      if (!determination) return;
+      setPublication(await publishCurveDetermination(determination.id));
+      setDetermination((prev) => (prev ? { ...prev, status: 'published' } : prev));
+    });
 
-  // lifecycle rail states
+  const isProposer =
+    operatorEmail !== null &&
+    determination !== null &&
+    operatorEmail.toLowerCase() === determination.prepared_by.toLowerCase();
+  const canStage =
+    active !== null && result !== null && result.qa.passed && !stale && determination === null;
+
+  // lifecycle rail states (determination-status driven)
+  const detStatus = determination?.status ?? null;
   const stepDef: 'done' | 'fail' = active ? 'done' : 'fail';
-  const stepQuotes = quotes.length > 0;
   const stepConstruct = result !== null && !stale;
   const stepQaFail = result !== null && !result.qa.passed;
-  const stepPublished = publication !== null;
+  const stepStaged = determination !== null;
+  const stepSubmitted =
+    detStatus === 'pending_review' || detStatus === 'approved' || detStatus === 'published';
+  const stepApproved = detStatus === 'approved' || detStatus === 'published';
+  const stepPublished = publication !== null || detStatus === 'published';
 
   return (
     <div>
@@ -320,20 +372,43 @@ export default function CurveWorkspacePage() {
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <RailStep n={1} label="Definition" state={stepDef} />
-                <RailStep n={2} label="Quotes" state={stepQuotes ? 'done' : 'current'} />
+                <RailStep
+                  n={2}
+                  label="Construct"
+                  state={
+                    stepQaFail ? 'fail' : stepConstruct ? 'done' : quotes.length ? 'current' : 'todo'
+                  }
+                />
                 <RailStep
                   n={3}
-                  label="Construct"
-                  state={stepConstruct ? 'done' : stepQuotes ? 'current' : 'todo'}
+                  label="Stage draft"
+                  state={stepStaged ? 'done' : stepConstruct && result?.qa.passed ? 'current' : 'todo'}
                 />
                 <RailStep
                   n={4}
-                  label="QA"
+                  label="Submit"
                   state={
-                    stepQaFail ? 'fail' : result && result.qa.passed && !stale ? 'done' : 'todo'
+                    detStatus === 'rejected'
+                      ? 'fail'
+                      : stepSubmitted
+                        ? 'done'
+                        : detStatus === 'draft'
+                          ? 'current'
+                          : 'todo'
                   }
                 />
-                <RailStep n={5} label="Publish" state={stepPublished ? 'done' : 'todo'} />
+                <RailStep
+                  n={5}
+                  label="Approve"
+                  state={
+                    stepApproved ? 'done' : detStatus === 'pending_review' ? 'current' : 'todo'
+                  }
+                />
+                <RailStep
+                  n={6}
+                  label="Publish"
+                  state={stepPublished ? 'done' : detStatus === 'approved' ? 'current' : 'todo'}
+                />
               </div>
             </div>
           </div>
@@ -777,30 +852,120 @@ export default function CurveWorkspacePage() {
                 )}
               </div>
 
-              {/* Publish */}
+              {/* Governance & publication — the per-cob maker-checker (FC-G2) */}
               <div className="card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-h3 text-navy">Publish to golden copy</h2>
-                  {result.qa.passed ? (
-                    <Chip tone="ok">QA green</Chip>
+                  <h2 className="text-h3 text-navy">Governance &amp; publication</h2>
+                  {determination ? (
+                    <DeterminationStatusChip status={determination.status} />
+                  ) : result.qa.passed ? (
+                    <Chip tone="ok">QA green — ready to stage</Chip>
                   ) : (
-                    <Chip tone="crit">QA blocks publish</Chip>
+                    <Chip tone="crit">QA blocks the draft</Chip>
                   )}
                 </div>
                 <p className="mt-1 text-caption text-slate">
-                  Publishing constructs the curve again server-side and fans it out to every bank
-                  under <span className="font-mono text-ink">{curveCode}</span> through the desk
-                  determination seam (bitemporal + lineage + audit). Dual control already happened on
-                  the definition.
+                  A weekly build is a per-cob determination under maker-checker: stage a draft, an
+                  analyst submits it, a <span className="font-medium">distinct</span> supervisor
+                  approves it, and only then does it fan out to every bank under{' '}
+                  <span className="font-mono text-ink">{curveCode}</span> (bitemporal + lineage +
+                  audit). Definition-level dual control still applies underneath.
                 </p>
 
-                {canPublish ? (
+                {/* Stage: available only after a QA-green construction */}
+                {!determination && (
                   <div className="mt-4 border-t border-border-light pt-4">
-                    {publishArmed ? (
+                    {canStage ? (
+                      <button
+                        type="button"
+                        disabled={lifecycleBusy}
+                        onClick={() => void stageDraft()}
+                        className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
+                      >
+                        {lifecycleBusy ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <FileText size={14} />
+                        )}
+                        Stage draft determination
+                      </button>
+                    ) : (
+                      <p className="text-caption text-slate">
+                        {stale
+                          ? 'Re-run construction on the current inputs to stage a draft.'
+                          : result.qa.passed
+                            ? 'Staging needs an approved definition effective on the as-of date.'
+                            : 'Staging is disabled until every hard QA gate passes.'}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Lifecycle actions once a draft exists */}
+                {determination && (
+                  <div className="mt-4 space-y-3 border-t border-border-light pt-4">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-micro text-slate">
+                      <span>
+                        determination{' '}
+                        <span className="font-mono text-ink">{determination.id.slice(0, 8)}…</span>
+                      </span>
+                      <span>
+                        prepared by{' '}
+                        <span className="font-mono text-ink">{determination.prepared_by}</span>
+                      </span>
+                      {determination.reviewed_by && (
+                        <span>
+                          approved by{' '}
+                          <span className="font-mono text-ink">{determination.reviewed_by}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {determination.status === 'draft' && (
+                      <button
+                        type="button"
+                        disabled={lifecycleBusy}
+                        onClick={() => void submitDraft()}
+                        className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
+                      >
+                        {lifecycleBusy ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Upload size={14} />
+                        )}
+                        Submit for review
+                      </button>
+                    )}
+
+                    {determination.status === 'pending_review' && (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          disabled={lifecycleBusy || isProposer}
+                          onClick={() => void approveDraft()}
+                          className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {lifecycleBusy ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <CheckCircle2 size={14} />
+                          )}
+                          Approve (four-eyes)
+                        </button>
+                        {isProposer && (
+                          <p className="flex items-center gap-1.5 text-caption text-warning">
+                            <XCircle size={13} className="shrink-0" />
+                            You staged this determination — a different supervisor must approve it.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {determination.status === 'approved' && (
                       <div className="space-y-3">
                         <CeremonyBanner>
                           <p className="font-medium text-navy">
-                            Confirm publish — this writes golden copy for every tenant
+                            Approved — publishing writes golden copy for every tenant
                           </p>
                           <p className="mt-1">
                             Curve <span className="font-mono">{curveCode}</span> v{active?.version} as
@@ -808,55 +973,41 @@ export default function CurveWorkspacePage() {
                             heals a partial fan-out.
                           </p>
                         </CeremonyBanner>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={publishBusy}
-                            onClick={() => void runPublish()}
-                            className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
-                          >
-                            {publishBusy ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                              <Upload size={14} />
-                            )}
-                            Confirm — publish to every bank
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPublishArmed(false)}
-                            className="rounded border border-border px-3 py-1.5 text-body font-medium text-ink hover:bg-surface"
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          disabled={lifecycleBusy}
+                          onClick={() => void publishDraft()}
+                          className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium disabled:opacity-50"
+                        >
+                          {lifecycleBusy ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Upload size={14} />
+                          )}
+                          Publish to every bank
+                        </button>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPublishArmed(true);
-                          setPublishError(null);
-                        }}
-                        className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-body font-medium"
-                      >
-                        <Upload size={14} /> Publish…
-                      </button>
+                    )}
+
+                    {determination.status === 'rejected' && (
+                      <p className="text-caption text-critical">
+                        This determination was rejected
+                        {determination.review_note ? `: ${determination.review_note}` : ''}. Re-run
+                        construction to stage a fresh draft.
+                      </p>
+                    )}
+
+                    {determination.status === 'published' && !publication && (
+                      <p className="flex items-center gap-1.5 text-caption text-success">
+                        <CheckCircle2 size={13} className="shrink-0" /> Published to golden copy.
+                      </p>
                     )}
                   </div>
-                ) : (
-                  <p className="mt-4 border-t border-border-light pt-4 text-caption text-slate">
-                    {stale
-                      ? 'Re-run construction on the current inputs to enable publish.'
-                      : result.qa.passed
-                        ? 'Publish is available once an approved definition is effective on the as-of date.'
-                        : 'Publish is disabled until every hard QA gate passes.'}
-                  </p>
                 )}
 
-                {publishError && (
+                {lifecycleError && (
                   <div className="mt-3">
-                    <ErrorPanel error={publishError} context="Publishing the curve" />
+                    <ErrorPanel error={lifecycleError} context="Curve governance action" />
                   </div>
                 )}
 

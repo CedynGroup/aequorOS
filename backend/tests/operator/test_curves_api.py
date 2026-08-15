@@ -196,20 +196,69 @@ def test_construct_requires_active_definition(operator_client: TestClient) -> No
 
 
 # ---------------------------------------------------------------------------
-# Publish (wiring smoke: no banks -> a complete, empty fan-out)
+# Entitlement tier (FC-6d) on the definition CRUD
 # ---------------------------------------------------------------------------
 
 
-def test_publish_endpoint_fans_out_through_determination(
+def test_definition_create_carries_entitlement_tier(operator_client: TestClient) -> None:
+    created = operator_client.post(
+        f"{BASE}/definitions", headers=operator_headers(), json=_definition_body()
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["entitlement_tier"] == "standard"  # default
+
+    premium = operator_client.post(
+        f"{BASE}/definitions",
+        headers=operator_headers(),
+        json=_definition_body(curve_code="AEQ.GHS.CORP", entitlement_tier="premium"),
+    )
+    assert premium.status_code == 201, premium.text
+    assert premium.json()["entitlement_tier"] == "premium"
+
+
+# ---------------------------------------------------------------------------
+# Per-cob maker-checker lifecycle (FC-G2)
+# ---------------------------------------------------------------------------
+
+
+def _stage_via_service(operator_db: Session, *, prepared_by: str) -> DeskDetermination:
+    definition = cc.get_active_definition(operator_db, CURVE_CODE, date(2026, 8, 7))
+    assert definition is not None
+    row = cc.stage_curve_determination(
+        operator_db,
+        definition=definition,
+        as_of=date(2026, 8, 7),
+        quotes=QUOTES,
+        calendar=cc.resolve_calendar(definition.calendar_name),
+        prepared_by=prepared_by,
+    )
+    operator_db.commit()
+    return row
+
+
+def test_curve_lifecycle_submit_approve_publish(
     operator_client: TestClient, operator_db: Session
 ) -> None:
+    """Wiring smoke: a draft (prepared by a distinct analyst) submits, is approved
+    by the dev operator, and publishes through the determination seam."""
     _bootstrap_methodology(operator_client)
     _seed_definition(operator_db, approve=True)
+    draft = _stage_via_service(operator_db, prepared_by=ANALYST)
+
+    submitted = operator_client.post(
+        f"{BASE}/determinations/{draft.id}/submit", headers=operator_headers()
+    )
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["status"] == "pending_review"
+
+    approved = operator_client.post(
+        f"{BASE}/determinations/{draft.id}/approve", headers=operator_headers()
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved"
 
     published = operator_client.post(
-        f"{BASE}/publish",
-        headers=operator_headers(),
-        json={"curve_code": CURVE_CODE, "as_of": AS_OF, "quotes": QUOTES},
+        f"{BASE}/determinations/{draft.id}/publish", headers=operator_headers()
     )
     assert published.status_code == 200, published.text
     body = published.json()
@@ -217,11 +266,43 @@ def test_publish_endpoint_fans_out_through_determination(
     assert body["status"] == "complete"
     assert body["results"] == []
 
-    # A determination was materialised and published through the desk seam.
     determination = operator_db.scalar(
         select(DeskDetermination).where(DeskDetermination.status == "published")
     )
     assert determination is not None
     assert determination.derived_values["curves_qa_passed"] is True
     assert CURVE_CODE in determination.derived_values["curves"]
-    assert "desk.curve.publish" in _audit_actions(operator_db)
+    actions = _audit_actions(operator_db)
+    assert "desk.curve.submit" in actions
+    assert "desk.curve.approve" in actions
+    assert "desk.curve.publish" in actions
+
+
+def test_curve_stage_then_self_approval_refused(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    """The dev operator stages a draft via the API, then cannot approve it (422)."""
+    _bootstrap_methodology(operator_client)
+    _seed_definition(operator_db, approve=True)
+
+    staged = operator_client.post(
+        f"{BASE}/determinations",
+        headers=operator_headers(),
+        json={"curve_code": CURVE_CODE, "as_of": AS_OF, "quotes": QUOTES},
+    )
+    assert staged.status_code == 201, staged.text
+    body = staged.json()
+    assert body["status"] == "draft"
+    assert body["prepared_by"] == DEV_EMAIL
+    det_id = body["id"]
+    assert "desk.curve.stage_draft" in _audit_actions(operator_db)
+
+    submitted = operator_client.post(
+        f"{BASE}/determinations/{det_id}/submit", headers=operator_headers()
+    )
+    assert submitted.status_code == 200, submitted.text
+
+    refused = operator_client.post(
+        f"{BASE}/determinations/{det_id}/approve", headers=operator_headers()
+    )
+    assert refused.status_code == 422, refused.text

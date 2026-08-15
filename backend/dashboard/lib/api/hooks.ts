@@ -107,6 +107,10 @@ import {
   type MarketDataCategory,
   type MarketDataSourcePreferencesPatch,
 } from './marketDataSources';
+import {
+  getReportComparison,
+  type ReportComparisonParams,
+} from './reportComparison';
 
 
 /**
@@ -1234,11 +1238,12 @@ export function useForwardGrid(
   bankId: string | undefined,
   curveName: string | null,
   asOf?: string,
+  frequency?: string,
   enabled = true
 ) {
   return useQuery({
-    queryKey: ['md-forward-grid', bankId, curveName, asOf ?? null],
-    queryFn: () => getForwardGrid(bankId!, curveName!, { asOf }),
+    queryKey: ['md-forward-grid', bankId, curveName, asOf ?? null, frequency ?? null],
+    queryFn: () => getForwardGrid(bankId!, curveName!, { asOf, frequency }),
     enabled: Boolean(bankId) && Boolean(curveName) && enabled,
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
@@ -1818,6 +1823,39 @@ export function useComparePackageVersions(
         })
       ),
     enabled: Boolean(enabled && bankId && packageId && againstPackageId),
+  });
+}
+
+/**
+ * The Reports "Compare" line diff — two run versions of one period, or one
+ * return across two periods. Calls the hand-rolled fetch layer in
+ * ./reportComparison (the endpoint post-dates the last OpenAPI regeneration);
+ * the fetcher already throws ApiError, so no apiCall() wrapper is needed.
+ *
+ * Fired only once both sides are chosen and distinct (`enabled`): a diff of a
+ * thing against itself is meaningless, and the caller uses the disabled state to
+ * show the "need two to compare" guidance instead.
+ */
+export function useReportComparison(
+  bankId: string | undefined,
+  params: ReportComparisonParams,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: [
+      'report-comparison',
+      bankId,
+      params.mode,
+      params.module,
+      params.left,
+      params.right,
+      params.scenarioCode ?? 'baseline',
+    ],
+    queryFn: () => getReportComparison(bankId!, params),
+    enabled:
+      Boolean(bankId && params.left && params.right) &&
+      params.left !== params.right &&
+      enabled,
   });
 }
 

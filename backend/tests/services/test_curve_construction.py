@@ -17,7 +17,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.curves.calendars import GHANA
-from app.models import Bank, CanonicalYieldCurve, DeskCurveDefinition, DeskPublication
+from app.models import (
+    Bank,
+    CanonicalYieldCurve,
+    DeskCurveDefinition,
+    DeskDetermination,
+    DeskPublication,
+)
 from app.services.market_desk import curve_construction as cc
 from app.services.market_desk import determinations, register
 from tests.api.helpers import ORG_1, ORG_2
@@ -173,6 +179,9 @@ def test_derived_values_conform_to_aequor_desk_forward_contract() -> None:
     assert all(isinstance(point["rate_pct"], float) for point in points)
     assert points[0]["rate_pct"] == pytest.approx(result.grid.rows[1].yield_ * 100.0)
     stored = derived["forward_grids"][CURVE_CODE]
+    assert set(stored["grids"]) == {"1D", "1M", "3M", "6M", "1Y"}
+    assert len(stored["grids"]["1D"]["rows"]) == 23
+    assert len(stored["grids"]["1Y"]["rows"]) == 31
     assert stored["rows"][0] == {
         "start": COB.isoformat(),
         "end": result.grid.rows[0].end.isoformat(),
@@ -368,27 +377,52 @@ def _approved_setup(db: Session) -> DeskCurveDefinition:
     return definition
 
 
-def test_publish_lands_forward_curve_for_every_bank(
+def _stage(db: Session, definition: DeskCurveDefinition, **overrides: object) -> DeskDetermination:
+    kwargs: dict[str, object] = {
+        "definition": definition,
+        "as_of": COB,
+        "quotes": GHS_QUOTES,
+        "calendar": GHANA,
+        "prepared_by": ANALYST,
+    }
+    kwargs.update(overrides)
+    return cc.stage_curve_determination(db, **kwargs)  # type: ignore[arg-type]
+
+
+def test_curve_lifecycle_stage_submit_approve_publish(
     db_session: Session, banks: tuple[Bank, Bank], storage: InMemoryStorageClient
 ) -> None:
+    """Happy path: draft -> submit -> approve (distinct signer) -> publish."""
     _ = storage
     definition = _approved_setup(db_session)
 
-    publication_row = cc.publish_forward_curve(
-        db_session,
-        definition=definition,
-        as_of=COB,
-        quotes=GHS_QUOTES,
-        calendar=GHANA,
-        actor=LEAD,
-    )
+    # 1. Stage a DRAFT — never approved, never published.
+    draft = _stage(db_session, definition)
+    db_session.commit()
+    assert draft.status == "draft"
+    assert draft.prepared_by == ANALYST
+    assert draft.reviewed_by is None
+    assert draft.derived_values["curves_qa_passed"] is True
+    # No canonical rows and no publication yet.
+    assert _current_forward_curves(db_session, banks[0]) == []
 
+    # 2. Maker submits.
+    submitted = cc.submit_curve_determination(db_session, draft.id)
+    assert submitted.status == "pending_review"
+
+    # 3. Checker (distinct from preparer) approves — four-eyes satisfied.
+    approved = cc.approve_curve_determination(db_session, draft.id, reviewed_by=LEAD)
+    db_session.commit()
+    assert approved.status == "approved"
+    assert approved.reviewed_by == LEAD
+
+    # 4. Publish fans out; only now do canonical rows land for every bank.
+    publication_row = cc.publish_curve_determination(db_session, draft.id, actor=LEAD)
     assert publication_row.status == "complete"
     assert {entry["bank_id"] for entry in publication_row.results} == {
         banks[0].id,
         banks[1].id,
     }
-
     for bank in banks:
         curves = _current_forward_curves(db_session, bank)
         assert len(curves) == 1
@@ -396,12 +430,62 @@ def test_publish_lands_forward_curve_for_every_bank(
         assert curve.source_system == "AEQUOR_DESK"
         assert curve.curve_type == "forward"
         assert curve.curve_name == CURVE_CODE
-
-    # A DeskPublication row records the fan-out; the determination is published.
     assert db_session.get(DeskPublication, publication_row.id) is not None
+    assert determinations.get(db_session, draft.id).status == "published"
 
 
-def test_publish_refuses_unapproved_definition(
+def test_curve_four_eyes_blocks_self_approval(
+    db_session: Session, banks: tuple[Bank, Bank], storage: InMemoryStorageClient
+) -> None:
+    """The preparer can never approve their own curve determination (422)."""
+    _ = banks, storage
+    definition = _approved_setup(db_session)
+    draft = _stage(db_session, definition)
+    cc.submit_curve_determination(db_session, draft.id)
+    db_session.commit()
+    with pytest.raises(HTTPException) as excinfo:
+        cc.approve_curve_determination(db_session, draft.id, reviewed_by=ANALYST)
+    assert excinfo.value.status_code == 422
+    assert determinations.get(db_session, draft.id).status == "pending_review"
+
+
+def test_curve_publish_blocked_before_approval(
+    db_session: Session, banks: tuple[Bank, Bank], storage: InMemoryStorageClient
+) -> None:
+    """A draft or pending_review determination cannot be published (409)."""
+    _ = banks, storage
+    definition = _approved_setup(db_session)
+    draft = _stage(db_session, definition)
+    db_session.commit()
+    with pytest.raises(HTTPException) as excinfo:
+        cc.publish_curve_determination(db_session, draft.id, actor=LEAD)
+    assert excinfo.value.status_code == 409
+
+    cc.submit_curve_determination(db_session, draft.id)
+    db_session.commit()
+    with pytest.raises(HTTPException) as excinfo:
+        cc.publish_curve_determination(db_session, draft.id, actor=LEAD)
+    assert excinfo.value.status_code == 409
+
+
+def test_curve_qa_hard_gate_blocks_submit(
+    db_session: Session, banks: tuple[Bank, Bank], storage: InMemoryStorageClient
+) -> None:
+    """A QA-failing curve stages (so the analyst sees why) but cannot be submitted."""
+    _ = banks, storage
+    definition = _approved_setup(db_session)
+    # A single pillar fails the pillar-coverage gate (pillar_min_count=3).
+    thin_quotes = [{"instrument": "deposit", "tenor": "3M", "quote": 0.245}]
+    draft = _stage(db_session, definition, quotes=thin_quotes)
+    db_session.commit()
+    assert draft.qa_results["passed"] is False
+    assert draft.qa_results["pillar_coverage_pass"] is False
+    with pytest.raises(HTTPException) as excinfo:
+        cc.submit_curve_determination(db_session, draft.id)
+    assert excinfo.value.status_code == 422
+
+
+def test_stage_refuses_unapproved_definition(
     db_session: Session, banks: tuple[Bank, Bank], storage: InMemoryStorageClient
 ) -> None:
     _ = banks, storage
@@ -413,17 +497,34 @@ def test_publish_refuses_unapproved_definition(
         approved_by=LEAD,
         effective_from=date(2026, 1, 1),
     )
-    draft = _create_definition(db_session)  # never approved
+    draft_definition = _create_definition(db_session)  # never approved
     db_session.commit()
     with pytest.raises(HTTPException) as excinfo:
-        cc.publish_forward_curve(
-            db_session,
-            definition=draft,
-            as_of=COB,
-            quotes=GHS_QUOTES,
-            calendar=GHANA,
-            actor=LEAD,
-        )
+        _stage(db_session, draft_definition)
     assert excinfo.value.status_code == 409
-    # Nothing was published.
     assert not determinations.list_determinations(db_session)
+
+
+def test_staged_determination_digest_matches_construction(
+    db_session: Session, banks: tuple[Bank, Bank], storage: InMemoryStorageClient
+) -> None:
+    """Staging does not perturb the value-based digest (reproducibility)."""
+    _ = banks, storage
+    definition = _approved_setup(db_session)
+    expected = cc.build_forward_curve(definition, COB, GHS_QUOTES, calendar=GHANA)
+    draft = _stage(db_session, definition)
+    assert draft.input_digest == expected.input_digest
+
+
+def test_definition_carries_entitlement_tier(db_session: Session) -> None:
+    """FC-6d: the definition CRUD round-trips the distribution tier (default standard)."""
+    default_row = _create_definition(db_session)
+    assert default_row.entitlement_tier == "standard"
+
+    premium = cc.create_definition(
+        db_session,
+        spec=_spec(curve_code="AEQ.GHS.CORP", entitlement_tier="premium"),
+        change_rationale="premium credit curve",
+        proposed_by=ANALYST,
+    )
+    assert premium.entitlement_tier == "premium"

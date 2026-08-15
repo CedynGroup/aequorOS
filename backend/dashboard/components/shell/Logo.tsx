@@ -43,6 +43,7 @@ export default function Logo({
         </defs>
         <rect width="64" height="64" rx="14" fill="url(#aeq-mark)" />
         <path d={A_PATH} fill="#FFFFFF" />
+        <image href="/branding/aequoros-mark.png" width="64" height="64" />
       </svg>
       {showWordmark && (
         <div className="leading-none">

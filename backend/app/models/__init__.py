@@ -32,6 +32,7 @@ from app.models.canonical import (
 from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
 from app.models.capital_plan import CapitalPlan, IlaapSnapshot
 from app.models.database_connection import DatabaseDirectConnection
+from app.models.desk_operating_environment import DeskOperatingEnvironmentAssessment
 from app.models.entitlements import MarketDataEntitlement
 from app.models.financial import (
     FinancialAccount,
@@ -197,6 +198,7 @@ __all__ = [
     "MarketDataSourcePreference",
     "DeskCurveDefinition",
     "DeskDetermination",
+    "DeskOperatingEnvironmentAssessment",
     "DeskMethodology",
     "DeskObservation",
     "DeskPublication",

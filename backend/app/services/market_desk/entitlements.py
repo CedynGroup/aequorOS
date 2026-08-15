@@ -15,12 +15,18 @@ from app.models.entitlements import (
     ENTITLEMENT_TIERS,
     MarketDataEntitlement,
 )
+from app.models.market_desk_curves import DeskCurveDefinition
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 # Default when an org has zero entitlement rows: standard tier (grandfather).
 DEFAULT_TIER = "standard"
+
+# Ordered tier ladder (curve platform spec §10; core < standard < premium).
+# FC-6d: a published curve's tier is its definition's tier, and an org sees it
+# only when its own active tier is at or above the curve's tier.
+TIER_RANK: dict[str, int] = {"core": 0, "standard": 1, "premium": 2}
 
 # Which publish scopes / curve families each dataset unlocks.
 DATASET_SCOPES: dict[str, frozenset[DataScope]] = {
@@ -117,6 +123,72 @@ def curve_allowed(curve_code: str, datasets: set[str]) -> bool:
         return False
     # Non-AEQ vendor curves are not gated by desk entitlements.
     return True
+
+
+def org_tier(datasets: set[str]) -> str:
+    """The highest named tier whose FULL dataset set the org holds (FC-6d).
+
+    Tiers are nested dataset sets (core ⊂ standard ⊂ premium) and ``grant_tier``
+    grants the full set, so a subset test is exact for a tier-granted org; a
+    partial/ad-hoc grant that does not cover a whole tier resolves conservatively
+    downward. An org with no rows resolves to the default (standard) because
+    :func:`active_datasets` grandfathers it to the standard set.
+    """
+    tier = "core"
+    for name in ("standard", "premium"):
+        if set(ENTITLEMENT_TIERS[name]).issubset(datasets):
+            tier = name
+    return tier
+
+
+def tier_allows(curve_tier: str, datasets: set[str]) -> bool:
+    """True when the org's active tier is at or above the curve's tier (FC-6d)."""
+    required = TIER_RANK.get(curve_tier, TIER_RANK[DEFAULT_TIER])
+    return TIER_RANK.get(org_tier(datasets), 0) >= required
+
+
+def curve_definition_tier(
+    db: Session, curve_code: str, *, as_of: date | None = None
+) -> str | None:
+    """The entitlement tier governing a curve code, or ``None`` when ungoverned.
+
+    Resolves the latest APPROVED :class:`DeskCurveDefinition` for the code
+    (effective on ``as_of`` when given) and returns its ``entitlement_tier``.
+    ``None`` means no governed definition owns the code (e.g. a synthetic AGD /
+    OIS proxy published outside the construction workspace) — such curves keep
+    only the name-family dataset gate, never a tier gate.
+    """
+    query = (
+        select(DeskCurveDefinition)
+        .where(
+            DeskCurveDefinition.curve_code == curve_code,
+            DeskCurveDefinition.status == "approved",
+        )
+        .order_by(DeskCurveDefinition.version.desc())
+        .limit(1)
+    )
+    if as_of is not None:
+        query = query.where(DeskCurveDefinition.effective_from <= as_of)
+    row = db.scalar(query)
+    return row.entitlement_tier if row is not None else None
+
+
+def curve_visible(
+    db: Session, curve_code: str, datasets: set[str], *, as_of: date | None = None
+) -> bool:
+    """Full read-time visibility of an AEQ.* curve for an org (FC-6d).
+
+    Combines the existing name-family dataset gate (:func:`curve_allowed`) with
+    the definition's distribution tier vs the org's active tier. A curve with no
+    governed definition is gated by name only; a governed curve must ALSO be at
+    or below the org's tier.
+    """
+    if not curve_allowed(curve_code, datasets):
+        return False
+    tier = curve_definition_tier(db, curve_code, as_of=as_of)
+    if tier is None:
+        return True
+    return tier_allows(tier, datasets)
 
 
 def index_allowed(index_code: str, datasets: set[str]) -> bool:

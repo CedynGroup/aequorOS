@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Code2, LineChart, LogOut } from 'lucide-react';
+import BrandLogo from './BrandLogo';
 import {
   clearToken,
   getAuthConfig,
@@ -26,7 +27,7 @@ const NAV = [
     match: ['/tenants', '/onboard', '/operations'],
   },
   {
-    href: '/desk/determinations',
+    href: '/desk/market',
     label: 'Markets Desk',
     icon: LineChart,
     // Active for every surface inside the Markets Desk section.
@@ -93,8 +94,7 @@ export default function Shell({ children }: { children: ReactNode }) {
       {/* Left rail */}
       <aside className="fixed inset-y-0 left-0 z-20 flex w-56 flex-col bg-nav">
         <div className="px-5 pb-4 pt-5">
-          <div className="text-h3 font-semibold text-white">AequorOS</div>
-          <div className="text-micro uppercase tracking-widest text-slate">Operator</div>
+          <BrandLogo inverse subtitle="Operator" />
         </div>
         <nav className="flex-1 space-y-0.5 px-3">
           {NAV.map(({ href, label, icon: Icon, match }) => {

@@ -651,8 +651,14 @@ _PCT = Decimal("100")
 _MONTHS_PER_YEAR = Decimal("12")
 
 
-def get_forward_grid(
-    db: Session, ctx: TenantContext, bank_id: str, curve_name: str, as_of: date
+def get_forward_grid(  # noqa: PLR0913 - tenant scope plus optional as-of/frequency selectors
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    curve_name: str,
+    as_of: date,
+    *,
+    frequency: str | None = None,
 ) -> ForwardGridRead:
     """The published forward grid for a desk curve, from its approved determination.
 
@@ -668,7 +674,9 @@ def get_forward_grid(
         from app.services.market_desk import entitlements as desk_entitlements  # noqa: PLC0415
 
         datasets = desk_entitlements.active_datasets(db, ctx.organization_id, as_of=as_of)
-        if not desk_entitlements.curve_allowed(curve_name, datasets):
+        # FC-6d: both the name-family dataset gate and the curve definition's
+        # distribution tier vs the org's active tier.
+        if not desk_entitlements.curve_visible(db, curve_name, datasets, as_of=as_of):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No forward grid is available for this curve.",
@@ -684,8 +692,20 @@ def get_forward_grid(
     raw_points = spec.get("points") or []
     points = sorted((int(p["tenor_months"]), Decimal(str(p["rate_pct"]))) for p in raw_points)
     stored_grid = derived_values.get("forward_grids", {}).get(curve_name, {})
-    rows = _stored_forward_grid_rows(stored_grid)
     assumptions = _forward_grid_assumptions(stored_grid)
+    available_frequencies = _available_forward_grid_frequencies(stored_grid, assumptions)
+    default_frequency = assumptions.curve_frequency if assumptions else "3M"
+    selected_frequency = (frequency or default_frequency).upper()
+    if selected_frequency not in available_frequencies:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "The requested published forward-grid frequency is not available for this curve."
+            ),
+        )
+    rows = _stored_forward_grid_rows(_stored_frequency_grid(stored_grid, selected_frequency))
+    if not rows:
+        rows = _stored_forward_grid_rows(stored_grid)
     return ForwardGridRead(
         curve_name=curve_name,
         currency=_curve_currency(curve_name),
@@ -697,10 +717,35 @@ def get_forward_grid(
             else _curve_interpolation(db, curve_name, as_of)
         ),
         grid_is_authoritative=bool(rows),
+        frequency=selected_frequency,
+        available_frequencies=available_frequencies,
         assumptions=assumptions,
         rows=rows or _forward_grid_rows(points, determination.cob_date),
         pillars=_forward_grid_pillars(determination.input_snapshot),
     )
+
+
+def _available_forward_grid_frequencies(
+    stored_grid: object, assumptions: ForwardGridAssumptionsRead | None
+) -> list[str]:
+    if isinstance(stored_grid, dict) and isinstance(stored_grid.get("grids"), dict):
+        frequencies = sorted(
+            frequency.upper()
+            for frequency, grid in stored_grid["grids"].items()
+            if isinstance(frequency, str) and isinstance(grid, dict) and grid.get("rows")
+        )
+        if frequencies:
+            return frequencies
+    return [assumptions.curve_frequency.upper() if assumptions else "3M"]
+
+
+def _stored_frequency_grid(stored_grid: object, frequency: str) -> object:
+    if not isinstance(stored_grid, dict) or not isinstance(stored_grid.get("grids"), dict):
+        return stored_grid
+    for candidate, grid in stored_grid["grids"].items():
+        if isinstance(candidate, str) and candidate.upper() == frequency:
+            return grid
+    return {}
 
 
 def _stored_forward_grid_rows(value: object) -> list[ForwardGridRowRead]:
@@ -760,29 +805,30 @@ def _latest_curve_determination(
 def _forward_grid_rows(
     points: list[tuple[int, Decimal]], cob_date: date
 ) -> list[ForwardGridRowRead]:
-    """Reconstruct Start/End/DF/Yield rows from per-bucket forward yields.
+    """Reconstruct Start/End/period-DF/Yield rows from per-bucket forward yields.
 
     Each stored point is a forward bucket ending at ``tenor_months`` (the
     ``curve_construction`` grid); its start is the previous bucket's end.
-    ``forward_yield`` is the stored percent as a decimal fraction; the
-    discount factor is the cumulative product of ``1/(1 + f·Δt)`` over the
-    buckets (ACT/12 year fractions) — the determination stores yields, not DFs,
-    so the DF is a faithful reconstruction consistent with the shown forwards.
+    ``forward_yield`` is the stored percent as a decimal fraction; the returned
+    discount factor is the *period* discount ratio ``DF(End)/DF(Start)``. This
+    matches ``domain.curves.multicurve.forward_grid`` and is required for a
+    basis conversion to re-express the forward yield correctly. Older
+    determinations do not contain the exact calendar-adjusted construction grid,
+    so dates and accrual fractions remain explicitly labelled reconstruction.
     """
     rows: list[ForwardGridRowRead] = []
-    discount = Decimal(1)
     prev_month = 0
     for tenor_months, rate_pct in points:
         if tenor_months <= prev_month:
             continue
         forward = rate_pct / _PCT
         year_fraction = Decimal(tenor_months - prev_month) / _MONTHS_PER_YEAR
-        discount = discount / (Decimal(1) + forward * year_fraction)
+        period_discount = Decimal(1) / (Decimal(1) + forward * year_fraction)
         rows.append(
             ForwardGridRowRead(
                 start=_add_months(cob_date, prev_month),
                 end=_add_months(cob_date, tenor_months),
-                discount_factor=_dec_str(discount.quantize(_DF_QUANTUM)),
+                discount_factor=_dec_str(period_discount.quantize(_DF_QUANTUM)),
                 forward_yield=_dec_str(forward),
             )
         )

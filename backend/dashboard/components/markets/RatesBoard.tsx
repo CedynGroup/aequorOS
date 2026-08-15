@@ -18,8 +18,10 @@ import { fmtPct } from '@/lib/format';
 import AttributionChip from './AttributionChip';
 import { MonoChip } from './chips';
 
+export type RateGroupKey = 'policy' | 'money-market' | 'lending';
+
 type RateGroup = {
-  key: string;
+  key: RateGroupKey;
   title: string;
   subtitle: string;
   matches: (code: string) => boolean;
@@ -81,16 +83,24 @@ function RateRow({ index }: { index: IndexViewRead }) {
           {index.scenario !== 'base' && <StatusPill tone="amber">{labelize(index.scenario)}</StatusPill>}
         </span>
       </td>
-      <td className="px-4 py-3 text-right font-mono text-kpi text-navy tnum">{fmtRateValue(index.value)}</td>
+      <td className="px-4 py-3 text-right font-mono font-semibold text-navy tnum">{fmtRateValue(index.value)}</td>
       <td className="px-4 py-3 text-right text-caption font-mono text-slate">{fmtDateUTC(index.asOfDate)}</td>
       <td className="px-4 py-3 text-right"><AttributionChip attribution={index.attribution} className="justify-end" /></td>
     </tr>
   );
 }
 
-export default function RatesBoard({ indices }: { indices: IndexViewRead[] }) {
+export default function RatesBoard({
+  indices,
+  groups: selectedGroups,
+}: {
+  indices: IndexViewRead[];
+  groups?: RateGroupKey[];
+}) {
   const claimed = new Set<string>();
-  const groups = RATE_GROUPS.map((group) => {
+  const groups = RATE_GROUPS.filter(
+    (group) => selectedGroups === undefined || selectedGroups.includes(group.key)
+  ).map((group) => {
     const members = indices.filter(
       (index) =>
         !claimed.has(`${index.indexCode}-${index.scenario}`) &&

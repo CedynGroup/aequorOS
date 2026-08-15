@@ -120,5 +120,6 @@ class MarketDataViewsRead(ClosedModel):
     as_of_date: date = Field(title="Market Data Views As Of Date")
     curves: list[YieldCurveViewRead]
     fx_rates: list[FxRateViewRead]
+    fx_forwards: list[FxRateViewRead]
     ratings: list[RatingViewRead]
     indices: list[IndexViewRead]

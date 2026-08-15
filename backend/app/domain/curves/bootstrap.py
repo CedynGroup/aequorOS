@@ -174,6 +174,14 @@ class ZeroCurve:
         """Curve time (years, curve day count) of a calendar date."""
         return year_fraction(self.valuation_date, day, self.day_count)
 
+    def discount(self, day: date) -> float:
+        """Discount factor to a calendar date (the shared curve protocol)."""
+        if day < self.valuation_date:
+            raise BootstrapError(
+                f"Discount date {day.isoformat()} precedes {self.valuation_date.isoformat()}."
+            )
+        return self.df(self.time_of(day))
+
     def zero(self, t: float) -> float:
         """Continuously compounded zero rate at time ``t``."""
         return self._interpolator.zero(t)

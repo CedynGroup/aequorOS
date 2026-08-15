@@ -35,6 +35,9 @@ from app.db.base import utc_now
 from app.domain.curves.bootstrap import ZeroCurve
 from app.domain.curves.calendars import (
     GHANA,
+    KENYA,
+    NIGERIA,
+    SOUTH_AFRICA,
     USA,
     BusinessDayConvention,
     Calendar,
@@ -49,8 +52,10 @@ from app.domain.curves.conventions import (
 )
 from app.domain.curves.forwards import ForwardQaResult, QaError, qa_forwards
 from app.domain.curves.instruments import (
+    DEFAULT_FUTURES_VOL,
     DepositHelper,
     FraHelper,
+    FuturesHelper,
     InstrumentSetError,
     OisHelper,
     RateHelper,
@@ -60,15 +65,17 @@ from app.domain.curves.interpolation import INTERPOLATION_METHODS
 from app.domain.curves.multicurve import (
     CurveSet,
     ForwardGrid,
+    ForwardGridRow,
     MarketQuote,
     MultiCurveError,
     SolvedCurve,
     build_curve_set,
     forward_grid,
+    forward_grid_for_frequency,
 )
 from app.domain.curves.objects import canonical_input_digest
 from app.models import DeskCurveDefinition, DeskDetermination
-from app.services.market_desk import publication, register
+from app.services.market_desk import determinations, publication, register
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -81,6 +88,7 @@ __all__ = [
     "CurveConstructionQa",
     "CurveConstructionResult",
     "CurveDefinitionSpec",
+    "approve_curve_determination",
     "approve_definition_version",
     "build_forward_curve",
     "create_definition",
@@ -88,14 +96,22 @@ __all__ = [
     "get_definition_version",
     "list_definitions",
     "propose_definition_version",
-    "publish_forward_curve",
+    "publish_curve_determination",
     "resolve_calendar",
+    "stage_curve_determination",
+    "submit_curve_determination",
     "to_determination_derived_values",
 ]
 
 # Named calendars the desk seeds (spec §2.5). Grows with expansion markets; an
 # unknown name is a governed-definition error, never a silent default.
-_CALENDARS: dict[str, Calendar] = {"USA": USA, "GHANA": GHANA}
+_CALENDARS: dict[str, Calendar] = {
+    "USA": USA,
+    "GHANA": GHANA,
+    "NIGERIA": NIGERIA,
+    "KENYA": KENYA,
+    "SOUTH_AFRICA": SOUTH_AFRICA,
+}
 
 _VALID_EXTRAPOLATION: frozenset[str] = frozenset({"flat_forward", "flat_zero"})
 
@@ -110,6 +126,18 @@ _DEFAULT_QA_GRID_POINTS = 40
 _DEFAULT_OSCILLATION_TOLERANCE = 3.0
 _DEFAULT_PILLAR_MIN_COUNT = 3
 _REPRICE_TOLERANCE = 1e-8  # the acid test the quant lib pins (spec §2.3)
+
+# Every approved construction publishes this full bank-selectable family. The
+# periods are governed defaults and can be overridden by
+# ``params.grid_periods_by_frequency`` on a definition.
+_PUBLISHED_GRID_FREQUENCIES: tuple[str, ...] = ("1D", "1M", "3M", "6M", "1Y")
+_DEFAULT_GRID_PERIODS_BY_FREQUENCY: dict[str, int] = {
+    "1D": 22,
+    "1M": 120,
+    "3M": 120,
+    "6M": 60,
+    "1Y": 30,
+}
 
 
 class CurveConstructionError(ValueError):
@@ -163,6 +191,7 @@ class CurveConstructionResult:
     as_of: date
     output_basis: DayCount
     grid: ForwardGrid
+    grids_by_frequency: dict[str, tuple[ForwardGridRow, ...]]
     pillars: tuple[CurveConstructionPillar, ...]
     qa: CurveConstructionQa
     input_digest: str
@@ -243,7 +272,17 @@ def _build_helper(  # noqa: PLR0913 - the helper's governed construction paramet
     convention: BusinessDayConvention,
     float_frequency_months: int,
     on_projection: bool,
+    forward_start: date | None = None,
+    sigma: float | None = None,
 ) -> RateHelper:
+    """Resolve one quote into a self-repricing helper.
+
+    ``forward_start`` (FC-G3), when set, makes deposit/FRA/swap/OIS instruments
+    accrue from that future/IMM date instead of the spot date. ``sigma`` (FC-6a)
+    is the futures->forward convexity vol, read only for a ``futures`` instrument
+    (which is inherently forward-starting over ``[forward_start, forward_start +
+    tenor]`` and requires ``forward_start`` as its IMM period start).
+    """
     kind = instrument.strip().lower()
     if kind in _DEPOSIT_KINDS:
         return DepositHelper(
@@ -252,6 +291,7 @@ def _build_helper(  # noqa: PLR0913 - the helper's governed construction paramet
             spot_lag=spot_lag,
             convention=convention,
             on_projection=on_projection,
+            forward_start=forward_start,
         )
     if kind == "fra":
         start_token, sep, end_token = tenor.lower().partition("x")
@@ -265,15 +305,32 @@ def _build_helper(  # noqa: PLR0913 - the helper's governed construction paramet
             calendar,
             spot_lag=spot_lag,
             convention=convention,
+            forward_start=forward_start,
         )
     if kind == "swap":
         return SwapHelper(
-            tenor, calendar, float_frequency_months=float_frequency_months, spot_lag=spot_lag
+            tenor,
+            calendar,
+            float_frequency_months=float_frequency_months,
+            spot_lag=spot_lag,
+            forward_start=forward_start,
         )
     if kind == "ois":
-        return OisHelper(tenor, calendar, spot_lag=spot_lag)
+        return OisHelper(tenor, calendar, spot_lag=spot_lag, forward_start=forward_start)
+    if kind == "futures":
+        if forward_start is None:
+            raise CurveConstructionError(
+                "A 'futures' quote needs a forward_start (the IMM period start date)."
+            )
+        end = calendar.add_tenor(forward_start, tenor, convention)
+        return FuturesHelper(
+            forward_start,
+            end,
+            calendar,
+            sigma=DEFAULT_FUTURES_VOL if sigma is None else sigma,
+        )
     raise CurveConstructionError(
-        f"Unknown instrument {instrument!r}; expected deposit/fra/swap/ois."
+        f"Unknown instrument {instrument!r}; expected deposit/fra/swap/ois/futures."
     )
 
 
@@ -290,6 +347,8 @@ class _QuoteLeg:
     quote: float
     helper: RateHelper
     pillar_date: date
+    forward_start: date | None = None
+    sigma: float | None = None
 
 
 def _read_int_param(params: Mapping[str, Any], key: str, default: int) -> int:
@@ -310,6 +369,30 @@ def _read_float_param(params: Mapping[str, Any], key: str, default: float) -> fl
         return float(raw)
     except (TypeError, ValueError) as exc:
         raise CurveConstructionError(f"params.{key} must be numeric, got {raw!r}.") from exc
+
+
+def _parse_optional_date(value: Any) -> date | None:
+    """Read a quote's ``forward_start``: a ``date``, an ISO string, or ``None``."""
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError as exc:
+        raise CurveConstructionError(
+            f"forward_start {value!r} must be an ISO date (YYYY-MM-DD)."
+        ) from exc
+
+
+def _parse_optional_float(value: Any, *, field: str) -> float | None:
+    """Read a quote's optional numeric override (e.g. futures ``sigma``)."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise CurveConstructionError(f"{field} must be numeric, got {value!r}.") from exc
 
 
 def _prepare_legs(  # noqa: PLR0913 - the governed construction parameters, spelled out
@@ -339,6 +422,8 @@ def _prepare_legs(  # noqa: PLR0913 - the governed construction parameters, spel
                 f"quote for {instrument} {tenor} must be a number (decimal fraction)."
             ) from exc
         on_projection = leg == "projection"
+        forward_start = _parse_optional_date(raw.get("forward_start"))
+        sigma = _parse_optional_float(raw.get("sigma"), field=f"sigma for {instrument} {tenor}")
         try:
             helper = _build_helper(
                 instrument,
@@ -348,11 +433,15 @@ def _prepare_legs(  # noqa: PLR0913 - the governed construction parameters, spel
                 convention=convention,
                 float_frequency_months=float_frequency_months,
                 on_projection=on_projection,
+                forward_start=forward_start,
+                sigma=sigma,
             )
             pillar = helper.pillar_date(calendar, as_of)
         except (InstrumentSetError, ConventionError, CalendarError) as exc:
             raise CurveConstructionError(str(exc)) from exc
-        entry = _QuoteLeg(instrument, tenor, leg, quote, helper, pillar)
+        entry = _QuoteLeg(
+            instrument, tenor, leg, quote, helper, pillar, forward_start=forward_start, sigma=sigma
+        )
         (projection if on_projection else discount).append(entry)
 
     discount.sort(key=lambda e: e.pillar_date)
@@ -462,6 +551,12 @@ def _construction_digest(
                     "tenor": leg.tenor,
                     "leg": leg.leg,
                     "quote": leg.quote,
+                    # FC-G3/FC-6a: forward-start + futures vol are part of the
+                    # construction inputs, so they MUST enter the value-based digest
+                    # (spec §2.7) — else two curves differing only in forward-start
+                    # would replay identically. ``None`` for a plain spot instrument.
+                    "forward_start": leg.forward_start.isoformat() if leg.forward_start else None,
+                    "sigma": leg.sigma,
                 }
                 for leg in legs
             ),
@@ -546,6 +641,31 @@ def build_forward_curve(
     except (MultiCurveError, ConventionError, CalendarError) as exc:
         raise CurveConstructionError(str(exc)) from exc
 
+    configured_periods = params.get("grid_periods_by_frequency", {})
+    if not isinstance(configured_periods, Mapping):
+        raise CurveConstructionError(
+            "grid_periods_by_frequency must be a mapping of frequency to count."
+        )
+    grids_by_frequency: dict[str, tuple[ForwardGridRow, ...]] = {}
+    for frequency in _PUBLISHED_GRID_FREQUENCIES:
+        default_periods = _DEFAULT_GRID_PERIODS_BY_FREQUENCY[frequency]
+        frequency_periods = max(
+            _read_int_param(configured_periods, frequency, default_periods), 1
+        )
+        try:
+            grids_by_frequency[frequency] = forward_grid_for_frequency(
+                output_curve,
+                as_of=as_of,
+                frequency=frequency,
+                calendar=calendar,
+                periods=frequency_periods,
+                convention=convention,
+                output_basis=output_basis,
+                end_of_month=end_of_month,
+            )
+        except (MultiCurveError, ConventionError, CalendarError) as exc:
+            raise CurveConstructionError(str(exc)) from exc
+
     all_legs = (*discount_legs, *projection_legs)
     pillars: list[CurveConstructionPillar] = []
     worst_residual = 0.0
@@ -582,6 +702,7 @@ def build_forward_curve(
         as_of=as_of,
         output_basis=output_basis,
         grid=grid,
+        grids_by_frequency=grids_by_frequency,
         pillars=tuple(pillars),
         qa=qa,
         input_digest=digest,
@@ -618,7 +739,7 @@ def to_determination_derived_values(
         }
         for index, row in enumerate(result.grid.rows[1:])
     ]
-    forward_grid = {
+    forward_grid: dict[str, Any] = {
         "rows": [
             {
                 "start": row.start.isoformat(),
@@ -628,6 +749,20 @@ def to_determination_derived_values(
             }
             for row in result.grid.rows
         ],
+        "grids": {
+            frequency: {
+                "rows": [
+                    {
+                        "start": row.start.isoformat(),
+                        "end": row.end.isoformat(),
+                        "discount_factor": format(row.discount_factor, ".12f"),
+                        "forward_yield": format(row.yield_, ".12f"),
+                    }
+                    for row in rows
+                ]
+            }
+            for frequency, rows in result.grids_by_frequency.items()
+        },
     }
     if definition is not None:
         forward_grid["definition"] = {
@@ -679,6 +814,9 @@ class CurveDefinitionSpec:
     roll_convention: str
     extrapolation_rule: str
     params: dict[str, Any]
+    # FC-6d distribution tier (core < standard < premium); trailing default so
+    # the platform-wide grandfather tier applies when a caller omits it.
+    entitlement_tier: str = "standard"
 
 
 def _apply_spec(row: DeskCurveDefinition, spec: CurveDefinitionSpec) -> None:
@@ -697,6 +835,7 @@ def _apply_spec(row: DeskCurveDefinition, spec: CurveDefinitionSpec) -> None:
     row.roll_convention = spec.roll_convention
     row.extrapolation_rule = spec.extrapolation_rule
     row.params = spec.params
+    row.entitlement_tier = spec.entitlement_tier
 
 
 def _validate_spec(spec: CurveDefinitionSpec) -> None:
@@ -865,7 +1004,21 @@ def get_active_definition(
 
 
 # ---------------------------------------------------------------------------
-# Publication (through the existing determination -> fan-out path)
+# Per-cob maker-checker lifecycle (FC-G2)
+#
+# A constructed weekly curve is a Track-1 determination that walks the SAME
+# maker-checker state machine the rates flow uses (spec §3.A steps 5-8): the
+# analyst stages a DRAFT (never approved, never published), submits it, a
+# distinct supervisor approves it (four-eyes, ``determinations._require_checker``),
+# and only an APPROVED determination fans out. The definition-level dual control
+# (FC-3, approver != proposer on the DEFINITION) is preserved AND this per-cob
+# determination maker-checker rides on top — two independent control gates.
+#
+# The draft row is materialised here rather than via ``determinations.create_draft``
+# because a curve's input snapshot is the cob's instrument-grid QUOTES, not the
+# desk-observation series ``create_draft`` snapshots; the state transitions
+# (submit / approve / publish) reuse ``determinations`` and ``publication``
+# unchanged.
 # ---------------------------------------------------------------------------
 
 
@@ -886,71 +1039,128 @@ def _qa_payload(qa: CurveConstructionQa) -> dict[str, Any]:
     }
 
 
-def publish_forward_curve(  # noqa: PLR0913 - the construction + fan-out parameters
-    db: Session,
-    *,
-    definition: DeskCurveDefinition,
-    as_of: date,
-    quotes: Sequence[Mapping[str, Any]],
-    calendar: Calendar,
-    actor: str,
-    methodology_code: str = register.DEFAULT_METHODOLOGY_CODE,
-) -> DeskPublication:
-    """Construct then publish a forward curve through the desk fan-out (spec §3.A step 7).
-
-    Publication reuses the EXISTING determination -> ``publication.publish`` seam so
-    bitemporal storage, lineage/raw-tier provenance and per-bank audit come for free
-    (this module edits neither ``determinations.py`` nor ``publication.py``). The
-    determination is materialised directly in the ``approved`` state carrying the
-    construction's derived values and value-based digest: dual control already
-    happened on the curve DEFINITION (approver != proposer), and ``prepared_by`` /
-    ``reviewed_by`` record that same governance pair. The determination is stamped
-    with the active desk methodology version (spec §6 "the weekly build is a Track-1
-    determination stamped with the version").
-    """
-    if definition.status != "approved":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Curve definition {definition.curve_code!r} v{definition.version} is "
-            f"{definition.status!r}; only an approved definition can be published.",
-        )
-    result = build_forward_curve(definition, as_of, quotes, calendar=calendar)
-    if not result.qa.passed:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Curve construction failed a hard QA gate; publication is blocked.",
-        )
-    methodology = register.get_active(db, methodology_code, as_of)
-    if methodology is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"No approved methodology version of {methodology_code!r} is effective on "
-                f"{as_of.isoformat()}; approve one before publishing a constructed curve."
-            ),
-        )
-
-    input_snapshot = sorted(
+def _curve_input_snapshot(result: CurveConstructionResult) -> list[dict[str, str]]:
+    """The value-based, id-free quote snapshot a curve determination records."""
+    return sorted(
         (
             {"instrument": leg.instrument, "tenor": leg.tenor, "quote": str(leg.quote)}
             for leg in result.pillars
         ),
         key=lambda entry: (entry["instrument"], entry["tenor"]),
     )
+
+
+def _ensure_curve_qa(determination: DeskDetermination) -> None:
+    """Hard QA gate for a constructed-curve determination (spec §3.A step 4).
+
+    The determinations state machine is deliberately QA-agnostic, so — exactly
+    like the rates flow's ``calculation.ensure_approvable`` — the curve's hard
+    gate is enforced at THIS service layer before submit / approve. A curve
+    determination stores its QA verdict under ``qa_results['passed']``.
+    """
+    qa = determination.qa_results or {}
+    if qa.get("passed") is not True:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Curve construction failed a hard QA gate; this action is blocked.",
+        )
+
+
+def stage_curve_determination(  # noqa: PLR0913 - the construction + governance parameters
+    db: Session,
+    *,
+    definition: DeskCurveDefinition,
+    as_of: date,
+    quotes: Sequence[Mapping[str, Any]],
+    calendar: Calendar,
+    prepared_by: str,
+    methodology_code: str = register.DEFAULT_METHODOLOGY_CODE,
+    research_adjustments: Sequence[Mapping[str, Any]] | None = None,
+) -> DeskDetermination:
+    """Stage a DRAFT determination for a cob's constructed curve (FC-G2 step 1).
+
+    Constructs the curve (running the hard QA gate), resolves the active desk
+    methodology (spec §6 "the weekly build is a Track-1 determination stamped
+    with the version"), and writes a determination in the ``draft`` state
+    carrying the construction's derived values, value-based ``input_digest`` and
+    quote snapshot. NEVER approved, never published — that is the whole point of
+    the split. The QA verdict is recorded (so the analyst can inspect a failure)
+    but does not block staging; ``submit`` / ``approve`` enforce it. Bounded
+    ``research_adjustments`` (Option B) are persisted via
+    ``determinations.set_research_adjustments`` — audited, digest-eligible, and
+    never a rewrite of the methodology register.
+    """
+    if definition.status != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Curve definition {definition.curve_code!r} v{definition.version} is "
+            f"{definition.status!r}; only an approved definition can be staged.",
+        )
+    result = build_forward_curve(definition, as_of, quotes, calendar=calendar)
+    methodology = register.get_active(db, methodology_code, as_of)
+    if methodology is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"No approved methodology version of {methodology_code!r} is effective on "
+                f"{as_of.isoformat()}; approve one before staging a constructed curve."
+            ),
+        )
     determination = DeskDetermination(
         cob_date=as_of,
         methodology_code=methodology.methodology_code,
         methodology_version=methodology.version,
-        input_snapshot=input_snapshot,
+        input_snapshot=_curve_input_snapshot(result),
         input_digest=result.input_digest,
         derived_values=to_determination_derived_values(
             result, definition.curve_code, definition
         ),
         qa_results=_qa_payload(result.qa),
-        status="approved",
-        prepared_by=definition.proposed_by,
-        reviewed_by=definition.approved_by or actor,
+        status="draft",
+        prepared_by=prepared_by,
     )
     db.add(determination)
     db.flush()
-    return publication.publish(db, determination.id, actor=actor)
+    if research_adjustments:
+        determinations.set_research_adjustments(
+            db,
+            determination.id,
+            adjustments=[dict(entry) for entry in research_adjustments],
+            applied_by=prepared_by,
+        )
+    return determination
+
+
+def submit_curve_determination(db: Session, determination_id: Any) -> DeskDetermination:
+    """Maker step (FC-G2 step 2): 'definition vX applied to this cob, QA green'.
+
+    Enforces the hard QA gate, then reuses ``determinations.submit_for_review``
+    (which refuses anything not in ``draft``).
+    """
+    _ensure_curve_qa(determinations.get(db, determination_id))
+    return determinations.submit_for_review(db, determination_id)
+
+
+def approve_curve_determination(
+    db: Session, determination_id: Any, *, reviewed_by: str
+) -> DeskDetermination:
+    """Checker step (FC-G2 step 3): four-eyes approval.
+
+    Enforces the hard QA gate, then reuses ``determinations.approve`` whose
+    ``_require_checker`` rejects ``reviewed_by == prepared_by`` (422) and
+    refuses anything not in ``pending_review`` (409).
+    """
+    _ensure_curve_qa(determinations.get(db, determination_id))
+    return determinations.approve(db, determination_id, reviewed_by=reviewed_by)
+
+
+def publish_curve_determination(
+    db: Session, determination_id: Any, *, actor: str
+) -> DeskPublication:
+    """Publish step (FC-G2 step 4): only an APPROVED determination fans out.
+
+    Pure reuse of ``publication.publish`` (which refuses anything not
+    ``approved``/``published`` with 409), so bitemporal storage,
+    lineage/raw-tier provenance and per-bank audit come for free.
+    """
+    return publication.publish(db, determination_id, actor=actor)

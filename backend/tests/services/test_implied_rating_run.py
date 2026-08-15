@@ -196,8 +196,14 @@ def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(db_se
     assert rating_run.results["pit"]["rating_grade"] == "ccc+"
     assert rating_run.results["pit"]["pd_band"]["basis"] == "PIT"
     assert rating_run.results["ttc"]["pd_band"]["basis"] == "TTC"
+    assert rating_run.results["pit"]["key_drivers_up"]
+    assert rating_run.results["pit"]["key_drivers_down"]
     assert rating_run.input_snapshot["operating_environment"]["source"] == "market_index"
     assert rating_run.results["ddep_stress"]["sovereign_loss_ghs"] == "120000000.000000"
+    # §2.2 weaker-of degrades to latest with a single quarterly period.
+    conservative = rating_run.input_snapshot["conservative_income_basis"]
+    assert conservative["applied"] is False
+    assert conservative["annual_periods_used"] == 0
     assert db_session.query(DeskMethodology).count() == 1
     assert db_session.query(ImpliedRatingRun).count() == 1
 
@@ -257,5 +263,11 @@ def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(db_se
 
     assert live.metrics["pit_rating_grade"] == "ccc+"
     assert live.metrics["pit_pd_upper_pct"]
+    # Driver metrics the live card depends on are present on the success path.
+    assert live.metrics["pit_pd_central_pct"]
+    assert live.metrics["ttc_pd_central_pct"]
+    assert live.metrics["pit_systematic_factor"]
+    assert live.metrics["key_driver_up"]
+    assert live.metrics["key_driver_down"]
     assert live.input_hash is not None
     assert db_session.query(ImpliedRatingRun).count() == 1

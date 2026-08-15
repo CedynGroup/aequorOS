@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Fraunces } from 'next/font/google';
+import BrandLogo from '@/components/BrandLogo';
 import { ArrowRight, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
 import {
   ApiError,
@@ -161,10 +162,7 @@ function LoginForm() {
         </svg>
 
         <div>
-          <div className="text-h2 font-semibold text-white">AequorOS</div>
-          <div className="text-micro uppercase tracking-widest text-slate">
-            Operator Console
-          </div>
+        <BrandLogo inverse subtitle="Operator Console" />
         </div>
 
         <div className="relative max-w-2xl">
@@ -192,10 +190,7 @@ function LoginForm() {
       <div className="flex items-center justify-center bg-surface-raised p-8">
         <div className="w-full max-w-sm">
           <div className="mb-10 lg:hidden">
-            <div className="text-h2 font-semibold text-navy">AequorOS</div>
-            <div className="text-micro uppercase tracking-widest text-slate">
-              Operator Console
-            </div>
+            <BrandLogo subtitle="Operator Console" />
           </div>
 
           <h2 className="text-h1 text-navy">Sign in</h2>

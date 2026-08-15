@@ -41,6 +41,12 @@ from app.domain.curves.calendars import (
     third_wednesday,
     us_federal_holidays,
 )
+from app.domain.curves.fx_forward import (
+    FxForwardCurve,
+    FxForwardError,
+    FxForwardPoint,
+    build_fx_forward_curve,
+)
 from app.domain.curves.instruments import (
     DepositHelper,
     DiscountCurve,
@@ -61,6 +67,7 @@ from app.domain.curves.multicurve import (
     build_curve_set,
     convert_basis,
     forward_grid,
+    forward_grid_for_frequency,
 )
 
 __all__ = [
@@ -78,6 +85,9 @@ __all__ = [
     "ForwardGridRow",
     "FraHelper",
     "FuturesHelper",
+    "FxForwardCurve",
+    "FxForwardError",
+    "FxForwardPoint",
     "InstrumentSet",
     "MarketQuote",
     "OisHelper",
@@ -87,10 +97,12 @@ __all__ = [
     "add_calendar_months",
     "build_calendar",
     "build_curve_set",
+    "build_fx_forward_curve",
     "calendar_from_holidays",
     "convert_basis",
     "convexity_adjustment",
     "forward_grid",
+    "forward_grid_for_frequency",
     "ghana_holidays",
     "kenya_holidays",
     "next_imm_date",

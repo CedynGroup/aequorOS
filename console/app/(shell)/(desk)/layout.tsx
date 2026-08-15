@@ -13,9 +13,12 @@ import type { ReactNode } from 'react';
  */
 
 const TABS = [
+  { href: '/desk/market', label: 'Market Workspace' },
   { href: '/desk/determinations', label: 'Research Desk' },
   { href: '/desk/observations', label: 'Observations' },
   { href: '/desk/curves', label: 'Curves' },
+  { href: '/desk/fx-forwards', label: 'FX Forwards' },
+  { href: '/desk/operating-environment', label: 'Operating Environment' },
   { href: '/desk/methodology', label: 'Methodology' },
   { href: '/desk/sources', label: 'Sources' },
   { href: '/desk/entitlements', label: 'Entitlements' },

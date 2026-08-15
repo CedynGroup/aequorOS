@@ -133,7 +133,17 @@ DEFAULT_METHODOLOGY_PARAMETERS_V1: dict[str, Any] = {
         "explicit_bps_by_tenor_y": None,
     },
     "agd_node_grid_months": [1, 3, 6, 12, 24, 36, 60, 84, 120],
-    "fwd_node_grid_months": [3, 6, 12, 24, 36, 60, 84, 120],
+    "fwd_node_grid_months": [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+        18, 24, 36, 48, 60, 72, 84, 96, 120,
+    ],
+    "forward_grid_periods_by_frequency": {
+        "1D": 22,
+        "1M": 120,
+        "3M": 120,
+        "6M": 60,
+        "1Y": 30,
+    },
     # Cointegration is a weekly DIAGNOSTIC only in v1 — it never sets the AGD
     # level. Local calibration (scripts/desk_calibration_ghana.py, 2026-08-09,
     # 91-day T-bill yield on the daily interbank rate, auction-date aligned):

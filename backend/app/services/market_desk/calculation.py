@@ -67,6 +67,7 @@ from app.domain.curves.bootstrap import (
     ZeroCurve,
     bootstrap_zero_curve,
 )
+from app.domain.curves.calendars import GHANA, Calendar
 from app.domain.curves.cointegration import (
     ADF_CRITICAL_VALUES,
     CointegrationError,
@@ -74,6 +75,7 @@ from app.domain.curves.cointegration import (
 )
 from app.domain.curves.conventions import DayCount, discount_to_yield
 from app.domain.curves.forwards import ForwardQaResult, qa_forwards
+from app.domain.curves.multicurve import forward_grid_for_frequency
 from app.domain.curves.nss import fit_nss, nss_zero
 from app.domain.curves.objects import CurveBuildResult, CurveDefinition, CurveNodes
 from app.domain.curves.ois_step import MeetingDateStepCurve
@@ -119,6 +121,38 @@ LENDING_INDICATOR_SERIES = "GHS.LENDING.INDICATOR"
 GRR_BASE_SERIES = "GHS.BASE.GRR_CONSISTENT"
 
 TBILL_TENOR_DAYS: tuple[int, ...] = (91, 182, 364)
+
+_PUBLISHED_FORWARD_GRID_FREQUENCIES: tuple[str, ...] = ("1D", "1M", "3M", "6M", "1Y")
+_DEFAULT_FORWARD_GRID_PERIODS: dict[str, int] = {
+    "1D": 22,
+    "1M": 120,
+    "3M": 120,
+    "6M": 60,
+    "1Y": 30,
+}
+_DEFAULT_FORWARD_TENORS_MONTHS: tuple[int, ...] = (
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    18,
+    24,
+    36,
+    48,
+    60,
+    72,
+    84,
+    96,
+    120,
+)
 
 #: Every rate series the pipeline can emit into ``derived_values['rates']`` —
 #: the treatment-map completeness contract: each must carry a declared
@@ -1017,9 +1051,15 @@ def _sovereign_blocks(ctx: _Ctx, sovereign: _SovereignBuild) -> dict[str, dict[s
         extrapolation=extrapolation,
         instrument_selection=selection,
     )
-    forward_grid = [
-        int(m) for m in ctx.params.get("fwd_node_grid_months", [3, 6, 12, 24, 36, 60, 84, 120])
-    ]
+    configured_forward_tenors = ctx.params.get("fwd_node_grid_months", [])
+    if not isinstance(configured_forward_tenors, list):
+        configured_forward_tenors = []
+    forward_grid = sorted(
+        {
+            *_DEFAULT_FORWARD_TENORS_MONTHS,
+            *(int(months) for months in configured_forward_tenors if int(months) > 0),
+        }
+    )
     forward_nodes = [
         (months / _MONTHS_PER_YEAR, curve.instantaneous_forward(months / _MONTHS_PER_YEAR))
         for months in forward_grid
@@ -1030,6 +1070,70 @@ def _sovereign_blocks(ctx: _Ctx, sovereign: _SovereignBuild) -> dict[str, dict[s
         FWD_CODE: _curve_block(
             forward_definition, forward_nodes, forward_months, sovereign.qa, raw_inputs
         ),
+    }
+
+
+def _forward_grid_family(ctx: _Ctx, sovereign: _SovereignBuild) -> dict[str, Any]:
+    """Persisted bank pull grids from the same sovereign curve the desk publishes.
+
+    The canonical ``AEQ.GHS.SOV.FWD`` points are a tenor surface. This companion
+    block holds contiguous forecast periods at each selectable frequency, with
+    exact dates and period discount factors produced by the approved curve
+    interpolation. It is evidence, not a browser-side reconstruction.
+    """
+    if sovereign.curve is None:
+        return {}
+    configured_periods = ctx.params.get("forward_grid_periods_by_frequency", {})
+    if not isinstance(configured_periods, dict):
+        configured_periods = {}
+    calendar: Calendar = GHANA
+    grids: dict[str, Any] = {}
+    for frequency in _PUBLISHED_FORWARD_GRID_FREQUENCIES:
+        periods = max(
+            int(configured_periods.get(frequency, _DEFAULT_FORWARD_GRID_PERIODS[frequency])),
+            1,
+        )
+        rows = forward_grid_for_frequency(
+            sovereign.curve,
+            as_of=ctx.cob,
+            frequency=frequency,
+            calendar=calendar,
+            periods=periods,
+            output_basis=DayCount.ACT_364,
+        )
+        grids[frequency] = {
+            "rows": [
+                {
+                    "start": row.start.isoformat(),
+                    "end": row.end.isoformat(),
+                    "discount_factor": _fmt(row.discount_factor, 12),
+                    "forward_yield": _fmt(row.yield_, 12),
+                }
+                for row in rows
+            ]
+        }
+    return {
+        FWD_CODE: {
+            "rows": grids["3M"]["rows"],
+            "grids": grids,
+            "definition": {
+                "version": 1,
+                "calendar_name": "GHANA",
+                "instrument_set_ref": "GHS_SOVEREIGN_BILLS_BONDS",
+                "projection_index": "GHS_SOVEREIGN",
+                "discount_curve_code": AGD_CODE,
+                "interpolation_method": str(
+                    ctx.params.get("interpolation_method", "monotone_convex")
+                ),
+                "output_daycount": DayCount.ACT_364.value,
+                "payment_frequency": "Quarterly",
+                "payment_interval_months": 3,
+                "curve_frequency": "3M",
+                "spot_lag_days": 0,
+                "roll_convention": "modified_following",
+                "extrapolation_rule": str(ctx.params.get("extrapolation_rule", "flat_forward")),
+            },
+        }
     }
 
 
@@ -1415,6 +1519,7 @@ def run_pipeline(
     sovereign = _build_sovereign(ctx)
     agd = _build_agd(ctx)
     curves = _sovereign_blocks(ctx, sovereign)
+    forward_grids = _forward_grid_family(ctx, sovereign)
     # Stage 4 true-OIS when methodology requests it and instruments exist;
     # otherwise synthetic AGD (Stage 2).
     true_ois = _try_true_ois(snapshot, parameters, cob_date, ctx.flags)
@@ -1456,6 +1561,7 @@ def run_pipeline(
         "rates_qa_passed": rates_qa_passed,
         "curves_qa_passed": curves_qa_passed,
         "curves": curves,
+        "forward_grids": forward_grids,
         "rates": rates,
         # Flat adapter-contract sections (aequor_desk build_extraction shape).
         "reference_rates": {code: entry["value"] for code, entry in rates.items()},

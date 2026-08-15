@@ -9,6 +9,7 @@ const tabs = [
   { href: '/submissions/returns', label: 'Returns' },
   { href: '/submissions/signatures', label: 'Signatures' },
   { href: '/submissions/approvals', label: 'Approvals' },
+  { href: '/submissions/compare', label: 'Compare' },
   { href: '/submissions/history', label: 'History' },
   { href: '/submissions/templates', label: 'Templates' },
   { href: '/submissions', label: 'Calendar' },

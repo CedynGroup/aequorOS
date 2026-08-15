@@ -16,6 +16,7 @@ from app.domain.curves.multicurve import (
     build_curve_set,
     convert_basis,
     forward_grid,
+    forward_grid_for_frequency,
 )
 
 AS_OF = date(2023, 12, 29)
@@ -109,6 +110,24 @@ def test_forward_grid_monthly_anchor() -> None:
         date(2024, 2, 29),
         date(2024, 3, 29),  # 2024-03-31 Sun rolls back (MF) to Good Friday, a US business day
     ]
+
+
+def test_forward_grid_for_frequency_builds_business_day_daily_periods() -> None:
+    rows = forward_grid_for_frequency(
+        _flat_curve(0.04),
+        as_of=AS_OF,
+        frequency="1D",
+        calendar=USA,
+        periods=3,
+    )
+    assert len(rows) == 4  # spot stub + three business-day periods
+    assert rows[0].start == rows[0].end == AS_OF
+    assert [row.end for row in rows[1:]] == [
+        date(2024, 1, 2),
+        date(2024, 1, 3),
+        date(2024, 1, 4),
+    ]
+    assert all(0 < row.discount_factor <= 1 for row in rows[1:])
 
 
 def test_convert_basis_ordering() -> None:

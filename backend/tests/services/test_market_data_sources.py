@@ -511,15 +511,17 @@ def test_get_forward_grid_from_approved_determination(db_session: Session) -> No
     assert grid.currency == "GHS"
     assert grid.methodology_ref == "GHS_CURVE_V1 v2"
     assert grid.grid_is_authoritative is False
+    assert grid.frequency == "3M"
+    assert grid.available_frequencies == ["3M"]
     assert grid.assumptions is None
     assert len(grid.rows) == 2
     assert grid.rows[0].start == AS_OF
     assert grid.rows[0].end == date(2026, 10, 15)  # +3 months
     assert grid.rows[0].forward_yield == "0.24"
     assert grid.rows[1].forward_yield == "0.25"
-    # Cumulative discount factor is strictly decreasing and below 1.
+    # The endpoint returns the forward period's DF ratio, never a cumulative DF.
     assert Decimal(grid.rows[0].discount_factor) < Decimal("1")
-    assert Decimal(grid.rows[1].discount_factor) < Decimal(grid.rows[0].discount_factor)
+    assert Decimal(grid.rows[1].discount_factor) == Decimal("0.941176470588")
     assert [p.instrument for p in grid.pillars] == ["deposit", "swap"]
 
 
@@ -527,6 +529,34 @@ def test_get_forward_grid_returns_persisted_calendar_grid_and_assumptions(
     db_session: Session,
 ) -> None:
     bank_id = _seed_bank(db_session)
+    primary_rows = [
+        {
+            "start": "2026-07-15",
+            "end": "2026-07-17",
+            "discount_factor": "1.000000000000",
+            "forward_yield": "0.000000000000",
+        },
+        {
+            "start": "2026-07-17",
+            "end": "2026-10-19",
+            "discount_factor": "0.942100000000",
+            "forward_yield": "0.245000000000",
+        },
+    ]
+    daily_rows = [
+        {
+            "start": "2026-07-15",
+            "end": "2026-07-15",
+            "discount_factor": "1.000000000000",
+            "forward_yield": "0.000000000000",
+        },
+        {
+            "start": "2026-07-15",
+            "end": "2026-07-16",
+            "discount_factor": "0.999300000000",
+            "forward_yield": "0.245000000000",
+        },
+    ]
     determination = DeskDetermination(
         cob_date=AS_OF,
         methodology_code="GHS_CURVE_V2",
@@ -537,20 +567,14 @@ def test_get_forward_grid_returns_persisted_calendar_grid_and_assumptions(
             "curves": {"AEQ.GHS.SOV.FWD": {"curve_type": "forward", "points": []}},
             "forward_grids": {
                 "AEQ.GHS.SOV.FWD": {
-                    "rows": [
-                        {
-                            "start": "2026-07-15",
-                            "end": "2026-07-17",
-                            "discount_factor": "1.000000000000",
-                            "forward_yield": "0.000000000000",
-                        },
-                        {
-                            "start": "2026-07-17",
-                            "end": "2026-10-19",
-                            "discount_factor": "0.942100000000",
-                            "forward_yield": "0.245000000000",
-                        },
-                    ],
+                    "rows": primary_rows,
+                    "grids": {
+                        "1D": {"rows": daily_rows},
+                        "1M": {"rows": primary_rows},
+                        "3M": {"rows": primary_rows},
+                        "6M": {"rows": primary_rows},
+                        "1Y": {"rows": primary_rows},
+                    },
                     "definition": {
                         "version": 7,
                         "calendar_name": "GHANA",
@@ -587,6 +611,17 @@ def test_get_forward_grid_returns_persisted_calendar_grid_and_assumptions(
     assert grid.assumptions is not None
     assert grid.assumptions.calendar_name == "GHANA"
     assert grid.assumptions.curve_frequency == "3M"
+    assert grid.frequency == "3M"
+    assert grid.available_frequencies == ["1D", "1M", "1Y", "3M", "6M"]
+
+    daily = market_data_sources.get_forward_grid(
+        db_session, CTX, bank_id, "AEQ.GHS.SOV.FWD", AS_OF, frequency="1D"
+    )
+    assert daily.frequency == "1D"
+    assert [(row.start, row.end) for row in daily.rows] == [
+        (date(2026, 7, 15), date(2026, 7, 15)),
+        (date(2026, 7, 15), date(2026, 7, 16)),
+    ]
 
 
 def test_get_forward_grid_404_when_no_determination(db_session: Session) -> None:

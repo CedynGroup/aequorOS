@@ -15,6 +15,8 @@ ZERO = Decimal("0")
 ONE = Decimal("1")
 HUNDRED = Decimal("100")
 PD_FLOOR_PCT = Decimal("0.03")
+PD_FLOOR_FRAC = PD_FLOOR_PCT / HUNDRED  # 0.0003 — the Basel floor as a fraction
+_PD_CEIL_FRAC = Decimal("0.999999")  # keep central tendencies strictly inside (0,1)
 _SCORE_Q = Decimal("0.000001")
 _PCT_Q = Decimal("0.000001")
 _SQRT_TWO = sqrt(2.0)
@@ -68,9 +70,21 @@ class PdBand:
     upper_pct: Decimal
     confidence_level: Decimal
     basis: str
-    pluto_tasche_upper_pct: Decimal
+    # The calibrated central tendency this band is built around: the master-scale
+    # anchor for TTC, or the Vasicek systematic-conditioned anchor for PIT.
+    central_tendency_pct: Decimal
+    # Systematic factor Z used for the PIT conditioning (0 for the TTC view).
+    systematic_factor: Decimal
+    # Diagnostics (reported, not the sole driver): the anchor-centred Bayesian
+    # posterior upper quantile, the Pluto-Tasche zero-default most-prudent bound
+    # on any real internal pool (``None`` when there is no internal outcome data
+    # yet — the honest low-default state), and the margin of conservatism.
     bayesian_upper_pct: Decimal
+    pluto_tasche_upper_pct: Decimal | None
     margin_of_conservatism_pct: Decimal
+    prior_strength: Decimal
+    internal_obligors: int
+    internal_defaults: int
 
 
 @dataclass(frozen=True)
@@ -100,15 +114,24 @@ class RatingMethodology:
     components: tuple[ComponentDefinition, ...]
     grade_cutpoints: Mapping[str, Decimal]
     grade_order: tuple[str, ...]
+    # The single sourced master scale: grade -> long-run (TTC, unconditional)
+    # central-tendency PD in percent. PIT is DERIVED from this by Vasicek
+    # conditioning on the live systematic factor — there is no separate PIT table.
     grade_pd_anchors_pct: Mapping[str, Decimal]
     confidence_level: Decimal
     moc_k_sigma: Decimal
+    # Vasicek asset correlation (the sovereign is the systematic factor, §6.1);
+    # elevated for the Ghana sovereign-bank nexus. Versioned parameter.
+    asset_correlation: Decimal = Decimal("0.24")
+    # Bayesian prior strength kappa: the effective number of external
+    # observations backing each grade's anchor. Larger -> tighter band. The
+    # Stage-1 band width is the anchor-centred prior credible interval; it
+    # narrows as real internal default outcomes accrue (Stage 2).
+    prior_strength: Decimal = Decimal("25")
     operating_environment_matrix: tuple[tuple[Decimal, Decimal], tuple[Decimal, Decimal]] = (
         (ZERO, ZERO),
         (ZERO, ONE),
     )
-    bayesian_prior_alpha: Decimal = ONE
-    bayesian_prior_beta: Decimal = Decimal("99")
 
 
 @dataclass(frozen=True)
@@ -116,9 +139,16 @@ class RatingInputs:
     ratio_values: Mapping[str, Decimal]
     operating_environment_score: Decimal
     sovereign_ceiling: str
+    # REAL internal rated-portfolio outcomes per grade (obligors observed and
+    # defaults among them). Empty/zero in Stage 1 (no internal default history),
+    # which yields a prior-only band; they update the posterior once real
+    # outcomes accrue. NOT a synthetic reference population.
     grade_obligors: Mapping[str, int]
     grade_defaults: Mapping[str, int]
     basis: str
+    # The live systematic factor Z for PIT conditioning (negative = stressed
+    # state -> PIT above TTC). Ignored for the TTC (unconditional) view.
+    systematic_factor: Decimal = ZERO
     support_uplift_notches: int = 0
 
 
@@ -349,20 +379,87 @@ def _pluto_tasche_upper(defaults: int, obligors: int, confidence: Decimal) -> De
     return Decimal(str((low + high) / 2.0))
 
 
-def _beta_posterior_upper(
-    defaults: int,
-    obligors: int,
+def _pd_band(  # noqa: PLR0913 - the governed band parameters, spelled out
+    *,
+    anchor_frac: Decimal,
+    basis: str,
+    systematic_factor: Decimal,
+    asset_correlation: Decimal,
+    prior_strength: Decimal,
     confidence: Decimal,
-    prior_alpha: Decimal,
-    prior_beta: Decimal,
-) -> Decimal:
-    """Conservative beta-binomial approximation using posterior mean + normal quantile."""
-    if prior_alpha <= ZERO or prior_beta <= ZERO:
-        raise RatingComputationError("Bayesian prior parameters must be positive.")
-    alpha, beta = prior_alpha + defaults, prior_beta + obligors - defaults
+    moc_k_sigma: Decimal,
+    internal_obligors: int,
+    internal_defaults: int,
+) -> PdBand:
+    """Build the published PD band around a calibrated central tendency.
+
+    Design (remediation of the flat-band defect):
+    1. **Central tendency.** TTC is the master-scale anchor (long-run,
+       unconditional). PIT is that anchor Vasicek-conditioned on the live
+       systematic factor ``Z`` (§6.1) — a stressed state (Z < 0) lifts PIT
+       above TTC, a benign state lowers it. PIT is therefore *derived*, never a
+       second hardcoded table.
+    2. **Band width.** An anchor-centred Bayesian posterior: prior
+       ``Beta(kappa·c, kappa·(1−c))`` has mean = the central tendency ``c`` and
+       strength ``kappa`` = the external evidence behind the grade. With no
+       internal default history the band is the prior credible interval (honest
+       low-default uncertainty); real internal outcomes update the posterior and
+       narrow it. This replaces the old ``max(anchor, raw_pluto_tasche)`` that
+       always collapsed to the anchor.
+    3. **Conservatism + floor.** upper = posterior upper quantile + k·σ MoC;
+       everything floored at the Basel 0.03%.
+    Pluto-Tasche is retained as a zero-default *diagnostic* on any real internal
+    pool (``None`` until such data exist) — it is not the band driver, so its
+    tiny sampling bound can no longer crush the band.
+    """
+    if prior_strength <= ZERO:
+        raise RatingComputationError("Prior strength (kappa) must be positive.")
+    if internal_obligors < 0 or not 0 <= internal_defaults <= max(internal_obligors, 0):
+        raise RatingComputationError("Internal outcome counts are invalid.")
+
+    anchor = min(max(anchor_frac, PD_FLOOR_FRAC), _PD_CEIL_FRAC)
+    if basis == "PIT":
+        central = vasicek_conditional_pd(anchor, asset_correlation, systematic_factor)
+    else:
+        central = anchor
+    central = min(max(central, PD_FLOOR_FRAC), _PD_CEIL_FRAC)
+
+    a0 = prior_strength * central
+    b0 = prior_strength * (ONE - central)
+    alpha = a0 + Decimal(internal_defaults)
+    beta = b0 + Decimal(internal_obligors - internal_defaults)
     mean = alpha / (alpha + beta)
     variance = alpha * beta / ((alpha + beta) ** 2 * (alpha + beta + ONE))
-    return min(ONE, mean + Decimal(str(_normal_ppf(float(confidence)))) * variance.sqrt())
+    sd = variance.sqrt()
+
+    z_upper = Decimal(str(_normal_ppf(float(confidence))))
+    moc = max(moc_k_sigma, ZERO) * sd
+    point = max(mean, PD_FLOOR_FRAC)
+    lower = min(max(mean - z_upper * sd, PD_FLOOR_FRAC), point)
+    bayesian_upper = mean + z_upper * sd
+    upper = max(bayesian_upper + moc, point)
+
+    pluto = (
+        _pluto_tasche_upper(internal_defaults, internal_obligors, confidence)
+        if internal_obligors > 0
+        else None
+    )
+
+    return PdBand(
+        lower_pct=_quantize(lower * HUNDRED, _PCT_Q),
+        point_pct=_quantize(point * HUNDRED, _PCT_Q),
+        upper_pct=_quantize(upper * HUNDRED, _PCT_Q),
+        confidence_level=confidence,
+        basis=basis,
+        central_tendency_pct=_quantize(central * HUNDRED, _PCT_Q),
+        systematic_factor=_quantize(systematic_factor, _SCORE_Q),
+        bayesian_upper_pct=_quantize(bayesian_upper * HUNDRED, _PCT_Q),
+        pluto_tasche_upper_pct=(None if pluto is None else _quantize(pluto * HUNDRED, _PCT_Q)),
+        margin_of_conservatism_pct=_quantize(moc * HUNDRED, _PCT_Q),
+        prior_strength=prior_strength,
+        internal_obligors=internal_obligors,
+        internal_defaults=internal_defaults,
+    )
 
 
 def vasicek_conditional_pd(
@@ -394,7 +491,7 @@ def ddep_stress(
     post_stress_capital = capital - loss
     ratio = (
         None
-        if risk_weighted_assets in {None, ZERO}
+        if risk_weighted_assets is None or risk_weighted_assets == ZERO
         else post_stress_capital / risk_weighted_assets * HUNDRED
     )
     return SovereignStressResult(
@@ -428,39 +525,26 @@ def compute_rating(
     ceiling_index = _grade_index(inputs.sovereign_ceiling, methodology.grade_order)
     implied_index = max(standalone_index, ceiling_index)
     implied_grade = methodology.grade_order[implied_index]
-    issuer_grade = methodology.grade_order[
-        max(implied_index - max(inputs.support_uplift_notches, 0), ceiling_index)
-    ]
-    pooled_grades = methodology.grade_order[implied_index:]
+    # Support uplift moves the grade UP (lower index), never above the sovereign
+    # ceiling — a distressed sovereign cannot credibly backstop its banks (§4.3).
+    issuer_index = max(implied_index - max(inputs.support_uplift_notches, 0), ceiling_index)
+    issuer_grade = methodology.grade_order[issuer_index]
+    # The band is built around the ISSUER grade's anchor (post ceiling + support),
+    # conditioned to PIT/TTC. Internal outcome counts pool this grade and worse
+    # (Pluto-Tasche monotonic-ordering assumption); they are zero in Stage 1.
+    pooled_grades = methodology.grade_order[issuer_index:]
     pooled_obligors = sum(inputs.grade_obligors.get(grade, 0) for grade in pooled_grades)
     pooled_defaults = sum(inputs.grade_defaults.get(grade, 0) for grade in pooled_grades)
-    pluto = _pluto_tasche_upper(
-        pooled_defaults, pooled_obligors, methodology.confidence_level
-    )
-    bayesian = _beta_posterior_upper(
-        pooled_defaults,
-        pooled_obligors,
-        methodology.confidence_level,
-        methodology.bayesian_prior_alpha,
-        methodology.bayesian_prior_beta,
-    )
-    point = Decimal(pooled_defaults) / Decimal(pooled_obligors)
-    estimate = max(pluto, bayesian)
-    sigma = (estimate * (ONE - estimate) / Decimal(pooled_obligors)).sqrt()
-    moc = max(methodology.moc_k_sigma, ZERO) * sigma
-    anchor = methodology.grade_pd_anchors_pct[issuer_grade]
-    lower = max(anchor, PD_FLOOR_PCT)
-    point_pct = max(point * HUNDRED, lower)
-    upper = max((estimate + moc) * HUNDRED, point_pct)
-    pd_band = PdBand(
-        _quantize(lower, _PCT_Q),
-        _quantize(point_pct, _PCT_Q),
-        _quantize(upper, _PCT_Q),
-        methodology.confidence_level,
-        inputs.basis,
-        _quantize(pluto * HUNDRED, _PCT_Q),
-        _quantize(bayesian * HUNDRED, _PCT_Q),
-        _quantize(moc * HUNDRED, _PCT_Q),
+    pd_band = _pd_band(
+        anchor_frac=methodology.grade_pd_anchors_pct[issuer_grade] / HUNDRED,
+        basis=inputs.basis,
+        systematic_factor=inputs.systematic_factor,
+        asset_correlation=methodology.asset_correlation,
+        prior_strength=methodology.prior_strength,
+        confidence=methodology.confidence_level,
+        moc_k_sigma=methodology.moc_k_sigma,
+        internal_obligors=pooled_obligors,
+        internal_defaults=pooled_defaults,
     )
     return RatingResult(
         standalone_score,

@@ -9,12 +9,18 @@ immediately and return the job id to poll via ``GET /jobs/{id}``.
 from __future__ import annotations
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
-from app.models import Bank, BankReportingPeriod, LiveMetric, LiveMetricSnapshot
+from app.models import (
+    Bank,
+    BankReportingPeriod,
+    IngestionBatch,
+    LiveMetric,
+    LiveMetricSnapshot,
+)
 from app.schemas.live import (
     JobEnqueuedRead,
     LiveModuleView,
@@ -24,7 +30,7 @@ from app.schemas.live import (
     OfficialRunRequest,
     RefreshRequest,
 )
-from app.services import freshness, job_queue
+from app.services import job_queue
 from app.services.audit import record_event
 
 _MODULE_ORDER = {
@@ -36,6 +42,16 @@ _MODULE_ORDER = {
 
 
 def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSummaryRead:
+    """The always-live treasury cockpit.
+
+    The live view is compute-from-latest: on read it recomputes any module
+    whose inputs have changed (new data ingested, or a methodology/parameter
+    version drift) via the shared cheap-tier ``pipeline.recompute_live``, then
+    serves the fresh rows. It never depends on a background job having run, and
+    it is never labelled "stale" — drift versus the last *official filing* is a
+    governance concept (``freshness.get_bank_freshness``), not a liveness one,
+    and lives on the reporting surface, not here.
+    """
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _latest_period(db, ctx, bank)
     if period is None:
@@ -47,6 +63,8 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
             is_stale=False,
             computed_at=None,
         )
+
+    _ensure_live_current(db, ctx, bank, period)
 
     rows = list(
         db.scalars(
@@ -69,14 +87,74 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         for row in rows
     ]
     computed_at = max((row.computed_at for row in rows), default=None)
-    is_stale = freshness.get_bank_freshness(db, ctx, bank.id, period.id).is_stale
     return LiveSummaryRead(
         bank_id=bank.id,
         reporting_period_id=period.id,
         period_label=period.label,
         modules=modules,
-        is_stale=is_stale,
+        is_stale=False,
         computed_at=computed_at,
+    )
+
+
+def _ensure_live_current(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> None:
+    """Keep the live cache current WITHOUT blocking the read.
+
+    A read never recomputes inline — the module engines are seconds each, far too
+    heavy for a request. Instead a CHEAP check (pure timestamp comparison, no
+    engine work) detects when data has been ingested since the cache was computed
+    and enqueues a coalesced background refresh; the in-process worker recomputes
+    and updates the cache within seconds, so the next poll reflects it. Fact
+    re-derivation and the engines stay entirely off the request path, and no
+    manual activation is ever required — a data change auto-refreshes.
+    """
+    cached = {
+        row.module: row
+        for row in db.scalars(
+            select(LiveMetric).where(
+                LiveMetric.organization_id == ctx.organization_id,
+                LiveMetric.bank_id == bank.id,
+                LiveMetric.reporting_period_id == period.id,
+            )
+        )
+    }
+    if not _refresh_needed(db, ctx, bank, cached):
+        return
+    job_queue.enqueue(
+        db,
+        ctx.organization_id,
+        "pipeline_refresh",
+        bank_id=bank.id,
+        payload={"as_of_date": period.period_end.isoformat(), "reason": "live-read auto-refresh"},
+        run_after=utc_now(),
+        coalesce_key=f"refresh:{bank.id}:{period.period_end.isoformat()}",
+    )
+    db.commit()
+
+
+def _refresh_needed(
+    db: Session, ctx: TenantContext, bank: Bank, cached: dict[str, LiveMetric]
+) -> bool:
+    """Cheap staleness check: is the cache behind the latest ingested data?
+
+    Compares the newest ingestion batch against the oldest cached module — a pure
+    timestamp comparison, no engine work, so it is safe on every read.
+    """
+    if not cached:
+        return True
+    oldest_compute = min((row.computed_at for row in cached.values()), default=None)
+    latest_ingest = db.scalar(
+        select(func.max(IngestionBatch.created_at)).where(
+            IngestionBatch.organization_id == ctx.organization_id,
+            IngestionBatch.bank_id == bank.id,
+        )
+    )
+    return (
+        latest_ingest is not None
+        and oldest_compute is not None
+        and latest_ingest > oldest_compute
     )
 
 

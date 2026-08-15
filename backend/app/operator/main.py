@@ -29,6 +29,8 @@ from app.operator.features.auth import router as auth_router
 from app.operator.features.curves import router as curves_router
 from app.operator.features.data_engines import router as data_engines_router
 from app.operator.features.desk import router as desk_router
+from app.operator.features.fx_forward import router as fx_forward_router
+from app.operator.features.operating_environment import router as operating_environment_router
 from app.operator.features.operators import router as operators_router
 from app.operator.features.provision import router as provision_router
 from app.operator.features.tenants import router as tenants_router
@@ -96,6 +98,8 @@ def create_operator_app() -> FastAPI:
     operator_router.include_router(data_engines_router)
     operator_router.include_router(desk_router)
     operator_router.include_router(curves_router)
+    operator_router.include_router(fx_forward_router)
+    operator_router.include_router(operating_environment_router)
     operator_router.include_router(operators_router)
     app.include_router(operator_router)
     return app

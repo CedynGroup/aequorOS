@@ -41,6 +41,10 @@ from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin
 
 DESK_CURVE_DEFINITION_STATUSES: tuple[str, ...] = ("draft", "approved", "retired")
 DESK_CURVE_KINDS: tuple[str, ...] = ("forward", "zero", "discount")
+# Distribution tier a published curve requires (curve platform spec §10, FC-6d):
+# an org sees a published AEQ.* curve only when its active dataset tier is at or
+# above the curve definition's tier (core < standard < premium).
+DESK_CURVE_ENTITLEMENT_TIERS: tuple[str, ...] = ("core", "standard", "premium")
 
 
 def _values(values: tuple[str, ...]) -> str:
@@ -65,6 +69,10 @@ class DeskCurveDefinition(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             f"curve_kind IN ({_values(DESK_CURVE_KINDS)})",
             name="ck_desk_curve_definitions_curve_kind",
+        ),
+        CheckConstraint(
+            f"entitlement_tier IN ({_values(DESK_CURVE_ENTITLEMENT_TIERS)})",
+            name="ck_desk_curve_definitions_entitlement_tier",
         ),
         UniqueConstraint(
             "curve_code", "version", name="uq_desk_curve_definitions_code_version"
@@ -100,6 +108,11 @@ class DeskCurveDefinition(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     )
     params: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
+    # Distribution tier (FC-6d): a published curve's tier is its definition's
+    # tier; reads gate an org to curves at or below its active dataset tier.
+    entitlement_tier: Mapped[str] = mapped_column(
+        String(20), default="standard", server_default=sql_text("'standard'"), nullable=False
     )
     change_rationale: Mapped[str] = mapped_column(Text, nullable=False)
     proposed_by: Mapped[str] = mapped_column(String(320), nullable=False)

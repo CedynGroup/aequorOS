@@ -129,6 +129,27 @@ def get_market_data_views(
             )
         )
 
+    fx_forwards: list[FxRateViewRead] = []
+    for base, quote, tenor_months in market_data.list_fx_forward_scopes(
+        db, org, bank.id, effective_as_of
+    ):
+        forward = market_data.get_fx_forward(
+            db, org, bank.id, base, quote, tenor_months, effective_as_of, now=now
+        )
+        if forward is None:
+            continue
+        fx_forwards.append(
+            FxRateViewRead(
+                base=forward.base_currency,
+                quote=forward.quote_currency,
+                rate_type="forward",
+                tenor_months=tenor_months,
+                rate=forward.rate,
+                as_of_date=forward.as_of_date,
+                history=[],
+                attribution=_attribution_read(forward.attribution),
+            )
+        )
     ratings: list[RatingViewRead] = []
     for issuer in market_data.list_rating_issuers(db, org, bank.id, effective_as_of):
         rating = market_data.get_rating(db, org, bank.id, issuer, effective_as_of, now=now)
@@ -169,6 +190,7 @@ def get_market_data_views(
         as_of_date=effective_as_of,
         curves=curves,
         fx_rates=fx_rates,
+        fx_forwards=fx_forwards,
         ratings=ratings,
         indices=indices,
     )

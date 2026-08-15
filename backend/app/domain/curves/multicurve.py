@@ -61,6 +61,7 @@ __all__ = [
     "build_curve_set",
     "convert_basis",
     "forward_grid",
+    "forward_grid_for_frequency",
 ]
 
 _MF = BusinessDayConvention.MODIFIED_FOLLOWING
@@ -349,6 +350,57 @@ def forward_grid(  # noqa: PLR0913 - the template's grid parameters, spelled out
             )
         )
     return ForwardGrid.create(as_of, curve_frequency_months, output_basis, rows)
+
+
+def forward_grid_for_frequency(  # noqa: PLR0913 - mirrors forward_grid's governed inputs
+    curve: DiscountCurve,
+    *,
+    as_of: date,
+    frequency: str,
+    calendar: Calendar,
+    periods: int,
+    convention: BusinessDayConvention = _MF,
+    output_basis: DayCount = DayCount.ACT_360,
+    end_of_month: bool = True,
+) -> tuple[ForwardGridRow, ...]:
+    """Resample a solved curve at a day/week/month/year frequency.
+
+    This is the dense published-grid counterpart to :func:`forward_grid`.
+    ``Calendar.add_tenor`` supplies business-day-aware ``1D``/``1W`` behavior
+    as well as calendar month/year rolls; each output row remains a *period*
+    forward with ``DF(End) / DF(Start)``. The row-zero spot stub is retained so
+    all published frequencies share the same evidence shape.
+    """
+    if periods < 0:
+        raise MultiCurveError("A forward grid needs a non-negative period count.")
+    token = frequency.strip().upper()
+    if not token:
+        raise MultiCurveError("A forward-grid frequency is required.")
+
+    rows: list[ForwardGridRow] = [
+        ForwardGridRow(start=as_of, end=as_of, discount_factor=1.0, yield_=0.0)
+    ]
+    start = as_of
+    for _ in range(periods):
+        end = (
+            calendar.advance(start, 1)
+            if token == "1D"
+            else calendar.add_tenor(start, token, convention, end_of_month=end_of_month)
+        )
+        if end <= start:
+            raise MultiCurveError(f"Frequency {frequency!r} did not advance the grid date.")
+        df_start = curve.discount(start)
+        df_end = curve.discount(end)
+        rows.append(
+            ForwardGridRow(
+                start=start,
+                end=end,
+                discount_factor=df_end / df_start,
+                yield_=simple_rate_from_discounts(df_start, df_end, start, end, output_basis),
+            )
+        )
+        start = end
+    return tuple(rows)
 
 
 def convert_basis(

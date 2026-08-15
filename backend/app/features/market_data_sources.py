@@ -78,12 +78,15 @@ def get_market_data_planes(
     response_model=ForwardGridRead,
     operation_id="getMarketDataForwardGrid",
 )
-def get_forward_grid(
+def get_forward_grid(  # noqa: PLR0913 - route path, session, tenant, and optional grid selectors
     bank_id: str,
     curve_name: str,
     db: DbSession,
     ctx: Tenant,
     as_of: Annotated[date | None, Query()] = None,
+    frequency: Annotated[str | None, Query()] = None,
 ) -> ForwardGridRead:
     resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
-    return market_data_sources.get_forward_grid(db, ctx, bank_id, curve_name, resolved_as_of)
+    return market_data_sources.get_forward_grid(
+        db, ctx, bank_id, curve_name, resolved_as_of, frequency=frequency
+    )

@@ -27,6 +27,7 @@ export * from "./LiquidityCfpApi";
 export * from "./LiquidityThresholdsApi";
 export * from "./LiveEngineApi";
 export * from "./MarketDataApi";
+export * from "./MarketDataSourcesApi";
 export * from "./NotificationsApi";
 export * from "./OrganizationApi";
 export * from "./RegulatoryCapitalApi";

@@ -10,8 +10,9 @@
  * three-plane source control room. Source management (vendor connections,
  * quotas, manual uploads) stays in Data Engine → Market Data.
  *
- * Tabs: Overview · Curves · Forward · FX · Rates · Sources. The as-of scrubber
- * is a page-level control that reproduces the whole surface as published then.
+ * Tabs: Overview · Curves · Market data · Sources. Market data contains the
+ * Forward curves, Rates, and FX sub-navigation; the as-of scrubber reproduces
+ * the complete surface as published then.
  */
 
 import { useState } from 'react';
@@ -29,6 +30,7 @@ import CurveThumbnails from '@/components/markets/CurveThumbnails';
 import CurvesExplorer from '@/components/markets/CurvesExplorer';
 import ForwardTab from '@/components/markets/ForwardTab';
 import FxBoard from '@/components/markets/FxBoard';
+import FxForwardsBoard from '@/components/markets/FxForwardsBoard';
 import ImpliedRatingCard from '@/components/markets/ImpliedRatingCard';
 import RatingsStrip from '@/components/markets/RatingsStrip';
 import IndicesStrip from '@/components/markets/IndicesStrip';
@@ -39,15 +41,20 @@ import SourcesControlRoom from '@/components/markets/SourcesControlRoom';
 
 const MANAGE_SOURCES_HREF = '/data-engine/market-data';
 
-type TabKey = 'overview' | 'curves' | 'forward' | 'fx' | 'rates' | 'sources';
+type TabKey = 'overview' | 'curves' | 'market-data' | 'sources';
+type MarketDataView = 'forward' | 'rates' | 'fx';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'curves', label: 'Curves' },
-  { key: 'forward', label: 'Forward' },
-  { key: 'fx', label: 'FX' },
-  { key: 'rates', label: 'Rates' },
+  { key: 'market-data', label: 'Market data' },
   { key: 'sources', label: 'Sources' },
+];
+
+const MARKET_DATA_TABS: { key: MarketDataView; label: string }[] = [
+  { key: 'forward', label: 'Forward curves' },
+  { key: 'rates', label: 'Rates' },
+  { key: 'fx', label: 'FX' },
 ];
 
 function ManageSourcesLink() {
@@ -141,6 +148,7 @@ export default function MarketsPage() {
   const { bank } = useBankContext();
   const [asOf, setAsOf] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>('overview');
+  const [marketDataView, setMarketDataView] = useState<MarketDataView>('forward');
   const [overlayCurveName, setOverlayCurveName] = useState<string | null>(null);
   const [selectedCurveName, setSelectedCurveName] = useState<string | null>(null);
 
@@ -190,7 +198,7 @@ export default function MarketsPage() {
     if (!data) return null;
     // The Forward tab reads a separate endpoint and carries its own curve
     // empty-state, so it is not blanked by the shared "no market data" guard.
-    if (isEmpty && tab !== 'forward') return emptyState;
+    if (isEmpty && !(tab === 'market-data' && marketDataView === 'forward')) return emptyState;
 
     if (tab === 'overview') {
       return (
@@ -250,14 +258,36 @@ export default function MarketsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.85fr)] gap-5 items-start">
-            <div className="space-y-6">
+          <div className="space-y-5">
+            {/* Rates and curves sit side by side — the two feeds a treasurer scans
+                together. On narrow viewports they stack. */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
               {referenceRates.length > 0 && (
                 <Section
                   title="Rate monitor"
-                  subtitle="Policy, money-market, and lending reference rates on the selected source"
+                  subtitle="Policy, reference, and lending rates on the selected source"
                 >
-                  <RatesBoard indices={referenceRates} />
+                  <RatesBoard indices={referenceRates} groups={['policy', 'lending']} />
+                </Section>
+              )}
+
+              {data.fxRates.length > 0 && (
+                <Section
+                  title="FX monitor"
+                  subtitle="Spot per pair, day movement, and persisted quote history"
+                >
+                  <FxBoard fxRates={data.fxRates} />
+                </Section>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+              {referenceRates.length > 0 && (
+                <Section
+                  title="Money market"
+                  subtitle="Interbank and bill auction rates on the selected source"
+                >
+                  <RatesBoard indices={referenceRates} groups={['money-market']} />
                 </Section>
               )}
 
@@ -277,22 +307,11 @@ export default function MarketsPage() {
               )}
             </div>
 
-            <div className="space-y-6">
-              {data.fxRates.length > 0 && (
-                <Section
-                  title="FX monitor"
-                  subtitle="Spot per pair, day movement, and persisted quote history"
-                >
-                  <FxBoard fxRates={data.fxRates} />
-                </Section>
-              )}
-
-              {otherIndices.length > 0 && (
-                <Section title="Indicators" subtitle="Macro indices and forecasts by scenario">
-                  <IndicesStrip indices={otherIndices} />
-                </Section>
-              )}
-            </div>
+            {otherIndices.length > 0 && (
+              <Section title="Indicators" subtitle="Macro indices and forecasts by scenario">
+                <IndicesStrip indices={otherIndices} />
+              </Section>
+            )}
           </div>
         </div>
       );
@@ -329,7 +348,8 @@ export default function MarketsPage() {
               onSelectCurve={setSelectedCurveName}
               onOpenForward={(curveName) => {
                 setSelectedCurveName(curveName);
-                setTab('forward');
+                setMarketDataView('forward');
+                setTab('market-data');
               }}
               onEditOverlays={(curveName) => setOverlayCurveName(curveName)}
             />
@@ -347,7 +367,7 @@ export default function MarketsPage() {
       );
     }
 
-    if (tab === 'forward') {
+    if (tab === 'market-data' && marketDataView === 'forward') {
       if (!bank) return null;
       return (
         <ForwardTab
@@ -360,8 +380,8 @@ export default function MarketsPage() {
       );
     }
 
-    if (tab === 'fx') {
-      if (data.fxRates.length === 0) {
+    if (tab === 'market-data' && marketDataView === 'fx') {
+      if (data.fxRates.length === 0 && data.fxForwards.length === 0) {
         return (
           <EmptyState
             Icon={CandlestickChart}
@@ -375,8 +395,8 @@ export default function MarketsPage() {
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border-light pb-4">
             <div>
               <p className="text-micro font-medium uppercase tracking-wider text-slate">Foreign exchange</p>
-              <h2 className="mt-1 text-h2 text-navy">FX spot monitor</h2>
-              <p className="mt-1 text-caption text-slate">Arbitrated spot observations, one-day movement, and persisted quote history.</p>
+              <h2 className="mt-1 text-h2 text-navy">FX market monitor</h2>
+              <p className="mt-1 text-caption text-slate">Historical spot observations and market-implied forward forecasts from the selected source.</p>
             </div>
             <SourceIndicator
               category="fx"
@@ -384,12 +404,22 @@ export default function MarketsPage() {
               onManage={() => setTab('sources')}
             />
           </div>
-          <FxBoard fxRates={data.fxRates} />
+          {data.fxRates.length > 0 && (
+            <Section title="Historical spot" subtitle="Arbitrated spot observations, one-day movement, and persisted quote history.">
+              <FxBoard fxRates={data.fxRates} />
+            </Section>
+          )}
+          <Section
+            title="Market-implied FX forward forecasts"
+            subtitle="Forward outrights supplied by the selected canonical source; they are market-implied, not a statistical prediction."
+          >
+            <FxForwardsBoard forwards={data.fxForwards} spots={data.fxRates} />
+          </Section>
         </div>
       );
     }
 
-    // rates
+    // rates — the remaining Market data sub-view.
     if (referenceRates.length === 0 && otherIndices.length === 0) {
       return (
         <EmptyState
@@ -428,6 +458,20 @@ export default function MarketsPage() {
             </Section>
           )}
         </div>
+        {data.curves.some((curve) => curve.curveType === 'forward') && (
+          <Section
+            title="Published forward-rate forecasts"
+            subtitle="Approved desk forward curves are the term structure of expected market rates. Open one to inspect every published tenor."
+          >
+            <CurveThumbnails
+              curves={data.curves.filter((curve) => curve.curveType === 'forward')}
+              onOpen={(curveName) => {
+                setSelectedCurveName(curveName);
+                setMarketDataView('forward');
+              }}
+            />
+          </Section>
+        )}
       </div>
     );
   }
@@ -448,6 +492,14 @@ export default function MarketsPage() {
 
       <div className="px-8 py-6 space-y-6">
         <SubTabs items={TABS} active={tab} onChange={(key) => setTab(key as TabKey)} />
+
+        {tab === 'market-data' && (
+          <SubTabs
+            items={MARKET_DATA_TABS}
+            active={marketDataView}
+            onChange={(key) => setMarketDataView(key as MarketDataView)}
+          />
+        )}
 
         {isReproduction && tab !== 'sources' && data && (
           <ReproductionBanner asOfDate={data.asOfDate} />

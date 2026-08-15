@@ -6,12 +6,38 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from app.models import Organization
+from app.models import DeskCurveDefinition, Organization
 from app.services.market_desk import entitlements
 
 
 def _org(db: Session, name: str) -> Organization:
     row = Organization(name=name)
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _approved_curve_definition(
+    db: Session, *, curve_code: str, tier: str
+) -> DeskCurveDefinition:
+    row = DeskCurveDefinition(
+        curve_code=curve_code,
+        version=1,
+        status="approved",
+        currency="GHS",
+        calendar_name="GHANA",
+        curve_kind="forward",
+        instrument_set_ref="GHS.SOV",
+        interpolation_method="monotone_convex",
+        output_daycount="ACT_360",
+        payment_interval_months=3,
+        curve_frequency="3M",
+        entitlement_tier=tier,
+        change_rationale="test",
+        proposed_by="analyst@aequoros.com",
+        approved_by="lead@aequoros.com",
+        effective_from=date(2026, 1, 1),
+    )
     db.add(row)
     db.flush()
     return row
@@ -56,6 +82,48 @@ def test_core_tier_blocks_sovereign_curves(db_session: Session) -> None:
     assert entitlements.curve_allowed("AEQ.GHS.SOV.ZERO", granted) is False
     assert entitlements.index_allowed("GHS.MPR", granted) is True
     assert entitlements.index_allowed("GHS.APR.GCB", granted) is False
+
+
+# ---------------------------------------------------------------------------
+# FC-6d: definition entitlement tier gating
+# ---------------------------------------------------------------------------
+
+
+def test_org_tier_resolves_the_highest_fully_held_tier() -> None:
+    assert entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["core"])) == "core"
+    assert (
+        entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["standard"])) == "standard"
+    )
+    assert (
+        entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["premium"])) == "premium"
+    )
+
+
+def test_curve_visible_gates_on_definition_tier(db_session: Session) -> None:
+    _approved_curve_definition(db_session, curve_code="AEQ.GHS.SOV.FWD", tier="premium")
+    _approved_curve_definition(db_session, curve_code="AEQ.GHS.SOV.ZERO", tier="standard")
+    db_session.flush()
+    standard = set(entitlements.ENTITLEMENT_TIERS["standard"])
+    premium = set(entitlements.ENTITLEMENT_TIERS["premium"])
+
+    # The name-family gate alone would admit both to a standard org...
+    assert entitlements.curve_allowed("AEQ.GHS.SOV.FWD", standard) is True
+    # ...but the premium tier on the FWD definition hides it from a standard org.
+    assert entitlements.curve_visible(db_session, "AEQ.GHS.SOV.FWD", standard) is False
+    assert entitlements.curve_visible(db_session, "AEQ.GHS.SOV.ZERO", standard) is True
+    # A premium org sees both.
+    assert entitlements.curve_visible(db_session, "AEQ.GHS.SOV.FWD", premium) is True
+    assert entitlements.curve_visible(db_session, "AEQ.GHS.SOV.ZERO", premium) is True
+
+
+def test_ungoverned_aeq_curve_keeps_name_gate_only(db_session: Session) -> None:
+    # No definition governs AEQ.GHS.OIS → tier gate is a no-op; the name-family
+    # gate (OIS needs the discount dataset) still applies.
+    assert entitlements.curve_definition_tier(db_session, "AEQ.GHS.OIS") is None
+    premium = set(entitlements.ENTITLEMENT_TIERS["premium"])
+    core = set(entitlements.ENTITLEMENT_TIERS["core"])
+    assert entitlements.curve_visible(db_session, "AEQ.GHS.OIS", premium) is True
+    assert entitlements.curve_visible(db_session, "AEQ.GHS.OIS", core) is False
 
 
 def test_revoke_ends_grant(db_session: Session) -> None:

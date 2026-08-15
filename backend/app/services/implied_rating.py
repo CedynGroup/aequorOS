@@ -37,6 +37,7 @@ from app.models import (
     CanonicalMarketIndex,
     DeskMethodology,
     ImpliedRatingRun,
+    InstitutionProfile,
     Jurisdiction,
     LiveMetric,
     RegulatoryRun,
@@ -114,9 +115,26 @@ _MOODYS_GRADES = {
     "ca": "cc",
     "c": "c",
 }
+# A reporting period spanning at least this many days is treated as annual for
+# the §2.2 three-year-average convention (a ~12-month year vs a quarter/half).
+_ANNUAL_MIN_DAYS = 350
+# §2.2 anti-manipulation: the problem-loan and profitability ratios take the
+# WEAKER of the latest figure and the three-year average, so a single good year
+# cannot flatter the score. Capital ratios stay latest-only (point-in-time).
+_CONSERVATIVE_RATIOS: dict[str, str] = {
+    "npl_pct": "lower_is_better",
+    "roa_pct": "higher_is_better",
+    "net_interest_margin_pct": "higher_is_better",
+    "gross_income_to_assets_pct": "higher_is_better",
+    "cost_to_income_pct": "lower_is_better",
+}
 
-DEFAULT_PARAMETERS_V1: dict[str, Any] = {
-    "parameter_status": "initial expert-anchored template; active automatically",
+DEFAULT_PARAMETERS_V2: dict[str, Any] = {
+    "parameter_status": (
+        "v2 remediation: single sourced TTC master scale; PIT derived by Vasicek "
+        "systematic conditioning; anchor-centred Bayesian band. Values remain "
+        "calibration placeholders pending independent validation (§8.2/§15)."
+    ),
     "components": [
         {"code": "capitalisation", "weight": "0.25"},
         {"code": "asset_quality", "weight": "0.20"},
@@ -297,62 +315,64 @@ DEFAULT_PARAMETERS_V1: dict[str, Any] = {
         "cc": "0.12",
         "c": "0",
     },
-    "ttc_grade_pd_anchors_pct": {
+    # The SINGLE sourced master scale: grade -> long-run (TTC, unconditional)
+    # 1-year PD central tendency, in percent. Shaped to published agency
+    # idealized/observed 1-year default rates by rating (S&P/Moody's cumulative
+    # default studies; e.g. CCC/C ~25-28%/yr). PIT is DERIVED from this by
+    # Vasicek conditioning on the live systematic factor — there is NO separate
+    # PIT table. Provenance below; values require independent validation
+    # against the primary agency tables before sizing a live repo haircut.
+    "master_scale_source": (
+        "Aligned to the shape of S&P/Moody's average 1-year corporate default "
+        "rates by rating grade; calibration placeholder pending §8.2 validation."
+    ),
+    "master_scale_pd_anchors_pct": {
         "aaa": "0.01",
         "aa+": "0.02",
-        "aa": "0.03",
-        "aa-": "0.04",
-        "a+": "0.05",
-        "a": "0.07",
-        "a-": "0.10",
-        "bbb+": "0.15",
+        "aa": "0.02",
+        "aa-": "0.03",
+        "a+": "0.04",
+        "a": "0.06",
+        "a-": "0.09",
+        "bbb+": "0.14",
         "bbb": "0.22",
-        "bbb-": "0.32",
-        "bb+": "0.50",
-        "bb": "0.75",
-        "bb-": "1.10",
-        "b+": "1.70",
-        "b": "2.60",
-        "b-": "4.00",
-        "ccc+": "7.00",
-        "ccc": "12.00",
-        "ccc-": "20.00",
-        "cc": "35.00",
+        "bbb-": "0.35",
+        "bb+": "0.55",
+        "bb": "0.85",
+        "bb-": "1.35",
+        "b+": "2.30",
+        "b": "4.50",
+        "b-": "8.00",
+        "ccc+": "16.00",
+        "ccc": "25.00",
+        "ccc-": "36.00",
+        "cc": "50.00",
         "c": "100.00",
     },
-    "pit_grade_pd_anchors_pct": {
-        "aaa": "0.02",
-        "aa+": "0.03",
-        "aa": "0.05",
-        "aa-": "0.06",
-        "a+": "0.08",
-        "a": "0.11",
-        "a-": "0.15",
-        "bbb+": "0.23",
-        "bbb": "0.33",
-        "bbb-": "0.48",
-        "bb+": "0.75",
-        "bb": "1.13",
-        "bb-": "1.65",
-        "b+": "2.55",
-        "b": "3.90",
-        "b-": "6.00",
-        "ccc+": "10.50",
-        "ccc": "18.00",
-        "ccc-": "30.00",
-        "cc": "52.50",
-        "c": "100.00",
-    },
-    "reference_grade_obligors": {grade: 800 for grade in GRADE_ORDER},
-    "reference_grade_defaults": {grade: 0 for grade in GRADE_ORDER},
+    # REAL internal rated-portfolio outcomes per grade. Empty in Stage 1 (no
+    # internal default history) -> the band is the anchor-centred prior credible
+    # interval. Populated only by observed outcomes; NOT a synthetic population.
+    "internal_grade_obligors": {grade: 0 for grade in GRADE_ORDER},
+    "internal_grade_defaults": {grade: 0 for grade in GRADE_ORDER},
     "confidence_level": "0.90",
     "moc_k_sigma": "1.0",
-    "bayesian_prior_alpha": "1.0",
-    "bayesian_prior_beta": "99.0",
+    # Vasicek asset correlation — elevated for the Ghana sovereign-bank nexus (§6).
+    "asset_correlation": "0.24",
+    # Bayesian prior strength kappa (effective external observations per grade).
+    "prior_strength": "25",
+    # Systematic-factor mapping: Z = (op_env_score - neutral) / scale. A fragile
+    # system (op-env below neutral) yields Z < 0 -> PIT above TTC. Versioned.
+    "systematic_factor_neutral": "0.65",
+    "systematic_factor_scale": "0.15",
     "operating_environment_index_code": "GHANA_OPERATING_ENVIRONMENT_SCORE",
     "operating_environment_fallback_score": "0.55",
     "operating_environment_matrix": [["0", "0"], ["0", "1"]],
     "ddep_haircut_pct": "30.0",
+    # §4.3 support notching. Parent/systemic uplift is small and bounded, and a
+    # distressed sovereign (ceiling at/below this floor grade) caps it to zero —
+    # a weak sovereign cannot credibly backstop its banks. Versioned parameters.
+    "support_uplift_max_notches": "1",
+    "support_distress_floor_grade": "b-",
 }
 
 
@@ -366,27 +386,40 @@ class _RatingSources:
     operating_environment_score: Decimal
     sovereign_ceiling: str
     parameters: dict[str, Any]
+    # Governed problem-loan/profitability ratios over up to three prior annual
+    # reporting periods (most recent first) for the §2.2 weaker-of convention.
+    annual_ratio_history: list[dict[str, Decimal]]
     support_uplift_notches: int
 
 
 def ensure_default_methodology(db: Session) -> DeskMethodology:
-    """Create the automatically active initial scorecard parameter version."""
-    existing = db.scalar(
+    """Ensure the current (v2) scorecard parameter version is active.
+
+    Idempotent and Track-2 safe: if the latest stored version already carries the
+    v2 structure (a single master scale), return it. Otherwise append a NEW
+    version with the current parameters — prior versions are never mutated, so any
+    historical run stays reproducible under the version that produced it (§8.4).
+    """
+    latest = db.scalar(
         select(DeskMethodology)
         .where(DeskMethodology.methodology_code == METHODOLOGY_CODE)
-        .order_by(DeskMethodology.version)
+        .order_by(DeskMethodology.version.desc())
         .limit(1)
     )
-    if existing is not None:
-        return existing
+    if latest is not None and "master_scale_pd_anchors_pct" in (latest.parameters or {}):
+        return latest
+    next_version = (latest.version + 1) if latest is not None else 1
     row = DeskMethodology(
         methodology_code=METHODOLOGY_CODE,
-        version=1,
+        version=next_version,
         status="approved",
-        parameters=DEFAULT_PARAMETERS_V1,
+        parameters=DEFAULT_PARAMETERS_V2,
         change_rationale=(
-            "Initial transparent CAMELS/Fitch-weighted Ghana bank scorecard with "
-            "Pluto-Tasche/Bayesian low-default PD bands, Basel floor, and DDEP stress."
+            "v2 remediation of the PD band: single sourced TTC master scale; PIT "
+            "derived by Vasicek systematic conditioning (not a second static "
+            "table); anchor-centred Bayesian credible-interval band with k-sigma "
+            "MoC and Basel floor; Pluto-Tasche retained as a zero-default "
+            "diagnostic; synthetic reference population removed."
         ),
         proposed_by=_BOOTSTRAP_PROPOSER,
         approved_by="system:auto",
@@ -597,6 +630,61 @@ def _operating_environment(
     return value, {"source": "methodology_fallback"}
 
 
+def _support_uplift(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    sovereign_ceiling: str,
+    parameters: dict[str, Any],
+) -> int:
+    """§4.3 parent/systemic support notching from available master data.
+
+    Parent support is inferred conservatively from the ORASS institution profile:
+    a foreign strategic parent — a parent country registered abroad holding a
+    majority foreign stake — is a credible source of ordinary support and earns a
+    small, bounded uplift. Systemic-importance uplift is NOT inferred: the
+    platform holds no D-SIB designation, and inventing one would overstate
+    support.
+
+    Support never lifts the issuer above the sovereign — a distressed sovereign
+    cannot credibly backstop its banks (§4.3). That cap is enforced twice: here,
+    by returning zero once the sovereign ceiling is at/below the distress floor
+    grade, and in the engine, which bounds ``issuer_index`` at the ceiling
+    regardless of what this returns. ``0`` is the honest default when no
+    parent/systemic data exists.
+    """
+    floor_grade = str(parameters.get("support_distress_floor_grade", "b-"))
+    if (
+        floor_grade in GRADE_ORDER
+        and sovereign_ceiling in GRADE_ORDER
+        and GRADE_ORDER.index(sovereign_ceiling) >= GRADE_ORDER.index(floor_grade)
+    ):
+        return 0
+    profile = db.scalar(
+        select(InstitutionProfile).where(
+            InstitutionProfile.organization_id == ctx.organization_id,
+            InstitutionProfile.bank_id == bank.id,
+        )
+    )
+    if profile is None:
+        return 0
+    foreign_pct = profile.ownership_foreign_pct
+    has_foreign_parent = bool(
+        profile.parent_country_code
+        and profile.parent_country_code != bank.jurisdiction_code
+        and foreign_pct is not None
+        and Decimal(str(foreign_pct)) >= Decimal("50")
+    )
+    if not has_foreign_parent:
+        return 0
+    max_notches = int(
+        _decimal(
+            parameters.get("support_uplift_max_notches", "1"), "support_uplift_max_notches"
+        )
+    )
+    return max(0, min(1, max_notches))
+
+
 def _definition(raw: dict[str, Any]) -> RatioDefinition:
     return RatioDefinition(
         code=str(raw["code"]),
@@ -619,7 +707,13 @@ def _definition(raw: dict[str, Any]) -> RatioDefinition:
     )
 
 
-def _methodology(parameters: dict[str, Any], anchor_key: str) -> RatingMethodology:
+def _methodology(parameters: dict[str, Any]) -> RatingMethodology:
+    """Build the engine methodology from the single sourced master scale.
+
+    PIT/TTC are no longer two tables — one master scale (TTC, unconditional) plus
+    the Vasicek asset correlation and Bayesian prior strength; PIT is derived at
+    compute time from the live systematic factor.
+    """
     try:
         ratio_definitions = tuple(_definition(raw) for raw in parameters["ratios"])
         components = tuple(
@@ -631,8 +725,8 @@ def _methodology(parameters: dict[str, Any], anchor_key: str) -> RatingMethodolo
             for grade, value in parameters["grade_cutpoints"].items()
         }
         anchors = {
-            grade: _decimal(value, f"{anchor_key}.{grade}")
-            for grade, value in parameters[anchor_key].items()
+            grade: _decimal(value, f"master_scale_pd_anchors_pct.{grade}")
+            for grade, value in parameters["master_scale_pd_anchors_pct"].items()
         }
         environment_matrix = tuple(
             tuple(_decimal(value, "operating_environment_matrix") for value in row)
@@ -651,17 +745,80 @@ def _methodology(parameters: dict[str, Any], anchor_key: str) -> RatingMethodolo
         grade_pd_anchors_pct=anchors,
         confidence_level=_decimal(parameters["confidence_level"], "confidence_level"),
         moc_k_sigma=_decimal(parameters["moc_k_sigma"], "moc_k_sigma"),
+        asset_correlation=_decimal(
+            parameters.get("asset_correlation", "0.24"), "asset_correlation"
+        ),
+        prior_strength=_decimal(parameters.get("prior_strength", "25"), "prior_strength"),
         operating_environment_matrix=environment_matrix,  # type: ignore[arg-type]
-        bayesian_prior_alpha=_decimal(
-            parameters.get("bayesian_prior_alpha", "1"), "bayesian_prior_alpha"
-        ),
-        bayesian_prior_beta=_decimal(
-            parameters.get("bayesian_prior_beta", "99"), "bayesian_prior_beta"
-        ),
     )
 
 
+def _systematic_factor(
+    operating_environment_score: Decimal, parameters: dict[str, Any]
+) -> Decimal:
+    """Live systematic factor Z for the PIT conditioning (§6.1).
+
+    ``Z = (operating_environment_score − neutral) / scale``. A fragile operating
+    environment (score below the neutral level) yields ``Z < 0``, lifting PIT
+    above the long-run TTC anchor through the Vasicek conditioning. The
+    operating-environment score already folds in banking-system risk, credit
+    conditions and the sovereign backdrop (§3.4), so it is the systematic proxy.
+    """
+    neutral = _decimal(
+        parameters.get("systematic_factor_neutral", "0.65"), "systematic_factor_neutral"
+    )
+    scale = _decimal(
+        parameters.get("systematic_factor_scale", "0.15"), "systematic_factor_scale"
+    )
+    if scale <= _ZERO:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="systematic_factor_scale must be positive.",
+        )
+    return (operating_environment_score - neutral) / scale
+
+
+_COMPONENT_LABELS = {
+    "capitalisation": "Capitalisation & leverage",
+    "asset_quality": "Asset quality",
+    "funding_liquidity": "Funding & liquidity",
+    "business_profile": "Business profile",
+    "earnings": "Earnings & profitability",
+    "risk_profile": "Risk profile",
+}
+
+
+def _key_drivers(result: Any) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Explainability (§10.1): the strongest and weakest components by score.
+
+    Each component score is in [0, 1] (1 = strongest); the top scorers are the
+    rating's supports, the bottom scorers its drags. Returns up to two of each,
+    with the leading ratio of each named so the bank can act on it.
+    """
+
+    def _entry(component: Any) -> dict[str, str]:
+        top_ratio = max(
+            component.ratios,
+            key=lambda ratio: abs(ratio.adjusted_score - Decimal("0.5")),
+        )
+        return {
+            "component": str(component.code),
+            "label": _COMPONENT_LABELS.get(component.code, str(component.code)),
+            "score": str(component.score),
+            "weight": str(component.weight),
+            "top_ratio": str(top_ratio.code),
+            "top_ratio_value": str(top_ratio.value),
+        }
+
+    ordered = sorted(result.component_scores, key=lambda component: component.score, reverse=True)
+    up = [_entry(component) for component in ordered[:2]]
+    down = [_entry(component) for component in reversed(ordered[-2:])]
+    return up, down
+
+
 def _result_payload(result: Any) -> dict[str, Any]:
+    band = result.pd_band
+    drivers_up, drivers_down = _key_drivers(result)
     return {
         "indicative": True,
         "rating_grade": result.issuer_grade,
@@ -670,9 +827,12 @@ def _result_payload(result: Any) -> dict[str, Any]:
         "sovereign_ceiling": result.sovereign_ceiling,
         "ceiling_applied": result.ceiling_applied,
         "support_uplift_notches": result.support_uplift_notches,
+        "key_drivers_up": drivers_up,
+        "key_drivers_down": drivers_down,
         "components": [
             {
                 "code": component.code,
+                "label": _COMPONENT_LABELS.get(component.code, component.code),
                 "weight": str(component.weight),
                 "score": str(component.score),
                 "contribution": str(component.contribution),
@@ -689,35 +849,181 @@ def _result_payload(result: Any) -> dict[str, Any]:
             for component in result.component_scores
         ],
         "pd_band": {
-            "lower_pct": str(result.pd_band.lower_pct),
-            "point_pct": str(result.pd_band.point_pct),
-            "upper_pct": str(result.pd_band.upper_pct),
-            "confidence_level": str(result.pd_band.confidence_level),
-            "basis": result.pd_band.basis,
-            "pluto_tasche_upper_pct": str(result.pd_band.pluto_tasche_upper_pct),
-            "bayesian_upper_pct": str(result.pd_band.bayesian_upper_pct),
-            "margin_of_conservatism_pct": str(result.pd_band.margin_of_conservatism_pct),
+            "lower_pct": str(band.lower_pct),
+            "point_pct": str(band.point_pct),
+            "upper_pct": str(band.upper_pct),
+            "central_tendency_pct": str(band.central_tendency_pct),
+            "confidence_level": str(band.confidence_level),
+            "basis": band.basis,
+            "systematic_factor": str(band.systematic_factor),
+            "bayesian_upper_pct": str(band.bayesian_upper_pct),
+            "pluto_tasche_upper_pct": (
+                None if band.pluto_tasche_upper_pct is None else str(band.pluto_tasche_upper_pct)
+            ),
+            "margin_of_conservatism_pct": str(band.margin_of_conservatism_pct),
+            "prior_strength": str(band.prior_strength),
+            "internal_obligors": band.internal_obligors,
+            "internal_defaults": band.internal_defaults,
         },
+    }
+
+
+def _period_governed_ratios(facts: list[BankFinancialFact]) -> dict[str, Decimal] | None:
+    """The five §2.2 problem-loan/profitability ratios for one period's facts.
+
+    Returns ``None`` when the period lacks the balance-sheet or income-statement
+    facts to compute the full set, so such a period simply does not contribute to
+    the three-year average (graceful degrade rather than a hard failure).
+    """
+    values = _fact_values(facts)
+    total_assets = _sum_group(values, "balance_sheet", _ASSET_CATEGORIES)
+    loans = values.get(("balance_sheet", "loans_gross"), _ZERO)
+    problem_loans = values.get(("loan_exposure", "past_due_90"), _ZERO)
+    try:
+        gross_income = _latest_income_value(values, "gross_income")
+        net_income = _latest_income_value(values, "net_income")
+        net_interest_income = _latest_income_value(values, "net_interest_income")
+        operating_expenses = _latest_income_value(values, "operating_expenses")
+        return {
+            "npl_pct": _ratio(problem_loans, loans, "NPL ratio"),
+            "roa_pct": _ratio(net_income, total_assets, "return on assets"),
+            "net_interest_margin_pct": _ratio(
+                net_interest_income, total_assets, "net interest margin"
+            ),
+            "gross_income_to_assets_pct": _ratio(
+                gross_income, total_assets, "gross-income ratio"
+            ),
+            "cost_to_income_pct": _ratio(
+                operating_expenses, gross_income, "cost-to-income ratio"
+            ),
+        }
+    except HTTPException:
+        return None
+
+
+def _annual_ratio_history(
+    db: Session, organization_id: str, bank_id: str, current_period: BankReportingPeriod
+) -> list[dict[str, Decimal]]:
+    """Governed ratios over up to three prior annual periods (§2.2), newest first.
+
+    Only annual periods (≈12-month span) on or before the current period end are
+    considered; the newest three that carry a full governed-ratio set are kept.
+    Quarterly/partial periods and periods with incomplete facts are skipped, so
+    the caller can degrade gracefully when fewer than two remain.
+    """
+    periods = list(
+        db.scalars(
+            select(BankReportingPeriod)
+            .where(
+                BankReportingPeriod.organization_id == organization_id,
+                BankReportingPeriod.bank_id == bank_id,
+                BankReportingPeriod.period_end <= current_period.period_end,
+            )
+            .order_by(BankReportingPeriod.period_end.desc())
+        )
+    )
+    history: list[dict[str, Decimal]] = []
+    for period in periods:
+        if (period.period_end - period.period_start).days < _ANNUAL_MIN_DAYS:
+            continue
+        facts = list(
+            db.scalars(
+                select(BankFinancialFact).where(
+                    BankFinancialFact.organization_id == organization_id,
+                    BankFinancialFact.bank_id == bank_id,
+                    BankFinancialFact.reporting_period_id == period.id,
+                )
+            )
+        )
+        ratios = _period_governed_ratios(facts)
+        if ratios is not None:
+            history.append(ratios)
+        if len(history) >= 3:
+            break
+    return history
+
+
+def _apply_conservative_basis(
+    ratio_values: dict[str, Decimal], history: list[dict[str, Decimal]]
+) -> dict[str, Any]:
+    """§2.2 anti-manipulation convention (Moody's anti-cherry-picking).
+
+    For the problem-loan and profitability ratios, replace the latest figure with
+    the WEAKER of it and the three-year average — the more conservative (worse)
+    ratio: ``max`` for a lower-is-better problem-loan/cost ratio, ``min`` for a
+    higher-is-better income ratio. Capital ratios are left untouched. Mutates
+    ``ratio_values`` in place and returns a transparent, value-based record of
+    which figure won for each governed ratio (kept in the run snapshot so the
+    input digest stays reproducible). With fewer than two usable annual periods
+    the convention degrades to latest-only and records the reason.
+    """
+    usable = len(history)
+    if usable < 2:
+        return {
+            "convention": "weaker_of_three_year_average_and_latest",
+            "reference": "AequorOS_Implied_Rating_PD_Implementation.md §2.2",
+            "applied": False,
+            "annual_periods_used": usable,
+            "reason": (
+                "fewer than two annual periods with a full governed-ratio set; "
+                "latest figure used"
+            ),
+            "ratios": {},
+        }
+    records: dict[str, Any] = {}
+    for code, direction in _CONSERVATIVE_RATIOS.items():
+        samples = [period[code] for period in history if code in period]
+        if not samples:
+            continue
+        latest = ratio_values[code]
+        three_year_avg = sum(samples, _ZERO) / Decimal(len(samples))
+        chosen = (
+            min(latest, three_year_avg)
+            if direction == "higher_is_better"
+            else max(latest, three_year_avg)
+        )
+        ratio_values[code] = chosen
+        records[code] = {
+            "direction": direction,
+            "latest_pct": str(latest),
+            "three_year_avg_pct": str(three_year_avg),
+            "chosen_pct": str(chosen),
+            "basis": "three_year_average" if chosen != latest else "latest",
+        }
+    return {
+        "convention": "weaker_of_three_year_average_and_latest",
+        "reference": "AequorOS_Implied_Rating_PD_Implementation.md §2.2",
+        "applied": True,
+        "annual_periods_used": usable,
+        "ratios": records,
     }
 
 
 def _rating_inputs(
     sources: _RatingSources,
-) -> tuple[RatingInputs, dict[str, str], Decimal, Decimal, Decimal]:
+) -> tuple[RatingInputs, dict[str, str], Decimal, Decimal, Decimal, dict[str, Any]]:
     values = _fact_values(sources.facts)
     total_assets = _sum_group(values, "balance_sheet", _ASSET_CATEGORIES)
     loans = values.get(("balance_sheet", "loans_gross"), _ZERO)
     deposits = sum(
-        amount
-        for (group, category), amount in values.items()
-        if group == "balance_sheet" and category.startswith(_DEPOSIT_PREFIXES)
+        (
+            amount
+            for (group, category), amount in values.items()
+            if group == "balance_sheet" and category.startswith(_DEPOSIT_PREFIXES)
+        ),
+        _ZERO,
     )
     problem_loans = values.get(("loan_exposure", "past_due_90"), _ZERO)
-    staged_total = sum(amount for (group, _), amount in values.items() if group == "ecl_exposure")
+    staged_total = sum(
+        (amount for (group, _), amount in values.items() if group == "ecl_exposure"), _ZERO
+    )
     stage3 = sum(
-        amount
-        for (group, category), amount in values.items()
-        if group == "ecl_exposure" and category.endswith(":stage3")
+        (
+            amount
+            for (group, category), amount in values.items()
+            if group == "ecl_exposure" and category.endswith(":stage3")
+        ),
+        _ZERO,
     )
     if staged_total <= _ZERO:
         # Older governed fact vintages carry the Basel past-due bucket but not
@@ -759,11 +1065,16 @@ def _rating_inputs(
         "eve_sensitivity_pct": abs(_get_metric(sources.irr, "worst_eve_change_pct_tier1", "irr")),
         "fx_nop_pct": _get_metric(sources.fx, "nop_pct_tier1", "fx"),
     }
+    # §2.2: fold the three-year-average / latest weaker-of choice into the
+    # problem-loan and profitability ratios before scoring (capital untouched).
+    conservative_basis = _apply_conservative_basis(ratio_values, sources.annual_ratio_history)
     counts = {
-        grade: int(value) for grade, value in sources.parameters["reference_grade_obligors"].items()
+        grade: int(value)
+        for grade, value in sources.parameters.get("internal_grade_obligors", {}).items()
     }
     defaults = {
-        grade: int(value) for grade, value in sources.parameters["reference_grade_defaults"].items()
+        grade: int(value)
+        for grade, value in sources.parameters.get("internal_grade_defaults", {}).items()
     }
     inputs = RatingInputs(
         ratio_values=ratio_values,
@@ -780,6 +1091,7 @@ def _rating_inputs(
         sovereign_holdings,
         capital_total,
         total_rwa,
+        conservative_basis,
     )
 
 
@@ -831,10 +1143,20 @@ def _live_calculation(
         raise _missing("current canonical-derived financial facts")
     dependencies = _live_dependency_metrics(db, ctx, bank, period)
     sovereign = _current_sovereign(db, ctx.organization_id, bank.id, period.period_end)
+    ceiling = _normalize_grade(sovereign["rating"])
     environment, environment_source = _operating_environment(
         db, ctx.organization_id, bank.id, period.period_end, methodology.parameters
     )
-    inputs, ratios, sovereign_holdings, capital_total, total_rwa = _rating_inputs(
+    history = _annual_ratio_history(db, ctx.organization_id, bank.id, period)
+    uplift = _support_uplift(db, ctx, bank, ceiling, methodology.parameters)
+    (
+        inputs,
+        ratios,
+        sovereign_holdings,
+        capital_total,
+        total_rwa,
+        conservative_basis,
+    ) = _rating_inputs(
         _RatingSources(
             facts=facts,
             capital=dependencies["capital"],
@@ -842,17 +1164,21 @@ def _live_calculation(
             irr=dependencies["irr"],
             fx=dependencies["fx"],
             operating_environment_score=environment,
-            sovereign_ceiling=_normalize_grade(sovereign["rating"]),
+            sovereign_ceiling=ceiling,
             parameters=methodology.parameters,
-            support_uplift_notches=0,
+            annual_ratio_history=history,
+            support_uplift_notches=uplift,
         )
     )
+    engine_methodology = _methodology(methodology.parameters)
+    z_now = _systematic_factor(environment, methodology.parameters)
     pit = compute_rating(
-        inputs, _methodology(methodology.parameters, "pit_grade_pd_anchors_pct")
+        RatingInputs(**{**inputs.__dict__, "basis": "PIT", "systematic_factor": z_now}),
+        engine_methodology,
     )
     ttc = compute_rating(
-        RatingInputs(**{**inputs.__dict__, "basis": "TTC"}),
-        _methodology(methodology.parameters, "ttc_grade_pd_anchors_pct"),
+        RatingInputs(**{**inputs.__dict__, "basis": "TTC", "systematic_factor": z_now}),
+        engine_methodology,
     )
     stress = ddep_stress(
         sovereign_holdings,
@@ -875,6 +1201,7 @@ def _live_calculation(
         "sovereign_rating": sovereign,
         "operating_environment": {"score": str(environment), **environment_source},
         "derived_ratios_pct": ratios,
+        "conservative_income_basis": conservative_basis,
         "methodology": {
             "code": methodology.methodology_code,
             "version": methodology.version,
@@ -941,6 +1268,8 @@ def compute_live(
                 message=f"Conservative PIT PD upper band is elevated at {upper}%.",
             )
         )
+    # Top rating support and drag for the live card (§10.1 explainability).
+    drivers_up, drivers_down = _key_drivers(pit)
     return LiveModuleResult(
         metrics={
             "pit_rating_grade": pit.issuer_grade,
@@ -951,10 +1280,15 @@ def compute_live(
             "pit_pd_lower_pct": str(pit.pd_band.lower_pct),
             "pit_pd_point_pct": str(pit.pd_band.point_pct),
             "pit_pd_upper_pct": str(pit.pd_band.upper_pct),
+            "pit_pd_central_pct": str(pit.pd_band.central_tendency_pct),
+            "pit_systematic_factor": str(pit.pd_band.systematic_factor),
             "ttc_pd_lower_pct": str(ttc.pd_band.lower_pct),
             "ttc_pd_point_pct": str(ttc.pd_band.point_pct),
             "ttc_pd_upper_pct": str(ttc.pd_band.upper_pct),
+            "ttc_pd_central_pct": str(ttc.pd_band.central_tendency_pct),
             "confidence_level": str(pit.pd_band.confidence_level),
+            "key_driver_up": str(drivers_up[0]["label"]) if drivers_up else "",
+            "key_driver_down": str(drivers_down[0]["label"]) if drivers_down else "",
             "methodology_version": str(snapshot["methodology"]["version"]),
             "ddep_eligible": str(stress.eligible).lower(),
             "ddep_post_stress_capital_ratio_pct": (
@@ -1026,10 +1360,23 @@ def run(
     irr = _latest_succeeded_metrics(db, ctx.organization_id, bank_id, period.id, "irr")
     fx = _latest_succeeded_metrics(db, ctx.organization_id, bank_id, period.id, "fx")
     sovereign = _current_sovereign(db, ctx.organization_id, bank_id, period.period_end)
+    ceiling = _normalize_grade(sovereign["rating"])
     environment, environment_source = _operating_environment(
         db, ctx.organization_id, bank_id, period.period_end, methodology.parameters
     )
-    inputs, ratios, sovereign_holdings, capital_total, total_rwa = _rating_inputs(
+    history = _annual_ratio_history(db, ctx.organization_id, bank_id, period)
+    # An explicit analyst notching request wins; otherwise derive support (§4.3)
+    # from the institution profile (0 when no parent/systemic data exists).
+    model_uplift = _support_uplift(db, ctx, bank, ceiling, methodology.parameters)
+    effective_uplift = support_uplift_notches if support_uplift_notches > 0 else model_uplift
+    (
+        inputs,
+        ratios,
+        sovereign_holdings,
+        capital_total,
+        total_rwa,
+        conservative_basis,
+    ) = _rating_inputs(
         _RatingSources(
             facts=facts,
             capital=capital,
@@ -1037,15 +1384,21 @@ def run(
             irr=irr,
             fx=fx,
             operating_environment_score=environment,
-            sovereign_ceiling=_normalize_grade(sovereign["rating"]),
+            sovereign_ceiling=ceiling,
             parameters=methodology.parameters,
-            support_uplift_notches=support_uplift_notches,
+            annual_ratio_history=history,
+            support_uplift_notches=effective_uplift,
         )
     )
-    pit = compute_rating(inputs, _methodology(methodology.parameters, "pit_grade_pd_anchors_pct"))
-    ttc_inputs = RatingInputs(**{**inputs.__dict__, "basis": "TTC"})
+    engine_methodology = _methodology(methodology.parameters)
+    z_now = _systematic_factor(environment, methodology.parameters)
+    pit = compute_rating(
+        RatingInputs(**{**inputs.__dict__, "basis": "PIT", "systematic_factor": z_now}),
+        engine_methodology,
+    )
     ttc = compute_rating(
-        ttc_inputs, _methodology(methodology.parameters, "ttc_grade_pd_anchors_pct")
+        RatingInputs(**{**inputs.__dict__, "basis": "TTC", "systematic_factor": z_now}),
+        engine_methodology,
     )
     stress = ddep_stress(
         sovereign_holdings,
@@ -1068,6 +1421,7 @@ def run(
         "sovereign_rating": sovereign,
         "operating_environment": {"score": str(environment), **environment_source},
         "derived_ratios_pct": ratios,
+        "conservative_income_basis": conservative_basis,
     }
     run_row = ImpliedRatingRun(
         organization_id=ctx.organization_id,

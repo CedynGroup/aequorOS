@@ -75,6 +75,17 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/desk/observations",
         "/operator/v1/desk/observations",
         "/operator/v1/desk/publications",
+        # Operating-Environment desk console: compute-preview writes nothing,
+        # the maker-checker lifecycle governs the [0,1] jurisdiction score, and
+        # publish fans GHANA_OPERATING_ENVIRONMENT_SCORE out to every tenant.
+        # Duplicate 'assessments' is the GET+POST pair on the collection path.
+        "/operator/v1/operating-environment/assessments",
+        "/operator/v1/operating-environment/assessments",
+        "/operator/v1/operating-environment/assessments/{assessment_id}",
+        "/operator/v1/operating-environment/assessments/{assessment_id}/approve",
+        "/operator/v1/operating-environment/assessments/{assessment_id}/publish",
+        "/operator/v1/operating-environment/assessments/{assessment_id}/submit",
+        "/operator/v1/operating-environment/compute-preview",
         # Staff account management (operator_admin only): duplicates are the
         # GET+POST pair on the collection path.
         "/operator/v1/operators",

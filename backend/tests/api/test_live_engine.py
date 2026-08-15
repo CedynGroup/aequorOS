@@ -88,7 +88,10 @@ def test_get_live_summary_shape(db_client: TestClient) -> None:
     assert body["reporting_period_id"] is not None
     modules = {module["module"] for module in body["modules"]}
     assert {"liquidity", "capital", "irr", "fx", "ftp", "rating"} <= modules
-    assert body["is_stale"] is True  # live view exists but no official run yet
+    # The live cockpit is always compute-from-latest — never "stale". Drift vs the
+    # last official filing is a governance concept, surfaced by GET /freshness, not
+    # a liveness flag on the treasury view.
+    assert body["is_stale"] is False
 
 
 def test_get_freshness_shape(db_client: TestClient) -> None:

@@ -14,6 +14,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.market_desk import DeskResearchAdjustment
+
 
 class ClosedModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -39,6 +41,9 @@ class _CurveDefinitionFields(ClosedModel):
     spot_lag_days: int = Field(default=2, ge=0)
     roll_convention: str = Field(default="modified_following", max_length=30)
     extrapolation_rule: str = Field(default="flat_forward", max_length=30)
+    # FC-6d: distribution tier a published curve requires (core < standard <
+    # premium). Default standard — the platform-wide grandfather tier.
+    entitlement_tier: Literal["core", "standard", "premium"] = "standard"
     params: dict[str, Any] = Field(default_factory=dict, title="Curve Definition Params")
     change_rationale: str = Field(min_length=1)
 
@@ -78,6 +83,7 @@ class DeskCurveDefinitionRead(ClosedModel):
     spot_lag_days: int
     roll_convention: str
     extrapolation_rule: str
+    entitlement_tier: str
     params: dict[str, Any] = Field(title="Curve Definition Params")
     change_rationale: str
     proposed_by: str
@@ -102,6 +108,14 @@ class DeskCurveQuote(ClosedModel):
     tenor: str = Field(min_length=1, max_length=20)
     quote: float
     leg: Literal["discount", "projection"] = "discount"
+    # FC-G3: an explicit forward/IMM start date makes the instrument FORWARD-START
+    # — accruing over [forward_start, forward_start + tenor] instead of from the
+    # spot date. Required for a ``futures`` instrument (its IMM period start).
+    # ``None`` keeps the classic spot-start behaviour.
+    forward_start: date | None = Field(default=None, title="Quote Forward Start")
+    # FC-6a: absolute (normal) short-rate vol for the futures->forward convexity
+    # adjustment; read only for a ``futures`` instrument. ``None`` = governed default.
+    sigma: float | None = Field(default=None, ge=0.0, title="Quote Futures Sigma")
 
 
 class DeskCurveConstructRequest(ClosedModel):
@@ -116,6 +130,17 @@ class DeskCurvePublishRequest(DeskCurveConstructRequest):
     """Construct + publish through the desk determination fan-out."""
 
     methodology_code: str | None = Field(default=None, max_length=40)
+
+
+class DeskCurveStageRequest(DeskCurvePublishRequest):
+    """Construct + stage a DRAFT determination for per-cob maker-checker (FC-G2).
+
+    Writes a draft only — never approved, never published. Bounded, audited
+    ``research_adjustments`` (Option B Track-1) may ride along; they are
+    recorded on the draft exactly like the rates flow (``set_research_adjustments``).
+    """
+
+    research_adjustments: list[DeskResearchAdjustment] = Field(default_factory=list)
 
 
 class DeskCurveGridRow(ClosedModel):

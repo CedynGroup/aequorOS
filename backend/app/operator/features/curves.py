@@ -14,12 +14,13 @@ trail is part of the control story the spec's governance sections commit to.
 from __future__ import annotations
 
 from datetime import date
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.models import DeskCurveDefinition
+from app.models import DeskCurveDefinition, DeskDetermination
 from app.operator.deps import Operator, OperatorDb, record_operator_action
-from app.schemas.market_desk import DeskPublicationRead
+from app.schemas.market_desk import DeskDeterminationRead, DeskPublicationRead
 from app.schemas.market_desk_curves import (
     DeskCurveConstructRequest,
     DeskCurveConstructResponse,
@@ -30,8 +31,8 @@ from app.schemas.market_desk_curves import (
     DeskCurveDefinitionVersionPropose,
     DeskCurveGridRow,
     DeskCurvePillarView,
-    DeskCurvePublishRequest,
     DeskCurveQaView,
+    DeskCurveStageRequest,
 )
 from app.services.market_desk import curve_construction
 
@@ -61,12 +62,34 @@ def _definition_read(row: DeskCurveDefinition) -> DeskCurveDefinitionRead:
         spot_lag_days=row.spot_lag_days,
         roll_convention=row.roll_convention,
         extrapolation_rule=row.extrapolation_rule,
+        entitlement_tier=row.entitlement_tier,
         params=row.params,
         change_rationale=row.change_rationale,
         proposed_by=row.proposed_by,
         approved_by=row.approved_by,
         approved_at=row.approved_at,
         effective_from=row.effective_from,
+        created_at=row.created_at,
+    )
+
+
+def _determination_read(row: DeskDetermination) -> DeskDeterminationRead:
+    return DeskDeterminationRead(
+        id=row.id,
+        cob_date=row.cob_date,
+        methodology_code=row.methodology_code,
+        methodology_version=row.methodology_version,
+        input_snapshot=row.input_snapshot,
+        input_digest=row.input_digest,
+        derived_values=row.derived_values,
+        qa_results=row.qa_results,
+        research_adjustments=list(row.research_adjustments or []),
+        status=row.status,
+        prepared_by=row.prepared_by,
+        reviewed_by=row.reviewed_by,
+        review_note=row.review_note,
+        published_at=row.published_at,
+        supersedes_id=row.supersedes_id,
         created_at=row.created_at,
     )
 
@@ -88,6 +111,7 @@ def _spec_from_create(payload: DeskCurveDefinitionCreate) -> curve_construction.
         spot_lag_days=payload.spot_lag_days,
         roll_convention=payload.roll_convention,
         extrapolation_rule=payload.extrapolation_rule,
+        entitlement_tier=payload.entitlement_tier,
         params=payload.params,
     )
 
@@ -111,6 +135,7 @@ def _spec_from_propose(
         spot_lag_days=payload.spot_lag_days,
         roll_convention=payload.roll_convention,
         extrapolation_rule=payload.extrapolation_rule,
+        entitlement_tier=payload.entitlement_tier,
         params=payload.params,
     )
 
@@ -320,12 +345,23 @@ def construct_curve(
     return _construct_response(result)
 
 
-@router.post("/publish", response_model=DeskPublicationRead)
-def publish_curve(
-    payload: DeskCurvePublishRequest, db: OperatorDb, operator: Operator
-) -> DeskPublicationRead:
-    """Construct then publish a forward curve to golden copy through the desk
-    determination fan-out (bitemporal + lineage + audit for free)."""
+# -- per-cob maker-checker lifecycle (FC-G2) ----------------------------------------
+#
+# Publishing a constructed curve is NOT a single privileged action: it walks the
+# SAME per-cob maker-checker the rates weekly flow uses. Stage a DRAFT determination
+# (construct + persist, never approved), the maker submits it, a DISTINCT supervisor
+# approves it (four-eyes, enforced in ``determinations.approve``), and only then does
+# it fan out. Definition-level dual control (FC-3) still applies underneath.
+
+
+@router.post("/determinations", response_model=DeskDeterminationRead, status_code=201)
+def stage_curve_determination(
+    payload: DeskCurveStageRequest, db: OperatorDb, operator: Operator
+) -> DeskDeterminationRead:
+    """Stage a DRAFT determination for this cob's constructed curve (writes a
+    draft — never approved, never published). Bounded research adjustments may
+    ride along. 409 when no approved definition/methodology is effective; 422
+    when the solve or a convention/calendar resolution fails."""
     definition = _active_definition(db, payload.curve_code, payload.as_of)
     calendar = curve_construction.resolve_calendar(definition.calendar_name)
     kwargs = (
@@ -334,13 +370,14 @@ def publish_curve(
         else {"methodology_code": payload.methodology_code}
     )
     try:
-        row = curve_construction.publish_forward_curve(
+        row = curve_construction.stage_curve_determination(
             db,
             definition=definition,
             as_of=payload.as_of,
             quotes=[quote.model_dump() for quote in payload.quotes],
             calendar=calendar,
-            actor=operator.email,
+            prepared_by=operator.email,
+            research_adjustments=[a.model_dump() for a in payload.research_adjustments],
             **kwargs,
         )
     except curve_construction.CurveConstructionError as exc:
@@ -350,10 +387,75 @@ def publish_curve(
     record_operator_action(
         db,
         operator,
-        action="desk.curve.publish",
+        action="desk.curve.stage_draft",
         detail={
             "curve_code": payload.curve_code,
             "as_of": payload.as_of.isoformat(),
+            "determination_id": str(row.id),
+            "input_digest": row.input_digest,
+            "qa_passed": bool((row.qa_results or {}).get("passed")),
+        },
+    )
+    db.commit()
+    return _determination_read(row)
+
+
+@router.post(
+    "/determinations/{determination_id}/submit", response_model=DeskDeterminationRead
+)
+def submit_curve_determination(
+    determination_id: UUID, db: OperatorDb, operator: Operator
+) -> DeskDeterminationRead:
+    """Maker step: draft -> pending_review (hard QA gate enforced here)."""
+    row = curve_construction.submit_curve_determination(db, determination_id)
+    record_operator_action(
+        db,
+        operator,
+        action="desk.curve.submit",
+        detail={"determination_id": str(row.id)},
+    )
+    db.commit()
+    return _determination_read(row)
+
+
+@router.post(
+    "/determinations/{determination_id}/approve", response_model=DeskDeterminationRead
+)
+def approve_curve_determination(
+    determination_id: UUID, db: OperatorDb, operator: Operator
+) -> DeskDeterminationRead:
+    """Checker step: pending_review -> approved. Four-eyes (approver != preparer)
+    is enforced in ``determinations.approve`` (422)."""
+    row = curve_construction.approve_curve_determination(
+        db, determination_id, reviewed_by=operator.email
+    )
+    record_operator_action(
+        db,
+        operator,
+        action="desk.curve.approve",
+        detail={"determination_id": str(row.id)},
+    )
+    db.commit()
+    return _determination_read(row)
+
+
+@router.post(
+    "/determinations/{determination_id}/publish", response_model=DeskPublicationRead
+)
+def publish_curve_determination(
+    determination_id: UUID, db: OperatorDb, operator: Operator
+) -> DeskPublicationRead:
+    """Publish step: only an APPROVED determination fans out to golden copy
+    through the desk determination seam (bitemporal + lineage + audit)."""
+    row = curve_construction.publish_curve_determination(
+        db, determination_id, actor=operator.email
+    )
+    record_operator_action(
+        db,
+        operator,
+        action="desk.curve.publish",
+        detail={
+            "determination_id": str(determination_id),
             "publication_id": str(row.id),
             "status": row.status,
             "banks": len(row.results),

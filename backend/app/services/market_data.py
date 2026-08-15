@@ -380,13 +380,17 @@ def list_yield_curves(  # noqa: PLR0913 - scope + tenant + as-of is the request 
     if source_systems is not None:
         pair_query = pair_query.where(CanonicalYieldCurve.source_system.in_(source_systems))
     pairs = sorted((ccy, name) for ccy, name in db.execute(pair_query).all())
-    # Spec §10: desk dataset entitlements gate visibility of AEQ.* curves.
+    # Spec §10: desk dataset entitlements gate visibility of AEQ.* curves — both
+    # the name-family gate and (FC-6d) the definition's distribution tier vs the
+    # org's active tier.
     from app.services.market_desk import entitlements as desk_entitlements  # noqa: PLC0415
 
     datasets = desk_entitlements.active_datasets(db, organization_id, as_of=as_of)
     views: list[CurveView] = []
     for ccy, name in pairs:
-        if name.startswith("AEQ.") and not desk_entitlements.curve_allowed(name, datasets):
+        if name.startswith("AEQ.") and not desk_entitlements.curve_visible(
+            db, name, datasets, as_of=as_of
+        ):
             continue
         view = get_yield_curve(
             db,
@@ -492,6 +496,62 @@ def get_fx_spot_history(  # noqa: PLR0913 - scope + tenant + as-of is the reques
     return series[-limit:] if limit > 0 else series
 
 
+def get_fx_forward(  # noqa: PLR0913 - scope + tenant + pair/tenor/as-of request key
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    base_currency: str,
+    quote_currency: str,
+    tenor_months: int,
+    as_of: date,
+    *,
+    source_systems: tuple[str, ...] | None = None,
+    now: datetime | None = None,
+) -> FxRateView | None:
+    """The market-implied outright FX forward for one pair and tenor.
+
+    This is a forecast observable supplied by the selected canonical source,
+    not a statistical FX prediction. The latest business date at or before
+    ``as_of`` wins under the same arbitration rules as spot.
+    """
+    now = now or utc_now()
+    query = select(CanonicalFxRate).where(
+        CanonicalFxRate.organization_id == organization_id,
+        CanonicalFxRate.bank_id == bank_id,
+        CanonicalFxRate.base_currency == base_currency.upper(),
+        CanonicalFxRate.quote_currency == quote_currency.upper(),
+        CanonicalFxRate.rate_type == "forward",
+        CanonicalFxRate.tenor_months == tenor_months,
+        CanonicalFxRate.as_of_date <= as_of,
+        CanonicalFxRate.superseded_by.is_(None),
+        CanonicalFxRate.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+    )
+    if source_systems is not None:
+        query = query.where(CanonicalFxRate.source_system.in_(source_systems))
+    row = db.scalar(
+        query.order_by(
+            CanonicalFxRate.as_of_date.desc(),
+            CanonicalFxRate.ingested_at.desc(),
+            CanonicalFxRate.id.desc(),
+        ).limit(1)
+    )
+    if row is None:
+        return None
+    return FxRateView(
+        base_currency=row.base_currency,
+        quote_currency=row.quote_currency,
+        rate=Decimal(row.rate),
+        as_of_date=row.as_of_date,
+        attribution=_attribution(
+            row.ingested_at,
+            row.ingestion_batch_id,
+            row.source_system,
+            ScopeCategory.FX_FORWARD,
+            now,
+        ),
+    )
+
+
 def _fx_spot_query(
     organization_id: str,
     bank_id: str,
@@ -589,6 +649,31 @@ def list_fx_pairs(
         .distinct()
     ).all()
     return sorted((base, quote) for base, quote in rows)
+
+
+def list_fx_forward_scopes(
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    as_of: date,
+) -> list[tuple[str, str, int]]:
+    """Distinct canonical market-implied FX-forward pair/tenor scopes."""
+    rows = db.execute(
+        select(
+            CanonicalFxRate.base_currency,
+            CanonicalFxRate.quote_currency,
+            CanonicalFxRate.tenor_months,
+        ).where(
+            CanonicalFxRate.organization_id == organization_id,
+            CanonicalFxRate.bank_id == bank_id,
+            CanonicalFxRate.rate_type == "forward",
+            CanonicalFxRate.tenor_months.is_not(None),
+            CanonicalFxRate.as_of_date <= as_of,
+            CanonicalFxRate.superseded_by.is_(None),
+            CanonicalFxRate.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+        ).distinct()
+    ).all()
+    return sorted((base, quote, int(tenor)) for base, quote, tenor in rows if tenor is not None)
 
 
 def list_rating_issuers(

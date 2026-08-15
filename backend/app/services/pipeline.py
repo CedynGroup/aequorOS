@@ -14,6 +14,7 @@ Both are worker handlers: ``(session, job)`` where ``job.payload`` carries
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 from uuid import UUID
@@ -69,33 +70,29 @@ class PipelineError(Exception):
     """A refresh/official job could not run (missing bank or payload)."""
 
 
-def run_refresh(session: Session, job: Job) -> None:
-    """Cheap tier: derive facts, recompute live metrics + findings for a bank.
+@dataclass(frozen=True)
+class RecomputeOutcome:
+    """Result of a cheap-tier live recompute."""
 
-    Idempotent — re-running upserts the same ``live_metrics`` rows and reconciles
-    findings (continuing breaches keep their identity; cleared breaches are
-    superseded). No ``RegulatoryRun`` row is ever created or mutated.
+    period: BankReportingPeriod | None
+    modules_ok: list[str]
+    modules_failed: dict[str, str]
+    skipped_reason: str | None
+
+
+def recompute_modules(
+    session: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> tuple[list[str], dict[str, str]]:
+    """Recompute every module's live view from the CURRENT facts and upsert the
+    ``live_metrics`` + findings. Creates **zero** ``RegulatoryRun`` rows.
+
+    This is the light, read-safe half of the live tier: it does NOT re-derive
+    facts (no mass delete/insert), so it is fast and non-blocking on the request
+    path. The on-read live view (``live_view``) calls this so a methodology or
+    parameter change re-flows instantly and cheaply. Fact re-derivation — the
+    heavy half — happens only in :func:`recompute_live` (the ingestion-triggered
+    background job), never synchronously on a read.
     """
-    ctx = _ctx_from_job(session, job)
-    bank = _bank_or_error(session, ctx, job)
-    as_of = _as_of_from_payload(job)
-
-    try:
-        derivation = derive_facts(session, ctx, bank.id, as_of)
-    except DerivationError as exc:
-        session.rollback()
-        if exc.code == "no_canonical_data":
-            # Nothing to compute yet — a benign no-op, not a failed job.
-            job.progress = {
-                "status": "skipped",
-                "reason": exc.code,
-                "as_of_date": as_of.isoformat(),
-            }
-            return
-        raise
-    session.commit()
-
-    period = _get_period(session, ctx, bank, derivation.reporting_period_id)
     modules_ok: list[str] = []
     modules_failed: dict[str, str] = {}
     for module, compute in _CHEAP_MODULES:
@@ -118,6 +115,50 @@ def run_refresh(session: Session, job: Job) -> None:
     except Exception:  # noqa: BLE001 - forecast reflection is best-effort
         session.rollback()
 
+    return modules_ok, modules_failed
+
+
+def recompute_live(
+    session: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> RecomputeOutcome:
+    """Full cheap-tier recompute: derive facts from current canonical state THEN
+    recompute every module. The heavy path — run by the background refresh job
+    (``run_refresh``, ingestion-triggered), NOT on the read path. Idempotent.
+    """
+    try:
+        derivation = derive_facts(session, ctx, bank.id, as_of)
+    except DerivationError as exc:
+        session.rollback()
+        if exc.code == "no_canonical_data":
+            # Nothing to compute yet — a benign no-op.
+            return RecomputeOutcome(None, [], {}, exc.code)
+        raise
+    session.commit()
+
+    period = _get_period(session, ctx, bank, derivation.reporting_period_id)
+    modules_ok, modules_failed = recompute_modules(session, ctx, bank, period)
+    return RecomputeOutcome(period, modules_ok, modules_failed, None)
+
+
+def run_refresh(session: Session, job: Job) -> None:
+    """Cheap-tier worker handler: proactively warm the live view for a bank.
+
+    Delegates to :func:`recompute_live` (the same path the on-read live view
+    uses) and records the refresh audit event. Idempotent.
+    """
+    ctx = _ctx_from_job(session, job)
+    bank = _bank_or_error(session, ctx, job)
+    as_of = _as_of_from_payload(job)
+
+    outcome = recompute_live(session, ctx, bank, as_of)
+    if outcome.skipped_reason is not None or outcome.period is None:
+        job.progress = {
+            "status": "skipped",
+            "reason": outcome.skipped_reason or "no_period",
+            "as_of_date": as_of.isoformat(),
+        }
+        return
+
     record_event(
         session,
         ctx,
@@ -126,16 +167,16 @@ def run_refresh(session: Session, job: Job) -> None:
         entity_id=bank.id,
         details={
             "as_of_date": as_of.isoformat(),
-            "reporting_period_id": str(period.id),
-            "modules_ok": modules_ok,
-            "modules_failed": sorted(modules_failed),
+            "reporting_period_id": str(outcome.period.id),
+            "modules_ok": outcome.modules_ok,
+            "modules_failed": sorted(outcome.modules_failed),
         },
     )
     session.commit()
     job.progress = {
         "as_of_date": as_of.isoformat(),
-        "modules_ok": modules_ok,
-        "modules_failed": modules_failed,
+        "modules_ok": outcome.modules_ok,
+        "modules_failed": outcome.modules_failed,
     }
 
 

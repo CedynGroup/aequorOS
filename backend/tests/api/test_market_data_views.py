@@ -130,6 +130,24 @@ def _seed_spot(session: Session, bank_id: str, *, rate: str, as_of: date) -> Non
     session.flush()
 
 
+def _seed_fx_forward(
+    session: Session, bank_id: str, *, tenor_months: int, rate: str, as_of: date
+) -> None:
+    meta = _meta(session, bank_id, source_system="REFINITIV", as_of=as_of)
+    session.add(
+        CanonicalFxRate(
+            **meta,
+            source_reference=f"REFINITIV/USDGHS/{tenor_months}m/{as_of.isoformat()}",
+            base_currency="USD",
+            quote_currency="GHS",
+            rate_type="forward",
+            tenor_months=tenor_months,
+            rate=Decimal(rate),
+        )
+    )
+    session.flush()
+
+
 def _seed_rating(session: Session, bank_id: str) -> None:
     meta = _meta(session, bank_id, source_system="MANUAL_UPLOAD", as_of=AS_OF)
     session.add(
@@ -165,7 +183,9 @@ def _views_url(bank_id: str | str) -> str:
     return f"/api/v1/banks/{bank_id}/market-data/views?as_of={AS_OF.isoformat()}"
 
 
-def test_views_serve_curves_fx_ratings_and_indices(db_client: TestClient) -> None:
+def test_views_serve_curves_fx_ratings_and_indices(  # noqa: PLR0915 - one full response contract
+    db_client: TestClient,
+) -> None:
     _ = db_client  # initializes the app engine/DB before the direct session
     session = get_sessionmaker()()
     try:
@@ -173,6 +193,7 @@ def test_views_serve_curves_fx_ratings_and_indices(db_client: TestClient) -> Non
         _seed_curve(session, bank_id, rates={12: "0.185", 1: "0.14", 60: "0.22"})
         _seed_spot(session, bank_id, rate="12.70", as_of=AS_OF - timedelta(days=1))
         _seed_spot(session, bank_id, rate="12.85", as_of=AS_OF)
+        _seed_fx_forward(session, bank_id, tenor_months=3, rate="13.10", as_of=AS_OF)
         _seed_rating(session, bank_id)
         _seed_index(session, bank_id)
         session.commit()
@@ -210,6 +231,13 @@ def test_views_serve_curves_fx_ratings_and_indices(db_client: TestClient) -> Non
         point["as_of_date"] for point in history
     )
     assert fx["attribution"]["source_system"] == "REFINITIV"
+
+    (fx_forward,) = body["fx_forwards"]
+    assert (fx_forward["base"], fx_forward["quote"]) == ("USD", "GHS")
+    assert fx_forward["rate_type"] == "forward"
+    assert fx_forward["tenor_months"] == 3
+    assert Decimal(fx_forward["rate"]) == Decimal("13.10")
+    assert fx_forward["history"] == []
 
     (rating,) = body["ratings"]
     assert rating["issuer"] == "GHANA_SOVEREIGN"

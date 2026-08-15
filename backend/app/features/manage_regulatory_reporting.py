@@ -54,7 +54,8 @@ from app.schemas.regulatory_reporting import (
     SubmissionEventListRead,
     SubmissionPollRead,
 )
-from app.services import regulatory_reporting
+from app.schemas.report_comparison import ReportComparisonRead, ReportComparisonRequest
+from app.services import regulatory_reporting, report_comparison
 from app.services.regulatory_reporting import artifact_versions, version_chain
 from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.storage.client import StorageLocation, StorageNotFoundError
@@ -310,6 +311,29 @@ def compare_package_versions(
     so the comparison an examiner is shown is the one the platform computed.
     """
     return version_chain.compare_versions(db, ctx, bank_id, package_id, against)
+
+
+@router.get(
+    "/banks/{bank_id}/reports/comparison",
+    response_model=ReportComparisonRead,
+    operation_id="compareReports",
+)
+def compare_reports(
+    bank_id: str,
+    query: Annotated[ReportComparisonRequest, Query()],
+    db: DbSession,
+    ctx: Tenant,
+) -> ReportComparisonRead:
+    """Line-item delta over two immutable runs of the same module, with favorability.
+
+    ``version`` mode compares two run versions of one reporting period (an
+    original filing vs a resubmission); ``period`` mode compares the latest run
+    of two reporting periods. Each numeric line carries its absolute and
+    percentage delta, direction, and a favorable/adverse/neutral judgment from the
+    governed favorable-direction registry. Returns 404 when a run, period or
+    version is missing, and 422 when the two sides are not comparable.
+    """
+    return report_comparison.build_comparison(db, ctx, bank_id, query)
 
 
 @router.get(

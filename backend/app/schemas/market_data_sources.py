@@ -212,6 +212,8 @@ class ForwardGridRead(ClosedModel):
     methodology_ref: str
     interpolation: str
     grid_is_authoritative: bool
+    frequency: str
+    available_frequencies: list[str]
     assumptions: ForwardGridAssumptionsRead | None
     rows: list[ForwardGridRowRead]
     pillars: list[ForwardGridPillarRead]

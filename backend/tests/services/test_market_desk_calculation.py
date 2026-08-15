@@ -175,7 +175,26 @@ def _minimal_snapshot() -> list[dict[str, str]]:
 
 
 class TestRealFixtureIntegration:
-    def test_full_pipeline_over_harvested_fixtures(self, desk: Session) -> None:
+    def test_legacy_sparse_tenor_parameter_still_publishes_dense_surface(self) -> None:
+        parameters = dict(PARAMS)
+        parameters["fwd_node_grid_months"] = [3, 6, 12, 24, 36, 60, 84, 120]
+        derived, _ = run_pipeline(_minimal_snapshot(), parameters, COB)
+
+        tenors = [point["tenor_months"] for point in derived["curves"]["AEQ.GHS.SOV.FWD"]["points"]]
+        assert tenors[:12] == list(range(1, 13))
+        assert tenors[-1] == 120
+        assert set(derived["forward_grids"]["AEQ.GHS.SOV.FWD"]["grids"]) == {
+            "1D",
+            "1M",
+            "3M",
+            "6M",
+            "1Y",
+        }
+
+    def test_full_pipeline_over_harvested_fixtures(  # noqa: PLR0915 - full desk package contract
+        self,
+        desk: Session,
+    ) -> None:
         draft = _computed_draft(desk)
         derived, qa = draft.derived_values, draft.qa_results
 
@@ -226,7 +245,12 @@ class TestRealFixtureIntegration:
         # The sovereign forward curve is published alongside.
         fwd = derived["curves"]["AEQ.GHS.SOV.FWD"]
         assert fwd["curve_type"] == "forward"
-        assert len(fwd["points"]) == len(PARAMS["fwd_node_grid_months"])
+        assert [point["tenor_months"] for point in fwd["points"]][:12] == list(range(1, 13))
+        assert fwd["points"][-1]["tenor_months"] == 120
+        grids = derived["forward_grids"]["AEQ.GHS.SOV.FWD"]["grids"]
+        assert set(grids) == {"1D", "1M", "3M", "6M", "1Y"}
+        assert len(grids["1D"]["rows"]) == 23
+        assert len(grids["1Y"]["rows"]) == 31
 
         # GRR cross-check RAN (three-input reconstruction, flag-not-block).
         assert qa["grr_check"]["status"] in {"pass", "mismatch_flagged"}

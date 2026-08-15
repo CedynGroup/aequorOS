@@ -61,6 +61,16 @@ export const EXTRAPOLATION_OPTIONS: { value: string; label: string }[] = [
   { value: 'flat_zero', label: 'Flat zero (hold terminal zero)' },
 ];
 
+/** FC-6d distribution tier — an org sees a published curve only at/below its own tier. */
+export const ENTITLEMENT_TIER_OPTIONS: {
+  value: 'core' | 'standard' | 'premium';
+  label: string;
+}[] = [
+  { value: 'core', label: 'Core — rates + FX' },
+  { value: 'standard', label: 'Standard — + sovereign & discount curves' },
+  { value: 'premium', label: 'Premium — + credit curves' },
+];
+
 // ---------------------------------------------------------------------------
 // Status + ceremony
 // ---------------------------------------------------------------------------
@@ -166,6 +176,9 @@ export function DefinitionForm({
   const [outputDaycount, setOutputDaycount] = useState(base?.output_daycount ?? 'ACT/360');
   const [roll, setRoll] = useState(base?.roll_convention ?? 'modified_following');
   const [extrapolation, setExtrapolation] = useState(base?.extrapolation_rule ?? 'flat_forward');
+  const [entitlementTier, setEntitlementTier] = useState<'core' | 'standard' | 'premium'>(
+    (base?.entitlement_tier as 'core' | 'standard' | 'premium') ?? 'standard',
+  );
   const [curveFrequency, setCurveFrequency] = useState(base?.curve_frequency ?? '3M');
   const [paymentIntervalMonths, setPaymentIntervalMonths] = useState(
     String(base?.payment_interval_months ?? 3),
@@ -230,6 +243,7 @@ export function DefinitionForm({
         roll_convention: roll,
         extrapolation_rule: extrapolation,
         params: paramsParse.value,
+        entitlement_tier: entitlementTier,
         change_rationale: rationale.trim(),
       },
       curveCode.trim(),
@@ -384,6 +398,21 @@ export function DefinitionForm({
             onChange={(e) => setExtrapolation(e.target.value)}
           >
             {EXTRAPOLATION_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Entitlement tier" hint="Distribution tier a tenant needs to receive this curve">
+          <select
+            className={inputClass}
+            value={entitlementTier}
+            onChange={(e) =>
+              setEntitlementTier(e.target.value as 'core' | 'standard' | 'premium')
+            }
+          >
+            {ENTITLEMENT_TIER_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>

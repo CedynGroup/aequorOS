@@ -182,6 +182,8 @@ export interface ForwardGridResponse {
   methodologyRef: string | null;
   interpolation: string | null;
   gridIsAuthoritative: boolean;
+  frequency: string;
+  availableFrequencies: string[];
   assumptions: ForwardGridAssumptions | null;
   rows: ForwardGridPublishedRow[];
   pillars: ForwardGridPillar[];
@@ -378,6 +380,12 @@ function parseForwardGrid(body: unknown): ForwardGridResponse {
     methodologyRef: optStr(field(body, 'methodology_ref')),
     interpolation: optStr(field(body, 'interpolation')),
     gridIsAuthoritative: bool(field(body, 'grid_is_authoritative')),
+    frequency: str(field(body, 'frequency')),
+    availableFrequencies: Array.isArray(field(body, 'available_frequencies'))
+      ? (field(body, 'available_frequencies') as unknown[]).filter(
+          (frequency): frequency is string => typeof frequency === 'string'
+        )
+      : [],
     assumptions,
     rows,
     pillars,
@@ -424,10 +432,11 @@ export async function getMarketDataPlanes(
 export async function getForwardGrid(
   bankId: string,
   curveName: string,
-  params?: { asOf?: string }
+  params?: { asOf?: string; frequency?: string }
 ): Promise<ForwardGridResponse> {
   const query = new URLSearchParams();
   if (params?.asOf) query.set('as_of', params.asOf);
+  if (params?.frequency) query.set('frequency', params.frequency);
   const suffix = query.toString() ? `?${query.toString()}` : '';
   return parseForwardGrid(
     await mdFetch(`${base(bankId)}/curves/${encodeURIComponent(curveName)}/forward-grid${suffix}`)
