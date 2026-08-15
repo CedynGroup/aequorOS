@@ -19,10 +19,20 @@ function sparkColor(first: number, last: number): string {
 
 export default function FxBoard({ fxRates }: { fxRates: FxRateViewRead[] }) {
   return (
-    <div
-      className={`grid grid-cols-1 gap-4 ${fxRates.length > 1 ? 'sm:grid-cols-2' : ''}`}
-    >
-      {fxRates.map((fx) => {
+    <div className="overflow-x-auto border border-border rounded-lg bg-surface-raised">
+      <table className="w-full min-w-[36rem] text-body">
+        <thead className="bg-surface/60 text-micro font-medium uppercase tracking-wider text-slate">
+          <tr>
+            <th className="px-4 py-2.5 text-left">Pair</th>
+            <th className="px-4 py-2.5 text-right">Spot</th>
+            <th className="px-4 py-2.5 text-right">1d move</th>
+            <th className="px-4 py-2.5 text-right">History</th>
+            <th className="px-4 py-2.5 text-right">As of</th>
+            <th className="px-4 py-2.5 text-right">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {fxRates.map((fx) => {
         const series = fx.history.map((point) => num(point.rate));
         const previous = series.length > 1 ? series[series.length - 2] : null;
         const rate = num(fx.rate);
@@ -31,41 +41,42 @@ export default function FxBoard({ fxRates }: { fxRates: FxRateViewRead[] }) {
             ? ((rate - previous) / previous) * 100
             : null;
         return (
-          <div key={`${fx.base}${fx.quote}`} className="card px-4 py-3.5 flex flex-col gap-2 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-micro font-medium text-slate uppercase tracking-wider">
-                {fx.base}/{fx.quote}{' '}
-                <span className="normal-case tracking-normal">· {fx.rateType}</span>
-              </p>
-              <span className="text-caption text-slate font-mono">
-                {fmtDateUTC(fx.asOfDate)}
-              </span>
-            </div>
-            <div className="flex items-end justify-between gap-3">
-              <span className="font-mono text-kpi text-navy tnum">
+          <tr key={`${fx.base}${fx.quote}`} className="border-t border-border-light hover:bg-surface/60">
+            <td className="px-4 py-3">
+              <span className="font-mono font-medium text-navy">{fx.base}/{fx.quote}</span>
+              <span className="ml-2 text-caption text-slate">{fx.rateType}</span>
+            </td>
+            <td className="px-4 py-3 text-right font-mono font-semibold text-navy tnum">
                 {rate.toLocaleString('en-US', {
                   minimumFractionDigits: 4,
                   maximumFractionDigits: 4,
                 })}
-              </span>
-              {series.length > 1 && (
-                <Sparkline
-                  data={series}
-                  color={sparkColor(series[0], series[series.length - 1])}
-                />
-              )}
-            </div>
-            <div className="flex items-center justify-between gap-2">
+            </td>
+            <td className="px-4 py-3 text-right">
               {movePct !== null ? (
                 <DeltaBadge value={movePct} suffix="%" decimals={2} invert />
               ) : (
                 <span className="text-caption text-slate">No prior observation</span>
               )}
-              <AttributionChip attribution={fx.attribution} />
-            </div>
-          </div>
+            </td>
+            <td className="px-4 py-3">
+              {series.length > 1 && (
+                <div className="ml-auto w-24">
+                  <Sparkline data={series} color={sparkColor(series[0], series[series.length - 1])} />
+                </div>
+              )}
+            </td>
+            <td className="px-4 py-3 text-right text-caption font-mono text-slate">
+              {fmtDateUTC(fx.asOfDate)}
+            </td>
+            <td className="px-4 py-3 text-right">
+              <AttributionChip attribution={fx.attribution} className="justify-end" />
+            </td>
+          </tr>
         );
-      })}
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

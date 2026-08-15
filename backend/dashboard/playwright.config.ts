@@ -42,7 +42,7 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
   retries: 0,
-  workers: 1, // journeys share one seeded bank; keep them ordered + isolated
+  workers: 1, // journeys share one disposable canonical test bank; keep them ordered + isolated
   reporter: [['list']],
   use: {
     baseURL: E2E_BASE_URL,
@@ -51,8 +51,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        // Start from a FRESH disposable database every run: seed-demo only
-        // wipes the seeded bank's ingestion/run dependents, so terminal
+        // Start from a FRESH disposable database every run. Terminal
         // regulatory packages (acknowledged/rejected) minted by lifecycle
         // journeys would otherwise leak across runs and block regeneration.
         `sh -c 'mkdir -p "${E2E_TMP}" && rm -f "${E2E_DB}" "${E2E_DB}-wal" "${E2E_DB}-shm" && ` +
@@ -65,7 +64,6 @@ export default defineConfig({
       env: {
         DATABASE_URL: `sqlite+pysqlite:///${E2E_DB}`,
         WORKER_DATABASE_URL: '',
-        DEMO_SEED_ENABLED: '1',
         // Signer identities need a pepper to derive; signing itself stays
         // OFF so the hermetic stack exercises the surfaces and guards
         // without an HSM.

@@ -34,11 +34,6 @@ class AppSettings(BaseSettings):
 
     app_env: AppEnv = Field(default="local", alias="APP_ENV")
     app_name: str = Field(default="risk-service", alias="APP_NAME")
-    # Synthetic demo-bank seeding (POST /banks/seed-demo). Default OFF everywhere:
-    # per the 2026-07-21 order, all bank data flows through the Data Engine
-    # (uploads/adapters/API) — seeding exists only as the hermetic test fixture
-    # (tests/conftest.py enables it). Never enable against the primary database.
-    demo_seed_enabled: bool = Field(default=False, alias="DEMO_SEED_ENABLED")
 
 
 class DatabaseSettings(BaseSettings):
@@ -685,6 +680,11 @@ class OperatorSettings(BaseSettings):
     dev_auth_enabled: bool = Field(default=False, alias="OPERATOR_DEV_AUTH_ENABLED")
     dev_token: str | None = Field(default=None, alias="OPERATOR_DEV_TOKEN")
     dev_email: str = Field(default="dev@aequoros.com", alias="OPERATOR_DEV_EMAIL")
+    #: Signing secret for operator password-session JWTs (HS256, dedicated —
+    #: never the tenant AUTH_JWT_SECRET). REQUIRED for the email+password
+    #: primary path to function: unset, POST /operator/auth/login answers 503
+    #: with a clear message rather than degrade.
+    jwt_secret: str | None = Field(default=None, alias="OPERATOR_JWT_SECRET")
     #: Workforce OIDC (Google Workspace / Okta issuer). Verified with the same
     #: zero-trust machinery as customer SSO (`verify_oidc_id_token`); tokens
     #: must carry a verified email under the allowed domain.
@@ -699,6 +699,7 @@ class OperatorSettings(BaseSettings):
     @field_validator(
         "operator_database_url",
         "dev_token",
+        "jwt_secret",
         "oidc_issuer",
         "oidc_client_id",
         mode="before",

@@ -131,6 +131,25 @@ class DeskDeterminationReject(ClosedModel):
     reason: str = Field(min_length=1)
 
 
+class DeskResearchAdjustment(ClosedModel):
+    """One determination-scoped research judgment (Option B Track-1).
+
+    Kinds: override (absolute percent level), additive_bps (spread on the
+    methodology-derived level), assumption_note (disclosure only).
+    """
+
+    series_code: str = Field(min_length=1, max_length=80)
+    kind: Literal["override", "additive_bps", "assumption_note"]
+    value: str | None = Field(default=None, title="Adjustment Value")
+    rationale: str = Field(default="", title="Adjustment Rationale")
+
+
+class DeskResearchAdjustmentsPut(ClosedModel):
+    """Replace the full research_adjustments set on a draft determination."""
+
+    adjustments: list[DeskResearchAdjustment] = Field(default_factory=list)
+
+
 class DeskDeterminationRead(ClosedModel):
     id: UUID
     cob_date: date
@@ -140,6 +159,9 @@ class DeskDeterminationRead(ClosedModel):
     input_digest: str
     derived_values: dict[str, Any] = Field(title="Determination Derived Values")
     qa_results: dict[str, Any] = Field(title="Determination Qa Results")
+    research_adjustments: list[Any] = Field(
+        default_factory=list, title="Determination Research Adjustments"
+    )
     status: str
     prepared_by: str
     reviewed_by: str | None = Field(title="Determination Reviewed By")
@@ -152,6 +174,127 @@ class DeskDeterminationRead(ClosedModel):
 class DeskDeterminationListRead(ClosedModel):
     determinations: list[DeskDeterminationRead]
     total: int
+
+
+class DeskPackageCompletenessItem(ClosedModel):
+    series_code: str
+    required: bool
+    status: str  # present | stale | missing
+    as_of_date: str | None = None
+    value: str | None = None
+    unit: str | None = None
+    age_days: int | None = None
+    stale_limit_days: int
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+
+class DeskPackageCompleteness(ClosedModel):
+    cob_date: str
+    items: list[DeskPackageCompletenessItem]
+    required_total: int
+    required_present: int
+    required_missing: list[str]
+    required_stale: list[str]
+    ready: bool
+    failed_captures: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DeskRateDelta(ClosedModel):
+    series_code: str
+    current: str | None = None
+    prior: str | None = None
+    delta_pp: str | None = None
+    unit: str | None = None
+
+
+class DeskWeekOverWeek(ClosedModel):
+    prior_determination_id: str | None = None
+    prior_cob_date: str | None = None
+    prior_published_at: str | None = None
+    deltas: list[DeskRateDelta] = Field(default_factory=list)
+
+
+class DeskPackageView(ClosedModel):
+    """Wizard payload: completeness, WoW deltas, input provenance."""
+
+    completeness: DeskPackageCompleteness
+    week_over_week: DeskWeekOverWeek
+    input_provenance: list[dict[str, Any]] = Field(default_factory=list)
+    rates_qa_passed: bool | None = None
+    curves_qa_passed: bool | None = None
+    package_digest: str | None = None
+
+
+# -- capture content / snippets ------------------------------------------------------
+
+
+class DeskCaptureContentView(ClosedModel):
+    capture_id: str
+    source_key: str
+    source_url: str | None = None
+    as_of_date: str
+    status: str
+    content_sha256: str
+    parser_version: str
+    kind: str
+    content_omitted: str | None = None
+    content_available: bool
+    content_bytes: int
+    text: str | None = None
+    truncated: bool = False
+    snippet: str | None = None
+    needle: str | None = None
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class DeskObservationSnippet(ClosedModel):
+    capture_id: str
+    source_key: str
+    source_url: str | None = None
+    kind: str
+    content_available: bool
+    content_omitted: str | None = None
+    snippet: str | None = None
+    needle: str | None = None
+    hint: str | None = None
+
+
+# -- entitlements --------------------------------------------------------------------
+
+
+class DeskEntitlementGrantTier(ClosedModel):
+    organization_id: str = Field(min_length=1, max_length=20)
+    tier: Literal["core", "standard", "premium"]
+    effective_from: date
+    notes: str | None = None
+
+
+class DeskEntitlementGrantDataset(ClosedModel):
+    organization_id: str = Field(min_length=1, max_length=20)
+    dataset_code: str = Field(min_length=1, max_length=40)
+    effective_from: date
+    notes: str | None = None
+
+
+class DeskEntitlementRead(ClosedModel):
+    id: UUID
+    organization_id: str
+    dataset_code: str
+    tier: str | None = None
+    status: str
+    effective_from: date
+    effective_to: date | None = None
+    granted_by: str
+    revoked_by: str | None = None
+    revoked_at: datetime | None = None
+    notes: str | None = None
+    created_at: datetime
+
+
+class DeskEntitlementListRead(ClosedModel):
+    entitlements: list[DeskEntitlementRead]
+    total: int
+    catalog: dict[str, Any] = Field(default_factory=dict)
 
 
 # -- publications --------------------------------------------------------------------

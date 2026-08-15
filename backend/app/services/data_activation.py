@@ -42,6 +42,7 @@ from app.schemas.regulatory_fx import FxScenarioBatchCreate
 from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
 from app.services import (
+    implied_rating,
     regulatory_capital,
     regulatory_forecasting,
     regulatory_ftp,
@@ -142,7 +143,9 @@ def run_official_modules(
     filing runs mint the exact same immutable RegulatoryRun rows as an inline
     activation.
     """
-    return _run_all_modules(db, ctx, bank_id, period_id)
+    runs = _run_all_modules(db, ctx, bank_id, period_id)
+    runs.append(_implied_rating_outcome(db, ctx, bank_id, period_id))
+    return runs
 
 
 def _run_all_modules(
@@ -218,6 +221,29 @@ def _run_all_modules(
             db.rollback()
             outcomes.append(_failed(module, str(exc) or type(exc).__name__))
     return outcomes
+
+
+def _implied_rating_outcome(
+    db: Session, ctx: TenantContext, bank_id: str, period_id: UUID
+) -> ActivationRunRead:
+    """Attach the automatic, data-driven implied assessment to activation."""
+    try:
+        rating_run = implied_rating.run(db, ctx, bank_id, period_id)
+    except HTTPException as exc:
+        db.rollback()
+        return _failed("implied_rating", _http_detail(exc))
+    pit = rating_run.results.get("pit", {})
+    pd_band = pit.get("pd_band", {}) if isinstance(pit, dict) else {}
+    return ActivationRunRead(
+        module="implied_rating",
+        status="succeeded",
+        scenarios_succeeded=1,
+        scenarios_failed=0,
+        headline=(
+            f"{pit.get('rating_grade', '—')} · PIT upper PD "
+            f"{pd_band.get('upper_pct', '—')}%"
+        ),
+    )
 
 
 def _batch_outcome(

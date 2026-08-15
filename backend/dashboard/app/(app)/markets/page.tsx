@@ -1,32 +1,61 @@
 'use client';
 
 /**
- * Markets hub — the consumption side of market data. Everything the canonical
- * store can serve for this bank right now: every published yield curve
- * (multi-curve, keyed by curve name, with the bank's private overlay
- * composition), grouped reference rates, FX spot boards, issuer ratings, and
- * macro indices — each with source attribution and freshness. Source
- * management (vendor connections, quotas, manual uploads) stays in
- * Data Engine → Market Data.
+ * Markets hub — the consumption side of market data, as a tabbed enterprise
+ * surface (spec docs/internal/market_data_sources.md §5). Everything the
+ * canonical store can serve for this bank right now: published yield curves
+ * (multi-curve, with the bank's private overlay composition), grouped reference
+ * rates, FX spot boards, issuer ratings, and macro indices — each with source
+ * attribution and freshness — plus the desk's published forward grids and the
+ * three-plane source control room. Source management (vendor connections,
+ * quotas, manual uploads) stays in Data Engine → Market Data.
+ *
+ * Tabs: Overview · Curves · Market data · Sources. Market data contains the
+ * Forward curves, Rates, and FX sub-navigation; the as-of scrubber reproduces
+ * the complete surface as published then.
  */
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, CandlestickChart } from 'lucide-react';
+import { ArrowUpRight, CalendarClock, CandlestickChart } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
+import SubTabs from '@/components/ui/SubTabs';
 import { useBankContext } from '@/components/shell/BankContext';
-import { useMarketDataViews } from '@/lib/api/hooks';
-import { fmtDateUTC } from '@/lib/api/values';
+import { useLiveSummary, useMarketDataSourcePreferences, useMarketDataViews } from '@/lib/api/hooks';
+import { fmtDateUTC, isoDate } from '@/lib/api/values';
 import CurveBoard from '@/components/markets/CurveBoard';
+import CurveThumbnails from '@/components/markets/CurveThumbnails';
+import CurvesExplorer from '@/components/markets/CurvesExplorer';
+import ForwardTab from '@/components/markets/ForwardTab';
 import FxBoard from '@/components/markets/FxBoard';
+import FxForwardsBoard from '@/components/markets/FxForwardsBoard';
+import ImpliedRatingCard from '@/components/markets/ImpliedRatingCard';
 import RatingsStrip from '@/components/markets/RatingsStrip';
 import IndicesStrip from '@/components/markets/IndicesStrip';
 import RatesBoard, { isReferenceRateCode } from '@/components/markets/RatesBoard';
 import OverlayDrawer from '@/components/markets/OverlayDrawer';
+import SourceIndicator from '@/components/markets/SourceIndicator';
+import SourcesControlRoom from '@/components/markets/SourcesControlRoom';
 
 const MANAGE_SOURCES_HREF = '/data-engine/market-data';
+
+type TabKey = 'overview' | 'curves' | 'market-data' | 'sources';
+type MarketDataView = 'forward' | 'rates' | 'fx';
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'curves', label: 'Curves' },
+  { key: 'market-data', label: 'Market data' },
+  { key: 'sources', label: 'Sources' },
+];
+
+const MARKET_DATA_TABS: { key: MarketDataView; label: string }[] = [
+  { key: 'forward', label: 'Forward curves' },
+  { key: 'rates', label: 'Rates' },
+  { key: 'fx', label: 'FX' },
+];
 
 function ManageSourcesLink() {
   return (
@@ -37,6 +66,61 @@ function ManageSourcesLink() {
       Manage sources
       <ArrowUpRight size={13} aria-hidden />
     </Link>
+  );
+}
+
+/**
+ * As-of scrubber (FC-5 §4.2): reproduces the whole Markets surface as it was
+ * published at the chosen date. Picking today (or clearing) returns to the live
+ * latest-published view.
+ */
+function AsOfControl({
+  asOf,
+  todayIso,
+  onChange,
+}: {
+  asOf: string | null;
+  todayIso: string;
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <label className="inline-flex items-center gap-1.5 text-caption text-slate whitespace-nowrap">
+        As of
+        <input
+          type="date"
+          value={asOf ?? todayIso}
+          max={todayIso}
+          onChange={(event) => {
+            const value = event.target.value;
+            onChange(!value || value >= todayIso ? null : value);
+          }}
+          className="px-2 py-1 text-caption font-mono bg-surface border border-border rounded text-navy"
+        />
+      </label>
+      {asOf !== null && (
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="text-caption font-medium text-action hover:underline whitespace-nowrap"
+        >
+          Today
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ReproductionBanner({ asOfDate }: { asOfDate: Date }) {
+  return (
+    <div className="rounded-lg border border-warning/30 bg-warning-light px-4 py-2.5 flex items-center gap-2 text-caption text-navy">
+      <CalendarClock size={14} className="text-warning shrink-0" aria-hidden />
+      <span>
+        Reproducing the Markets surface as published on{' '}
+        <span className="font-mono font-medium">{fmtDateUTC(asOfDate)}</span>. Every value is the
+        golden copy as it stood then — not re-derived.
+      </span>
+    </div>
   );
 }
 
@@ -62,16 +146,22 @@ function Section({
 
 export default function MarketsPage() {
   const { bank } = useBankContext();
-  const views = useMarketDataViews(bank?.id);
-  const data = views.data;
+  const [asOf, setAsOf] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabKey>('overview');
+  const [marketDataView, setMarketDataView] = useState<MarketDataView>('forward');
   const [overlayCurveName, setOverlayCurveName] = useState<string | null>(null);
+  const [selectedCurveName, setSelectedCurveName] = useState<string | null>(null);
 
-  const isEmpty =
-    data !== undefined &&
-    data.curves.length === 0 &&
-    data.fxRates.length === 0 &&
-    data.ratings.length === 0 &&
-    data.indices.length === 0;
+  const views = useMarketDataViews(bank?.id, asOf ?? undefined);
+  const liveSummary = useLiveSummary(bank?.id);
+  const prefs = useMarketDataSourcePreferences(bank?.id);
+  const data = views.data;
+
+  const todayIso = isoDate(new Date());
+  const isReproduction = asOf !== null && asOf < todayIso;
+  const liveRating = isReproduction
+    ? undefined
+    : liveSummary.data?.modules.find((module) => module.module === 'rating');
 
   const referenceRates =
     data?.indices.filter((index) => isReferenceRateCode(index.indexCode)) ?? [];
@@ -80,108 +170,355 @@ export default function MarketsPage() {
   const overlayCurve =
     data?.curves.find((curve) => curve.curveName === overlayCurveName) ?? null;
 
+  const isEmpty =
+    data !== undefined &&
+    data.curves.length === 0 &&
+    data.fxRates.length === 0 &&
+    data.ratings.length === 0 &&
+    data.indices.length === 0 &&
+    !liveRating;
+
+  const emptyState = (
+    <EmptyState
+      Icon={CandlestickChart}
+      title="No market data ingested yet"
+      description="The canonical store has no servable curves, FX rates, ratings, or indices for this bank. Connect a vendor source or upload the market data template in the Data Engine."
+      action={
+        <Link
+          href={MANAGE_SOURCES_HREF}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+        >
+          Open Data Engine → Market Data
+        </Link>
+      }
+    />
+  );
+
+  function renderViewTab() {
+    if (!data) return null;
+    // The Forward tab reads a separate endpoint and carries its own curve
+    // empty-state, so it is not blanked by the shared "no market data" guard.
+    if (isEmpty && !(tab === 'market-data' && marketDataView === 'forward')) return emptyState;
+
+    if (tab === 'overview') {
+      return (
+        <div className="space-y-6">
+          {!isReproduction && (
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.85fr)] gap-5 items-start">
+              <Section
+                title="Credit monitor"
+                subtitle="Live internal assessment derived from Treasury and ALM inputs"
+              >
+                {liveRating && liveRating.metrics.availability !== 'unavailable' ? (
+                  <ImpliedRatingCard rating={liveRating} />
+                ) : (
+                  <div className="border border-border bg-surface-raised px-5 py-4 text-body text-slate rounded-lg">
+                    No live assessment is available yet. The next canonical-data refresh will
+                    calculate the rating after Capital, Liquidity, IRRBB, and FX live metrics are
+                    available.
+                  </div>
+                )}
+              </Section>
+
+              <Section
+                title="Agency observations"
+                subtitle="Market ratings used to frame the sovereign and counterparty context"
+              >
+                {data.ratings.length > 0 ? (
+                  <RatingsStrip ratings={data.ratings} />
+                ) : (
+                  <div className="border border-border bg-surface-raised px-5 py-4 text-caption text-slate rounded-lg">
+                    No agency observations are available on the selected source.
+                  </div>
+                )}
+              </Section>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border-light py-3">
+            <span className="text-micro font-medium uppercase tracking-wider text-slate">
+              Engine feed
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <SourceIndicator
+                category="curves"
+                preference={prefs.data?.curves}
+                onManage={() => setTab('sources')}
+              />
+              <SourceIndicator
+                category="fx"
+                preference={prefs.data?.fx}
+                onManage={() => setTab('sources')}
+              />
+              <SourceIndicator
+                category="rates"
+                preference={prefs.data?.rates}
+                onManage={() => setTab('sources')}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            {/* Rates and curves sit side by side — the two feeds a treasurer scans
+                together. On narrow viewports they stack. */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+              {referenceRates.length > 0 && (
+                <Section
+                  title="Rate monitor"
+                  subtitle="Policy, reference, and lending rates on the selected source"
+                >
+                  <RatesBoard indices={referenceRates} groups={['policy', 'lending']} />
+                </Section>
+              )}
+
+              {data.fxRates.length > 0 && (
+                <Section
+                  title="FX monitor"
+                  subtitle="Spot per pair, day movement, and persisted quote history"
+                >
+                  <FxBoard fxRates={data.fxRates} />
+                </Section>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+              {referenceRates.length > 0 && (
+                <Section
+                  title="Money market"
+                  subtitle="Interbank and bill auction rates on the selected source"
+                >
+                  <RatesBoard indices={referenceRates} groups={['money-market']} />
+                </Section>
+              )}
+
+              {data.curves.length > 0 && (
+                <Section
+                  title="Curve monitor"
+                  subtitle="Published discount, zero, and forward curves. Select a row for the curve workbench."
+                >
+                  <CurveThumbnails
+                    curves={data.curves}
+                    onOpen={(curveName) => {
+                      setSelectedCurveName(curveName);
+                      setTab('curves');
+                    }}
+                  />
+                </Section>
+              )}
+            </div>
+
+            {otherIndices.length > 0 && (
+              <Section title="Indicators" subtitle="Macro indices and forecasts by scenario">
+                <IndicesStrip indices={otherIndices} />
+              </Section>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (tab === 'curves') {
+      if (data.curves.length === 0) {
+        return (
+          <EmptyState
+            Icon={CandlestickChart}
+            title="No curves published"
+            description="The canonical store has no servable curves for this bank at the as-of date."
+          />
+        );
+      }
+      return (
+        <div className="space-y-8">
+          <div className="flex justify-end">
+            <SourceIndicator
+              category="curves"
+              preference={prefs.data?.curves}
+              onManage={() => setTab('sources')}
+            />
+          </div>
+          <Section
+            title="Curves explorer"
+            subtitle="Pick a published curve, reproduce it at any past as-of date, read the tenor-adjusted forward grid, and layer your private spreads"
+          >
+            <CurvesExplorer
+              curves={data.curves}
+              asOfDate={data.asOfDate}
+              isReproduction={isReproduction}
+              selectedCurveName={selectedCurveName}
+              onSelectCurve={setSelectedCurveName}
+              onOpenForward={(curveName) => {
+                setSelectedCurveName(curveName);
+                setMarketDataView('forward');
+                setTab('market-data');
+              }}
+              onEditOverlays={(curveName) => setOverlayCurveName(curveName)}
+            />
+          </Section>
+          <Section
+            title="Curve board"
+            subtitle="Every published curve at the as-of date — official base vs your private spread composition"
+          >
+            <CurveBoard
+              curves={data.curves}
+              onEditOverlays={(curveName) => setOverlayCurveName(curveName)}
+            />
+          </Section>
+        </div>
+      );
+    }
+
+    if (tab === 'market-data' && marketDataView === 'forward') {
+      if (!bank) return null;
+      return (
+        <ForwardTab
+          bankId={bank.id}
+          curves={data.curves}
+          asOf={asOf}
+          selectedCurveName={selectedCurveName}
+          onSelectCurve={setSelectedCurveName}
+        />
+      );
+    }
+
+    if (tab === 'market-data' && marketDataView === 'fx') {
+      if (data.fxRates.length === 0 && data.fxForwards.length === 0) {
+        return (
+          <EmptyState
+            Icon={CandlestickChart}
+            title="No FX rates published"
+            description="The canonical store has no servable FX spot rates for this bank at the as-of date."
+          />
+        );
+      }
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border-light pb-4">
+            <div>
+              <p className="text-micro font-medium uppercase tracking-wider text-slate">Foreign exchange</p>
+              <h2 className="mt-1 text-h2 text-navy">FX market monitor</h2>
+              <p className="mt-1 text-caption text-slate">Historical spot observations and market-implied forward forecasts from the selected source.</p>
+            </div>
+            <SourceIndicator
+              category="fx"
+              preference={prefs.data?.fx}
+              onManage={() => setTab('sources')}
+            />
+          </div>
+          {data.fxRates.length > 0 && (
+            <Section title="Historical spot" subtitle="Arbitrated spot observations, one-day movement, and persisted quote history.">
+              <FxBoard fxRates={data.fxRates} />
+            </Section>
+          )}
+          <Section
+            title="Market-implied FX forward forecasts"
+            subtitle="Forward outrights supplied by the selected canonical source; they are market-implied, not a statistical prediction."
+          >
+            <FxForwardsBoard forwards={data.fxForwards} spots={data.fxRates} />
+          </Section>
+        </div>
+      );
+    }
+
+    // rates — the remaining Market data sub-view.
+    if (referenceRates.length === 0 && otherIndices.length === 0) {
+      return (
+        <EmptyState
+          Icon={CandlestickChart}
+          title="No reference rates published"
+          description="The canonical store has no servable reference rates or indices for this bank at the as-of date."
+        />
+      );
+    }
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border-light pb-4">
+          <div>
+            <p className="text-micro font-medium uppercase tracking-wider text-slate">Reference data</p>
+            <h2 className="mt-1 text-h2 text-navy">Rates monitor</h2>
+            <p className="mt-1 text-caption text-slate">Policy, money-market, lending, and macro inputs resolved on the selected source plane.</p>
+          </div>
+          <SourceIndicator
+            category="rates"
+            preference={prefs.data?.rates}
+            onManage={() => setTab('sources')}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.85fr)] items-start">
+          {referenceRates.length > 0 && (
+            <Section
+              title="Reference rates"
+              subtitle="Policy, money-market, and lending reference rates"
+            >
+              <RatesBoard indices={referenceRates} />
+            </Section>
+          )}
+          {otherIndices.length > 0 && (
+            <Section title="Indicators" subtitle="Scenario-tagged macro inputs and forecasts">
+              <IndicesStrip indices={otherIndices} />
+            </Section>
+          )}
+        </div>
+        {data.curves.some((curve) => curve.curveType === 'forward') && (
+          <Section
+            title="Published forward-rate forecasts"
+            subtitle="Approved desk forward curves are the term structure of expected market rates. Open one to inspect every published tenor."
+          >
+            <CurveThumbnails
+              curves={data.curves.filter((curve) => curve.curveType === 'forward')}
+              onOpen={(curveName) => {
+                setSelectedCurveName(curveName);
+                setMarketDataView('forward');
+              }}
+            />
+          </Section>
+        )}
+      </div>
+    );
+  }
+
   return (
     <>
       <PageHeader
         breadcrumbs={[{ label: 'Markets' }]}
         title="Markets"
-        subtitle="Reference rates, FX spot, curves, and ratings feeding the risk engines — with source attribution and freshness on every value."
-        asOf={data ? fmtDateUTC(data.asOfDate) : undefined}
-        action={<ManageSourcesLink />}
+        subtitle="Live market monitor for curves, rates, FX, and credit inputs feeding Treasury and risk engines."
+        action={
+          <div className="flex items-center gap-4">
+            <AsOfControl asOf={asOf} todayIso={todayIso} onChange={setAsOf} />
+            <ManageSourcesLink />
+          </div>
+        }
       />
 
-      <QueryBoundary
-        isLoading={views.isLoading}
-        error={views.error}
-        onRetry={() => views.refetch()}
-      >
-        {data && (
-          <div className="px-8 py-6 space-y-8">
-            {isEmpty ? (
-              <EmptyState
-                Icon={CandlestickChart}
-                title="No market data ingested yet"
-                description="The canonical store has no servable curves, FX rates, ratings, or indices for this bank. Connect a vendor source or upload the market data template in the Data Engine."
-                action={
-                  <Link
-                    href={MANAGE_SOURCES_HREF}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
-                  >
-                    Open Data Engine → Market Data
-                  </Link>
-                }
-              />
-            ) : (
-              <>
-                {referenceRates.length > 0 && (
-                  <Section
-                    title="Reference rates"
-                    subtitle="Policy, money-market, and lending reference rates published to your Markets tab"
-                  >
-                    <RatesBoard indices={referenceRates} />
-                  </Section>
-                )}
+      <div className="px-8 py-6 space-y-6">
+        <SubTabs items={TABS} active={tab} onChange={(key) => setTab(key as TabKey)} />
 
-                {data.curves.length > 0 && (
-                  <Section
-                    title="Curve board"
-                    subtitle="Every published curve at the as-of date — official base vs your private spread composition"
-                  >
-                    <CurveBoard
-                      curves={data.curves}
-                      onEditOverlays={(curveName) => setOverlayCurveName(curveName)}
-                    />
-                  </Section>
-                )}
-
-                {(data.fxRates.length > 0 || data.ratings.length > 0) && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                    {data.fxRates.length > 0 && (
-                      <Section
-                        title="FX board"
-                        subtitle="Spot per pair (quote units per 1 base) with the trailing persisted history"
-                      >
-                        <FxBoard fxRates={data.fxRates} />
-                      </Section>
-                    )}
-
-                    {data.ratings.length > 0 && (
-                      <Section
-                        title="Ratings"
-                        subtitle="Latest issuer rating observations with agency and watch status"
-                      >
-                        <RatingsStrip ratings={data.ratings} />
-                      </Section>
-                    )}
-                  </div>
-                )}
-
-                {otherIndices.length > 0 && (
-                  <Section
-                    title="Indicators"
-                    subtitle="Macro indices and forecasts by scenario"
-                  >
-                    <IndicesStrip indices={otherIndices} />
-                  </Section>
-                )}
-
-                {(data.curves.length === 0 ||
-                  data.fxRates.length === 0 ||
-                  data.ratings.length === 0 ||
-                  data.indices.length === 0) && (
-                  <p className="text-caption text-slate">
-                    Scopes without data are hidden.{' '}
-                    <Link href={MANAGE_SOURCES_HREF} className="text-action hover:underline">
-                      Manage market data sources
-                    </Link>{' '}
-                    to ingest more.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
+        {tab === 'market-data' && (
+          <SubTabs
+            items={MARKET_DATA_TABS}
+            active={marketDataView}
+            onChange={(key) => setMarketDataView(key as MarketDataView)}
+          />
         )}
-      </QueryBoundary>
+
+        {isReproduction && tab !== 'sources' && data && (
+          <ReproductionBanner asOfDate={data.asOfDate} />
+        )}
+
+        {tab === 'sources' ? (
+          bank ? (
+            <SourcesControlRoom bankId={bank.id} asOf={asOf} />
+          ) : null
+        ) : (
+          <QueryBoundary
+            isLoading={views.isLoading}
+            error={views.error}
+            onRetry={() => views.refetch()}
+          >
+            {renderViewTab()}
+          </QueryBoundary>
+        )}
+      </div>
 
       {bank && overlayCurve && (
         <OverlayDrawer

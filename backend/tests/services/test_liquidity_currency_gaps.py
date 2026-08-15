@@ -20,11 +20,11 @@ from app.db.base import utc_now
 from app.models import BankReportingPeriod, ParamLiquidityThreshold, RegulatoryRun
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_liquidity
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.services.test_le_and_lmt import _CanonicalSeeder
 
@@ -75,7 +75,7 @@ def _run(db: Session, scenario: str):
 
 
 def test_baseline_run_carries_currency_ladders_and_fx_metrics(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _seed_fx_book(db_session)
 
     run = _run(db_session, "baseline")
@@ -110,7 +110,7 @@ def test_baseline_run_carries_currency_ladders_and_fx_metrics(db_session: Sessio
 def test_usd_funding_stress_applies_depreciation_to_fx_liabilities(
     db_session: Session,
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _seed_fx_book(db_session)
 
     run = _run(db_session, "usd_funding_stress")
@@ -133,7 +133,7 @@ def test_usd_funding_stress_applies_depreciation_to_fx_liabilities(
 def test_board_currency_mismatch_limit_produces_validation_rows(
     db_session: Session,
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _seed_fx_book(db_session)
 
     # Without a Board row: no per-currency mismatch checks are invented.
@@ -172,7 +172,7 @@ def test_stressed_behavioural_ladder_redistributes_demand_deposits(
     the 8.0M GHS CALL book from all-in-horizon-1 to [2.4M, 0.8M, 0, 0,
     4.8M stable core]; the USD fixed deposit is not demand-natured and its
     contractual placement never moves."""
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _seed_fx_book(db_session)
 
     baseline = _run(db_session, "baseline")

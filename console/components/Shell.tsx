@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Code2, LineChart, LogOut } from 'lucide-react';
+import BrandLogo from './BrandLogo';
 import {
   clearToken,
   getAuthConfig,
@@ -26,7 +27,7 @@ const NAV = [
     match: ['/tenants', '/onboard', '/operations'],
   },
   {
-    href: '/desk/determinations',
+    href: '/desk/market',
     label: 'Markets Desk',
     icon: LineChart,
     // Active for every surface inside the Markets Desk section.
@@ -38,14 +39,15 @@ const NAV = [
  * Thin console shell: fixed left rail (brand + nav) and a top header carrying
  * the environment badge (which API this console is pointed at — the single
  * most important piece of operator context) and the session identity: the
- * workforce email for OIDC sessions, an explicit DEV SESSION chip otherwise.
+ * operator email for password and OIDC sessions, an explicit DEV SESSION
+ * chip for dev-token sessions.
  */
 export default function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [apiHost, setApiHost] = useState<string | null>(null);
   const [identity, setIdentity] = useState<
-    { mode: 'oidc'; email: string } | { mode: 'dev' } | null
+    { mode: 'oidc' | 'password'; email: string } | { mode: 'dev' } | null
   >(null);
 
   useEffect(() => {
@@ -62,7 +64,10 @@ export default function Shell({ children }: { children: ReactNode }) {
             alive &&
             setIdentity(
               session.authenticated && session.email
-                ? { mode: 'oidc', email: session.email }
+                ? {
+                    mode: session.mode === 'password' ? 'password' : 'oidc',
+                    email: session.email,
+                  }
                 : null,
             ),
         )
@@ -89,8 +94,7 @@ export default function Shell({ children }: { children: ReactNode }) {
       {/* Left rail */}
       <aside className="fixed inset-y-0 left-0 z-20 flex w-56 flex-col bg-nav">
         <div className="px-5 pb-4 pt-5">
-          <div className="text-h3 font-semibold text-white">AequorOS</div>
-          <div className="text-micro uppercase tracking-widest text-slate">Operator</div>
+          <BrandLogo inverse subtitle="Operator" />
         </div>
         <nav className="flex-1 space-y-0.5 px-3">
           {NAV.map(({ href, label, icon: Icon, match }) => {
@@ -135,10 +139,14 @@ export default function Shell({ children }: { children: ReactNode }) {
                 dev session
               </span>
             )}
-            {identity?.mode === 'oidc' && (
+            {(identity?.mode === 'oidc' || identity?.mode === 'password') && (
               <span
                 className="rounded border border-border-light bg-surface px-2 py-0.5 font-mono text-micro text-slate"
-                title="Workforce OIDC session"
+                title={
+                  identity.mode === 'password'
+                    ? 'Operator session (email + password)'
+                    : 'Workforce OIDC session'
+                }
               >
                 {identity.email}
               </span>

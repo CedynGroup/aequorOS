@@ -17,10 +17,12 @@ from app.models import (
     CanonicalMarketIndex,
     CanonicalYieldCurve,
     CanonicalYieldCurvePoint,
+    DeskCurveDefinition,
     IngestionBatch,
     LineageRecord,
 )
 from app.services import market_data
+from app.services.market_desk import entitlements
 from tests.api.helpers import ORG_1
 
 AS_OF = date(2026, 7, 15)
@@ -547,3 +549,86 @@ def test_missing_data_returns_none(db_session: Session) -> None:
     assert market_data.get_fx_spot_history(db_session, ORG_1, bank.id, "USD", "GHS", AS_OF) == []
     assert market_data.get_rating(db_session, ORG_1, bank.id, "GHANA_SOVEREIGN", AS_OF) is None
     assert market_data.get_index(db_session, ORG_1, bank.id, "GHS_POLICY_RATE", AS_OF) is None
+
+
+# ---------------------------------------------------------------------------
+# FC-6d: definition entitlement tier gates AEQ.* curve visibility at read
+# ---------------------------------------------------------------------------
+
+
+def _approved_curve_definition(
+    db_session: Session, *, curve_code: str, tier: str
+) -> DeskCurveDefinition:
+    row = DeskCurveDefinition(
+        curve_code=curve_code,
+        version=1,
+        status="approved",
+        currency="GHS",
+        calendar_name="GHANA",
+        curve_kind="forward",
+        instrument_set_ref="GHS.SOV",
+        interpolation_method="monotone_convex",
+        output_daycount="ACT_360",
+        payment_interval_months=3,
+        curve_frequency="3M",
+        entitlement_tier=tier,
+        change_rationale="test",
+        proposed_by="analyst@aequoros.com",
+        approved_by="lead@aequoros.com",
+        effective_from=date(2026, 1, 1),
+    )
+    db_session.add(row)
+    db_session.flush()
+    return row
+
+
+def test_premium_curve_tier_hidden_from_standard_org(db_session: Session) -> None:
+    """A premium-tier definition hides its published curve from a standard org, even
+    though the sovereign name-family gate alone would admit it; a standard-tier curve
+    stays visible."""
+    bank = _bank(db_session)
+    _seed_curve(
+        db_session,
+        bank,
+        curve_name="AEQ.GHS.SOV.FWD",
+        source_system="AEQUOR_DESK",
+        ingested_at=LATER,
+        rates={12: "0.25"},
+        curve_type="forward",
+    )
+    _seed_curve(
+        db_session,
+        bank,
+        curve_name="AEQ.GHS.SOV.ZERO",
+        source_system="AEQUOR_DESK",
+        ingested_at=LATER,
+        rates={12: "0.24"},
+        curve_type="zero",
+    )
+    _approved_curve_definition(db_session, curve_code="AEQ.GHS.SOV.FWD", tier="premium")
+    _approved_curve_definition(db_session, curve_code="AEQ.GHS.SOV.ZERO", tier="standard")
+    db_session.flush()
+
+    # Default entitlement is the standard tier (no rows) — the premium FWD curve is
+    # hidden; the standard ZERO curve is served.
+    names = {
+        v.curve_name
+        for v in market_data.list_yield_curves(db_session, ORG_1, bank.id, as_of=AS_OF, now=NOW)
+    }
+    assert "AEQ.GHS.SOV.ZERO" in names
+    assert "AEQ.GHS.SOV.FWD" not in names
+
+    # Granting premium unlocks the FWD curve.
+    entitlements.grant_tier(
+        db_session,
+        organization_id=ORG_1,
+        tier="premium",
+        effective_from=date(2026, 1, 1),
+        granted_by="ops@aequoros.com",
+    )
+    db_session.flush()
+    names_premium = {
+        v.curve_name
+        for v in market_data.list_yield_curves(db_session, ORG_1, bank.id, as_of=AS_OF, now=NOW)
+    }
+    assert {"AEQ.GHS.SOV.FWD", "AEQ.GHS.SOV.ZERO"} <= names_premium

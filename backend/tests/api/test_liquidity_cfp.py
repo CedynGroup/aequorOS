@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app.services.sample_bank_seed import SAMPLE_BANK_ID
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.api.helpers import ORG_2, headers
 
 EWIS_URL = f"/api/v1/banks/{SAMPLE_BANK_ID}/liquidity/ewis"

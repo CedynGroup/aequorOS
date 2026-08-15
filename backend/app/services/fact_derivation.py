@@ -201,13 +201,10 @@ from app.models import (
     CanonicalProduct,
     CanonicalReferenceRow,
 )
-from app.services import jurisdictions
+from app.services import jurisdictions, market_data_sources
 from app.services.market_data import (
     CurveView,
     desk_projection_curve_name,
-    get_fx_spot,
-    get_fx_spot_history,
-    get_yield_curve,
     list_fx_base_currencies,
 )
 
@@ -450,6 +447,7 @@ def derive_facts(
     facts.extend(
         _fact(bank, period, spec) for spec in _derive_operational_income(canonical, groups)
     )
+    facts.extend(_fact(bank, period, spec) for spec in _derive_cashflow_summary(canonical, groups))
     capital_specs = _derive_capital_components(canonical, groups)
     facts.extend(_fact(bank, period, spec) for spec in capital_specs)
     facts.extend(
@@ -609,23 +607,24 @@ def _load_market_data(
     curves derive byte-identically.
     """
     base_ccy = jurisdictions.base_currency(bank)
-    market_curve = get_yield_curve(
-        db,
-        ctx.organization_id,
-        bank.id,
-        base_ccy,
-        as_of,
-        curve_name=desk_projection_curve_name(base_ccy),
+    # Route through the per-bank source preference (market_data_sources.md §3):
+    # the selected plane + overlay flow live into FTP. The default preference
+    # (aequor + overlay on) reproduces the historical projection-curve selection
+    # exactly, so books without a preference derive byte-identically.
+    market_curve = market_data_sources.preferred_projection_curve(
+        db, ctx.organization_id, bank.id, base_ccy, as_of
     )
-    if market_curve is None:
-        market_curve = get_yield_curve(db, ctx.organization_id, bank.id, base_ccy, as_of)
     market_spots: dict[str, Decimal] = {}
     market_fx_history: dict[str, list[tuple[date, Decimal]]] = {}
     for currency in list_fx_base_currencies(db, ctx.organization_id, bank.id, base_ccy, as_of):
-        spot = get_fx_spot(db, ctx.organization_id, bank.id, currency, base_ccy, as_of)
+        spot = market_data_sources.preferred_fx_spot(
+            db, ctx.organization_id, bank.id, currency, base_ccy, as_of
+        )
         if spot is not None:
             market_spots[currency] = spot.rate
-        history = get_fx_spot_history(db, ctx.organization_id, bank.id, currency, base_ccy, as_of)
+        history = market_data_sources.preferred_fx_history(
+            db, ctx.organization_id, bank.id, currency, base_ccy, as_of
+        )
         if len(history) >= _MARKET_FX_HISTORY_MIN_OBSERVATIONS:
             market_fx_history[currency] = history
     return market_curve, market_spots, market_fx_history
@@ -1704,14 +1703,25 @@ def _derive_fx_hedges(canonical: _Canonical, groups: list[GroupResult]) -> list[
 
 def _derive_operational_income(canonical: _Canonical, groups: list[GroupResult]) -> list[_FactSpec]:
     warnings: list[str] = []
-    months: list[tuple[date, Decimal]] = []
+    months: list[tuple[date, dict[str, Decimal | None]]] = []
     for payload in canonical.refs.get("historical_financials", ()):
         period_end = str(payload.get("period_end", ""))
         nii = _dec_or_none(payload.get("net_interest_income_ghs"))
-        fees = _dec_or_none(payload.get("non_interest_income_ghs"))
         if not period_end or nii is None:
             continue
-        months.append((date.fromisoformat(period_end), nii + (fees or _ZERO)))
+        fees = _dec_or_none(payload.get("non_interest_income_ghs"))
+        months.append(
+            (
+                date.fromisoformat(period_end),
+                {
+                    "gross_income": nii + (fees or _ZERO),
+                    "net_interest_income": nii,
+                    "net_income": _dec_or_none(payload.get("net_income_ghs")),
+                    "operating_expenses": _dec_or_none(payload.get("operating_expenses_ghs")),
+                    "provisions": _dec_or_none(payload.get("provisions_ghs")),
+                },
+            )
+        )
     months.sort()
 
     specs: list[_FactSpec] = []
@@ -1722,17 +1732,26 @@ def _derive_operational_income(canonical: _Canonical, groups: list[GroupResult])
         window = remaining[-12:]
         remaining = remaining[:-12]
         year = window[-1][0].year
-        gross = sum((amount for _, amount in window), _ZERO)
-        specs.append(
-            _FactSpec(
-                fact_group="operational_income",
-                category=f"gross_income_{year}",
-                amount=gross,
-                income_year=year,
-                derived_from="trailing 12-month gross income (net interest + "
-                "non-interest) from historical_financials",
+        metrics = {
+            "gross_income": "trailing 12-month gross income (net interest + non-interest)",
+            "net_interest_income": "trailing 12-month net interest income",
+            "net_income": "trailing 12-month net income",
+            "operating_expenses": "trailing 12-month operating expenses",
+            "provisions": "trailing 12-month credit-loss provisions",
+        }
+        for metric, description in metrics.items():
+            amounts = [values[metric] for _, values in window]
+            if any(amount is None for amount in amounts):
+                continue
+            specs.append(
+                _FactSpec(
+                    fact_group="operational_income",
+                    category=f"{metric}_{year}",
+                    amount=sum((amount for amount in amounts if amount is not None), _ZERO),
+                    income_year=year,
+                    derived_from=f"{description} from historical_financials",
+                )
             )
-        )
     specs.reverse()
     if not specs:
         groups.append(
@@ -1758,6 +1777,54 @@ def _derive_operational_income(canonical: _Canonical, groups: list[GroupResult])
             group="operational_income", status="derived", rows=len(specs), warnings=warnings
         )
     )
+    return specs
+
+
+def _derive_cashflow_summary(canonical: _Canonical, groups: list[GroupResult]) -> list[_FactSpec]:
+    """Trailing 90-day actual cash-flow summary from canonical ETL rows."""
+    observations: list[tuple[date, Decimal, Decimal, Decimal]] = []
+    for payload in canonical.refs.get("historical_cashflows", ()):
+        raw_date = str(payload.get("date", ""))
+        inflows = _dec_or_none(payload.get("deposit_inflow_ghs"))
+        outflows = _dec_or_none(payload.get("deposit_outflow_ghs"))
+        net = _dec_or_none(payload.get("net_cashflow_ghs"))
+        if not raw_date or inflows is None or outflows is None:
+            continue
+        observations.append(
+            (date.fromisoformat(raw_date), inflows, outflows, net or inflows - outflows)
+        )
+    observations.sort(key=lambda item: item[0])
+    if not observations:
+        groups.append(
+            GroupResult(
+                group="cashflow",
+                status="skipped",
+                note="No canonical historical cash flows were ingested.",
+            )
+        )
+        return []
+    window = observations[-90:]
+    specs = [
+        _FactSpec(
+            fact_group="cashflow",
+            category="inflows_90d",
+            amount=sum((inflow for _, inflow, _, _ in window), _ZERO),
+            derived_from="latest 90 canonical historical_cashflows inflows",
+        ),
+        _FactSpec(
+            fact_group="cashflow",
+            category="outflows_90d",
+            amount=sum((outflow for _, _, outflow, _ in window), _ZERO),
+            derived_from="latest 90 canonical historical_cashflows outflows",
+        ),
+        _FactSpec(
+            fact_group="cashflow",
+            category="net_cashflow_90d",
+            amount=sum((net for _, _, _, net in window), _ZERO),
+            derived_from="latest 90 canonical historical_cashflows net cash flow",
+        ),
+    ]
+    groups.append(GroupResult(group="cashflow", status="derived", rows=len(specs)))
     return specs
 
 

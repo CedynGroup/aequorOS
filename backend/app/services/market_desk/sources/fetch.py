@@ -103,8 +103,13 @@ def client_kwargs(host: str) -> dict[str, Any]:
             "verify": False,
             "headers": {"User-Agent": BROWSER_USER_AGENT},
             "follow_redirects": True,
+            "trust_env": False,
         }
-    return {"headers": {"User-Agent": BROWSER_USER_AGENT}, "follow_redirects": True}
+    return {
+        "headers": {"User-Agent": BROWSER_USER_AGENT},
+        "follow_redirects": True,
+        "trust_env": False,
+    }
 
 
 class Pacer:

@@ -38,6 +38,7 @@ class JurisdictionRead(ClosedModel):
     locale: str
     central_bank_name: str
     regulator_short: str
+    sovereign_rating_issuer: str | None = None
     submission_portal: str | None
     timezone: str | None
 
@@ -102,12 +103,6 @@ class BankFactsRead(ClosedModel):
     lcr_inflows: list[BankFactRead]
     market_risk: list[BankFactRead]
     operational_income: list[BankFactRead]
+    cash_flows: list[BankFactRead]
     capital_components: list[BankFactRead]
     deposit_behavior: list[BankFactRead]
-
-
-class BankSeedSummaryRead(ClosedModel):
-    bank_id: str
-    periods: int
-    fact_count: int
-    param_count: int

@@ -54,11 +54,11 @@ from app.services import regulatory_capital, regulatory_irr, regulatory_liquidit
 from app.services.regulatory_reporting import calendar, generation, validation
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.registry import REGISTRY
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
@@ -359,7 +359,7 @@ def test_le_registry_entry_is_periodic_monthly_confirmed() -> None:
 
 
 def test_le_calendar_expands_monthly_obligation(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     obligations = calendar.list_obligations(
         db_session, MAKER, SAMPLE_BANK_ID, 1, as_of=date(2026, 4, 5)
     ).obligations
@@ -371,7 +371,7 @@ def test_le_calendar_expands_monthly_obligation(db_session: Session) -> None:
 
 
 def test_le_generation_derives_templates_from_canonical_exposures(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _run_capital_baseline(db_session)
     tier1 = _tier1(db_session)
     amounts = _seed_le_book(db_session, tier1)
@@ -454,7 +454,7 @@ def test_le_generation_derives_templates_from_canonical_exposures(db_session: Se
 
 
 def test_le_top_100_cap_truncates_with_info_finding(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _run_capital_baseline(db_session)
     seeder = _CanonicalSeeder(db_session)
     for index in range(103):
@@ -491,7 +491,7 @@ def test_le_top_100_cap_truncates_with_info_finding(db_session: Session) -> None
 def test_le_validates_and_exports_round_trip(
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _run_capital_baseline(db_session)
     _seed_le_book(db_session, _tier1(db_session))
     package = _generate(db_session, "LE-MONTHLY")
@@ -524,7 +524,7 @@ def test_le_validates_and_exports_round_trip(
 
 
 def test_le_409_without_baseline_capital_run(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     with pytest.raises(HTTPException) as exc_info:
         _generate(db_session, "LE-MONTHLY")
     assert exc_info.value.status_code == 409
@@ -532,7 +532,7 @@ def test_le_409_without_baseline_capital_run(db_session: Session) -> None:
 
 
 def test_le_409_without_canonical_positions(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _run_capital_baseline(db_session)
     with pytest.raises(HTTPException) as exc_info:
         _generate(db_session, "LE-MONTHLY")
@@ -603,7 +603,7 @@ def _seed_lmt_book(db: Session) -> None:
 def test_lmt_carries_ladder_concentration_and_unencumbered_sections(  # noqa: PLR0915 - one linear pass over the printed grid
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _run_liquidity_baseline(db_session)
     _seed_lmt_book(db_session)
 
@@ -769,7 +769,7 @@ def _seed_table1_book(db: Session) -> None:
 
 
 def test_lmt_table1_prudential_ratios(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _run_liquidity_baseline(db_session)
     _seed_table1_book(db_session)
 
@@ -804,7 +804,7 @@ def test_lmt_table1_prudential_ratios(db_session: Session) -> None:
 
 def test_lmt_table1_uses_board_register_floor(db_session: Session) -> None:
     """A Board-adopted floor above the observed ratio flips it to a breach."""
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _run_liquidity_baseline(db_session)
     _seed_table1_book(db_session)
     db_session.add(
@@ -882,7 +882,7 @@ def _seed_currency_book(db: Session) -> None:
 
 
 def test_lmt_significant_currency_tables(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _run_liquidity_baseline(db_session)
     _seed_currency_book(db_session)
 
@@ -936,7 +936,7 @@ def test_lmt_funding_concentration_netting_related_and_tables_7_8(
     (4.0M fixed at 200 days), and an anonymous 1.0M. A 3.0M negotiable-paper
     note at 9 months fills Table 8's instrument rows.
     """
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _run_liquidity_baseline(db_session)
     db_session.add(
         RelatedParty(
@@ -1023,7 +1023,7 @@ def test_lmt_collateral_and_no_maturity_tables(db_session: Session) -> None:
     collateral (re-hypothecable government paper, partly re-pledged, partly
     unavailable) plus own debt securities for Table 10.
     """
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _run_liquidity_baseline(db_session)
     db_session.add(
         ParamLiquidityHaircut(
@@ -1121,7 +1121,7 @@ def test_lmt_collateral_and_no_maturity_tables(db_session: Session) -> None:
 
 
 def test_lmt_without_canonical_positions_omits_position_tools(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _run_liquidity_baseline(db_session)
     package = _generate(db_session, "LMT")
     sections = _sections(package)
@@ -1157,7 +1157,7 @@ def _irr_baseline_run(db: Session) -> RegulatoryRun:
 
 
 def test_irrbb_bog_450_params_flow_into_engine_outputs(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     shocks = db_session.scalars(
         select(ParamStressShock).where(
             ParamStressShock.module == "irr",
@@ -1192,7 +1192,7 @@ def test_irrbb_bog_450_params_flow_into_engine_outputs(db_session: Session) -> N
 
 
 def test_irrbb_450_rows_render_only_when_metrics_carry_them(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     regulatory_irr.run_all_irr_scenarios(
         db_session,
         MAKER,

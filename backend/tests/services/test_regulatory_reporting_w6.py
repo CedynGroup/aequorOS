@@ -33,11 +33,11 @@ from app.services.regulatory_reporting.registry import (
     daily_next_business_day,
     get_definition,
 )
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
@@ -121,7 +121,7 @@ def _current(db: Session, return_code: str, reporting_date: date, basis: str):
 def test_solo_and_consolidated_coexist_as_independent_current_versions(
     db_session: Session,
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _liquidity_run(db_session, MARCH)
 
     solo = _generate(db_session, "BSD3", MARCH, basis="solo")
@@ -152,7 +152,7 @@ def test_solo_and_consolidated_coexist_as_independent_current_versions(
 
 
 def test_regenerate_solo_does_not_supersede_consolidated(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _liquidity_run(db_session, MARCH)
 
     _generate(db_session, "BSD3", MARCH, basis="solo")
@@ -189,7 +189,7 @@ def test_dbk_daily_next_business_day_skips_weekends() -> None:
 
 
 def test_dbk_generation_requires_fx_canonical_data(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     with pytest.raises(HTTPException) as exc_info:
         _generate(db_session, "DBK-DAILY", MARCH)
     assert exc_info.value.status_code == 409
@@ -197,7 +197,7 @@ def test_dbk_generation_requires_fx_canonical_data(db_session: Session) -> None:
 
 
 def test_dbk_generation_builds_nop_and_contingents_sections(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _fx_run(db_session, MARCH)
 
     package = _generate(db_session, "DBK-DAILY", MARCH)
@@ -217,7 +217,7 @@ def test_dbk_generation_builds_nop_and_contingents_sections(db_session: Session)
 
 
 def test_daily_obligations_are_windowed_not_expanded(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     as_of = date(2026, 3, 31)
 
     result = calendar.list_obligations(
@@ -251,7 +251,7 @@ def _comparative(package: RegulatoryPackage) -> dict[str, dict]:
 
 
 def test_prior_period_column_blank_on_first_period(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _liquidity_run(db_session, MARCH)
 
     package = _generate(db_session, "BSD3", MARCH)
@@ -263,7 +263,7 @@ def test_prior_period_column_blank_on_first_period(db_session: Session) -> None:
 
 
 def test_prior_period_column_populated_on_second_period(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _liquidity_run(db_session, FEBRUARY)
     _liquidity_run(db_session, MARCH)
 
@@ -280,7 +280,7 @@ def test_prior_period_column_populated_on_second_period(db_session: Session) -> 
 
 
 def test_prior_period_comparative_is_basis_scoped(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     _liquidity_run(db_session, FEBRUARY)
     _liquidity_run(db_session, MARCH)
 
@@ -297,7 +297,7 @@ def test_prior_period_comparative_is_basis_scoped(db_session: Session) -> None:
 
 
 def test_deadline_override_changes_due_date(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     as_of = date(2026, 3, 15)
 
     baseline = calendar.list_obligations(
@@ -329,7 +329,7 @@ def test_deadline_override_changes_due_date(db_session: Session) -> None:
 def test_reporting_settings_get_defaults_empty_then_round_trips(
     db_session: Session,
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
 
     empty = reporting_settings.get_reporting_settings(db_session, MAKER, SAMPLE_BANK_ID)
     assert empty.deadline_overrides == {}

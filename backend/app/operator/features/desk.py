@@ -15,6 +15,7 @@ a parameter "in passing" during a weekly publish.
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -28,12 +29,17 @@ from app.models import (
 )
 from app.operator.deps import Operator, OperatorDb, record_operator_action
 from app.schemas.market_desk import (
+    DeskCaptureContentView,
     DeskCaptureListRead,
     DeskCaptureRead,
     DeskDeterminationCreate,
     DeskDeterminationListRead,
     DeskDeterminationRead,
     DeskDeterminationReject,
+    DeskEntitlementGrantDataset,
+    DeskEntitlementGrantTier,
+    DeskEntitlementListRead,
+    DeskEntitlementRead,
     DeskMethodologyApprove,
     DeskMethodologyCreate,
     DeskMethodologyListRead,
@@ -42,15 +48,21 @@ from app.schemas.market_desk import (
     DeskObservationCreate,
     DeskObservationListRead,
     DeskObservationRead,
+    DeskObservationSnippet,
+    DeskPackageView,
     DeskPublicationListRead,
     DeskPublicationRead,
+    DeskResearchAdjustmentsPut,
 )
 from app.services.market_desk import (
     calculation,
     determinations,
+    entitlements,
     observations,
+    package,
     publication,
     register,
+    snippets,
 )
 
 router = APIRouter(prefix="/desk", tags=["operator-desk"])
@@ -117,6 +129,7 @@ def _determination_read(row: DeskDetermination) -> DeskDeterminationRead:
         input_digest=row.input_digest,
         derived_values=row.derived_values,
         qa_results=row.qa_results,
+        research_adjustments=list(row.research_adjustments or []),
         status=row.status,
         prepared_by=row.prepared_by,
         reviewed_by=row.reviewed_by,
@@ -312,6 +325,141 @@ def list_captures(
     return DeskCaptureListRead(captures=[_capture_read(row) for row in rows], total=len(rows))
 
 
+@router.get("/captures/{capture_id}/content", response_model=DeskCaptureContentView)
+def get_capture_content(
+    capture_id: UUID,
+    db: OperatorDb,
+    _operator: Operator,
+    needle: str | None = None,
+) -> DeskCaptureContentView:
+    """Decode silver capture payload for field-level source review."""
+    view = snippets.capture_content_view(db, capture_id, needle=needle)
+    return DeskCaptureContentView.model_validate(view)
+
+
+@router.get(
+    "/captures/{capture_id}/snippet",
+    response_model=DeskObservationSnippet,
+)
+def get_capture_snippet(
+    capture_id: UUID,
+    db: OperatorDb,
+    _operator: Operator,
+    value: str | None = None,
+) -> DeskObservationSnippet:
+    """Snippet window around an extracted observation value."""
+    view = snippets.snippet_for_observation(db, capture_id=capture_id, value=value)
+    return DeskObservationSnippet.model_validate(view)
+
+
+# -- entitlements (spec §10) ------------------------------------------------------------
+
+
+def _entitlement_read(row: Any) -> DeskEntitlementRead:
+    return DeskEntitlementRead(
+        id=row.id,
+        organization_id=row.organization_id,
+        dataset_code=row.dataset_code,
+        tier=row.tier,
+        status=row.status,
+        effective_from=row.effective_from,
+        effective_to=row.effective_to,
+        granted_by=row.granted_by,
+        revoked_by=row.revoked_by,
+        revoked_at=row.revoked_at,
+        notes=row.notes,
+        created_at=row.created_at,
+    )
+
+
+@router.get("/entitlements", response_model=DeskEntitlementListRead)
+def list_entitlements(
+    db: OperatorDb,
+    _operator: Operator,
+    organization_id: str | None = None,
+    include_revoked: bool = False,
+) -> DeskEntitlementListRead:
+    rows = entitlements.list_entitlements(
+        db, organization_id=organization_id, include_revoked=include_revoked
+    )
+    return DeskEntitlementListRead(
+        entitlements=[_entitlement_read(r) for r in rows],
+        total=len(rows),
+        catalog=entitlements.catalog(),
+    )
+
+
+@router.post("/entitlements/grant-tier", response_model=DeskEntitlementListRead, status_code=201)
+def grant_entitlement_tier(
+    payload: DeskEntitlementGrantTier, db: OperatorDb, operator: Operator
+) -> DeskEntitlementListRead:
+    rows = entitlements.grant_tier(
+        db,
+        organization_id=payload.organization_id,
+        tier=payload.tier,
+        effective_from=payload.effective_from,
+        granted_by=operator.email,
+        notes=payload.notes,
+    )
+    record_operator_action(
+        db,
+        operator,
+        action="desk.entitlement.grant_tier",
+        detail={
+            "organization_id": payload.organization_id,
+            "tier": payload.tier,
+            "datasets": [r.dataset_code for r in rows],
+        },
+    )
+    db.commit()
+    all_rows = entitlements.list_entitlements(db, organization_id=payload.organization_id)
+    return DeskEntitlementListRead(
+        entitlements=[_entitlement_read(r) for r in all_rows],
+        total=len(all_rows),
+        catalog=entitlements.catalog(),
+    )
+
+
+@router.post("/entitlements/grant-dataset", response_model=DeskEntitlementRead, status_code=201)
+def grant_entitlement_dataset(
+    payload: DeskEntitlementGrantDataset, db: OperatorDb, operator: Operator
+) -> DeskEntitlementRead:
+    row = entitlements.grant_dataset(
+        db,
+        organization_id=payload.organization_id,
+        dataset_code=payload.dataset_code,
+        effective_from=payload.effective_from,
+        granted_by=operator.email,
+        notes=payload.notes,
+    )
+    record_operator_action(
+        db,
+        operator,
+        action="desk.entitlement.grant_dataset",
+        detail={
+            "organization_id": payload.organization_id,
+            "dataset_code": payload.dataset_code,
+        },
+    )
+    db.commit()
+    return _entitlement_read(row)
+
+
+@router.post("/entitlements/{entitlement_id}/revoke", response_model=DeskEntitlementRead)
+def revoke_entitlement(
+    entitlement_id: UUID, db: OperatorDb, operator: Operator
+) -> DeskEntitlementRead:
+    row = entitlements.revoke(db, entitlement_id, revoked_by=operator.email)
+    record_operator_action(
+        db,
+        operator,
+        action="desk.entitlement.revoke",
+        detail={"entitlement_id": str(row.id), "dataset_code": row.dataset_code},
+    )
+    db.commit()
+    return _entitlement_read(row)
+
+
 # -- determinations (Track 1) -----------------------------------------------------------
 
 
@@ -333,6 +481,19 @@ def get_determination(
     determination_id: UUID, db: OperatorDb, _operator: Operator
 ) -> DeskDeterminationRead:
     return _determination_read(determinations.get(db, determination_id))
+
+
+@router.get(
+    "/determinations/{determination_id}/package",
+    response_model=DeskPackageView,
+)
+def get_determination_package(
+    determination_id: UUID, db: OperatorDb, _operator: Operator
+) -> DeskPackageView:
+    """Research Desk wizard payload: completeness, WoW deltas, provenance."""
+    row = determinations.get(db, determination_id)
+    view = package.build_package_view(db, row)
+    return DeskPackageView.model_validate(view)
 
 
 @router.post("/determinations", response_model=DeskDeterminationRead, status_code=201)
@@ -390,16 +551,63 @@ def compute_determination(
     return _determination_read(row)
 
 
+@router.put(
+    "/determinations/{determination_id}/adjustments",
+    response_model=DeskDeterminationRead,
+)
+def put_determination_adjustments(
+    determination_id: UUID,
+    payload: DeskResearchAdjustmentsPut,
+    db: OperatorDb,
+    operator: Operator,
+) -> DeskDeterminationRead:
+    """Replace research adjustments on a draft and recompute so package digest
+    and derived rates reflect judgment (Option B Track-1)."""
+    before = list(determinations.get(db, determination_id).research_adjustments or [])
+    row = determinations.set_research_adjustments(
+        db,
+        determination_id,
+        adjustments=[item.model_dump() for item in payload.adjustments],
+        applied_by=operator.email,
+    )
+    methodology = register.get_version(db, row.methodology_code, row.methodology_version)
+    try:
+        calculation.compute_determination(db, row, methodology=methodology)
+    except calculation.CalculationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    record_operator_action(
+        db,
+        operator,
+        action="desk.determination.adjustments",
+        detail={
+            "determination_id": str(row.id),
+            "before": before,
+            "after": list(row.research_adjustments or []),
+            "package_digest": (row.derived_values or {}).get("package_digest"),
+        },
+    )
+    db.commit()
+    return _determination_read(row)
+
+
 @router.post("/determinations/{determination_id}/submit", response_model=DeskDeterminationRead)
 def submit_determination(
     determination_id: UUID, db: OperatorDb, operator: Operator
 ) -> DeskDeterminationRead:
+    # Submit requires a computed rates package (rates_qa_passed). Empty
+    # drafts cannot reach the Supervisor.
+    calculation.ensure_approvable(determinations.get(db, determination_id))
     row = determinations.submit_for_review(db, determination_id)
     record_operator_action(
         db,
         operator,
         action="desk.determination.submit",
-        detail={"determination_id": str(row.id)},
+        detail={
+            "determination_id": str(row.id),
+            "package_digest": (row.derived_values or {}).get("package_digest"),
+        },
     )
     db.commit()
     return _determination_read(row)

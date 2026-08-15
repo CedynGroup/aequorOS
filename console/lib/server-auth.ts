@@ -125,12 +125,35 @@ export interface OauthTxn {
   redirect_uri: string;
 }
 
-/** Established workforce session. The id_token stays HttpOnly-server-side. */
+/**
+ * Established operator session, in either auth mode. The credential stays
+ * HttpOnly-server-side in both:
+ * - password mode: `token` holds the operator session JWT minted by
+ *   POST /operator/auth/login (`mode: 'password'`);
+ * - workforce SSO mode: `id_token` holds the OIDC id_token (`mode: 'oidc'`;
+ *   also the shape of pre-password-era cookies, where `mode` is absent).
+ * The /api/op proxy forwards whichever credential is present as the bearer;
+ * the operator API is the verifying authority for both.
+ */
 export interface OperatorSession {
-  id_token: string;
+  /** Operator session JWT (password sign-in). */
+  token?: string;
+  /** Workforce OIDC id_token (SSO sign-in). */
+  id_token?: string;
   email: string;
-  /** Unix seconds — mirrors the id_token exp; the API is the authority. */
+  /** Unix seconds — mirrors the credential's exp; the API is the authority. */
   exp: number;
+  mode?: 'password' | 'oidc';
+}
+
+/** The bearer the /api/op proxy forwards — operator JWT or OIDC id_token. */
+export function sessionBearer(session: OperatorSession): string | null {
+  return session.token ?? session.id_token ?? null;
+}
+
+/** Which sign-in produced this session (legacy cookies predate `mode`). */
+export function sessionMode(session: OperatorSession): 'password' | 'oidc' {
+  return session.mode ?? (session.token ? 'password' : 'oidc');
 }
 
 export function encodeCookie(value: object): string {
@@ -148,7 +171,8 @@ export function decodeCookie<T>(raw: string | undefined): T | null {
 
 export function readSession(req: NextRequest): OperatorSession | null {
   const session = decodeCookie<OperatorSession>(req.cookies.get(SESSION_COOKIE)?.value);
-  if (!session?.id_token || !session.email || typeof session.exp !== 'number') return null;
+  if (!session || !session.email || typeof session.exp !== 'number') return null;
+  if (!sessionBearer(session)) return null;
   if (session.exp * 1000 <= Date.now()) return null;
   return session;
 }

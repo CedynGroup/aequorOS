@@ -103,10 +103,8 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   await requireObjectStorage();
   const admin = await mintBackendToken('admin');
 
-  // Seed the sample bank (e2e fixture path — DEMO_SEED_ENABLED=1 on this
-  // hermetic backend only) and compute a liquidity baseline so BSD3 packs
-  // can generate.
-  await api(admin, 'POST', '/banks/seed-demo');
+  // The disposable database is populated by the backend's test-only canonical
+  // fixture during bootstrap. There is no runtime seed endpoint.
   const periods = await api(
     admin,
     'GET',

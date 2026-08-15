@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw
 
 from app.core.config import get_settings
 from app.services.attestation import pdf_signing
-from app.services.sample_bank_seed import SAMPLE_BANK_ID
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.api.helpers import ORG_1, headers
 
 REPORTING_DATE = "2026-03-31"

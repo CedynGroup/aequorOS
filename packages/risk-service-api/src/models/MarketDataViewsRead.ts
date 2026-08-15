@@ -69,6 +69,12 @@ export interface MarketDataViewsRead {
    * @type {Array<FxRateViewRead>}
    * @memberof MarketDataViewsRead
    */
+  fxForwards: Array<FxRateViewRead>;
+  /**
+   *
+   * @type {Array<FxRateViewRead>}
+   * @memberof MarketDataViewsRead
+   */
   fxRates: Array<FxRateViewRead>;
   /**
    *
@@ -93,6 +99,8 @@ export function instanceOfMarketDataViewsRead(
   if (!("asOfDate" in value) || value["asOfDate"] === undefined) return false;
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
   if (!("curves" in value) || value["curves"] === undefined) return false;
+  if (!("fxForwards" in value) || value["fxForwards"] === undefined)
+    return false;
   if (!("fxRates" in value) || value["fxRates"] === undefined) return false;
   if (!("indices" in value) || value["indices"] === undefined) return false;
   if (!("ratings" in value) || value["ratings"] === undefined) return false;
@@ -115,6 +123,7 @@ export function MarketDataViewsReadFromJSONTyped(
     asOfDate: new Date(json["as_of_date"]),
     bankId: json["bank_id"],
     curves: (json["curves"] as Array<any>).map(YieldCurveViewReadFromJSON),
+    fxForwards: (json["fx_forwards"] as Array<any>).map(FxRateViewReadFromJSON),
     fxRates: (json["fx_rates"] as Array<any>).map(FxRateViewReadFromJSON),
     indices: (json["indices"] as Array<any>).map(IndexViewReadFromJSON),
     ratings: (json["ratings"] as Array<any>).map(RatingViewReadFromJSON),
@@ -137,6 +146,7 @@ export function MarketDataViewsReadToJSONTyped(
     as_of_date: value["asOfDate"].toISOString().substring(0, 10),
     bank_id: value["bankId"],
     curves: (value["curves"] as Array<any>).map(YieldCurveViewReadToJSON),
+    fx_forwards: (value["fxForwards"] as Array<any>).map(FxRateViewReadToJSON),
     fx_rates: (value["fxRates"] as Array<any>).map(FxRateViewReadToJSON),
     indices: (value["indices"] as Array<any>).map(IndexViewReadToJSON),
     ratings: (value["ratings"] as Array<any>).map(RatingViewReadToJSON),

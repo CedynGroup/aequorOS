@@ -1,8 +1,7 @@
 """The nightly scheduled market-desk capture job (founder's directive).
 
-Scrape BoG/GFIM/GSS after Ghana publication hours every day and have new
-rates staged, computed, and PENDING REVIEW, so the desk publishes them for
-the next business day with one maker-checker action:
+Scrape BoG/GFIM/GSS after Ghana publication hours every day and stage a
+**draft** rates package for the Analyst — never auto-submit for review.
 
 1. **Capture** — for every due source in ``SOURCE_REGISTRY`` (per-source
    cadence honored: daily every night; weekly/monthly/per-event only when the
@@ -13,16 +12,18 @@ the next business day with one maker-checker action:
    recorded as a ``failed`` capture and NEVER aborts the other sources — the
    morning desk sees exactly which series need the manual fallback (spec §3).
 2. **Stage** — when (and only when) an APPROVED methodology is effective for
-   the COB date, open the day's draft determination, run the calculation
-   pipeline, and submit it for review. The morning queue then shows it
-   PENDING REVIEW with QA results attached.
+   the COB date, open the day's draft determination and pre-compute proposed
+   rates/curves so the Analyst opens a package with numbers ready. Success
+   ends at ``draft`` (``draft_ready`` in job progress). The job NEVER
+   submits for review, NEVER approves, and NEVER publishes — the Analyst
+   must Review → Adjust → Confirm → Submit; the Supervisor then approves.
 
 Governance boundaries, deliberately hard:
 
 - No approved methodology → the job stops after observations. A robot cannot
   bypass Track-2 approval (spec §5) by minting determinations against a draft.
-- The job NEVER publishes. Approval and publication are the human
-  maker-checker actions, always.
+- The job NEVER advances past draft. Maker (Analyst) and checker (Supervisor)
+  are human actions, always.
 
 HAZARD (ships-together invariant): the ``desk_capture`` job type lives in
 THREE places that must change together — ``job_queue.JOB_TYPES``,
@@ -275,10 +276,9 @@ def _fetch(spec: SourceSpec, cob: date) -> list[RawFetch]:
     with httpx.Client(**client_kwargs(_host_for(spec.source_key))) as client:
         desk_session = DeskSession(client)
         if spec.source_key in _MONTHLY_EDITION_SOURCES:
-            try:
-                return fetch_source(spec.source_key, desk_session, period=cob)
-            except Exception:  # noqa: BLE001 - edition-not-yet-published fallback
-                return fetch_source(spec.source_key, desk_session, period=_previous_month(cob))
+            # Notices lag 1–2 months; walk back several months until one URL
+            # resolves (BoG 404s future/current months that are not published).
+            return _fetch_monthly_edition(spec.source_key, desk_session, cob)
         if spec.source_key.startswith("gfim_"):
             return fetch_source(spec.source_key, desk_session, year=str(cob.year))
         return fetch_source(spec.source_key, desk_session)
@@ -286,6 +286,26 @@ def _fetch(spec: SourceSpec, cob: date) -> list[RawFetch]:
 
 def _previous_month(day: date) -> date:
     return day.replace(day=1) - timedelta(days=1)
+
+
+#: How many prior calendar months to try for APR/SEFD notice URLs.
+_MONTHLY_EDITION_LOOKBACK = 6
+
+
+def _fetch_monthly_edition(
+    source_key: str, desk_session: DeskSession, cob: date
+) -> list[RawFetch]:
+    """Try COB month, then prior months, until a publication URL succeeds."""
+    period = cob
+    last_error: Exception | None = None
+    for _ in range(_MONTHLY_EDITION_LOOKBACK):
+        try:
+            return fetch_source(source_key, desk_session, period=period)
+        except Exception as exc:  # noqa: BLE001 - try older edition
+            last_error = exc
+            period = _previous_month(period)
+    assert last_error is not None
+    raise last_error
 
 
 def _data_fetches(fetches: list[RawFetch]) -> list[RawFetch]:
@@ -363,7 +383,7 @@ def _record_failed_fetch(
 
 
 def _stage_determination(db: Session, cob: date) -> dict[str, Any]:
-    """Draft, compute, and submit the day's determination for human review.
+    """Draft and pre-compute the day's determination for Analyst review.
 
     Governance boundaries, deliberately hard:
 
@@ -372,8 +392,9 @@ def _stage_determination(db: Session, cob: date) -> dict[str, Any]:
     - Any existing determination for the COB (whatever its status) is
       respected: a re-run never duplicates the draft, and a human rejection
       is never steamrolled by tonight's job.
-    - Success ends at ``pending_review`` — with QA results attached for the
-      morning checker. The job NEVER publishes.
+    - Success ends at ``draft`` (progress status ``draft_ready``) with
+      proposed rates/QA attached. The job NEVER submits for review, never
+      approves, and never publishes — that is the Analyst → Supervisor path.
     """
     methodology = register.get_active(db, register.DEFAULT_METHODOLOGY_CODE, cob)
     if methodology is None:
@@ -390,7 +411,6 @@ def _stage_determination(db: Session, cob: date) -> dict[str, Any]:
     try:
         draft = determinations.create_draft(db, cob_date=cob, prepared_by=CAPTURE_IDENTITY)
         calculation.compute_determination(db, draft, methodology=methodology)
-        determinations.submit_for_review(db, draft.id)
     except (HTTPException, calculation.CalculationError) as exc:
         # Structural refusals (no observations yet, undeclared series, ...)
         # are a nightly fact of life, not a job failure: the captures are
@@ -398,9 +418,12 @@ def _stage_determination(db: Session, cob: date) -> dict[str, Any]:
         db.rollback()
         detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
         return {"status": "failed", "reason": str(detail)}
+    derived = draft.derived_values or {}
     return {
-        "status": "pending_review",
+        "status": "draft_ready",
         "determination_id": str(draft.id),
         "input_digest": draft.input_digest,
-        "qa_passed": draft.derived_values.get("qa_passed"),
+        "qa_passed": derived.get("qa_passed"),
+        "rates_qa_passed": derived.get("rates_qa_passed"),
+        "curves_qa_passed": derived.get("curves_qa_passed"),
     }

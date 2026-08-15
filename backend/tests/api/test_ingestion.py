@@ -18,6 +18,7 @@ from app.models import CanonicalReferenceRow
 from app.storage.client import StorageLocation
 from tests.adapters.excel_csv import fixtures
 from tests.api.helpers import ORG_2, headers
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 AS_OF = str(fixtures.AS_OF)
 
@@ -98,9 +99,14 @@ RECON_MAPPING = MappingConfig(
 
 
 def seed_bank(client: TestClient) -> str:
-    response = client.post("/api/v1/banks/seed-demo", headers=headers())
-    assert response.status_code == 200, response.text
-    return response.json()["bank_id"]
+    _ = client  # initialize the test app's engine before opening a direct session
+    session = get_sessionmaker()()
+    try:
+        materialize_canonical_test_book(session)
+        session.commit()
+    finally:
+        session.close()
+    return SAMPLE_BANK_ID
 
 
 def activate_mapping(client: TestClient, bank_id: str, mapping: MappingConfig) -> str:

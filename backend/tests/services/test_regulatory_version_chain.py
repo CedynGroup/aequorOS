@@ -30,11 +30,11 @@ from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import regulatory_liquidity
 from app.services.attestation import workflow as attestation_workflow
 from app.services.regulatory_reporting import generation, snapshot_diff, version_chain
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.api.helpers import ORG_2
 
@@ -151,7 +151,7 @@ def test_headline_totals_are_diffed_and_non_numeric_cells_carry_no_delta() -> No
 
 
 def _seed_two_versions(db: Session) -> tuple[RegulatoryPackage, RegulatoryPackage]:
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,

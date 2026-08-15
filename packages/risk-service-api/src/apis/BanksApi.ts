@@ -16,7 +16,6 @@ import type {
   BankListRead,
   BankRead,
   BankReportingPeriodListRead,
-  BankSeedSummaryRead,
   ErrorResponse,
 } from "../models/index";
 import {
@@ -28,8 +27,6 @@ import {
   BankReadToJSON,
   BankReportingPeriodListReadFromJSON,
   BankReportingPeriodListReadToJSON,
-  BankSeedSummaryReadFromJSON,
-  BankSeedSummaryReadToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
 } from "../models/index";
@@ -274,49 +271,6 @@ export class BanksApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BankListRead> {
     const response = await this.listBanksRaw(initOverrides);
-    return await response.value();
-  }
-
-  /**
-   * Seed Demo Bank
-   */
-  async seedDemoBankRaw(
-    initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<BankSeedSummaryRead>> {
-    const queryParameters: any = {};
-
-    const headerParameters: runtime.HTTPHeaders = {};
-
-    if (this.configuration && this.configuration.accessToken) {
-      const token = this.configuration.accessToken;
-      const tokenString = await token("HTTPBearer", []);
-
-      if (tokenString) {
-        headerParameters["Authorization"] = `Bearer ${tokenString}`;
-      }
-    }
-    const response = await this.request(
-      {
-        path: `/api/v1/banks/seed-demo`,
-        method: "POST",
-        headers: headerParameters,
-        query: queryParameters,
-      },
-      initOverrides,
-    );
-
-    return new runtime.JSONApiResponse(response, (jsonValue) =>
-      BankSeedSummaryReadFromJSON(jsonValue),
-    );
-  }
-
-  /**
-   * Seed Demo Bank
-   */
-  async seedDemoBank(
-    initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<BankSeedSummaryRead> {
-    const response = await this.seedDemoBankRaw(initOverrides);
     return await response.value();
   }
 }

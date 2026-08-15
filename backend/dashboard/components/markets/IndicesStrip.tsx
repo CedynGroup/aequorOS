@@ -12,38 +12,47 @@ function fmtIndexValue(value: string): string {
 /** Macro indices / forecasts strip: value, scenario, horizon, attribution. */
 export default function IndicesStrip({ indices }: { indices: IndexViewRead[] }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-      {indices.map((index) => (
-        <div
-          key={`${index.indexCode}-${index.scenario}`}
-          className="card px-4 py-3.5 flex flex-col gap-2 min-w-0"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-micro font-medium text-slate uppercase tracking-wider truncate">
-              {labelize(index.indexCode)}
-            </p>
-            {index.scenario !== 'base' && (
-              <StatusPill tone="amber">{labelize(index.scenario)}</StatusPill>
-            )}
-          </div>
-          <div className="flex items-end justify-between gap-3">
-            <span className="font-mono text-kpi text-navy tnum">
-              {fmtIndexValue(index.value)}
-            </span>
-            {index.horizonMonths !== null && index.horizonMonths !== undefined && (
-              <span className="text-caption text-slate whitespace-nowrap">
-                {index.horizonMonths}m horizon
-              </span>
-            )}
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-caption text-slate font-mono">
-              {fmtDateUTC(index.asOfDate)}
-            </span>
-            <AttributionChip attribution={index.attribution} />
-          </div>
-        </div>
-      ))}
+    <div className="overflow-x-auto border border-border rounded-lg bg-surface-raised">
+      <table className="w-full min-w-[34rem] text-body">
+        <thead className="bg-surface/60 text-micro font-medium uppercase tracking-wider text-slate">
+          <tr>
+            <th className="px-4 py-2.5 text-left">Indicator</th>
+            <th className="px-3 py-2.5 text-right">Scenario</th>
+            <th className="px-3 py-2.5 text-right">Value</th>
+            <th className="px-3 py-2.5 text-right">Horizon</th>
+            <th className="px-4 py-2.5 text-right">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {indices.map((index) => (
+            <tr
+              key={`${index.indexCode}-${index.scenario}`}
+              className="border-t border-border-light hover:bg-surface/60"
+            >
+              <td className="px-4 py-3 font-medium text-navy">{labelize(index.indexCode)}</td>
+              <td className="px-3 py-3 text-right">
+                {index.scenario !== 'base' ? (
+                  <StatusPill tone="amber">{labelize(index.scenario)}</StatusPill>
+                ) : (
+                  <span className="text-caption text-slate">Base</span>
+                )}
+              </td>
+              <td className="px-3 py-3 text-right font-mono font-semibold text-navy tnum">
+                {fmtIndexValue(index.value)}
+              </td>
+              <td className="px-3 py-3 text-right text-caption text-slate">
+                {index.horizonMonths !== null && index.horizonMonths !== undefined
+                  ? `${index.horizonMonths}m`
+                  : '—'}
+              </td>
+              <td className="px-4 py-3 text-right">
+                <span className="block text-caption font-mono text-slate">{fmtDateUTC(index.asOfDate)}</span>
+                <AttributionChip attribution={index.attribution} className="justify-end mt-1" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

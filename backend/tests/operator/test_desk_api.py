@@ -32,6 +32,9 @@ DEV_EMAIL = "dev@aequoros.com"
 COB = "2026-08-07"
 
 DERIVED_VALUES = {
+    "qa_passed": True,
+    "rates_qa_passed": True,
+    "curves_qa_passed": True,
     "curves": {
         "AEQ.GHS.SOV.ZERO": {
             "curve_type": "zero",
@@ -41,8 +44,17 @@ DERIVED_VALUES = {
             ],
         }
     },
-    "reference_rates": {"GHS.MPR": 15.0, "GHS.GRR": 21.3},
-    "fx_rates": {"USD/GHS": 12.85},
+    "rates": {
+        "GHS.MPR": {"value": "15.000000", "unit": "pct", "treatment": "pass_through"},
+        "GHS.INTERBANK.ON": {
+            "value": "10.000000",
+            "unit": "pct",
+            "treatment": "windowed",
+        },
+        "GHS.GRR": {"value": "21.300000", "unit": "pct", "treatment": "pass_through"},
+    },
+    "reference_rates": {"GHS.MPR": "15.0", "GHS.GRR": "21.3"},
+    "fx_rates": {"USD/GHS": "12.85"},
 }
 
 
@@ -228,6 +240,12 @@ def test_determination_workflow_enforces_maker_checker(
     assert len(draft["input_digest"]) == 64
     assert draft["input_snapshot"]
 
+    # Seed a rates-ready package before submit (this test isolates maker-checker).
+    row = operator_db.get(DeskDetermination, UUID(draft["id"]))
+    assert row is not None
+    row.derived_values = DERIVED_VALUES
+    operator_db.commit()
+
     submitted = operator_client.post(
         f"{BASE}/determinations/{draft['id']}/submit", headers=operator_headers()
     )
@@ -270,6 +288,46 @@ def test_determination_workflow_enforces_maker_checker(
         assert expected in actions
 
 
+def test_determination_package_endpoint(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    _bootstrap_methodology(operator_client)
+    _enter_observation(operator_client)
+    # Seed required companion series so completeness is partially populated.
+    for series, value in (
+        ("GHS.INTERBANK.ON", "10.00"),
+        ("GHS.TBILL.91.DISCOUNT", "20.00"),
+        ("GHS.TBILL.182.DISCOUNT", "21.00"),
+        ("GHS.TBILL.364.DISCOUNT", "22.00"),
+        ("GHS.USDGHS.MID", "12.50"),
+        ("GHS.GRR", "21.30"),
+    ):
+        r = operator_client.post(
+            f"{BASE}/observations",
+            headers=operator_headers(),
+            json={
+                "series_code": series,
+                "as_of_date": "2026-08-07" if series != "GHS.GRR" else "2026-07-01",
+                "value": value,
+                "unit": "rate" if series == "GHS.USDGHS.MID" else "pct",
+            },
+        )
+        assert r.status_code == 201, r.text
+
+    draft = _draft_determination(operator_client)
+    pkg = operator_client.get(
+        f"{BASE}/determinations/{draft['id']}/package", headers=operator_headers()
+    )
+    assert pkg.status_code == 200, pkg.text
+    body = pkg.json()
+    assert "completeness" in body
+    assert body["completeness"]["ready"] is True
+    assert "week_over_week" in body
+    assert "input_provenance" in body
+    assert isinstance(body["completeness"]["items"], list)
+    assert body["completeness"]["required_total"] >= 1
+
+
 def test_publish_fans_out_and_audits(
     operator_client: TestClient,
     operator_db: Session,
@@ -300,15 +358,15 @@ def test_publish_fans_out_and_audits(
     _bootstrap_methodology(operator_client)
     _enter_observation(operator_client)
     draft = _draft_determination(operator_client)
-    operator_client.post(
-        f"{BASE}/determinations/{draft['id']}/submit", headers=operator_headers()
-    )
     row = operator_db.get(DeskDetermination, UUID(draft["id"]))
     assert row is not None
     row.prepared_by = "analyst@aequoros.com"
-    # The calculation pipeline is a later phase; its outputs are fixture data.
     row.derived_values = DERIVED_VALUES
     operator_db.commit()
+    submitted = operator_client.post(
+        f"{BASE}/determinations/{draft['id']}/submit", headers=operator_headers()
+    )
+    assert submitted.status_code == 200, submitted.text
     approved = operator_client.post(
         f"{BASE}/determinations/{draft['id']}/approve", headers=operator_headers()
     )

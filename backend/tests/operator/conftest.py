@@ -26,10 +26,13 @@ from app.db.session import get_engine, get_sessionmaker
 from app.models import Jurisdiction
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.main import create_operator_app
+from app.operator.services import operator_auth
 from app.operator.services.tenant_provisioning import ProvisioningClients
 from app.storage.config import StorageEngineSettings
 
 DEV_TOKEN = "operator-dev-token-for-tests"
+# ≥32 bytes: PyJWT warns below the RFC 7518 minimum for HS256.
+OPERATOR_JWT_SECRET = "operator-jwt-secret-for-tests-0123456789abcdef"
 
 
 def operator_headers(token: str = DEV_TOKEN) -> dict[str, str]:
@@ -166,13 +169,18 @@ def operator_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("OPERATOR_DEV_EMAIL", "dev@aequoros.com")
     monkeypatch.setenv("OPERATOR_CORS_ORIGINS", "")
     monkeypatch.setenv("OPERATOR_DATABASE_URL", "")
+    monkeypatch.setenv("OPERATOR_JWT_SECRET", OPERATOR_JWT_SECRET)
     monkeypatch.setenv("OPERATOR_OIDC_ISSUER", "")
     monkeypatch.setenv("OPERATOR_OIDC_CLIENT_ID", "")
     monkeypatch.setenv("OPERATOR_OIDC_ALLOWED_DOMAIN", "aequoros.com")
     monkeypatch.setenv("OPERATOR_AWS_KMS_ENABLED", "0")
     monkeypatch.setenv("OPERATOR_PORT", "8100")
     get_operator_settings.cache_clear()
+    # The login throttle is process-global by design — never let one test's
+    # failures lock a later test out.
+    operator_auth.reset_login_throttle()
     yield
+    operator_auth.reset_login_throttle()
     get_operator_settings.cache_clear()
 
 
@@ -196,6 +204,7 @@ def _seed_jurisdictions(engine: Engine) -> None:
                     locale="en-GH",
                     central_bank_name="Bank of Ghana",
                     regulator_short="BoG",
+                    sovereign_rating_issuer="GHANA_SOVEREIGN",
                     submission_portal="ORASS",
                     timezone="Africa/Accra",
                 ),
@@ -207,6 +216,7 @@ def _seed_jurisdictions(engine: Engine) -> None:
                     locale="en-NG",
                     central_bank_name="Central Bank of Nigeria",
                     regulator_short="CBN",
+                    sovereign_rating_issuer="NIGERIA_SOVEREIGN",
                     submission_portal=None,
                     timezone="Africa/Lagos",
                 ),

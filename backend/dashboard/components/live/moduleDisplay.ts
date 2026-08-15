@@ -15,6 +15,7 @@ export const LIVE_MODULE_LABELS: Record<LiveModule, string> = {
   irr: 'Interest Rate Risk',
   fx: 'FX Risk',
   ftp: 'Transfer Pricing',
+  rating: 'Credit Assessment',
   forecast: 'Balance Sheet Forecast',
 };
 
@@ -24,6 +25,7 @@ export const LIVE_MODULE_HREFS: Record<LiveModule, string> = {
   irr: '/irr/limits',
   fx: '/fx/limits',
   ftp: '/ftp/products',
+  rating: '/markets',
   forecast: '/forecasting',
 };
 
@@ -36,6 +38,7 @@ const PRIMARY_METRIC: Record<LiveModule, { key: string; label: string }> = {
   irr: { key: 'eve_limit_pct', label: 'ΔEVE / Tier 1' },
   fx: { key: 'nop_pct_tier1', label: 'NOP / Tier 1' },
   ftp: { key: 'portfolio_nim_pct', label: 'Portfolio NIM' },
+  rating: { key: 'pit_pd_upper_pct', label: 'PIT PD upper band' },
   forecast: { key: 'year5_car_pct', label: 'Year-5 CAR' },
 };
 

@@ -66,11 +66,11 @@ from app.services.attestation.signers import get_raw_signer
 from app.services.attestation.workflow import AttestationConflict
 from app.services.regulatory_reporting import generation, validation
 from app.services.regulatory_reporting import workflow as reporting_workflow
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
@@ -155,7 +155,7 @@ def _users(db: Session) -> None:
 def _seed(
     db: Session, *, require_signed_pdf: bool = False, officer_titles: Any = None
 ) -> RegulatoryPackage:
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     _users(db)
     db.add(
         ReturnSigningPolicy(

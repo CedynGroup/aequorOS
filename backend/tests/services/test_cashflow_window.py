@@ -34,11 +34,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
 from app.services import cashflow_window
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.api.helpers import headers
 from tests.factories.canonical import seed_canonical_fixture
@@ -48,7 +48,7 @@ NO_MATURITY_COUNT = 4  # DEP/1, DEP/2, DEP/3, DEP/USD
 
 
 def _seed(db: Session) -> None:
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     db.flush()
     seed_canonical_fixture(db, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID)
     db.flush()
@@ -172,7 +172,7 @@ def test_superseded_and_error_snapshots_never_contribute(db_session: Session) ->
 
 
 def test_inverted_window_is_422(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     with pytest.raises(HTTPException) as excinfo:
         cashflow_window.compute_cashflow_window(
             db_session,
@@ -186,7 +186,7 @@ def test_inverted_window_is_422(db_session: Session) -> None:
 
 
 def test_oversized_window_is_422(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     with pytest.raises(HTTPException) as excinfo:
         cashflow_window.compute_cashflow_window(
             db_session,
@@ -225,7 +225,7 @@ def test_endpoint_wiring_serializes_decimals_as_strings(db_client: TestClient) -
     """GET /banks/{id}/analytics/cashflow-window through the router."""
     session = get_sessionmaker()()
     try:
-        seed_sample_bank(session)
+        materialize_canonical_test_book(session)
         session.flush()
         seed_canonical_fixture(session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID)
         session.commit()

@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.db.base import utc_now
 from app.models import BankReportingPeriod, Job, LiveMetric
 from app.services import job_queue, scheduler
-from app.services.sample_bank_seed import SAMPLE_BANK_ID, seed_sample_bank
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.api.helpers import ORG_1
 
 
@@ -28,7 +28,7 @@ def _count(db_session: Session, job_type: str, *, status: str | None = None) -> 
 
 
 def test_run_tick_is_inert_when_disabled(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
     tick = _tick_job(db_session)
 
@@ -45,7 +45,7 @@ def test_run_tick_enqueues_official_and_reschedules_when_enabled(
 ) -> None:
     monkeypatch.setenv("OFFICIAL_RUN_ENABLED", "true")
     get_settings.cache_clear()
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
     _tick_job(db_session)
     # Claim it the way the worker would, so it is running (not re-selected).
@@ -79,7 +79,7 @@ def test_run_tick_enqueues_live_refreshes_when_enabled(
     last ingestion."""
     monkeypatch.setenv("LIVE_REFRESH_ENABLED", "true")
     get_settings.cache_clear()
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.commit()
     _tick_job(db_session)
     tick = job_queue.claim_next(db_session, utc_now(), ("scheduled_tick",))
@@ -103,7 +103,7 @@ def test_live_refresh_skips_a_fresh_live_tier(
     refresh exists to cure staleness, not to churn."""
     monkeypatch.setenv("LIVE_REFRESH_ENABLED", "true")
     get_settings.cache_clear()
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period_id = db_session.scalar(
         select(BankReportingPeriod.id)
         .where(

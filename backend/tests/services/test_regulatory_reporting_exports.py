@@ -34,11 +34,11 @@ from app.services.regulatory_reporting.templates import (
     CURRENCY_UNIT_NOTE,
     get_template,
 )
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
@@ -56,7 +56,7 @@ def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
 
 
 def _seed_with_baseline_run(db: Session) -> None:
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,
@@ -286,7 +286,7 @@ def test_missing_snapshot_section_raises_409(
 def test_headline_comparative_column_renders_prior_period(
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     february = date(2026, 2, 28)
     for period_end in (february, REPORTING_DATE):
         period_id = db_session.scalar(

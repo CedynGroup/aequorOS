@@ -99,6 +99,18 @@ import {
   temenosApi,
 } from './client';
 import { ingestionApi } from './ingestion';
+import {
+  getForwardGrid,
+  getMarketDataPlanes,
+  getMarketDataSourcePreferences,
+  putMarketDataSourcePreferences,
+  type MarketDataCategory,
+  type MarketDataSourcePreferencesPatch,
+} from './marketDataSources';
+import {
+  getReportComparison,
+  type ReportComparisonParams,
+} from './reportComparison';
 
 
 /**
@@ -1162,6 +1174,81 @@ export function useEndMarketDataOverlay(bankId: string | undefined) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Market-data SOURCE SELECTION (docs/internal/market_data_sources.md §4).
+// The three-plane control room: per-bank source preference (which plane feeds
+// the engines), the side-by-side plane comparison, and the desk's published
+// forward grid. These call the hand-rolled fetch layer in ./marketDataSources
+// (the endpoints post-date the last OpenAPI regeneration); the fetchers already
+// throw ApiError, so no apiCall() wrapper is needed. A preference change
+// invalidates the served views — the whole Markets tab re-renders on the newly
+// selected plane, exactly as the engines will consume it.
+// ---------------------------------------------------------------------------
+
+const sourcePrefsInvalidatePrefixes = ['md-source-prefs', 'md-planes', 'md-views'];
+
+export function useMarketDataSourcePreferences(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['md-source-prefs', bankId],
+    queryFn: () => getMarketDataSourcePreferences(bankId!),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useUpdateMarketDataSourcePreferences(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: MarketDataSourcePreferencesPatch) =>
+      putMarketDataSourcePreferences(bankId!, patch),
+    onSuccess: (resolved) => {
+      queryClient.setQueryData(['md-source-prefs', bankId], resolved);
+      sourcePrefsInvalidatePrefixes.forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
+    },
+  });
+}
+
+/**
+ * Side-by-side plane comparison for one category at the as-of date. Gated by
+ * `enabled` so the three category queries only fire while the Sources tab is
+ * open. Omit `asOf` for the live latest view.
+ */
+export function useMarketDataPlanes(
+  bankId: string | undefined,
+  category: MarketDataCategory,
+  asOf?: string,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: ['md-planes', bankId, category, asOf ?? null],
+    queryFn: () => getMarketDataPlanes(bankId!, { category, asOf }),
+    enabled: Boolean(bankId) && enabled,
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+/**
+ * The desk's published forward grid for one curve (spec §4 FC-5/G1). DF and
+ * forward yields are decimal fractions. Gated by `enabled` + a curve name so it
+ * only fires once the Forward tab has a curve selected.
+ */
+export function useForwardGrid(
+  bankId: string | undefined,
+  curveName: string | null,
+  asOf?: string,
+  frequency?: string,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: ['md-forward-grid', bankId, curveName, asOf ?? null, frequency ?? null],
+    queryFn: () => getForwardGrid(bankId!, curveName!, { asOf, frequency }),
+    enabled: Boolean(bankId) && Boolean(curveName) && enabled,
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
 /** Server-side filters + window for one page of the canonical position book. */
 export type CanonicalPositionsPageParams = {
   limit: number;
@@ -1736,6 +1823,39 @@ export function useComparePackageVersions(
         })
       ),
     enabled: Boolean(enabled && bankId && packageId && againstPackageId),
+  });
+}
+
+/**
+ * The Reports "Compare" line diff — two run versions of one period, or one
+ * return across two periods. Calls the hand-rolled fetch layer in
+ * ./reportComparison (the endpoint post-dates the last OpenAPI regeneration);
+ * the fetcher already throws ApiError, so no apiCall() wrapper is needed.
+ *
+ * Fired only once both sides are chosen and distinct (`enabled`): a diff of a
+ * thing against itself is meaningless, and the caller uses the disabled state to
+ * show the "need two to compare" guidance instead.
+ */
+export function useReportComparison(
+  bankId: string | undefined,
+  params: ReportComparisonParams,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: [
+      'report-comparison',
+      bankId,
+      params.mode,
+      params.module,
+      params.left,
+      params.right,
+      params.scenarioCode ?? 'baseline',
+    ],
+    queryFn: () => getReportComparison(bankId!, params),
+    enabled:
+      Boolean(bankId && params.left && params.right) &&
+      params.left !== params.right &&
+      enabled,
   });
 }
 

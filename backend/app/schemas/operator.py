@@ -168,8 +168,63 @@ class DataEnginesRead(ClosedModel):
 class OperatorAuditLogRead(ClosedModel):
     id: str
     operator_email: str
-    auth_mode: Literal["dev", "oidc"]
+    auth_mode: Literal["dev", "oidc", "password"]
     action: str
     target_org: str | None
     detail: JsonObject
     created_at: datetime
+
+
+# -- staff identity (email+password primary; SSO secondary) -----------------------
+type OperatorRole = Literal["developer", "operator_admin", "super_admin"]
+
+_EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+
+class OperatorLoginRequest(ClosedModel):
+    email: str = Field(min_length=3, max_length=320, pattern=_EMAIL_PATTERN)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class OperatorIdentityRead(ClosedModel):
+    email: str
+    display_name: str
+    role: OperatorRole
+
+
+class OperatorLoginRead(ClosedModel):
+    access_token: str
+    expires_at: datetime
+    operator: OperatorIdentityRead
+
+
+class OperatorUserRead(ClosedModel):
+    email: str
+    display_name: str
+    role: OperatorRole
+    is_active: bool
+    last_login_at: datetime | None
+    created_at: datetime
+
+
+class OperatorUsersListRead(ClosedModel):
+    operators: list[OperatorUserRead]
+
+
+class OperatorUserCreate(ClosedModel):
+    email: str = Field(min_length=3, max_length=320, pattern=_EMAIL_PATTERN)
+    display_name: str = Field(min_length=1, max_length=255)
+    role: OperatorRole
+
+
+class OperatorUserCreatedRead(ClosedModel):
+    operator: OperatorUserRead
+    #: Plaintext shown exactly once (the provisioning-saga OTP idiom); only
+    #: the Argon2id hash is stored server-side.
+    one_time_password: str
+
+
+class OperatorPasswordResetRead(ClosedModel):
+    operator: OperatorUserRead
+    #: Plaintext shown exactly once; replaces the previous credential.
+    one_time_password: str

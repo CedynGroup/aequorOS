@@ -37,11 +37,11 @@ from app.services import data_activation, institution_profile, reverse_stress
 from app.services.regulatory_reporting import generation
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.registry import REGISTRY
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.services.test_le_and_lmt import _CanonicalSeeder
 from tests.storage.inmemory import InMemoryStorageClient
@@ -76,7 +76,7 @@ def _period_id(db: Session) -> UUID:
 def test_every_registered_return_generates_and_exports_end_to_end(
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period_id = _period_id(db_session)
     # A small canonical book so the position-derived returns (Large
     # Exposures, the LMT monitoring tools) have data to report.

@@ -29,11 +29,11 @@ from app.services import (
     regulatory_liquidity,
     window_analytics,
 )
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.api.helpers import headers
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
@@ -87,7 +87,7 @@ def _mint_baseline_runs(db: Session, period_id: UUID) -> dict[str, dict]:
 
 def test_single_period_window_over_stored_runs(db_session: Session) -> None:
     """A one-period window: start==end==avg==min==max, change 0, stored=True."""
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     official = _mint_baseline_runs(db_session, _period_id(db_session))
 
     result = window_analytics.compute_window(
@@ -126,7 +126,7 @@ def test_single_period_window_over_stored_runs(db_session: Session) -> None:
 
 def test_window_without_stored_runs_computes_inline(db_session: Session) -> None:
     """No baseline runs → the trend fallback recomputes inline (stored=False)."""
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
 
     result = window_analytics.compute_window(
         db_session,
@@ -153,7 +153,7 @@ def test_window_without_stored_runs_computes_inline(db_session: Session) -> None
 
 
 def test_inverted_window_is_422(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     with pytest.raises(HTTPException) as excinfo:
         window_analytics.compute_window(
             db_session,
@@ -167,7 +167,7 @@ def test_inverted_window_is_422(db_session: Session) -> None:
 
 
 def test_oversized_window_is_422(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     with pytest.raises(HTTPException) as excinfo:
         window_analytics.compute_window(
             db_session,
@@ -182,7 +182,7 @@ def test_oversized_window_is_422(db_session: Session) -> None:
 
 def test_empty_window_returns_valid_empty_payload(db_session: Session) -> None:
     """A window with no periods and no snapshots is a 200, never a 500."""
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     result = window_analytics.compute_window(
         db_session,
         MAKER,
@@ -197,7 +197,7 @@ def test_empty_window_returns_valid_empty_payload(db_session: Session) -> None:
 
 def test_daily_stats_appear_only_when_snapshots_exist(db_session: Session) -> None:
     """The daily section aggregates the snapshot ladder inside the window."""
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID)
     db_session.commit()
@@ -242,7 +242,7 @@ def test_endpoint_wiring_serializes_decimals_as_strings(db_client: TestClient) -
     """GET /banks/{id}/analytics/window through the router: Decimals-as-str."""
     session = get_sessionmaker()()
     try:
-        seed_sample_bank(session)
+        materialize_canonical_test_book(session)
         session.commit()
     finally:
         session.close()

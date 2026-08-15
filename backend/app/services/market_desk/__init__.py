@@ -15,10 +15,22 @@ Four seams, mirroring the spec's governance split:
 
 from app.services.market_desk import (
     determinations,
+    entitlements,
     observations,
+    package,
     publication,
     register,
+    snippets,
     sources,
 )
 
-__all__ = ["determinations", "observations", "publication", "register", "sources"]
+__all__ = [
+    "determinations",
+    "entitlements",
+    "observations",
+    "package",
+    "publication",
+    "register",
+    "snippets",
+    "sources",
+]

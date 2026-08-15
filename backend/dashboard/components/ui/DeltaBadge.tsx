@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 /**
  * Compact ▲/▼ change indicator with risk-semantic coloring and tabular
  * numerals. `invert` flips which direction counts as good (e.g. cost or
@@ -42,6 +44,64 @@ export default function DeltaBadge({
       {positive ? '+' : ''}
       {value.toFixed(decimals)}
       {suffix}
+    </span>
+  );
+}
+
+export type DeltaDirection = 'up' | 'down' | 'flat';
+export type DeltaFavorability = 'favorable' | 'adverse' | 'neutral';
+
+const DIRECTION_GLYPH: Record<DeltaDirection, string> = {
+  up: '▲',
+  down: '▼',
+  flat: '–',
+};
+
+const DIRECTION_WORD: Record<DeltaDirection, string> = {
+  up: 'increased',
+  down: 'decreased',
+  flat: 'unchanged',
+};
+
+const FAVORABILITY_TONE: Record<DeltaFavorability, string> = {
+  favorable: 'text-success',
+  adverse: 'text-critical',
+  neutral: 'text-slate',
+};
+
+/**
+ * A change indicator whose SHAPE and COLOR are set independently: `direction`
+ * chooses the triangle (up ▲ / down ▼ / flat –), `favorability` chooses the
+ * tone (favorable green / adverse red / neutral grey). This decouples the two
+ * axes that a single signed delta conflates — so an NPL increase reads as a
+ * red ▲ while a CAR increase reads as a green ▲, and the same fall in each
+ * flips the colour without changing the glyph.
+ *
+ * `children` is the already-formatted delta text (unit-aware); pass none to
+ * render the bare glyph as a standalone indicator.
+ */
+export function SemanticDelta({
+  direction,
+  favorability,
+  children,
+  className = '',
+}: {
+  direction: DeltaDirection;
+  favorability: DeltaFavorability;
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 font-mono tnum whitespace-nowrap ${FAVORABILITY_TONE[favorability]} ${className}`}
+    >
+      <span aria-hidden className="text-[9px] leading-none">
+        {DIRECTION_GLYPH[direction]}
+      </span>
+      <span className="sr-only">
+        {DIRECTION_WORD[direction]}, {favorability}
+      </span>
+      {children}
     </span>
   );
 }

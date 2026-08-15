@@ -29,11 +29,11 @@ from app.schemas.reverse_stress import ReverseStressRunCreate
 from app.services import regulatory_capital, regulatory_liquidity, reverse_stress
 from app.services.regulatory_reporting import generation
 from app.services.regulatory_reporting.exports import export_package
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
@@ -65,7 +65,7 @@ def _period_id(db: Session):
 def _seed_stress_outcomes(db: Session, *, with_reverse: bool = True) -> None:
     """Baselines + the combined liquidity scenario + all capital scenarios
     (+ the reverse-stress frontier) over the deterministic seeded book."""
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     period_id = _period_id(db)
     for scenario in ("baseline", "combined"):
         run = regulatory_liquidity.create_liquidity_run(
@@ -183,7 +183,7 @@ def test_stress_pack_without_frontier_omits_the_optional_section(db_session: Ses
 
 
 def test_stress_pack_requires_a_stress_scenario(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period_id = _period_id(db_session)
     for module, runner in (
         ("liquidity", regulatory_liquidity.create_liquidity_run),

@@ -21,6 +21,7 @@ export const ActivationModule = {
   Fx: "fx",
   Ftp: "ftp",
   Forecast: "forecast",
+  ImpliedRating: "implied_rating",
 } as const;
 export type ActivationModule =
   (typeof ActivationModule)[keyof typeof ActivationModule];

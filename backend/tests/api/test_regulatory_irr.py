@@ -9,7 +9,7 @@ from sqlalchemy import delete, update
 
 from app.db.session import get_sessionmaker
 from app.models import BankFinancialFact, ParamStressShock
-from app.services.sample_bank_seed import DEMO_ORG_ID, JURISDICTION_CODE, SAMPLE_BANK_ID
+from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, JURISDICTION_CODE, SAMPLE_BANK_ID
 from tests.api.helpers import ORG_1, ORG_2, headers
 
 FOUR_DP = Decimal("0.0001")

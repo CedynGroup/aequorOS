@@ -57,7 +57,8 @@
           "irr",
           "fx",
           "ftp",
-          "forecast"
+          "forecast",
+          "implied_rating"
         ],
         "type": "string"
       },
@@ -1336,6 +1337,13 @@
             "title": "Capital Components",
             "type": "array"
           },
+          "cash_flows": {
+            "items": {
+              "$ref": "#/components/schemas/BankFactRead"
+            },
+            "title": "Cash Flows",
+            "type": "array"
+          },
           "deposit_behavior": {
             "items": {
               "$ref": "#/components/schemas/BankFactRead"
@@ -1398,6 +1406,7 @@
           "lcr_inflows",
           "market_risk",
           "operational_income",
+          "cash_flows",
           "capital_components",
           "deposit_behavior"
         ],
@@ -2083,35 +2092,6 @@
           "closed"
         ],
         "type": "string"
-      },
-      "BankSeedSummaryRead": {
-        "additionalProperties": false,
-        "properties": {
-          "bank_id": {
-            "title": "Bank Id",
-            "type": "string"
-          },
-          "fact_count": {
-            "title": "Fact Count",
-            "type": "integer"
-          },
-          "param_count": {
-            "title": "Param Count",
-            "type": "integer"
-          },
-          "periods": {
-            "title": "Periods",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "bank_id",
-          "periods",
-          "fact_count",
-          "param_count"
-        ],
-        "title": "BankSeedSummaryRead",
-        "type": "object"
       },
       "BasisFilter": {
         "enum": [
@@ -6557,6 +6537,66 @@
           "no_maturity_count"
         ],
         "title": "CashflowWindowRead",
+        "type": "object"
+      },
+      "CategoryPreferenceRead": {
+        "additionalProperties": false,
+        "description": "One category's resolved selection: base plane + overlay toggle.",
+        "properties": {
+          "overlay": {
+            "title": "Overlay",
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "aequor",
+              "bank",
+              "vendor"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "overlay"
+        ],
+        "title": "CategoryPreferenceRead",
+        "type": "object"
+      },
+      "CategoryPreferenceUpdate": {
+        "additionalProperties": false,
+        "description": "Partial patch of one category \u2014 omitted fields keep their current value.",
+        "properties": {
+          "overlay": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlay"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "aequor",
+                  "bank",
+                  "vendor"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "title": "CategoryPreferenceUpdate",
         "type": "object"
       },
       "CertificationPreviewRead": {
@@ -14069,6 +14109,240 @@
         "title": "ForecastScenarioRead",
         "type": "object"
       },
+      "ForwardGridAssumptionsRead": {
+        "additionalProperties": false,
+        "description": "Immutable governed definition applied to this published grid.",
+        "properties": {
+          "calendar_name": {
+            "title": "Calendar Name",
+            "type": "string"
+          },
+          "curve_frequency": {
+            "title": "Curve Frequency",
+            "type": "string"
+          },
+          "discount_curve_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Curve Code"
+          },
+          "extrapolation_rule": {
+            "title": "Extrapolation Rule",
+            "type": "string"
+          },
+          "instrument_set_ref": {
+            "title": "Instrument Set Ref",
+            "type": "string"
+          },
+          "interpolation_method": {
+            "title": "Interpolation Method",
+            "type": "string"
+          },
+          "output_daycount": {
+            "title": "Output Daycount",
+            "type": "string"
+          },
+          "payment_frequency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Frequency"
+          },
+          "payment_interval_months": {
+            "title": "Payment Interval Months",
+            "type": "integer"
+          },
+          "projection_index": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projection Index"
+          },
+          "roll_convention": {
+            "title": "Roll Convention",
+            "type": "string"
+          },
+          "spot_lag_days": {
+            "title": "Spot Lag Days",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "calendar_name",
+          "instrument_set_ref",
+          "projection_index",
+          "discount_curve_code",
+          "interpolation_method",
+          "output_daycount",
+          "payment_frequency",
+          "payment_interval_months",
+          "curve_frequency",
+          "spot_lag_days",
+          "roll_convention",
+          "extrapolation_rule"
+        ],
+        "title": "ForwardGridAssumptionsRead",
+        "type": "object"
+      },
+      "ForwardGridPillarRead": {
+        "additionalProperties": false,
+        "description": "One calibrating pillar instrument from the determination's input snapshot.",
+        "properties": {
+          "instrument": {
+            "title": "Instrument",
+            "type": "string"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "tenor": {
+            "title": "Tenor",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenor",
+          "instrument",
+          "quote"
+        ],
+        "title": "ForwardGridPillarRead",
+        "type": "object"
+      },
+      "ForwardGridRead": {
+        "additionalProperties": false,
+        "description": "The published forward grid for a desk curve (spec \u00a74).",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "Forward Grid As Of",
+            "type": "string"
+          },
+          "assumptions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForwardGridAssumptionsRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available_frequencies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Frequencies",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "curve_name": {
+            "title": "Curve Name",
+            "type": "string"
+          },
+          "frequency": {
+            "title": "Frequency",
+            "type": "string"
+          },
+          "grid_is_authoritative": {
+            "title": "Grid Is Authoritative",
+            "type": "boolean"
+          },
+          "interpolation": {
+            "title": "Interpolation",
+            "type": "string"
+          },
+          "methodology_ref": {
+            "title": "Methodology Ref",
+            "type": "string"
+          },
+          "pillars": {
+            "items": {
+              "$ref": "#/components/schemas/ForwardGridPillarRead"
+            },
+            "title": "Pillars",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ForwardGridRowRead"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "curve_name",
+          "currency",
+          "as_of",
+          "methodology_ref",
+          "interpolation",
+          "grid_is_authoritative",
+          "frequency",
+          "available_frequencies",
+          "assumptions",
+          "rows",
+          "pillars"
+        ],
+        "title": "ForwardGridRead",
+        "type": "object"
+      },
+      "ForwardGridRowRead": {
+        "additionalProperties": false,
+        "description": "One Start/End/DF/Yield row of the published forward grid.\n\n``discount_factor`` and ``forward_yield`` are decimal strings (yields are\ndecimal fractions, e.g. ``\"0.235\"`` = 23.5%).",
+        "properties": {
+          "discount_factor": {
+            "title": "Discount Factor",
+            "type": "string"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "forward_yield": {
+            "title": "Forward Yield",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "discount_factor",
+          "forward_yield"
+        ],
+        "title": "ForwardGridRowRead",
+        "type": "object"
+      },
       "FreshnessModuleRead": {
         "additionalProperties": false,
         "properties": {
@@ -15468,6 +15742,149 @@
           "created_at"
         ],
         "title": "IlaapSnapshotRead",
+        "type": "object"
+      },
+      "ImpliedRatingRunCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "support_uplift_notches": {
+            "default": 0,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Support Uplift Notches",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reporting_period_id"
+        ],
+        "title": "ImpliedRatingRunCreate",
+        "type": "object"
+      },
+      "ImpliedRatingRunListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ImpliedRatingRunRead"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "runs"
+        ],
+        "title": "ImpliedRatingRunListRead",
+        "type": "object"
+      },
+      "ImpliedRatingRunRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_hash": {
+            "title": "Input Hash",
+            "type": "string"
+          },
+          "input_snapshot": {
+            "additionalProperties": true,
+            "title": "Input Snapshot",
+            "type": "object"
+          },
+          "methodology_code": {
+            "title": "Methodology Code",
+            "type": "string"
+          },
+          "methodology_version": {
+            "title": "Methodology Version",
+            "type": "integer"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "results": {
+            "additionalProperties": true,
+            "title": "Results",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "reporting_period_id",
+          "methodology_code",
+          "methodology_version",
+          "status",
+          "engine_version",
+          "input_hash",
+          "input_snapshot",
+          "results",
+          "error_code",
+          "error_message",
+          "completed_at",
+          "created_at"
+        ],
+        "title": "ImpliedRatingRunRead",
         "type": "object"
       },
       "IncentivePoint": {
@@ -17270,6 +17687,17 @@
             "title": "Regulator Short",
             "type": "string"
           },
+          "sovereign_rating_issuer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sovereign Rating Issuer"
+          },
           "submission_portal": {
             "anyOf": [
               {
@@ -18563,6 +18991,7 @@
           "irr",
           "fx",
           "ftp",
+          "rating",
           "forecast"
         ],
         "type": "string"
@@ -19799,6 +20228,13 @@
             "title": "Curves",
             "type": "array"
           },
+          "fx_forwards": {
+            "items": {
+              "$ref": "#/components/schemas/FxRateViewRead"
+            },
+            "title": "Fx Forwards",
+            "type": "array"
+          },
           "fx_rates": {
             "items": {
               "$ref": "#/components/schemas/FxRateViewRead"
@@ -19826,6 +20262,7 @@
           "as_of_date",
           "curves",
           "fx_rates",
+          "fx_forwards",
           "ratings",
           "indices"
         ],
@@ -21471,6 +21908,388 @@
           "default"
         ],
         "type": "string"
+      },
+      "PlaneAttributionRead": {
+        "additionalProperties": false,
+        "description": "Provenance + freshness for a served plane (mirrors SourceAttribution).",
+        "properties": {
+          "age_seconds": {
+            "title": "Age Seconds",
+            "type": "number"
+          },
+          "ingested_at": {
+            "format": "date-time",
+            "title": "Plane Ingested At",
+            "type": "string"
+          },
+          "ingestion_batch_id": {
+            "format": "uuid",
+            "title": "Ingestion Batch Id",
+            "type": "string"
+          },
+          "source_system": {
+            "title": "Source System",
+            "type": "string"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source_system",
+          "ingestion_batch_id",
+          "ingested_at",
+          "stale",
+          "age_seconds"
+        ],
+        "title": "PlaneAttributionRead",
+        "type": "object"
+      },
+      "PlaneCurveItemRead": {
+        "additionalProperties": false,
+        "description": "One curve resolved under a plane (rates decimal fractions).",
+        "properties": {
+          "adjusted_points": {
+            "items": {
+              "$ref": "#/components/schemas/PlaneCurvePointRead"
+            },
+            "title": "Adjusted Points",
+            "type": "array"
+          },
+          "as_of_date": {
+            "format": "date",
+            "title": "Plane Curve As Of Date",
+            "type": "string"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/PlaneAttributionRead"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "curve_name": {
+            "title": "Curve Name",
+            "type": "string"
+          },
+          "curve_type": {
+            "title": "Curve Type",
+            "type": "string"
+          },
+          "kind": {
+            "const": "curve",
+            "default": "curve",
+            "title": "Kind",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/PlaneCurvePointRead"
+            },
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency",
+          "curve_name",
+          "curve_type",
+          "as_of_date",
+          "points",
+          "adjusted_points",
+          "attribution"
+        ],
+        "title": "PlaneCurveItemRead",
+        "type": "object"
+      },
+      "PlaneCurvePointRead": {
+        "additionalProperties": false,
+        "properties": {
+          "rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rate",
+            "type": "string"
+          },
+          "tenor_months": {
+            "title": "Tenor Months",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tenor_months",
+          "rate"
+        ],
+        "title": "PlaneCurvePointRead",
+        "type": "object"
+      },
+      "PlaneFxItemRead": {
+        "additionalProperties": false,
+        "description": "One FX spot resolved under a plane: ``rate`` quote units per 1 base.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "Plane Fx As Of Date",
+            "type": "string"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/PlaneAttributionRead"
+          },
+          "base": {
+            "title": "Base",
+            "type": "string"
+          },
+          "kind": {
+            "const": "fx",
+            "default": "fx",
+            "title": "Kind",
+            "type": "string"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "rate": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "base",
+          "quote",
+          "rate",
+          "as_of_date",
+          "attribution"
+        ],
+        "title": "PlaneFxItemRead",
+        "type": "object"
+      },
+      "PlaneIndexItemRead": {
+        "additionalProperties": false,
+        "description": "One reference index resolved under a plane (percent-valued).",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "Plane Index As Of Date",
+            "type": "string"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/PlaneAttributionRead"
+          },
+          "horizon_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plane Index Horizon Months"
+          },
+          "index_code": {
+            "title": "Index Code",
+            "type": "string"
+          },
+          "kind": {
+            "const": "index",
+            "default": "index",
+            "title": "Kind",
+            "type": "string"
+          },
+          "scenario": {
+            "title": "Scenario",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_code",
+          "scenario",
+          "value",
+          "as_of_date",
+          "attribution"
+        ],
+        "title": "PlaneIndexItemRead",
+        "type": "object"
+      },
+      "PlaneOverlayDeltaRead": {
+        "additionalProperties": false,
+        "description": "One overlay-adjusted point vs its base, on the selected plane.",
+        "properties": {
+          "adjusted": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Adjusted",
+            "type": "string"
+          },
+          "base": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Base",
+            "type": "string"
+          },
+          "curve_name": {
+            "title": "Curve Name",
+            "type": "string"
+          },
+          "delta": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Delta",
+            "type": "string"
+          },
+          "tenor_months": {
+            "title": "Tenor Months",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "curve_name",
+          "tenor_months",
+          "base",
+          "adjusted",
+          "delta"
+        ],
+        "title": "PlaneOverlayDeltaRead",
+        "type": "object"
+      },
+      "PlaneOverlayRead": {
+        "additionalProperties": false,
+        "description": "The overlay layer preview for the category (curves only; empty otherwise).",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "delta_preview": {
+            "items": {
+              "$ref": "#/components/schemas/PlaneOverlayDeltaRead"
+            },
+            "title": "Delta Preview",
+            "type": "array"
+          }
+        },
+        "required": [
+          "available",
+          "delta_preview"
+        ],
+        "title": "PlaneOverlayRead",
+        "type": "object"
+      },
+      "PlaneRead": {
+        "additionalProperties": false,
+        "description": "One base plane's side-by-side resolution of the requested scope.",
+        "properties": {
+          "attribution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaneAttributionRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plane Attribution"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "is_selected": {
+            "title": "Is Selected",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PlaneCurveItemRead"
+                },
+                {
+                  "$ref": "#/components/schemas/PlaneFxItemRead"
+                },
+                {
+                  "$ref": "#/components/schemas/PlaneIndexItemRead"
+                }
+              ]
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "source": {
+            "enum": [
+              "aequor",
+              "bank",
+              "vendor"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "available",
+          "is_selected",
+          "items"
+        ],
+        "title": "PlaneRead",
+        "type": "object"
+      },
+      "PlanesRead": {
+        "additionalProperties": false,
+        "description": "The three-plane comparison for one category at an as-of date (spec \u00a74).",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "Planes As Of",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "curves",
+              "fx",
+              "rates"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "overlay": {
+            "$ref": "#/components/schemas/PlaneOverlayRead"
+          },
+          "overlay_enabled": {
+            "title": "Overlay Enabled",
+            "type": "boolean"
+          },
+          "planes": {
+            "items": {
+              "$ref": "#/components/schemas/PlaneRead"
+            },
+            "title": "Planes",
+            "type": "array"
+          },
+          "selected_source": {
+            "enum": [
+              "aequor",
+              "bank",
+              "vendor"
+            ],
+            "title": "Selected Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "as_of",
+          "selected_source",
+          "overlay_enabled",
+          "planes",
+          "overlay"
+        ],
+        "title": "PlanesRead",
+        "type": "object"
       },
       "PolicyListRead": {
         "additionalProperties": false,
@@ -27602,6 +28421,106 @@
         ],
         "type": "string"
       },
+      "SourcePreferencesRead": {
+        "additionalProperties": false,
+        "description": "The bank's resolved preference (defaults synthesised when no row).",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "curves": {
+            "$ref": "#/components/schemas/CategoryPreferenceRead"
+          },
+          "fx": {
+            "$ref": "#/components/schemas/CategoryPreferenceRead"
+          },
+          "rates": {
+            "$ref": "#/components/schemas/CategoryPreferenceRead"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Preferences Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Preferences Updated By"
+          }
+        },
+        "required": [
+          "bank_id",
+          "curves",
+          "fx",
+          "rates"
+        ],
+        "title": "SourcePreferencesRead",
+        "type": "object"
+      },
+      "SourcePreferencesUpdate": {
+        "additionalProperties": false,
+        "description": "Partial preference patch (any subset of categories); ``reason`` is audit only.",
+        "properties": {
+          "curves": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryPreferenceUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fx": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryPreferenceUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryPreferenceUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "SourcePreferencesUpdate",
+        "type": "object"
+      },
       "SsoAccessRequestApprove": {
         "description": "Approval is the authorization act \u2014 the admin explicitly picks the role.",
         "properties": {
@@ -32538,92 +33457,6 @@
           }
         ],
         "summary": "List Banks",
-        "tags": [
-          "banks"
-        ]
-      }
-    },
-    "/api/v1/banks/seed-demo": {
-      "post": {
-        "operationId": "seedDemoBank",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BankSeedSummaryRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request."
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Missing or invalid tenant context."
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Requested resource was not found for the tenant."
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Workflow transition or state conflict."
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Request validation failed."
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unexpected server error."
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Seed Demo Bank",
         "tags": [
           "banks"
         ]
@@ -38168,6 +39001,315 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/implied-rating/runs": {
+      "get": {
+        "operationId": "listImpliedBankRatingRuns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpliedRatingRunListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Implied Bank Rating Runs",
+        "tags": [
+          "implied-rating"
+        ]
+      },
+      "post": {
+        "operationId": "runImpliedBankRating",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImpliedRatingRunCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpliedRatingRunRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Implied Bank Rating",
+        "tags": [
+          "implied-rating"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/implied-rating/runs/{run_id}": {
+      "get": {
+        "operationId": "getImpliedBankRatingRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpliedRatingRunRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Implied Bank Rating Run",
+        "tags": [
+          "implied-rating"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/ingestion-batches": {
       "get": {
         "operationId": "listIngestionBatches",
@@ -42351,6 +43493,145 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/market-data/curves/{curve_name}/forward-grid": {
+      "get": {
+        "operationId": "getMarketDataForwardGrid",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "curve_name",
+            "required": true,
+            "schema": {
+              "title": "Curve Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "frequency",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Frequency"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardGridRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Forward Grid",
+        "tags": [
+          "market-data-sources"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/market-data/overlays": {
       "get": {
         "operationId": "listMarketDataOverlays",
@@ -42714,6 +43995,129 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/market-data/planes": {
+      "get": {
+        "operationId": "getMarketDataPlanes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": true,
+            "schema": {
+              "title": "Category",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanesRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Market Data Planes",
+        "tags": [
+          "market-data-sources"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/market-data/quota": {
       "get": {
         "operationId": "getMarketDataQuota",
@@ -42905,6 +44309,208 @@
         "summary": "List Market Data Scopes",
         "tags": [
           "market-data"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/market-data/source-preferences": {
+      "get": {
+        "operationId": "getMarketDataSourcePreferences",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcePreferencesRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Source Preferences",
+        "tags": [
+          "market-data-sources"
+        ]
+      },
+      "put": {
+        "operationId": "updateMarketDataSourcePreferences",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourcePreferencesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcePreferencesRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Source Preferences",
+        "tags": [
+          "market-data-sources"
         ]
       }
     },

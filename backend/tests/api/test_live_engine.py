@@ -10,7 +10,6 @@ from sqlalchemy import select
 from app.db.session import get_sessionmaker
 from app.models import Job
 from app.services import job_queue, pipeline
-from app.services.sample_bank_seed import SAMPLE_BANK_ID, seed_sample_bank
 from tests.adapters.excel_csv import fixtures
 from tests.api.helpers import ORG_1, ORG_2, headers
 from tests.api.test_ingestion import FULL_MAPPING, activate_mapping, seed_bank, start_batch
@@ -19,6 +18,7 @@ from tests.factories.canonical import (
     seed_canonical_fixture,
     seed_hedge_and_swap_positions,
 )
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 AS_OF = FIXTURE_AS_OF.isoformat()
 _BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
@@ -33,7 +33,7 @@ def _seed_and_refresh(db_client: TestClient, *, hedged: bool = False) -> None:
     _ = db_client  # ensures the app engine/DB is initialized
     session = get_sessionmaker()()
     try:
-        seed_sample_bank(session)
+        materialize_canonical_test_book(session)
         session.flush()
         seed_canonical_fixture(session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
         if hedged:
@@ -87,8 +87,11 @@ def test_get_live_summary_shape(db_client: TestClient) -> None:
     assert body["bank_id"] == str(SAMPLE_BANK_ID)
     assert body["reporting_period_id"] is not None
     modules = {module["module"] for module in body["modules"]}
-    assert {"liquidity", "capital", "irr", "fx", "ftp"} <= modules
-    assert body["is_stale"] is True  # live view exists but no official run yet
+    assert {"liquidity", "capital", "irr", "fx", "ftp", "rating"} <= modules
+    # The live cockpit is always compute-from-latest — never "stale". Drift vs the
+    # last official filing is a governance concept, surfaced by GET /freshness, not
+    # a liveness flag on the treasury view.
+    assert body["is_stale"] is False
 
 
 def test_get_freshness_shape(db_client: TestClient) -> None:

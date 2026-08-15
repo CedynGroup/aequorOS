@@ -38,11 +38,11 @@ from app.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import credit_params, regulatory_capital
 from app.services.fact_derivation import derive_facts
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.services.test_le_and_lmt import _CanonicalSeeder
 
@@ -164,7 +164,7 @@ def test_general_provisions_override_replaces_ingested_component() -> None:
 
 
 def test_fact_derivation_emits_staged_ead_and_crm_buckets(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     seeder = _CanonicalSeeder(db_session)
     product = seeder.product("LN.COMM", "CORPORATE_UNRATED")
     seeder.position(
@@ -246,7 +246,7 @@ def _run_capital(db: Session, period_id, scenario: str):
 
 
 def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period = _seed_ecl_facts(db_session)
 
     # Staged facts alone do not activate the engine: assumptions are Board
@@ -323,7 +323,7 @@ def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Ses
 
 
 def test_unstaged_book_keeps_ingested_provisions_untouched(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period = db_session.scalar(
         select(BankReportingPeriod).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,

@@ -146,13 +146,23 @@ def _curve_currency(curve_code: str) -> str:
 
 
 def determination_scopes(determination: DeskDetermination) -> list[DataScope]:
-    """The taxonomy scopes a determination's derived_values can serve."""
+    """The taxonomy scopes a determination's derived_values can serve.
+
+    Rates-first: reference-rate and FX scopes publish whenever present.
+    Curve scopes are included only when ``curves_qa_passed`` is true (or
+    legacy rows with no split flag still carry curves — treat missing as
+    eligible so historical publications remain re-publishable).
+    """
     derived = determination.derived_values or {}
     scopes: set[DataScope] = set()
-    for curve_code in derived.get("curves", {}):
-        scope = _CURVE_SCOPE_BY_CURRENCY.get(_curve_currency(curve_code))
-        if scope is not None:
-            scopes.add(scope)
+    curves_ok = derived.get("curves_qa_passed")
+    if curves_ok is None:
+        curves_ok = True  # pre-split determinations: keep prior curve scopes
+    if curves_ok:
+        for curve_code in derived.get("curves", {}):
+            scope = _CURVE_SCOPE_BY_CURRENCY.get(_curve_currency(curve_code))
+            if scope is not None:
+                scopes.add(scope)
     if derived.get("reference_rates"):
         scopes.add(_REFERENCE_RATE_SCOPE)
     for pair_key in derived.get("fx_rates", {}):

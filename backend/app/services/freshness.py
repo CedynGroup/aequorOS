@@ -17,9 +17,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod, LiveMetric, RegulatoryRun
+from app.models import Bank, BankReportingPeriod, ImpliedRatingRun, LiveMetric, RegulatoryRun
 from app.schemas.live import BankFreshnessRead, FreshnessModuleRead
 from app.services import (
+    implied_rating,
     regulatory_capital,
     regulatory_ftp,
     regulatory_fx,
@@ -43,8 +44,9 @@ _CURRENT_HASH: dict[str, _HashFn] = {
     "irr": regulatory_irr.current_input_hash,
     "fx": regulatory_fx.current_input_hash,
     "ftp": regulatory_ftp.current_input_hash,
+    "rating": implied_rating.current_input_hash,
 }
-_MODULES = ("liquidity", "capital", "irr", "fx", "ftp", "forecast")
+_MODULES = ("liquidity", "capital", "irr", "fx", "ftp", "rating", "forecast")
 
 
 def get_bank_freshness(
@@ -87,13 +89,18 @@ def get_bank_freshness(
             live_hash = hash_fn(db, ctx, bank, period) if hash_fn is not None else None
             computed_at = None
 
-        official_run = _latest_official_run(db, ctx, bank, period, module)
-        official_hash = official_run.input_hash if official_run is not None else None
-        official_run_at = (
-            (official_run.completed_at or official_run.created_at)
-            if official_run is not None
-            else None
-        )
+        if module == "rating":
+            official_rating = _latest_official_rating(db, ctx, bank, period)
+            official_hash = official_rating.input_hash if official_rating is not None else None
+            official_run_at = official_rating.completed_at if official_rating is not None else None
+        else:
+            official_run = _latest_official_run(db, ctx, bank, period, module)
+            official_hash = official_run.input_hash if official_run is not None else None
+            official_run_at = (
+                (official_run.completed_at or official_run.created_at)
+                if official_run is not None
+                else None
+            )
         is_stale = official_hash is None or live_hash != official_hash
         any_stale = any_stale or is_stale
         modules.append(
@@ -134,6 +141,22 @@ def _latest_official_run(
             RegulatoryRun.status == "succeeded",
         )
         .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
+        .limit(1)
+    )
+
+
+def _latest_official_rating(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> ImpliedRatingRun | None:
+    return db.scalar(
+        select(ImpliedRatingRun)
+        .where(
+            ImpliedRatingRun.organization_id == ctx.organization_id,
+            ImpliedRatingRun.bank_id == bank.id,
+            ImpliedRatingRun.reporting_period_id == period.id,
+            ImpliedRatingRun.status == "succeeded",
+        )
+        .order_by(ImpliedRatingRun.completed_at.desc(), ImpliedRatingRun.id.desc())
         .limit(1)
     )
 

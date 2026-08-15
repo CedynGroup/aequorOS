@@ -18,8 +18,10 @@ import { fmtPct } from '@/lib/format';
 import AttributionChip from './AttributionChip';
 import { MonoChip } from './chips';
 
+export type RateGroupKey = 'policy' | 'money-market' | 'lending';
+
 type RateGroup = {
-  key: string;
+  key: RateGroupKey;
   title: string;
   subtitle: string;
   matches: (code: string) => boolean;
@@ -53,9 +55,13 @@ export function isReferenceRateCode(code: string): boolean {
   return RATE_GROUPS.some((group) => group.matches(code));
 }
 
-/** Reference rates are decimal fractions; render as percentages. */
+/**
+ * Reference rates publish as percent-valued index numbers (GHS.MPR = 15.0,
+ * not 0.15) — unlike curve points, which are decimal fractions. Render the
+ * stored value as-is; do NOT ×100 (that produced the 1500%/1023% defect).
+ */
 function fmtRateValue(value: string): string {
-  return fmtPct(num(value) * 100, 2);
+  return fmtPct(num(value), 2);
 }
 
 /** "GHS.TBILL.91.DISCOUNT" → "T-bill 91d discount"-style readable label. */
@@ -68,36 +74,33 @@ function rateLabel(code: string): string {
     .join(' · ');
 }
 
-function RateCard({ index }: { index: IndexViewRead }) {
+function RateRow({ index }: { index: IndexViewRead }) {
   return (
-    <div className="card px-4 py-3.5 flex flex-col gap-2 min-w-0">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-micro font-medium text-slate uppercase tracking-wider truncate">
-          {rateLabel(index.indexCode)}
-        </p>
-        {index.scenario !== 'base' && (
-          <StatusPill tone="amber">{labelize(index.scenario)}</StatusPill>
-        )}
-      </div>
-      <div className="flex items-end justify-between gap-3">
-        <span className="font-mono text-kpi text-navy tnum">
-          {fmtRateValue(index.value)}
+    <tr className="border-t border-border-light hover:bg-surface/60">
+      <td className="px-4 py-3">
+        <span className="block font-medium text-navy">{rateLabel(index.indexCode)}</span>
+        <span className="mt-1 inline-flex items-center gap-2"><MonoChip>{index.indexCode}</MonoChip>
+          {index.scenario !== 'base' && <StatusPill tone="amber">{labelize(index.scenario)}</StatusPill>}
         </span>
-        <MonoChip>{index.indexCode}</MonoChip>
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-caption text-slate font-mono">
-          {fmtDateUTC(index.asOfDate)}
-        </span>
-        <AttributionChip attribution={index.attribution} />
-      </div>
-    </div>
+      </td>
+      <td className="px-4 py-3 text-right font-mono font-semibold text-navy tnum">{fmtRateValue(index.value)}</td>
+      <td className="px-4 py-3 text-right text-caption font-mono text-slate">{fmtDateUTC(index.asOfDate)}</td>
+      <td className="px-4 py-3 text-right"><AttributionChip attribution={index.attribution} className="justify-end" /></td>
+    </tr>
   );
 }
 
-export default function RatesBoard({ indices }: { indices: IndexViewRead[] }) {
+export default function RatesBoard({
+  indices,
+  groups: selectedGroups,
+}: {
+  indices: IndexViewRead[];
+  groups?: RateGroupKey[];
+}) {
   const claimed = new Set<string>();
-  const groups = RATE_GROUPS.map((group) => {
+  const groups = RATE_GROUPS.filter(
+    (group) => selectedGroups === undefined || selectedGroups.includes(group.key)
+  ).map((group) => {
     const members = indices.filter(
       (index) =>
         !claimed.has(`${index.indexCode}-${index.scenario}`) &&
@@ -110,19 +113,29 @@ export default function RatesBoard({ indices }: { indices: IndexViewRead[] }) {
   if (groups.length === 0) return null;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {groups.map(({ group, members }) => (
-        <div key={group.key} className="space-y-2">
-          <div>
+        <section key={group.key} className="overflow-x-auto border border-border rounded-lg bg-surface-raised">
+          <div className="px-4 py-3 border-b border-border bg-surface/45">
             <h3 className="text-body font-semibold text-navy">{group.title}</h3>
-            <p className="text-caption text-slate">{group.subtitle}</p>
+            <p className="text-caption text-slate mt-0.5">{group.subtitle}</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            {members.map((index) => (
-              <RateCard key={`${index.indexCode}-${index.scenario}`} index={index} />
-            ))}
-          </div>
-        </div>
+          <table className="w-full min-w-[37rem] text-body">
+            <thead className="text-micro font-medium uppercase tracking-wider text-slate">
+              <tr>
+                <th className="px-4 py-2.5 text-left">Instrument</th>
+                <th className="px-4 py-2.5 text-right">Rate</th>
+                <th className="px-4 py-2.5 text-right">As of</th>
+                <th className="px-4 py-2.5 text-right">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((index) => (
+                <RateRow key={`${index.indexCode}-${index.scenario}`} index={index} />
+              ))}
+            </tbody>
+          </table>
+        </section>
       ))}
     </div>
   );

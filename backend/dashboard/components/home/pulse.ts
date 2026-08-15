@@ -26,6 +26,7 @@ import {
   useFxDashboard,
   useIrrDashboard,
   useLiquidityDashboard,
+  useLiveSummary,
 } from '@/lib/api/hooks';
 import { labelize, num } from '@/lib/api/values';
 
@@ -57,6 +58,7 @@ export const DEFAULT_MODULE_ORDER: LiveModule[] = [
   'irr',
   'fx',
   'ftp',
+  'rating',
   'forecast',
 ];
 
@@ -145,6 +147,8 @@ export function usePulseCards(
   const fx = useFxDashboard(bankId, periodId);
   const ftp = useFtpDashboard(bankId, periodId);
   const forecasts = useForecastRuns(bankId, { limit: 10 });
+  const liveSummary = useLiveSummary(bankId);
+  const ratingLive = liveSummary.data?.modules.find((module) => module.module === 'rating');
 
   // Plane-2 EOD ladders — when at least two daily points exist, the card's
   // delta and sparkline switch from month-over-month to prior-close.
@@ -154,6 +158,7 @@ export function usePulseCards(
     irr: useLiveSnapshots(bankId, 'irr'),
     fx: useLiveSnapshots(bankId, 'fx'),
     ftp: useLiveSnapshots(bankId, 'ftp'),
+    rating: useLiveSnapshots(bankId, 'rating'),
     forecast: useLiveSnapshots(bankId, 'forecast'),
   } as const;
 
@@ -274,6 +279,20 @@ export function usePulseCards(
       status: ftp.data
         ? (ftp.data.live?.status ?? ftp.data.metrics.nmdCoreStatus)
         : 'na',
+    },
+    rating: {
+      module: 'rating',
+      isLoading: liveSummary.isLoading,
+      error: liveSummary.error,
+      ...(ratingLive?.metrics.availability !== 'unavailable' && ratingLive && {
+        metricLabel: 'Conservative PIT PD band',
+        value: fixed(num(ratingLive.metrics.pit_pd_upper_pct), 2),
+        unit: '%',
+        hint: `Implied ${String(ratingLive.metrics.pit_rating_grade ?? '—').toUpperCase()} · sovereign ceiling ${String(ratingLive.metrics.sovereign_ceiling ?? '—').toUpperCase()}`,
+        computedAt: ratingLive.computedAt,
+        basisNote: 'live canonical scorecard',
+      }),
+      status: (ratingLive?.status ?? 'na') as CardStatus,
     },
     forecast: buildForecastCard(forecasts, periodId),
   };

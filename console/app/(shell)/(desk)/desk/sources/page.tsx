@@ -1,9 +1,16 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, PenLine } from 'lucide-react';
-import { listDeskCaptures, type DeskCapture } from '@/lib/api';
+import { ExternalLink, FileSearch, PenLine } from 'lucide-react';
+import {
+  getDeskCaptureContent,
+  listDeskCaptures,
+  toApiError,
+  type ApiError,
+  type DeskCapture,
+  type DeskCaptureContentView,
+} from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { fmtDate, fmtTs, relTime, DASH } from '@/lib/format';
 import { Chip, EmptyState, ErrorPanel, PageHeader, SkeletonRows, StatusChip } from '@/components/ui';
@@ -120,6 +127,11 @@ function RecencyBadge({ latest, cadence }: { latest: string | null; cadence?: Ca
 
 export default function SourcesPage() {
   const { data, error, loading, reload } = useApi(() => listDeskCaptures());
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<DeskCaptureContentView | null>(null);
+  const [viewerError, setViewerError] = useState<ApiError | null>(null);
+  const [viewerBusy, setViewerBusy] = useState(false);
+  const [needle, setNeedle] = useState('');
 
   const grouped = useMemo(() => {
     const map = new Map<string, DeskCapture[]>();
@@ -131,11 +143,25 @@ export default function SourcesPage() {
     return map;
   }, [data]);
 
+  async function openViewer(captureId: string, search?: string) {
+    setViewerId(captureId);
+    setViewerBusy(true);
+    setViewerError(null);
+    try {
+      const view = await getDeskCaptureContent(captureId, search || undefined);
+      setViewer(view);
+    } catch (err) {
+      setViewerError(toApiError(err));
+      setViewer(null);
+    }
+    setViewerBusy(false);
+  }
+
   return (
     <div>
       <PageHeader
         title="Sources"
-        sub="Tier-1 Ghana sources: HTML scrape, templated PDF/XLSX parse, and one real API — every one with a manual-entry fallback, because layouts drift and BoG blocks automation."
+        sub="Tier-1 Ghana sources: HTML scrape, templated PDF/XLSX parse, and one real API — every one with a manual-entry fallback, because layouts drift and BoG blocks automation. Open capture content for field-level source review."
       />
 
       {/* ------------------------------------------------ registry cards */}
@@ -235,18 +261,25 @@ export default function SourcesPage() {
                           {c.content_sha256.slice(0, 12)}…
                         </td>
                         <td className="px-3 py-2">
-                          {c.source_url ? (
-                            <a
-                              href={c.source_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-micro text-action hover:underline"
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void openViewer(c.id)}
+                              className="inline-flex items-center gap-1 text-micro font-medium text-action hover:underline"
                             >
-                              <ExternalLink size={11} /> source
-                            </a>
-                          ) : (
-                            <span className="text-slate-light">{DASH}</span>
-                          )}
+                              <FileSearch size={11} /> view content
+                            </button>
+                            {c.source_url ? (
+                              <a
+                                href={c.source_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-micro text-action hover:underline"
+                              >
+                                <ExternalLink size={11} /> URL
+                              </a>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="max-w-md break-words px-5 py-2 text-caption text-critical">
                           {c.parse_error ?? ''}
@@ -259,6 +292,104 @@ export default function SourcesPage() {
             );
           })}
       </div>
+
+      {/* Capture content / snippet viewer */}
+      {viewerId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 p-4">
+          <div className="card max-h-[90vh] w-full max-w-3xl overflow-hidden flex flex-col">
+            <div className="flex items-start justify-between gap-3 border-b border-border-light px-5 py-3">
+              <div>
+                <h2 className="text-h3 text-navy">Capture content</h2>
+                <p className="font-mono text-micro text-slate">{viewerId}</p>
+              </div>
+              <button
+                type="button"
+                className="text-caption text-slate hover:text-ink"
+                onClick={() => {
+                  setViewerId(null);
+                  setViewer(null);
+                  setNeedle('');
+                }}
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex flex-wrap items-end gap-2 border-b border-border-light px-5 py-3">
+              <label className="block min-w-[12rem] flex-1">
+                <span className="mb-1 block text-caption font-medium text-slate">
+                  Find value (snippet)
+                </span>
+                <input
+                  value={needle}
+                  onChange={(e) => setNeedle(e.target.value)}
+                  className="w-full rounded-md border border-border bg-surface-base px-3 py-2 font-mono text-body text-ink focus:border-focus focus:outline-none"
+                  placeholder="e.g. 15.00"
+                />
+              </label>
+              <button
+                type="button"
+                className="btn-primary px-3 py-2 text-body"
+                onClick={() => void openViewer(viewerId, needle)}
+              >
+                Search
+              </button>
+            </div>
+            <div className="overflow-y-auto px-5 py-4">
+              {viewerBusy && <p className="text-caption text-slate">Loading…</p>}
+              {viewerError && <ErrorPanel error={viewerError} context="Loading capture content" />}
+              {viewer && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Chip mono>{viewer.source_key}</Chip>
+                    <Chip>{viewer.kind}</Chip>
+                    <Chip tone={viewer.content_available ? 'ok' : 'warn'}>
+                      {viewer.content_available
+                        ? `${viewer.content_bytes} bytes`
+                        : 'content not inline'}
+                    </Chip>
+                    {viewer.truncated && <Chip tone="warn">truncated</Chip>}
+                  </div>
+                  {viewer.source_url && (
+                    <a
+                      href={viewer.source_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-caption text-action hover:underline"
+                    >
+                      {viewer.source_url}
+                    </a>
+                  )}
+                  {viewer.content_omitted && (
+                    <p className="text-caption text-warning">{viewer.content_omitted}</p>
+                  )}
+                  {viewer.snippet && (
+                    <div>
+                      <h3 className="text-body font-medium text-navy">Snippet around value</h3>
+                      <pre className="mt-1 whitespace-pre-wrap rounded border border-action/30 bg-action-light/30 p-3 font-mono text-caption text-ink">
+                        {viewer.snippet}
+                      </pre>
+                    </div>
+                  )}
+                  {viewer.text != null && (
+                    <div>
+                      <h3 className="text-body font-medium text-navy">Full text</h3>
+                      <pre className="mt-1 max-h-96 overflow-auto whitespace-pre-wrap rounded border border-border-light bg-surface p-3 font-mono text-micro text-ink">
+                        {viewer.text}
+                      </pre>
+                    </div>
+                  )}
+                  {!viewer.content_available && !viewer.text && (
+                    <p className="text-caption text-slate">
+                      Raw bytes not stored inline (over size cap). Use the source URL or re-capture
+                      with a smaller artifact.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

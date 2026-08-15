@@ -36,12 +36,12 @@ from app.services import (
     regulatory_liquidity,
     stress_scenarios,
 )
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     ISOLATED_ORG_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
@@ -70,7 +70,7 @@ def _system_refs(*codes: str) -> list[ScenarioRefIn]:
 
 
 def test_catalogue_merges_system_and_custom_with_vocabulary(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period_id = _period_id(db_session)
 
     catalogue = stress_scenarios.list_catalogue(
@@ -105,7 +105,7 @@ def test_catalogue_merges_system_and_custom_with_vocabulary(db_session: Session)
 
 
 def test_custom_scenario_crud_guards(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
 
     # System codes are reserved.
     with pytest.raises(HTTPException) as excinfo:
@@ -193,7 +193,7 @@ def test_custom_scenario_crud_guards(db_session: Session) -> None:
 
 def test_analysis_parity_with_official_runs_and_zero_writes(db_session: Session) -> None:
     """The keystone: workbench numbers == official-run numbers, no run rows."""
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period_id = _period_id(db_session)
 
     # Official immutable runs (the governance path).
@@ -277,7 +277,7 @@ def test_analysis_parity_with_official_runs_and_zero_writes(db_session: Session)
 
 
 def test_overrides_failures_as_data_and_saved_analyses(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     period_id = _period_id(db_session)
     runs_before = _run_count(db_session)
 

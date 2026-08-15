@@ -25,7 +25,7 @@ from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
 from app.services.fact_derivation import DerivationError, DerivationResult, derive_facts
 from app.services.regulatory_capital import run_all_capital_scenarios
 from app.services.regulatory_liquidity import run_all_liquidity_scenarios
-from app.services.sample_bank_seed import SAMPLE_BANK_ID, seed_sample_bank
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import (
     EXPECTED_CAPITAL_TOTAL,
@@ -70,7 +70,7 @@ def _ctx() -> TenantContext:
 
 
 def _prepare(db_session: Session) -> DerivationResult:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     result = derive_facts(db_session, _ctx(), SAMPLE_BANK_ID, FIXTURE_AS_OF)
@@ -239,7 +239,7 @@ SINGLE_LIMIT_PCT = Decimal("10")
 
 
 def _prepare_hedged(db_session: Session) -> DerivationResult:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     seed_hedge_and_swap_positions(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
@@ -301,7 +301,7 @@ def test_irr_swap_facts_are_seed_shaped(db_session: Session) -> None:
 
 
 def test_receive_fixed_swap_derives_and_unknown_direction_warns(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     seed_directional_swap_positions(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
@@ -412,7 +412,7 @@ def test_liquidity_and_capital_engines_succeed_on_derived_facts(db_session: Sess
 
 
 def test_derivation_requires_canonical_data(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
 
@@ -518,7 +518,7 @@ def _seed_market_fx_spots(db_session: Session) -> None:
 
 
 def test_canonical_market_curve_overrides_reference_curve(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     _seed_market_curve(db_session)
@@ -540,7 +540,7 @@ def test_canonical_market_curve_overrides_reference_curve(db_session: Session) -
 
 
 def test_canonical_fx_spot_and_history_override_reference(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     _seed_market_fx_spots(db_session)

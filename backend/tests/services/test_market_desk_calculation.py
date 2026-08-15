@@ -175,13 +175,39 @@ def _minimal_snapshot() -> list[dict[str, str]]:
 
 
 class TestRealFixtureIntegration:
-    def test_full_pipeline_over_harvested_fixtures(self, desk: Session) -> None:
+    def test_legacy_sparse_tenor_parameter_still_publishes_dense_surface(self) -> None:
+        parameters = dict(PARAMS)
+        parameters["fwd_node_grid_months"] = [3, 6, 12, 24, 36, 60, 84, 120]
+        derived, _ = run_pipeline(_minimal_snapshot(), parameters, COB)
+
+        tenors = [point["tenor_months"] for point in derived["curves"]["AEQ.GHS.SOV.FWD"]["points"]]
+        assert tenors[:12] == list(range(1, 13))
+        assert tenors[-1] == 120
+        assert set(derived["forward_grids"]["AEQ.GHS.SOV.FWD"]["grids"]) == {
+            "1D",
+            "1M",
+            "3M",
+            "6M",
+            "1Y",
+        }
+
+    def test_full_pipeline_over_harvested_fixtures(  # noqa: PLR0915 - full desk package contract
+        self,
+        desk: Session,
+    ) -> None:
         draft = _computed_draft(desk)
         derived, qa = draft.derived_values, draft.qa_results
 
         # Hard gates pass on the real data.
         assert derived["qa_passed"] is True
-        assert qa["gates"] == {"curve_build": "pass", "forward_qa": "pass"}
+        assert derived["rates_qa_passed"] is True
+        assert derived["curves_qa_passed"] is True
+        assert qa["gates"]["rates_package"] == "pass"
+        assert qa["gates"]["curve_build"] == "pass"
+        assert qa["gates"]["forward_qa"] == "pass"
+        assert qa["gates"]["discounting"] == "synthetic_agd"
+        assert qa["gates"]["credit_curve"] in {"pass", "skipped"}
+        assert derived.get("discounting_mode") == "synthetic_agd"
         assert qa["forward_qa"]["passed"] is True
         assert qa["nss_fallback_used"] is False
 
@@ -219,7 +245,12 @@ class TestRealFixtureIntegration:
         # The sovereign forward curve is published alongside.
         fwd = derived["curves"]["AEQ.GHS.SOV.FWD"]
         assert fwd["curve_type"] == "forward"
-        assert len(fwd["points"]) == len(PARAMS["fwd_node_grid_months"])
+        assert [point["tenor_months"] for point in fwd["points"]][:12] == list(range(1, 13))
+        assert fwd["points"][-1]["tenor_months"] == 120
+        grids = derived["forward_grids"]["AEQ.GHS.SOV.FWD"]["grids"]
+        assert set(grids) == {"1D", "1M", "3M", "6M", "1Y"}
+        assert len(grids["1D"]["rows"]) == 23
+        assert len(grids["1Y"]["rows"]) == 31
 
         # GRR cross-check RAN (three-input reconstruction, flag-not-block).
         assert qa["grr_check"]["status"] in {"pass", "mismatch_flagged"}
@@ -300,8 +331,14 @@ class TestReproducibility:
 
         assert _canonical(first_derived) == _canonical(second_derived)
         assert _canonical(first_qa) == _canonical(second_qa)
-        # The stored results ARE the pure function of (snapshot, parameters).
-        assert _canonical(draft.derived_values) == _canonical(first_derived)
+        # Stored results equal pure pipeline output plus package metadata
+        # (digest + empty research_adjustments) folded in after compute.
+        stored = dict(draft.derived_values)
+        package_digest = stored.pop("package_digest", None)
+        research_adjustments = stored.pop("research_adjustments", None)
+        assert package_digest and len(package_digest) == 64
+        assert research_adjustments == []
+        assert _canonical(stored) == _canonical(first_derived)
         # Curve digests are value-based and stable.
         for code in ("AEQ.GHS.SOV.ZERO", "AEQ.GHS.SOV.FWD", "AEQ.GHS.OIS"):
             assert first_derived["curves"][code]["digest"] == (
@@ -336,19 +373,26 @@ class TestQaGateFailure:
             entries.append(_entry(code, date(2026, 8, 6), f"{price:.4f}"))
         return sorted(entries, key=_canonical)
 
-    def test_oscillating_bonds_fail_the_hard_gate_but_record_the_attempt(self) -> None:
+    def test_oscillating_bonds_fail_curves_qa_but_rates_package_still_passes(self) -> None:
+        """Rates-first: forward oscillation fails curves QA without killing rates."""
         derived, qa = run_pipeline(self._poisoned_snapshot(), PARAMS, COB)
 
-        assert derived["qa_passed"] is False
-        assert qa["qa_passed"] is False
+        assert derived["curves_qa_passed"] is False
+        assert qa["curves_qa_passed"] is False
         assert qa["gates"]["forward_qa"] == "fail"
         assert qa["forward_qa"]["passed"] is False
         assert qa["forward_qa"]["positivity_pass"] is False
-        # The attempt is still recorded: the curve nodes exist for review.
+        # Rates package is independent of curve smoothness.
+        assert derived["rates_qa_passed"] is True
+        assert derived["qa_passed"] is True  # legacy key follows rates readiness
+        assert qa["gates"]["rates_package"] == "pass"
+        assert "GHS.MPR" in derived["rates"]
+        assert "GHS.INTERBANK.ON" in derived["rates"]
+        # The curve attempt is still recorded: the nodes exist for review.
         assert len(derived["curves"]["AEQ.GHS.SOV.ZERO"]["points"]) == 7
         assert any(flag["flag"] == "forward_qa_failed" for flag in qa["flags"])
 
-    def test_failed_gate_blocks_approval_at_the_api_guard(self) -> None:
+    def test_failed_rates_gate_blocks_approval_curve_failure_does_not(self) -> None:
         derived, qa = run_pipeline(self._poisoned_snapshot(), PARAMS, COB)
         determination = DeskDetermination(
             cob_date=COB,
@@ -361,12 +405,25 @@ class TestQaGateFailure:
             status="pending_review",
             prepared_by=ANALYST,
         )
+        # Curve QA failed but rates package passed — approval is allowed.
+        calculation.ensure_approvable(determination)
+
+        determination.derived_values = {
+            "qa_passed": False,
+            "rates_qa_passed": False,
+            "curves_qa_passed": False,
+        }
         with pytest.raises(HTTPException) as excinfo:
             calculation.ensure_approvable(determination)
         assert excinfo.value.status_code == 409
 
-        determination.derived_values = {"qa_passed": True}
-        calculation.ensure_approvable(determination)  # passing gates approve fine
+        determination.derived_values = {"rates_qa_passed": True, "qa_passed": True}
+        calculation.ensure_approvable(determination)
+
+        determination.derived_values = {}
+        with pytest.raises(HTTPException) as empty:
+            calculation.ensure_approvable(determination)
+        assert empty.value.status_code == 409
 
 
 # -- declared treatments ---------------------------------------------------------------------

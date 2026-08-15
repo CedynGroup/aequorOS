@@ -1,10 +1,18 @@
 """Operator app dependencies: identity, DB sessions, audit helper.
 
-Identity comes from workforce OIDC (Google Workspace/Okta) verified with the
-same zero-trust machinery customer SSO uses, or — outside production only —
-a static development bearer token. There is NO password path and NO overlap
-with tenant identity (staff_UI.md §1: workforce and customer identity are
-separate systems).
+Staff identity MATCHES the client-side model (founder's directive,
+2026-08-11: "We are building the same as client"): email+password against
+``operator_users`` is the PRIMARY path (an 8-hour HS256 session JWT over the
+dedicated ``OPERATOR_JWT_SECRET``), workforce OIDC (Google Workspace/Okta,
+verified with the same zero-trust machinery customer SSO uses) is the
+SECONDARY path, and — outside production only — a static development bearer
+token remains for local work. There is still NO overlap with tenant identity
+(staff_UI.md §1: workforce and customer identity are separate systems);
+``operator_users`` is a staff table, not a tenant one.
+
+Bearer resolution order: dev token, operator JWT, OIDC id_token. A token that
+VERIFIES as an operator JWT but fails the row check (missing, deactivated,
+stale role claim) is rejected outright — it never falls through to OIDC.
 
 The DB session here is CROSS-TENANT: it deliberately sets no
 ``organization_id`` on the session, so on the RLS-forced primary it must run
@@ -20,22 +28,25 @@ from __future__ import annotations
 import secrets
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core import security
 from app.core.config import OperatorSettings, get_operator_settings, get_settings
 from app.db.session import get_engine
-from app.models import OperatorAuditLog
+from app.models import OperatorAuditLog, OperatorUser
+from app.models.operator import OPERATOR_ROLE_RANK
+from app.operator.services import operator_auth
 
 _bearer_scheme = HTTPBearer(
     auto_error=False,
     description=(
-        "Operator credential: workforce OIDC id_token "
-        "(or the dev token outside production)"
+        "Operator credential: operator session JWT (password sign-in), "
+        "workforce OIDC id_token, or the dev token outside production"
     ),
 )
 
@@ -45,13 +56,23 @@ _UNAUTHORIZED = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
+OperatorRole = Literal["developer", "operator_admin", "super_admin"]
+
 
 @dataclass(frozen=True)
 class OperatorContext:
     """The authenticated staff identity for one operator request."""
 
     email: str
-    auth_mode: Literal["dev", "oidc"]
+    auth_mode: Literal["dev", "oidc", "password"]
+    #: Staff authorization role. Password/JWT sessions carry it as a claim
+    #: verified against the ``operator_users`` row; OIDC sessions take the
+    #: row's role (or ``developer`` when domain-allow-listed without a row);
+    #: dev sessions are ``super_admin`` — the local root session IS the
+    #: documented bootstrap path for creating the first operator account,
+    #: and dev auth cannot exist in production (boot refusal + request-level
+    #: check).
+    role: OperatorRole
 
 
 def _dev_context(token: str, operator_settings: OperatorSettings) -> OperatorContext | None:
@@ -65,7 +86,41 @@ def _dev_context(token: str, operator_settings: OperatorSettings) -> OperatorCon
         return None
     if not secrets.compare_digest(token, operator_settings.dev_token):
         return None
-    return OperatorContext(email=operator_settings.dev_email, auth_mode="dev")
+    return OperatorContext(
+        email=operator_settings.dev_email, auth_mode="dev", role="super_admin"
+    )
+
+
+def _load_operator_user(email: str) -> OperatorUser | None:
+    """Fetch one staff row on a short-lived session (global table, no RLS)."""
+    session = get_operator_sessionmaker()()
+    try:
+        return session.scalar(select(OperatorUser).where(OperatorUser.email == email))
+    finally:
+        session.close()
+
+
+def _password_context(token: str, operator_settings: OperatorSettings) -> OperatorContext | None:
+    """Operator session JWT (the email+password primary path).
+
+    Returns None when the bearer is not an operator JWT at all (unconfigured
+    secret, wrong signature/typ — an OIDC id_token lands here too, and falls
+    through to the OIDC branch). Raises the generic 401 when the token IS a
+    valid operator JWT but the account no longer backs it: the row is the
+    persistent authority, so a deactivated operator or a stale role claim
+    dies immediately rather than riding out the token's 8 hours.
+    """
+    if operator_settings.jwt_secret is None:
+        return None
+    try:
+        claims = operator_auth.verify_operator_token(token, secret=operator_settings.jwt_secret)
+    except security.TokenInvalidError:
+        return None
+    email = str(claims["sub"]).lower()
+    user = _load_operator_user(email)
+    if user is None or not user.is_active or user.role != claims.get("role"):
+        raise _UNAUTHORIZED
+    return OperatorContext(email=email, auth_mode="password", role=cast("OperatorRole", user.role))
 
 
 def _oidc_context(token: str, operator_settings: OperatorSettings) -> OperatorContext:
@@ -90,7 +145,17 @@ def _oidc_context(token: str, operator_settings: OperatorSettings) -> OperatorCo
     domain = email.rsplit("@", 1)[-1].lower()
     if domain != operator_settings.oidc_allowed_domain.lower():
         raise _UNAUTHORIZED
-    return OperatorContext(email=email.lower(), auth_mode="oidc")
+    # Parity with the client model: when a staff row exists for this email it
+    # is the authority — a deactivated operator cannot slip back in through
+    # SSO, and the row's role governs. A domain-allowed identity WITHOUT a
+    # row keeps the historical allow-list behavior (documented): it
+    # authenticates with the base 'developer' role.
+    normalized = email.lower()
+    user = _load_operator_user(normalized)
+    if user is not None and not user.is_active:
+        raise _UNAUTHORIZED
+    role: OperatorRole = cast("OperatorRole", user.role) if user is not None else "developer"
+    return OperatorContext(email=normalized, auth_mode="oidc", role=role)
 
 
 def get_operator_context(
@@ -106,7 +171,27 @@ def get_operator_context(
     dev = _dev_context(credentials.credentials, operator_settings)
     if dev is not None:
         return dev
+    password = _password_context(credentials.credentials, operator_settings)
+    if password is not None:
+        return password
     return _oidc_context(credentials.credentials, operator_settings)
+
+
+def require_operator_admin(
+    operator: Annotated[OperatorContext, Depends(get_operator_context)],
+) -> OperatorContext:
+    """Gate for operator-account management: ``operator_admin`` or above.
+
+    Rank rules WITHIN management (who may touch which row) live in the
+    operators feature via ``OPERATOR_ROLE_RANK``; this dependency only
+    keeps ``developer`` sessions out entirely.
+    """
+    if OPERATOR_ROLE_RANK[operator.role] < OPERATOR_ROLE_RANK["operator_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operator administration requires the operator_admin role or above.",
+        )
+    return operator
 
 
 # -- database ------------------------------------------------------------------
@@ -153,6 +238,7 @@ def get_operator_db_session(
 
 
 Operator = Annotated[OperatorContext, Depends(get_operator_context)]
+OperatorAdmin = Annotated[OperatorContext, Depends(require_operator_admin)]
 OperatorDb = Annotated[Session, Depends(get_operator_db_session)]
 
 

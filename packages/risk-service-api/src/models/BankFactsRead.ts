@@ -49,6 +49,12 @@ export interface BankFactsRead {
    * @type {Array<BankFactRead>}
    * @memberof BankFactsRead
    */
+  cashFlows: Array<BankFactRead>;
+  /**
+   *
+   * @type {Array<BankFactRead>}
+   * @memberof BankFactsRead
+   */
   depositBehavior: Array<BankFactRead>;
   /**
    *
@@ -105,6 +111,7 @@ export function instanceOfBankFactsRead(value: object): value is BankFactsRead {
     value["capitalComponents"] === undefined
   )
     return false;
+  if (!("cashFlows" in value) || value["cashFlows"] === undefined) return false;
   if (!("depositBehavior" in value) || value["depositBehavior"] === undefined)
     return false;
   if (!("lcrInflows" in value) || value["lcrInflows"] === undefined)
@@ -145,6 +152,7 @@ export function BankFactsReadFromJSONTyped(
     capitalComponents: (json["capital_components"] as Array<any>).map(
       BankFactReadFromJSON,
     ),
+    cashFlows: (json["cash_flows"] as Array<any>).map(BankFactReadFromJSON),
     depositBehavior: (json["deposit_behavior"] as Array<any>).map(
       BankFactReadFromJSON,
     ),
@@ -181,6 +189,7 @@ export function BankFactsReadToJSONTyped(
     capital_components: (value["capitalComponents"] as Array<any>).map(
       BankFactReadToJSON,
     ),
+    cash_flows: (value["cashFlows"] as Array<any>).map(BankFactReadToJSON),
     deposit_behavior: (value["depositBehavior"] as Array<any>).map(
       BankFactReadToJSON,
     ),

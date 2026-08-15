@@ -31,13 +31,16 @@ __all__ = [
     "ConventionError",
     "DayCount",
     "CashFlow",
+    "EIKON_DAYCOUNT_CODES",
     "accrued_interest",
     "bond_cashflows",
     "bond_price",
     "bond_ytm",
     "convert_zero_rate",
+    "daycount_from_eikon_code",
     "discount_factor_to_zero",
     "discount_to_yield",
+    "simple_rate_from_discounts",
     "year_fraction",
     "yield_to_discount",
     "zero_to_discount_factor",
@@ -49,15 +52,34 @@ class ConventionError(ValueError):
 
 
 class DayCount(enum.Enum):
-    """Supported day-count conventions; the value is the year basis in days."""
+    """Supported day-count conventions.
+
+    The three original actual/fixed-basis members carry a constant year length
+    (``.basis``, in days). The two added members — ``THIRTY_360`` (US bond
+    30/360) and ``ACT_ACT`` (ISDA actual/actual) — do **not** have a constant
+    year basis; their year fractions are computed structurally by
+    :func:`year_fraction`, and ``.basis`` raises for them by design.
+
+    These map onto the Eikon Forward Curve template's day-count codes
+    (``MMA0``/``A0`` = money-market Act/360, ``MMA5``/``A5`` = Act/365,
+    ``AA`` = Act/Act) — see :data:`EIKON_DAYCOUNT_CODES`.
+    """
 
     ACT_364 = "ACT/364"  # GFIM standard: actual days over a 364-day year
     ACT_365F = "ACT/365F"
     ACT_360 = "ACT/360"
+    THIRTY_360 = "30/360"  # US (bond) 30/360, for bond-style output legs
+    ACT_ACT = "ACT/ACT"  # ISDA actual/actual
 
     @property
     def basis(self) -> float:
-        return _BASIS[self]
+        """Constant year length in days; raises for the structural day counts."""
+        try:
+            return _BASIS[self]
+        except KeyError as exc:
+            raise ConventionError(
+                f"{self.value} has no constant year basis; use year_fraction()."
+            ) from exc
 
 
 _BASIS: dict[DayCount, float] = {
@@ -67,6 +89,29 @@ _BASIS: dict[DayCount, float] = {
 }
 
 
+# Eikon Forward Curve template day-count codes (spec §0 Assumptions tab) ->
+# the library day counts. ``MMA0``/``MMA5`` denote *money-market* (simple)
+# accrual on the same Act/360 / Act/365 basis; the accrual basis itself is the
+# same object, and the simple-vs-compounded choice lives at the render site.
+EIKON_DAYCOUNT_CODES: dict[str, DayCount] = {
+    "MMA0": DayCount.ACT_360,
+    "A0": DayCount.ACT_360,
+    "MMA5": DayCount.ACT_365F,
+    "A5": DayCount.ACT_365F,
+    "AA": DayCount.ACT_ACT,
+}
+
+
+def daycount_from_eikon_code(code: str) -> DayCount:
+    """Resolve an Eikon day-count code (``MMA0``/``A0``/``MMA5``/``A5``/``AA``)."""
+    try:
+        return EIKON_DAYCOUNT_CODES[code]
+    except KeyError as exc:
+        raise ConventionError(
+            f"Unknown Eikon day-count code '{code}'; known: {sorted(EIKON_DAYCOUNT_CODES)}."
+        ) from exc
+
+
 class Compounding(enum.Enum):
     SIMPLE = "simple"
     ANNUAL = "annual"
@@ -74,10 +119,65 @@ class Compounding(enum.Enum):
 
 
 def year_fraction(start: date, end: date, day_count: DayCount) -> float:
-    """Actual-days year fraction between two dates on the given basis."""
+    """Year fraction between two dates on the given day count.
+
+    Actual/fixed-basis members use ``actual_days / basis``; ``THIRTY_360`` uses
+    the US bond 30/360 day rule; ``ACT_ACT`` uses the ISDA actual/actual split
+    (each calendar year weighted by its own day count).
+    """
     if end < start:
         raise ConventionError(f"year_fraction requires start <= end, got {start} > {end}.")
+    if day_count is DayCount.THIRTY_360:
+        return _thirty_360_days(start, end) / 360.0
+    if day_count is DayCount.ACT_ACT:
+        return _act_act_isda(start, end)
     return (end - start).days / day_count.basis
+
+
+def _thirty_360_days(start: date, end: date) -> int:
+    """US (bond) 30/360 day count: ``360*(Y2-Y1) + 30*(M2-M1) + (D2-D1)``.
+
+    Day adjustments (the US/NASD rule): ``D1`` is capped at 30; ``D2`` is set to
+    30 when it is 31 and ``D1`` is already 30 (equivalently >= 30 after the cap).
+    """
+    d1 = min(start.day, 30)
+    d2 = 30 if (end.day == 31 and d1 == 30) else end.day
+    return 360 * (end.year - start.year) + 30 * (end.month - start.month) + (d2 - d1)
+
+
+def _act_act_isda(start: date, end: date) -> float:
+    """ISDA actual/actual: sum each calendar year's actual days over its length."""
+    if start == end:
+        return 0.0
+    total = 0.0
+    year = start.year
+    cursor = start
+    while year < end.year:
+        next_year_start = date(year + 1, 1, 1)
+        denominator = 366.0 if calendar.isleap(year) else 365.0
+        total += (next_year_start - cursor).days / denominator
+        cursor = next_year_start
+        year += 1
+    denominator = 366.0 if calendar.isleap(end.year) else 365.0
+    total += (end - cursor).days / denominator
+    return total
+
+
+def simple_rate_from_discounts(
+    df_start: float, df_end: float, start: date, end: date, day_count: DayCount
+) -> float:
+    """Money-market (simple) forward rate over ``[start, end]`` from discount factors.
+
+    ``f = (DF(start)/DF(end) - 1) / tau`` with ``tau`` on ``day_count`` — the
+    Eikon "Convert to" contract (default money-market Act/360). Discount factors
+    are basis-invariant, so this is the only place the output basis enters.
+    """
+    if df_start <= 0.0 or df_end <= 0.0:
+        raise ConventionError("Discount factors must be strictly positive.")
+    tau = year_fraction(start, end, day_count)
+    if tau <= 0.0:
+        raise ConventionError("A forward period must have a strictly positive year fraction.")
+    return (df_start / df_end - 1.0) / tau
 
 
 # ---------------------------------------------------------------------------

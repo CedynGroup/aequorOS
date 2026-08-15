@@ -7,7 +7,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.config import get_settings
 from app.models import Bank, BankFinancialFact, BankReportingPeriod, Jurisdiction
 from app.schemas.banks import (
     BankFactRead,
@@ -16,12 +15,9 @@ from app.schemas.banks import (
     BankRead,
     BankReportingPeriodListRead,
     BankReportingPeriodRead,
-    BankSeedSummaryRead,
     JurisdictionRead,
 )
-from app.services.audit import record_event
 from app.services.public_ids import normalize_public_id
-from app.services.sample_bank_seed import DEMO_ORG_ID, seed_sample_bank
 
 _FACT_GROUP_FIELDS: dict[str, str] = {
     "balance_sheet": "balance_sheet",
@@ -31,6 +27,7 @@ _FACT_GROUP_FIELDS: dict[str, str] = {
     "lcr_inflow": "lcr_inflows",
     "market_risk": "market_risk",
     "operational_income": "operational_income",
+    "cashflow": "cash_flows",
     "capital_component": "capital_components",
     "deposit_behavior": "deposit_behavior",
 }
@@ -125,43 +122,6 @@ def get_period_facts(
     return BankFactsRead(
         period=BankReportingPeriodRead.model_validate(period, from_attributes=True),
         **grouped,
-    )
-
-
-def seed_demo(db: Session, ctx: TenantContext) -> BankSeedSummaryRead:
-    if not get_settings().app.demo_seed_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "Demo seeding is disabled: bank data flows through the Data Engine "
-                "(uploads, core adapters, API). Set DEMO_SEED_ENABLED=1 only for "
-                "isolated test environments."
-            ),
-        )
-    if ctx.organization_id != DEMO_ORG_ID:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Demo bank seeding is only available to the demo organization.",
-        )
-    summary = seed_sample_bank(db)
-    record_event(
-        db,
-        ctx,
-        event_type="bank_seed.completed",
-        entity_type="bank",
-        entity_id=summary.bank_id,
-        details={
-            "periods": summary.periods,
-            "fact_count": summary.fact_count,
-            "param_count": summary.param_count,
-        },
-    )
-    db.commit()
-    return BankSeedSummaryRead(
-        bank_id=summary.bank_id,
-        periods=summary.periods,
-        fact_count=summary.fact_count,
-        param_count=summary.param_count,
     )
 
 

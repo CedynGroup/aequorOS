@@ -19,11 +19,11 @@ from app.schemas.regulatory_reporting import (
 )
 from app.services import notifications, regulatory_liquidity, reporting_deadline_scan
 from app.services.regulatory_reporting import generation, validation, workflow
-from app.services.sample_bank_seed import (
+from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    seed_sample_bank,
+    materialize_canonical_test_book,
 )
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.factories.attestation import relax_signing
@@ -214,7 +214,7 @@ def test_mark_read_and_mark_all_read_touch_only_visible_rows(db_session: Session
 
 
 def _seed_with_baseline_run(db: Session) -> None:
-    seed_sample_bank(db)
+    materialize_canonical_test_book(db)
     _ensure_role_users(db, DEMO_ORG_ID)
     # This suite is about which notification reaches whom, and it drives the
     # lifecycle with bare approval decisions. Approving and signing are one act
@@ -378,7 +378,7 @@ def test_regulator_decisions_notify_approvers_and_generator(db_session: Session)
 
 
 def test_deadline_scan_is_idempotent_for_the_same_day(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     as_of = date(2026, 4, 2)
 
     first = reporting_deadline_scan.scan_reporting_deadlines(db_session, DEMO_ORG_ID, as_of=as_of)
@@ -400,7 +400,7 @@ def test_deadline_scan_is_idempotent_for_the_same_day(db_session: Session) -> No
 
 
 def test_deadline_scan_thresholds_fire_at_the_right_offsets(db_session: Session) -> None:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     scope = f"BSD3:{REPORTING_DATE.isoformat()}"
 
     for days_before, threshold in ((7, 7), (3, 3), (1, 1)):

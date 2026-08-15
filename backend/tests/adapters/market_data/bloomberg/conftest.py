@@ -31,7 +31,7 @@ from app.models import (
     CanonicalYieldCurvePoint,
 )
 from app.services.ingestion import bank_slug as derive_bank_slug
-from app.services.sample_bank_seed import SAMPLE_BANK_ID, seed_sample_bank
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.adapters.market_data.contract import VENDOR_INTERNAL_MARKER
 from tests.storage.inmemory import InMemoryStorageClient
 
@@ -67,7 +67,7 @@ def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
 
 @pytest.fixture
 def bank(db_session: Session) -> Bank:
-    seed_sample_bank(db_session)
+    materialize_canonical_test_book(db_session)
     bank = db_session.get(Bank, SAMPLE_BANK_ID)
     assert bank is not None
     return bank

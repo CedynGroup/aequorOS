@@ -198,12 +198,47 @@ def parse_gfim_daily_xlsx(raw: bytes, *, context: ParseContext) -> ParseResult: 
 # The TOC also lists this heading (with dotted leaders); the body occurrence
 # is the LAST match. '-GHS' may or may not ride on the heading itself.
 _STATS_HEADING_RE = re.compile(r"B\.\s+SUMMARY\s+OF\s+TRADE\s+STATISTICS(?:-?\s*GHS)?")
-_REPORT_MONTH_RE = re.compile(r"MARKET\s+STATISTICS\s+FOR\s+([A-Z]+)\s+(\d{4})")
+# Live PDFs use several month phrasings; fixtures use clean text extracts.
+_REPORT_MONTH_RES: tuple[re.Pattern[str], ...] = (
+    re.compile(r"MARKET\s+STATISTICS\s+FOR\s+([A-Z]+)\s+(\d{4})"),
+    re.compile(r"SECURITIES\s+TRADED\s+FOR\s+([A-Z]+)\s+(\d{4})"),
+    re.compile(r"STATUS\s+REPORT\s*[-–—]?\s*([A-Z]+)\s+(\d{4})", re.I),
+    re.compile(r"\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)(\d{4})\b"),
+    re.compile(
+        r"\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+(\d{4})\b",
+        re.I,
+    ),
+)
 _STAT_ROWS: tuple[tuple[str, str, str], ...] = (
     ("Volume Traded", "GHS.GFIM.MONTHLY.VOLUME", "ghs"),
     ("Value Traded (GHS)", "GHS.GFIM.MONTHLY.VALUE_GHS", "ghs"),
     ("No. of Trades", "GHS.GFIM.MONTHLY.TRADES", "index"),
 )
+
+
+def _status_report_text(raw: bytes) -> str:
+    """Decode a GFIM monthly status artifact: PDF (live captures) or plain text (fixtures)."""
+    if raw[:4] == b"%PDF":
+        from app.services.market_desk.sources.pdf_text import page_lines
+
+        pages = page_lines(raw)
+        return "\n".join(line for page in pages for line in page)
+    return raw.decode("utf-8", errors="replace")
+
+
+def _resolve_report_month(text: str) -> date | None:
+    upper = text.upper()
+    for pattern in _REPORT_MONTH_RES:
+        match = pattern.search(upper)
+        if match is None:
+            continue
+        month_token = match.group(1).title()
+        year_token = match.group(2)
+        try:
+            return datetime.strptime(f"01 {month_token} {year_token}", "%d %B %Y").date()
+        except ValueError:
+            continue
+    return None
 
 
 def parse_gfim_status_report(raw: bytes, *, context: ParseContext) -> ParseResult:
@@ -213,25 +248,28 @@ def parse_gfim_status_report(raw: bytes, *, context: ParseContext) -> ParseResul
     Only the GHS trade-statistics block is extracted; the ranking tables,
     US$ statistics, and outstanding-securities sections are recorded as
     unsupported rather than half-parsed.
+
+    Live captures are PDFs (FileBird); fixtures ship pre-extracted ``.txt``.
+    Both paths are supported.
     """
     del context
     result = ParseResult()
-    text = raw.decode("utf-8", errors="replace")
+    text = _status_report_text(raw)
 
-    month_match = _REPORT_MONTH_RE.search(text)
-    if month_match is None:
-        result.errors.append("report month not found (no 'MARKET STATISTICS FOR <MONTH> <YEAR>')")
+    report_month = _resolve_report_month(text)
+    if report_month is None:
+        result.errors.append(
+            "report month not found (no 'MARKET STATISTICS FOR <MONTH> <YEAR>' "
+            "or equivalent month/year banner)"
+        )
         return result
-    report_month = datetime.strptime(
-        f"01 {month_match.group(1).title()} {month_match.group(2)}", "%d %B %Y"
-    ).date()
 
     headings = list(_STATS_HEADING_RE.finditer(text))
     if not headings:
         result.errors.append("section 'B. SUMMARY OF TRADE STATISTICS' not found")
         return result
     heading = headings[-1]  # earlier hits are the table of contents
-    block = text[heading.end() : heading.end() + 2000]
+    block = text[heading.end() : heading.end() + 4000]
 
     for label, series_code, unit in _STAT_ROWS:
         row_match = re.search(

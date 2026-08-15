@@ -38,8 +38,9 @@ from app.db.base import Base
 from app.models import Jurisdiction, Organization, User
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
+from tests.fixtures.canonical_bank_fixture import materialize_canonical_test_book
 
-# The platform tenant ID pinned by the hermetic fixture (sample_bank_seed).
+# The platform tenant ID used by the hermetic E2E fixture.
 DEMO_ORG_ID = "OR-DEM00001"
 #: Step-up re-authentication for every e2e signer. Mirrored in
 #: dashboard/e2e/support/mint.ts (E2E_PASSWORD) — the two must agree, and both say
@@ -96,6 +97,8 @@ def main() -> None:
                 )
         session.commit()
         _enrol_signing_keys(session)
+        materialize_canonical_test_book(session)
+        session.commit()
     print("e2e database bootstrapped")
 
 

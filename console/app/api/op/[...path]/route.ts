@@ -1,10 +1,12 @@
 /**
  * /api/op/* — same-origin proxy to the operator API.
  *
- * Every console API call goes through here, in both auth modes:
- * - workforce OIDC: the id_token from the HttpOnly session cookie becomes the
- *   bearer — browser JavaScript never holds the credential;
- * - dev token: the browser's own Authorization header is forwarded verbatim.
+ * Every console API call goes through here, in all auth modes:
+ * - password (primary): the operator session JWT from the HttpOnly session
+ *   cookie becomes the bearer — browser JavaScript never holds the credential;
+ * - workforce OIDC (secondary): same cookie mechanics with the id_token;
+ * - dev token (local only): the browser's own Authorization header is
+ *   forwarded verbatim.
  *
  * The proxy adds no authorization of its own — the operator API verifies the
  * bearer (dev token or id_token signature/issuer/audience/domain) on every
@@ -13,7 +15,7 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { operatorApiUrl, readSession } from '@/lib/server-auth';
+import { operatorApiUrl, readSession, sessionBearer } from '@/lib/server-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,10 +33,13 @@ async function forward(req: NextRequest, path: string[]) {
 
   const incomingAuth = req.headers.get('authorization');
   const session = readSession(req);
+  const bearer = session ? sessionBearer(session) : null;
   if (incomingAuth) {
     headers.Authorization = incomingAuth; // dev-token mode
-  } else if (session) {
-    headers.Authorization = `Bearer ${session.id_token}`; // workforce mode
+  } else if (bearer) {
+    // Cookie session: operator JWT (password mode) or OIDC id_token (SSO),
+    // forwarded identically — the operator API verifies either.
+    headers.Authorization = `Bearer ${bearer}`;
   }
 
   const contentType = req.headers.get('content-type');

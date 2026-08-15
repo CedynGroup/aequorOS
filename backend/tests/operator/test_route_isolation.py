@@ -33,20 +33,40 @@ def test_operator_app_serves_only_operator_routes() -> None:
     assert offenders == [], f"non-operator routes leaked onto the operator app: {offenders}"
     # The exact public surface of this phase — update deliberately.
     assert sorted(paths) == [
+        # Staff sign-in front door (email+password primary path) — beside
+        # /operator/health, not under /v1: session issuance is not a resource.
+        "/operator/auth/login",
         "/operator/health",
+        # Forward-curve construction console (FC-3): construct is a preview, publish
+        # fans out through the desk determination seam. Duplicate 'definitions' is
+        # the GET+POST pair on the collection path.
+        "/operator/v1/curves/construct",
+        "/operator/v1/curves/definitions",
+        "/operator/v1/curves/definitions",
+        "/operator/v1/curves/definitions/{curve_code}/versions",
+        "/operator/v1/curves/definitions/{curve_code}/versions/{version}/approve",
+        "/operator/v1/curves/publish",
         "/operator/v1/data-engines",
         # Market research desk console (spec §11a): duplicates are GET+POST
         # pairs on the same path.
         "/operator/v1/desk/captures",
+        "/operator/v1/desk/captures/{capture_id}/content",
+        "/operator/v1/desk/captures/{capture_id}/snippet",
         "/operator/v1/desk/determinations",
         "/operator/v1/desk/determinations",
         "/operator/v1/desk/determinations/{determination_id}",
+        "/operator/v1/desk/determinations/{determination_id}/adjustments",
         "/operator/v1/desk/determinations/{determination_id}/approve",
         "/operator/v1/desk/determinations/{determination_id}/compute",
+        "/operator/v1/desk/determinations/{determination_id}/package",
         "/operator/v1/desk/determinations/{determination_id}/publish",
         "/operator/v1/desk/determinations/{determination_id}/reject",
         "/operator/v1/desk/determinations/{determination_id}/submit",
         "/operator/v1/desk/determinations/{determination_id}/supersede",
+        "/operator/v1/desk/entitlements",
+        "/operator/v1/desk/entitlements/grant-dataset",
+        "/operator/v1/desk/entitlements/grant-tier",
+        "/operator/v1/desk/entitlements/{entitlement_id}/revoke",
         "/operator/v1/desk/methodologies",
         "/operator/v1/desk/methodologies",
         "/operator/v1/desk/methodologies/ensure-default",
@@ -55,6 +75,24 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/desk/observations",
         "/operator/v1/desk/observations",
         "/operator/v1/desk/publications",
+        # Operating-Environment desk console: compute-preview writes nothing,
+        # the maker-checker lifecycle governs the [0,1] jurisdiction score, and
+        # publish fans GHANA_OPERATING_ENVIRONMENT_SCORE out to every tenant.
+        # Duplicate 'assessments' is the GET+POST pair on the collection path.
+        "/operator/v1/operating-environment/assessments",
+        "/operator/v1/operating-environment/assessments",
+        "/operator/v1/operating-environment/assessments/{assessment_id}",
+        "/operator/v1/operating-environment/assessments/{assessment_id}/approve",
+        "/operator/v1/operating-environment/assessments/{assessment_id}/publish",
+        "/operator/v1/operating-environment/assessments/{assessment_id}/submit",
+        "/operator/v1/operating-environment/compute-preview",
+        # Staff account management (operator_admin only): duplicates are the
+        # GET+POST pair on the collection path.
+        "/operator/v1/operators",
+        "/operator/v1/operators",
+        "/operator/v1/operators/{email}/deactivate",
+        "/operator/v1/operators/{email}/reactivate",
+        "/operator/v1/operators/{email}/reset-password",
         "/operator/v1/tenants",
         "/operator/v1/tenants",
         "/operator/v1/tenants/{org_id}/activity",
