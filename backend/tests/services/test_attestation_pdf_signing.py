@@ -273,7 +273,7 @@ def _rendered_return() -> RenderedReturn:
     )
     template = ReturnTemplate(
         template_id="test.v1",
-        return_code="BSD3",
+        return_code="LCR-NSFR",
         title="Test Return",
         fidelity="CONFIRMED",
         source_citation="BoG BSD/2026/test",

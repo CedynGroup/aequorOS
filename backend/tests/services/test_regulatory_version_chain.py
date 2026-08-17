@@ -169,7 +169,7 @@ def _seed_two_versions(db: Session) -> tuple[RegulatoryPackage, RegulatoryPackag
         ),
     )
     assert run.status == "succeeded"
-    payload = RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE)
+    payload = RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE)
     first = generation.generate_package(db, MAKER, SAMPLE_BANK_ID, payload)
     second = generation.generate_package(db, MAKER, SAMPLE_BANK_ID, payload)
     return _row(db, first.id), _row(db, second.id)

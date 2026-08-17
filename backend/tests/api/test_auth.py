@@ -1,35 +1,112 @@
-"""E2E: password login → bearer token → /auth/me, with lockout + refresh."""
+"""E2E auth against the ACTUAL primary: password login → bearer → /auth/me,
+lockout, refresh, SSO linking/JIT, and the RBAC write gate.
+
+Invariants: credentials are verified (wrong password 401 → lockout 423), tokens
+carry the real user's identity, profile edits round-trip and validate, SSO only
+links PRE-PROVISIONED users (JIT records a request, admin approval is the gate),
+viewer is read-only. The real admin's row is primed IN the rolled-back
+transaction (a known password hash, a clean throttle) — nothing persists.
+Opt-in via REAL_DATA_DATABASE_URL (tests/real_data.py).
+"""
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
 from uuid import uuid4
 
 import jwt
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session, sessionmaker
 
+import app.api.v1.auth as auth_api
 from app.core.security import hash_password
-from app.db.session import get_sessionmaker
-from app.models import Organization, SsoConnection, User
-from tests.api.helpers import headers
+from app.models import SsoConnection, User
+from tests.real_data import (
+    REAL_BANK_ID,
+    REAL_ORG_ID,
+    REAL_USER_EMAIL,
+    REAL_USER_ID,
+    real_headers,
+    requires_real_data,
+)
 
-_EMAIL = "cfo@testbank.example"
+pytestmark = requires_real_data
+
+_EMAIL = REAL_USER_EMAIL
 _PASSWORD = "S3cure-Passphrase!"
 
 _ISSUER = "https://accounts.google.com"
 _CLIENT_ID = "test-client-id.apps.googleusercontent.com"
+_SSO_SUBJECT = "google-oauth2|abc123"
 
 
-def _seed_sso_connection(
-    org_id: str,
+@pytest.fixture
+def auth_client(
+    real_client: TestClient,
+    _real_bound_sessionmaker: sessionmaker,
+    monkeypatch: pytest.MonkeyPatch,
+) -> TestClient:
+    """``real_client`` with the auth routes' *system* session bound to the same
+    rolled-back connection.
+
+    login / sso / refresh run on the cross-tenant system session (the BYPASSRLS
+    worker role in production, ``get_worker_sessionmaker``). Under the app-role
+    URL that would open a SECOND connection outside the test transaction — the
+    login side-effects (throttle counters, last_login_at, SSO linking, JIT
+    stubs) would COMMIT to the primary — and see no users at all under RLS.
+    Bind it to the shared connection scoped to the real org instead: every auth
+    rule still runs for real, and the outer rollback discards everything.
+    """
+
+    def _scoped_system_session() -> Session:
+        return _real_bound_sessionmaker(info={"organization_id": REAL_ORG_ID})
+
+    monkeypatch.setattr(auth_api, "get_worker_sessionmaker", lambda: _scoped_system_session)
+    return real_client
+
+
+@pytest.fixture
+def prime_admin(real_session: Session) -> Callable[..., User]:
+    """Give the real admin a KNOWN password and a clean throttle/profile, inside
+    the rolled-back transaction (the primary's row is untouched)."""
+
+    def _prime(role: str = "admin") -> User:
+        real_session.info["organization_id"] = REAL_ORG_ID
+        user = real_session.get(User, REAL_USER_ID)
+        assert user is not None and user.is_active and user.email == _EMAIL
+        user.role = role
+        user.auth_provider = "password"
+        user.sso_subject = None
+        user.password_hash = hash_password(_PASSWORD)
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user.display_name = "Chief Financial Officer"
+        user.job_title = None
+        user.locale = None
+        user.timezone = None
+        user.theme = None
+        real_session.commit()  # savepoint release on the shared connection
+        return user
+
+    return _prime
+
+
+def _configure_sso_connection(
+    session: Session,
     *,
     allowed_email_domains: list[str] | None = None,
     jit_enabled: bool = False,
 ) -> None:
-    session = get_sessionmaker()()
+    """Replace the org's SSO connection (one per org) with the test IdP — in the
+    rolled-back transaction, so the real connection row is restored on teardown."""
+    session.info["organization_id"] = REAL_ORG_ID
+    session.execute(delete(SsoConnection).where(SsoConnection.organization_id == REAL_ORG_ID))
     session.add(
         SsoConnection(
-            organization_id=org_id,
+            organization_id=REAL_ORG_ID,
             issuer=_ISSUER,
             client_id=_CLIENT_ID,
             client_secret_ciphertext="sealed-opaque",
@@ -39,7 +116,12 @@ def _seed_sso_connection(
         )
     )
     session.commit()
-    session.close()
+
+
+def _remove_sso_connection(session: Session) -> None:
+    session.info["organization_id"] = REAL_ORG_ID
+    session.execute(delete(SsoConnection).where(SsoConnection.organization_id == REAL_ORG_ID))
+    session.commit()
 
 
 def _id_token(**overrides: object) -> str:
@@ -48,7 +130,7 @@ def _id_token(**overrides: object) -> str:
     claims: dict[str, object] = {
         "iss": _ISSUER,
         "aud": _CLIENT_ID,
-        "sub": "google-oauth2|abc123",
+        "sub": _SSO_SUBJECT,
         "email": _EMAIL,
         "email_verified": True,
         "iat": 1,
@@ -58,60 +140,60 @@ def _id_token(**overrides: object) -> str:
     return jwt.encode(claims, "not-the-real-idp-key-padded-to-32-bytes!", algorithm="HS256")
 
 
-def _seed_user(role: str = "analyst") -> tuple:
-    session = get_sessionmaker()()
-    org = Organization(name="Auth Test Bank")  # id from the platform generator
-    session.add(org)
-    session.flush()
-    user = User(
-        id=uuid4(),
-        organization_id=org.id,
-        email=_EMAIL,
-        display_name="Chief Financial Officer",
-        role=role,
-        auth_provider="password",
-        password_hash=hash_password(_PASSWORD),
+def _patch_verify(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Skip the network JWKS verification; the token's own claims come back.
+    Routing (iss/aud → connection) and every policy check still run for real."""
+    monkeypatch.setattr(
+        "app.core.security.verify_oidc_id_token",
+        lambda id_token, *, issuer, audience: jwt.decode(
+            id_token, options={"verify_signature": False}
+        ),
     )
-    session.add(user)
-    session.commit()
-    ids = (org.id, user.id)
-    session.close()
-    return ids
 
 
-def test_password_login_then_me(db_client: TestClient) -> None:
-    org_id, user_id = _seed_user(role="analyst")
+def _login(client: TestClient, password: str = _PASSWORD) -> Any:
+    return client.post("/api/v1/auth/login", json={"email": _EMAIL, "password": password})
 
-    login = db_client.post("/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD})
+
+def _access_requests(client: TestClient, email: str) -> list[dict[str, Any]]:
+    response = client.get("/api/v1/auth/sso/access-requests", headers=real_headers())
+    assert response.status_code == 200, response.text
+    return [request for request in response.json() if request["email"] == email]
+
+
+def test_password_login_then_me(auth_client: TestClient, prime_admin: Callable[..., User]) -> None:
+    prime_admin(role="analyst")
+
+    login = _login(auth_client)
     assert login.status_code == 200, login.text
     tokens = login.json()
     assert tokens["access_token"] and tokens["refresh_token"]
     assert tokens["token_type"] == "bearer"
 
-    me = db_client.get(
+    me = auth_client.get(
         "/api/v1/auth/me",
         headers={"Authorization": f"Bearer {tokens['access_token']}"},
     )
     assert me.status_code == 200, me.text
     body = me.json()
-    assert body["user_id"] == str(user_id)
-    assert body["organization_id"] == str(org_id)
+    assert body["user_id"] == str(REAL_USER_ID)
+    assert body["organization_id"] == REAL_ORG_ID
     assert body["email"] == _EMAIL
-    assert body["role"] == "analyst"
+    assert body["role"] == "analyst"  # the row's role, not a claim
     assert body["job_title"] is None
     assert body["locale"] is None
     assert body["timezone"] is None
     assert body["theme"] is None
 
 
-def test_user_can_update_and_clear_own_profile(db_client: TestClient) -> None:
-    org_id, user_id = _seed_user(role="viewer")
-    token = db_client.post(
-        "/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD}
-    ).json()["access_token"]
+def test_user_can_update_and_clear_own_profile(
+    auth_client: TestClient, prime_admin: Callable[..., User]
+) -> None:
+    prime_admin(role="viewer")
+    token = _login(auth_client).json()["access_token"]
     authorization = {"Authorization": f"Bearer {token}"}
 
-    updated = db_client.patch(
+    updated = auth_client.patch(
         "/api/v1/auth/me",
         headers=authorization,
         json={
@@ -124,8 +206,8 @@ def test_user_can_update_and_clear_own_profile(db_client: TestClient) -> None:
     )
     assert updated.status_code == 200, updated.text
     assert updated.json() == {
-        "user_id": str(user_id),
-        "organization_id": str(org_id),
+        "user_id": str(REAL_USER_ID),
+        "organization_id": REAL_ORG_ID,
         "email": _EMAIL,
         "display_name": "Jane Mensah",
         "job_title": "Treasury Analyst",
@@ -136,9 +218,9 @@ def test_user_can_update_and_clear_own_profile(db_client: TestClient) -> None:
         # Exposed so the signing ceremony can offer the right step-up proof.
         "auth_provider": "password",
     }
-    assert db_client.get("/api/v1/auth/me", headers=authorization).json() == updated.json()
+    assert auth_client.get("/api/v1/auth/me", headers=authorization).json() == updated.json()
 
-    cleared = db_client.patch(
+    cleared = auth_client.patch(
         "/api/v1/auth/me",
         headers=authorization,
         json={"display_name": "", "job_title": None},
@@ -160,13 +242,11 @@ def test_user_can_update_and_clear_own_profile(db_client: TestClient) -> None:
     ],
 )
 def test_profile_update_rejects_invalid_or_forbidden_fields(
-    db_client: TestClient, payload: dict[str, str]
+    auth_client: TestClient, prime_admin: Callable[..., User], payload: dict[str, str]
 ) -> None:
-    _org_id, _user_id = _seed_user(role="viewer")
-    token = db_client.post(
-        "/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD}
-    ).json()["access_token"]
-    response = db_client.patch(
+    prime_admin(role="viewer")
+    token = _login(auth_client).json()["access_token"]
+    response = auth_client.patch(
         "/api/v1/auth/me",
         headers={"Authorization": f"Bearer {token}"},
         json=payload,
@@ -174,18 +254,18 @@ def test_profile_update_rejects_invalid_or_forbidden_fields(
     assert response.status_code == 422
 
 
-def test_me_requires_a_valid_bearer_token(db_client: TestClient) -> None:
-    assert db_client.get("/api/v1/auth/me").status_code == 401  # no token
-    bad = db_client.get("/api/v1/auth/me", headers={"Authorization": "Bearer not.a.jwt"})
+def test_me_requires_a_valid_bearer_token(real_client: TestClient) -> None:
+    assert real_client.get("/api/v1/auth/me").status_code == 401  # no token
+    bad = real_client.get("/api/v1/auth/me", headers={"Authorization": "Bearer not.a.jwt"})
     assert bad.status_code == 401
 
 
-def test_refresh_issues_new_tokens(db_client: TestClient) -> None:
-    _seed_user()
-    tokens = db_client.post(
-        "/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD}
-    ).json()
-    refreshed = db_client.post(
+def test_refresh_issues_new_tokens(
+    auth_client: TestClient, prime_admin: Callable[..., User]
+) -> None:
+    prime_admin()
+    tokens = _login(auth_client).json()
+    refreshed = auth_client.post(
         "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
     )
     assert refreshed.status_code == 200, refreshed.text
@@ -193,79 +273,79 @@ def test_refresh_issues_new_tokens(db_client: TestClient) -> None:
 
 
 def test_sso_linked_account_keeps_password_login(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    auth_client: TestClient,
+    real_session: Session,
+    prime_admin: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Regression: linking SSO must ADD a sign-in method, not revoke the password.
 
     (An SSO sign-in flips auth_provider to 'oidc'; password login used to require
     auth_provider == 'password' and locked the account's own fallback out.)
     """
-    org_id, user_id = _seed_user(role="admin")
-    _seed_sso_connection(org_id)
+    prime_admin(role="admin")
+    _configure_sso_connection(real_session)
     _patch_verify(monkeypatch)
     # SSO sign-in links the account (auth_provider becomes 'oidc').
-    assert db_client.post("/api/v1/auth/sso", json={"id_token": _id_token()}).status_code == 200
+    assert auth_client.post("/api/v1/auth/sso", json={"id_token": _id_token()}).status_code == 200
 
     # Password login still works afterwards.
-    login = db_client.post("/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD})
+    login = _login(auth_client)
     assert login.status_code == 200, login.text
-    me = db_client.get(
+    me = auth_client.get(
         "/api/v1/auth/me",
         headers={"Authorization": f"Bearer {login.json()['access_token']}"},
     )
-    assert me.json()["user_id"] == str(user_id)
+    assert me.json()["user_id"] == str(REAL_USER_ID)
+    assert me.json()["auth_provider"] == "oidc"
 
 
-def test_wrong_password_is_rejected_then_locks_out(db_client: TestClient) -> None:
-    _seed_user()
+def test_wrong_password_is_rejected_then_locks_out(
+    auth_client: TestClient, prime_admin: Callable[..., User]
+) -> None:
+    prime_admin()
     for _ in range(5):  # AUTH_MAX_FAILED_LOGINS default
-        r = db_client.post("/api/v1/auth/login", json={"email": _EMAIL, "password": "wrong"})
+        r = _login(auth_client, password="wrong")
         assert r.status_code == 401
     # Further attempts — even with the CORRECT password — are locked out.
-    locked = db_client.post("/api/v1/auth/login", json={"email": _EMAIL, "password": _PASSWORD})
+    locked = _login(auth_client)
     assert locked.status_code == 423
 
 
-def _patch_verify(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Skip the network JWKS verification; the token's own claims come back.
-    Routing (iss/aud → connection) and every policy check still run for real."""
-    monkeypatch.setattr(
-        "app.core.security.verify_oidc_id_token",
-        lambda id_token, *, issuer, audience: jwt.decode(
-            id_token, options={"verify_signature": False}
-        ),
-    )
-
-
 def test_sso_login_links_oidc_identity_and_issues_app_tokens(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    auth_client: TestClient,
+    real_session: Session,
+    prime_admin: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    org_id, user_id = _seed_user(role="viewer")  # pre-provisioned by email
-    _seed_sso_connection(org_id)
+    prime_admin(role="viewer")  # pre-provisioned by email
+    _configure_sso_connection(real_session)
     _patch_verify(monkeypatch)
-    login = db_client.post("/api/v1/auth/sso", json={"id_token": _id_token()})
+    login = auth_client.post("/api/v1/auth/sso", json={"id_token": _id_token()})
     assert login.status_code == 200, login.text
     access = login.json()["access_token"]
 
-    me = db_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
+    me = auth_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
     assert me.status_code == 200
-    assert me.json()["user_id"] == str(user_id)
+    assert me.json()["user_id"] == str(REAL_USER_ID)
 
-    session = get_sessionmaker()()
-    session.info["organization_id"] = org_id
-    user = session.get(User, user_id)
+    real_session.expire_all()
+    user = real_session.get(User, REAL_USER_ID)
+    assert user is not None
     assert user.auth_provider == "oidc"
-    assert user.sso_subject == "google-oauth2|abc123"
-    session.close()
+    assert user.sso_subject == _SSO_SUBJECT
 
 
 def test_sso_login_rejects_unprovisioned_identity(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    auth_client: TestClient,
+    real_session: Session,
+    prime_admin: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    org_id, _ = _seed_user(role="viewer")
-    _seed_sso_connection(org_id)
+    prime_admin(role="viewer")
+    _configure_sso_connection(real_session)
     _patch_verify(monkeypatch)
-    r = db_client.post(
+    r = auth_client.post(
         "/api/v1/auth/sso",
         json={"id_token": _id_token(sub="google|x", email="stranger@nowhere.example")},
     )
@@ -273,113 +353,138 @@ def test_sso_login_rejects_unprovisioned_identity(
 
 
 def test_sso_login_without_a_configured_connection_is_rejected(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    auth_client: TestClient,
+    real_session: Session,
+    prime_admin: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _seed_user(role="viewer")  # user exists, but no sso_connections row
+    prime_admin(role="viewer")  # user exists, but no sso_connections row
+    _remove_sso_connection(real_session)
     _patch_verify(monkeypatch)
-    r = db_client.post("/api/v1/auth/sso", json={"id_token": _id_token()})
+    r = auth_client.post("/api/v1/auth/sso", json={"id_token": _id_token()})
     assert r.status_code == 401
 
 
 def test_sso_login_enforces_allowed_email_domains(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    auth_client: TestClient,
+    real_session: Session,
+    prime_admin: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    org_id, _ = _seed_user(role="viewer")
-    _seed_sso_connection(org_id, allowed_email_domains=["otherbank.example"])
+    prime_admin(role="viewer")
+    _configure_sso_connection(real_session, allowed_email_domains=["otherbank.example"])
     _patch_verify(monkeypatch)
-    r = db_client.post("/api/v1/auth/sso", json={"id_token": _id_token()})
+    r = auth_client.post("/api/v1/auth/sso", json={"id_token": _id_token()})
     assert r.status_code == 401
     assert "domain" in r.json()["error"]["message"].lower()
 
 
 def test_sso_login_rejects_unverified_email(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    auth_client: TestClient,
+    real_session: Session,
+    prime_admin: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    org_id, _ = _seed_user(role="viewer")
-    _seed_sso_connection(org_id)
+    prime_admin(role="viewer")
+    _configure_sso_connection(real_session)
     _patch_verify(monkeypatch)
-    r = db_client.post("/api/v1/auth/sso", json={"id_token": _id_token(email_verified=False)})
+    r = auth_client.post("/api/v1/auth/sso", json={"id_token": _id_token(email_verified=False)})
     assert r.status_code == 401
 
 
 def test_jit_records_a_request_and_admin_approval_is_the_gate(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    auth_client: TestClient,
+    real_session: Session,
+    prime_admin: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Org + connection + an admin exist; the signing-in employee has NO account.
-    org_id, admin_id = _seed_user(role="admin")
-    _seed_sso_connection(org_id, allowed_email_domains=["newbank.example"], jit_enabled=True)
-    _patch_verify(monkeypatch)
-    admin = headers(org_id=org_id, user_id=admin_id, roles=("admin",))
-    token = _id_token(
-        sub="google|new-employee", email="analyst@newbank.example", name="New Analyst"
+    # Org + connection + the real admin exist; the signing-in employee has NO account.
+    prime_admin(role="admin")
+    _configure_sso_connection(
+        real_session, allowed_email_domains=["newbank.example"], jit_enabled=True
     )
+    _patch_verify(monkeypatch)
+    email = f"analyst-{uuid4().hex[:8]}@newbank.example"
+    token = _id_token(sub=f"google|{uuid4().hex}", email=email, name="New Analyst")
 
     # First sign-in: NO session — an access request is recorded instead.
-    first = db_client.post("/api/v1/auth/sso", json={"id_token": token})
+    first = auth_client.post("/api/v1/auth/sso", json={"id_token": token})
     assert first.status_code == 403
     assert "administrator must approve" in first.json()["error"]["message"].lower()
 
     # Retrying doesn't get in either, and doesn't duplicate the request.
-    again = db_client.post("/api/v1/auth/sso", json={"id_token": token})
+    again = auth_client.post("/api/v1/auth/sso", json={"id_token": token})
     assert again.status_code == 403
-    pending = db_client.get("/api/v1/auth/sso/access-requests", headers=admin)
-    assert pending.status_code == 200, pending.text
-    assert [r["email"] for r in pending.json()] == ["analyst@newbank.example"]
+    pending = _access_requests(auth_client, email)
+    assert len(pending) == 1
 
     # Approval — with an explicitly chosen role — is what grants access.
-    request_id = pending.json()[0]["user_id"]
-    approved = db_client.post(
+    request_id = pending[0]["user_id"]
+    approved = auth_client.post(
         f"/api/v1/auth/sso/access-requests/{request_id}/approve",
         json={"role": "analyst"},
-        headers=admin,
+        headers=real_headers(),
     )
     assert approved.status_code == 200, approved.text
 
-    login = db_client.post("/api/v1/auth/sso", json={"id_token": token})
+    login = auth_client.post("/api/v1/auth/sso", json={"id_token": token})
     assert login.status_code == 200, login.text
-    me = db_client.get(
+    me = auth_client.get(
         "/api/v1/auth/me",
         headers={"Authorization": f"Bearer {login.json()['access_token']}"},
     )
     assert me.status_code == 200
     body = me.json()
-    assert body["email"] == "analyst@newbank.example"
+    assert body["email"] == email
     assert body["role"] == "analyst"  # exactly what the admin granted
-    assert body["organization_id"] == str(org_id)
-    # The request queue is empty once approved.
-    assert db_client.get("/api/v1/auth/sso/access-requests", headers=admin).json() == []
+    assert body["organization_id"] == REAL_ORG_ID
+    # The request is gone from the queue once approved.
+    assert _access_requests(auth_client, email) == []
 
 
-def test_rejected_access_request_is_deleted_and_can_reapply(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+# Rejection is a recorded STATE on the kept (deactivated) stub — users are
+# never physically deleted (signer identities reference them and the
+# append-only privilege tiering makes a DELETE fail on the primary; fixed
+# 2026-08-16: users.access_rejected_at, migration 202608160016). A fresh
+# sign-in by the same email clears the rejection and re-opens the request.
+def test_rejected_access_request_is_recorded_not_deleted_and_can_reapply(
+    auth_client: TestClient,
+    real_session: Session,
+    prime_admin: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    org_id, admin_id = _seed_user(role="admin")
-    _seed_sso_connection(org_id, allowed_email_domains=["newbank.example"], jit_enabled=True)
+    prime_admin(role="admin")
+    _configure_sso_connection(
+        real_session, allowed_email_domains=["newbank.example"], jit_enabled=True
+    )
     _patch_verify(monkeypatch)
-    admin = headers(org_id=org_id, user_id=admin_id, roles=("admin",))
-    token = _id_token(sub="google|temp", email="temp@newbank.example")
+    email = f"temp-{uuid4().hex[:8]}@newbank.example"
+    token = _id_token(sub=f"google|{uuid4().hex}", email=email)
 
-    assert db_client.post("/api/v1/auth/sso", json={"id_token": token}).status_code == 403
-    request_id = db_client.get("/api/v1/auth/sso/access-requests", headers=admin).json()[0][
-        "user_id"
-    ]
-    rejected = db_client.post(
-        f"/api/v1/auth/sso/access-requests/{request_id}/reject", headers=admin
+    assert auth_client.post("/api/v1/auth/sso", json={"id_token": token}).status_code == 403
+    request_id = _access_requests(auth_client, email)[0]["user_id"]
+    rejected = auth_client.post(
+        f"/api/v1/auth/sso/access-requests/{request_id}/reject", headers=real_headers()
     )
     assert rejected.status_code == 204
-    assert db_client.get("/api/v1/auth/sso/access-requests", headers=admin).json() == []
+    assert _access_requests(auth_client, email) == []
     # Still no access; a fresh sign-in just records a new request.
-    assert db_client.post("/api/v1/auth/sso", json={"id_token": token}).status_code == 403
-    assert len(db_client.get("/api/v1/auth/sso/access-requests", headers=admin).json()) == 1
+    assert auth_client.post("/api/v1/auth/sso", json={"id_token": token}).status_code == 403
+    assert len(_access_requests(auth_client, email)) == 1
 
 
 def test_jit_still_rejects_domains_outside_the_allow_list(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    auth_client: TestClient,
+    real_session: Session,
+    prime_admin: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    org_id, _ = _seed_user(role="admin")
-    _seed_sso_connection(org_id, allowed_email_domains=["newbank.example"], jit_enabled=True)
+    prime_admin(role="admin")
+    _configure_sso_connection(
+        real_session, allowed_email_domains=["newbank.example"], jit_enabled=True
+    )
     _patch_verify(monkeypatch)
-    r = db_client.post(
+    r = auth_client.post(
         "/api/v1/auth/sso",
         json={"id_token": _id_token(sub="google|drifter", email="drifter@gmail.example")},
     )
@@ -387,34 +492,55 @@ def test_jit_still_rejects_domains_outside_the_allow_list(
 
 
 def test_jit_without_domain_list_never_creates_accounts(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    auth_client: TestClient,
+    real_session: Session,
+    prime_admin: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # A hand-edited row (jit on, no domains) must fail closed at login time.
-    org_id, _ = _seed_user(role="admin")
-    _seed_sso_connection(org_id, allowed_email_domains=[], jit_enabled=True)
+    prime_admin(role="admin")
+    _configure_sso_connection(real_session, allowed_email_domains=[], jit_enabled=True)
     _patch_verify(monkeypatch)
-    r = db_client.post(
+    email = "anyone@anywhere.example"
+    r = auth_client.post(
         "/api/v1/auth/sso",
-        json={"id_token": _id_token(sub="google|anyone", email="anyone@anywhere.example")},
+        json={"id_token": _id_token(sub="google|anyone", email=email)},
     )
     assert r.status_code == 401
+    real_session.info["organization_id"] = REAL_ORG_ID
+    assert real_session.scalar(select(User.id).where(User.email == email)) is None
 
 
-def test_viewer_is_read_only_analyst_can_mutate(db_client: TestClient) -> None:
+def test_viewer_is_read_only_analyst_can_mutate(real_client: TestClient) -> None:
+    """RBAC ladder is enforced from the token's role claims (the real admin's
+    identity, narrowed per request)."""
     # A viewer can read...
-    assert db_client.get("/api/v1/banks", headers=headers(roles=("viewer",))).status_code == 200
+    assert (
+        real_client.get("/api/v1/banks", headers=real_headers(roles=("viewer",))).status_code == 200
+    )
     # ...but every mutation endpoint rejects them (403 — RBAC write gate).
-    viewer_mutate = db_client.post("/api/v1/banks/seed-demo", headers=headers(roles=("viewer",)))
+    payload = {
+        "as_of_date": "2026-06-30",
+        "idempotency_key": f"auth-rbac-{uuid4().hex}",
+        "reason": "RBAC write-gate check",
+    }
+    viewer_mutate = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/push-batches",
+        headers=real_headers(roles=("viewer",)),
+        json=payload,
+    )
     assert viewer_mutate.status_code == 403
     # analyst (or higher) may mutate.
-    assert (
-        db_client.post("/api/v1/banks/seed-demo", headers=headers(roles=("analyst",))).status_code
-        == 200
+    analyst_mutate = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/push-batches",
+        headers=real_headers(roles=("analyst",)),
+        json=payload,
     )
+    assert analyst_mutate.status_code == 201, analyst_mutate.text
 
 
-def test_unknown_email_is_rejected_uniformly(db_client: TestClient) -> None:
-    r = db_client.post(
+def test_unknown_email_is_rejected_uniformly(auth_client: TestClient) -> None:
+    r = auth_client.post(
         "/api/v1/auth/login", json={"email": "nobody@nowhere.example", "password": "x"}
     )
     assert r.status_code == 401

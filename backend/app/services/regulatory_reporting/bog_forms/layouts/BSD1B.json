@@ -1,0 +1,753 @@
+{
+ "form": "BSD1B",
+ "workbook": "FORM BSD1B.XLS",
+ "sheets": [
+  {
+   "name": "FORM FXP",
+   "max_row": 46,
+   "max_col": 11,
+   "column_widths": {
+    "A": 4.56,
+    "B": 15.85,
+    "C": 19.7,
+    "D": 21.28,
+    "E": 18.14,
+    "F": 11.85,
+    "G": 16.28,
+    "H": 11.42,
+    "I": 9.28,
+    "J": 8.85
+   },
+   "merges": [
+    "E12:F12",
+    "C12:D12",
+    "I12:J12",
+    "G12:H12",
+    "B8:K8",
+    "A13:B13"
+   ],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "[Form FXP]",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "[Form FXP]",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J1",
+     "kind": "label",
+     "value": "(Daily)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "REPORT ON FOREX OPEN POSITION(S)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "(Daily)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A3",
+     "kind": "label",
+     "value": "Reporting Institution:     FIRST ATLANTIC MERCHANT BANK LTD",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B3",
+     "kind": "label",
+     "value": "Reporting Institution:     ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A4",
+     "kind": "label",
+     "value": "Reporting as at 1 Sept. 2003",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B4",
+     "kind": "label",
+     "value": "Reporting  as at                        ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A5",
+     "kind": "label",
+     "value": "Position(s) as at 29",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": "Position(s) as on      ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C6",
+     "kind": "label",
+     "value": "(DAY)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D6",
+     "kind": "label",
+     "value": "(MONTH)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E6",
+     "kind": "label",
+     "value": "(YEAR)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "(¢'Million)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "1. CURRENCY-WISE POSITIONS (EXPOSURES)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B8",
+     "kind": "label",
+     "value": "1. CURRENCY-WISE POSITIONS (EXPOSURES)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "(Amounts in Units of Currencies)",
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "(Amounts in Units of Currencies)",
+     "align": "general"
+    },
+    {
+     "ref": "C12",
+     "kind": "label",
+     "value": "US Dollar",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E12",
+     "kind": "label",
+     "value": "GBP",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "G12",
+     "kind": "label",
+     "value": "EURO",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "I12",
+     "kind": "label",
+     "value": "Other Currencies",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "Position Component",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C13",
+     "kind": "label",
+     "value": "Amount",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D13",
+     "kind": "label",
+     "value": "(Nature of Position)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E13",
+     "kind": "label",
+     "value": "Amount",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "F13",
+     "kind": "label",
+     "value": "(Nature of Position)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "G13",
+     "kind": "label",
+     "value": "Amount",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "H13",
+     "kind": "label",
+     "value": "(Nature of Position)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "I13",
+     "kind": "label",
+     "value": "Amount",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "J13",
+     "kind": "label",
+     "value": "(Nature of Position)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "I)",
+     "align": "right"
+    },
+    {
+     "ref": "B14",
+     "kind": "label",
+     "value": "Net Assets",
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "label",
+     "value": "ii)",
+     "align": "right"
+    },
+    {
+     "ref": "B16",
+     "kind": "label",
+     "value": "Liabilities on contingent credits",
+     "align": "left"
+    },
+    {
+     "ref": "A18",
+     "kind": "label",
+     "value": "iii)",
+     "align": "right"
+    },
+    {
+     "ref": "B18",
+     "kind": "label",
+     "value": "Net Trading Position (under contracts outstanding)",
+     "align": "left"
+    },
+    {
+     "ref": "B19",
+     "kind": "label",
+     "value": "NET OPEN POSITION (NOP) (I+ii+iii)",
+     "bold": true,
+     "align": "left"
+    },
+    {
+     "ref": "B22",
+     "kind": "label",
+     "value": "Cedi equivalent (in 000) (of NOP in currency)",
+     "align": "left"
+    },
+    {
+     "ref": "B24",
+     "kind": "label",
+     "value": "Single curr. Open Position",
+     "align": "general"
+    },
+    {
+     "ref": "B26",
+     "kind": "label",
+     "value": "Management limit, if any, on NOP in currency",
+     "align": "left"
+    },
+    {
+     "ref": "B27",
+     "kind": "label",
+     "value": "Revaluation Rates",
+     "align": "general"
+    },
+    {
+     "ref": "B30",
+     "kind": "label",
+     "value": "Currency",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C30",
+     "kind": "label",
+     "value": "Net Open Position",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D30",
+     "kind": "label",
+     "value": "(Nature of Position)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B31",
+     "kind": "label",
+     "value": "US Dollar",
+     "align": "general"
+    },
+    {
+     "ref": "B32",
+     "kind": "label",
+     "value": "GB Pound",
+     "align": "general"
+    },
+    {
+     "ref": "B33",
+     "kind": "label",
+     "value": "EURO",
+     "align": "general"
+    },
+    {
+     "ref": "B34",
+     "kind": "label",
+     "value": "Other Currencies",
+     "align": "general"
+    },
+    {
+     "ref": "B36",
+     "kind": "label",
+     "value": "a.  AGGREGATE FOREX OPEN POSITION (AFOP)",
+     "bold": true,
+     "align": "left"
+    },
+    {
+     "ref": "B37",
+     "kind": "label",
+     "value": "b. Net own funds (NOF)[Networth]",
+     "align": "general"
+    },
+    {
+     "ref": "B38",
+     "kind": "label",
+     "value": "c. AFOP as % of NOF",
+     "align": "general"
+    },
+    {
+     "ref": "C38",
+     "kind": "formula",
+     "formula": "=C36/C37",
+     "number_format": "0.00%",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "AFOP",
+   "max_row": 17,
+   "max_col": 3,
+   "column_widths": {
+    "A": 29.13,
+    "B": 20.13,
+    "C": 20.7
+   },
+   "merges": [
+    "A5:C5",
+    "A3:C3"
+   ],
+   "cells": [
+    {
+     "ref": "A3",
+     "kind": "label",
+     "value": "II. AGGREGATE FOREX OPEN POSITION",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A5",
+     "kind": "label",
+     "value": "(Amounts in cedi equiv.)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A7",
+     "kind": "label",
+     "value": "Currency",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "Net Open Position",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C7",
+     "kind": "label",
+     "value": "(Nature of Position)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "US Dollar",
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "GB Pound",
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "EURO",
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "Other Currencies",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "a.  AGGREGATE FOREX OPEN POSITION (AFOP)",
+     "bold": true,
+     "align": "left"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "b. Net own funds (NOF)[Networth]",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "c. AFOP as % of NOF",
+     "align": "general"
+    },
+    {
+     "ref": "B15",
+     "kind": "formula",
+     "formula": "=B13/B14",
+     "number_format": "0.00%",
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "label",
+     "value": "Regulatory (ie BoG)limit, if any, on AFOP.",
+     "align": "left"
+    }
+   ]
+  },
+  {
+   "name": "SCHEDULE B",
+   "max_row": 12,
+   "max_col": 6,
+   "column_widths": {
+    "A": 21.42,
+    "B": 12.56,
+    "C": 11.42,
+    "D": 14.28,
+    "F": 19.85
+   },
+   "merges": [
+    "A3:F3",
+    "A2:F2",
+    "A1:F1"
+   ],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "SCHEDULE B",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "LIABILITIES ON ACCOUNT",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A3",
+     "kind": "label",
+     "value": "CONTINGENT EXPOSURES (IN CURRENCIES)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A5",
+     "kind": "label",
+     "value": "Liabilities (crystallised) under Contingents",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": "USD",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C5",
+     "kind": "label",
+     "value": "GBP",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D5",
+     "kind": "label",
+     "value": "DEM",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E5",
+     "kind": "label",
+     "value": "EURO",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "F5",
+     "kind": "label",
+     "value": "Other Currencies (in equiv. Cedis - ¢'Million)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A6",
+     "kind": "label",
+     "value": "a.   Letters of Credit",
+     "align": "general"
+    },
+    {
+     "ref": "B6",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "C6",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "D6",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "F6",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "A7",
+     "kind": "label",
+     "value": "b.   Guarantees",
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "C7",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "F7",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "c.   Other Commitments",
+     "align": "general"
+    },
+    {
+     "ref": "B8",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "C8",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "D8",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "F8",
+     "kind": "input",
+     "value": 0,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "Total",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B10",
+     "kind": "formula",
+     "formula": "=SUM(B6:B8)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "C10",
+     "kind": "formula",
+     "formula": "=SUM(C6:C8)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "D10",
+     "kind": "formula",
+     "formula": "=SUM(D6:D8)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "F10",
+     "kind": "formula",
+     "formula": "=SUM(F6:F8)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "Net Position (L or S)",
+     "align": "general"
+    },
+    {
+     "ref": "B12",
+     "kind": "formula",
+     "formula": "=IF(B10<0,\"( S )\",IF(B10=0,\"-\",\"( L )\"))",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C12",
+     "kind": "formula",
+     "formula": "=IF(C10<0,\"( S )\",IF(C10=0,\"-\",\"( L )\"))",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D12",
+     "kind": "formula",
+     "formula": "=IF(D10<0,\"( S )\",IF(D10=0,\"-\",\"( L )\"))",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "F12",
+     "kind": "formula",
+     "formula": "=IF(F10<0,\"( S )\",IF(F10=0,\"-\",\"( L )\"))",
+     "bold": true,
+     "align": "center"
+    }
+   ]
+  }
+ ]
+}

@@ -2,7 +2,7 @@
 
 /**
  * Regulatory pack cards for the Reports library: the two Bank of Ghana
- * returns (BSD-2 capital, BSD-3 liquidity) linking to their module-owned
+ * returns (CAR-RWA capital, LCR-NSFR liquidity — recoded 2026-08-15; the official BoG BSD forms are the 'bsd' family) linking to their module-owned
  * submission pages, plus the print-optimized Board Pack composite owned by
  * this module. Readiness comes from the same BSD preview hooks the module
  * pages use — this card deck never rebuilds the returns themselves.
@@ -61,20 +61,20 @@ export default function PackCards({
     runId?: string;
   }[] = [
     {
-      form: 'BSD-2',
+      form: 'CAR-RWA',
       title: `${regShort()} Capital Adequacy Return`,
       description:
         'Capital structure, risk-weighted assets, and capital ratios — generated from the latest successful baseline capital run; official packages live in the Regulatory Reporting hub.',
-      href: '/submissions/returns?code=BSD2',
+      href: '/submissions/returns?code=CAR-RWA',
       status: packStatus(bsd2),
       runId: bsd2.data?.runId,
     },
     {
-      form: 'BSD-3',
+      form: 'LCR-NSFR',
       title: `${regShort()} Liquidity Return (LCR & NSFR)`,
       description:
         'Liquidity Coverage Ratio and Net Stable Funding Ratio — generated from the latest successful baseline liquidity run; official packages live in the Regulatory Reporting hub.',
-      href: '/submissions/returns?code=BSD3',
+      href: '/submissions/returns?code=LCR-NSFR',
       status: packStatus(bsd3),
       runId: bsd3.data?.runId,
     },

@@ -64,8 +64,8 @@ test.describe('submission pipeline', () => {
     await page.goto('/submissions');
     await expect(page).toHaveURL(/\/submissions/);
     // The obligation table is populated from listReportingObligations for the
-    // seeded bank — BSD3 (monthly liquidity return) must appear.
-    await expect(page.getByText('BSD3').first()).toBeVisible();
+    // seeded bank — LCR-NSFR (monthly liquidity return; the legacy 'BSD3' code was recoded — official BSD3 is Large Exposures) must appear.
+    await expect(page.getByText('LCR-NSFR').first()).toBeVisible();
   });
 
   test('journey 3: history renders the package/version ledger', async ({ page }) => {
@@ -79,7 +79,7 @@ test.describe('submission pipeline', () => {
 
     await page.goto('/submissions/history');
     await expect(page).toHaveURL(/\/submissions\/history/);
-    await expect(page.getByText('BSD3').first()).toBeVisible();
+    await expect(page.getByText('LCR-NSFR').first()).toBeVisible();
   });
 
   test('journey 4: a prior version yields its files, its signers, and a diff', async ({

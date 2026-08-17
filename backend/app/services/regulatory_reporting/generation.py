@@ -1450,6 +1450,7 @@ liquidity_snapshot_metadata = _liquidity_metadata
 
 # Imported at the bottom — after the seams above are defined — so the module
 # pairs load cleanly regardless of which side is imported first.
+from app.services.regulatory_reporting.bog_forms.generation import BOG_GENERATORS  # noqa: E402
 from app.services.regulatory_reporting.dbk_generation import DBK_GENERATORS  # noqa: E402
 from app.services.regulatory_reporting.le_generation import LE_GENERATORS  # noqa: E402
 from app.services.regulatory_reporting.lrt_generation import LRT_GENERATORS  # noqa: E402
@@ -1465,6 +1466,7 @@ _GENERATORS = {
     **LRT_GENERATORS,
     **LE_GENERATORS,
     **DBK_GENERATORS,
+    **BOG_GENERATORS,
 }
 
 __all__ = [

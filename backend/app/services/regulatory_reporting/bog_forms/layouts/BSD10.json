@@ -1,0 +1,609 @@
+{
+ "form": "BSD10",
+ "workbook": "FORM BSD10 REVISED.xls",
+ "sheets": [
+  {
+   "name": "BSD10",
+   "max_row": 18,
+   "max_col": 11,
+   "column_widths": {
+    "A": 3.14,
+    "B": 30.85,
+    "C": 10.99,
+    "D": 11.13,
+    "E": 10.71,
+    "F": 11.56,
+    "G": 11.13,
+    "H": 14.99
+   },
+   "merges": [
+    "B3:C3"
+   ],
+   "cells": [
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H1",
+     "kind": "label",
+     "value": "FORM BSD 10",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B3",
+     "kind": "label",
+     "value": "                 CAPITAL  EXPENDITURE",
+     "bold": true,
+     "align": "right"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": "(¢'Million)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C6",
+     "kind": "label",
+     "value": "Land and Buildings",
+     "align": "center"
+    },
+    {
+     "ref": "D6",
+     "kind": "label",
+     "value": "Furniture and Equipment",
+     "align": "center"
+    },
+    {
+     "ref": "E6",
+     "kind": "label",
+     "value": "Computers",
+     "align": "center"
+    },
+    {
+     "ref": "F6",
+     "kind": "label",
+     "value": "Other Office   Equipment",
+     "align": "center"
+    },
+    {
+     "ref": "G6",
+     "kind": "label",
+     "value": "Motor     Vehicles",
+     "align": "center"
+    },
+    {
+     "ref": "H6",
+     "kind": "label",
+     "value": "Total",
+     "align": "center"
+    },
+    {
+     "ref": "A7",
+     "kind": "label",
+     "value": "A.",
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "Purchased",
+     "align": "general"
+    },
+    {
+     "ref": "C7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H7",
+     "kind": "formula",
+     "formula": "=SUM(C7:G7)",
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "B.",
+     "align": "general"
+    },
+    {
+     "ref": "B8",
+     "kind": "label",
+     "value": "On finance-lease",
+     "align": "general"
+    },
+    {
+     "ref": "C8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H8",
+     "kind": "formula",
+     "formula": "=SUM(C8:G8)",
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "C.",
+     "align": "general"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "On Hire-Purchase",
+     "align": "general"
+    },
+    {
+     "ref": "C9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H9",
+     "kind": "formula",
+     "formula": "=SUM(C9:G9)",
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "D.",
+     "align": "general"
+    },
+    {
+     "ref": "B10",
+     "kind": "label",
+     "value": "Capital WIP",
+     "align": "general"
+    },
+    {
+     "ref": "C10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H10",
+     "kind": "formula",
+     "formula": "=SUM(C10:G10)",
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "E.",
+     "align": "general"
+    },
+    {
+     "ref": "B11",
+     "kind": "label",
+     "value": "Contracted but not  provided",
+     "align": "general"
+    },
+    {
+     "ref": "C11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H11",
+     "kind": "formula",
+     "formula": "=SUM(C11:G11)",
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "F.",
+     "align": "general"
+    },
+    {
+     "ref": "B12",
+     "kind": "label",
+     "value": "Authorised but not contracted",
+     "align": "general"
+    },
+    {
+     "ref": "C12",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D12",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E12",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F12",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G12",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H12",
+     "kind": "formula",
+     "formula": "=SUM(C12:G12)",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "G.",
+     "align": "general"
+    },
+    {
+     "ref": "B13",
+     "kind": "label",
+     "value": "Forecast to be acquired in next  six  months",
+     "align": "general"
+    },
+    {
+     "ref": "C13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H13",
+     "kind": "formula",
+     "formula": "=SUM(C13:G13)",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "H.",
+     "align": "general"
+    },
+    {
+     "ref": "B14",
+     "kind": "label",
+     "value": "Disposal proceeds",
+     "align": "general"
+    },
+    {
+     "ref": "C14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H14",
+     "kind": "formula",
+     "formula": "=SUM(C14:G14)",
+     "align": "general"
+    },
+    {
+     "ref": "B16",
+     "kind": "label",
+     "value": "Forecast to be acquired 0 - 3 months",
+     "align": "general"
+    },
+    {
+     "ref": "C16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H16",
+     "kind": "formula",
+     "formula": "=SUM(C16:G16)",
+     "align": "general"
+    },
+    {
+     "ref": "B17",
+     "kind": "label",
+     "value": "                                   3 - 6 months",
+     "align": "general"
+    },
+    {
+     "ref": "C17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H17",
+     "kind": "formula",
+     "formula": "=SUM(C17:G17)",
+     "align": "general"
+    },
+    {
+     "ref": "B18",
+     "kind": "label",
+     "value": "Total",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C18",
+     "kind": "formula",
+     "formula": "=C16+C17",
+     "align": "general"
+    },
+    {
+     "ref": "D18",
+     "kind": "formula",
+     "formula": "=D16+D17",
+     "align": "general"
+    },
+    {
+     "ref": "E18",
+     "kind": "formula",
+     "formula": "=E16+E17",
+     "align": "general"
+    },
+    {
+     "ref": "F18",
+     "kind": "formula",
+     "formula": "=F16+F17",
+     "align": "general"
+    },
+    {
+     "ref": "G18",
+     "kind": "formula",
+     "formula": "=G16+G17",
+     "align": "general"
+    },
+    {
+     "ref": "H18",
+     "kind": "formula",
+     "formula": "=H16+H17",
+     "align": "general"
+    }
+   ]
+  }
+ ]
+}

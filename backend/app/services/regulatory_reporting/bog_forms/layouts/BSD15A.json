@@ -1,0 +1,2056 @@
+{
+ "form": "BSD15A",
+ "workbook": "FORM BSD15A REVISED.xls",
+ "sheets": [
+  {
+   "name": "Domestic charges of banks",
+   "max_row": 233,
+   "max_col": 19,
+   "column_widths": {
+    "B": 41.56
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF INSTITUTION:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A3",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A4",
+     "kind": "label",
+     "value": "RATES OF COMMISSION AND OTHER CHARGES OF BANKS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A6",
+     "kind": "label",
+     "value": "DOMESTIC BANKING",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "ITEM",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A9",
+     "kind": "input",
+     "value": 1,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "COMMISSION ON TURNOVER (COT)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B10",
+     "kind": "label",
+     "value": "      minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B11",
+     "kind": "label",
+     "value": "      maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B12",
+     "kind": "label",
+     "value": "      Ledger Fees",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B13",
+     "kind": "label",
+     "value": "      minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B14",
+     "kind": "label",
+     "value": "      maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "input",
+     "value": 2,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B16",
+     "kind": "label",
+     "value": "MAINTENANCE FEE  (SAVINGS ACCOUNT)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B17",
+     "kind": "label",
+     "value": "      Above ¢2,000,000",
+     "align": "general"
+    },
+    {
+     "ref": "B18",
+     "kind": "label",
+     "value": "      BT ¢1,000,000 - ¢2,000,000",
+     "align": "general"
+    },
+    {
+     "ref": "B19",
+     "kind": "label",
+     "value": "      BT ¢500,000 - ¢1,000,000",
+     "align": "general"
+    },
+    {
+     "ref": "B20",
+     "kind": "label",
+     "value": "      Bt ¢200,000.00 - ¢500,000.00",
+     "align": "general"
+    },
+    {
+     "ref": "B21",
+     "kind": "label",
+     "value": "      Below ¢200,000.00",
+     "align": "general"
+    },
+    {
+     "ref": "B22",
+     "kind": "label",
+     "value": "      SME's",
+     "align": "general"
+    },
+    {
+     "ref": "B23",
+     "kind": "label",
+     "value": "      MIA's",
+     "align": "general"
+    },
+    {
+     "ref": "A25",
+     "kind": "input",
+     "value": 3,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B25",
+     "kind": "label",
+     "value": "BANK DRAFT (PAYMENT ORDER)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B26",
+     "kind": "label",
+     "value": "      Bank's customers",
+     "align": "general"
+    },
+    {
+     "ref": "B27",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B28",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B29",
+     "kind": "label",
+     "value": "      Non customers",
+     "align": "general"
+    },
+    {
+     "ref": "B30",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B31",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B32",
+     "kind": "label",
+     "value": "   Cancelation of draft",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A34",
+     "kind": "input",
+     "value": 4,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B34",
+     "kind": "label",
+     "value": "RETURNED CHEQUES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B35",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B36",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A38",
+     "kind": "input",
+     "value": 5,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B38",
+     "kind": "label",
+     "value": "STOPPED CHEQUES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B39",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B40",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B41",
+     "kind": "label",
+     "value": "      Refer to Drawer",
+     "align": "general"
+    },
+    {
+     "ref": "B42",
+     "kind": "label",
+     "value": "      Returned uncleared effect (insufficient funds)",
+     "align": "general"
+    },
+    {
+     "ref": "B43",
+     "kind": "label",
+     "value": "      Returned uncleared effect (other reasons)",
+     "align": "general"
+    },
+    {
+     "ref": "A45",
+     "kind": "input",
+     "value": 6,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B45",
+     "kind": "label",
+     "value": "LOCAL TRANSFERS/REMITTANCES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B46",
+     "kind": "label",
+     "value": "Telegraphic Transfers",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B47",
+     "kind": "label",
+     "value": "      Customers",
+     "align": "general"
+    },
+    {
+     "ref": "B48",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B49",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B50",
+     "kind": "label",
+     "value": "      Non Customers",
+     "align": "general"
+    },
+    {
+     "ref": "B51",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B52",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B54",
+     "kind": "label",
+     "value": "Cable",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B55",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B56",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B57",
+     "kind": "label",
+     "value": "      Non customers",
+     "align": "general"
+    },
+    {
+     "ref": "B58",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B59",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B61",
+     "kind": "label",
+     "value": "Mail Transfer",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B62",
+     "kind": "label",
+     "value": "      Customer",
+     "align": "general"
+    },
+    {
+     "ref": "B63",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B64",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B65",
+     "kind": "label",
+     "value": "      Non customers",
+     "align": "general"
+    },
+    {
+     "ref": "B66",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B67",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B69",
+     "kind": "label",
+     "value": "Postage",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B70",
+     "kind": "label",
+     "value": "      Customer",
+     "align": "general"
+    },
+    {
+     "ref": "B71",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B72",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B73",
+     "kind": "label",
+     "value": "      Non customers",
+     "align": "general"
+    },
+    {
+     "ref": "B74",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B75",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A77",
+     "kind": "input",
+     "value": 7,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B77",
+     "kind": "label",
+     "value": "LENDING FEES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B78",
+     "kind": "label",
+     "value": "   Commitemnt fee",
+     "align": "general"
+    },
+    {
+     "ref": "B79",
+     "kind": "label",
+     "value": "   Processing",
+     "align": "general"
+    },
+    {
+     "ref": "B80",
+     "kind": "label",
+     "value": "   Property valuation Fee (open market value)",
+     "align": "general"
+    },
+    {
+     "ref": "B81",
+     "kind": "label",
+     "value": "   Guarantee Commission",
+     "align": "general"
+    },
+    {
+     "ref": "B82",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B83",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B84",
+     "kind": "label",
+     "value": "   Bid Security",
+     "align": "general"
+    },
+    {
+     "ref": "B85",
+     "kind": "label",
+     "value": "   Bank Credit Letter (Letter of Intent)",
+     "align": "general"
+    },
+    {
+     "ref": "B86",
+     "kind": "label",
+     "value": "   Mobilisation Guarantee",
+     "align": "general"
+    },
+    {
+     "ref": "B87",
+     "kind": "label",
+     "value": "   Retention Guaratee",
+     "align": "general"
+    },
+    {
+     "ref": "B88",
+     "kind": "label",
+     "value": "   Performance Bond",
+     "align": "general"
+    },
+    {
+     "ref": "B89",
+     "kind": "label",
+     "value": "   Default or restructured",
+     "align": "general"
+    },
+    {
+     "ref": "B90",
+     "kind": "label",
+     "value": "   Salary Credit Processing Fee",
+     "align": "general"
+    },
+    {
+     "ref": "B91",
+     "kind": "label",
+     "value": "   Overdraft Processing or Renewal Fee",
+     "align": "general"
+    },
+    {
+     "ref": "B92",
+     "kind": "label",
+     "value": "    Revolving Acceptance Credit",
+     "align": "general"
+    },
+    {
+     "ref": "B93",
+     "kind": "label",
+     "value": "    Arrangement Fee for Facilities",
+     "align": "general"
+    },
+    {
+     "ref": "A95",
+     "kind": "input",
+     "value": 8,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B95",
+     "kind": "label",
+     "value": "STATEMENTS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B96",
+     "kind": "label",
+     "value": "   Monthly",
+     "align": "general"
+    },
+    {
+     "ref": "B97",
+     "kind": "label",
+     "value": "   Screen printed",
+     "align": "general"
+    },
+    {
+     "ref": "B98",
+     "kind": "label",
+     "value": "   Duplicate (per sheet)",
+     "align": "general"
+    },
+    {
+     "ref": "B99",
+     "kind": "label",
+     "value": "   Certificate of Balance (per sheet)",
+     "align": "general"
+    },
+    {
+     "ref": "B100",
+     "kind": "label",
+     "value": "   Enquiries bt 1 year and 3 yrs (per sheet)",
+     "align": "general"
+    },
+    {
+     "ref": "B101",
+     "kind": "label",
+     "value": "   Enquiries 3yrs and above (per sheet)",
+     "align": "general"
+    },
+    {
+     "ref": "B102",
+     "kind": "label",
+     "value": "   Auditors Questionnaire",
+     "align": "general"
+    },
+    {
+     "ref": "A104",
+     "kind": "input",
+     "value": 9,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B104",
+     "kind": "label",
+     "value": "SPECIAL CLEARING",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B105",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B106",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A108",
+     "kind": "input",
+     "value": 10,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B108",
+     "kind": "label",
+     "value": "CLEARING",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B109",
+     "kind": "label",
+     "value": "Bank's cheques",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B110",
+     "kind": "label",
+     "value": "   Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B111",
+     "kind": "label",
+     "value": "   Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B112",
+     "kind": "label",
+     "value": "   Country Clearing",
+     "align": "general"
+    },
+    {
+     "ref": "B113",
+     "kind": "label",
+     "value": "   Other banks cheques",
+     "align": "general"
+    },
+    {
+     "ref": "B114",
+     "kind": "label",
+     "value": "   Mimimum",
+     "align": "general"
+    },
+    {
+     "ref": "B115",
+     "kind": "label",
+     "value": "   Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B117",
+     "kind": "label",
+     "value": "Other Bank's cheques marked ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B118",
+     "kind": "label",
+     "value": "  Commission on Drawer's A/c",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B119",
+     "kind": "label",
+     "value": "   Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B120",
+     "kind": "label",
+     "value": "   Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B122",
+     "kind": "label",
+     "value": "Interbranch Clearing (Bank's Cheques)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B123",
+     "kind": "label",
+     "value": "   Bank's branches",
+     "align": "general"
+    },
+    {
+     "ref": "B124",
+     "kind": "label",
+     "value": "  Other bank's Presentation: Marked Comm. A/c Drawer",
+     "align": "general"
+    },
+    {
+     "ref": "B125",
+     "kind": "label",
+     "value": "   Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B126",
+     "kind": "label",
+     "value": "   Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B127",
+     "kind": "label",
+     "value": "  No commission mark (Comm borne by payee)",
+     "align": "general"
+    },
+    {
+     "ref": "B128",
+     "kind": "label",
+     "value": "   Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B129",
+     "kind": "label",
+     "value": "   Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B131",
+     "kind": "label",
+     "value": "Interbranch Clearing (Other Bank's Cheques)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B132",
+     "kind": "label",
+     "value": "   No commission mark(Comm borne by payee)",
+     "align": "general"
+    },
+    {
+     "ref": "B133",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B134",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B135",
+     "kind": "label",
+     "value": "   Marked Comm.A/c Drawer",
+     "align": "general"
+    },
+    {
+     "ref": "B136",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B137",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B139",
+     "kind": "label",
+     "value": "Cheque Withdrawal Outside Drawee Branch by Phone/Radio",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B140",
+     "kind": "label",
+     "value": "      Customer",
+     "align": "general"
+    },
+    {
+     "ref": "B141",
+     "kind": "label",
+     "value": "      Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B142",
+     "kind": "label",
+     "value": "      Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A144",
+     "kind": "input",
+     "value": 11,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B144",
+     "kind": "label",
+     "value": "OUTSIDE ZONE CHEQUE PURCHASED",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B145",
+     "kind": "label",
+     "value": "    minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B146",
+     "kind": "label",
+     "value": "    maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A148",
+     "kind": "input",
+     "value": 12,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B148",
+     "kind": "label",
+     "value": "CHEQUE FOR COLLECTION",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B149",
+     "kind": "label",
+     "value": "    minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B150",
+     "kind": "label",
+     "value": "    maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A152",
+     "kind": "input",
+     "value": 13,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B152",
+     "kind": "label",
+     "value": "STANDING ORDERS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B153",
+     "kind": "label",
+     "value": "    Internal",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B154",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B155",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B156",
+     "kind": "label",
+     "value": "    External",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B157",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B158",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A160",
+     "kind": "input",
+     "value": 14,
+     "align": "general"
+    },
+    {
+     "ref": "B160",
+     "kind": "label",
+     "value": "SALARY TRANSFERS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B161",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B162",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B164",
+     "kind": "label",
+     "value": "   Non Salary Transfers",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B165",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B166",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A168",
+     "kind": "input",
+     "value": 15,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B168",
+     "kind": "label",
+     "value": "SALARY PROCESSING FEE",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B169",
+     "kind": "label",
+     "value": "    Internal",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B170",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B171",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B172",
+     "kind": "label",
+     "value": "    External",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B173",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B174",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A176",
+     "kind": "input",
+     "value": 16,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B176",
+     "kind": "label",
+     "value": "PENSION PROCESSING FEE",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B177",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B178",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A180",
+     "kind": "input",
+     "value": 17,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B180",
+     "kind": "label",
+     "value": "UNPAID STANDING ORDER",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B181",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B182",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A184",
+     "kind": "input",
+     "value": 18,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B184",
+     "kind": "label",
+     "value": "CLOSURE OF ACCOUNTS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B185",
+     "kind": "label",
+     "value": "   Savings a/c",
+     "align": "general"
+    },
+    {
+     "ref": "B186",
+     "kind": "label",
+     "value": "   Current a/c",
+     "align": "general"
+    },
+    {
+     "ref": "A188",
+     "kind": "input",
+     "value": 19,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B188",
+     "kind": "label",
+     "value": "SAFE CUSTODY (Account holders only)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B189",
+     "kind": "label",
+     "value": "   Envelopes (per quarter)",
+     "align": "general"
+    },
+    {
+     "ref": "B190",
+     "kind": "label",
+     "value": "   Boxes (per quarter)",
+     "align": "general"
+    },
+    {
+     "ref": "B191",
+     "kind": "label",
+     "value": "   Parcels ",
+     "align": "general"
+    },
+    {
+     "ref": "B192",
+     "kind": "label",
+     "value": "   Others",
+     "align": "general"
+    },
+    {
+     "ref": "A194",
+     "kind": "input",
+     "value": 20,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B194",
+     "kind": "label",
+     "value": "CHEQUE AND SAVINGS PASS BOOKS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B195",
+     "kind": "label",
+     "value": "  Personal Accounts (25 leaflets)",
+     "align": "general"
+    },
+    {
+     "ref": "B196",
+     "kind": "label",
+     "value": "  Personal Accounts (50 leaflets)",
+     "align": "general"
+    },
+    {
+     "ref": "B197",
+     "kind": "label",
+     "value": "  Corporate Accounts (50 Leaflets)",
+     "align": "general"
+    },
+    {
+     "ref": "B198",
+     "kind": "label",
+     "value": "  Corporate Accounts (100 Leaflets)",
+     "align": "general"
+    },
+    {
+     "ref": "B199",
+     "kind": "label",
+     "value": "  Plus Stamp Duty ( per Leaflet)",
+     "align": "general"
+    },
+    {
+     "ref": "B200",
+     "kind": "label",
+     "value": "  Cheque voucher retrieval",
+     "align": "general"
+    },
+    {
+     "ref": "B201",
+     "kind": "label",
+     "value": "  Sale of cheque leaflet",
+     "align": "general"
+    },
+    {
+     "ref": "B202",
+     "kind": "label",
+     "value": "  Replacement of Lost Savings Pass Book",
+     "align": "general"
+    },
+    {
+     "ref": "A204",
+     "kind": "input",
+     "value": 21,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B204",
+     "kind": "label",
+     "value": "ATM",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B205",
+     "kind": "label",
+     "value": "   Issuing",
+     "align": "general"
+    },
+    {
+     "ref": "B206",
+     "kind": "label",
+     "value": "   Cash Machine withdrawal",
+     "align": "general"
+    },
+    {
+     "ref": "B207",
+     "kind": "label",
+     "value": "   Replacement of lost/damage card",
+     "align": "general"
+    },
+    {
+     "ref": "B208",
+     "kind": "label",
+     "value": "   Replacement of PIN",
+     "align": "general"
+    },
+    {
+     "ref": "B209",
+     "kind": "label",
+     "value": "   Transaction fee per withdrawal",
+     "align": "general"
+    },
+    {
+     "ref": "A211",
+     "kind": "input",
+     "value": 22,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B211",
+     "kind": "label",
+     "value": "SIKA CARD ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B212",
+     "kind": "label",
+     "value": "    Loading Fee: per ¢100,000",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B213",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B214",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B216",
+     "kind": "label",
+     "value": "   Other Charges:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B217",
+     "kind": "label",
+     "value": "  First time purchaser",
+     "align": "general"
+    },
+    {
+     "ref": "B218",
+     "kind": "label",
+     "value": "  Lost/debased cards",
+     "align": "general"
+    },
+    {
+     "ref": "B219",
+     "kind": "label",
+     "value": "  Card replacement",
+     "align": "general"
+    },
+    {
+     "ref": "B220",
+     "kind": "label",
+     "value": "  Card extension",
+     "align": "general"
+    },
+    {
+     "ref": "B222",
+     "kind": "label",
+     "value": "  Sika Card - Merchants",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B223",
+     "kind": "label",
+     "value": "  License/Insurance Fee (per month)",
+     "align": "general"
+    },
+    {
+     "ref": "B225",
+     "kind": "label",
+     "value": "   Sika Card - Cash Back",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B226",
+     "kind": "label",
+     "value": "   Above ¢10 million: per ¢100,000",
+     "align": "general"
+    },
+    {
+     "ref": "B227",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B228",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B229",
+     "kind": "label",
+     "value": "   Below ¢10 million: per ¢100,000",
+     "align": "general"
+    },
+    {
+     "ref": "B230",
+     "kind": "label",
+     "value": "   minimum",
+     "align": "general"
+    },
+    {
+     "ref": "B231",
+     "kind": "label",
+     "value": "   maximum",
+     "align": "general"
+    },
+    {
+     "ref": "B233",
+     "kind": "label",
+     "value": "ALL CHARGES AND FEES NOT ACCOUNTED FOR ABOVE SHOULD BE LISTED BELOW",
+     "bold": true,
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "Range of pdts i.r.o sav & cur ",
+   "max_row": 124,
+   "max_col": 18,
+   "column_widths": {
+    "A": 36.56
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF INSTITUTION:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A3",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A5",
+     "kind": "label",
+     "value": "RANGE OF  PRODUCTS OF BANKS IN RESPECT OF SAVINGS AND CURRENT ACCOUNTS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A7",
+     "kind": "label",
+     "value": "DOMESTIC BANKING",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "(Amounts in Cedis)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "ITEM",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "1.  SAVINGS A/C (S1)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "    Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "    Minimum Operating Bal",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "label",
+     "value": "    Penal Charges:",
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A18",
+     "kind": "label",
+     "value": "    Transaction fee",
+     "align": "general"
+    },
+    {
+     "ref": "A19",
+     "kind": "label",
+     "value": "    Dormant Account Maintenance Fee",
+     "align": "general"
+    },
+    {
+     "ref": "A21",
+     "kind": "label",
+     "value": "2.  SAVINGS A/C (S2)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A22",
+     "kind": "label",
+     "value": "    Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A23",
+     "kind": "label",
+     "value": "    Minimum Operating Bal",
+     "align": "general"
+    },
+    {
+     "ref": "A24",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A25",
+     "kind": "label",
+     "value": "    Penal Charges:",
+     "align": "general"
+    },
+    {
+     "ref": "A26",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A27",
+     "kind": "label",
+     "value": "    Transaction fee",
+     "align": "general"
+    },
+    {
+     "ref": "A28",
+     "kind": "label",
+     "value": "    Dormant Account Maintenance Fee",
+     "align": "general"
+    },
+    {
+     "ref": "A30",
+     "kind": "label",
+     "value": " 3.  SAVINGS A/C (S3)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A31",
+     "kind": "label",
+     "value": "    Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A32",
+     "kind": "label",
+     "value": "    Minimum Operating Bal",
+     "align": "general"
+    },
+    {
+     "ref": "A33",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A34",
+     "kind": "label",
+     "value": "    Penal Charges:",
+     "align": "general"
+    },
+    {
+     "ref": "A35",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A36",
+     "kind": "label",
+     "value": "    Transaction fee",
+     "align": "general"
+    },
+    {
+     "ref": "A37",
+     "kind": "label",
+     "value": "    Dormant Account Maintenance Fee",
+     "align": "general"
+    },
+    {
+     "ref": "A39",
+     "kind": "label",
+     "value": "4.   SAVINGS A/C (S4)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A40",
+     "kind": "label",
+     "value": "    Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A41",
+     "kind": "label",
+     "value": "    Minimum Operating Bal",
+     "align": "general"
+    },
+    {
+     "ref": "A42",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A43",
+     "kind": "label",
+     "value": "    Penal Charges:",
+     "align": "general"
+    },
+    {
+     "ref": "A44",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A45",
+     "kind": "label",
+     "value": "    Transaction fee",
+     "align": "general"
+    },
+    {
+     "ref": "A46",
+     "kind": "label",
+     "value": "    Dormant Account Maintenance Fee",
+     "align": "general"
+    },
+    {
+     "ref": "A48",
+     "kind": "label",
+     "value": "5.   SAVINGS A/C (S5)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A49",
+     "kind": "label",
+     "value": "    Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A50",
+     "kind": "label",
+     "value": "    Minimum Operating Bal",
+     "align": "general"
+    },
+    {
+     "ref": "A51",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A52",
+     "kind": "label",
+     "value": "    Penal Charges:",
+     "align": "general"
+    },
+    {
+     "ref": "A53",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A54",
+     "kind": "label",
+     "value": "    Transaction fee",
+     "align": "general"
+    },
+    {
+     "ref": "A55",
+     "kind": "label",
+     "value": "    Dormant Account Maintenance Fee",
+     "align": "general"
+    },
+    {
+     "ref": "A57",
+     "kind": "label",
+     "value": "6.   SAVINGS A/C (S6)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A58",
+     "kind": "label",
+     "value": "    Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A59",
+     "kind": "label",
+     "value": "    Minimum Operating Bal",
+     "align": "general"
+    },
+    {
+     "ref": "A60",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A61",
+     "kind": "label",
+     "value": "    Penal Charges:",
+     "align": "general"
+    },
+    {
+     "ref": "A62",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A63",
+     "kind": "label",
+     "value": "    Transaction fee",
+     "align": "general"
+    },
+    {
+     "ref": "A64",
+     "kind": "label",
+     "value": "    Cash Machine withdrawal fee",
+     "align": "general"
+    },
+    {
+     "ref": "A65",
+     "kind": "label",
+     "value": "    Dormant Account Maintenance Fee",
+     "align": "general"
+    },
+    {
+     "ref": "A67",
+     "kind": "label",
+     "value": "7.   SAVINGS A/C (S7)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A68",
+     "kind": "label",
+     "value": "    Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A69",
+     "kind": "label",
+     "value": "    Minimum Operating Bal",
+     "align": "general"
+    },
+    {
+     "ref": "A70",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A71",
+     "kind": "label",
+     "value": "    Penal Charges:",
+     "align": "general"
+    },
+    {
+     "ref": "A72",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A73",
+     "kind": "label",
+     "value": "    Transaction fee",
+     "align": "general"
+    },
+    {
+     "ref": "A74",
+     "kind": "label",
+     "value": "    Dormant Account Maintenance Fee",
+     "align": "general"
+    },
+    {
+     "ref": "A76",
+     "kind": "label",
+     "value": " 8.   CURRENT ACCOUNT (C1)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A77",
+     "kind": "label",
+     "value": "    Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A78",
+     "kind": "label",
+     "value": "    Minimum Operating Bal",
+     "align": "general"
+    },
+    {
+     "ref": "A79",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A80",
+     "kind": "label",
+     "value": "    Transaction fee per non clearing debit",
+     "align": "general"
+    },
+    {
+     "ref": "A81",
+     "kind": "label",
+     "value": "    Transaction fee for cheques below ¢500,000",
+     "align": "general"
+    },
+    {
+     "ref": "A82",
+     "kind": "label",
+     "value": "    Cash Machine withdrawal fee",
+     "align": "general"
+    },
+    {
+     "ref": "A83",
+     "kind": "label",
+     "value": "    COT Applicable",
+     "align": "general"
+    },
+    {
+     "ref": "A84",
+     "kind": "label",
+     "value": "    Dormant Account Maintenance Fee",
+     "align": "general"
+    },
+    {
+     "ref": "A87",
+     "kind": "label",
+     "value": "9.    CURRENT ACCOUNT (C2)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A88",
+     "kind": "label",
+     "value": "    Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A89",
+     "kind": "label",
+     "value": "    Minimum Operating Bal",
+     "align": "general"
+    },
+    {
+     "ref": "A90",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A91",
+     "kind": "label",
+     "value": "    Transaction fee per non clearing debit",
+     "align": "general"
+    },
+    {
+     "ref": "A92",
+     "kind": "label",
+     "value": "    Cash Machine withdrawal fee",
+     "align": "general"
+    },
+    {
+     "ref": "A93",
+     "kind": "label",
+     "value": "    Penal Charges:",
+     "align": "general"
+    },
+    {
+     "ref": "A94",
+     "kind": "label",
+     "value": "    Transaction fee",
+     "align": "general"
+    },
+    {
+     "ref": "A95",
+     "kind": "label",
+     "value": "    COT Applicable",
+     "align": "general"
+    },
+    {
+     "ref": "A96",
+     "kind": "label",
+     "value": "    Dormant Account Maintenance Fee",
+     "align": "general"
+    },
+    {
+     "ref": "A98",
+     "kind": "label",
+     "value": "10.    CURRENT ACCOUNT (C3)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A99",
+     "kind": "label",
+     "value": "    Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A100",
+     "kind": "label",
+     "value": "    Minimum Operating Bal",
+     "align": "general"
+    },
+    {
+     "ref": "A101",
+     "kind": "label",
+     "value": "    Maintenance fee",
+     "align": "general"
+    },
+    {
+     "ref": "A102",
+     "kind": "label",
+     "value": "    Transaction fee per non clearing debit",
+     "align": "general"
+    },
+    {
+     "ref": "A103",
+     "kind": "label",
+     "value": "    Cash Machine withdrawal fee",
+     "align": "general"
+    },
+    {
+     "ref": "A104",
+     "kind": "label",
+     "value": "    Penal Charges:",
+     "align": "general"
+    },
+    {
+     "ref": "A105",
+     "kind": "label",
+     "value": "    Transaction fee",
+     "align": "general"
+    },
+    {
+     "ref": "A106",
+     "kind": "label",
+     "value": "    COT Applicable",
+     "align": "general"
+    },
+    {
+     "ref": "A107",
+     "kind": "label",
+     "value": "    Dormant Account Maintenance Fee",
+     "align": "general"
+    },
+    {
+     "ref": "A109",
+     "kind": "label",
+     "value": "10.      FOREIGN ACCOUNTS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A110",
+     "kind": "label",
+     "value": "     Foreign Currency Account",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A111",
+     "kind": "label",
+     "value": "     Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A112",
+     "kind": "label",
+     "value": "     Minimum Operating Balance",
+     "align": "general"
+    },
+    {
+     "ref": "A113",
+     "kind": "label",
+     "value": "     Interest Payable",
+     "align": "general"
+    },
+    {
+     "ref": "A114",
+     "kind": "label",
+     "value": "     Maintenance charges",
+     "align": "general"
+    },
+    {
+     "ref": "A116",
+     "kind": "label",
+     "value": "     Foreign Exchange Account",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A117",
+     "kind": "label",
+     "value": "     Initial Deposit",
+     "align": "general"
+    },
+    {
+     "ref": "A118",
+     "kind": "label",
+     "value": "     Minimum Operating Balance",
+     "align": "general"
+    },
+    {
+     "ref": "A119",
+     "kind": "label",
+     "value": "     Interest Payable",
+     "align": "general"
+    },
+    {
+     "ref": "A120",
+     "kind": "label",
+     "value": "     Maintenance charges",
+     "align": "general"
+    },
+    {
+     "ref": "A124",
+     "kind": "label",
+     "value": "ALL CHARGES AND FEES NOT ACCOUNTED FOR ABOVE SHOULD BE LISTED BELOW",
+     "bold": true,
+     "align": "general"
+    }
+   ]
+  }
+ ]
+}

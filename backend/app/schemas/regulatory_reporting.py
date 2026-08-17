@@ -20,8 +20,9 @@ type ReturnFamily = Literal[
     "large_exposures",
     "dbk",
     "stress",
+    "bsd",
 ]
-type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual", "daily"]
+type ReturnFrequency = Literal["weekly", "monthly", "quarterly", "semiannual", "annual", "daily"]
 type ReturnBasis = Literal["solo", "consolidated"]
 type PackageStatus = Literal[
     "draft",
@@ -35,7 +36,7 @@ type PackageStatus = Literal[
     "declined",
     "superseded",
 ]
-type ArtifactKind = Literal["xlsx", "csv", "pdf"]
+type ArtifactKind = Literal["xlsx", "csv", "pdf", "xlsx_working"]
 type ChannelCode = Literal["orass_api", "orass_sandbox", "email", "manual"]
 type SubmissionEventType = Literal[
     "submitted", "status_poll", "acknowledged", "rejected", "declined"

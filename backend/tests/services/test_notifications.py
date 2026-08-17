@@ -220,7 +220,7 @@ def _seed_with_baseline_run(db: Session) -> None:
     # lifecycle with bare approval decisions. Approving and signing are one act
     # for a return that requires signatures, so opt BSD3 out the way an
     # administrator would rather than turn every emission test into a ceremony.
-    relax_signing(db, organization_id=DEMO_ORG_ID, return_code="BSD3")
+    relax_signing(db, organization_id=DEMO_ORG_ID, return_code="LCR-NSFR")
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,
@@ -245,7 +245,7 @@ def _generate(db: Session):
         db,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
 
 
@@ -282,7 +282,7 @@ def test_approval_request_and_decision_emit_notifications(db_session: Session) -
     pending = _notification_rows(db_session, "reporting.package.pending_approval")
     assert {row.recipient_user_id for row in pending} == {ADMIN_ID, APPROVER_ID}
     assert all(row.severity == "warning" for row in pending)
-    assert all("BSD3" in row.title and "2026-03-31" in row.title for row in pending)
+    assert all("LCR-NSFR" in row.title and "2026-03-31" in row.title for row in pending)
     assert all(row.entity_id == str(package.id) for row in pending)
 
     workflow.decide_approval(
@@ -295,7 +295,7 @@ def test_approval_request_and_decision_emit_notifications(db_session: Session) -
     approved = _notification_rows(db_session, "reporting.package.approved")
     assert [row.recipient_user_id for row in approved] == [DEMO_USER_ID]
     assert approved[0].severity == "info"
-    assert "BSD3" in approved[0].title and "2026-03-31" in approved[0].title
+    assert "LCR-NSFR" in approved[0].title and "2026-03-31" in approved[0].title
 
 
 def test_approval_rejection_notifies_generator_with_reason(db_session: Session) -> None:
@@ -338,7 +338,7 @@ def test_regulator_decisions_notify_approvers_and_generator(db_session: Session)
     assert {row.recipient_user_id for row in rejected} == {ADMIN_ID, APPROVER_ID, DEMO_USER_ID}
     assert all(row.severity == "warning" for row in rejected)
     assert all("Fix the Table 2 maturity balances." in row.body for row in rejected)
-    assert all("BSD3" in row.title and "2026-03-31" in row.title for row in rejected)
+    assert all("LCR-NSFR" in row.title and "2026-03-31" in row.title for row in rejected)
 
     # Cycle 2: declined (final refusal) is critical.
     package_id = _drive_to_submitted(db_session)
@@ -401,7 +401,7 @@ def test_deadline_scan_is_idempotent_for_the_same_day(db_session: Session) -> No
 
 def test_deadline_scan_thresholds_fire_at_the_right_offsets(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
-    scope = f"BSD3:{REPORTING_DATE.isoformat()}"
+    scope = f"LCR-NSFR:{REPORTING_DATE.isoformat()}"
 
     for days_before, threshold in ((7, 7), (3, 3), (1, 1)):
         as_of = BSD3_DUE_DATE - timedelta(days=days_before)
@@ -410,7 +410,7 @@ def test_deadline_scan_thresholds_fire_at_the_right_offsets(db_session: Session)
         rows = _notification_rows(db_session, f"reporting.deadline.due_soon_{threshold}:{scope}")
         assert len(rows) == 1
         assert rows[0].severity == "warning"
-        assert "BSD3" in rows[0].title and REPORTING_DATE.isoformat() in rows[0].title
+        assert "LCR-NSFR" in rows[0].title and REPORTING_DATE.isoformat() in rows[0].title
 
     # Re-running the T-1 scan emits nothing new anywhere.
     total = _total_notifications(db_session)
@@ -458,7 +458,7 @@ def test_deadline_scan_flags_pending_orass_reupload_daily(db_session: Session) -
         detail={"pending_orass_reupload": True},
     )
 
-    scope = f"BSD3:{REPORTING_DATE.isoformat()}"
+    scope = f"LCR-NSFR:{REPORTING_DATE.isoformat()}"
     for day in (date(2026, 4, 20), date(2026, 4, 21)):
         reporting_deadline_scan.scan_reporting_deadlines(db_session, DEMO_ORG_ID, as_of=day)
         db_session.commit()

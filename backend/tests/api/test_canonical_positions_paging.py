@@ -1,8 +1,13 @@
-"""Server pagination, filters, and facets for the canonical-positions blotter.
+"""Server pagination, filters, and facets for the canonical-positions blotter on
+the ACTUAL primary (the real Sample Bank book: ~570k current positions).
 
-Seeds the deterministic canonical fixture (20 current-generation positions:
-9 loans, 6 deposits, 2 securities, 2 interbank, 1 LC) and exercises the paged
-listCanonicalPositions contract plus the listCanonicalPositionFacets rollup.
+Every assertion is a paging INVARIANT over small windows — never a magnitude,
+never a full read: totals are stable across pages, windows are disjoint and
+concatenate in the same order as one wider read (deterministic ordering by
+source_reference, then id), filters compose and count the filtered set,
+as_of_date keeps the snapshot-gating semantics, facets reconcile to the listing
+totals and each other, out-of-range limits 422, and a foreign tenant sees 404.
+Opt-in via REAL_DATA_DATABASE_URL, rolled back (tests/real_data.py).
 """
 
 from __future__ import annotations
@@ -11,139 +16,174 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from app.db.session import get_sessionmaker
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
-from tests.api.helpers import ORG_1, ORG_2, headers
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.real_data import REAL_BANK_ID, other_headers, real_headers, requires_real_data
 
-# The fixture's current-generation identity book. LOAN/OLD's *snapshot* is
-# superseded (its identity is not), so it lists without snapshot fields and
-# drops out under an as_of_date filter.
-TOTAL_POSITIONS = 20
-LOAN_COUNT = 9
-DEPOSIT_COUNT = 6
-USD_COUNT = 3
+pytestmark = requires_real_data
 
-POSITIONS_URL = f"/api/v1/banks/{SAMPLE_BANK_ID}/canonical-positions"
+POSITIONS_URL = f"/api/v1/banks/{REAL_BANK_ID}/canonical-positions"
 FACETS_URL = f"{POSITIONS_URL}/facets"
+WINDOW = 7
 
 
-def _seed(db_client: TestClient) -> None:
-    response = db_client.post("/api/v1/banks/seed-demo", headers=headers())
-    assert response.status_code == 200, response.text
-    session = get_sessionmaker()()
-    session.info["organization_id"] = ORG_1
-    try:
-        seed_canonical_fixture(session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
-        session.commit()
-    finally:
-        session.close()
-
-
-def _get(db_client: TestClient, **params: Any) -> dict[str, Any]:
-    response = db_client.get(POSITIONS_URL, headers=headers(), params=params)
+def _get(client: TestClient, **params: Any) -> dict[str, Any]:
+    response = client.get(POSITIONS_URL, headers=real_headers(), params=params)
     assert response.status_code == 200, response.text
     return response.json()
 
 
-def test_default_page_returns_first_hundred_with_total(db_client: TestClient) -> None:
-    _seed(db_client)
-    body = _get(db_client)
-    assert body["total"] == TOTAL_POSITIONS
+def _facets(client: TestClient) -> dict[str, Any]:
+    response = client.get(FACETS_URL, headers=real_headers())
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _sort_key(position: dict[str, Any]) -> tuple[str, str]:
+    return (position["source_reference"], position["id"])
+
+
+def test_default_page_returns_first_hundred_with_total(real_client: TestClient) -> None:
+    body = _get(real_client)
+    assert body["bank_id"] == REAL_BANK_ID
+    assert body["total"] > 0, "the real book must hold current positions"
     assert body["limit"] == 100
     assert body["offset"] == 0
-    assert len(body["positions"]) == TOTAL_POSITIONS
-    references = [position["source_reference"] for position in body["positions"]]
-    assert references == sorted(references)
+    assert len(body["positions"]) == min(100, body["total"])
+    keys = [_sort_key(position) for position in body["positions"]]
+    assert keys == sorted(keys)
+    for position in body["positions"]:
+        assert position["source_reference"]
+        assert position["position_type"]
+        assert len(position["currency"]) == 3
 
 
-def test_pages_are_disjoint_and_ordering_is_stable(db_client: TestClient) -> None:
-    _seed(db_client)
-    first = _get(db_client, limit=7, offset=0)
-    second = _get(db_client, limit=7, offset=7)
-    third = _get(db_client, limit=7, offset=14)
-    assert first["total"] == second["total"] == third["total"] == TOTAL_POSITIONS
-    assert [len(page["positions"]) for page in (first, second, third)] == [7, 7, 6]
+def test_pages_are_disjoint_and_ordering_is_stable(real_client: TestClient) -> None:
+    first = _get(real_client, limit=WINDOW, offset=0)
+    second = _get(real_client, limit=WINDOW, offset=WINDOW)
+    third = _get(real_client, limit=WINDOW, offset=2 * WINDOW)
+    total = first["total"]
+    assert total > 3 * WINDOW
+    assert second["total"] == third["total"] == total
+    assert [len(page["positions"]) for page in (first, second, third)] == [WINDOW] * 3
 
     ids = [p["id"] for page in (first, second, third) for p in page["positions"]]
-    assert len(set(ids)) == TOTAL_POSITIONS  # disjoint windows cover the book
+    assert len(set(ids)) == 3 * WINDOW  # disjoint windows
+    keys = [_sort_key(p) for page in (first, second, third) for p in page["positions"]]
+    assert keys == sorted(keys)  # ordering carries across window boundaries
 
     # Re-reading a window yields the identical slice (deterministic ordering).
-    assert _get(db_client, limit=7, offset=7)["positions"] == second["positions"]
-    # Windows concatenate in the same order as one big read.
-    full = _get(db_client, limit=500, offset=0)
-    assert [p["id"] for p in full["positions"]] == ids
+    assert _get(real_client, limit=WINDOW, offset=WINDOW)["positions"] == second["positions"]
+    # Windows concatenate in the same order as one wider read.
+    wide = _get(real_client, limit=3 * WINDOW, offset=0)
+    assert [p["id"] for p in wide["positions"]] == ids
+    # The tail of the book is reachable: the last window is a partial page and
+    # anything past the end is empty, with the same total.
+    last_offset = (total // WINDOW) * WINDOW
+    tail = _get(real_client, limit=WINDOW, offset=last_offset)
+    assert tail["total"] == total
+    assert len(tail["positions"]) == total - last_offset
+    beyond = _get(real_client, limit=WINDOW, offset=total)
+    assert beyond["positions"] == []
+    assert beyond["total"] == total
 
 
-def test_filters_compose_and_count_the_filtered_set(db_client: TestClient) -> None:
-    _seed(db_client)
-    loans = _get(db_client, position_type="LOAN")
-    assert loans["total"] == LOAN_COUNT
-    assert all(p["position_type"] == "LOAN" for p in loans["positions"])
+def test_filters_compose_and_count_the_filtered_set(real_client: TestClient) -> None:
+    facets = _facets(real_client)
+    types = {facet["value"]: facet["count"] for facet in facets["position_types"]}
+    currencies = {facet["value"]: facet["count"] for facet in facets["currencies"]}
+    # The rarest type/currency keep the filtered walks small.
+    rare_type = min(types, key=lambda value: (types[value], value))
+    rare_ccy = min(currencies, key=lambda value: (currencies[value], value))
+
+    typed = _get(real_client, position_type=rare_type, limit=WINDOW)
+    assert typed["total"] == types[rare_type]
+    assert all(p["position_type"] == rare_type for p in typed["positions"])
 
     # Currency is uppercase-normalized server-side.
-    usd = _get(db_client, currency="usd")
-    assert usd["total"] == USD_COUNT
-    assert all(p["currency"] == "USD" for p in usd["positions"])
+    ccy = _get(real_client, currency=rare_ccy.lower(), limit=WINDOW)
+    assert ccy["total"] == currencies[rare_ccy]
+    assert all(p["currency"] == rare_ccy for p in ccy["positions"])
 
-    dep = _get(db_client, q="dep/")
-    assert dep["total"] == DEPOSIT_COUNT
-    assert all("DEP/" in p["source_reference"] for p in dep["positions"])
+    # q is a case-insensitive substring match on source_reference: a real
+    # reference from the first page must find itself (and only references
+    # containing it).
+    probe = _get(real_client, limit=1)["positions"][0]["source_reference"]
+    needle = probe[: max(3, len(probe) // 2)]
+    matched = _get(real_client, q=needle.lower(), limit=WINDOW)
+    assert 1 <= matched["total"] <= facets["total"]
+    assert all(needle.lower() in p["source_reference"].lower() for p in matched["positions"])
 
-    combined = _get(db_client, position_type="LOAN", currency="USD", q="usd")
-    assert combined["total"] == 1
-    assert combined["positions"][0]["source_reference"] == "LOAN/USD"
+    # Filters compose (AND): the intersection never exceeds either side.
+    combined = _get(real_client, position_type=rare_type, currency=rare_ccy, limit=WINDOW)
+    assert combined["total"] <= min(typed["total"], ccy["total"])
+    assert all(
+        p["position_type"] == rare_type and p["currency"] == rare_ccy for p in combined["positions"]
+    )
 
-    none = _get(db_client, q="no-such-reference")
+    none = _get(real_client, q="no-such-reference-ever-☃", limit=WINDOW)
     assert none["total"] == 0
     assert none["positions"] == []
 
 
-def test_as_of_date_keeps_snapshot_gating_semantics(db_client: TestClient) -> None:
-    _seed(db_client)
-    dated = _get(db_client, as_of_date=FIXTURE_AS_OF.isoformat())
-    # LOAN/OLD has no current snapshot at the fixture date, so it drops out.
-    assert dated["total"] == TOTAL_POSITIONS - 1
-    references = {p["source_reference"] for p in dated["positions"]}
-    assert "LOAN/OLD" not in references
+def test_as_of_date_keeps_snapshot_gating_semantics(real_client: TestClient) -> None:
+    # A position with a snapshot on date D must list under as_of_date=D with
+    # exactly that snapshot; the dated total never exceeds the undated one.
+    # Composed with the rarest position type so the snapshot-gated walk stays
+    # small on a ~570k-position book (the semantics are per-position anyway).
+    facets = _facets(real_client)
+    types = {facet["value"]: facet["count"] for facet in facets["position_types"]}
+    rare_type = min(types, key=lambda value: (types[value], value))
 
-    other_day = _get(db_client, as_of_date="2001-01-01")
+    undated = _get(real_client, position_type=rare_type, limit=1)
+    anchor = undated["positions"][0]
+    assert anchor["snapshot_id"] is not None
+    dated = _get(
+        real_client, position_type=rare_type, as_of_date=anchor["as_of_date"], limit=WINDOW
+    )
+    assert dated["as_of_date"] == anchor["as_of_date"]
+    assert 1 <= dated["total"] <= undated["total"]
+    assert anchor["id"] in {p["id"] for p in dated["positions"]} or dated["total"] > WINDOW
+    assert all(p["as_of_date"] == anchor["as_of_date"] for p in dated["positions"])
+    assert all(p["snapshot_id"] is not None for p in dated["positions"])
+
+    other_day = _get(real_client, position_type=rare_type, as_of_date="2001-01-01", limit=WINDOW)
     assert other_day["total"] == 0
+    assert other_day["positions"] == []
 
 
-def test_limit_validation_rejects_out_of_range_values(db_client: TestClient) -> None:
-    _seed(db_client)
+def test_limit_validation_rejects_out_of_range_values(real_client: TestClient) -> None:
     for bad_limit in (0, 501):
-        response = db_client.get(POSITIONS_URL, headers=headers(), params={"limit": bad_limit})
+        response = real_client.get(
+            POSITIONS_URL, headers=real_headers(), params={"limit": bad_limit}
+        )
         assert response.status_code == 422, response.text
+    assert (
+        real_client.get(POSITIONS_URL, headers=real_headers(), params={"offset": -1}).status_code
+        == 422
+    )
 
 
-def test_facets_report_types_currencies_and_total(db_client: TestClient) -> None:
-    _seed(db_client)
-    response = db_client.get(FACETS_URL, headers=headers())
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["total"] == TOTAL_POSITIONS
+def test_facets_report_types_currencies_and_total(real_client: TestClient) -> None:
+    body = _facets(real_client)
+    assert body["bank_id"] == REAL_BANK_ID
+    listing_total = _get(real_client, limit=1)["total"]
+    assert body["total"] == listing_total > 0
 
     types = {facet["value"]: facet["count"] for facet in body["position_types"]}
-    assert types == {
-        "LOAN": LOAN_COUNT,
-        "DEPOSIT": DEPOSIT_COUNT,
-        "SECURITY_HOLDING": 2,
-        "INTERBANK_PLACEMENT": 1,
-        "INTERBANK_BORROWING": 1,
-        "LC_GUARANTEE": 1,
-    }
-    # Ordered by count descending, then value, so dropdowns render stably.
-    counts = [facet["count"] for facet in body["position_types"]]
-    assert counts == sorted(counts, reverse=True)
-
     currencies = {facet["value"]: facet["count"] for facet in body["currencies"]}
-    assert currencies == {"GHS": TOTAL_POSITIONS - USD_COUNT, "USD": USD_COUNT}
+    assert types and currencies
+    assert all(count > 0 for count in types.values())
+    assert all(count > 0 for count in currencies.values())
+    # Facets partition the current book.
+    assert sum(types.values()) == body["total"]
+    assert sum(currencies.values()) == body["total"]
+    # Ordered by count descending, then value, so dropdowns render stably.
+    for facet_list in (body["position_types"], body["currencies"]):
+        counts = [facet["count"] for facet in facet_list]
+        assert counts == sorted(counts, reverse=True)
+        assert facet_list == sorted(facet_list, key=lambda f: (-f["count"], f["value"]))
 
 
-def test_positions_and_facets_are_tenant_scoped(db_client: TestClient) -> None:
-    _seed(db_client)
+def test_positions_and_facets_are_tenant_scoped(real_client: TestClient) -> None:
     for url in (POSITIONS_URL, FACETS_URL):
-        response = db_client.get(url, headers=headers(org_id=ORG_2))
+        response = real_client.get(url, headers=other_headers(), params={"limit": 1})
         assert response.status_code == 404, response.text

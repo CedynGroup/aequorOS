@@ -134,7 +134,7 @@ def _seed(db: Session, *, require_signed_pdf: bool = True, roles: Any = None) ->
         ReturnSigningPolicy(
             organization_id=DEMO_ORG_ID,
             bank_id=SAMPLE_BANK_ID,
-            return_code="BSD3",
+            return_code="LCR-NSFR",
             required_signatures=roles
             or [
                 {"role": "preparer", "min_count": 1, "officer_titles": []},
@@ -170,7 +170,7 @@ def _seed(db: Session, *, require_signed_pdf: bool = True, roles: Any = None) ->
         db,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
     validation.validate_package(db, MAKER, SAMPLE_BANK_ID, read.id)
     package = db.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == read.id))

@@ -1,4 +1,14 @@
-"""HTTP surface: template downloads and the manual market data upload flow."""
+"""HTTP surface: template downloads and the manual market data upload flow, on
+the ACTUAL primary.
+
+Invariants: every template kind downloads as an .xlsx whose header row is the
+documented one (unknown kind 422); a full-coverage workbook is accepted into the
+real bank as a zero-quota MANUAL_UPLOAD ingestion batch that produces canonical
+records for every scope it carries; row problems surface as warnings; empty /
+unrecognisable / wrong-suffix files 422; a foreign tenant gets 404. Storage is
+the in-memory client — nothing leaves the process. Opt-in via
+REAL_DATA_DATABASE_URL, rolled back (tests/real_data.py).
+"""
 
 from __future__ import annotations
 
@@ -15,8 +25,10 @@ from tests.adapters.market_data.manual_upload.fixtures import (
     build_full_coverage_workbook,
     build_yield_curve_workbook,
 )
-from tests.api.helpers import ORG_2, headers
+from tests.real_data import REAL_BANK_ID, other_headers, real_headers, requires_real_data
 from tests.storage.inmemory import InMemoryStorageClient
+
+pytestmark = requires_real_data
 
 AS_OF = FIXTURE_AS_OF.isoformat()
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -37,15 +49,8 @@ def wired_storage(
     return storage_engine
 
 
-def _seed_bank(client: TestClient) -> str:
-    response = client.post("/api/v1/banks/seed-demo", headers=headers())
-    assert response.status_code == 200, response.text
-    return response.json()["bank_id"]
-
-
-def _upload(  # noqa: PLR0913 - one helper carries the full request shape
+def _upload(
     client: TestClient,
-    bank_id: str,
     content: bytes,
     *,
     filename: str = "curves.xlsx",
@@ -53,8 +58,8 @@ def _upload(  # noqa: PLR0913 - one helper carries the full request shape
     request_headers: dict[str, str] | None = None,
 ) -> Any:
     return client.post(
-        f"/api/v1/banks/{bank_id}/market-data/uploads",
-        headers=request_headers or headers(),
+        f"/api/v1/banks/{REAL_BANK_ID}/market-data/uploads",
+        headers=request_headers or real_headers(),
         files={"file": (filename, io.BytesIO(content), XLSX_MEDIA_TYPE)},
         data={"as_of_date": as_of},
     )
@@ -64,8 +69,8 @@ def _upload(  # noqa: PLR0913 - one helper carries the full request shape
 
 
 @pytest.mark.parametrize("kind", TEMPLATE_KINDS)
-def test_template_download(db_client: TestClient, kind: str) -> None:
-    response = db_client.get(f"/api/v1/market-data/templates/{kind}", headers=headers())
+def test_template_download(real_client: TestClient, kind: str) -> None:
+    response = real_client.get(f"/api/v1/market-data/templates/{kind}", headers=real_headers())
     assert response.status_code == 200, response.text
     assert response.headers["content-type"].startswith(XLSX_MEDIA_TYPE)
     assert f'filename="{kind}_template.xlsx"' in response.headers["content-disposition"]
@@ -75,22 +80,20 @@ def test_template_download(db_client: TestClient, kind: str) -> None:
     assert tuple(cell.value for cell in sheet[1]) == TEMPLATE_HEADERS[kind]  # type: ignore[index]
 
 
-def test_template_unknown_kind_is_422(db_client: TestClient) -> None:
-    response = db_client.get("/api/v1/market-data/templates/bond_ladder", headers=headers())
+def test_template_unknown_kind_is_422(real_client: TestClient) -> None:
+    response = real_client.get("/api/v1/market-data/templates/bond_ladder", headers=real_headers())
     assert response.status_code == 422
 
 
 # -- uploads --------------------------------------------------------------------
 
 
-def test_upload_full_workbook_accepted(
-    db_client: TestClient, wired_storage: InMemoryStorageClient
-) -> None:
-    bank_id = _seed_bank(db_client)
-    response = _upload(db_client, bank_id, build_full_coverage_workbook(), filename="full.xlsx")
+@pytest.mark.usefixtures("wired_storage")
+def test_upload_full_workbook_accepted(real_client: TestClient) -> None:
+    response = _upload(real_client, build_full_coverage_workbook(), filename="full.xlsx")
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["bank_id"] == bank_id
+    assert body["bank_id"] == REAL_BANK_ID
     assert body["status"] == "accepted"
     assert body["as_of_date"] == AS_OF
     assert body["quota_consumed"] == 0
@@ -102,24 +105,24 @@ def test_upload_full_workbook_accepted(
     assert "MACRO_GHANA_GDP_FORECAST" in body["scopes"]
     assert body["batch_id"]
 
-    batch = db_client.get(
-        f"/api/v1/banks/{bank_id}/ingestion-batches/{body['batch_id']}", headers=headers()
+    batch = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/ingestion-batches/{body['batch_id']}",
+        headers=real_headers(),
     )
     assert batch.status_code == 200, batch.text
     assert batch.json()["source_system"] == "MANUAL_UPLOAD"
+    assert batch.json()["as_of_date"] == AS_OF
 
 
-def test_upload_reports_row_problems_as_warnings(
-    db_client: TestClient, wired_storage: InMemoryStorageClient
-) -> None:
-    bank_id = _seed_bank(db_client)
+@pytest.mark.usefixtures("wired_storage")
+def test_upload_reports_row_problems_as_warnings(real_client: TestClient) -> None:
     content = build_yield_curve_workbook(
         [
             ["GHS", "GHS_GOV_BOND", AS_OF, 3, 15.80],
             ["XXX", "XXX_GOV_BOND", AS_OF, 3, 9.10],
         ]
     )
-    response = _upload(db_client, bank_id, content)
+    response = _upload(real_client, content)
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["status"] == "accepted"
@@ -127,10 +130,8 @@ def test_upload_reports_row_problems_as_warnings(
     assert any("unsupported currency" in warning for warning in body["warnings"])
 
 
-def test_upload_unrecognized_file_is_422(
-    db_client: TestClient, wired_storage: InMemoryStorageClient
-) -> None:
-    bank_id = _seed_bank(db_client)
+@pytest.mark.usefixtures("wired_storage")
+def test_upload_unrecognized_file_is_422(real_client: TestClient) -> None:
     workbook = openpyxl.Workbook()
     sheet = workbook.active
     assert sheet is not None
@@ -138,33 +139,27 @@ def test_upload_unrecognized_file_is_422(
     sheet.append(["something", 1])
     buffer = io.BytesIO()
     workbook.save(buffer)
-    response = _upload(db_client, bank_id, buffer.getvalue(), filename="mystery.xlsx")
+    response = _upload(real_client, buffer.getvalue(), filename="mystery.xlsx")
     assert response.status_code == 422
     assert "no recognizable market data rows" in response.json()["error"]["message"]
 
 
-def test_upload_empty_file_is_422(
-    db_client: TestClient, wired_storage: InMemoryStorageClient
-) -> None:
-    bank_id = _seed_bank(db_client)
-    response = _upload(db_client, bank_id, b"")
+@pytest.mark.usefixtures("wired_storage")
+def test_upload_empty_file_is_422(real_client: TestClient) -> None:
+    response = _upload(real_client, b"")
     assert response.status_code == 422
     assert response.json()["error"]["message"] == "Uploaded file is empty."
 
 
-def test_upload_unsupported_suffix_is_422(
-    db_client: TestClient, wired_storage: InMemoryStorageClient
-) -> None:
-    bank_id = _seed_bank(db_client)
-    response = _upload(db_client, bank_id, b"currency\n", filename="curves.txt")
+@pytest.mark.usefixtures("wired_storage")
+def test_upload_unsupported_suffix_is_422(real_client: TestClient) -> None:
+    response = _upload(real_client, b"currency\n", filename="curves.txt")
     assert response.status_code == 422
     assert "Unsupported file type" in response.json()["error"]["message"]
 
 
-def test_upload_is_tenant_scoped(
-    db_client: TestClient, wired_storage: InMemoryStorageClient
-) -> None:
-    bank_id = _seed_bank(db_client)
+@pytest.mark.usefixtures("wired_storage")
+def test_upload_is_tenant_scoped(real_client: TestClient) -> None:
     content = build_yield_curve_workbook([["GHS", "GHS_GOV_BOND", AS_OF, 3, 15.80]])
-    response = _upload(db_client, bank_id, content, request_headers=headers(org_id=ORG_2))
+    response = _upload(real_client, content, request_headers=other_headers())
     assert response.status_code == 404

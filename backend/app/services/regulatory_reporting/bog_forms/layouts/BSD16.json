@@ -1,0 +1,823 @@
+{
+ "form": "BSD16",
+ "workbook": "FORM BSD16 REVISED.xls",
+ "sheets": [
+  {
+   "name": "MONTHLY ATM OPERATIONS",
+   "max_row": 63,
+   "max_col": 6,
+   "column_widths": {
+    "A": 4.85,
+    "B": 24.41,
+    "C": 18.41,
+    "D": 18.85,
+    "E": 18.7,
+    "F": 19.41
+   },
+   "merges": [
+    "C3:E3"
+   ],
+   "cells": [
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C3",
+     "kind": "label",
+     "value": "         MONTHLY  REPORT ON OPERATIONS OF ATM ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B4",
+     "kind": "label",
+     "value": "(¢'Million)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B6",
+     "kind": "label",
+     "value": "Station / Branch",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C6",
+     "kind": "label",
+     "value": "No. of Cards Issued",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D6",
+     "kind": "label",
+     "value": "Minimum withdrawal made ¢",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E6",
+     "kind": "label",
+     "value": "Maximum withdrawal made ¢",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "F6",
+     "kind": "label",
+     "value": "Total Withdrawals  ¢",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A7",
+     "kind": "input",
+     "value": 1,
+     "align": "general"
+    },
+    {
+     "ref": "F7",
+     "kind": "formula",
+     "formula": "=D7+E7",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "input",
+     "value": 2,
+     "align": "general"
+    },
+    {
+     "ref": "F8",
+     "kind": "formula",
+     "formula": "=D8+E8",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "input",
+     "value": 3,
+     "align": "general"
+    },
+    {
+     "ref": "F9",
+     "kind": "formula",
+     "formula": "=D9+E9",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "input",
+     "value": 4,
+     "align": "general"
+    },
+    {
+     "ref": "F10",
+     "kind": "formula",
+     "formula": "=D10+E10",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "input",
+     "value": 5,
+     "align": "general"
+    },
+    {
+     "ref": "F11",
+     "kind": "formula",
+     "formula": "=D11+E11",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "input",
+     "value": 6,
+     "align": "general"
+    },
+    {
+     "ref": "F12",
+     "kind": "formula",
+     "formula": "=D12+E12",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "input",
+     "value": 7,
+     "align": "general"
+    },
+    {
+     "ref": "F13",
+     "kind": "formula",
+     "formula": "=D13+E13",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "input",
+     "value": 8,
+     "align": "general"
+    },
+    {
+     "ref": "F14",
+     "kind": "formula",
+     "formula": "=D14+E14",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "input",
+     "value": 9,
+     "align": "general"
+    },
+    {
+     "ref": "F15",
+     "kind": "formula",
+     "formula": "=D15+E15",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "input",
+     "value": 10,
+     "align": "general"
+    },
+    {
+     "ref": "F16",
+     "kind": "formula",
+     "formula": "=D16+E16",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "input",
+     "value": 11,
+     "align": "general"
+    },
+    {
+     "ref": "F17",
+     "kind": "formula",
+     "formula": "=D17+E17",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A18",
+     "kind": "input",
+     "value": 12,
+     "align": "general"
+    },
+    {
+     "ref": "F18",
+     "kind": "formula",
+     "formula": "=D18+E18",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A19",
+     "kind": "input",
+     "value": 13,
+     "align": "general"
+    },
+    {
+     "ref": "F19",
+     "kind": "formula",
+     "formula": "=D19+E19",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A20",
+     "kind": "input",
+     "value": 14,
+     "align": "general"
+    },
+    {
+     "ref": "F20",
+     "kind": "formula",
+     "formula": "=D20+E20",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A21",
+     "kind": "input",
+     "value": 15,
+     "align": "general"
+    },
+    {
+     "ref": "F21",
+     "kind": "formula",
+     "formula": "=D21+E21",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A22",
+     "kind": "input",
+     "value": 16,
+     "align": "general"
+    },
+    {
+     "ref": "F22",
+     "kind": "formula",
+     "formula": "=D22+E22",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A23",
+     "kind": "input",
+     "value": 17,
+     "align": "general"
+    },
+    {
+     "ref": "F23",
+     "kind": "formula",
+     "formula": "=D23+E23",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A24",
+     "kind": "input",
+     "value": 18,
+     "align": "general"
+    },
+    {
+     "ref": "F24",
+     "kind": "formula",
+     "formula": "=D24+E24",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A25",
+     "kind": "input",
+     "value": 19,
+     "align": "general"
+    },
+    {
+     "ref": "F25",
+     "kind": "formula",
+     "formula": "=D25+E25",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A26",
+     "kind": "input",
+     "value": 20,
+     "align": "general"
+    },
+    {
+     "ref": "F26",
+     "kind": "formula",
+     "formula": "=D26+E26",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A27",
+     "kind": "input",
+     "value": 21,
+     "align": "general"
+    },
+    {
+     "ref": "F27",
+     "kind": "formula",
+     "formula": "=D27+E27",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A28",
+     "kind": "input",
+     "value": 22,
+     "align": "general"
+    },
+    {
+     "ref": "F28",
+     "kind": "formula",
+     "formula": "=D28+E28",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A29",
+     "kind": "input",
+     "value": 23,
+     "align": "general"
+    },
+    {
+     "ref": "F29",
+     "kind": "formula",
+     "formula": "=D29+E29",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A30",
+     "kind": "input",
+     "value": 24,
+     "align": "general"
+    },
+    {
+     "ref": "F30",
+     "kind": "formula",
+     "formula": "=D30+E30",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A31",
+     "kind": "input",
+     "value": 25,
+     "align": "general"
+    },
+    {
+     "ref": "F31",
+     "kind": "formula",
+     "formula": "=D31+E31",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A32",
+     "kind": "input",
+     "value": 26,
+     "align": "general"
+    },
+    {
+     "ref": "F32",
+     "kind": "formula",
+     "formula": "=D32+E32",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A33",
+     "kind": "input",
+     "value": 27,
+     "align": "general"
+    },
+    {
+     "ref": "F33",
+     "kind": "formula",
+     "formula": "=D33+E33",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A34",
+     "kind": "input",
+     "value": 28,
+     "align": "general"
+    },
+    {
+     "ref": "F34",
+     "kind": "formula",
+     "formula": "=D34+E34",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A35",
+     "kind": "input",
+     "value": 29,
+     "align": "general"
+    },
+    {
+     "ref": "F35",
+     "kind": "formula",
+     "formula": "=D35+E35",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A36",
+     "kind": "input",
+     "value": 30,
+     "align": "general"
+    },
+    {
+     "ref": "F36",
+     "kind": "formula",
+     "formula": "=D36+E36",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A37",
+     "kind": "input",
+     "value": 31,
+     "align": "general"
+    },
+    {
+     "ref": "F37",
+     "kind": "formula",
+     "formula": "=D37+E37",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A38",
+     "kind": "input",
+     "value": 32,
+     "align": "general"
+    },
+    {
+     "ref": "F38",
+     "kind": "formula",
+     "formula": "=D38+E38",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A39",
+     "kind": "input",
+     "value": 33,
+     "align": "general"
+    },
+    {
+     "ref": "F39",
+     "kind": "formula",
+     "formula": "=D39+E39",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A40",
+     "kind": "input",
+     "value": 34,
+     "align": "general"
+    },
+    {
+     "ref": "F40",
+     "kind": "formula",
+     "formula": "=D40+E40",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A41",
+     "kind": "input",
+     "value": 35,
+     "align": "general"
+    },
+    {
+     "ref": "F41",
+     "kind": "formula",
+     "formula": "=D41+E41",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A42",
+     "kind": "input",
+     "value": 36,
+     "align": "general"
+    },
+    {
+     "ref": "F42",
+     "kind": "formula",
+     "formula": "=D42+E42",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A43",
+     "kind": "input",
+     "value": 37,
+     "align": "general"
+    },
+    {
+     "ref": "F43",
+     "kind": "formula",
+     "formula": "=D43+E43",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A44",
+     "kind": "input",
+     "value": 38,
+     "align": "general"
+    },
+    {
+     "ref": "F44",
+     "kind": "formula",
+     "formula": "=D44+E44",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A45",
+     "kind": "input",
+     "value": 39,
+     "align": "general"
+    },
+    {
+     "ref": "F45",
+     "kind": "formula",
+     "formula": "=D45+E45",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A46",
+     "kind": "input",
+     "value": 40,
+     "align": "general"
+    },
+    {
+     "ref": "F46",
+     "kind": "formula",
+     "formula": "=D46+E46",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A47",
+     "kind": "input",
+     "value": 41,
+     "align": "general"
+    },
+    {
+     "ref": "F47",
+     "kind": "formula",
+     "formula": "=D47+E47",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A48",
+     "kind": "input",
+     "value": 42,
+     "align": "general"
+    },
+    {
+     "ref": "F48",
+     "kind": "formula",
+     "formula": "=D48+E48",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A49",
+     "kind": "input",
+     "value": 43,
+     "align": "general"
+    },
+    {
+     "ref": "F49",
+     "kind": "formula",
+     "formula": "=D49+E49",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A50",
+     "kind": "input",
+     "value": 44,
+     "align": "general"
+    },
+    {
+     "ref": "F50",
+     "kind": "formula",
+     "formula": "=D50+E50",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A51",
+     "kind": "input",
+     "value": 45,
+     "align": "general"
+    },
+    {
+     "ref": "F51",
+     "kind": "formula",
+     "formula": "=D51+E51",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A52",
+     "kind": "input",
+     "value": 46,
+     "align": "general"
+    },
+    {
+     "ref": "F52",
+     "kind": "formula",
+     "formula": "=D52+E52",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A53",
+     "kind": "input",
+     "value": 47,
+     "align": "general"
+    },
+    {
+     "ref": "F53",
+     "kind": "formula",
+     "formula": "=D53+E53",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A54",
+     "kind": "input",
+     "value": 48,
+     "align": "general"
+    },
+    {
+     "ref": "F54",
+     "kind": "formula",
+     "formula": "=D54+E54",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A55",
+     "kind": "input",
+     "value": 49,
+     "align": "general"
+    },
+    {
+     "ref": "F55",
+     "kind": "formula",
+     "formula": "=D55+E55",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A56",
+     "kind": "input",
+     "value": 50,
+     "align": "general"
+    },
+    {
+     "ref": "F56",
+     "kind": "formula",
+     "formula": "=D56+E56",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B57",
+     "kind": "label",
+     "value": "TOTAL",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C57",
+     "kind": "label",
+     "value": "+",
+     "bold": true,
+     "number_format": "_(* #,##0_);_(* \\(#,##0\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "F57",
+     "kind": "formula",
+     "formula": "=SUM(F7:F56)",
+     "bold": true,
+     "number_format": "_(* #,##0_);_(* \\(#,##0\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "B59",
+     "kind": "label",
+     "value": "We confirm that the above information represents the true state of affairs on the operations of the ATMs.",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B62",
+     "kind": "label",
+     "value": "………………………………………..…..",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D62",
+     "kind": "label",
+     "value": "<----Signature -------->'",
+     "align": "general"
+    },
+    {
+     "ref": "E62",
+     "kind": "label",
+     "value": "…………………….…………………..",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B63",
+     "kind": "label",
+     "value": "(                                                       )",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D63",
+     "kind": "label",
+     "value": "<----Designation ----->'",
+     "align": "general"
+    },
+    {
+     "ref": "E63",
+     "kind": "label",
+     "value": "(                                                   )",
+     "bold": true,
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "Sheet2",
+   "max_row": 1,
+   "max_col": 1,
+   "column_widths": {},
+   "merges": [],
+   "cells": []
+  },
+  {
+   "name": "Sheet3",
+   "max_row": 1,
+   "max_col": 1,
+   "column_widths": {},
+   "merges": [],
+   "cells": []
+  }
+ ]
+}

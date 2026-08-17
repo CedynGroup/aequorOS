@@ -1,0 +1,385 @@
+{
+ "form": "BSD1A",
+ "workbook": "FORM BSD1A.xls",
+ "sheets": [
+  {
+   "name": "20 LARGEST WITHDRAWALS",
+   "max_row": 31,
+   "max_col": 10,
+   "column_widths": {
+    "A": 6.7,
+    "B": 35.42,
+    "C": 27.99,
+    "D": 17.56,
+    "E": 15.56,
+    "F": 10.71,
+    "H": 11.7,
+    "I": 17.56,
+    "J": 21.42
+   },
+   "merges": [
+    "A5:E5"
+   ],
+   "cells": [
+    {
+     "ref": "A3",
+     "kind": "label",
+     "value": "NAME OF INSTITUTION : …………………………………….",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A5",
+     "kind": "label",
+     "value": "WEEKLY RETURN ON TWENTY LARGEST WITHDRAWALS OVER THE COUNTER",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A7",
+     "kind": "label",
+     "value": "FOR THE WEEK ENDING…………………..",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F7",
+     "kind": "label",
+     "value": "AMOUNT IN ¢ MILLION",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "CUSTOMER",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C9",
+     "kind": "label",
+     "value": "BRANCH",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D9",
+     "kind": "label",
+     "value": "TYPE OF A/C",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E9",
+     "kind": "label",
+     "value": "THURSDAY",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F9",
+     "kind": "label",
+     "value": "FRIDAY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "G9",
+     "kind": "label",
+     "value": "MONDAY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "H9",
+     "kind": "label",
+     "value": "TUESDAY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "I9",
+     "kind": "label",
+     "value": "WEDNESDAY",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J9",
+     "kind": "label",
+     "value": "TOTAL",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A11",
+     "kind": "input",
+     "value": 1,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J11",
+     "kind": "formula",
+     "formula": "=SUM(E11:I11)",
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "input",
+     "value": 2,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J12",
+     "kind": "formula",
+     "formula": "=SUM(E12:I12)",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "input",
+     "value": 3,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J13",
+     "kind": "formula",
+     "formula": "=SUM(E13:I13)",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "input",
+     "value": 4,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J14",
+     "kind": "formula",
+     "formula": "=SUM(E14:I14)",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "input",
+     "value": 5,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J15",
+     "kind": "formula",
+     "formula": "=SUM(E15:I15)",
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "input",
+     "value": 6,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J16",
+     "kind": "formula",
+     "formula": "=SUM(E16:I16)",
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "input",
+     "value": 7,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J17",
+     "kind": "formula",
+     "formula": "=SUM(E17:I17)",
+     "align": "general"
+    },
+    {
+     "ref": "A18",
+     "kind": "input",
+     "value": 8,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J18",
+     "kind": "formula",
+     "formula": "=SUM(E18:I18)",
+     "align": "general"
+    },
+    {
+     "ref": "A19",
+     "kind": "input",
+     "value": 9,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J19",
+     "kind": "formula",
+     "formula": "=SUM(E19:I19)",
+     "align": "general"
+    },
+    {
+     "ref": "A20",
+     "kind": "input",
+     "value": 10,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J20",
+     "kind": "formula",
+     "formula": "=SUM(E20:I20)",
+     "align": "general"
+    },
+    {
+     "ref": "A21",
+     "kind": "input",
+     "value": 11,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J21",
+     "kind": "formula",
+     "formula": "=SUM(E21:I21)",
+     "align": "general"
+    },
+    {
+     "ref": "A22",
+     "kind": "input",
+     "value": 12,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J22",
+     "kind": "formula",
+     "formula": "=SUM(E22:I22)",
+     "align": "general"
+    },
+    {
+     "ref": "A23",
+     "kind": "input",
+     "value": 13,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J23",
+     "kind": "formula",
+     "formula": "=SUM(E23:I23)",
+     "align": "general"
+    },
+    {
+     "ref": "A24",
+     "kind": "input",
+     "value": 14,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J24",
+     "kind": "formula",
+     "formula": "=SUM(E24:I24)",
+     "align": "general"
+    },
+    {
+     "ref": "A25",
+     "kind": "input",
+     "value": 15,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J25",
+     "kind": "formula",
+     "formula": "=SUM(E25:I25)",
+     "align": "general"
+    },
+    {
+     "ref": "A26",
+     "kind": "input",
+     "value": 16,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J26",
+     "kind": "formula",
+     "formula": "=SUM(E26:I26)",
+     "align": "general"
+    },
+    {
+     "ref": "A27",
+     "kind": "input",
+     "value": 17,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J27",
+     "kind": "formula",
+     "formula": "=SUM(E27:I27)",
+     "align": "general"
+    },
+    {
+     "ref": "A28",
+     "kind": "input",
+     "value": 18,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J28",
+     "kind": "formula",
+     "formula": "=SUM(E28:I28)",
+     "align": "general"
+    },
+    {
+     "ref": "A29",
+     "kind": "input",
+     "value": 19,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J29",
+     "kind": "formula",
+     "formula": "=SUM(E29:I29)",
+     "align": "general"
+    },
+    {
+     "ref": "A30",
+     "kind": "input",
+     "value": 20,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J30",
+     "kind": "formula",
+     "formula": "=SUM(E30:I30)",
+     "align": "general"
+    },
+    {
+     "ref": "J31",
+     "kind": "formula",
+     "formula": "=SUM(J11:J30)",
+     "bold": true,
+     "align": "general"
+    }
+   ]
+  }
+ ]
+}

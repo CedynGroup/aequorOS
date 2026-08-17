@@ -64,6 +64,7 @@ router = APIRouter(tags=["regulatory-reporting"])
 
 _ARTIFACT_MEDIA_TYPES = {
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "xlsx_working": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "csv": "text/csv",
     "pdf": "application/pdf",
 }
@@ -211,11 +212,24 @@ def decide_package_approval(
 def export_regulatory_package(
     bank_id: str,
     package_id: UUID,
-    kind: Annotated[Literal["xlsx", "csv", "pdf"], Query()],
+    kind: Annotated[
+        Literal["xlsx", "xlsx_official", "xlsx_working", "csv", "pdf"],
+        Query(
+            description=(
+                "pdf = values-only submission package (the BoG filing format); "
+                "xlsx / xlsx_official = sealed values-only Excel (governance twin of the PDF); "
+                "xlsx_working = ALM/Finance working copy with the template's live formulas "
+                "(official BoG BSD forms only; never filed); csv = generic sections."
+            )
+        ),
+    ],
     db: DbSession,
     ctx: MutationTenant,
 ) -> RegulatoryArtifactRead:
-    return reporting_workflow.export_package_artifact(db, ctx, bank_id, package_id, kind)
+    # "xlsx_official" is the explicit name for the sealed export; it is stored
+    # under the historical kind "xlsx" so existing artifacts/signatures keep working.
+    resolved: reporting_workflow.ArtifactKind = "xlsx" if kind == "xlsx_official" else kind
+    return reporting_workflow.export_package_artifact(db, ctx, bank_id, package_id, resolved)
 
 
 @router.get(

@@ -1,0 +1,230 @@
+{
+ "form": "BSD17",
+ "workbook": "FORM BSD17 REVISED.xls",
+ "sheets": [
+  {
+   "name": "BSG17-SHEET 1",
+   "max_row": 15,
+   "max_col": 3,
+   "column_widths": {
+    "A": 7.99,
+    "B": 27.56,
+    "C": 15.85
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF BANK: …………………………………………………",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "FOREIGN INWARD REMITTANCES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A3",
+     "kind": "label",
+     "value": "MONTH OF ………………….…...…. 20……",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A6",
+     "kind": "label",
+     "value": "Item No.",
+     "align": "general"
+    },
+    {
+     "ref": "B6",
+     "kind": "label",
+     "value": "Recipients",
+     "align": "general"
+    },
+    {
+     "ref": "C6",
+     "kind": "label",
+     "value": "Amount in US$",
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "input",
+     "value": 1,
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B8",
+     "kind": "label",
+     "value": "Individuals",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "input",
+     "value": 2,
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "Exporters",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "input",
+     "value": 3,
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B10",
+     "kind": "label",
+     "value": "Service Providers",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "input",
+     "value": 4,
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B11",
+     "kind": "label",
+     "value": "NGOs",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "input",
+     "value": 5,
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B12",
+     "kind": "label",
+     "value": "Embassies",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "input",
+     "value": 6,
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B13",
+     "kind": "label",
+     "value": "Others",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "input",
+     "value": 7,
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B15",
+     "kind": "label",
+     "value": "Total (1+2+3+4+5+6)",
+     "bold": true,
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "BSD17 -SHEET 2",
+   "max_row": 13,
+   "max_col": 2,
+   "column_widths": {
+    "A": 26.28,
+    "B": 14.7
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A4",
+     "kind": "label",
+     "value": "Region",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B4",
+     "kind": "label",
+     "value": "Amount in US$",
+     "align": "general"
+    },
+    {
+     "ref": "A6",
+     "kind": "label",
+     "value": "United Kingdom",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A7",
+     "kind": "label",
+     "value": "USA and Canada",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "European Union",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "ECOWAS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "Rest of Africa",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "Others",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "Total",
+     "bold": true,
+     "align": "general"
+    }
+   ]
+  }
+ ]
+}

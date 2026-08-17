@@ -59,6 +59,26 @@ def _daily_reporting_dates(as_of: date) -> list[date]:
     return sorted(dates)
 
 
+_WEEKLY_TRAILING_WEEKS = 8
+
+
+def _weekly_reporting_dates(as_of: date, horizon_end: date) -> list[date]:
+    """The last ``_WEEKLY_TRAILING_WEEKS`` weekly anchor dates before ``as_of``
+    plus every anchor up to ``horizon_end`` (Friday close by default)."""
+    from app.services.regulatory_reporting.bog_forms.catalog import (  # noqa: PLC0415
+        WEEKLY_ANCHOR_WEEKDAY,
+    )
+
+    delta = (as_of.weekday() - WEEKLY_ANCHOR_WEEKDAY) % 7
+    last_anchor = as_of - timedelta(days=delta)
+    dates = [last_anchor - timedelta(weeks=w) for w in range(_WEEKLY_TRAILING_WEEKS, 0, -1)]
+    cursor = last_anchor
+    while cursor <= horizon_end:
+        dates.append(cursor)
+        cursor += timedelta(weeks=1)
+    return dates
+
+
 def _period_end_months(frequency: str) -> tuple[int, ...]:
     step = _FREQUENCY_MONTHS[frequency]
     return tuple(month for month in range(1, 13) if month % step == 0)
@@ -149,11 +169,16 @@ def list_obligations(
         # appear in the package list/history like any other package.
         if definition.event_driven:
             continue
-        reporting_dates = (
-            _daily_reporting_dates(today)
-            if definition.frequency == "daily"
-            else _reporting_dates(definition, today, horizon_end)
-        )
+        if definition.frequency == "daily":
+            reporting_dates = _daily_reporting_dates(today)
+        elif definition.frequency == "weekly":
+            # Weekly BoG returns (BSD1/1A/1B/14/15A/15B): Friday-close reporting
+            # dates — a bounded trailing window plus the horizon's Fridays. The
+            # Guide fixes the cadence and the 9-day limit, not the weekday
+            # (documented convention in bog_forms.catalog).
+            reporting_dates = _weekly_reporting_dates(today, horizon_end)
+        else:
+            reporting_dates = _reporting_dates(definition, today, horizon_end)
         for reporting_date in reporting_dates:
             due_date = _due_date(definition, reporting_date, overrides)
             package = db.scalar(

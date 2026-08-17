@@ -1,0 +1,353 @@
+{
+ "form": "BSD14",
+ "workbook": "FORM BSD14 REVISED.xls",
+ "sheets": [
+  {
+   "name": "INTEREST&LENDING-RATES",
+   "max_row": 48,
+   "max_col": 21,
+   "column_widths": {
+    "A": 16.56,
+    "B": 8.56,
+    "C": 7.99,
+    "D": 6.41,
+    "F": 6.28,
+    "G": 6.41,
+    "I": 6.7,
+    "J": 6.56,
+    "K": 11.85,
+    "L": 8.14,
+    "M": 6.7,
+    "N": 10.41,
+    "O": 8.28,
+    "P": 16.99,
+    "Q": 13.99,
+    "R": 12.28,
+    "S": 8.41,
+    "T": 10.85,
+    "U": 7.99
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "K2",
+     "kind": "label",
+     "value": "BANK OF GHANA",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J3",
+     "kind": "label",
+     "value": "BANKING SUPERVISION DEPARTMENT",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J4",
+     "kind": "label",
+     "value": "WEEKLY RETURN ON INTEREST RATES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A7",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "align": "general"
+    },
+    {
+     "ref": "R7",
+     "kind": "label",
+     "value": "REPORTING DATE:",
+     "align": "center"
+    },
+    {
+     "ref": "R8",
+     "kind": "label",
+     "value": "FOR THE WEEK ENDING",
+     "align": "center"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "BASE RATE:",
+     "align": "general"
+    },
+    {
+     "ref": "S10",
+     "kind": "label",
+     "value": "(in percentage )",
+     "align": "center"
+    },
+    {
+     "ref": "D12",
+     "kind": "label",
+     "value": "BORROWING RATES",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "P12",
+     "kind": "label",
+     "value": "LENDING RATES",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "left"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "Currency",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B13",
+     "kind": "label",
+     "value": "Demand",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "C13",
+     "kind": "label",
+     "value": "Savings",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "F13",
+     "kind": "label",
+     "value": " Fixed / Time Deposit (months)",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "general"
+    },
+    {
+     "ref": "K13",
+     "kind": "label",
+     "value": "Certificate",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "L13",
+     "kind": "label",
+     "value": "Call",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "M13",
+     "kind": "label",
+     "value": "Any",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "B14",
+     "kind": "label",
+     "value": "Deposit",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C14",
+     "kind": "label",
+     "value": "Deposit",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D14",
+     "kind": "input",
+     "value": 1,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E14",
+     "kind": "input",
+     "value": 2,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F14",
+     "kind": "input",
+     "value": 3,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G14",
+     "kind": "input",
+     "value": 6,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H14",
+     "kind": "input",
+     "value": 12,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I14",
+     "kind": "input",
+     "value": 24,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J14",
+     "kind": "input",
+     "value": 36,
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K14",
+     "kind": "label",
+     "value": " of  Deposits",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "L14",
+     "kind": "label",
+     "value": "Deposit",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "M14",
+     "kind": "label",
+     "value": "Other",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "N14",
+     "kind": "label",
+     "value": "Agriculture",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "O14",
+     "kind": "label",
+     "value": "Exports ",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "P14",
+     "kind": "label",
+     "value": "Mining/Quarrying",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "Q14",
+     "kind": "label",
+     "value": "Manufacturing",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "R14",
+     "kind": "label",
+     "value": "Construction",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "S14",
+     "kind": "label",
+     "value": "Imports",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "T14",
+     "kind": "label",
+     "value": "Commerce",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "U14",
+     "kind": "label",
+     "value": "Others",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "center"
+    },
+    {
+     "ref": "A17",
+     "kind": "label",
+     "value": "Cedis",
+     "number_format": "0.0%",
+     "align": "left"
+    },
+    {
+     "ref": "A26",
+     "kind": "label",
+     "value": "FOREIGN ACCOUNTS",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "general"
+    },
+    {
+     "ref": "A28",
+     "kind": "label",
+     "value": "USD",
+     "number_format": "0.0%",
+     "align": "left"
+    },
+    {
+     "ref": "A29",
+     "kind": "label",
+     "value": "GBP ",
+     "number_format": "0.0%",
+     "align": "left"
+    },
+    {
+     "ref": "A30",
+     "kind": "label",
+     "value": "DEM ",
+     "number_format": "0.0%",
+     "align": "left"
+    },
+    {
+     "ref": "A31",
+     "kind": "label",
+     "value": "All other Currencies",
+     "number_format": "0.0%",
+     "align": "general"
+    },
+    {
+     "ref": "A44",
+     "kind": "label",
+     "value": "Note: Please you may add other items that are on the returns which have not be specified on the Interest and borrowing rates.",
+     "bold": true,
+     "align": "general"
+    }
+   ]
+  }
+ ]
+}

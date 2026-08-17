@@ -115,7 +115,7 @@ def test_certification_digest_is_order_independent_over_source_runs() -> None:
         "bank_id": SAMPLE_BANK_ID,
         "package_id": "p1",
         "package_version": 1,
-        "return_code": "BSD3",
+        "return_code": "LCR-NSFR",
         "reporting_date": "2026-06-30",
         "basis": "solo",
         "content_digest_value": "c1",
@@ -132,7 +132,7 @@ def test_certification_digest_changes_when_any_input_hash_changes() -> None:
         "bank_id": SAMPLE_BANK_ID,
         "package_id": "p1",
         "package_version": 1,
-        "return_code": "BSD3",
+        "return_code": "LCR-NSFR",
         "reporting_date": "2026-06-30",
         "basis": "solo",
         "content_digest_value": "c1",
@@ -173,7 +173,7 @@ def test_engine_binding_refuses_to_masquerade_as_master_data() -> None:
         "bank_id": SAMPLE_BANK_ID,
         "package_id": "p1",
         "package_version": 1,
-        "return_code": "BSD3",
+        "return_code": "LCR-NSFR",
         "reporting_date": "2026-06-30",
         "basis": "solo",
         "content_digest_value": "c1",
@@ -311,7 +311,7 @@ def test_configured_policy_makes_signature_mandatory(db_session: Session) -> Non
         db_session,
         _ctx(),
         bank_id=SAMPLE_BANK_ID,
-        return_code="BSD3",
+        return_code="LCR-NSFR",
         return_family="liquidity",
         basis="solo",
         as_at=date(2026, 6, 30),
@@ -325,7 +325,7 @@ def _resolve_bsd3(db_session: Session) -> SigningPolicy:
         db_session,
         _ctx(),
         bank_id=SAMPLE_BANK_ID,
-        return_code="BSD3",
+        return_code="LCR-NSFR",
         return_family="liquidity",
         basis="solo",
         as_at=date(2026, 6, 30),
@@ -389,7 +389,7 @@ def test_esign_kill_switch_keeps_admin_relaxed_rows_attributed(
 ) -> None:
     """A policy an administrator already relaxed keeps its `configured` source:
     the flag changed nothing for it, and claiming otherwise would misattribute."""
-    relax_signing(db_session, organization_id=ORG_1, return_code="BSD3")
+    relax_signing(db_session, organization_id=ORG_1, return_code="LCR-NSFR")
     monkeypatch.setenv("ATTESTATION_ESIGN_REQUIRED", "0")
     get_settings.cache_clear()
 
@@ -427,7 +427,7 @@ def test_policy_resolution_prefers_the_most_specific_row(db_session: Session) ->
             ReturnSigningPolicy(
                 organization_id=ORG_1,
                 bank_id=SAMPLE_BANK_ID,
-                return_code="BSD3",
+                return_code="LCR-NSFR",
                 return_family=None,
                 required_signatures=[
                     {"role": "preparer"},
@@ -444,7 +444,7 @@ def test_policy_resolution_prefers_the_most_specific_row(db_session: Session) ->
         db_session,
         ctx,
         bank_id=SAMPLE_BANK_ID,
-        return_code="BSD3",
+        return_code="LCR-NSFR",
         return_family="liquidity",
         basis="solo",
         as_at=date(2026, 6, 30),
@@ -473,7 +473,7 @@ def test_policy_not_yet_effective_is_ignored(db_session: Session) -> None:
         db_session,
         ctx,
         bank_id=SAMPLE_BANK_ID,
-        return_code="BSD3",
+        return_code="LCR-NSFR",
         return_family="liquidity",
         basis="solo",
         as_at=date(2026, 6, 30),
@@ -492,7 +492,7 @@ def _package(**overrides: object) -> RegulatoryPackage:
         "organization_id": ORG_1,
         "bank_id": SAMPLE_BANK_ID,
         "return_family": "liquidity",
-        "return_code": "BSD3",
+        "return_code": "LCR-NSFR",
         "reporting_date": date(2026, 6, 30),
         "frequency": "monthly",
         "basis": "solo",
@@ -761,7 +761,7 @@ def test_relaxing_the_policy_is_what_reopens_filing(
     get_settings.cache_clear()
 
     package = _package(status="approved")
-    relax_signing(db_session, organization_id=ORG_1, return_code="BSD3")
+    relax_signing(db_session, organization_id=ORG_1, return_code="LCR-NSFR")
 
     workflow.ensure_submittable(db_session, _ctx(), package)  # no raise
     get_settings.cache_clear()

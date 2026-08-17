@@ -63,7 +63,7 @@ def _seed_with_baseline_run(db: Session) -> None:
     # not about who signed. Opt this return out of the platform's mandatory
     # signing the way an administrator would; the gate is proved in
     # tests/services/test_attestation_spine.py.
-    relax_signing(db, organization_id=DEMO_ORG_ID, return_code="BSD3")
+    relax_signing(db, organization_id=DEMO_ORG_ID, return_code="LCR-NSFR")
     if db.scalar(select(User.id).where(User.id == CHECKER.actor_user_id)) is None:
         db.add(
             User(
@@ -117,7 +117,7 @@ def _approved_package(db: Session, monkeypatch: pytest.MonkeyPatch):
         db,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
     validation.validate_package(db, MAKER, SAMPLE_BANK_ID, package.id)
     workflow.request_approval(
@@ -206,7 +206,7 @@ def test_acknowledged_package_requires_granted_resubmission_to_regenerate(
             db_session,
             MAKER,
             SAMPLE_BANK_ID,
-            RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+            RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
         )
     assert exc.value.status_code == 409
     assert "resubmission" in str(exc.value.detail).lower()
@@ -224,7 +224,7 @@ def test_acknowledged_package_requires_granted_resubmission_to_regenerate(
         db_session,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
     assert v2.version == approved.version + 1
     requests = workflow.list_resubmission_requests(db_session, MAKER, SAMPLE_BANK_ID, approved.id)
@@ -271,7 +271,7 @@ def test_denied_resubmission_keeps_acknowledged_package_immutable(
             db_session,
             MAKER,
             SAMPLE_BANK_ID,
-            RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+            RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
         )
     assert exc.value.status_code == 409
 
@@ -303,7 +303,7 @@ def test_snapshot_sha256_is_sealed_and_value_based(db_session: Session) -> None:
         db_session,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
     row = db_session.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == package.id))
     assert row is not None
@@ -332,7 +332,7 @@ def _approved_stub_package(db_session: Session) -> RegulatoryPackage:
         db_session,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
     row = db_session.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == generated.id))
     assert row is not None
@@ -362,14 +362,14 @@ def test_orass_api_submit_returns_reference_and_labels_contract(
         seen["url"] = str(request.url)
         seen["auth"] = request.headers.get("Authorization")
         seen["body"] = json.loads(request.content)
-        return httpx.Response(201, json={"reference": "BSD301390", "status": "received"})
+        return httpx.Response(201, json={"reference": "LCRN01390", "status": "received"})
 
     channel = _api_channel(handler)
     ref = channel.submit(package, [_stub_artifact(package)])
-    assert ref == "BSD301390"
-    assert seen["url"].endswith("/api/v1/returns/BSD3/submissions")
+    assert ref == "LCRN01390"
+    assert seen["url"].endswith("/api/v1/returns/LCR-NSFR/submissions")
     assert seen["auth"] == "Bearer test-key"
-    assert seen["body"]["metadata"]["return_code"] == "BSD3"
+    assert seen["body"]["metadata"]["return_code"] == "LCR-NSFR"
     assert channel.last_detail["provisional_contract"] is True
 
 
@@ -409,7 +409,7 @@ def test_orass_api_poll_maps_statuses_and_carries_comments() -> None:
             200, json={"status": "declined", "comments": "Not approvable as filed."}
         )
 
-    status, detail = _api_channel(handler).poll_with_detail("BSD301390")
+    status, detail = _api_channel(handler).poll_with_detail("LCRN01390")
     assert status == "declined"
     assert detail["comments"] == "Not approvable as filed."
 
@@ -433,9 +433,9 @@ def test_orass_api_requires_base_url_and_credentials(db_session: Session) -> Non
 
 def test_orass_api_resubmission_request_flow() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path.endswith("/submissions/BSD301390/resubmission-requests")
+        assert request.url.path.endswith("/submissions/LCRN01390/resubmission-requests")
         return httpx.Response(201, json={"status": "granted"})
 
-    status, detail = _api_channel(handler).request_resubmission("BSD301390", "Wrong attachment")
+    status, detail = _api_channel(handler).request_resubmission("LCRN01390", "Wrong attachment")
     assert status == "granted"
     assert detail["provisional_contract"] is True

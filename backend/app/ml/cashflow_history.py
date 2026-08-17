@@ -46,9 +46,14 @@ def _flow_from_payload(payload: dict[str, Any]) -> DailyFlow | None:
         date = datetime.date.fromisoformat(str(raw_date)[:10])
     except ValueError:
         return None
-    inflow = _num(payload, "inflow_ghs", "inflow")
-    outflow = _num(payload, "outflow_ghs", "outflow")
-    net = _num(payload, "net_ghs", "net", default=inflow - outflow)
+    # The canonical historical_cashflows rows (Sample Bank dataset, the primary,
+    # fact_derivation._derive_cashflow_summary) carry deposit_inflow_ghs /
+    # deposit_outflow_ghs / net_cashflow_ghs; the short names remain accepted
+    # for other feeds. Reading only the short names parsed the real bank's
+    # 702-day series as all zeros (found by the real-DB tests, 2026-08-16).
+    inflow = _num(payload, "deposit_inflow_ghs", "inflow_ghs", "inflow")
+    outflow = _num(payload, "deposit_outflow_ghs", "outflow_ghs", "outflow")
+    net = _num(payload, "net_cashflow_ghs", "net_ghs", "net", default=inflow - outflow)
     return DailyFlow(date=date, inflow=inflow, outflow=outflow, net=net)
 
 

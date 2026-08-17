@@ -1,15 +1,27 @@
+"""Balance-sheet forecasting API against the ACTUAL primary database.
+
+Invariants (never frozen goldens — the real book moves): horizon → path length
+and monotone period labels; projection identities (assets = funding, income
+= NII + fees, summary derived from its own path); metric statuses and
+validations consistent with thresholds; year-0 LCR/NSFR equal the standalone
+liquidity engine; determinism of input_hash; module scoping; tenant isolation.
+"""
+
 from __future__ import annotations
 
+import datetime
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
-from tests.api.helpers import ORG_2, headers
+from tests.real_data import REAL_BANK_ID, other_headers, real_headers, requires_real_data
 
-FOUR_DP = Decimal("0.0001")
+pytestmark = requires_real_data
+
+MONEY_TOLERANCE = Decimal("0.01")  # per-category money() rounding across a sum
+OPTIMIZER_TOP_LIMIT = 10
 ASSUMPTION_KEYS = {
     "loan_growth_pct",
     "deposit_growth_pct",
@@ -18,6 +30,11 @@ ASSUMPTION_KEYS = {
     "credit_loss_rate_pct",
     "fx_depreciation_pct",
     "dividend_payout_pct",
+}
+RESOLVED_ASSUMPTION_KEYS = ASSUMPTION_KEYS | {
+    "fee_income_pct_assets",
+    "tax_rate_pct",
+    "securities_shift_pp",
 }
 FORECAST_FACT_GROUPS = {
     "balance_sheet",
@@ -31,17 +48,16 @@ FORECAST_FACT_GROUPS = {
 }
 
 
-def _seed_latest_period(db_client: TestClient) -> dict[str, Any]:
-    response = db_client.post("/api/v1/banks/seed-demo", headers=headers())
+def _latest_period(client: TestClient) -> dict[str, Any]:
+    response = client.get(f"/api/v1/banks/{REAL_BANK_ID}/reporting-periods", headers=real_headers())
     assert response.status_code == 200, response.text
-    periods = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/reporting-periods", headers=headers()
-    ).json()["periods"]
+    periods = response.json()["periods"]
+    assert periods, "the real Sample Bank must have at least one reporting period"
     return periods[0]
 
 
 def _create_forecast_run(
-    db_client: TestClient,
+    client: TestClient,
     period_id: str,
     scenario_code: str,
     assumptions: dict[str, str] | None = None,
@@ -49,44 +65,108 @@ def _create_forecast_run(
     payload: dict[str, Any] = {"reporting_period_id": period_id, "scenario_code": scenario_code}
     if assumptions is not None:
         payload["assumptions"] = assumptions
-    response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs", headers=headers(), json=payload
+    response = client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs", headers=real_headers(), json=payload
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def _module_total(client: TestClient, module: str) -> int:
+    response = client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+        headers=real_headers(),
+        params={"module": module},
+    )
+    assert response.status_code == 200, response.text
+    return int(response.json()["total"])
 
 
 def _dec(value: Any) -> Decimal:
     return Decimal(str(value))
 
 
-def test_list_forecast_scenarios_returns_presets_and_defaults(db_client: TestClient) -> None:
-    _seed_latest_period(db_client)
-    response = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/scenarios", headers=headers()
+def _expected_labels(period: dict[str, Any], years: int) -> list[str]:
+    """Year 0 is the period itself; year N is the same month N calendar years on."""
+    end = datetime.date.fromisoformat(period["period_end"])
+    return [period["label"]] + [f"{end.year + n:04d}-{end.month:02d}" for n in range(1, years + 1)]
+
+
+def _assert_path_identities(path: list[dict[str, Any]], years: int, period: dict[str, Any]) -> None:
+    """The projection identities that hold for ANY book, in every year."""
+    assert [row["year"] for row in path] == list(range(years + 1))
+    assert [row["period_label"] for row in path] == _expected_labels(period, years)
+    # Constant (unprojected) assets and constant funding rows do not move, so
+    # ``total_assets - (loans + securities + cash)`` and
+    # ``total_assets - (deposits + borrowings_plug + equity)`` are the same
+    # constants in every year: assets tie to funding through the plug.
+    other_assets = {
+        _dec(row["total_assets"]) - _dec(row["loans"]) - _dec(row["securities"]) - _dec(row["cash"])
+        for row in path
+    }
+    other_funding = {
+        _dec(row["total_assets"])
+        - _dec(row["deposits"])
+        - _dec(row["borrowings_plug"])
+        - _dec(row["equity"])
+        for row in path
+    }
+    assert len(other_assets) == 1, other_assets
+    assert len(other_funding) == 1, other_funding
+    assert path[0]["roe_pct"] is None
+    for row in path[1:]:
+        assert _dec(row["total_income"]) == _dec(row["nii"]) + _dec(row["fees"])
+        assert _dec(row["borrowings_plug"]) >= 0
+        assert _dec(row["dividends"]) >= 0
+        if _dec(row["net_income"]) > 0:
+            assert _dec(row["dividends"]) <= _dec(row["net_income"])
+        assert row["roe_pct"] is not None
+
+
+def _assert_summary_matches_path(summary: dict[str, Any], path: list[dict[str, Any]]) -> None:
+    projected = path[1:]
+    assert _dec(summary["year5_car_pct"]) == _dec(projected[-1]["car_pct"])
+    assert _dec(summary["year5_lcr_pct"]) == _dec(projected[-1]["lcr_pct"])
+    assert _dec(summary["year5_nsfr_pct"]) == _dec(projected[-1]["nsfr_pct"])
+    assert _dec(summary["min_car_pct"]) == min(_dec(row["car_pct"]) for row in projected)
+    assert _dec(summary["min_lcr_pct"]) == min(_dec(row["lcr_pct"]) for row in projected)
+    assert _dec(summary["min_nsfr_pct"]) == min(_dec(row["nsfr_pct"]) for row in projected)
+    assert _dec(summary["cumulative_net_income"]) == sum(
+        (_dec(row["net_income"]) for row in projected), Decimal("0")
+    )
+    assert _dec(summary["min_car_pct"]) <= _dec(summary["year5_car_pct"])
+
+
+def test_list_forecast_scenarios_returns_presets_and_defaults(real_client: TestClient) -> None:
+    response = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/scenarios", headers=real_headers()
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["bank_id"] == str(SAMPLE_BANK_ID)
+    assert body["bank_id"] == REAL_BANK_ID
     scenarios = {item["code"]: item["assumptions"] for item in body["scenarios"]}
     assert set(scenarios) == {"base", "adverse", "severely_adverse"}
     for assumptions in scenarios.values():
         assert set(assumptions) == ASSUMPTION_KEYS
-    assert _dec(scenarios["base"]["loan_growth_pct"]) == Decimal("18")
-    assert _dec(scenarios["base"]["deposit_growth_pct"]) == Decimal("16")
-    assert _dec(scenarios["adverse"]["fx_depreciation_pct"]) == Decimal("15")
-    assert _dec(scenarios["severely_adverse"]["loan_growth_pct"]) == Decimal("-2")
+    # Presets are bank parameters, so only their ORDERING is invariant: each
+    # step of severity grows more slowly, earns less and loses more.
+    base, adverse, severe = scenarios["base"], scenarios["adverse"], scenarios["severely_adverse"]
+    for key in ("loan_growth_pct", "deposit_growth_pct", "nim_pct"):
+        assert _dec(base[key]) >= _dec(adverse[key]) >= _dec(severe[key]), key
+    for key in ("cost_to_income_pct", "credit_loss_rate_pct", "fx_depreciation_pct"):
+        assert _dec(base[key]) <= _dec(adverse[key]) <= _dec(severe[key]), key
+    assert _dec(base["dividend_payout_pct"]) >= _dec(severe["dividend_payout_pct"])
     defaults = body["defaults"]
-    assert _dec(defaults["fee_income_pct_assets"]) == Decimal("1.2")
-    assert _dec(defaults["tax_rate_pct"]) == Decimal("25")
-    assert _dec(defaults["securities_shift_pp"]) == Decimal("0")
+    assert set(defaults) == {"fee_income_pct_assets", "tax_rate_pct", "securities_shift_pp"}
+    assert _dec(defaults["fee_income_pct_assets"]) >= 0
+    assert Decimal("0") <= _dec(defaults["tax_rate_pct"]) < Decimal("100")
 
 
 def test_create_base_forecast_run_persists_projection_and_outputs(  # noqa: PLR0915
-    db_client: TestClient,
+    real_client: TestClient,
 ) -> None:
-    period = _seed_latest_period(db_client)
-    run = _create_forecast_run(db_client, period["id"], "base")
+    period = _latest_period(real_client)
+    run = _create_forecast_run(real_client, period["id"], "base")
 
     assert run["status"] == "succeeded"
     assert run["module"] == "forecast"
@@ -102,47 +182,65 @@ def test_create_base_forecast_run_persists_projection_and_outputs(  # noqa: PLR0
     snapshot = run["inputs"]
     assert snapshot["module"] == "forecast"
     assert snapshot["scenario_code"] == "base"
-    assert snapshot["as_of_date"] == "2026-03-31"
-    # 41 capital-module facts + 3 LCR inflow facts participate in the forecast.
-    assert len(snapshot["facts"]) == 44
+    assert snapshot["as_of_date"] == period["period_end"]
+    assert snapshot["reporting_period"]["label"] == period["label"]
+    assert snapshot["facts"], "the forecast snapshot must carry facts"
+    # The snapshot is scoped to exactly the groups both downstream engines read.
     assert {fact["fact_group"] for fact in snapshot["facts"]} == FORECAST_FACT_GROUPS
     assert snapshot["assumption_overrides"] is None
-    assert _dec(snapshot["assumptions"]["loan_growth_pct"]) == Decimal("18")
+    presets = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/scenarios", headers=real_headers()
+    ).json()
+    base_preset = next(item for item in presets["scenarios"] if item["code"] == "base")
+    for key in ASSUMPTION_KEYS:
+        assert _dec(snapshot["assumptions"][key]) == _dec(base_preset["assumptions"][key])
 
     resolved = run["assumptions"]
-    assert _dec(resolved["loan_growth_pct"]) == Decimal("18")
-    assert _dec(resolved["deposit_growth_pct"]) == Decimal("16")
-    assert _dec(resolved["fee_income_pct_assets"]) == Decimal("1.2")
-    assert _dec(resolved["tax_rate_pct"]) == Decimal("25")
-    assert _dec(resolved["securities_shift_pp"]) == Decimal("0")
+    assert set(resolved) == RESOLVED_ASSUMPTION_KEYS
+    for key in ASSUMPTION_KEYS:
+        assert _dec(resolved[key]) == _dec(base_preset["assumptions"][key])
+    for key in ("fee_income_pct_assets", "tax_rate_pct", "securities_shift_pp"):
+        assert _dec(resolved[key]) == _dec(presets["defaults"][key])
 
     path = run["path"]
-    assert [row["year"] for row in path] == [0, 1, 2, 3, 4, 5]
-    assert path[0]["period_label"] == "2026-03"
-    assert path[5]["period_label"] == "2031-03"
-    # Year 0 ratios equal the standalone engine baselines (cross-module consistency).
-    assert _dec(path[0]["car_pct"]) == Decimal("15.832363")
-    assert _dec(path[0]["lcr_pct"]) == Decimal("147.294589")
-    assert path[0]["roe_pct"] is None
-    # Year 1 goldens (derived in tests/domain/test_forecasting_engine.py).
-    assert _dec(path[1]["loans"]) == Decimal("1652000000")
-    assert _dec(path[1]["deposits"]) == Decimal("2204000000")
-    assert _dec(path[1]["securities"]) == Decimal("719200000")
-    assert _dec(path[1]["nii"]) == Decimal("105388800")
-    assert _dec(path[1]["net_income"]) == Decimal("40874016")
-    for row in path:
-        assert _dec(row["total_assets"]) == (
-            _dec(row["deposits"])
-            + Decimal("60000000")
-            + _dec(row["borrowings_plug"])
-            + _dec(row["equity"])
-        )
+    _assert_path_identities(path, 5, period)
+    # Year 0 is the as-of book: its balances are the derived balance-sheet facts
+    # (positive), and no P&L has accrued yet.
+    assert _dec(path[0]["total_assets"]) > 0
+    assert _dec(path[0]["loans"]) > 0
+    assert _dec(path[0]["deposits"]) > 0
+    for field in ("nii", "fees", "total_income", "opex", "credit_losses", "net_income"):
+        assert _dec(path[0][field]) == 0
+    # Year 1 mechanics: loans and deposits scale by the resolved growth rates.
+    loan_factor = 1 + _dec(resolved["loan_growth_pct"]) / 100
+    deposit_factor = 1 + _dec(resolved["deposit_growth_pct"]) / 100
+    assert abs(_dec(path[1]["loans"]) - _dec(path[0]["loans"]) * loan_factor) <= MONEY_TOLERANCE
+    assert (
+        abs(_dec(path[1]["deposits"]) - _dec(path[0]["deposits"]) * deposit_factor)
+        <= MONEY_TOLERANCE
+    )
 
     summary = run["summary"]
-    assert _dec(summary["year5_car_pct"]) >= Decimal("10")
-    assert _dec(summary["year5_lcr_pct"]) >= Decimal("100")
-    assert _dec(summary["year5_nsfr_pct"]) >= Decimal("100")
-    assert _dec(summary["min_car_pct"]) <= _dec(summary["year5_car_pct"])
+    _assert_summary_matches_path(summary, path)
+
+    # Year-0 liquidity ratios equal the standalone liquidity engine's baseline on
+    # the same period (cross-module consistency). The year-0 CAR is NOT asserted
+    # equal to the capital engine's: the capital snapshot additionally carries
+    # ``ecl_exposure`` (IFRS 9) facts that the forecast snapshot deliberately
+    # excludes, so the two diverge on any book with ECL data — the real one has.
+    liquidity = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+        headers=real_headers(),
+        json={
+            "module": "liquidity",
+            "reporting_period_id": period["id"],
+            "scenario_code": "baseline",
+        },
+    )
+    assert liquidity.status_code == 201, liquidity.text
+    assert liquidity.json()["status"] == "succeeded"
+    assert _dec(path[0]["lcr_pct"]) == _dec(liquidity.json()["metrics"]["lcr_pct"])
+    assert _dec(path[0]["nsfr_pct"]) == _dec(liquidity.json()["metrics"]["nsfr_pct"])
 
     metric_results = {item["metric_code"]: item for item in run["metric_results"]}
     assert set(metric_results) == {
@@ -153,12 +251,7 @@ def test_create_base_forecast_run_persists_projection_and_outputs(  # noqa: PLR0
     }
     assert metric_results["avg_roe_pct"]["status"] == "na"
     assert metric_results["avg_roe_pct"]["threshold_min"] is None
-    assert metric_results["year5_car_pct"]["status"] == "green"
-    assert _dec(metric_results["year5_car_pct"]["threshold_min"]) == Decimal("10")
-    assert metric_results["year5_lcr_pct"]["status"] == "green"
-    assert _dec(metric_results["year5_lcr_pct"]["threshold_min"]) == Decimal("100")
-    assert metric_results["year5_nsfr_pct"]["status"] == "green"
-
+    assert _dec(metric_results["avg_roe_pct"]["metric_value"]) == _dec(summary["avg_roe_pct"])
     validations = {item["rule_code"]: item for item in run["validations"]}
     assert set(validations) == {
         "projection_balance_ties",
@@ -166,28 +259,43 @@ def test_create_base_forecast_run_persists_projection_and_outputs(  # noqa: PLR0
         "year5_lcr_above_minimum",
         "year5_nsfr_above_minimum",
     }
-    assert all(item["passed"] is True for item in validations.values())
     assert all(item["severity"] == "error" for item in validations.values())
+    assert validations["projection_balance_ties"]["passed"] is True
+    # Status and validation must agree with the value they grade.
+    for code, rule in (
+        ("year5_car_pct", "year5_car_above_minimum"),
+        ("year5_lcr_pct", "year5_lcr_above_minimum"),
+        ("year5_nsfr_pct", "year5_nsfr_above_minimum"),
+    ):
+        metric = metric_results[code]
+        value = _dec(metric["metric_value"])
+        assert value == _dec(summary[code])
+        minimum = _dec(metric["threshold_min"])
+        assert minimum > 0
+        above = value >= minimum
+        assert metric["status"] in ({"green", "amber"} if above else {"red"}), code
+        assert validations[rule]["passed"] is above, rule
 
-    fetched = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs/{run['id']}", headers=headers()
+    fetched = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs/{run['id']}", headers=real_headers()
     )
     assert fetched.status_code == 200
     assert fetched.json()["input_hash"] == run["input_hash"]
+    assert fetched.json()["path"] == path
 
 
-def test_forecast_horizon_years_controls_the_path_length(db_client: TestClient) -> None:
-    period = _seed_latest_period(db_client)
+def test_forecast_horizon_years_controls_the_path_length(real_client: TestClient) -> None:
+    period = _latest_period(real_client)
 
     # Default (nothing passed) stays the 5-year projection with no snapshot key,
     # so unchanged inputs keep reproducing the pre-horizon input_hash.
-    default_run = _create_forecast_run(db_client, period["id"], "base")
+    default_run = _create_forecast_run(real_client, period["id"], "base")
     assert [row["year"] for row in default_run["path"]] == [0, 1, 2, 3, 4, 5]
     assert "horizon_years" not in default_run["inputs"]
 
-    three = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs",
-        headers=headers(),
+    three = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs",
+        headers=real_headers(),
         json={
             "reporting_period_id": period["id"],
             "scenario_code": "base",
@@ -197,9 +305,7 @@ def test_forecast_horizon_years_controls_the_path_length(db_client: TestClient) 
     assert three.status_code == 201, three.text
     run = three.json()
     assert run["status"] == "succeeded"
-    assert [row["year"] for row in run["path"]] == [0, 1, 2, 3]
-    assert run["path"][0]["period_label"] == "2026-03"
-    assert run["path"][3]["period_label"] == "2029-03"
+    _assert_path_identities(run["path"], 3, period)
     # Provenance: the non-default horizon is persisted in the run inputs and
     # therefore participates in the input hash.
     assert run["inputs"]["horizon_years"] == 3
@@ -207,12 +313,13 @@ def test_forecast_horizon_years_controls_the_path_length(db_client: TestClient) 
     # Year-by-year mechanics are horizon-independent: the shared years match.
     assert run["path"][:4] == default_run["path"][:4]
     # The summary's final-year fields read from the run's own last year.
+    _assert_summary_matches_path(run["summary"], run["path"])
     assert run["summary"]["year5_car_pct"] == default_run["path"][3]["car_pct"]
 
     # An explicit 5 is the same projection; only the snapshot provenance differs.
-    explicit = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs",
-        headers=headers(),
+    explicit = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs",
+        headers=real_headers(),
         json={
             "reporting_period_id": period["id"],
             "scenario_code": "base",
@@ -225,9 +332,9 @@ def test_forecast_horizon_years_controls_the_path_length(db_client: TestClient) 
 
     # Bounds are schema-enforced.
     for horizon in (0, 11):
-        rejected = db_client.post(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs",
-            headers=headers(),
+        rejected = real_client.post(
+            f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs",
+            headers=real_headers(),
             json={
                 "reporting_period_id": period["id"],
                 "scenario_code": "base",
@@ -238,50 +345,65 @@ def test_forecast_horizon_years_controls_the_path_length(db_client: TestClient) 
 
 
 def test_custom_scenario_requires_assumptions_then_resolves_partial_override(
-    db_client: TestClient,
+    real_client: TestClient,
 ) -> None:
-    period = _seed_latest_period(db_client)
+    period = _latest_period(real_client)
 
-    blocked = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs",
-        headers=headers(),
+    blocked = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs",
+        headers=real_headers(),
         json={"reporting_period_id": period["id"], "scenario_code": "custom"},
     )
     assert blocked.status_code == 422
 
+    base = _create_forecast_run(real_client, period["id"], "base")
+    base_assumptions = base["assumptions"]
+    # Override loan growth to a value distinct from the base preset.
+    override = str(_dec(base_assumptions["loan_growth_pct"]) - Decimal("8"))
     run = _create_forecast_run(
-        db_client, period["id"], "custom", assumptions={"loan_growth_pct": "10"}
+        real_client, period["id"], "custom", assumptions={"loan_growth_pct": override}
     )
     assert run["status"] == "succeeded"
     assert run["scenario_code"] == "custom"
     resolved = run["assumptions"]
     # The override applies; every other key resolves from the base preset.
-    assert _dec(resolved["loan_growth_pct"]) == Decimal("10")
-    assert _dec(resolved["deposit_growth_pct"]) == Decimal("16")
-    assert _dec(resolved["nim_pct"]) == Decimal("4.8")
-    assert _dec(resolved["dividend_payout_pct"]) == Decimal("30")
-    assert run["inputs"]["assumption_overrides"] == {"loan_growth_pct": "10"}
-    assert _dec(run["path"][1]["loans"]) == Decimal("1540000000")  # 1400M x 1.10
-
-    base = _create_forecast_run(db_client, period["id"], "base")
+    assert _dec(resolved["loan_growth_pct"]) == _dec(override)
+    for key in RESOLVED_ASSUMPTION_KEYS - {"loan_growth_pct"}:
+        assert _dec(resolved[key]) == _dec(base_assumptions[key]), key
+    assert run["inputs"]["assumption_overrides"] == {"loan_growth_pct": override}
+    # Year-1 loans scale by the overridden rate off the same year-0 book.
+    assert run["path"][0] == base["path"][0]
+    factor = 1 + _dec(override) / 100
+    assert abs(_dec(run["path"][1]["loans"]) - _dec(run["path"][0]["loans"]) * factor) <= (
+        MONEY_TOLERANCE
+    )
+    assert _dec(run["path"][1]["loans"]) < _dec(base["path"][1]["loans"])
     assert base["input_hash"] != run["input_hash"]
 
 
-def test_forecast_runs_list_and_get_are_module_scoped(db_client: TestClient) -> None:
-    period = _seed_latest_period(db_client)
-    first = _create_forecast_run(db_client, period["id"], "base")
-    second = _create_forecast_run(db_client, period["id"], "severely_adverse")
+def test_forecast_runs_list_and_get_are_module_scoped(real_client: TestClient) -> None:
+    period = _latest_period(real_client)
+    forecast_before = _module_total(real_client, "forecast")
+    first = _create_forecast_run(real_client, period["id"], "base")
+    second = _create_forecast_run(real_client, period["id"], "severely_adverse")
 
-    listed = db_client.get(f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs", headers=headers())
+    listed = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs",
+        headers=real_headers(),
+        params={"limit": 100},
+    )
     assert listed.status_code == 200
     body = listed.json()
-    assert body["total"] == 2
-    assert body["has_more"] is False
-    summaries = {item["id"]: item for item in body["runs"]}
-    assert set(summaries) == {first["id"], second["id"]}
+    # The real bank carries prior forecast runs; ours are the two newest.
+    assert body["total"] == forecast_before + 2
+    assert body["has_more"] is (body["total"] > 100)
+    assert [item["id"] for item in body["runs"][:2]] == [second["id"], first["id"]]
+    ours = {first["id"], second["id"]}
+    summaries = {item["id"]: item for item in body["runs"] if item["id"] in ours}
+    assert len(summaries) == 2
     for summary in summaries.values():
         assert summary["status"] == "succeeded"
-        assert summary["period_label"] == "2026-03"
+        assert summary["period_label"] == period["label"]
         assert summary["avg_roe_pct"] is not None
         assert summary["year5_car_pct"] is not None
         assert summary["year5_lcr_pct"] is not None
@@ -290,54 +412,59 @@ def test_forecast_runs_list_and_get_are_module_scoped(db_client: TestClient) -> 
     assert _dec(summaries[second["id"]]["avg_roe_pct"]) < (
         _dec(summaries[first["id"]]["avg_roe_pct"])
     )
+    assert _dec(summaries[second["id"]]["year5_car_pct"]) < (
+        _dec(summaries[first["id"]]["year5_car_pct"])
+    )
 
     # The shared regulatory-runs listing can filter the new modules.
-    filtered = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-        headers=headers(),
-        params={"module": "forecast"},
-    )
-    assert filtered.status_code == 200
-    assert filtered.json()["total"] == 2
+    assert _module_total(real_client, "forecast") == forecast_before + 2
 
     # A capital run is not retrievable through the forecast-run endpoint.
-    capital_run = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-        headers=headers(),
+    capital_run = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+        headers=real_headers(),
         json={
             "module": "capital",
             "reporting_period_id": period["id"],
             "scenario_code": "baseline",
         },
-    ).json()
-    missing = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs/{capital_run['id']}", headers=headers()
+    )
+    assert capital_run.status_code == 201, capital_run.text
+    missing = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs/{capital_run.json()['id']}",
+        headers=real_headers(),
     )
     assert missing.status_code == 404
     assert (
-        db_client.get(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs/{uuid4()}", headers=headers()
+        real_client.get(
+            f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs/{uuid4()}", headers=real_headers()
         ).status_code
         == 404
     )
 
 
 def test_strategic_optimizer_persists_a_run_and_returns_ranked_candidates(
-    db_client: TestClient,
+    real_client: TestClient,
 ) -> None:
-    period = _seed_latest_period(db_client)
-    response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/optimizer",
-        headers=headers(),
+    period = _latest_period(real_client)
+    optimizer_before = _module_total(real_client, "optimizer")
+    response = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/optimizer",
+        headers=real_headers(),
         json={"reporting_period_id": period["id"]},
     )
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["status"] == "succeeded"
     assert body["scenario_code"] == "constrained_search"
-    assert body["candidates_evaluated"] == 108
-    assert 1 <= body["feasible_count"] <= 108
-    assert len(body["top"]) <= 10
+    assert body["error"] is None
+    assert len(body["input_hash"]) == 64
+    evaluated = body["candidates_evaluated"]
+    feasible = body["feasible_count"]
+    assert evaluated > 0
+    assert 0 <= feasible <= evaluated
+    # The ranked shortlist is the feasible set, capped, ordered by average ROE.
+    assert len(body["top"]) == min(feasible, OPTIMIZER_TOP_LIMIT)
     roes = [_dec(candidate["summary"]["avg_roe_pct"]) for candidate in body["top"]]
     assert roes == sorted(roes, reverse=True)
     for candidate in body["top"]:
@@ -345,30 +472,47 @@ def test_strategic_optimizer_persists_a_run_and_returns_ranked_candidates(
         statuses = {item["constraint"]: item for item in candidate["constraint_status"]}
         assert set(statuses) == {"car", "lcr", "nsfr"}
         assert all(item["passed"] is True for item in statuses.values())
-    assert set(body["binding_constraint_histogram"]) >= {"car", "lcr", "nsfr"}
-    assert _dec(body["base_assumptions"]["loan_growth_pct"]) == Decimal("18")
+    histogram = body["binding_constraint_histogram"]
+    assert set(histogram) >= {"car", "lcr", "nsfr"}
+    # Every infeasible candidate binds at least one constraint (or errored),
+    # and a fully feasible search binds none.
+    assert sum(histogram.values()) >= evaluated - feasible
+    if feasible == evaluated:
+        assert sum(histogram.values()) == 0
+    # The search starts from the resolved base preset.
+    base_preset = next(
+        item
+        for item in real_client.get(
+            f"/api/v1/banks/{REAL_BANK_ID}/forecast/scenarios", headers=real_headers()
+        ).json()["scenarios"]
+        if item["code"] == "base"
+    )
+    for key in ASSUMPTION_KEYS:
+        assert _dec(body["base_assumptions"][key]) == _dec(base_preset["assumptions"][key])
 
-    # The optimizer run persists under module='optimizer'.
-    listed = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-        headers=headers(),
+    # The optimizer run persists under module='optimizer' as the newest run.
+    listed = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+        headers=real_headers(),
         params={"module": "optimizer"},
     ).json()
-    assert listed["total"] == 1
+    assert listed["total"] == optimizer_before + 1
     assert listed["runs"][0]["id"] == body["run_id"]
     assert listed["runs"][0]["scenario_code"] == "constrained_search"
-    stored = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs/{body['run_id']}", headers=headers()
+    stored = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs/{body['run_id']}", headers=real_headers()
     ).json()
     assert stored["module"] == "optimizer"
-    assert stored["metrics"]["candidates_evaluated"] == 108
+    assert stored["metrics"]["candidates_evaluated"] == evaluated
+    assert stored["metrics"]["feasible_count"] == feasible
 
 
-def test_whatif_analysis_persists_a_run_and_compares_paths(db_client: TestClient) -> None:
-    period = _seed_latest_period(db_client)
-    response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/whatif",
-        headers=headers(),
+def test_whatif_analysis_persists_a_run_and_compares_paths(real_client: TestClient) -> None:
+    period = _latest_period(real_client)
+    whatif_before = _module_total(real_client, "whatif")
+    response = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/whatif",
+        headers=real_headers(),
         json={"reporting_period_id": period["id"], "shock_code": "default_spike"},
     )
     assert response.status_code == 201, response.text
@@ -378,47 +522,57 @@ def test_whatif_analysis_persists_a_run_and_compares_paths(db_client: TestClient
     assert len(body["base_path"]) == 6
     assert len(body["shocked_path"]) == 6
     assert len(body["deltas"]) == 6
-    # default_spike multiplies the credit-loss rate by 2.5: year-5 CAR and net
-    # income both fall relative to base.
+    # Both paths start from the same as-of book.
+    assert body["base_path"][0] == body["shocked_path"][0]
+    # default_spike multiplies the credit-loss rate by 2.5 and touches nothing
+    # else: year-5 CAR and net income both fall relative to base.
+    base_loss = _dec(body["base_assumptions"]["credit_loss_rate_pct"])
+    assert _dec(body["shocked_assumptions"]["credit_loss_rate_pct"]) == base_loss * Decimal("2.5")
+    for key in RESOLVED_ASSUMPTION_KEYS - {"credit_loss_rate_pct"}:
+        assert _dec(body["shocked_assumptions"][key]) == _dec(body["base_assumptions"][key]), key
     year5 = body["year5"]
     assert _dec(year5["car_pct"]["shocked"]) < _dec(year5["car_pct"]["base"])
     assert _dec(year5["net_income"]["shocked"]) < _dec(year5["net_income"]["base"])
-    assert _dec(year5["car_pct"]["delta"]) == (
-        _dec(year5["car_pct"]["shocked"]) - _dec(year5["car_pct"]["base"])
-    )
-    assert _dec(body["shocked_assumptions"]["credit_loss_rate_pct"]) == Decimal("2.5")
+    for metric in year5.values():
+        assert _dec(metric["delta"]) == _dec(metric["shocked"]) - _dec(metric["base"])
+    assert _dec(year5["car_pct"]["base"]) == _dec(body["base_path"][5]["car_pct"])
+    assert _dec(year5["car_pct"]["shocked"]) == _dec(body["shocked_path"][5]["car_pct"])
+    assert _dec(body["base_summary"]["year5_car_pct"]) == _dec(year5["car_pct"]["base"])
+    assert _dec(body["shocked_summary"]["year5_car_pct"]) == _dec(year5["car_pct"]["shocked"])
 
-    mpr = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/whatif",
-        headers=headers(),
+    mpr = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/whatif",
+        headers=real_headers(),
         json={"reporting_period_id": period["id"], "shock_code": "mpr_cut_200"},
-    ).json()
-    assert _dec(mpr["shocked_path"][5]["loans"]) > _dec(mpr["base_path"][5]["loans"])
+    )
+    assert mpr.status_code == 201, mpr.text
+    # A policy-rate cut stimulates lending: year-5 loans exceed the base path.
+    assert _dec(mpr.json()["shocked_path"][5]["loans"]) > _dec(mpr.json()["base_path"][5]["loans"])
 
-    unknown = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/whatif",
-        headers=headers(),
+    unknown = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/whatif",
+        headers=real_headers(),
         json={"reporting_period_id": period["id"], "shock_code": "meteor_strike"},
     )
     assert unknown.status_code == 422
 
-    listed = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-        headers=headers(),
+    listed = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+        headers=real_headers(),
         params={"module": "whatif"},
     ).json()
-    assert listed["total"] == 2
-    assert {run["scenario_code"] for run in listed["runs"]} == {"default_spike", "mpr_cut_200"}
+    assert listed["total"] == whatif_before + 2
+    assert {run["scenario_code"] for run in listed["runs"][:2]} == {"default_spike", "mpr_cut_200"}
 
 
 def test_forecast_modules_are_not_creatable_through_create_regulatory_run(
-    db_client: TestClient,
+    real_client: TestClient,
 ) -> None:
-    period = _seed_latest_period(db_client)
+    period = _latest_period(real_client)
     for module in ("forecast", "optimizer", "whatif"):
-        response = db_client.post(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-            headers=headers(),
+        response = real_client.post(
+            f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+            headers=real_headers(),
             json={
                 "module": module,
                 "reporting_period_id": period["id"],
@@ -428,77 +582,81 @@ def test_forecast_modules_are_not_creatable_through_create_regulatory_run(
         assert response.status_code == 422, module
 
 
-def test_unknown_bank_and_period_return_404(db_client: TestClient) -> None:
-    _seed_latest_period(db_client)
+def test_unknown_bank_and_period_return_404(real_client: TestClient) -> None:
     assert (
-        db_client.get(f"/api/v1/banks/{uuid4()}/forecast/scenarios", headers=headers()).status_code
+        real_client.get(
+            f"/api/v1/banks/{uuid4()}/forecast/scenarios", headers=real_headers()
+        ).status_code
         == 404
     )
     assert (
-        db_client.post(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs",
-            headers=headers(),
+        real_client.post(
+            f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs",
+            headers=real_headers(),
             json={"reporting_period_id": str(uuid4()), "scenario_code": "base"},
         ).status_code
         == 404
     )
     assert (
-        db_client.post(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/optimizer",
-            headers=headers(),
+        real_client.post(
+            f"/api/v1/banks/{REAL_BANK_ID}/forecast/optimizer",
+            headers=real_headers(),
             json={"reporting_period_id": str(uuid4())},
         ).status_code
         == 404
     )
 
 
-def test_forecasting_endpoints_are_tenant_isolated(db_client: TestClient) -> None:
-    period = _seed_latest_period(db_client)
-    run = _create_forecast_run(db_client, period["id"], "base")
+def test_forecasting_endpoints_are_tenant_isolated(real_client: TestClient) -> None:
+    period = _latest_period(real_client)
+    forecast_before = _module_total(real_client, "forecast")
+    run = _create_forecast_run(real_client, period["id"], "base")
 
-    org2 = headers(ORG_2)
+    other = other_headers()
     assert (
-        db_client.get(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/scenarios", headers=org2
+        real_client.get(
+            f"/api/v1/banks/{REAL_BANK_ID}/forecast/scenarios", headers=other
         ).status_code
         == 404
     )
     assert (
-        db_client.post(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs",
-            headers=org2,
+        real_client.post(
+            f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs",
+            headers=other,
             json={"reporting_period_id": period["id"], "scenario_code": "base"},
         ).status_code
         == 404
     )
     assert (
-        db_client.get(f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs", headers=org2).status_code
+        real_client.get(f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs", headers=other).status_code
         == 404
     )
     assert (
-        db_client.get(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs/{run['id']}", headers=org2
+        real_client.get(
+            f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs/{run['id']}", headers=other
         ).status_code
         == 404
     )
     assert (
-        db_client.post(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/optimizer",
-            headers=org2,
+        real_client.post(
+            f"/api/v1/banks/{REAL_BANK_ID}/forecast/optimizer",
+            headers=other,
             json={"reporting_period_id": period["id"]},
         ).status_code
         == 404
     )
     assert (
-        db_client.post(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/whatif",
-            headers=org2,
+        real_client.post(
+            f"/api/v1/banks/{REAL_BANK_ID}/forecast/whatif",
+            headers=other,
             json={"reporting_period_id": period["id"], "shock_code": "default_spike"},
         ).status_code
         == 404
     )
 
-    listed = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast/runs", headers=headers()
+    # None of the foreign attempts minted a run: exactly ours was added.
+    listed = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/forecast/runs", headers=real_headers()
     ).json()
-    assert listed["total"] == 1
+    assert listed["total"] == forecast_before + 1
+    assert listed["runs"][0]["id"] == run["id"]

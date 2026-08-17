@@ -1,0 +1,2045 @@
+{
+ "form": "BSD8",
+ "workbook": "FORM BSD8 REVISED.xls",
+ "sheets": [
+  {
+   "name": "BSD8",
+   "max_row": 37,
+   "max_col": 257,
+   "column_widths": {
+    "A": 7.56,
+    "B": 57.41,
+    "C": 18.28,
+    "D": 15.85,
+    "E": 16.56,
+    "F": 15.13,
+    "G": 16.13,
+    "H": 18.85,
+    "I": 22.14,
+    "J": 22.14,
+    "K": 22.14
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B4",
+     "kind": "label",
+     "value": "SUMMARY  SHEET",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E4",
+     "kind": "label",
+     "value": "(¢'Million)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": "CLASSIFICATION  OF  ADVANCES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A6",
+     "kind": "label",
+     "value": "No",
+     "align": "center"
+    },
+    {
+     "ref": "B6",
+     "kind": "label",
+     "value": "Item ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C6",
+     "kind": "label",
+     "value": "Current",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D6",
+     "kind": "label",
+     "value": "Olem",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E6",
+     "kind": "label",
+     "value": "Substandard",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "F6",
+     "kind": "label",
+     "value": "Doubtful",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "G6",
+     "kind": "label",
+     "value": "Loss",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "H6",
+     "kind": "label",
+     "value": "Total",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A7",
+     "kind": "input",
+     "value": 1,
+     "align": "center"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "Previous balance (Gross)",
+     "align": "left"
+    },
+    {
+     "ref": "C7",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E7",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F7",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G7",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H7",
+     "kind": "formula",
+     "formula": "=SUM(C7:G7)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "input",
+     "value": 2,
+     "align": "center"
+    },
+    {
+     "ref": "B8",
+     "kind": "label",
+     "value": "Add: New advances made during the month",
+     "align": "general"
+    },
+    {
+     "ref": "C8",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D8",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E8",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F8",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G8",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H8",
+     "kind": "formula",
+     "formula": "=SUM(C8:G8)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "input",
+     "value": 3,
+     "align": "center"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "Add: Interest charged (for the month)",
+     "align": "left"
+    },
+    {
+     "ref": "C9",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D9",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E9",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F9",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G9",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H9",
+     "kind": "formula",
+     "formula": "=SUM(C9:G9)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "input",
+     "value": 4,
+     "align": "center"
+    },
+    {
+     "ref": "B10",
+     "kind": "label",
+     "value": "Add: Revaluation gains/loss (for the month)",
+     "align": "left"
+    },
+    {
+     "ref": "C10",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D10",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E10",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F10",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G10",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H10",
+     "kind": "formula",
+     "formula": "=SUM(C10:G10)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "input",
+     "value": 5,
+     "align": "center"
+    },
+    {
+     "ref": "B11",
+     "kind": "label",
+     "value": "Less: Amount recovered",
+     "align": "left"
+    },
+    {
+     "ref": "C11",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D11",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E11",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F11",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G11",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H11",
+     "kind": "formula",
+     "formula": "=SUM(C11:G11)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "input",
+     "value": 6,
+     "align": "center"
+    },
+    {
+     "ref": "B12",
+     "kind": "label",
+     "value": "Less: Amount written  off",
+     "align": "left"
+    },
+    {
+     "ref": "C12",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D12",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E12",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F12",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G12",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H12",
+     "kind": "formula",
+     "formula": "=SUM(C12:G12)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "input",
+     "value": 7,
+     "align": "center"
+    },
+    {
+     "ref": "B13",
+     "kind": "label",
+     "value": "(+ / -) Changes in classification from previous month",
+     "align": "general"
+    },
+    {
+     "ref": "C13",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D13",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E13",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F13",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G13",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H13",
+     "kind": "formula",
+     "formula": "=SUM(C13:G13)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "input",
+     "value": 8,
+     "align": "center"
+    },
+    {
+     "ref": "B14",
+     "kind": "label",
+     "value": "Current  balance (Gross)",
+     "align": "general"
+    },
+    {
+     "ref": "C14",
+     "kind": "formula",
+     "formula": "=SUM(C7:C13)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D14",
+     "kind": "formula",
+     "formula": "=SUM(D7:D13)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E14",
+     "kind": "formula",
+     "formula": "=SUM(E7:E13)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F14",
+     "kind": "formula",
+     "formula": "=SUM(F7:F13)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G14",
+     "kind": "formula",
+     "formula": "=SUM(G7:G13)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H14",
+     "kind": "formula",
+     "formula": "=SUM(C14:G14)",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "8 (b)",
+     "align": "center"
+    },
+    {
+     "ref": "B15",
+     "kind": "label",
+     "value": "   Of  which foreign Currency (of item 8)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C15",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D15",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E15",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F15",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G15",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H15",
+     "kind": "formula",
+     "formula": "=SUM(C15:G15)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "input",
+     "value": 9,
+     "align": "center"
+    },
+    {
+     "ref": "B16",
+     "kind": "label",
+     "value": "Revaluation gains (on NPL, cum. balance)",
+     "align": "general"
+    },
+    {
+     "ref": "C16",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D16",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E16",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F16",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G16",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H16",
+     "kind": "formula",
+     "formula": "=SUM(C16:G16)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "input",
+     "value": 10,
+     "align": "center"
+    },
+    {
+     "ref": "B17",
+     "kind": "label",
+     "value": "Interest in suspense (cumulative balance)",
+     "align": "general"
+    },
+    {
+     "ref": "C17",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D17",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E17",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F17",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G17",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H17",
+     "kind": "formula",
+     "formula": "=SUM(C17:G17)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A18",
+     "kind": "input",
+     "value": 11,
+     "align": "center"
+    },
+    {
+     "ref": "B18",
+     "kind": "label",
+     "value": "Allowable Security (Cash & Near Cash Instruments)",
+     "align": "general"
+    },
+    {
+     "ref": "C18",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D18",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E18",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F18",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G18",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H18",
+     "kind": "formula",
+     "formula": "=SUM(C18:G18)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A19",
+     "kind": "input",
+     "value": 12,
+     "align": "center"
+    },
+    {
+     "ref": "B19",
+     "kind": "label",
+     "value": "Net current balance (8-9-10-11)",
+     "align": "general"
+    },
+    {
+     "ref": "C19",
+     "kind": "formula",
+     "formula": "=C14-C16-C17-C18",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D19",
+     "kind": "formula",
+     "formula": "=D14-D16-D17-D18",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E19",
+     "kind": "formula",
+     "formula": "=E14-E16-E17-E18",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F19",
+     "kind": "formula",
+     "formula": "=F14-F16-F17-F18",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G19",
+     "kind": "formula",
+     "formula": "=G14-G16-G17-G18",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H19",
+     "kind": "formula",
+     "formula": "=SUM(C19:G19)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A20",
+     "kind": "label",
+     "value": "12 (b)",
+     "align": "center"
+    },
+    {
+     "ref": "B20",
+     "kind": "label",
+     "value": "   Of  which foreign Currency (of item 12)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C20",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D20",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E20",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F20",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G20",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H20",
+     "kind": "formula",
+     "formula": "=SUM(C20:G20)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A21",
+     "kind": "input",
+     "value": 13,
+     "align": "center"
+    },
+    {
+     "ref": "B21",
+     "kind": "label",
+     "value": "Provisions required (on 12)",
+     "align": "general"
+    },
+    {
+     "ref": "C21",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D21",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "E21",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "F21",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "G21",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "H21",
+     "kind": "formula",
+     "formula": "=SUM(C21:G21)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A22",
+     "kind": "input",
+     "value": 14,
+     "align": "center"
+    },
+    {
+     "ref": "B22",
+     "kind": "label",
+     "value": "Amounts provided in BSD 2",
+     "align": "general"
+    },
+    {
+     "ref": "H22",
+     "kind": "formula",
+     "formula": "=[1]BSD2!D38+[1]BSD2!D39",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "BSD8-Annexure",
+   "max_row": 56,
+   "max_col": 257,
+   "column_widths": {
+    "A": 17.42,
+    "B": 35.7,
+    "C": 17.42,
+    "D": 17.42,
+    "E": 17.42,
+    "I": 17.42,
+    "J": 17.42
+   },
+   "merges": [
+    "E1:M1"
+   ],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "align": "general"
+    },
+    {
+     "ref": "E1",
+     "kind": "label",
+     "value": "         ADVANCES  SUBJECT TO ADVERSE CLASSIFICATION (50 LARGEST)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B3",
+     "kind": "label",
+     "value": "(¢'Million)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G3",
+     "kind": "label",
+     "value": "      Amount   Due",
+     "align": "general"
+    },
+    {
+     "ref": "B4",
+     "kind": "label",
+     "value": "Name of Customer",
+     "align": "center"
+    },
+    {
+     "ref": "C4",
+     "kind": "label",
+     "value": "Branch",
+     "align": "general"
+    },
+    {
+     "ref": "D4",
+     "kind": "label",
+     "value": "Sector",
+     "align": "general"
+    },
+    {
+     "ref": "E4",
+     "kind": "label",
+     "value": "Facility",
+     "align": "general"
+    },
+    {
+     "ref": "F4",
+     "kind": "label",
+     "value": "Expiry Date",
+     "align": "center"
+    },
+    {
+     "ref": "G4",
+     "kind": "label",
+     "value": "Capital",
+     "align": "center"
+    },
+    {
+     "ref": "H4",
+     "kind": "label",
+     "value": "Interest",
+     "align": "center"
+    },
+    {
+     "ref": "I4",
+     "kind": "label",
+     "value": "Total Funded  Credits",
+     "align": "center"
+    },
+    {
+     "ref": "J4",
+     "kind": "label",
+     "value": "Off Balance Sheet Liability",
+     "align": "center"
+    },
+    {
+     "ref": "K4",
+     "kind": "label",
+     "value": "Total Exposure",
+     "align": "center"
+    },
+    {
+     "ref": "L4",
+     "kind": "label",
+     "value": "Value of Security",
+     "align": "center"
+    },
+    {
+     "ref": "M4",
+     "kind": "label",
+     "value": "Type of Security",
+     "align": "center"
+    },
+    {
+     "ref": "N4",
+     "kind": "label",
+     "value": "Classifi-cation",
+     "align": "center"
+    },
+    {
+     "ref": "O4",
+     "kind": "label",
+     "value": "Provision  made",
+     "align": "center"
+    },
+    {
+     "ref": "P4",
+     "kind": "label",
+     "value": "Comments on action",
+     "align": "center"
+    },
+    {
+     "ref": "A5",
+     "kind": "input",
+     "value": 1,
+     "align": "general"
+    },
+    {
+     "ref": "I5",
+     "kind": "formula",
+     "formula": "=G5+H5",
+     "align": "general"
+    },
+    {
+     "ref": "K5",
+     "kind": "formula",
+     "formula": "=I5+J5",
+     "align": "general"
+    },
+    {
+     "ref": "A6",
+     "kind": "input",
+     "value": 2,
+     "align": "general"
+    },
+    {
+     "ref": "I6",
+     "kind": "formula",
+     "formula": "=G6+H6",
+     "align": "general"
+    },
+    {
+     "ref": "K6",
+     "kind": "formula",
+     "formula": "=I6+J6",
+     "align": "general"
+    },
+    {
+     "ref": "A7",
+     "kind": "input",
+     "value": 3,
+     "align": "general"
+    },
+    {
+     "ref": "I7",
+     "kind": "formula",
+     "formula": "=G7+H7",
+     "align": "general"
+    },
+    {
+     "ref": "K7",
+     "kind": "formula",
+     "formula": "=I7+J7",
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "input",
+     "value": 4,
+     "align": "general"
+    },
+    {
+     "ref": "I8",
+     "kind": "formula",
+     "formula": "=G8+H8",
+     "align": "general"
+    },
+    {
+     "ref": "K8",
+     "kind": "formula",
+     "formula": "=I8+J8",
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "input",
+     "value": 5,
+     "align": "general"
+    },
+    {
+     "ref": "I9",
+     "kind": "formula",
+     "formula": "=G9+H9",
+     "align": "general"
+    },
+    {
+     "ref": "K9",
+     "kind": "formula",
+     "formula": "=I9+J9",
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "input",
+     "value": 6,
+     "align": "general"
+    },
+    {
+     "ref": "I10",
+     "kind": "formula",
+     "formula": "=G10+H10",
+     "align": "general"
+    },
+    {
+     "ref": "K10",
+     "kind": "formula",
+     "formula": "=I10+J10",
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "input",
+     "value": 7,
+     "align": "general"
+    },
+    {
+     "ref": "I11",
+     "kind": "formula",
+     "formula": "=G11+H11",
+     "align": "general"
+    },
+    {
+     "ref": "K11",
+     "kind": "formula",
+     "formula": "=I11+J11",
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "input",
+     "value": 8,
+     "align": "general"
+    },
+    {
+     "ref": "I12",
+     "kind": "formula",
+     "formula": "=G12+H12",
+     "align": "general"
+    },
+    {
+     "ref": "K12",
+     "kind": "formula",
+     "formula": "=I12+J12",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "input",
+     "value": 9,
+     "align": "general"
+    },
+    {
+     "ref": "I13",
+     "kind": "formula",
+     "formula": "=G13+H13",
+     "align": "general"
+    },
+    {
+     "ref": "K13",
+     "kind": "formula",
+     "formula": "=I13+J13",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "input",
+     "value": 10,
+     "align": "general"
+    },
+    {
+     "ref": "I14",
+     "kind": "formula",
+     "formula": "=G14+H14",
+     "align": "general"
+    },
+    {
+     "ref": "K14",
+     "kind": "formula",
+     "formula": "=I14+J14",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "input",
+     "value": 11,
+     "align": "general"
+    },
+    {
+     "ref": "I15",
+     "kind": "formula",
+     "formula": "=G15+H15",
+     "align": "general"
+    },
+    {
+     "ref": "K15",
+     "kind": "formula",
+     "formula": "=I15+J15",
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "input",
+     "value": 12,
+     "align": "general"
+    },
+    {
+     "ref": "I16",
+     "kind": "formula",
+     "formula": "=G16+H16",
+     "align": "general"
+    },
+    {
+     "ref": "K16",
+     "kind": "formula",
+     "formula": "=I16+J16",
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "input",
+     "value": 13,
+     "align": "general"
+    },
+    {
+     "ref": "I17",
+     "kind": "formula",
+     "formula": "=G17+H17",
+     "align": "general"
+    },
+    {
+     "ref": "K17",
+     "kind": "formula",
+     "formula": "=I17+J17",
+     "align": "general"
+    },
+    {
+     "ref": "A18",
+     "kind": "input",
+     "value": 14,
+     "align": "general"
+    },
+    {
+     "ref": "I18",
+     "kind": "formula",
+     "formula": "=G18+H18",
+     "align": "general"
+    },
+    {
+     "ref": "K18",
+     "kind": "formula",
+     "formula": "=I18+J18",
+     "align": "general"
+    },
+    {
+     "ref": "A19",
+     "kind": "input",
+     "value": 15,
+     "align": "general"
+    },
+    {
+     "ref": "I19",
+     "kind": "formula",
+     "formula": "=G19+H19",
+     "align": "general"
+    },
+    {
+     "ref": "K19",
+     "kind": "formula",
+     "formula": "=I19+J19",
+     "align": "general"
+    },
+    {
+     "ref": "A20",
+     "kind": "input",
+     "value": 16,
+     "align": "general"
+    },
+    {
+     "ref": "I20",
+     "kind": "formula",
+     "formula": "=G20+H20",
+     "align": "general"
+    },
+    {
+     "ref": "K20",
+     "kind": "formula",
+     "formula": "=I20+J20",
+     "align": "general"
+    },
+    {
+     "ref": "A21",
+     "kind": "input",
+     "value": 17,
+     "align": "general"
+    },
+    {
+     "ref": "I21",
+     "kind": "formula",
+     "formula": "=G21+H21",
+     "align": "general"
+    },
+    {
+     "ref": "K21",
+     "kind": "formula",
+     "formula": "=I21+J21",
+     "align": "general"
+    },
+    {
+     "ref": "A22",
+     "kind": "input",
+     "value": 18,
+     "align": "general"
+    },
+    {
+     "ref": "I22",
+     "kind": "formula",
+     "formula": "=G22+H22",
+     "align": "general"
+    },
+    {
+     "ref": "K22",
+     "kind": "formula",
+     "formula": "=I22+J22",
+     "align": "general"
+    },
+    {
+     "ref": "A23",
+     "kind": "input",
+     "value": 19,
+     "align": "general"
+    },
+    {
+     "ref": "I23",
+     "kind": "formula",
+     "formula": "=G23+H23",
+     "align": "general"
+    },
+    {
+     "ref": "K23",
+     "kind": "formula",
+     "formula": "=I23+J23",
+     "align": "general"
+    },
+    {
+     "ref": "A24",
+     "kind": "input",
+     "value": 20,
+     "align": "general"
+    },
+    {
+     "ref": "I24",
+     "kind": "formula",
+     "formula": "=G24+H24",
+     "align": "general"
+    },
+    {
+     "ref": "K24",
+     "kind": "formula",
+     "formula": "=I24+J24",
+     "align": "general"
+    },
+    {
+     "ref": "A25",
+     "kind": "input",
+     "value": 21,
+     "align": "general"
+    },
+    {
+     "ref": "I25",
+     "kind": "formula",
+     "formula": "=G25+H25",
+     "align": "general"
+    },
+    {
+     "ref": "K25",
+     "kind": "formula",
+     "formula": "=I25+J25",
+     "align": "general"
+    },
+    {
+     "ref": "A26",
+     "kind": "input",
+     "value": 22,
+     "align": "general"
+    },
+    {
+     "ref": "I26",
+     "kind": "formula",
+     "formula": "=G26+H26",
+     "align": "general"
+    },
+    {
+     "ref": "K26",
+     "kind": "formula",
+     "formula": "=I26+J26",
+     "align": "general"
+    },
+    {
+     "ref": "A27",
+     "kind": "input",
+     "value": 23,
+     "align": "general"
+    },
+    {
+     "ref": "I27",
+     "kind": "formula",
+     "formula": "=G27+H27",
+     "align": "general"
+    },
+    {
+     "ref": "K27",
+     "kind": "formula",
+     "formula": "=I27+J27",
+     "align": "general"
+    },
+    {
+     "ref": "A28",
+     "kind": "input",
+     "value": 24,
+     "align": "general"
+    },
+    {
+     "ref": "I28",
+     "kind": "formula",
+     "formula": "=G28+H28",
+     "align": "general"
+    },
+    {
+     "ref": "K28",
+     "kind": "formula",
+     "formula": "=I28+J28",
+     "align": "general"
+    },
+    {
+     "ref": "A29",
+     "kind": "input",
+     "value": 25,
+     "align": "general"
+    },
+    {
+     "ref": "I29",
+     "kind": "formula",
+     "formula": "=G29+H29",
+     "align": "general"
+    },
+    {
+     "ref": "K29",
+     "kind": "formula",
+     "formula": "=I29+J29",
+     "align": "general"
+    },
+    {
+     "ref": "A30",
+     "kind": "input",
+     "value": 26,
+     "align": "general"
+    },
+    {
+     "ref": "I30",
+     "kind": "formula",
+     "formula": "=G30+H30",
+     "align": "general"
+    },
+    {
+     "ref": "K30",
+     "kind": "formula",
+     "formula": "=I30+J30",
+     "align": "general"
+    },
+    {
+     "ref": "A31",
+     "kind": "input",
+     "value": 27,
+     "align": "general"
+    },
+    {
+     "ref": "I31",
+     "kind": "formula",
+     "formula": "=G31+H31",
+     "align": "general"
+    },
+    {
+     "ref": "K31",
+     "kind": "formula",
+     "formula": "=I31+J31",
+     "align": "general"
+    },
+    {
+     "ref": "A32",
+     "kind": "input",
+     "value": 28,
+     "align": "general"
+    },
+    {
+     "ref": "I32",
+     "kind": "formula",
+     "formula": "=G32+H32",
+     "align": "general"
+    },
+    {
+     "ref": "K32",
+     "kind": "formula",
+     "formula": "=I32+J32",
+     "align": "general"
+    },
+    {
+     "ref": "A33",
+     "kind": "input",
+     "value": 29,
+     "align": "general"
+    },
+    {
+     "ref": "I33",
+     "kind": "formula",
+     "formula": "=G33+H33",
+     "align": "general"
+    },
+    {
+     "ref": "K33",
+     "kind": "formula",
+     "formula": "=I33+J33",
+     "align": "general"
+    },
+    {
+     "ref": "A34",
+     "kind": "input",
+     "value": 30,
+     "align": "general"
+    },
+    {
+     "ref": "I34",
+     "kind": "formula",
+     "formula": "=G34+H34",
+     "align": "general"
+    },
+    {
+     "ref": "K34",
+     "kind": "formula",
+     "formula": "=I34+J34",
+     "align": "general"
+    },
+    {
+     "ref": "A35",
+     "kind": "input",
+     "value": 31,
+     "align": "general"
+    },
+    {
+     "ref": "I35",
+     "kind": "formula",
+     "formula": "=G35+H35",
+     "align": "general"
+    },
+    {
+     "ref": "K35",
+     "kind": "formula",
+     "formula": "=I35+J35",
+     "align": "general"
+    },
+    {
+     "ref": "A36",
+     "kind": "input",
+     "value": 32,
+     "align": "general"
+    },
+    {
+     "ref": "I36",
+     "kind": "formula",
+     "formula": "=G36+H36",
+     "align": "general"
+    },
+    {
+     "ref": "K36",
+     "kind": "formula",
+     "formula": "=I36+J36",
+     "align": "general"
+    },
+    {
+     "ref": "A37",
+     "kind": "input",
+     "value": 33,
+     "align": "general"
+    },
+    {
+     "ref": "I37",
+     "kind": "formula",
+     "formula": "=G37+H37",
+     "align": "general"
+    },
+    {
+     "ref": "K37",
+     "kind": "formula",
+     "formula": "=I37+J37",
+     "align": "general"
+    },
+    {
+     "ref": "A38",
+     "kind": "input",
+     "value": 34,
+     "align": "general"
+    },
+    {
+     "ref": "I38",
+     "kind": "formula",
+     "formula": "=G38+H38",
+     "align": "general"
+    },
+    {
+     "ref": "K38",
+     "kind": "formula",
+     "formula": "=I38+J38",
+     "align": "general"
+    },
+    {
+     "ref": "A39",
+     "kind": "input",
+     "value": 35,
+     "align": "general"
+    },
+    {
+     "ref": "I39",
+     "kind": "formula",
+     "formula": "=G39+H39",
+     "align": "general"
+    },
+    {
+     "ref": "K39",
+     "kind": "formula",
+     "formula": "=I39+J39",
+     "align": "general"
+    },
+    {
+     "ref": "A40",
+     "kind": "input",
+     "value": 36,
+     "align": "general"
+    },
+    {
+     "ref": "I40",
+     "kind": "formula",
+     "formula": "=G40+H40",
+     "align": "general"
+    },
+    {
+     "ref": "K40",
+     "kind": "formula",
+     "formula": "=I40+J40",
+     "align": "general"
+    },
+    {
+     "ref": "A41",
+     "kind": "input",
+     "value": 37,
+     "align": "general"
+    },
+    {
+     "ref": "I41",
+     "kind": "formula",
+     "formula": "=G41+H41",
+     "align": "general"
+    },
+    {
+     "ref": "K41",
+     "kind": "formula",
+     "formula": "=I41+J41",
+     "align": "general"
+    },
+    {
+     "ref": "A42",
+     "kind": "input",
+     "value": 38,
+     "align": "general"
+    },
+    {
+     "ref": "I42",
+     "kind": "formula",
+     "formula": "=G42+H42",
+     "align": "general"
+    },
+    {
+     "ref": "K42",
+     "kind": "formula",
+     "formula": "=I42+J42",
+     "align": "general"
+    },
+    {
+     "ref": "A43",
+     "kind": "input",
+     "value": 39,
+     "align": "general"
+    },
+    {
+     "ref": "I43",
+     "kind": "formula",
+     "formula": "=G43+H43",
+     "align": "general"
+    },
+    {
+     "ref": "K43",
+     "kind": "formula",
+     "formula": "=I43+J43",
+     "align": "general"
+    },
+    {
+     "ref": "A44",
+     "kind": "input",
+     "value": 40,
+     "align": "general"
+    },
+    {
+     "ref": "I44",
+     "kind": "formula",
+     "formula": "=G44+H44",
+     "align": "general"
+    },
+    {
+     "ref": "K44",
+     "kind": "formula",
+     "formula": "=I44+J44",
+     "align": "general"
+    },
+    {
+     "ref": "A45",
+     "kind": "input",
+     "value": 41,
+     "align": "general"
+    },
+    {
+     "ref": "I45",
+     "kind": "formula",
+     "formula": "=G45+H45",
+     "align": "general"
+    },
+    {
+     "ref": "K45",
+     "kind": "formula",
+     "formula": "=I45+J45",
+     "align": "general"
+    },
+    {
+     "ref": "A46",
+     "kind": "input",
+     "value": 42,
+     "align": "general"
+    },
+    {
+     "ref": "I46",
+     "kind": "formula",
+     "formula": "=G46+H46",
+     "align": "general"
+    },
+    {
+     "ref": "K46",
+     "kind": "formula",
+     "formula": "=I46+J46",
+     "align": "general"
+    },
+    {
+     "ref": "A47",
+     "kind": "input",
+     "value": 43,
+     "align": "general"
+    },
+    {
+     "ref": "I47",
+     "kind": "formula",
+     "formula": "=G47+H47",
+     "align": "general"
+    },
+    {
+     "ref": "K47",
+     "kind": "formula",
+     "formula": "=I47+J47",
+     "align": "general"
+    },
+    {
+     "ref": "A48",
+     "kind": "input",
+     "value": 44,
+     "align": "general"
+    },
+    {
+     "ref": "I48",
+     "kind": "formula",
+     "formula": "=G48+H48",
+     "align": "general"
+    },
+    {
+     "ref": "K48",
+     "kind": "formula",
+     "formula": "=I48+J48",
+     "align": "general"
+    },
+    {
+     "ref": "A49",
+     "kind": "input",
+     "value": 45,
+     "align": "general"
+    },
+    {
+     "ref": "I49",
+     "kind": "formula",
+     "formula": "=G49+H49",
+     "align": "general"
+    },
+    {
+     "ref": "K49",
+     "kind": "formula",
+     "formula": "=I49+J49",
+     "align": "general"
+    },
+    {
+     "ref": "A50",
+     "kind": "input",
+     "value": 46,
+     "align": "general"
+    },
+    {
+     "ref": "I50",
+     "kind": "formula",
+     "formula": "=G50+H50",
+     "align": "general"
+    },
+    {
+     "ref": "K50",
+     "kind": "formula",
+     "formula": "=I50+J50",
+     "align": "general"
+    },
+    {
+     "ref": "A51",
+     "kind": "input",
+     "value": 47,
+     "align": "general"
+    },
+    {
+     "ref": "I51",
+     "kind": "formula",
+     "formula": "=G51+H51",
+     "align": "general"
+    },
+    {
+     "ref": "K51",
+     "kind": "formula",
+     "formula": "=I51+J51",
+     "align": "general"
+    },
+    {
+     "ref": "A52",
+     "kind": "input",
+     "value": 48,
+     "align": "general"
+    },
+    {
+     "ref": "I52",
+     "kind": "formula",
+     "formula": "=G52+H52",
+     "align": "general"
+    },
+    {
+     "ref": "K52",
+     "kind": "formula",
+     "formula": "=I52+J52",
+     "align": "general"
+    },
+    {
+     "ref": "A53",
+     "kind": "input",
+     "value": 49,
+     "align": "general"
+    },
+    {
+     "ref": "I53",
+     "kind": "formula",
+     "formula": "=G53+H53",
+     "align": "general"
+    },
+    {
+     "ref": "K53",
+     "kind": "formula",
+     "formula": "=I53+J53",
+     "align": "general"
+    },
+    {
+     "ref": "A54",
+     "kind": "input",
+     "value": 50,
+     "align": "general"
+    },
+    {
+     "ref": "I54",
+     "kind": "formula",
+     "formula": "=G54+H54",
+     "align": "general"
+    },
+    {
+     "ref": "K54",
+     "kind": "formula",
+     "formula": "=I54+J54",
+     "align": "general"
+    },
+    {
+     "ref": "B55",
+     "kind": "label",
+     "value": "TOTAL",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G55",
+     "kind": "formula",
+     "formula": "=SUM(G5:G54)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H55",
+     "kind": "formula",
+     "formula": "=SUM(H5:H54)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I55",
+     "kind": "formula",
+     "formula": "=SUM(I5:I54)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J55",
+     "kind": "formula",
+     "formula": "=SUM(J5:J54)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K55",
+     "kind": "formula",
+     "formula": "=I55+J55",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B56",
+     "kind": "label",
+     "value": "% of  50 Largest Funded Exposures to Total Funded Credit",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C56",
+     "kind": "formula",
+     "formula": "=K55/BSD8!H19*100",
+     "bold": true,
+     "align": "general"
+    }
+   ]
+  }
+ ]
+}

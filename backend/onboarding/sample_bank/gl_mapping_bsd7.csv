@@ -1,0 +1,38 @@
+# Sample Bank Ltd (BK-0PMD7Z5M) onboarding dataset — chart-of-accounts -> BSD7A/BSD7B P&L item mapping register (one row per GL code or code prefix; exact code beats prefix, longest prefix wins). Push with scripts/ingest_push.py --reference gl_mapping_bsd7=<this file>. Spec: docs/data_engine/datasets/gl_mapping_bsd7.md
+gl_account_code,gl_prefix,bsd7_item,sign,balance_basis,gl_account_name,notes
+,410,1a,1,ytd,Interest income - loans and advances,all 410x loan-interest accounts
+4109,,1a,-1,ytd,Interest in suspense (contra),"contra to loan interest: exact code beats the 410 prefix, sign -1"
+,420,1b,1,ytd,Discount income - bills,
+,430,1c,1,ytd,Interest income - investments and placements,
+,440,4,1,ytd,FX dealing income,profits; exchange losses are 5503 -> item 26
+,450,5,1,ytd,Fees and commissions,
+4601,,6,1,ytd,Dividend income,
+4701,,7,1,ytd,Gain/loss on disposal of PPE,signed net per the ledger
+4702,,8,1,ytd,Rent receivable,
+4703,,9,1,ytd,Gains on trading securities,dealing gains; losses are 5502 -> item 25
+4801,,10,1,ytd,Other operating income,
+5101,,2a_savings,1,ytd,Interest on savings deposits,
+5102,,2a_current,1,ytd,Interest on current accounts,
+5103,,2a_time,1,ytd,Interest on retail time deposits,
+5104,,2a_time,1,ytd,Interest on corporate time deposits,
+5105,,2a_time,1,ytd,Interest on FX time deposits,USD-business account: Foreign column
+5106,,2a_borrowings,1,ytd,Interest on interbank borrowings,
+5107,,2a_borrowings,1,ytd,Interest on FX borrowings,
+5108,,2b,1,ytd,Interest on subordinated debt,
+5109,,2b,1,ytd,Interest on repos / BoG facilities,
+5201,,12,1,ytd,Staff salaries and wages,
+5202,,13,1,ytd,Staff training,
+5203,,14,1,ytd,Directors emoluments,
+5204,,15,1,ytd,Other staff costs,
+5301,,16,1,ytd,Occupancy,
+5302,,17,1,ytd,Travel,
+,530,18,1,ytd,Admin & other opex,530x except 5301/5302 (exact rows above win)
+5401,,20,1,ytd,Depreciation and amortisation,
+5402,,21,1,ytd,Impairment charge - loans,"charge for the period, not the provision stock"
+5403,,22,1,ytd,Other impairment / provisions,
+5501,,24,1,ytd,Losses on sale of investments,
+5502,,25,1,ytd,Losses on dealing assets,
+5503,,26,1,ytd,Exchange losses,
+,560,28,1,ytd,Taxation - CIT and levies,
+5701,,30,1,ytd,Extraordinary items,signed net
+5801,,32,1,ytd,Dividends paid and payable,appropriation

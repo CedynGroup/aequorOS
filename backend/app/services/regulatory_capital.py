@@ -107,7 +107,9 @@ MODULE_CAPITAL = "capital"
 BASELINE_SCENARIO = "baseline"
 CAPITAL_SCENARIO_CODES = ("baseline", "mild", "moderate", "severe")
 
-BSD2_FORM_CODE = "BSD-2"
+# The Capital Adequacy Return's OFFICIAL BoG form is BSD5A ("CAR FORMAT"); the
+# earlier "BSD-2" label pre-dated the official templates (bog_forms/).
+BSD2_FORM_CODE = "BSD5A"
 BSD2_FORM_TITLE = "Capital Adequacy Return"
 CAR_EARLY_WARNING_LABEL = "Early warning / conservation buffer floor"
 

@@ -316,7 +316,7 @@ def _liquidity_sections(*, lmt_subset: bool) -> tuple[SectionLayout, ...]:
 
 _BSD3_TEMPLATE = ReturnTemplate(
     template_id="bog-bsd3-liquidity-v1",
-    return_code="BSD3",
+    return_code="LCR-NSFR",
     title="Liquidity Returns (LCR & NSFR)",
     fidelity="PARTIAL",
     source_citation=f"{_LMTD_CITATION}; {_LCR_GAP_CITATION}",
@@ -804,7 +804,7 @@ _LE_TEMPLATE = ReturnTemplate(
 
 _BSD2_TEMPLATE = ReturnTemplate(
     template_id="bog-bsd2-capital-v1",
-    return_code="BSD2",
+    return_code="CAR-RWA",
     title="Capital Adequacy Return (CAR & RWA)",
     fidelity="REPRESENTATIVE",
     source_citation=_CRD_CITATION,
@@ -1838,7 +1838,6 @@ TEMPLATES: dict[str, ReturnTemplate] = {
         _LE_TEMPLATE,
         _ICAAP_STRESS_TEMPLATE,
         _STRESS_PACK_TEMPLATE,
-        _BSD_MONTHLY_TEMPLATE,
         _LAS_QUARTERLY_TEMPLATE,
         _LRT_PROFILE_TEMPLATE,
         _LRT_OUTLET_TEMPLATE,
@@ -1847,6 +1846,19 @@ TEMPLATES: dict[str, ReturnTemplate] = {
         _LRT_PRODUCT_TEMPLATE,
     )
 }
+
+
+def _bog_templates() -> dict[str, ReturnTemplate]:
+    """One template per official BoG BSD form, built from the bog_forms
+    catalogue (deferred import; registry_entries never imports this module)."""
+    from app.services.regulatory_reporting.bog_forms.registry_entries import (  # noqa: PLC0415
+        build_templates,
+    )
+
+    return build_templates(ReturnTemplate, SectionLayout, ColumnSpec)
+
+
+TEMPLATES.update(_bog_templates())
 
 
 def get_template(template_id: str) -> ReturnTemplate | None:

@@ -106,7 +106,7 @@ def _seed_with_baseline_run(db: Session) -> None:
 
 
 def _generate(
-    db: Session, return_code: str = "BSD3", *, basis: str = "solo"
+    db: Session, return_code: str = "LCR-NSFR", *, basis: str = "solo"
 ) -> RegulatoryPackage:
     read = generation.generate_package(
         db,
@@ -207,7 +207,7 @@ def test_every_registered_return_family_seals_a_content_digest(db_session: Sessi
     # One engine-backed return plus all five master-data packs: the two binding
     # classes of §1.7 that Phase 0 has to seal.
     for return_code in (
-        "BSD3",
+        "LCR-NSFR",
         "LRT-PROFILE",
         "LRT-OUTLET",
         "LRT-PARTY",
@@ -229,12 +229,15 @@ def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
     ``app/``, and it seals ``content_digest`` unconditionally — so proving every
     registered return dispatches through it proves all of them are sealed,
     without seeding an engine run per return. Count pinned so a new return
-    family must consciously join this guard (16 = the original thirteen +
-    STRESS-PACK (item 6) + the two template-gated obligations BSD-MONTHLY /
-    LAS-QUARTERLY (items 12/14, generation refused until the forms land)).
+    family must consciously join this guard: 38 = the 15 pre-BSD entries (the
+    original thirteen incl. the recoded CAR-RWA / LCR-NSFR, STRESS-PACK (item 6),
+    LAS-QUARTERLY (item 14, still template-gated); BSD-MONTHLY retired) + the
+    23 official Bank of Ghana BSD forms (family "bsd", generator "bog_form",
+    2026-08-15 — every one dispatches through generate_package and is sealed).
     """
     generators = generation._GENERATORS  # pyright: ignore[reportPrivateUsage]
-    assert len(REGISTRY) == 16
+    assert len(REGISTRY) == 38  # noqa: PLR2004
+    assert sum(1 for d in REGISTRY.values() if d.family == "bsd") == 23  # noqa: PLR2004
     for definition in REGISTRY.values():
         assert definition.generator in generators, definition.code
 

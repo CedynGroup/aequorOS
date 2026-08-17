@@ -1,53 +1,140 @@
+"""Regulatory-capital API tests against the ACTUAL primary database.
+
+DB-backed conversion (tests/real_data.py; docs/bog_returns/CONTRIBUTING_real_db_tests.md):
+the retired sample-bank seed is gone, so these run against the real Sample Bank through
+``real_client`` (opt-in via REAL_DATA_DATABASE_URL, transaction-isolated, rolled back).
+The book changes as data is ingested, so every assertion is an INVARIANT, never a golden
+magnitude: CAR / Tier 1 / CET1 = capital ÷ RWA (from the run's own line items), total RWA =
+credit + market + operational and each equals its section, statuses and validations agree
+with the active thresholds, stress paths anchor on the baseline CAR with triggers tied to
+their own path, the input hash is scoped to the capital fact groups, the BSD5A preview
+reconciles to the run, plus 404/422 paths and tenant isolation.
+"""
+
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
-from sqlalchemy import update
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session
 
-from app.db.session import get_sessionmaker
 from app.models import BankFinancialFact
-from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, SAMPLE_BANK_ID
-from tests.api.helpers import ORG_1, ORG_2, headers
+from tests.real_data import (
+    REAL_BANK_ID,
+    REAL_ORG_ID,
+    other_headers,
+    real_headers,
+    requires_real_data,
+)
 
-FOUR_DP = Decimal("0.0001")
-GOLDEN_BASELINE_RATIOS = {
-    "car_pct": Decimal("15.8324"),
-    "tier1_ratio_pct": Decimal("13.0384"),
-    "cet1_ratio_pct": Decimal("12.1071"),
-    "leverage_ratio_pct": Decimal("10.9375"),
-}
-GOLDEN_END_CAR_BY_SCENARIO = {
-    "mild": Decimal("17.8370"),
-    "moderate": Decimal("15.7442"),
-    "severe": Decimal("9.3173"),
-}
+pytestmark = requires_real_data
+
+RATIO_PCT = Decimal("0.000001")  # the capital engine's ratio quantum
+GREEN_BUFFER_PP = Decimal("0.5")  # engine: green clears the minimum by 0.5pp
 CAPITAL_FACT_GROUPS = {
     "balance_sheet",
     "capital_component",
+    "crm_collateral",
+    "ecl_exposure",
     "loan_exposure",
     "market_risk",
     "off_balance",
     "operational_income",
     "securities",
 }
+CORE_CAPITAL_FACT_GROUPS = {"balance_sheet", "capital_component", "loan_exposure"}
+RATIO_THRESHOLDS = {
+    "car_pct": "car_min",
+    "tier1_ratio_pct": "tier1_min",
+    "cet1_ratio_pct": "cet1_min",
+    "leverage_ratio_pct": "leverage_min",
+}
+RATIO_VALIDATIONS = {
+    "car_pct": "car_above_minimum",
+    "tier1_ratio_pct": "tier1_above_minimum",
+    "cet1_ratio_pct": "cet1_above_minimum",
+    "leverage_ratio_pct": "leverage_above_minimum",
+}
+BASELINE_VALIDATION_RULES = {
+    "car_above_minimum",
+    "cet1_above_minimum",
+    "tier1_above_minimum",
+    "leverage_above_minimum",
+    "tier2_gp_cap_applied",
+}
+STRESS_SCENARIOS = ["mild", "moderate", "severe"]
+TRIGGER_CODES = ["early_warning", "breach", "critical"]
 
 
-def _seed_latest_period(db_client: TestClient) -> dict[str, Any]:
-    response = db_client.post("/api/v1/banks/seed-demo", headers=headers())
+def _dec(value: Any) -> Decimal:
+    return Decimal(str(value))
+
+
+def _ratio(numerator: Any, denominator: Any) -> Decimal:
+    """The engine's own ratio arithmetic: numerator / denominator × 100 at 6 dp."""
+    return (_dec(numerator) / _dec(denominator) * Decimal("100")).quantize(
+        RATIO_PCT, rounding=ROUND_HALF_UP
+    )
+
+
+def _expected_status(value: Any, minimum: Any) -> str:
+    """Mirror of ``classify_capital_ratio``: green ≥ min + 0.5pp, amber ≥ min, else red."""
+    if _dec(value) >= _dec(minimum) + GREEN_BUFFER_PP:
+        return "green"
+    if _dec(value) >= _dec(minimum):
+        return "amber"
+    return "red"
+
+
+def _periods(client: TestClient) -> list[dict[str, Any]]:
+    response = client.get(f"/api/v1/banks/{REAL_BANK_ID}/reporting-periods", headers=real_headers())
     assert response.status_code == 200, response.text
-    periods = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/reporting-periods", headers=headers()
-    ).json()["periods"]
-    return periods[0]
+    periods = response.json()["periods"]
+    assert periods, "the real Sample Bank must have at least one reporting period"
+    return periods
 
 
-def _create_run(db_client: TestClient, period_id: str, scenario_code: str) -> dict[str, Any]:
-    response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-        headers=headers(),
+def _latest_period(client: TestClient) -> dict[str, Any]:
+    return _periods(client)[0]
+
+
+def _period_without_stored_baseline(client: TestClient) -> dict[str, Any]:
+    """The most recent period with NO succeeded baseline capital run on the primary
+    (the dashboard/preview inline paths only exist for such a period)."""
+    stored: set[str] = set()
+    offset = 0
+    while True:
+        listed = client.get(
+            f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+            headers=real_headers(),
+            params={
+                "module": "capital",
+                "scenario_code": "baseline",
+                "limit": 100,
+                "offset": offset,
+            },
+        )
+        assert listed.status_code == 200, listed.text
+        body = listed.json()
+        stored.update(
+            run["reporting_period_id"] for run in body["runs"] if run["status"] == "succeeded"
+        )
+        if not body["has_more"]:
+            break
+        offset += 100
+    for period in _periods(client):
+        if period["id"] not in stored:
+            return period
+    raise AssertionError("every reporting period already carries a stored baseline capital run")
+
+
+def _create_run(client: TestClient, period_id: str, scenario_code: str) -> dict[str, Any]:
+    response = client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+        headers=real_headers(),
         json={
             "module": "capital",
             "reporting_period_id": period_id,
@@ -58,35 +145,121 @@ def _create_run(db_client: TestClient, period_id: str, scenario_code: str) -> di
     return response.json()
 
 
-def _four_dp(value: Any) -> Decimal:
-    return Decimal(str(value)).quantize(FOUR_DP)
+def _sections(run: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    sections: dict[str, list[dict[str, Any]]] = {}
+    for item in run["line_items"]:
+        sections.setdefault(item["section"], []).append(item)
+    return sections
 
 
-def _set_fact_amount(period_id: str, fact_group: str, category: str, amount: str) -> None:
-    session = get_sessionmaker()()
-    session.info["organization_id"] = ORG_1
-    try:
-        session.execute(
-            update(BankFinancialFact)
-            .where(
-                BankFinancialFact.organization_id == DEMO_ORG_ID,
-                BankFinancialFact.bank_id == SAMPLE_BANK_ID,
-                BankFinancialFact.reporting_period_id == UUID(period_id),
-                BankFinancialFact.fact_group == fact_group,
-                BankFinancialFact.category == category,
-            )
-            .values(amount=Decimal(amount))
+def _sum_weighted(lines: list[dict[str, Any]], key: str = "weighted_amount") -> Decimal:
+    return sum((_dec(line[key]) for line in lines), Decimal("0"))
+
+
+def _row_codes(rows: list[dict[str, Any]], prefix: str) -> list[str]:
+    """The BSD row codes a section of ``len(rows)`` rows must carry: ``prefix.1 … prefix.n``."""
+    return [f"{prefix}.{index}" for index in range(1, len(rows) + 1)]
+
+
+def _capital_tiers(component_lines: list[dict[str, Any]]) -> tuple[Decimal, Decimal, Decimal]:
+    """CET1 / AT1 / Tier 2 totals from the run's own capital-component lines."""
+    cet1 = _sum_weighted(
+        [line for line in component_lines if line["line_code"].startswith("cet1:")]
+    )
+    at1 = _sum_weighted([line for line in component_lines if line["line_code"].startswith("at1:")])
+    tier2 = _sum_weighted([line for line in component_lines if line["line_code"].startswith("t2:")])
+    return cet1, at1, tier2
+
+
+def _bump_one_fact(session: Session, period_id: str, fact_group: str) -> None:
+    """Change ONE real fact of ``fact_group`` for the period on the shared, rolled-back
+    transaction (the primary is never mutated) — the value-based hash must react only when
+    the group belongs to the module's snapshot."""
+    session.info["organization_id"] = REAL_ORG_ID
+    fact = session.scalars(
+        select(BankFinancialFact)
+        .where(
+            BankFinancialFact.organization_id == REAL_ORG_ID,
+            BankFinancialFact.bank_id == REAL_BANK_ID,
+            BankFinancialFact.reporting_period_id == UUID(period_id),
+            BankFinancialFact.fact_group == fact_group,
         )
-        session.commit()
-    finally:
-        session.close()
+        .order_by(BankFinancialFact.category)
+        .limit(1)
+    ).one_or_none()
+    assert fact is not None, f"the real period must carry a {fact_group} fact"
+    session.execute(
+        update(BankFinancialFact)
+        .where(BankFinancialFact.id == fact.id)
+        .values(amount=Decimal(str(fact.amount)) + Decimal("1"))
+    )
+    session.commit()  # savepoint release on the shared connection
 
 
-def test_create_baseline_capital_run_persists_snapshot_metrics_and_outputs(  # noqa: PLR0915
-    db_client: TestClient,
+def _assert_capital_metrics_consistent(run: dict[str, Any]) -> None:
+    """The metric block must reconcile to the run's own line items and thresholds."""
+    metrics = run["metrics"]
+    sections = _sections(run)
+    thresholds = run["inputs"]["parameters"]["thresholds_pct"]
+
+    total_rwa = _dec(metrics["total_rwa_ghs"])
+    credit_rwa = _dec(metrics["credit_rwa_ghs"])
+    market_rwa = _dec(metrics["market_rwa_ghs"])
+    operational_rwa = _dec(metrics["operational_rwa_ghs"])
+    assert total_rwa > 0
+    assert credit_rwa >= 0 and market_rwa >= 0 and operational_rwa >= 0
+    assert total_rwa == credit_rwa + market_rwa + operational_rwa
+
+    # Every RWA section reconciles to its headline figure.
+    for section in ("credit_rwa", "market_rwa", "operational_rwa", "capital_component", "ratio"):
+        assert sections.get(section), f"missing line items for section {section}"
+    assert _sum_weighted(sections["credit_rwa"]) == credit_rwa
+    market_lines = {line["line_code"]: line for line in sections["market_rwa"]}
+    assert _dec(market_lines["fx_rwa"]["weighted_amount"]) == market_rwa
+    operational_lines = {line["line_code"]: line for line in sections["operational_rwa"]}
+    assert _dec(operational_lines["operational_rwa"]["weighted_amount"]) == operational_rwa
+
+    # Capital = CET1 + AT1 + Tier 2 from the component lines; ratios = capital ÷ RWA.
+    cet1, at1, tier2 = _capital_tiers(sections["capital_component"])
+    total_capital = _dec(metrics["total_capital_ghs"])
+    assert total_capital == cet1 + at1 + tier2
+    assert _dec(metrics["car_pct"]) == _ratio(total_capital, total_rwa)
+    assert _dec(metrics["tier1_ratio_pct"]) == _ratio(cet1 + at1, total_rwa)
+    assert _dec(metrics["cet1_ratio_pct"]) == _ratio(cet1, total_rwa)
+    # Ratio lines store denominator (exposure) × ratio (rate) = numerator (weighted).
+    ratio_lines = {line["line_code"]: line for line in sections["ratio"]}
+    assert set(ratio_lines) == {"cet1_ratio", "tier1_ratio", "car", "leverage_ratio"}
+    assert _dec(ratio_lines["car"]["exposure_amount"]) == total_rwa
+    assert _dec(ratio_lines["car"]["weighted_amount"]) == total_capital
+    assert _dec(ratio_lines["car"]["rate_pct"]) == _dec(metrics["car_pct"])
+    leverage = ratio_lines["leverage_ratio"]
+    assert _dec(leverage["exposure_amount"]) > 0
+    assert _dec(leverage["weighted_amount"]) == cet1 + at1
+    assert _dec(metrics["leverage_ratio_pct"]) == _ratio(cet1 + at1, leverage["exposure_amount"])
+
+    # Metric statuses and validations agree with the active thresholds.
+    metric_results = {item["metric_code"]: item for item in run["metric_results"]}
+    validations = {item["rule_code"]: item for item in run["validations"]}
+    for code, threshold_code in RATIO_THRESHOLDS.items():
+        result = metric_results[code]
+        assert result["unit"] == "pct"
+        assert _dec(result["threshold_min"]) == _dec(thresholds[threshold_code])
+        assert _dec(result["metric_value"]) == _dec(metrics[code])
+        assert result["status"] == _expected_status(metrics[code], thresholds[threshold_code])
+        validation = validations[RATIO_VALIDATIONS[code]]
+        assert validation["severity"] == "error"
+        assert validation["passed"] is (_dec(metrics[code]) >= _dec(thresholds[threshold_code]))
+    assert validations["tier2_gp_cap_applied"]["severity"] == "info"
+    assert validations["tier2_gp_cap_applied"]["passed"] is True
+    positions = [item["position"] for item in run["line_items"]]
+    assert positions == sorted(positions)
+
+
+def test_create_baseline_capital_run_persists_snapshot_metrics_and_outputs(
+    real_client: TestClient,
 ) -> None:
-    period = _seed_latest_period(db_client)
-    run = _create_run(db_client, period["id"], "baseline")
+    period = _latest_period(real_client)
+    run = _create_run(real_client, period["id"], "baseline")
 
     assert run["status"] == "succeeded"
     assert run["module"] == "capital"
@@ -103,356 +276,405 @@ def test_create_baseline_capital_run_persists_snapshot_metrics_and_outputs(  # n
     assert snapshot["schema_version"] == "bank-facts-v2"
     assert snapshot["module"] == "capital"
     assert snapshot["scenario_code"] == "baseline"
-    assert snapshot["as_of_date"] == "2026-03-31"
-    assert snapshot["reporting_period"]["label"] == "2026-03"
-    # Only capital fact groups participate: 15 balance-sheet + 9 capital components
-    # + 6 loan exposures + 2 market-risk + 2 off-balance + 3 operational income
-    # + 4 securities.
-    assert len(snapshot["facts"]) == 41
-    assert {fact["fact_group"] for fact in snapshot["facts"]} == CAPITAL_FACT_GROUPS
+    assert snapshot["as_of_date"] == period["period_end"]
+    assert snapshot["reporting_period"]["label"] == period["label"]
+    # Only capital fact groups participate (the value-based hash is scoped to them).
+    assert snapshot["facts"], "baseline snapshot must carry capital facts"
+    groups = {fact["fact_group"] for fact in snapshot["facts"]}
+    assert groups <= CAPITAL_FACT_GROUPS
+    assert groups >= CORE_CAPITAL_FACT_GROUPS
     assert snapshot["shocks"] == {}
     assert set(snapshot["parameters"]) == {"risk_weights_pct", "thresholds_pct"}
-    assert snapshot["parameters"]["risk_weights_pct"]["RW100"] == "100.000000"
-    assert snapshot["parameters"]["thresholds_pct"]["rwa_multiplier"] == "1250.000000"
+    assert Decimal(snapshot["parameters"]["risk_weights_pct"]["RW100"]) == Decimal("100")
+    assert set(RATIO_THRESHOLDS.values()) <= set(snapshot["parameters"]["thresholds_pct"])
+    assert "rwa_multiplier" in snapshot["parameters"]["thresholds_pct"]
 
     metrics = run["metrics"]
-    for code, expected in GOLDEN_BASELINE_RATIOS.items():
-        assert _four_dp(metrics[code]) == expected, code
-    assert Decimal(metrics["total_rwa_ghs"]) == Decimal("2147500000")
-    assert Decimal(metrics["credit_rwa_ghs"]) == Decimal("1402500000")
-    assert Decimal(metrics["market_rwa_ghs"]) == Decimal("45000000")
-    assert Decimal(metrics["operational_rwa_ghs"]) == Decimal("700000000")
-    assert Decimal(metrics["total_capital_ghs"]) == Decimal("340000000")
     assert "stress_path" not in metrics
     assert "triggers" not in metrics
+    _assert_capital_metrics_consistent(run)
 
     metric_results = {item["metric_code"]: item for item in run["metric_results"]}
-    assert set(metric_results) == {
-        "car_pct",
-        "tier1_ratio_pct",
-        "cet1_ratio_pct",
-        "leverage_ratio_pct",
-    }
-    assert metric_results["car_pct"]["status"] == "green"
-    assert metric_results["car_pct"]["unit"] == "pct"
-    assert Decimal(metric_results["car_pct"]["threshold_min"]) == Decimal("10")
-    assert Decimal(metric_results["tier1_ratio_pct"]["threshold_min"]) == Decimal("8")
-    assert Decimal(metric_results["cet1_ratio_pct"]["threshold_min"]) == Decimal("6.5")
-    assert Decimal(metric_results["leverage_ratio_pct"]["threshold_min"]) == Decimal("3")
-    assert all(item["status"] == "green" for item in metric_results.values())
-
-    sections: dict[str, list[dict[str, Any]]] = {}
-    for item in run["line_items"]:
-        sections.setdefault(item["section"], []).append(item)
-    assert len(sections["credit_rwa"]) == 12
-    assert len(sections["market_rwa"]) == 4
-    assert len(sections["operational_rwa"]) == 5
-    assert len(sections["capital_component"]) == 9
-    assert len(sections["ratio"]) == 4
-    positions = [item["position"] for item in run["line_items"]]
-    assert positions == sorted(positions)
-    credit = {item["line_code"]: item for item in sections["credit_rwa"]}
-    assert Decimal(credit["corporate_unrated"]["weighted_amount"]) == Decimal("560000000")
-    assert Decimal(credit["committed_retail"]["exposure_amount"]) == Decimal("40000000")
-    assert Decimal(credit["committed_retail"]["weighted_amount"]) == Decimal("30000000")
-    assert Decimal(credit["cash_and_reserves"]["exposure_amount"]) == Decimal("290000000")
-    assert Decimal(credit["cash_and_reserves"]["weighted_amount"]) == Decimal("0")
-    components = {item["line_code"]: item for item in sections["capital_component"]}
-    assert Decimal(components["cet1:intangibles"]["weighted_amount"]) == Decimal("-25000000")
-    assert Decimal(components["t2:general_provisions"]["weighted_amount"]) == Decimal("15000000")
-
+    assert set(metric_results) == set(RATIO_THRESHOLDS)
     validations = {item["rule_code"]: item for item in run["validations"]}
-    assert set(validations) == {
-        "car_above_minimum",
-        "cet1_above_minimum",
-        "tier1_above_minimum",
-        "leverage_above_minimum",
-        "tier2_gp_cap_applied",
-    }
-    assert all(item["passed"] is True for item in validations.values())
-    assert validations["car_above_minimum"]["severity"] == "error"
-    assert validations["tier2_gp_cap_applied"]["severity"] == "info"
-    assert "did not bind" in validations["tier2_gp_cap_applied"]["message"]
+    assert set(validations) == BASELINE_VALIDATION_RULES
+    gp_message = validations["tier2_gp_cap_applied"]["message"]
+    assert ("did not bind" in gp_message) or ("bound" in gp_message)
 
-    fetched = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs/{run['id']}", headers=headers()
+    fetched = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs/{run['id']}", headers=real_headers()
     )
     assert fetched.status_code == 200
     assert fetched.json()["input_hash"] == run["input_hash"]
+    assert fetched.json()["metrics"] == run["metrics"]
 
 
-def test_capital_input_hash_is_scoped_to_capital_fact_groups(db_client: TestClient) -> None:
-    period = _seed_latest_period(db_client)
-    first = _create_run(db_client, period["id"], "baseline")
+def test_capital_input_hash_is_scoped_to_capital_fact_groups(
+    real_client: TestClient, real_session: Session
+) -> None:
+    period = _latest_period(real_client)
+    before = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+        headers=real_headers(),
+        params={"module": "capital", "scenario_code": "baseline"},
+    ).json()["total"]
+    first = _create_run(real_client, period["id"], "baseline")
 
     # Editing a liquidity-only fact must not disturb the capital input hash.
-    _set_fact_amount(period["id"], "lcr_inflow", "retail_loan_repayments", "61000000")
-    second = _create_run(db_client, period["id"], "baseline")
+    _bump_one_fact(real_session, period["id"], "lcr_inflow")
+    second = _create_run(real_client, period["id"], "baseline")
     assert second["id"] != first["id"]
     assert second["input_hash"] == first["input_hash"]
 
-    # Editing a capital fact must change it.
-    _set_fact_amount(period["id"], "loan_exposure", "corporate_unrated", "561000000")
-    third = _create_run(db_client, period["id"], "baseline")
+    # Editing a capital fact must change it (value-based, id-independent hash).
+    _bump_one_fact(real_session, period["id"], "loan_exposure")
+    third = _create_run(real_client, period["id"], "baseline")
     assert third["input_hash"] != first["input_hash"]
     assert third["status"] == "succeeded"
 
-    listed = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-        headers=headers(),
+    listed = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+        headers=real_headers(),
         params={"module": "capital", "scenario_code": "baseline"},
     )
     assert listed.status_code == 200
-    assert listed.json()["total"] == 3
+    assert listed.json()["total"] == before + 3
+    assert {run["id"] for run in listed.json()["runs"][:3]} == {
+        first["id"],
+        second["id"],
+        third["id"],
+    }
 
 
-def test_run_all_capital_scenarios_returns_four_runs_with_stress_outputs(
-    db_client: TestClient,
+def test_run_all_capital_scenarios_returns_four_runs_with_stress_outputs(  # noqa: PLR0915
+    real_client: TestClient,
 ) -> None:
-    period = _seed_latest_period(db_client)
-    response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/run-all-scenarios",
-        headers=headers(),
+    period = _latest_period(real_client)
+    response = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/capital/run-all-scenarios",
+        headers=real_headers(),
         json={"reporting_period_id": period["id"]},
     )
     assert response.status_code == 201, response.text
     runs = response.json()["runs"]
-    assert [run["scenario_code"] for run in runs] == ["baseline", "mild", "moderate", "severe"]
+    assert [run["scenario_code"] for run in runs] == ["baseline", *STRESS_SCENARIOS]
     assert all(run["status"] == "succeeded" for run in runs)
-    assert "stress_path" not in runs[0]["metrics"]
+    baseline = runs[0]
+    assert "stress_path" not in baseline["metrics"]
+    baseline_car = _dec(baseline["metrics"]["car_pct"])
+    thresholds = baseline["inputs"]["parameters"]["thresholds_pct"]
+    car_min = _dec(thresholds["car_min"])
+    early_warning = _dec(thresholds["car_early_warning"])
+    critical = _dec(thresholds["car_critical"])
+    assert critical <= car_min <= early_warning
+    # scenario_code is part of the snapshot, so each run gets a distinct hash.
+    assert len({run["input_hash"] for run in runs}) == 4
 
+    end_car: dict[str, Decimal] = {}
     for run in runs[1:]:
         scenario = run["scenario_code"]
+        assert run["inputs"]["shocks"], scenario
+        _assert_capital_metrics_consistent(run)
         stress_path = run["metrics"]["stress_path"]
         assert [row["quarter"] for row in stress_path] == [0, 1, 2, 3, 4], scenario
-        assert _four_dp(stress_path[0]["car"]) == Decimal("15.8324"), scenario
-        assert _four_dp(stress_path[-1]["car"]) == GOLDEN_END_CAR_BY_SCENARIO[scenario], scenario
-        assert len(run["metrics"]["triggers"]) == 3, scenario
+        # Q0 is the unstressed as-of position: it must anchor on the baseline CAR.
+        assert _dec(stress_path[0]["car"]) == baseline_car, scenario
+        for row in stress_path:
+            total_rwa = _dec(row["total_rwa"])
+            assert total_rwa == (
+                _dec(row["credit_rwa"]) + _dec(row["market_rwa"]) + _dec(row["operational_rwa"])
+            ), scenario
+            assert _dec(row["car"]) == _ratio(row["total_capital"], total_rwa), scenario
+            assert _dec(row["tier1_ratio"]) == _ratio(row["tier1_capital"], total_rwa), scenario
+            assert _dec(row["cet1_ratio"]) == _ratio(row["cet1_capital"], total_rwa), scenario
+        end_car[scenario] = _dec(stress_path[-1]["car"])
+
+        triggers = {item["code"]: item for item in run["metrics"]["triggers"]}
+        assert list(triggers) == TRIGGER_CODES, scenario
+        assert _dec(triggers["early_warning"]["threshold_pct"]) == early_warning
+        assert _dec(triggers["breach"]["threshold_pct"]) == car_min
+        assert _dec(triggers["critical"]["threshold_pct"]) == critical
+        validations = {item["rule_code"]: item for item in run["validations"]}
+        for code, trigger in triggers.items():
+            # A trigger fires in the FIRST quarter its own CAR path dips below the threshold.
+            first_below = next(
+                (
+                    row["quarter"]
+                    for row in stress_path
+                    if _dec(row["car"]) < _dec(trigger["threshold_pct"])
+                ),
+                None,
+            )
+            assert trigger["fired"] is (first_below is not None), (scenario, code)
+            assert trigger["first_quarter"] == first_below, (scenario, code)
+            validation = validations[f"capital_trigger_{code}"]
+            assert validation["passed"] is (not trigger["fired"]), (scenario, code)
+            assert validation["severity"] == ("warning" if code == "early_warning" else "error"), (
+                scenario,
+                code,
+            )
+        # Thresholds nest, so the triggers do too: critical ⇒ breach ⇒ early warning.
+        if triggers["critical"]["fired"]:
+            assert triggers["breach"]["fired"]
+        if triggers["breach"]["fired"]:
+            assert triggers["early_warning"]["fired"]
+
         metric_results = {item["metric_code"]: item for item in run["metric_results"]}
-        assert (
-            _four_dp(metric_results["car_pct_end"]["metric_value"])
-            == (GOLDEN_END_CAR_BY_SCENARIO[scenario])
+        assert _dec(metric_results["car_pct_end"]["metric_value"]) == end_car[scenario], scenario
+        assert _dec(metric_results["car_pct_end"]["threshold_min"]) == car_min
+        assert metric_results["car_pct_end"]["status"] == _expected_status(
+            end_car[scenario], car_min
         ), scenario
 
-    mild, moderate, severe = runs[1], runs[2], runs[3]
-    for run in (mild, moderate):
-        triggers = {item["code"]: item for item in run["metrics"]["triggers"]}
-        assert all(item["fired"] is False for item in triggers.values())
-        metric_results = {item["metric_code"]: item for item in run["metric_results"]}
-        assert metric_results["car_pct_end"]["status"] == "green"
-
-    severe_triggers = {item["code"]: item for item in severe["metrics"]["triggers"]}
-    assert severe_triggers["early_warning"]["fired"] is True
-    assert severe_triggers["early_warning"]["first_quarter"] == 4
-    assert severe_triggers["breach"]["fired"] is True
-    assert severe_triggers["breach"]["first_quarter"] == 4
-    assert severe_triggers["critical"]["fired"] is False
-    assert severe_triggers["critical"]["first_quarter"] is None
-    severe_results = {item["metric_code"]: item for item in severe["metric_results"]}
-    assert severe_results["car_pct_end"]["status"] == "red"
-    severe_validations = {item["rule_code"]: item for item in severe["validations"]}
-    assert severe_validations["capital_trigger_early_warning"]["passed"] is False
-    assert severe_validations["capital_trigger_early_warning"]["severity"] == "warning"
-    assert severe_validations["capital_trigger_breach"]["passed"] is False
-    assert severe_validations["capital_trigger_breach"]["severity"] == "error"
-    assert severe_validations["capital_trigger_critical"]["passed"] is True
+    # The severe scenario cannot leave the bank better capitalised than the mild one.
+    assert end_car["severe"] <= end_car["mild"]
 
 
 def test_capital_dashboard_computes_inline_then_prefers_stored_runs(  # noqa: PLR0915
-    db_client: TestClient,
+    real_client: TestClient,
 ) -> None:
-    period = _seed_latest_period(db_client)
+    latest = _latest_period(real_client)
+    period = _period_without_stored_baseline(real_client)
 
-    inline = db_client.get(f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/dashboard", headers=headers())
+    inline = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/capital/dashboard",
+        headers=real_headers(),
+        params={"reporting_period_id": period["id"]},
+    )
     assert inline.status_code == 200, inline.text
     body = inline.json()
     assert body["stored"] is False
     assert body["latest_run_id"] is None
     assert body["period"]["id"] == period["id"]
     metrics = body["metrics"]
-    for code, expected in GOLDEN_BASELINE_RATIOS.items():
-        assert _four_dp(metrics[code]) == expected, code
-    assert metrics["car_status"] == "green"
-    assert metrics["leverage_status"] == "green"
+    total_rwa = _dec(metrics["total_rwa_ghs"])
+    assert total_rwa > 0
+    assert _dec(metrics["car_pct"]) == _ratio(metrics["total_capital_ghs"], total_rwa)
+    buffers = body["buffers"]
+    assert _dec(buffers["car_critical_pct"]) <= _dec(buffers["car_min_pct"])
+    assert _dec(buffers["car_min_pct"]) <= _dec(buffers["car_early_warning_pct"])
+    assert buffers["car_early_warning_label"] == "Early warning / conservation buffer floor"
+    assert _dec(buffers["current_car_pct"]) == _dec(metrics["car_pct"])
+    assert _dec(buffers["headroom_pp"]) == (
+        _dec(metrics["car_pct"]) - _dec(buffers["car_min_pct"])
+    ).quantize(RATIO_PCT, rounding=ROUND_HALF_UP)
+    assert metrics["car_status"] == _expected_status(metrics["car_pct"], buffers["car_min_pct"])
+    for status_key in ("car_status", "tier1_status", "cet1_status", "leverage_status"):
+        assert metrics[status_key] in {"green", "amber", "red"}
 
     composition = body["rwa_composition"]
-    assert Decimal(composition["credit_rwa_ghs"]) == Decimal("1402500000")
-    assert Decimal(composition["market_rwa_ghs"]) == Decimal("45000000")
-    assert Decimal(composition["operational_rwa_ghs"]) == Decimal("700000000")
-    assert Decimal(composition["total_rwa_ghs"]) == Decimal("2147500000")
-    assert len(composition["credit_lines"]) == 12
+    assert _dec(composition["total_rwa_ghs"]) == total_rwa
+    assert _dec(composition["total_rwa_ghs"]) == (
+        _dec(composition["credit_rwa_ghs"])
+        + _dec(composition["market_rwa_ghs"])
+        + _dec(composition["operational_rwa_ghs"])
+    )
+    assert composition["credit_lines"]
+    assert _sum_weighted(composition["credit_lines"]) == _dec(composition["credit_rwa_ghs"])
 
     structure = body["capital_structure"]
-    assert len(structure["cet1_components"]) == 4
-    assert len(structure["cet1_deductions"]) == 2
-    assert len(structure["at1_components"]) == 1
-    assert len(structure["tier2_components"]) == 2
-    assert Decimal(structure["cet1_capital_ghs"]) == Decimal("260000000")
-    assert Decimal(structure["at1_capital_ghs"]) == Decimal("20000000")
-    assert Decimal(structure["tier1_capital_ghs"]) == Decimal("280000000")
-    assert Decimal(structure["tier2_capital_ghs"]) == Decimal("60000000")
-    assert Decimal(structure["total_capital_ghs"]) == Decimal("340000000")
-
-    buffers = body["buffers"]
-    assert Decimal(buffers["car_min_pct"]) == Decimal("10")
-    assert Decimal(buffers["car_early_warning_pct"]) == Decimal("10.5")
-    assert buffers["car_early_warning_label"] == "Early warning / conservation buffer floor"
-    assert Decimal(buffers["car_critical_pct"]) == Decimal("9")
-    assert _four_dp(buffers["current_car_pct"]) == Decimal("15.8324")
-    assert _four_dp(buffers["headroom_pp"]) == Decimal("5.8324")
+    assert structure["cet1_components"]
+    cet1 = _sum_weighted(structure["cet1_components"]) + _sum_weighted(structure["cet1_deductions"])
+    at1 = _sum_weighted(structure["at1_components"])
+    tier2 = _sum_weighted(structure["tier2_components"])
+    assert all(_dec(line["weighted_amount"]) < 0 for line in structure["cet1_deductions"])
+    assert _dec(structure["cet1_capital_ghs"]) == cet1
+    assert _dec(structure["at1_capital_ghs"]) == at1
+    assert _dec(structure["tier1_capital_ghs"]) == cet1 + at1
+    assert _dec(structure["tier2_capital_ghs"]) == tier2
+    assert _dec(structure["total_capital_ghs"]) == cet1 + at1 + tier2
+    assert _dec(structure["total_capital_ghs"]) == _dec(metrics["total_capital_ghs"])
+    assert _dec(metrics["tier1_ratio_pct"]) == _ratio(cet1 + at1, total_rwa)
+    assert _dec(metrics["cet1_ratio_pct"]) == _ratio(cet1, total_rwa)
 
     trend = body["trend"]
-    assert len(trend) == 12
-    assert [point["label"] for point in trend][:2] == ["2025-04", "2025-05"]
-    assert trend[-1]["label"] == "2026-03"
+    assert trend
+    assert len(trend) <= 13  # trailing window, not the bank's full history
     period_ends = [point["period_end"] for point in trend]
     assert period_ends == sorted(period_ends)
-    assert all(point["stored"] is False for point in trend)
-    assert len(body["validations"]) == 5
+    assert trend[-1]["label"] == latest["label"]
+    by_period = {point["reporting_period_id"]: point for point in trend}
+    assert by_period[period["id"]]["stored"] is False
+    assert _dec(by_period[period["id"]]["car_pct"]) == _dec(metrics["car_pct"])
+    assert {item["rule_code"] for item in body["validations"]} == BASELINE_VALIDATION_RULES
 
-    run = _create_run(db_client, period["id"], "baseline")
-    stored = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/dashboard",
-        headers=headers(),
+    run = _create_run(real_client, period["id"], "baseline")
+    stored = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/capital/dashboard",
+        headers=real_headers(),
         params={"reporting_period_id": period["id"]},
     )
     assert stored.status_code == 200
     body = stored.json()
     assert body["stored"] is True
     assert body["latest_run_id"] == run["id"]
-    assert _four_dp(body["metrics"]["car_pct"]) == Decimal("15.8324")
-    trend = body["trend"]
-    assert len(trend) == 12
-    assert trend[-1]["stored"] is True
-    assert all(point["stored"] is False for point in trend[:-1])
+    # The stored view reads the run back; inline and stored arithmetic agree.
+    assert _dec(body["metrics"]["car_pct"]) == _dec(run["metrics"]["car_pct"])
+    assert _dec(body["metrics"]["car_pct"]) == _dec(metrics["car_pct"])
+    trend = {point["reporting_period_id"]: point for point in body["trend"]}
+    assert trend[period["id"]]["stored"] is True
+    assert _dec(trend[period["id"]]["car_pct"]) == _dec(run["metrics"]["car_pct"])
 
 
-def test_structure_and_rwa_endpoints_require_a_baseline_run(db_client: TestClient) -> None:
-    period = _seed_latest_period(db_client)
+def test_structure_and_rwa_endpoints_require_a_baseline_run(real_client: TestClient) -> None:
+    period = _period_without_stored_baseline(real_client)
 
     for path in (
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/structure",
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/rwa",
+        f"/api/v1/banks/{REAL_BANK_ID}/capital/structure",
+        f"/api/v1/banks/{REAL_BANK_ID}/capital/rwa",
     ):
-        blocked = db_client.get(path, headers=headers())
+        blocked = real_client.get(
+            path, headers=real_headers(), params={"reporting_period_id": period["id"]}
+        )
         assert blocked.status_code == 409, path
         assert blocked.json()["error"]["details"]["error_code"] == "no_baseline_run"
 
-    run = _create_run(db_client, period["id"], "baseline")
+    run = _create_run(real_client, period["id"], "baseline")
+    sections = _sections(run)
+    cet1, at1, tier2 = _capital_tiers(sections["capital_component"])
 
-    structure = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/structure",
-        headers=headers(),
+    structure = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/capital/structure",
+        headers=real_headers(),
         params={"reporting_period_id": period["id"]},
     )
     assert structure.status_code == 200, structure.text
     body = structure.json()
     assert body["run_id"] == run["id"]
     assert body["reporting_period_id"] == period["id"]
-    assert Decimal(body["cet1_capital_ghs"]) == Decimal("260000000")
-    assert Decimal(body["tier2_capital_ghs"]) == Decimal("60000000")
-    assert Decimal(body["total_capital_ghs"]) == Decimal("340000000")
-    assert [line["line_code"] for line in body["at1_components"]] == ["at1:perpetual_instruments"]
+    assert _dec(body["cet1_capital_ghs"]) == cet1
+    assert _dec(body["at1_capital_ghs"]) == at1
+    assert _dec(body["tier1_capital_ghs"]) == cet1 + at1
+    assert _dec(body["tier2_capital_ghs"]) == tier2
+    assert _dec(body["total_capital_ghs"]) == _dec(run["metrics"]["total_capital_ghs"])
+    assert all(line["line_code"].startswith("at1:") for line in body["at1_components"])
+    assert all(line["line_code"].startswith("t2:") for line in body["tier2_components"])
+    assert all(_dec(line["weighted_amount"]) < 0 for line in body["cet1_deductions"])
+    assert all(_dec(line["weighted_amount"]) >= 0 for line in body["cet1_components"])
 
-    rwa = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/rwa",
-        headers=headers(),
+    rwa = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/capital/rwa",
+        headers=real_headers(),
         params={"reporting_period_id": period["id"]},
     )
     assert rwa.status_code == 200, rwa.text
     body = rwa.json()
     assert body["run_id"] == run["id"]
-    assert Decimal(body["total_rwa_ghs"]) == Decimal("2147500000")
-    assert len(body["credit_lines"]) == 12
-    assert len(body["market_lines"]) == 4
-    assert len(body["operational_lines"]) == 5
-    weighted_credit = sum(Decimal(line["weighted_amount"]) for line in body["credit_lines"])
-    assert weighted_credit == Decimal("1402500000")
+    assert _dec(body["total_rwa_ghs"]) == _dec(run["metrics"]["total_rwa_ghs"])
+    assert _dec(body["total_rwa_ghs"]) == (
+        _dec(body["credit_rwa_ghs"])
+        + _dec(body["market_rwa_ghs"])
+        + _dec(body["operational_rwa_ghs"])
+    )
+    assert len(body["credit_lines"]) == len(sections["credit_rwa"])
+    assert len(body["market_lines"]) == len(sections["market_rwa"])
+    assert len(body["operational_lines"]) == len(sections["operational_rwa"])
+    assert _sum_weighted(body["credit_lines"]) == _dec(body["credit_rwa_ghs"])
 
 
 def test_bsd2_preview_requires_baseline_run_then_renders_rows(  # noqa: PLR0915
-    db_client: TestClient,
+    real_client: TestClient,
 ) -> None:
-    period = _seed_latest_period(db_client)
+    period = _period_without_stored_baseline(real_client)
+    bank = real_client.get(f"/api/v1/banks/{REAL_BANK_ID}", headers=real_headers()).json()
 
-    blocked = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/submissions/bsd2",
-        headers=headers(),
+    blocked = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/submissions/bsd2",
+        headers=real_headers(),
         params={"reporting_period_id": period["id"]},
     )
     assert blocked.status_code == 409
     assert blocked.json()["error"]["details"]["error_code"] == "no_baseline_run"
 
-    run = _create_run(db_client, period["id"], "baseline")
-    response = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/submissions/bsd2",
-        headers=headers(),
+    run = _create_run(real_client, period["id"], "baseline")
+    response = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/submissions/bsd2",
+        headers=real_headers(),
         params={"reporting_period_id": period["id"]},
     )
     assert response.status_code == 200, response.text
     preview = response.json()
+    metrics = run["metrics"]
+    sections = _sections(run)
+    thresholds = run["inputs"]["parameters"]["thresholds_pct"]
 
     header = preview["header"]
-    assert header["form_code"] == "BSD-2"
+    assert header["form_code"] == "BSD5A"
     assert header["form_title"] == "Capital Adequacy Return"
     assert header["regulator"] == "Bank of Ghana"
-    assert header["bank_name"] == "Sample Bank Ltd"
-    assert header["reporting_period_label"] == "2026-03"
-    assert header["currency"] == "GHS"
+    assert header["bank_name"] == bank["name"]
+    assert header["reporting_period_label"] == period["label"]
+    assert header["currency"] == bank["currency"]
     assert header["preview_note"] == (
         "PREVIEW ONLY — This system does not file submissions with Bank of Ghana."
     )
     assert preview["run_id"] == run["id"]
     assert preview["scenario_code"] == "baseline"
 
-    assert [row["row_code"] for row in preview["cet1_rows"]] == ["1.1", "1.2", "1.3", "1.4"]
-    cet1_gross = sum(Decimal(row["amount"]) for row in preview["cet1_rows"])
-    assert cet1_gross == Decimal("300000000")
-    assert [row["row_code"] for row in preview["deduction_rows"]] == ["2.1", "2.2"]
-    deductions = sum(Decimal(row["amount"]) for row in preview["deduction_rows"])
-    assert deductions == Decimal("-40000000")
+    cet1_rows = preview["cet1_rows"]
+    assert cet1_rows
+    assert [row["row_code"] for row in cet1_rows] == _row_codes(cet1_rows, "1")
+    deduction_rows = preview["deduction_rows"]
+    assert [row["row_code"] for row in deduction_rows] == _row_codes(deduction_rows, "2")
+    assert all(_dec(row["amount"]) >= 0 for row in cet1_rows)
+    assert all(_dec(row["amount"]) < 0 for row in deduction_rows)
+    cet1_total = _sum_weighted(cet1_rows, "amount") + _sum_weighted(deduction_rows, "amount")
     assert preview["cet1_total"]["row_code"] == "3.0"
-    assert Decimal(preview["cet1_total"]["value"]) == Decimal("260000000")
-    assert [row["row_code"] for row in preview["at1_rows"]] == ["4.1"]
-    assert Decimal(preview["tier1_total"]["value"]) == Decimal("280000000")
-    assert [row["row_code"] for row in preview["tier2_rows"]] == ["6.1", "6.2"]
-    gp_row = next(
-        row for row in preview["tier2_rows"] if "General Provisions" in row["description"]
-    )
-    assert "cap not binding" in gp_row["description"]
-    assert "1.25% of credit RWA" in gp_row["description"]
-    assert Decimal(gp_row["amount"]) == Decimal("15000000")
+    assert _dec(preview["cet1_total"]["value"]) == cet1_total
+    at1_rows = preview["at1_rows"]
+    assert [row["row_code"] for row in at1_rows] == _row_codes(at1_rows, "4")
+    tier1_total = cet1_total + _sum_weighted(at1_rows, "amount")
+    assert preview["tier1_total"]["row_code"] == "5.0"
+    assert _dec(preview["tier1_total"]["value"]) == tier1_total
+    tier2_rows = preview["tier2_rows"]
+    assert [row["row_code"] for row in tier2_rows] == _row_codes(tier2_rows, "6")
+    gp_rows = [row for row in tier2_rows if "General Provisions" in row["description"]]
+    validations = {item["rule_code"]: item for item in run["validations"]}
+    for gp_row in gp_rows:
+        cap_pct = _dec(thresholds["tier2_gp_cap_pct_credit_rwa"]).normalize()
+        assert f"{cap_pct:f}% of credit RWA" in gp_row["description"]
+        # The preview's cap wording must agree with the run's own cap validation.
+        bound = "cap bound" in gp_row["description"]
+        assert ("did not bind" in validations["tier2_gp_cap_applied"]["message"]) is (not bound)
     assert preview["total_capital"]["row_code"] == "7.0"
-    assert Decimal(preview["total_capital"]["value"]) == Decimal("340000000")
+    assert _dec(preview["total_capital"]["value"]) == tier1_total + _sum_weighted(
+        tier2_rows, "amount"
+    )
+    assert _dec(preview["total_capital"]["value"]) == _dec(metrics["total_capital_ghs"])
 
     credit_rows = preview["credit_rwa_rows"]
-    assert [row["row_code"] for row in credit_rows] == [f"8.{i}" for i in range(1, 13)]
-    weighted_credit = sum(Decimal(row["weighted_amount"]) for row in credit_rows)
-    assert weighted_credit == Decimal("1402500000")
-    assert [row["row_code"] for row in preview["market_rwa_rows"]] == [
-        f"9.{i}" for i in range(1, 5)
-    ]
-    assert [row["row_code"] for row in preview["operational_rwa_rows"]] == [
-        f"10.{i}" for i in range(1, 6)
-    ]
+    assert len(credit_rows) == len(sections["credit_rwa"])
+    assert [row["row_code"] for row in credit_rows] == _row_codes(credit_rows, "8")
+    assert _sum_weighted(credit_rows) == _dec(metrics["credit_rwa_ghs"])
+    market_rows = preview["market_rwa_rows"]
+    assert [row["row_code"] for row in market_rows] == _row_codes(market_rows, "9")
+    assert len(market_rows) == len(sections["market_rwa"])
+    operational_rows = preview["operational_rwa_rows"]
+    assert [row["row_code"] for row in operational_rows] == _row_codes(operational_rows, "10")
+    assert len(operational_rows) == len(sections["operational_rwa"])
     assert preview["total_rwa"]["row_code"] == "11.0"
-    assert Decimal(preview["total_rwa"]["value"]) == Decimal("2147500000")
+    assert _dec(preview["total_rwa"]["value"]) == _dec(metrics["total_rwa_ghs"])
 
     ratio_rows = {row["row_code"]: row for row in preview["ratio_rows"]}
     assert set(ratio_rows) == {"12.1", "12.2", "12.3", "12.4"}
-    assert Decimal(ratio_rows["12.1"]["minimum_pct"]) == Decimal("6.5")
-    assert Decimal(ratio_rows["12.2"]["minimum_pct"]) == Decimal("8")
-    assert Decimal(ratio_rows["12.3"]["minimum_pct"]) == Decimal("10")
-    assert Decimal(ratio_rows["12.4"]["minimum_pct"]) == Decimal("3")
-    assert _four_dp(ratio_rows["12.3"]["value_pct"]) == Decimal("15.8324")
-    assert all(row["passed"] is True for row in ratio_rows.values())
-    assert len(preview["validations"]) == 5
+    layout = {
+        "12.1": ("cet1_ratio_pct", "cet1_min"),
+        "12.2": ("tier1_ratio_pct", "tier1_min"),
+        "12.3": ("car_pct", "car_min"),
+        "12.4": ("leverage_ratio_pct", "leverage_min"),
+    }
+    for row_code, (metric_code, threshold_code) in layout.items():
+        row = ratio_rows[row_code]
+        assert _dec(row["minimum_pct"]) == _dec(thresholds[threshold_code]), row_code
+        assert _dec(row["value_pct"]) == _dec(metrics[metric_code]), row_code
+        assert row["passed"] is (_dec(row["value_pct"]) >= _dec(row["minimum_pct"])), row_code
+    assert {item["rule_code"] for item in preview["validations"]} == BASELINE_VALIDATION_RULES
 
 
 def test_invalid_module_scenario_combinations_are_rejected_with_422(
-    db_client: TestClient,
+    real_client: TestClient,
 ) -> None:
-    period = _seed_latest_period(db_client)
+    period = _latest_period(real_client)
     combos = (
         ("capital", "idiosyncratic"),
         ("capital", "market_wide"),
@@ -462,9 +684,9 @@ def test_invalid_module_scenario_combinations_are_rejected_with_422(
         ("forecast", "baseline"),
     )
     for module, scenario_code in combos:
-        response = db_client.post(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-            headers=headers(),
+        response = real_client.post(
+            f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+            headers=real_headers(),
             json={
                 "module": module,
                 "reporting_period_id": period["id"],
@@ -474,47 +696,55 @@ def test_invalid_module_scenario_combinations_are_rejected_with_422(
         assert response.status_code == 422, (module, scenario_code)
 
 
-def test_unknown_bank_and_period_return_404(db_client: TestClient) -> None:
-    period = _seed_latest_period(db_client)
+def test_unknown_bank_and_period_return_404(real_client: TestClient) -> None:
+    period = _latest_period(real_client)
     assert (
-        db_client.post(
+        real_client.post(
             f"/api/v1/banks/{uuid4()}/capital/run-all-scenarios",
-            headers=headers(),
+            headers=real_headers(),
             json={"reporting_period_id": period["id"]},
         ).status_code
         == 404
     )
     assert (
-        db_client.post(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/run-all-scenarios",
-            headers=headers(),
+        real_client.post(
+            f"/api/v1/banks/{REAL_BANK_ID}/capital/run-all-scenarios",
+            headers=real_headers(),
             json={"reporting_period_id": str(uuid4())},
         ).status_code
         == 404
     )
     assert (
-        db_client.get(f"/api/v1/banks/{uuid4()}/capital/dashboard", headers=headers()).status_code
+        real_client.get(
+            f"/api/v1/banks/{uuid4()}/capital/dashboard", headers=real_headers()
+        ).status_code
         == 404
     )
     assert (
-        db_client.get(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/submissions/bsd2",
-            headers=headers(),
+        real_client.get(
+            f"/api/v1/banks/{REAL_BANK_ID}/submissions/bsd2",
+            headers=real_headers(),
             params={"reporting_period_id": str(uuid4())},
+        ).status_code
+        == 404
+    )
+    assert (
+        real_client.get(
+            f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs/{uuid4()}", headers=real_headers()
         ).status_code
         == 404
     )
 
 
-def test_regulatory_capital_endpoints_are_tenant_isolated(db_client: TestClient) -> None:
-    period = _seed_latest_period(db_client)
-    run = _create_run(db_client, period["id"], "baseline")
+def test_regulatory_capital_endpoints_are_tenant_isolated(real_client: TestClient) -> None:
+    period = _latest_period(real_client)
+    run = _create_run(real_client, period["id"], "baseline")
 
-    org2 = headers(ORG_2)
+    other = other_headers()
     assert (
-        db_client.post(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-            headers=org2,
+        real_client.post(
+            f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+            headers=other,
             json={
                 "module": "capital",
                 "reporting_period_id": period["id"],
@@ -524,51 +754,47 @@ def test_regulatory_capital_endpoints_are_tenant_isolated(db_client: TestClient)
         == 404
     )
     assert (
-        db_client.post(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/run-all-scenarios",
-            headers=org2,
+        real_client.post(
+            f"/api/v1/banks/{REAL_BANK_ID}/capital/run-all-scenarios",
+            headers=other,
             json={"reporting_period_id": period["id"]},
         ).status_code
         == 404
     )
+    for path in (
+        f"/api/v1/banks/{REAL_BANK_ID}/capital/dashboard",
+        f"/api/v1/banks/{REAL_BANK_ID}/capital/rwa",
+        f"/api/v1/banks/{REAL_BANK_ID}/capital/structure",
+    ):
+        assert real_client.get(path, headers=other).status_code == 404, path
     assert (
-        db_client.get(f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/dashboard", headers=org2).status_code
-        == 404
-    )
-    assert (
-        db_client.get(f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/rwa", headers=org2).status_code
-        == 404
-    )
-    assert (
-        db_client.get(f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/structure", headers=org2).status_code
-        == 404
-    )
-    assert (
-        db_client.get(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/submissions/bsd2",
-            headers=org2,
+        real_client.get(
+            f"/api/v1/banks/{REAL_BANK_ID}/submissions/bsd2",
+            headers=other,
             params={"reporting_period_id": period["id"]},
         ).status_code
         == 404
     )
     assert (
-        db_client.get(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs/{run['id']}", headers=org2
+        real_client.get(
+            f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs/{run['id']}", headers=other
         ).status_code
         == 404
     )
     assert (
-        db_client.get(
-            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-            headers=org2,
+        real_client.get(
+            f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+            headers=other,
             params={"module": "capital"},
         ).status_code
         == 404
     )
 
-    listed = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-        headers=headers(),
-        params={"module": "capital"},
+    # The owning tenant still sees the run it just created.
+    listed = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+        headers=real_headers(),
+        params={"module": "capital", "scenario_code": "baseline"},
     ).json()
-    assert listed["total"] == 1
+    assert listed["total"] >= 1
+    assert listed["runs"][0]["id"] == run["id"]

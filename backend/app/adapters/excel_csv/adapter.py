@@ -31,6 +31,7 @@ from app.adapters.excel_csv.type_coercion import (
 )
 from app.adapters.excel_csv.workbook_reader import WorkbookReadError, read_source
 from app.domain.ingestion.adapter import SourceAdapter, register_adapter
+from app.domain.ingestion.attributes import attributes_from_columns
 from app.domain.ingestion.contracts import (
     AdapterConfig,
     AdapterIdentity,
@@ -297,10 +298,14 @@ class ExcelCsvAdapter(SourceAdapter):
                 result.failures.append(_failure(record, "coercion_error", "; ".join(field_errors)))
                 continue
 
+            # attribute_columns from the mapping + any ``attributes.<key>``
+            # header (the loans-template / push-client convention) — see
+            # app.domain.ingestion.attributes.
             attributes = {
-                column: _stringify(record.data[column])
-                for column in mapping.attribute_columns
-                if column in record.data and not is_null_like(record.data[column])
+                key: _stringify(value)
+                for key, value in attributes_from_columns(
+                    record.data, mapping.attribute_columns, is_null=is_null_like
+                ).items()
             }
             if attributes:
                 values["attributes"] = attributes

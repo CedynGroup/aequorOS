@@ -1,0 +1,2204 @@
+{
+ "form": "BSD15B",
+ "workbook": "FORM BSD15B REVISED.xls",
+ "sheets": [
+  {
+   "name": "International Banking Charges",
+   "max_row": 402,
+   "max_col": 20,
+   "column_widths": {
+    "A": 54.99,
+    "B": 18.28,
+    "C": 18.7,
+    "E": 10.56,
+    "G": 9.85,
+    "H": 10.13,
+    "K": 10.28,
+    "L": 11.56,
+    "N": 7.7,
+    "O": 8.14,
+    "P": 9.7
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF INSTITUTION:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A4",
+     "kind": "label",
+     "value": "INTERNATIONAL BANKING",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A6",
+     "kind": "label",
+     "value": "ITEM",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "1. LETTERS OF CREDIT (IMPORTS)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "   Establishment Commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "        Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "       <3months",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "         3-6months",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "         6-9months",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "      Over 9 months",
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "label",
+     "value": "       Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "label",
+     "value": "       Deferred:",
+     "align": "general"
+    },
+    {
+     "ref": "A18",
+     "kind": "label",
+     "value": "         60 days",
+     "align": "general"
+    },
+    {
+     "ref": "A19",
+     "kind": "label",
+     "value": "         Arrangement fee",
+     "align": "general"
+    },
+    {
+     "ref": "A20",
+     "kind": "label",
+     "value": "        90 days",
+     "align": "general"
+    },
+    {
+     "ref": "A21",
+     "kind": "label",
+     "value": "        Arrangement fee",
+     "align": "general"
+    },
+    {
+     "ref": "A22",
+     "kind": "label",
+     "value": "       120 days",
+     "align": "general"
+    },
+    {
+     "ref": "A23",
+     "kind": "label",
+     "value": "       150 days",
+     "align": "general"
+    },
+    {
+     "ref": "A24",
+     "kind": "label",
+     "value": "       180 days",
+     "align": "general"
+    },
+    {
+     "ref": "A25",
+     "kind": "label",
+     "value": "    Arrangement fee",
+     "align": "general"
+    },
+    {
+     "ref": "A26",
+     "kind": "label",
+     "value": "    Presentation under L/C Drawings",
+     "align": "general"
+    },
+    {
+     "ref": "A27",
+     "kind": "label",
+     "value": "       Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A28",
+     "kind": "label",
+     "value": "   Amendments:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A29",
+     "kind": "label",
+     "value": "    Increase in Amount",
+     "align": "general"
+    },
+    {
+     "ref": "A30",
+     "kind": "label",
+     "value": "    Extention of period",
+     "align": "general"
+    },
+    {
+     "ref": "A31",
+     "kind": "label",
+     "value": "    Extention of period- another quarter ",
+     "align": "general"
+    },
+    {
+     "ref": "A32",
+     "kind": "label",
+     "value": "    Discrepancy",
+     "align": "general"
+    },
+    {
+     "ref": "A33",
+     "kind": "label",
+     "value": "   Other amendments:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A34",
+     "kind": "label",
+     "value": "       Commission:",
+     "align": "general"
+    },
+    {
+     "ref": "A35",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A36",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A37",
+     "kind": "label",
+     "value": "    Revolving credits",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A38",
+     "kind": "label",
+     "value": "    Cable/Telex/Swift charges",
+     "align": "general"
+    },
+    {
+     "ref": "A39",
+     "kind": "label",
+     "value": "    Swap charge",
+     "align": "general"
+    },
+    {
+     "ref": "A40",
+     "kind": "label",
+     "value": "    Confirmation commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A41",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A42",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A43",
+     "kind": "label",
+     "value": "    Payment commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A44",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A45",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A46",
+     "kind": "label",
+     "value": "   Drawings/Negotiation commission:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A47",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A48",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A49",
+     "kind": "label",
+     "value": "     Exchange - (Drawing/Negitiation)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A50",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A51",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A52",
+     "kind": "label",
+     "value": "    Cancellation fee",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A53",
+     "kind": "label",
+     "value": "    Correspondent Bank charges - Upfront Payment",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A55",
+     "kind": "label",
+     "value": "FULLY COVERED L/CS  (IMPORTS)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A57",
+     "kind": "label",
+     "value": "     Establishment",
+     "align": "general"
+    },
+    {
+     "ref": "A58",
+     "kind": "label",
+     "value": "  Revolving/Standby L/C",
+     "align": "general"
+    },
+    {
+     "ref": "A59",
+     "kind": "label",
+     "value": "Drawings/Negotiation commission",
+     "align": "general"
+    },
+    {
+     "ref": "A60",
+     "kind": "label",
+     "value": "Exchange - Drawings/Negotiation",
+     "align": "general"
+    },
+    {
+     "ref": "A61",
+     "kind": "label",
+     "value": "     Amendments",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A62",
+     "kind": "label",
+     "value": "      Increase in L/C value",
+     "align": "general"
+    },
+    {
+     "ref": "A63",
+     "kind": "label",
+     "value": "     Other Amendments",
+     "align": "general"
+    },
+    {
+     "ref": "A64",
+     "kind": "label",
+     "value": "      Extension",
+     "align": "general"
+    },
+    {
+     "ref": "A66",
+     "kind": "label",
+     "value": "2. LETTERS OF CREDIT (EXPORTS)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A68",
+     "kind": "label",
+     "value": "    Advising commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A69",
+     "kind": "label",
+     "value": "       Customers",
+     "align": "general"
+    },
+    {
+     "ref": "A70",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A71",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A72",
+     "kind": "label",
+     "value": "       Non-customers",
+     "align": "general"
+    },
+    {
+     "ref": "A73",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A74",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A75",
+     "kind": "label",
+     "value": "    Handling Charges",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A76",
+     "kind": "label",
+     "value": "       Customers",
+     "align": "general"
+    },
+    {
+     "ref": "A77",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A78",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A79",
+     "kind": "label",
+     "value": "       Non-customers",
+     "align": "general"
+    },
+    {
+     "ref": "A80",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A81",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A82",
+     "kind": "label",
+     "value": "   Confirmation Commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A83",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A84",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A85",
+     "kind": "label",
+     "value": "    Amendment commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A86",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A87",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A88",
+     "kind": "label",
+     "value": "    Transfer charge",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A89",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A90",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A91",
+     "kind": "label",
+     "value": "    Negotiation Commission - Corporate",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A92",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A93",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A94",
+     "kind": "label",
+     "value": "    Negotiation Commission - Others",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A95",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A96",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A97",
+     "kind": "label",
+     "value": "    Exchange  Commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A98",
+     "kind": "label",
+     "value": "           Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A99",
+     "kind": "label",
+     "value": "           Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A100",
+     "kind": "label",
+     "value": "    Cancellation",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A101",
+     "kind": "label",
+     "value": "    Postage/Courier",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A103",
+     "kind": "label",
+     "value": "3. SGS FACILITY/COLLATERAL MANAGEMENT",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A105",
+     "kind": "label",
+     "value": "    Handling",
+     "align": "general"
+    },
+    {
+     "ref": "A106",
+     "kind": "label",
+     "value": "    Transfer ",
+     "align": "general"
+    },
+    {
+     "ref": "A107",
+     "kind": "label",
+     "value": "    Management Fees",
+     "align": "general"
+    },
+    {
+     "ref": "A109",
+     "kind": "label",
+     "value": "4. DOCUMENTARY BILLS FOR COLLECTION (IMPORTS)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A111",
+     "kind": "label",
+     "value": "   Handling charges - customers",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A112",
+     "kind": "label",
+     "value": "                                     Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A113",
+     "kind": "label",
+     "value": "                                     Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A114",
+     "kind": "label",
+     "value": "                                     Non customers",
+     "align": "general"
+    },
+    {
+     "ref": "A115",
+     "kind": "label",
+     "value": "                                     Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A116",
+     "kind": "label",
+     "value": "                                     Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A117",
+     "kind": "label",
+     "value": "    Negotiation Commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A118",
+     "kind": "label",
+     "value": "                                     Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A119",
+     "kind": "label",
+     "value": "                                     Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A120",
+     "kind": "label",
+     "value": "    Advice of fate",
+     "align": "general"
+    },
+    {
+     "ref": "A121",
+     "kind": "label",
+     "value": "    Bills deleted",
+     "align": "general"
+    },
+    {
+     "ref": "A122",
+     "kind": "label",
+     "value": "     Protest",
+     "align": "general"
+    },
+    {
+     "ref": "A123",
+     "kind": "label",
+     "value": "    Payment Commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A124",
+     "kind": "label",
+     "value": "                                     Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A125",
+     "kind": "label",
+     "value": "                                     Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A126",
+     "kind": "label",
+     "value": "    Holding charges (per quarter)",
+     "align": "general"
+    },
+    {
+     "ref": "A127",
+     "kind": "label",
+     "value": "   Prior Approval -  Customers with:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A128",
+     "kind": "label",
+     "value": "                                  Own resources - FCA",
+     "align": "general"
+    },
+    {
+     "ref": "A129",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A130",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A131",
+     "kind": "label",
+     "value": "                                  Own resources  - FEA",
+     "align": "general"
+    },
+    {
+     "ref": "A132",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A133",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A134",
+     "kind": "label",
+     "value": "                                 Telex/Cable charges",
+     "align": "general"
+    },
+    {
+     "ref": "A135",
+     "kind": "label",
+     "value": "                                 Swap charge",
+     "align": "general"
+    },
+    {
+     "ref": "A136",
+     "kind": "label",
+     "value": "   Customers allocated funds from Bank:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A137",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A138",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A139",
+     "kind": "label",
+     "value": "                                  Exchange",
+     "align": "general"
+    },
+    {
+     "ref": "A140",
+     "kind": "label",
+     "value": "                                  Telex/Cable charges",
+     "align": "general"
+    },
+    {
+     "ref": "A141",
+     "kind": "label",
+     "value": "    Transfer of documents to other banks:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A142",
+     "kind": "label",
+     "value": "               Customers:",
+     "align": "general"
+    },
+    {
+     "ref": "A143",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A144",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A145",
+     "kind": "label",
+     "value": "                Customers:",
+     "align": "general"
+    },
+    {
+     "ref": "A146",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A147",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A148",
+     "kind": "label",
+     "value": "5. DOCUMENTARY BILLS FOR COLLECTION (EXPORTS)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A150",
+     "kind": "label",
+     "value": "     Handling Commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A151",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A152",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A153",
+     "kind": "label",
+     "value": "     Foreign bills negotiated",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A154",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A155",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A156",
+     "kind": "label",
+     "value": "     Foreign bills discounted",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A157",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A158",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A159",
+     "kind": "label",
+     "value": "     Payment Commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A160",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A161",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A162",
+     "kind": "label",
+     "value": "     Protest Bills",
+     "align": "general"
+    },
+    {
+     "ref": "A163",
+     "kind": "label",
+     "value": "     Overdue bills/qtr",
+     "align": "general"
+    },
+    {
+     "ref": "A164",
+     "kind": "label",
+     "value": "     Reminder on overdue bills",
+     "align": "general"
+    },
+    {
+     "ref": "A165",
+     "kind": "label",
+     "value": "     Courier",
+     "align": "general"
+    },
+    {
+     "ref": "A166",
+     "kind": "label",
+     "value": "     Advise of Fate",
+     "align": "general"
+    },
+    {
+     "ref": "A167",
+     "kind": "label",
+     "value": "     Bills Deleted",
+     "align": "general"
+    },
+    {
+     "ref": "A169",
+     "kind": "label",
+     "value": "6. EXPORTS (PREPAYMENTS)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A170",
+     "kind": "label",
+     "value": "     Commission",
+     "align": "general"
+    },
+    {
+     "ref": "A171",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A172",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A173",
+     "kind": "label",
+     "value": "7. CLEAN BILLS FOR COLLECTION",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A174",
+     "kind": "label",
+     "value": "     Inwards",
+     "align": "general"
+    },
+    {
+     "ref": "A175",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A176",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A177",
+     "kind": "label",
+     "value": "     Outward",
+     "align": "general"
+    },
+    {
+     "ref": "A178",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A179",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A180",
+     "kind": "label",
+     "value": "    Clearing of Foreign checques",
+     "align": "general"
+    },
+    {
+     "ref": "A182",
+     "kind": "label",
+     "value": "8. COMMITMENT FEE",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A183",
+     "kind": "label",
+     "value": "    Arrangement fee",
+     "align": "general"
+    },
+    {
+     "ref": "A184",
+     "kind": "label",
+     "value": "    Processing fee",
+     "align": "general"
+    },
+    {
+     "ref": "A185",
+     "kind": "label",
+     "value": "    Facility Fee",
+     "align": "general"
+    },
+    {
+     "ref": "A187",
+     "kind": "label",
+     "value": "9. GUARANTEESBONDS/TENDER/PERFORMANCE",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A189",
+     "kind": "label",
+     "value": "    Handling Commission",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A190",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A191",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A192",
+     "kind": "label",
+     "value": "    Commission- Guaratees (foreign)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A193",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A194",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A195",
+     "kind": "label",
+     "value": "    Commission-B/L indemnities",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A196",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A197",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A198",
+     "kind": "label",
+     "value": "    Default  or restructured",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A200",
+     "kind": "label",
+     "value": "10. EXCHANGE CONTROL",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A201",
+     "kind": "label",
+     "value": "    Form A2",
+     "align": "general"
+    },
+    {
+     "ref": "A202",
+     "kind": "label",
+     "value": "    Import Declaration Form (IDF)",
+     "align": "general"
+    },
+    {
+     "ref": "A204",
+     "kind": "label",
+     "value": "11. INWARD TRANSFER",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A206",
+     "kind": "label",
+     "value": "    Inward Remittances",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A207",
+     "kind": "label",
+     "value": "    Payment in Cedis - Commission- Customers:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A208",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A209",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A210",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A211",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A212",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A213",
+     "kind": "label",
+     "value": "    Administrative charges",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A214",
+     "kind": "label",
+     "value": "    Transfer to beneficiary in other banks",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A215",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A216",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A217",
+     "kind": "label",
+     "value": "    Request for drafts against transfer",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A218",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A219",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A220",
+     "kind": "label",
+     "value": "    Payment in Foreign Currency - Customer",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A221",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A222",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A223",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A224",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A225",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A226",
+     "kind": "label",
+     "value": "     Telegraphic",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A227",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A228",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A229",
+     "kind": "label",
+     "value": "     Mail",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A230",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A231",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A232",
+     "kind": "label",
+     "value": "     Swap charges",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A233",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A234",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A235",
+     "kind": "label",
+     "value": "     Claiming of charges from Remitting Banks",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A237",
+     "kind": "label",
+     "value": "12. REQUEST FOR FOREX DRAFTS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A239",
+     "kind": "label",
+     "value": "      Foreign currency account (FCA)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A240",
+     "kind": "label",
+     "value": "         Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A241",
+     "kind": "label",
+     "value": "         Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A242",
+     "kind": "label",
+     "value": "      Foreign Exchange account (FEA)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A243",
+     "kind": "label",
+     "value": "        Commission   - Customer",
+     "align": "general"
+    },
+    {
+     "ref": "A244",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A245",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A246",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A247",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A248",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A249",
+     "kind": "label",
+     "value": "      Bank of Ghana draft against:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A250",
+     "kind": "label",
+     "value": "         FCA",
+     "align": "general"
+    },
+    {
+     "ref": "A251",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A252",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A253",
+     "kind": "label",
+     "value": "         FEA - Customer",
+     "align": "general"
+    },
+    {
+     "ref": "A254",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A255",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A256",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A257",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A258",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A260",
+     "kind": "label",
+     "value": "      Cedis against drafts - Customer",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A261",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A262",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A263",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A264",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A265",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A267",
+     "kind": "label",
+     "value": "13. OUTWARD TRANSFERS: SWIFT/TELEX",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A269",
+     "kind": "label",
+     "value": "      Telegraphic- Customer",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A270",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A271",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A272",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A273",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A274",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A275",
+     "kind": "label",
+     "value": "      Swift - Customer",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A276",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A277",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A278",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A279",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A280",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A282",
+     "kind": "label",
+     "value": "      Drafts/Money Orders - Customer",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A283",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A284",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A285",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A286",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A287",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A289",
+     "kind": "label",
+     "value": "      Customers own resources",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A290",
+     "kind": "label",
+     "value": "          FCA",
+     "align": "general"
+    },
+    {
+     "ref": "A291",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A292",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A293",
+     "kind": "label",
+     "value": "         FEA - Customer",
+     "align": "general"
+    },
+    {
+     "ref": "A294",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A295",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A296",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A297",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A298",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A300",
+     "kind": "label",
+     "value": "        Bank's Funds - Customer",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A301",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A302",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A303",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A304",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A305",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A307",
+     "kind": "label",
+     "value": "        Exchange - Customer",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A308",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A309",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A310",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A311",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A312",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A314",
+     "kind": "label",
+     "value": "Travellers Cheques, Drafts, I.M.O etc credited to Forex Acc.",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A316",
+     "kind": "label",
+     "value": "         Telex/Swift charges",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A318",
+     "kind": "label",
+     "value": "14. T/CHEQUES SALES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A319",
+     "kind": "label",
+     "value": "         FEA - Customer",
+     "align": "general"
+    },
+    {
+     "ref": "A320",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A321",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A322",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A323",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A324",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A325",
+     "kind": "label",
+     "value": "         FCA - Customer",
+     "align": "general"
+    },
+    {
+     "ref": "A326",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A327",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A328",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A329",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A330",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A332",
+     "kind": "label",
+     "value": "15. ENCASHMENT OF T/CHEQUES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A333",
+     "kind": "label",
+     "value": "       For Foreign currency - Customer",
+     "align": "general"
+    },
+    {
+     "ref": "A334",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A335",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A336",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A337",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A338",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A340",
+     "kind": "label",
+     "value": "16. CHEQUE LODGEMENTS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A341",
+     "kind": "label",
+     "value": "       Local cheque",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A342",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A343",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A344",
+     "kind": "label",
+     "value": "       Foreign Cheque for collection",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A345",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A346",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A347",
+     "kind": "label",
+     "value": "                                 - Non customer",
+     "align": "general"
+    },
+    {
+     "ref": "A348",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A349",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A351",
+     "kind": "label",
+     "value": "       Stop cheques",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A353",
+     "kind": "label",
+     "value": "       Cheque issuance",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A355",
+     "kind": "label",
+     "value": "       Sale of Cheque Leaflet ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A357",
+     "kind": "label",
+     "value": "       Standing orders",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A358",
+     "kind": "label",
+     "value": "          Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A359",
+     "kind": "label",
+     "value": "          Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A361",
+     "kind": "label",
+     "value": "       Evacuation fee",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A363",
+     "kind": "label",
+     "value": "17. ACCOUNT CLOSURE",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A365",
+     "kind": "label",
+     "value": "18. RETURNED CHEQUES-FOREIGN",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A366",
+     "kind": "label",
+     "value": "       Returned by bank",
+     "align": "general"
+    },
+    {
+     "ref": "A367",
+     "kind": "label",
+     "value": "       Returned by foreign bank",
+     "align": "general"
+    },
+    {
+     "ref": "A369",
+     "kind": "label",
+     "value": "19. COMMISSION ON TURNOVER",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A370",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A371",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A373",
+     "kind": "label",
+     "value": "  Service charge/Fees - Corporate",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A374",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A375",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A377",
+     "kind": "label",
+     "value": "  Service charge/Fees - Others",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A378",
+     "kind": "label",
+     "value": "                                  Minimum",
+     "align": "general"
+    },
+    {
+     "ref": "A379",
+     "kind": "label",
+     "value": "                                  Maximum",
+     "align": "general"
+    },
+    {
+     "ref": "A381",
+     "kind": "label",
+     "value": "   Cash Withdrawal FCA",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A382",
+     "kind": "label",
+     "value": "   Cash Withdrawal FEA",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A384",
+     "kind": "label",
+     "value": "20. FOREX/FOREIGN A/C - maintenace charge",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A385",
+     "kind": "label",
+     "value": "    Charges on dormant accounts",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A387",
+     "kind": "label",
+     "value": "21. STATEMENTS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A388",
+     "kind": "label",
+     "value": "      Monthly",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A389",
+     "kind": "label",
+     "value": "      Duplicate- per sheet",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A390",
+     "kind": "label",
+     "value": "      Cheque Books",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A391",
+     "kind": "label",
+     "value": "        Personal",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A392",
+     "kind": "label",
+     "value": "        Corporate",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A394",
+     "kind": "label",
+     "value": "ALL CHARGES AND FEES NOT ACCOUNTED FOR ABOVE SHOULD BE LISTED BELOW",
+     "bold": true,
+     "align": "general"
+    }
+   ]
+  }
+ ]
+}

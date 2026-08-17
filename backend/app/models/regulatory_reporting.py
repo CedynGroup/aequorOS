@@ -57,7 +57,11 @@ PACKAGE_STATUSES = (
 # frequency were admitted in migration 202607240023.
 # "stress" (Phase 2 item 6) is the event-driven Stress Test Output Report
 # pack — a Board/ALCO artifact, not a BoG return; the constraint was widened
-# in migration 202608070035.
+# in migration 202608070035. "bsd" is the family of the official Bank of Ghana
+# BSD prudential returns (BSD1 … BSD17, bog_forms/); it and the "weekly"
+# frequency (BSD1/1A/1B/14/15A/15B) were admitted in migration 202608150013,
+# which also recoded the legacy mis-labelled 'BSD2'/'BSD3' packages to
+# 'CAR-RWA'/'LCR-NSFR' (docs/bog_returns/00_full_return_registry.md §3).
 RETURN_FAMILIES = (
     "liquidity",
     "capital",
@@ -68,10 +72,15 @@ RETURN_FAMILIES = (
     "large_exposures",
     "dbk",
     "stress",
+    "bsd",
 )
-RETURN_FREQUENCIES = ("monthly", "quarterly", "semiannual", "annual", "daily")
+RETURN_FREQUENCIES = ("weekly", "monthly", "quarterly", "semiannual", "annual", "daily")
 RETURN_BASES = ("solo", "consolidated")
-ARTIFACT_KINDS = ("xlsx", "csv", "pdf")
+# "xlsx" is the OFFICIAL (sealed, values-only) Excel export — the audit twin of
+# the submission PDF; "xlsx_working" (2026-08-16, migration 202608160015) is the
+# ALM/Finance WORKING copy of an official BoG BSD form with the template's live
+# formulas — never a filing artifact, never signed. See bog_forms/render.py.
+ARTIFACT_KINDS = ("xlsx", "csv", "pdf", "xlsx_working")
 # "orass_api" is the production machine-to-machine channel (Vizor API Service
 # wire contract configured per bank once BoG/Regnology onboarding completes);
 # "orass_sandbox" remains the labeled simulator for pre-onboarding use.

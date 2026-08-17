@@ -1,0 +1,2 @@
+# gl_mapping_bsd7 template — one row per gl_account_code OR gl_prefix; bsd7_item from the vocabulary in docs/data_engine/datasets/gl_mapping_bsd7.md; sign 1|-1; balance_basis ytd|period
+gl_account_code,gl_prefix,bsd7_item,sign,balance_basis,gl_account_name,notes

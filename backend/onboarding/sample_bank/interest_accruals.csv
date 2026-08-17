@@ -1,0 +1,24 @@
+# Sample Bank Ltd (BK-0PMD7Z5M) onboarding dataset — accrued-interest sub-ledger as at 2026-06-30 (stocks in cedis; USD rows converted at 15.10). bsd2_row = row number of the 'Accrued interest' line on the official BSD2 sheet. Push with scripts/ingest_push.py --reference interest_accruals=<this file> --as-of 2026-06-30. Spec: docs/data_engine/datasets/interest_accruals.md
+as_of_date,bsd2_row,side,currency,accrued_interest_ghs,accrued_interest_native,gl_account_code,position_reference,counterparty_reference,notes
+2026-06-30,20,asset,GHS,0.00,,1404,,,"Bank of Ghana balances are unremunerated - nil accrual, reported explicitly as 0"
+2026-06-30,29,asset,GHS,1915000.00,,1404,,,interbank placements with domestic banks (GHS)
+2026-06-30,29,asset,USD,152500.00,10099.34,1404,,,"USD placements with domestic banks, cedi equivalent"
+2026-06-30,32,asset,GHS,212400.00,,1404,,,placements with savings & loans / finance houses
+2026-06-30,141,liability,USD,205800.00,13629.14,2201,,,non-resident bank short-term borrowings
+2026-06-30,145,liability,USD,1284000.00,85033.11,2201,,,"DFI term loan (non-resident), semi-annual coupon"
+2026-06-30,151,liability,USD,18600.00,1231.79,2201,,,non-resident demand deposits
+2026-06-30,156,liability,USD,24300.00,1609.27,2201,,,non-resident savings
+2026-06-30,161,liability,USD,236500.00,15662.25,2201,,,non-resident time deposits
+2026-06-30,166,liability,USD,0.00,,2201,,,no non-resident CDs outstanding
+2026-06-30,177,liability,GHS,3960000.00,,2201,,,"subordinated debt (Tier 2), semi-annual coupon"
+2026-06-30,195,liability,GHS,1478000.00,,2201,,,interbank borrowings (GHS)
+2026-06-30,195,liability,USD,168200.00,11139.07,2201,,,"interbank borrowings (USD), cedi equivalent"
+2026-06-30,204,liability,GHS,61500.00,,2201,,,demand deposits of financial institutions
+2026-06-30,211,liability,GHS,12800.00,,2201,,,savings of financial institutions
+2026-06-30,218,liability,GHS,2146000.00,,2201,,,time deposits of banks and NBFIs
+2026-06-30,225,liability,GHS,0.00,,2201,,,no CDs issued to financial institutions
+2026-06-30,234,liability,GHS,412000.00,,2201,,,interest-bearing current accounts (public and corporate)
+2026-06-30,242,liability,GHS,3075000.00,,2201,,,"savings deposits, monthly accrual"
+2026-06-30,250,liability,GHS,11240000.00,,2201,,,time deposits - retail and corporate (GHS)
+2026-06-30,250,liability,USD,384000.00,25430.46,2201,,,"time deposits - foreign currency, cedi equivalent"
+2026-06-30,258,liability,GHS,0.00,,2201,,,no certificates of deposit outstanding

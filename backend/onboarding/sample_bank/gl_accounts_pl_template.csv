@@ -1,0 +1,2 @@
+# gl_account entity template — one file per month-end (as_of = the trial-balance date); balances fiscal-year-to-date in cedis; see docs/API_INTEGRATION.md §3.1
+source_reference,account_code,name,account_class,currency,balance

@@ -38,6 +38,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from app.domain.ingestion.adapter import SourceAdapter, register_adapter
+from app.domain.ingestion.attributes import attributes_from_columns
 from app.domain.ingestion.constants import REFERENCE_DATASET_KINDS
 from app.domain.ingestion.contracts import (
     AdapterConfig,
@@ -320,10 +321,14 @@ class ApiPushAdapter(SourceAdapter):
                 payload = record.data.get(dict_field)
                 if dict_field in model.model_fields and isinstance(payload, dict):
                     values[dict_field] = payload
+            # attribute_columns from the mapping + flat ``attributes.<key>``
+            # fields (the CSV/push-client convention; JSON payloads normally
+            # send the ``attributes`` object above) — app.domain.ingestion.attributes.
             attribute_extras = {
-                field: _stringify(record.data[field])
-                for field in mapping.attribute_columns
-                if field in record.data and record.data[field] is not None
+                key: _stringify(value)
+                for key, value in attributes_from_columns(
+                    record.data, mapping.attribute_columns, is_null=_is_missing
+                ).items()
             }
             if attribute_extras:
                 values["attributes"] = {**values.get("attributes", {}), **attribute_extras}

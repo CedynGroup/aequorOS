@@ -25,7 +25,6 @@ from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
 from app.services.fact_derivation import DerivationError, DerivationResult, derive_facts
 from app.services.regulatory_capital import run_all_capital_scenarios
 from app.services.regulatory_liquidity import run_all_liquidity_scenarios
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import (
     EXPECTED_CAPITAL_TOTAL,
@@ -42,6 +41,7 @@ from tests.factories.canonical import (
     seed_directional_swap_positions,
     seed_hedge_and_swap_positions,
 )
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 EXPECTED_GROUPS = {
     "balance_sheet",
@@ -108,7 +108,16 @@ def test_derivation_creates_every_group_with_plausible_aggregates(  # noqa: PLR0
     derived_groups = {group.group for group in result.groups if group.status == "derived"}
     assert derived_groups >= EXPECTED_GROUPS
     skipped = {group.group: group for group in result.groups if group.status == "skipped"}
-    assert set(skipped) == {"fx_hedge", "irr_swap"}
+    # Groups the bare canonical fixture legitimately cannot feed (each is
+    # skipped with an explanatory note, never silently absent):
+    #   fx_hedge  — no FX hedge positions in the base fixture (overlaid only by
+    #               seed_hedge_and_swap_positions; see _prepare_hedged below);
+    #   irr_swap  — no interest-rate swap positions in the base fixture (same
+    #               overlay);
+    #   cashflow  — the trailing-90-day actual cash-flow summary reads canonical
+    #               ``historical_cashflows`` reference rows (ETL-only), which
+    #               the fixture never ingests.
+    assert set(skipped) == {"fx_hedge", "irr_swap", "cashflow"}
     assert all(group.note for group in skipped.values())
 
     facts = _facts(db_session, result)
@@ -170,10 +179,18 @@ def test_derivation_creates_every_group_with_plausible_aggregates(  # noqa: PLR0
     returns = grouped["fx_return_history"]["USD"].attributes["returns"]
     assert len(returns) == 149  # 150 spots -> 149 daily returns
 
+    # operational_income emits one trailing-12-month fact per (metric, year) for
+    # every metric ALL twelve months carry: the fixture's monthly rows hold net
+    # interest (2M) + fees (0.5M) only, so gross_income (30M) and
+    # net_interest_income (24M) appear for each of the three years, while
+    # net_income / operating_expenses / provisions are absent, not zero-filled.
     income = grouped["operational_income"]
-    assert len(income) == 3
-    assert all(fact.amount == Decimal("30000000") for fact in income.values())
+    assert len(income) == 6
     assert {fact.income_year for fact in income.values()} == {2024, 2025, 2026}
+    for year in (2024, 2025, 2026):
+        assert income[f"gross_income_{year}"].amount == Decimal("30000000")
+        assert income[f"net_interest_income_{year}"].amount == Decimal("24000000")
+    assert not {c for c in income if not c.startswith(("gross_income_", "net_interest_income_"))}
 
     capital = grouped["capital_component"]
     assert capital["regulatory_adj_goodwill"].is_deduction is True

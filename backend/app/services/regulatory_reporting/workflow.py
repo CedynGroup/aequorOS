@@ -100,7 +100,7 @@ ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     "superseded": frozenset(),
 }
 
-type ArtifactKind = Literal["xlsx", "csv", "pdf"]
+type ArtifactKind = Literal["xlsx", "csv", "pdf", "xlsx_working"]
 type Exporter = Callable[
     [Session, TenantContext, RegulatoryPackage, ArtifactKind], RegulatoryPackageArtifact
 ]
@@ -663,7 +663,10 @@ def _filing_set(
     filed: list[FiledArtifact] = [
         artifact
         for artifact in artifacts
-        if signed is None or artifact.kind != signed.version.kind
+        # the ALM/Finance working copy (live formulas) is an internal review
+        # artifact and is NEVER filed with the regulator
+        if artifact.kind != "xlsx_working"
+        and (signed is None or artifact.kind != signed.version.kind)
     ]
     detail: dict[str, Any] = {}
     if signed is not None:

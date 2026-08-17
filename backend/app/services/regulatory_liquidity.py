@@ -108,7 +108,9 @@ LIQUIDITY_SCENARIO_CODES = (
     "usd_funding_stress",
 )
 
-BSD3_FORM_CODE = "BSD-3"
+# LCR/NSFR is not one of the Guide's BSD forms (official BSD3 = Large
+# Exposures); the preview is labelled by its honest return code.
+BSD3_FORM_CODE = "LCR-NSFR"
 BSD3_FORM_TITLE = "Liquidity Returns (LCR & NSFR)"
 
 
