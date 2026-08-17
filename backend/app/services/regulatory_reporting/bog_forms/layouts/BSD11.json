@@ -1,0 +1,1388 @@
+{
+ "form": "BSD11",
+ "workbook": "FORM BSD11 REVISED.xls",
+ "sheets": [
+  {
+   "name": "BSD11-Sheet-1",
+   "max_row": 15,
+   "max_col": 6,
+   "column_widths": {
+    "A": 31.7,
+    "B": 13.41,
+    "C": 12.56,
+    "D": 12.42,
+    "E": 11.99,
+    "F": 13.56
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F1",
+     "kind": "label",
+     "value": "FORM BSD 11",
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "F2",
+     "kind": "label",
+     "value": "( Sheet 1 of  8 )",
+     "align": "general"
+    },
+    {
+     "ref": "A5",
+     "kind": "label",
+     "value": "              PARTICULARS OF ADVANCES, LOANS OR OTHER CREDIT FACILITIES SECURED AND",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A6",
+     "kind": "label",
+     "value": "                 UNSECURED EXTENDED TO DIRECTORS, OFFICERS AND EMPLOYEES ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A7",
+     "kind": "label",
+     "value": "                                  (SECTIONS  41, 43 & 44)  BANKING  ACT 2004 (ACT 673)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C9",
+     "kind": "label",
+     "value": "SUMMARY",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B11",
+     "kind": "label",
+     "value": "Previous   Balance",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C11",
+     "kind": "label",
+     "value": "Advances,    Credit      Granted",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D11",
+     "kind": "label",
+     "value": "Amounts    Repaid",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E11",
+     "kind": "label",
+     "value": "Amounts    Written        Off",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "F11",
+     "kind": "label",
+     "value": "Current       Balance",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "Granted to firms in which  directors are interested",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "Granted  to  Directors",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "Granted  to  Officers",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "Granted to other Employees",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "BSD11-Sheet-2",
+   "max_row": 13,
+   "max_col": 6,
+   "column_widths": {
+    "A": 5.99,
+    "B": 39.7,
+    "C": 23.14,
+    "D": 19.85,
+    "E": 21.7,
+    "F": 19.99
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F1",
+     "kind": "label",
+     "value": "FORM BSD11",
+     "align": "center"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "F2",
+     "kind": "label",
+     "value": "( Sheet  2 of  8 )",
+     "align": "center"
+    },
+    {
+     "ref": "B4",
+     "kind": "label",
+     "value": "PARTICULARS  OF  DIRECTORS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": "SECTION  53,  BANKING ACT 2004 (ACT 673)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "NAME & ADDRESS",
+     "align": "center"
+    },
+    {
+     "ref": "C7",
+     "kind": "label",
+     "value": "DATE                        APPOINTED",
+     "align": "center"
+    },
+    {
+     "ref": "D7",
+     "kind": "label",
+     "value": "FULL  OR                   PART TIME",
+     "align": "center"
+    },
+    {
+     "ref": "E7",
+     "kind": "label",
+     "value": "NUMBER   AND        PERCENTAGE OF       SHARES HELD",
+     "align": "center"
+    },
+    {
+     "ref": "F7",
+     "kind": "label",
+     "value": "PARTICULARS OF    INTERESTS HELD IN    OTHER COMPANIES",
+     "align": "center"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "1.",
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "2.",
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "3.",
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "4.",
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "5.",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "6.",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "BSD11-Sheet-3",
+   "max_row": 15,
+   "max_col": 8,
+   "column_widths": {
+    "A": 3.85,
+    "B": 27.99,
+    "C": 17.42,
+    "D": 16.99,
+    "E": 17.42,
+    "F": 16.99,
+    "G": 17.56,
+    "H": 17.99
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H1",
+     "kind": "label",
+     "value": "FORM BSD11",
+     "align": "center"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "H2",
+     "kind": "label",
+     "value": "( Sheet  3 of  8 )",
+     "align": "center"
+    },
+    {
+     "ref": "B4",
+     "kind": "label",
+     "value": "FACILITY TO FIRMS IN WHICH REPORTING INSTITUTIONS DIRECTORS ARE INTERESTED",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": "SECTION  41, 43  BANKING ACT 2004 (ACT 673)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C8",
+     "kind": "label",
+     "value": "           AMOUNT     OF    FACILITY",
+     "bold": true,
+     "align": "left"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "1.",
+     "align": "general"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "PARTICULARS",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C9",
+     "kind": "label",
+     "value": "SECURED",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D9",
+     "kind": "label",
+     "value": "UNSECURED",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E9",
+     "kind": "label",
+     "value": "NATURE OF              SECURITY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "F9",
+     "kind": "label",
+     "value": "TYPE OF                 FACILITY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "G9",
+     "kind": "label",
+     "value": "PRESENT            BALANCE",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "H9",
+     "kind": "label",
+     "value": "DATE                       GRANTED",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "2.",
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "3.",
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "4.",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "5.",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "6.",
+     "align": "general"
+    },
+    {
+     "ref": "B15",
+     "kind": "label",
+     "value": "TOTAL",
+     "align": "center"
+    }
+   ]
+  },
+  {
+   "name": "BSD11-Sheet-4",
+   "max_row": 17,
+   "max_col": 10,
+   "column_widths": {
+    "A": 3.85,
+    "B": 26.7,
+    "C": 16.13,
+    "D": 16.28,
+    "E": 14.85,
+    "F": 15.28,
+    "G": 14.28,
+    "H": 13.7,
+    "I": 14.85,
+    "J": 14.14
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J1",
+     "kind": "label",
+     "value": "FORM BSD11",
+     "align": "center"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "J2",
+     "kind": "label",
+     "value": "( Sheet  4 of  8 )",
+     "align": "center"
+    },
+    {
+     "ref": "B3",
+     "kind": "label",
+     "value": "Grades which can be grouped together such that no more than five categories in each sub-head ( officials and other employees) need be shown.",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": "SCHEDULE OF OVERDRAFTS, LOANS AND OTHER CREDIT FACILITIES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B6",
+     "kind": "label",
+     "value": "SECURED AND UNSECURED EXTENDED TO DIRECTORS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "SECTION  43 BANKING ACT 2004 (ACT 673)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C10",
+     "kind": "label",
+     "value": "                        AMOUNT     OF    FACILITY",
+     "bold": true,
+     "align": "left"
+    },
+    {
+     "ref": "B11",
+     "kind": "label",
+     "value": "NAME AND PARTICULARS       OF THE DIRECTORS",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C11",
+     "kind": "label",
+     "value": "SECURED",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D11",
+     "kind": "label",
+     "value": "UNSECURED",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E11",
+     "kind": "label",
+     "value": "GUARANTEED",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "F11",
+     "kind": "label",
+     "value": "NATURE OF              SECURITY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "G11",
+     "kind": "label",
+     "value": "RATE  OF                 INTEREST",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "H11",
+     "kind": "label",
+     "value": "TYPE OF                 ADVANCE          OR CREDIT        FACILITY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "I11",
+     "kind": "label",
+     "value": "DATE                  APPROVED BY       AUTHORISED         BODY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "J11",
+     "kind": "label",
+     "value": "PRESENT            BALANCE",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "1.",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "2.",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "3.",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "4.",
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "label",
+     "value": "5.",
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "label",
+     "value": "6.",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "BSD11-Sheet-5",
+   "max_row": 37,
+   "max_col": 12,
+   "column_widths": {
+    "A": 3.85,
+    "B": 31.28,
+    "C": 6.13,
+    "D": 17.7,
+    "E": 5.85,
+    "F": 17.42,
+    "G": 5.85,
+    "H": 16.99,
+    "I": 5.85,
+    "J": 17.14,
+    "K": 5.99,
+    "L": 16.7
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "L1",
+     "kind": "label",
+     "value": "FORM BSD 11",
+     "align": "general"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "L2",
+     "kind": "label",
+     "value": "(Sheet 5 of 8)",
+     "align": "general"
+    },
+    {
+     "ref": "C3",
+     "kind": "label",
+     "value": "SCHEDULE OF OVERDRAFTS, LOANS AND OTHER CREDIT FACILITIES EXTENDED TO OFFICIALS AND",
+     "align": "general"
+    },
+    {
+     "ref": "C4",
+     "kind": "label",
+     "value": "OTHER EMPLOYEES OF THE  BANK.   SECTION 44(1), BANKING ACT 2004 (ACT 673)",
+     "align": "general"
+    },
+    {
+     "ref": "I6",
+     "kind": "label",
+     "value": "UNSECURED ADVANCES",
+     "align": "general"
+    },
+    {
+     "ref": "C7",
+     "kind": "label",
+     "value": "    HOUSING   LOANS",
+     "align": "general"
+    },
+    {
+     "ref": "E7",
+     "kind": "label",
+     "value": "   VEHICLE    LOANS",
+     "align": "general"
+    },
+    {
+     "ref": "G7",
+     "kind": "label",
+     "value": "     OTHER  SECURED",
+     "align": "general"
+    },
+    {
+     "ref": "I7",
+     "kind": "label",
+     "value": "AND CREDIT FACILITIES",
+     "align": "general"
+    },
+    {
+     "ref": "K7",
+     "kind": "label",
+     "value": "        TOTAL",
+     "align": "general"
+    },
+    {
+     "ref": "C8",
+     "kind": "label",
+     "value": "NO.",
+     "align": "center"
+    },
+    {
+     "ref": "D8",
+     "kind": "label",
+     "value": "AMOUNT",
+     "align": "center"
+    },
+    {
+     "ref": "E8",
+     "kind": "label",
+     "value": "NO.",
+     "align": "center"
+    },
+    {
+     "ref": "F8",
+     "kind": "label",
+     "value": "AMOUNT",
+     "align": "center"
+    },
+    {
+     "ref": "G8",
+     "kind": "label",
+     "value": "NO.",
+     "align": "center"
+    },
+    {
+     "ref": "H8",
+     "kind": "label",
+     "value": "AMOUNT",
+     "align": "center"
+    },
+    {
+     "ref": "I8",
+     "kind": "label",
+     "value": "NO.",
+     "align": "center"
+    },
+    {
+     "ref": "J8",
+     "kind": "label",
+     "value": "AMOUNT",
+     "align": "center"
+    },
+    {
+     "ref": "K8",
+     "kind": "label",
+     "value": "NO.",
+     "align": "center"
+    },
+    {
+     "ref": "L8",
+     "kind": "label",
+     "value": "AMOUNT",
+     "align": "center"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "A.",
+     "align": "general"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "To Officials",
+     "align": "general"
+    },
+    {
+     "ref": "B11",
+     "kind": "label",
+     "value": "Category 1",
+     "align": "general"
+    },
+    {
+     "ref": "B12",
+     "kind": "label",
+     "value": "Category 2",
+     "align": "general"
+    },
+    {
+     "ref": "B13",
+     "kind": "label",
+     "value": "Category 3 etc.",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "B.",
+     "align": "general"
+    },
+    {
+     "ref": "B15",
+     "kind": "label",
+     "value": "To Other Employees",
+     "align": "general"
+    },
+    {
+     "ref": "B17",
+     "kind": "label",
+     "value": "Category 1",
+     "align": "general"
+    },
+    {
+     "ref": "B18",
+     "kind": "label",
+     "value": "Category 2",
+     "align": "general"
+    },
+    {
+     "ref": "B19",
+     "kind": "label",
+     "value": "Category 3 etc.",
+     "align": "general"
+    },
+    {
+     "ref": "A22",
+     "kind": "label",
+     "value": "C.",
+     "align": "general"
+    },
+    {
+     "ref": "B22",
+     "kind": "label",
+     "value": "Total (for officials & other employees)",
+     "align": "general"
+    },
+    {
+     "ref": "A26",
+     "kind": "label",
+     "value": "I  certify that the information furnished above is complete and correct and that no official or other employee of the bank has",
+     "align": "general"
+    },
+    {
+     "ref": "A27",
+     "kind": "label",
+     "value": "been granted unsecured advances / unsecured credit facilities which exceed in aggregate his / her two years' salary.",
+     "align": "general"
+    },
+    {
+     "ref": "A32",
+     "kind": "label",
+     "value": "(                                            )",
+     "align": "general"
+    },
+    {
+     "ref": "A33",
+     "kind": "label",
+     "value": "CHIEF  EXECUTIVE  OFFICER",
+     "align": "general"
+    },
+    {
+     "ref": "A36",
+     "kind": "label",
+     "value": "Note:      Categorisation of officials and other employees may be made by the bank on the basis of their existing grades which",
+     "align": "general"
+    },
+    {
+     "ref": "A37",
+     "kind": "label",
+     "value": "              can be grouped together such that no more than five categories in each sub-head (officials & other employees need be shown).",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "BSD11-Sheet-6",
+   "max_row": 17,
+   "max_col": 9,
+   "column_widths": {
+    "A": 3.85,
+    "B": 26.7,
+    "C": 14.85,
+    "D": 15.13,
+    "E": 13.99,
+    "F": 15.28,
+    "G": 14.28,
+    "H": 13.7,
+    "I": 14.85
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I1",
+     "kind": "label",
+     "value": "FORM BSD11",
+     "align": "center"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "I2",
+     "kind": "label",
+     "value": "( Sheet  6 of  8 )",
+     "align": "center"
+    },
+    {
+     "ref": "B3",
+     "kind": "label",
+     "value": "ADVANCES, CREDITS AND GUARANTEES AS PERCENTAGE",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B4",
+     "kind": "label",
+     "value": "OF NET WORTH  ( SECTION  47,  BANKING ACT 2004 )    ACT 673",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C6",
+     "kind": "label",
+     "value": "                            EXPOSURES",
+     "bold": true,
+     "align": "left"
+    },
+    {
+     "ref": "G6",
+     "kind": "label",
+     "value": "             PERCENTAGE  TO  NET  WORTH",
+     "bold": true,
+     "align": "left"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "NAME(S) OF CUSTOMER(S)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C7",
+     "kind": "label",
+     "value": "ON  BALANCE    SHEET",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D7",
+     "kind": "label",
+     "value": "OFF BALANCE    SHEET",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E7",
+     "kind": "label",
+     "value": "TOTAL",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "F7",
+     "kind": "label",
+     "value": "TOTAL         SECURITY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "G7",
+     "kind": "label",
+     "value": "SECURED",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "H7",
+     "kind": "label",
+     "value": "UNSECURED",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "I7",
+     "kind": "label",
+     "value": "TOTAL",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "1.",
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "2.",
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "3.",
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "4.",
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "5.",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "6.",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "7.",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "8.",
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "label",
+     "value": "9.",
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "label",
+     "value": "10.",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "BSD11-Sheet-7",
+   "max_row": 16,
+   "max_col": 10,
+   "column_widths": {
+    "A": 3.85,
+    "B": 26.7,
+    "C": 16.13,
+    "D": 16.28,
+    "E": 14.85,
+    "F": 15.28,
+    "G": 14.28,
+    "H": 13.7,
+    "I": 14.85,
+    "J": 14.14
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J1",
+     "kind": "label",
+     "value": "FORM BSD11",
+     "align": "center"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "J2",
+     "kind": "label",
+     "value": "( Sheet  7 of  8 )",
+     "align": "center"
+    },
+    {
+     "ref": "B4",
+     "kind": "label",
+     "value": "IMMOVABLE PROPERTY ACCEPTED IN SATISFACTION",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": "OF DEBT ( SECTION  12 (5),  BANKING ACT 2004)   ACT 673",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B8",
+     "kind": "label",
+     "value": "NAME OF CUSTOMER",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C8",
+     "kind": "label",
+     "value": "DESCRIPTION   OF PROPERTY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D8",
+     "kind": "label",
+     "value": "LEASEHOLD /   FREEHOLD",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E8",
+     "kind": "label",
+     "value": "DATE  OF   ACQUISITION",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "F8",
+     "kind": "label",
+     "value": "ADVANCE   OUTSTANDING",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "G8",
+     "kind": "label",
+     "value": "VALUE OF   PROPERTY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "H8",
+     "kind": "label",
+     "value": "ESTIMATED   VALUE ON   FORCED SALE",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "I8",
+     "kind": "label",
+     "value": "PRIOR          LIEN",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "J8",
+     "kind": "label",
+     "value": "ANNUAL  NET     INCOME",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "1.",
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "2.",
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "3.",
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "4.",
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "5.",
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "6.",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "7.",
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "label",
+     "value": "8.",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "BSD11- Sheet 8",
+   "max_row": 18,
+   "max_col": 13,
+   "column_widths": {
+    "A": 4.56,
+    "B": 23.56,
+    "C": 19.85,
+    "D": 11.56,
+    "E": 9.85,
+    "F": 10.56,
+    "G": 8.41,
+    "H": 12.14,
+    "I": 13.56
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B4",
+     "kind": "label",
+     "value": "EXPOSURE TO RELATIVES OF DIRECTORS AND SIGNIFICANT SHAREHOLDERS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": "SECTIONS  43(1)(d), 43(6). BANKING ACT 2004 (ACT 673)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "NAME OF CUSTOMER",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C7",
+     "kind": "label",
+     "value": "RELATIONSHIP TO DIRECTOR/SIGNIFICANT SHAREHOLDER",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "label",
+     "value": "AMOUNT GRANTED",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E7",
+     "kind": "label",
+     "value": "TYPE OF SECURITY",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F7",
+     "kind": "label",
+     "value": "VALUE OF SECURITY",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G7",
+     "kind": "label",
+     "value": "EXPIRY DATE",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H7",
+     "kind": "label",
+     "value": "OUTSTANDING BALANCE",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I7",
+     "kind": "label",
+     "value": "CLASSIFICATION",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "input",
+     "value": 1,
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "input",
+     "value": 2,
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "input",
+     "value": 3,
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "input",
+     "value": 4,
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "input",
+     "value": 5,
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "input",
+     "value": 6,
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "input",
+     "value": 7,
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "input",
+     "value": 8,
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "input",
+     "value": 9,
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "input",
+     "value": 10,
+     "align": "general"
+    }
+   ]
+  }
+ ]
+}

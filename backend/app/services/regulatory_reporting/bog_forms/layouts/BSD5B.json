@@ -1,0 +1,1151 @@
+{
+ "form": "BSD5B",
+ "workbook": "FORM BSD5B REVISED.xls",
+ "sheets": [
+  {
+   "name": "CAR FORMAT-GROUP",
+   "max_row": 76,
+   "max_col": 6,
+   "column_widths": {
+    "B": 5.13,
+    "C": 51.42,
+    "D": 13.14,
+    "E": 13.7,
+    "F": 12.99
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF BANK: …………………………………………………",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "GROUP CAPITAL ADEQUACY RATIOS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A3",
+     "kind": "label",
+     "value": "DATA AS OF END………………….…...…. 20……",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E3",
+     "kind": "label",
+     "value": "FORM BSD5B",
+     "align": "general"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": " Capital Adequacy Computation",
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "No",
+     "align": "center"
+    },
+    {
+     "ref": "C7",
+     "kind": "label",
+     "value": "Item",
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "label",
+     "value": "Amount (¢'Million)",
+     "align": "general"
+    },
+    {
+     "ref": "B8",
+     "kind": "input",
+     "value": 1,
+     "align": "center"
+    },
+    {
+     "ref": "C8",
+     "kind": "label",
+     "value": "Paid-up  Ordinary Share Capital",
+     "align": "general"
+    },
+    {
+     "ref": "B9",
+     "kind": "input",
+     "value": 2,
+     "align": "center"
+    },
+    {
+     "ref": "C9",
+     "kind": "label",
+     "value": "Disclosed Reserves",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B10",
+     "kind": "input",
+     "value": 3,
+     "align": "center"
+    },
+    {
+     "ref": "C10",
+     "kind": "label",
+     "value": "Minority Interests ",
+     "align": "general"
+    },
+    {
+     "ref": "D10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B11",
+     "kind": "input",
+     "value": 4,
+     "align": "center"
+    },
+    {
+     "ref": "C11",
+     "kind": "label",
+     "value": "Paid-up Permanent Non-Cumulative Preference Shares",
+     "align": "general"
+    },
+    {
+     "ref": "D11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B12",
+     "kind": "input",
+     "value": 5,
+     "align": "center"
+    },
+    {
+     "ref": "C12",
+     "kind": "label",
+     "value": "Tier 1 Capital (1+2+3+4)",
+     "align": "general"
+    },
+    {
+     "ref": "D12",
+     "kind": "formula",
+     "formula": "=SUM(D8:D11)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "center"
+    },
+    {
+     "ref": "C13",
+     "kind": "label",
+     "value": "Less:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B14",
+     "kind": "input",
+     "value": 6,
+     "align": "center"
+    },
+    {
+     "ref": "C14",
+     "kind": "label",
+     "value": "Goodwill/Intangibles",
+     "align": "general"
+    },
+    {
+     "ref": "D14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B15",
+     "kind": "input",
+     "value": 7,
+     "align": "center"
+    },
+    {
+     "ref": "C15",
+     "kind": "label",
+     "value": "Losses not Provided For",
+     "align": "general"
+    },
+    {
+     "ref": "D15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B16",
+     "kind": "input",
+     "value": 8,
+     "align": "center"
+    },
+    {
+     "ref": "C16",
+     "kind": "label",
+     "value": "Investments in  Subsidiaries",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B17",
+     "kind": "input",
+     "value": 9,
+     "align": "center"
+    },
+    {
+     "ref": "C17",
+     "kind": "label",
+     "value": "Invest in the Capital of Other Banks & Fin. Institutions ",
+     "align": "general"
+    },
+    {
+     "ref": "D17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B18",
+     "kind": "input",
+     "value": 10,
+     "align": "center"
+    },
+    {
+     "ref": "C18",
+     "kind": "label",
+     "value": "Capitalised Revaluation Reserves",
+     "align": "general"
+    },
+    {
+     "ref": "D18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B19",
+     "kind": "input",
+     "value": 11,
+     "align": "center"
+    },
+    {
+     "ref": "C19",
+     "kind": "label",
+     "value": "Connected Lending of Long Term Nature",
+     "align": "general"
+    },
+    {
+     "ref": "D19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B20",
+     "kind": "input",
+     "value": 12,
+     "align": "center"
+    },
+    {
+     "ref": "C20",
+     "kind": "label",
+     "value": "Net Tier 1 Capital (5-6-7-8-9-10-11)",
+     "align": "general"
+    },
+    {
+     "ref": "D20",
+     "kind": "formula",
+     "formula": "=D12-SUM(D14:D19)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "B21",
+     "kind": "input",
+     "value": 13,
+     "align": "center"
+    },
+    {
+     "ref": "C21",
+     "kind": "label",
+     "value": "Capitalised Revaluation Reserves",
+     "align": "general"
+    },
+    {
+     "ref": "D21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B22",
+     "kind": "input",
+     "value": 14,
+     "align": "center"
+    },
+    {
+     "ref": "C22",
+     "kind": "label",
+     "value": "Revaluation Reserves",
+     "align": "general"
+    },
+    {
+     "ref": "D22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B23",
+     "kind": "input",
+     "value": 15,
+     "align": "center"
+    },
+    {
+     "ref": "C23",
+     "kind": "label",
+     "value": "Latent Revaluation Reserves",
+     "align": "general"
+    },
+    {
+     "ref": "D23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B24",
+     "kind": "input",
+     "value": 16,
+     "align": "center"
+    },
+    {
+     "ref": "C24",
+     "kind": "label",
+     "value": "Undisclosed Reserves",
+     "align": "general"
+    },
+    {
+     "ref": "B25",
+     "kind": "input",
+     "value": 17,
+     "align": "center"
+    },
+    {
+     "ref": "C25",
+     "kind": "label",
+     "value": "Cumulative Preference Shares",
+     "align": "general"
+    },
+    {
+     "ref": "D25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B26",
+     "kind": "input",
+     "value": 18,
+     "align": "center"
+    },
+    {
+     "ref": "C26",
+     "kind": "label",
+     "value": "Minority Interests in Tier 2 Prefered Shares",
+     "align": "general"
+    },
+    {
+     "ref": "D26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B27",
+     "kind": "input",
+     "value": 19,
+     "align": "center"
+    },
+    {
+     "ref": "C27",
+     "kind": "label",
+     "value": "Hybrid Capital",
+     "align": "general"
+    },
+    {
+     "ref": "D27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B28",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "C28",
+     "kind": "label",
+     "value": "Subordinated Term Debt (Limited to 50% of 5)",
+     "align": "general"
+    },
+    {
+     "ref": "D28",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B29",
+     "kind": "input",
+     "value": 21,
+     "align": "center"
+    },
+    {
+     "ref": "C29",
+     "kind": "label",
+     "value": "Tier 2 Capital (13+14+15+16+17+18+19)(Limited to 100% of 5)",
+     "align": "general"
+    },
+    {
+     "ref": "D29",
+     "kind": "formula",
+     "formula": "=SUM(D21:D28)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "B30",
+     "kind": "input",
+     "value": 22,
+     "align": "center"
+    },
+    {
+     "ref": "C30",
+     "kind": "label",
+     "value": "ADJUSTED CAPITAL BASE (12+20)",
+     "align": "general"
+    },
+    {
+     "ref": "D30",
+     "kind": "formula",
+     "formula": "=D20+D29",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "B32",
+     "kind": "input",
+     "value": 23,
+     "align": "center"
+    },
+    {
+     "ref": "C32",
+     "kind": "label",
+     "value": "TOTAL ASSETS (less Contra Items)",
+     "align": "general"
+    },
+    {
+     "ref": "D32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C33",
+     "kind": "label",
+     "value": "Less:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B34",
+     "kind": "input",
+     "value": 24,
+     "align": "center"
+    },
+    {
+     "ref": "C34",
+     "kind": "label",
+     "value": "Cash on Hand (Cedis)",
+     "align": "general"
+    },
+    {
+     "ref": "D34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B35",
+     "kind": "input",
+     "value": 25,
+     "align": "center"
+    },
+    {
+     "ref": "C35",
+     "kind": "label",
+     "value": "Cash on Hand (Forex) ",
+     "align": "general"
+    },
+    {
+     "ref": "D35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B36",
+     "kind": "input",
+     "value": 26,
+     "align": "center"
+    },
+    {
+     "ref": "C36",
+     "kind": "label",
+     "value": "Claims on Bank of Ghana:",
+     "align": "general"
+    },
+    {
+     "ref": "C37",
+     "kind": "label",
+     "value": "i.   Cedi Clearing Account Balance",
+     "align": "general"
+    },
+    {
+     "ref": "D37",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C38",
+     "kind": "label",
+     "value": "ii.   Forex Account Balance ",
+     "align": "general"
+    },
+    {
+     "ref": "D38",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C39",
+     "kind": "label",
+     "value": "iii.  Funds under SWAPS",
+     "align": "general"
+    },
+    {
+     "ref": "D39",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C40",
+     "kind": "label",
+     "value": "iv.  Bills and Bonds",
+     "align": "general"
+    },
+    {
+     "ref": "D40",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C41",
+     "kind": "label",
+     "value": "v.  Special Deposits",
+     "align": "general"
+    },
+    {
+     "ref": "B42",
+     "kind": "input",
+     "value": 27,
+     "align": "center"
+    },
+    {
+     "ref": "C42",
+     "kind": "label",
+     "value": "Claims on Government:",
+     "align": "general"
+    },
+    {
+     "ref": "C43",
+     "kind": "label",
+     "value": "i)  Treasury Securities (Bills and Bonds)",
+     "align": "general"
+    },
+    {
+     "ref": "D43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C44",
+     "kind": "label",
+     "value": "ii)  Stocks",
+     "align": "general"
+    },
+    {
+     "ref": "D44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B45",
+     "kind": "input",
+     "value": 28,
+     "align": "center"
+    },
+    {
+     "ref": "C45",
+     "kind": "label",
+     "value": "80% of Cheques drawn on other banks",
+     "align": "general"
+    },
+    {
+     "ref": "D45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B46",
+     "kind": "input",
+     "value": 29,
+     "align": "center"
+    },
+    {
+     "ref": "C46",
+     "kind": "label",
+     "value": "Goodwill / Intangibles",
+     "align": "general"
+    },
+    {
+     "ref": "D46",
+     "kind": "formula",
+     "formula": "=D14",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "B47",
+     "kind": "input",
+     "value": 30,
+     "align": "center"
+    },
+    {
+     "ref": "C47",
+     "kind": "label",
+     "value": "Investments in Subsidiaries",
+     "align": "general"
+    },
+    {
+     "ref": "D47",
+     "kind": "formula",
+     "formula": "=D16",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "B48",
+     "kind": "input",
+     "value": 31,
+     "align": "center"
+    },
+    {
+     "ref": "C48",
+     "kind": "label",
+     "value": "Invest in the Capital of Other Banks & Fin. Institutions ",
+     "align": "general"
+    },
+    {
+     "ref": "D48",
+     "kind": "formula",
+     "formula": "=D17",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "B49",
+     "kind": "input",
+     "value": 32,
+     "align": "center"
+    },
+    {
+     "ref": "C49",
+     "kind": "label",
+     "value": "Connected Lending of Long Term Nature",
+     "align": "general"
+    },
+    {
+     "ref": "D49",
+     "kind": "formula",
+     "formula": "=D19",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "B50",
+     "kind": "input",
+     "value": 33,
+     "align": "center"
+    },
+    {
+     "ref": "C50",
+     "kind": "label",
+     "value": "80% of claims on Discount Houses (Cedis / Forex)",
+     "align": "general"
+    },
+    {
+     "ref": "D50",
+     "kind": "formula",
+     "formula": "=D20",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "B51",
+     "kind": "input",
+     "value": 34,
+     "align": "center"
+    },
+    {
+     "ref": "C51",
+     "kind": "label",
+     "value": "80% of claims on Other Banks (Cedis / Forex)",
+     "align": "general"
+    },
+    {
+     "ref": "D51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B52",
+     "kind": "input",
+     "value": 35,
+     "align": "center"
+    },
+    {
+     "ref": "C52",
+     "kind": "label",
+     "value": "50% of Residential Mortgage Loans ",
+     "align": "general"
+    },
+    {
+     "ref": "D52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B53",
+     "kind": "input",
+     "value": 36,
+     "align": "center"
+    },
+    {
+     "ref": "C53",
+     "kind": "label",
+     "value": "50% of Export Financing Loans ",
+     "align": "general"
+    },
+    {
+     "ref": "D53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B54",
+     "kind": "input",
+     "value": 37,
+     "align": "center"
+    },
+    {
+     "ref": "C54",
+     "kind": "label",
+     "value": "80% of loans guaranteed by multilateral banks",
+     "align": "general"
+    },
+    {
+     "ref": "D54",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B55",
+     "kind": "input",
+     "value": 38,
+     "align": "center"
+    },
+    {
+     "ref": "C55",
+     "kind": "label",
+     "value": "ADJUSTED TOTAL ASSETS (17-18-19-,……..,-31)",
+     "align": "general"
+    },
+    {
+     "ref": "D55",
+     "kind": "formula",
+     "formula": "=D32-SUM(D34:D54)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "C56",
+     "kind": "label",
+     "value": "Add:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C57",
+     "kind": "label",
+     "value": "Off-Bal. Sheet Items (Net of cash margins & provision)",
+     "align": "general"
+    },
+    {
+     "ref": "B58",
+     "kind": "input",
+     "value": 39,
+     "align": "center"
+    },
+    {
+     "ref": "C58",
+     "kind": "label",
+     "value": "Commercial Letters of Credit Outstanding",
+     "align": "general"
+    },
+    {
+     "ref": "D58",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B59",
+     "kind": "input",
+     "value": 40,
+     "align": "center"
+    },
+    {
+     "ref": "C59",
+     "kind": "label",
+     "value": "Guarantees / Indemnities",
+     "align": "general"
+    },
+    {
+     "ref": "D59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B60",
+     "kind": "input",
+     "value": 41,
+     "align": "center"
+    },
+    {
+     "ref": "C60",
+     "kind": "label",
+     "value": "Acceptances",
+     "align": "general"
+    },
+    {
+     "ref": "D60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B61",
+     "kind": "input",
+     "value": 42,
+     "align": "center"
+    },
+    {
+     "ref": "C61",
+     "kind": "label",
+     "value": "Endorsements",
+     "align": "general"
+    },
+    {
+     "ref": "D61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B62",
+     "kind": "input",
+     "value": 43,
+     "align": "center"
+    },
+    {
+     "ref": "C62",
+     "kind": "label",
+     "value": "Revolving Underwriting Facilities",
+     "align": "general"
+    },
+    {
+     "ref": "D62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B63",
+     "kind": "input",
+     "value": 44,
+     "align": "center"
+    },
+    {
+     "ref": "C63",
+     "kind": "label",
+     "value": "Note Issuance Facilities",
+     "align": "general"
+    },
+    {
+     "ref": "D63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B64",
+     "kind": "input",
+     "value": 45,
+     "align": "center"
+    },
+    {
+     "ref": "C64",
+     "kind": "label",
+     "value": "Standby Letters of Credit to Other Banks",
+     "align": "general"
+    },
+    {
+     "ref": "D64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B65",
+     "kind": "input",
+     "value": 46,
+     "align": "center"
+    },
+    {
+     "ref": "C65",
+     "kind": "label",
+     "value": "TOTAL OFF-BAL SHEET ITEMS (38+39+40+....+45)",
+     "align": "general"
+    },
+    {
+     "ref": "D65",
+     "kind": "formula",
+     "formula": "=SUM(D58:D64)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "C66",
+     "kind": "label",
+     "value": "Less:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B67",
+     "kind": "input",
+     "value": 47,
+     "align": "center"
+    },
+    {
+     "ref": "C67",
+     "kind": "label",
+     "value": "50% of class 1 risk weighted off-balance sheet items",
+     "align": "general"
+    },
+    {
+     "ref": "D67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B68",
+     "kind": "input",
+     "value": 48,
+     "align": "center"
+    },
+    {
+     "ref": "C68",
+     "kind": "label",
+     "value": "80% of class 2 risk weighted off-balance sheet items",
+     "align": "general"
+    },
+    {
+     "ref": "D68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "B69",
+     "kind": "input",
+     "value": 49,
+     "align": "center"
+    },
+    {
+     "ref": "C69",
+     "kind": "label",
+     "value": "Net Contingent Liabs.  ()",
+     "align": "general"
+    },
+    {
+     "ref": "C70",
+     "kind": "label",
+     "value": "Add:  ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B71",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "C71",
+     "kind": "label",
+     "value": "50% of NOP",
+     "align": "general"
+    },
+    {
+     "ref": "B72",
+     "kind": "input",
+     "value": 51,
+     "align": "center"
+    },
+    {
+     "ref": "C72",
+     "kind": "label",
+     "value": "100% of 3yrs Average Annual Gross Income",
+     "align": "general"
+    },
+    {
+     "ref": "B73",
+     "kind": "input",
+     "value": 52,
+     "align": "center"
+    },
+    {
+     "ref": "C73",
+     "kind": "label",
+     "value": "ADJUSTED ASSET BASE (32+40-41-42)",
+     "align": "general"
+    },
+    {
+     "ref": "D73",
+     "kind": "formula",
+     "formula": "=D55+D65-D67-D68",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "B74",
+     "kind": "input",
+     "value": 53,
+     "align": "center"
+    },
+    {
+     "ref": "C74",
+     "kind": "label",
+     "value": "Adjusted Capital Base as percentage of Adjusted Asset Base: (16/43 X 100)",
+     "align": "general"
+    },
+    {
+     "ref": "D74",
+     "kind": "formula",
+     "formula": "=D30/D73%",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "B75",
+     "kind": "input",
+     "value": 54,
+     "align": "center"
+    },
+    {
+     "ref": "C75",
+     "kind": "label",
+     "value": "CAPITAL SURPLUS/DEFICIT {16 – (10% of 43)} ",
+     "align": "general"
+    },
+    {
+     "ref": "D75",
+     "kind": "formula",
+     "formula": "=D30-(D73*10%)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "Sheet2",
+   "max_row": 1,
+   "max_col": 1,
+   "column_widths": {},
+   "merges": [],
+   "cells": []
+  }
+ ]
+}

@@ -81,3 +81,11 @@ class User(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     )
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # SSO access-request outcome. A rejected JIT stub is KEPT (deactivated) with
+    # this stamp instead of being deleted: users are never physically deleted —
+    # signer identities reference them and the append-only privilege tiering
+    # (202607250027) makes a DELETE fail on the primary. A later sign-in by the
+    # same email clears the stamp (a fresh request) — migration 202608160016.
+    access_rejected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

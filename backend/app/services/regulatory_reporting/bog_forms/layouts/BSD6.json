@@ -1,0 +1,9763 @@
+{
+ "form": "BSD6",
+ "workbook": "FORM BSD6 REVISED.xls",
+ "sheets": [
+  {
+   "name": "BSD6A",
+   "max_row": 82,
+   "max_col": 254,
+   "column_widths": {
+    "A": 60.28,
+    "B": 13.56,
+    "C": 13.7,
+    "D": 12.42,
+    "E": 12.99,
+    "G": 12.7,
+    "H": 13.28,
+    "I": 12.28,
+    "J": 12.85,
+    "K": 13.14
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "DATA AS OF END  ………………………………… 200……..",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A3",
+     "kind": "label",
+     "value": "(¢'Million)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C3",
+     "kind": "label",
+     "value": "       MATURITY ANALYSIS OF ASSETS AND LIABILITIES IN CEDIS AS AT - ",
+     "align": "left"
+    },
+    {
+     "ref": "I3",
+     "kind": "label",
+     "value": "DD-MMM-YYYY",
+     "align": "center"
+    },
+    {
+     "ref": "A4",
+     "kind": "label",
+     "value": "BALANCE SHEET  -  BSD6A",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A5",
+     "kind": "label",
+     "value": "ASSETS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": "FROM BSD2",
+     "align": "general"
+    },
+    {
+     "ref": "C5",
+     "kind": "label",
+     "value": "Total",
+     "align": "general"
+    },
+    {
+     "ref": "D5",
+     "kind": "label",
+     "value": "Overdue",
+     "align": "general"
+    },
+    {
+     "ref": "E5",
+     "kind": "label",
+     "value": "Less Than 1month",
+     "align": "general"
+    },
+    {
+     "ref": "F5",
+     "kind": "label",
+     "value": "1 month less than 3 months",
+     "align": "general"
+    },
+    {
+     "ref": "G5",
+     "kind": "label",
+     "value": "3 months less than 6 months",
+     "align": "general"
+    },
+    {
+     "ref": "H5",
+     "kind": "label",
+     "value": "6 months less than 1 year",
+     "align": "general"
+    },
+    {
+     "ref": "I5",
+     "kind": "label",
+     "value": "1 year less than 3 years",
+     "align": "general"
+    },
+    {
+     "ref": "J5",
+     "kind": "label",
+     "value": "3 years less than 5 years",
+     "align": "general"
+    },
+    {
+     "ref": "K5",
+     "kind": "label",
+     "value": "5 years and over",
+     "align": "general"
+    },
+    {
+     "ref": "A6",
+     "kind": "label",
+     "value": "           1. Cash and balances due from other financial institutions",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B6",
+     "kind": "formula",
+     "formula": "=SUM(B7:B11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C6",
+     "kind": "formula",
+     "formula": "=SUM(C7:C11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D6",
+     "kind": "formula",
+     "formula": "=SUM(D7:D11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E6",
+     "kind": "formula",
+     "formula": "=SUM(E7:E11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F6",
+     "kind": "formula",
+     "formula": "=SUM(F7:F11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G6",
+     "kind": "formula",
+     "formula": "=SUM(G7:G11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H6",
+     "kind": "formula",
+     "formula": "=SUM(H7:H11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I6",
+     "kind": "formula",
+     "formula": "=SUM(I7:I11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J6",
+     "kind": "formula",
+     "formula": "=SUM(J7:J11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K6",
+     "kind": "formula",
+     "formula": "=SUM(K7:K11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A7",
+     "kind": "label",
+     "value": "               (a) Cash on hand ",
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "               (b) Claims on Bank of Ghana",
+     "align": "general"
+    },
+    {
+     "ref": "B8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "               (c) Claims on other depository institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "               (d) Claims on other financial institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "              (e) Accrued Interest",
+     "align": "general"
+    },
+    {
+     "ref": "B11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "          2. Bills",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B12",
+     "kind": "formula",
+     "formula": "=SUM(B13:B19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C12",
+     "kind": "formula",
+     "formula": "=SUM(C13:C19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D12",
+     "kind": "formula",
+     "formula": "=SUM(D13:D19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E12",
+     "kind": "formula",
+     "formula": "=SUM(E13:E19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F12",
+     "kind": "formula",
+     "formula": "=SUM(F13:F19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G12",
+     "kind": "formula",
+     "formula": "=SUM(G13:G19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H12",
+     "kind": "formula",
+     "formula": "=SUM(H13:H19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I12",
+     "kind": "formula",
+     "formula": "=SUM(I13:I19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J12",
+     "kind": "formula",
+     "formula": "=SUM(J13:J19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K12",
+     "kind": "formula",
+     "formula": "=SUM(K13:K19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "                (a) Government",
+     "align": "general"
+    },
+    {
+     "ref": "B13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "               (b) Bank of Ghana",
+     "align": "general"
+    },
+    {
+     "ref": "B14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "               (c) Depository Institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "label",
+     "value": "               (d) Other Financial Institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "label",
+     "value": "               (e) Public institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A18",
+     "kind": "label",
+     "value": "               (f) Public enterprises ",
+     "align": "general"
+    },
+    {
+     "ref": "B18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A19",
+     "kind": "label",
+     "value": "               (g) Private Sector Securities with less than 1 year to maturity",
+     "align": "general"
+    },
+    {
+     "ref": "B19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A20",
+     "kind": "label",
+     "value": "           3. Loans, overdrafts and other advances (Net) ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B20",
+     "kind": "formula",
+     "formula": "=B28-SUM(B29:B31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C20",
+     "kind": "formula",
+     "formula": "=C28-SUM(C29:C31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D20",
+     "kind": "formula",
+     "formula": "=D28-SUM(D29:D31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E20",
+     "kind": "formula",
+     "formula": "=E28-SUM(E29:E31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F20",
+     "kind": "formula",
+     "formula": "=F28-SUM(F29:F31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G20",
+     "kind": "formula",
+     "formula": "=G28-SUM(G29:G31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H20",
+     "kind": "formula",
+     "formula": "=H28-SUM(H29:H31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I20",
+     "kind": "formula",
+     "formula": "=I28-SUM(I29:I31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J20",
+     "kind": "formula",
+     "formula": "=J28-SUM(J29:J31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K20",
+     "kind": "formula",
+     "formula": "=K28-SUM(K29:K31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A21",
+     "kind": "label",
+     "value": "              (a)  Government",
+     "align": "general"
+    },
+    {
+     "ref": "B21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A22",
+     "kind": "label",
+     "value": "              (b)  Public institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A23",
+     "kind": "label",
+     "value": "              (c)  Public enterprises",
+     "align": "general"
+    },
+    {
+     "ref": "B23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A24",
+     "kind": "label",
+     "value": "              (d)  Private enterprises",
+     "align": "general"
+    },
+    {
+     "ref": "B24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A25",
+     "kind": "label",
+     "value": "              (e)  Cocoa syndicated loan",
+     "align": "general"
+    },
+    {
+     "ref": "B25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A26",
+     "kind": "label",
+     "value": "              (f)  Individuals",
+     "align": "general"
+    },
+    {
+     "ref": "B26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A27",
+     "kind": "label",
+     "value": "              (e)  Others",
+     "align": "general"
+    },
+    {
+     "ref": "B27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A28",
+     "kind": "label",
+     "value": "             Sub-total",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B28",
+     "kind": "formula",
+     "formula": "=SUM(B21:B27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C28",
+     "kind": "formula",
+     "formula": "=SUM(C21:C27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D28",
+     "kind": "formula",
+     "formula": "=SUM(D21:D27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E28",
+     "kind": "formula",
+     "formula": "=SUM(E21:E27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F28",
+     "kind": "formula",
+     "formula": "=SUM(F21:F27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G28",
+     "kind": "formula",
+     "formula": "=SUM(G21:G27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H28",
+     "kind": "formula",
+     "formula": "=SUM(H21:H27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I28",
+     "kind": "formula",
+     "formula": "=SUM(I21:I27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J28",
+     "kind": "formula",
+     "formula": "=SUM(J21:J27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K28",
+     "kind": "formula",
+     "formula": "=SUM(K21:K27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A29",
+     "kind": "label",
+     "value": "                   Less: Total debt provision",
+     "align": "general"
+    },
+    {
+     "ref": "B29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A30",
+     "kind": "label",
+     "value": "                             Interest in suspense",
+     "align": "general"
+    },
+    {
+     "ref": "B30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A31",
+     "kind": "label",
+     "value": "                             Revaluation gains on non-performing loans",
+     "align": "general"
+    },
+    {
+     "ref": "B31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A32",
+     "kind": "label",
+     "value": "            4. Securities other than shares ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A33",
+     "kind": "label",
+     "value": "            5.  Shares and other equities(Net)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A34",
+     "kind": "label",
+     "value": "            6.  Other Assets ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A35",
+     "kind": "label",
+     "value": "           7.  Property, Plant & Equipment (Net)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A36",
+     "kind": "label",
+     "value": "           8.  Total Assets (A + B)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B36",
+     "kind": "formula",
+     "formula": "=B6+B12+B20+B32+B33+B34+B35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C36",
+     "kind": "formula",
+     "formula": "=C6+C12+C20+C32+C33+C34+C35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D36",
+     "kind": "formula",
+     "formula": "=D6+D12+D20+D32+D33+D34+D35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E36",
+     "kind": "formula",
+     "formula": "=E6+E12+E20+E32+E33+E34+E35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F36",
+     "kind": "formula",
+     "formula": "=F6+F12+F20+F32+F33+F34+F35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G36",
+     "kind": "formula",
+     "formula": "=G6+G12+G20+G32+G33+G34+G35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H36",
+     "kind": "formula",
+     "formula": "=H6+H12+H20+H32+H33+H34+H35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I36",
+     "kind": "formula",
+     "formula": "=I6+I12+I20+I32+I33+I34+I35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J36",
+     "kind": "formula",
+     "formula": "=J6+J12+J20+J32+J33+J34+J35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K36",
+     "kind": "formula",
+     "formula": "=K6+K12+K20+K32+K33+K34+K35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B37",
+     "kind": "formula",
+     "formula": "=B79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C37",
+     "kind": "formula",
+     "formula": "=C79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D37",
+     "kind": "formula",
+     "formula": "=D79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E37",
+     "kind": "formula",
+     "formula": "=E79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F37",
+     "kind": "formula",
+     "formula": "=F79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G37",
+     "kind": "formula",
+     "formula": "=G79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H37",
+     "kind": "formula",
+     "formula": "=H79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I37",
+     "kind": "formula",
+     "formula": "=I79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J37",
+     "kind": "formula",
+     "formula": "=J79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K37",
+     "kind": "formula",
+     "formula": "=K79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B38",
+     "kind": "formula",
+     "formula": "=B36-B37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C38",
+     "kind": "formula",
+     "formula": "=C36-C37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D38",
+     "kind": "formula",
+     "formula": "=D36-D37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E38",
+     "kind": "formula",
+     "formula": "=E36-E37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F38",
+     "kind": "formula",
+     "formula": "=F36-F37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G38",
+     "kind": "formula",
+     "formula": "=G36-G37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H38",
+     "kind": "formula",
+     "formula": "=H36-H37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I38",
+     "kind": "formula",
+     "formula": "=I36-I37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J38",
+     "kind": "formula",
+     "formula": "=J36-J37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K38",
+     "kind": "formula",
+     "formula": "=K36-K37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A40",
+     "kind": "label",
+     "value": "            SHAREHOLDERS' FUNDS AND LIABILITIES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A41",
+     "kind": "label",
+     "value": "     9.  Paid-up capital",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A42",
+     "kind": "label",
+     "value": "     10.  Reserves",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B42",
+     "kind": "formula",
+     "formula": "=SUM(B43:B47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C42",
+     "kind": "formula",
+     "formula": "=SUM(C43:C47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D42",
+     "kind": "formula",
+     "formula": "=SUM(D43:D47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E42",
+     "kind": "formula",
+     "formula": "=SUM(E43:E47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F42",
+     "kind": "formula",
+     "formula": "=SUM(F43:F47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G42",
+     "kind": "formula",
+     "formula": "=SUM(G43:G47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H42",
+     "kind": "formula",
+     "formula": "=SUM(H43:H47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I42",
+     "kind": "formula",
+     "formula": "=SUM(I43:I47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J42",
+     "kind": "formula",
+     "formula": "=SUM(J43:J47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K42",
+     "kind": "formula",
+     "formula": "=SUM(K43:K47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A43",
+     "kind": "label",
+     "value": "            (a)  Statutory reserves fund",
+     "align": "general"
+    },
+    {
+     "ref": "B43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A44",
+     "kind": "label",
+     "value": "            (b)  Revaluation reserves (Capital Surplus)",
+     "align": "general"
+    },
+    {
+     "ref": "B44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A45",
+     "kind": "label",
+     "value": "            (c)   Income Surplus",
+     "align": "general"
+    },
+    {
+     "ref": "B45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A46",
+     "kind": "label",
+     "value": "            (d)  Profit and loss accounts to date",
+     "align": "general"
+    },
+    {
+     "ref": "B46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A47",
+     "kind": "label",
+     "value": "            (e)   Other reserves",
+     "align": "general"
+    },
+    {
+     "ref": "B47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A48",
+     "kind": "label",
+     "value": "            Shareholders' Funds",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B48",
+     "kind": "formula",
+     "formula": "=B41+B42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C48",
+     "kind": "formula",
+     "formula": "=C41+C42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D48",
+     "kind": "formula",
+     "formula": "=D41+D42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E48",
+     "kind": "formula",
+     "formula": "=E41+E42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F48",
+     "kind": "formula",
+     "formula": "=F41+F42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G48",
+     "kind": "formula",
+     "formula": "=G41+G42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H48",
+     "kind": "formula",
+     "formula": "=H41+H42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I48",
+     "kind": "formula",
+     "formula": "=I41+I42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J48",
+     "kind": "formula",
+     "formula": "=J41+J42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K48",
+     "kind": "formula",
+     "formula": "=K41+K42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A49",
+     "kind": "label",
+     "value": "     11.  Other amounts allowed as capital",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A50",
+     "kind": "label",
+     "value": "     12.  Long-term borrowing",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B50",
+     "kind": "formula",
+     "formula": "=SUM(B51:B56)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C50",
+     "kind": "formula",
+     "formula": "=SUM(C51:C56)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D50",
+     "kind": "formula",
+     "formula": "=SUM(D51:D56)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E50",
+     "kind": "formula",
+     "formula": "=SUM(E51:E56)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F50",
+     "kind": "formula",
+     "formula": "=SUM(F51:F56)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G50",
+     "kind": "formula",
+     "formula": "=SUM(G51:G56)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H50",
+     "kind": "formula",
+     "formula": "=SUM(H51:H56)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I50",
+     "kind": "formula",
+     "formula": "=SUM(I51:I56)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J50",
+     "kind": "formula",
+     "formula": "=SUM(J51:J56)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K50",
+     "kind": "formula",
+     "formula": "=SUM(K51:K56)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A51",
+     "kind": "label",
+     "value": "                (a) Government",
+     "align": "general"
+    },
+    {
+     "ref": "B51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A52",
+     "kind": "label",
+     "value": "               (b) Bank of Ghana",
+     "align": "general"
+    },
+    {
+     "ref": "B52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A53",
+     "kind": "label",
+     "value": "               (c) Depository Institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A54",
+     "kind": "label",
+     "value": "               (d) Other Financial Institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B54",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C54",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D54",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E54",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F54",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G54",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H54",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I54",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J54",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K54",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A55",
+     "kind": "label",
+     "value": "               (e) Others",
+     "align": "general"
+    },
+    {
+     "ref": "B55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A56",
+     "kind": "label",
+     "value": "               (f) Accrued Interest",
+     "align": "general"
+    },
+    {
+     "ref": "B56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A57",
+     "kind": "label",
+     "value": "      13. Cheques for clearing",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A58",
+     "kind": "label",
+     "value": "      14. Short-term borrowing",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B58",
+     "kind": "formula",
+     "formula": "=SUM(B59:B64)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C58",
+     "kind": "formula",
+     "formula": "=SUM(C59:C64)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D58",
+     "kind": "formula",
+     "formula": "=SUM(D59:D64)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E58",
+     "kind": "formula",
+     "formula": "=SUM(E59:E64)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F58",
+     "kind": "formula",
+     "formula": "=SUM(F59:F64)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G58",
+     "kind": "formula",
+     "formula": "=SUM(G59:G64)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H58",
+     "kind": "formula",
+     "formula": "=SUM(H59:H64)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I58",
+     "kind": "formula",
+     "formula": "=SUM(I59:I64)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J58",
+     "kind": "formula",
+     "formula": "=SUM(J59:J64)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K58",
+     "kind": "formula",
+     "formula": "=SUM(K59:K64)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A59",
+     "kind": "label",
+     "value": "            (a) Bank of Ghana",
+     "align": "general"
+    },
+    {
+     "ref": "B59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A60",
+     "kind": "label",
+     "value": "            (b) Depository institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A61",
+     "kind": "label",
+     "value": "            (c) Other financial institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A62",
+     "kind": "label",
+     "value": "            (d) Government",
+     "align": "general"
+    },
+    {
+     "ref": "B62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A63",
+     "kind": "label",
+     "value": "            (e) Others",
+     "align": "general"
+    },
+    {
+     "ref": "B63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A64",
+     "kind": "label",
+     "value": "            (f) Accrued interest",
+     "align": "general"
+    },
+    {
+     "ref": "B64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A65",
+     "kind": "label",
+     "value": "       15. Deposits of financial institutions ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B65",
+     "kind": "formula",
+     "formula": "=SUM(B66:B69)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C65",
+     "kind": "formula",
+     "formula": "=SUM(C66:C69)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D65",
+     "kind": "formula",
+     "formula": "=SUM(D66:D69)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E65",
+     "kind": "formula",
+     "formula": "=SUM(E66:E69)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F65",
+     "kind": "formula",
+     "formula": "=SUM(F66:F69)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G65",
+     "kind": "formula",
+     "formula": "=SUM(G66:G69)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H65",
+     "kind": "formula",
+     "formula": "=SUM(H66:H69)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I65",
+     "kind": "formula",
+     "formula": "=SUM(I66:I69)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J65",
+     "kind": "formula",
+     "formula": "=SUM(J66:J69)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K65",
+     "kind": "formula",
+     "formula": "=SUM(K66:K69)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A66",
+     "kind": "label",
+     "value": "            (a) Demand deposits",
+     "align": "general"
+    },
+    {
+     "ref": "B66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A67",
+     "kind": "label",
+     "value": "            (b) Savings accounts",
+     "align": "general"
+    },
+    {
+     "ref": "B67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A68",
+     "kind": "label",
+     "value": "            (c) Time deposits",
+     "align": "general"
+    },
+    {
+     "ref": "B68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A69",
+     "kind": "label",
+     "value": "            (d) Certificates of deposit",
+     "align": "general"
+    },
+    {
+     "ref": "B69",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C69",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D69",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E69",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F69",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G69",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H69",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I69",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J69",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K69",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A70",
+     "kind": "label",
+     "value": "        16. Deposits of non-financial institutions public and govt.",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B70",
+     "kind": "formula",
+     "formula": "=SUM(B71:B74)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C70",
+     "kind": "formula",
+     "formula": "=SUM(C71:C74)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D70",
+     "kind": "formula",
+     "formula": "=SUM(D71:D74)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E70",
+     "kind": "formula",
+     "formula": "=SUM(E71:E74)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F70",
+     "kind": "formula",
+     "formula": "=SUM(F71:F74)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G70",
+     "kind": "formula",
+     "formula": "=SUM(G71:G74)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H70",
+     "kind": "formula",
+     "formula": "=SUM(H71:H74)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I70",
+     "kind": "formula",
+     "formula": "=SUM(I71:I74)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J70",
+     "kind": "formula",
+     "formula": "=SUM(J71:J74)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K70",
+     "kind": "formula",
+     "formula": "=SUM(K71:K74)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A71",
+     "kind": "label",
+     "value": "            (a) Demand deposits",
+     "align": "general"
+    },
+    {
+     "ref": "B71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A72",
+     "kind": "label",
+     "value": "            (b) Savings accounts",
+     "align": "general"
+    },
+    {
+     "ref": "B72",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C72",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D72",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E72",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F72",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G72",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H72",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I72",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J72",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K72",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A73",
+     "kind": "label",
+     "value": "            (c) Time deposits",
+     "align": "general"
+    },
+    {
+     "ref": "B73",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C73",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D73",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E73",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F73",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G73",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H73",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I73",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J73",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K73",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A74",
+     "kind": "label",
+     "value": "            (d) Certificates of deposit",
+     "align": "general"
+    },
+    {
+     "ref": "B74",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C74",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D74",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E74",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F74",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G74",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H74",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I74",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J74",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K74",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A75",
+     "kind": "label",
+     "value": "          17. Special deposits",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B75",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C75",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D75",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E75",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F75",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G75",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H75",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I75",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J75",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K75",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A76",
+     "kind": "label",
+     "value": "         18. Margins against contingent liabilities",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B76",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C76",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D76",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E76",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F76",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G76",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H76",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I76",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J76",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K76",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A77",
+     "kind": "label",
+     "value": "         19. Bonds issued",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B77",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C77",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D77",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E77",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F77",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G77",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H77",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I77",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J77",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K77",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A78",
+     "kind": "label",
+     "value": "         20. Other liabilities  ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B78",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C78",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D78",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E78",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F78",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G78",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H78",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I78",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J78",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K78",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A79",
+     "kind": "label",
+     "value": "         21. Shareholders' Funds and Liabilities (9+10+11+...+20)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B79",
+     "kind": "formula",
+     "formula": "=B41+B42+B49+B50+B57+B58+B65+B70+B75+B76+B77+B78",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C79",
+     "kind": "formula",
+     "formula": "=C41+C42+C49+C50+C57+C58+C65+C70+C75+C76+C77+C78",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D79",
+     "kind": "formula",
+     "formula": "=D41+D42+D49+D50+D57+D58+D65+D70+D75+D76+D77+D78",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E79",
+     "kind": "formula",
+     "formula": "=E41+E42+E49+E50+E57+E58+E65+E70+E75+E76+E77+E78",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F79",
+     "kind": "formula",
+     "formula": "=F41+F42+F49+F50+F57+F58+F65+F70+F75+F76+F77+F78",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G79",
+     "kind": "formula",
+     "formula": "=G41+G42+G49+G50+G57+G58+G65+G70+G75+G76+G77+G78",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H79",
+     "kind": "formula",
+     "formula": "=H41+H42+H49+H50+H57+H58+H65+H70+H75+H76+H77+H78",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I79",
+     "kind": "formula",
+     "formula": "=I41+I42+I49+I50+I57+I58+I65+I70+I75+I76+I77+I78",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J79",
+     "kind": "formula",
+     "formula": "=J41+J42+J49+J50+J57+J58+J65+J70+J75+J76+J77+J78",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K79",
+     "kind": "formula",
+     "formula": "=K41+K42+K49+K50+K57+K58+K65+K70+K75+K76+K77+K78",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A80",
+     "kind": "label",
+     "value": "         22. ASSETS - SHAREHOLDERS' FUNDS & LIABILITIES (11-27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B80",
+     "kind": "formula",
+     "formula": "=B36-B79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C80",
+     "kind": "formula",
+     "formula": "=C36-C79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D80",
+     "kind": "formula",
+     "formula": "=D36-D79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E80",
+     "kind": "formula",
+     "formula": "=E36-E79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F80",
+     "kind": "formula",
+     "formula": "=F36-F79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G80",
+     "kind": "formula",
+     "formula": "=G36-G79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H80",
+     "kind": "formula",
+     "formula": "=H36-H79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I80",
+     "kind": "formula",
+     "formula": "=I36-I79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J80",
+     "kind": "formula",
+     "formula": "=J36-J79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K80",
+     "kind": "formula",
+     "formula": "=K36-K79",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A81",
+     "kind": "label",
+     "value": "         23. Contingent liabilities ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B81",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C81",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D81",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E81",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F81",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G81",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H81",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I81",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J81",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K81",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A82",
+     "kind": "label",
+     "value": "         24. Managed funds (contra)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B82",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C82",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D82",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E82",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F82",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G82",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H82",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I82",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J82",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K82",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "BSD6B",
+   "max_row": 71,
+   "max_col": 257,
+   "column_widths": {
+    "A": 60.28,
+    "B": 12.56,
+    "C": 12.7,
+    "E": 11.85,
+    "F": 11.56,
+    "G": 11.99,
+    "I": 11.85,
+    "K": 11.7,
+    "L": 10.99
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "DATA AS OF END  ………………………………… 200……..",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A3",
+     "kind": "label",
+     "value": "(¢'Million)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C3",
+     "kind": "label",
+     "value": "       MATURITY ANALYSIS OF ASSETS AND LIABILITIES IN CEDIS AS AT - ",
+     "align": "left"
+    },
+    {
+     "ref": "I3",
+     "kind": "label",
+     "value": "DD-MMM-YYYY",
+     "align": "center"
+    },
+    {
+     "ref": "A4",
+     "kind": "label",
+     "value": "BALANCE SHEET  -  BSD6B",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A5",
+     "kind": "label",
+     "value": "ASSETS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B5",
+     "kind": "label",
+     "value": "FROM BSD2",
+     "align": "general"
+    },
+    {
+     "ref": "C5",
+     "kind": "label",
+     "value": "Total",
+     "align": "general"
+    },
+    {
+     "ref": "D5",
+     "kind": "label",
+     "value": "Overdue",
+     "align": "general"
+    },
+    {
+     "ref": "E5",
+     "kind": "label",
+     "value": "Less Than 1month",
+     "align": "general"
+    },
+    {
+     "ref": "F5",
+     "kind": "label",
+     "value": "1 month less than 3 months",
+     "align": "general"
+    },
+    {
+     "ref": "G5",
+     "kind": "label",
+     "value": "3 months less than 6 months",
+     "align": "general"
+    },
+    {
+     "ref": "H5",
+     "kind": "label",
+     "value": "6 months less than 1 year",
+     "align": "general"
+    },
+    {
+     "ref": "I5",
+     "kind": "label",
+     "value": "1 year less than 3 years",
+     "align": "general"
+    },
+    {
+     "ref": "J5",
+     "kind": "label",
+     "value": "3 years less than 5 years",
+     "align": "general"
+    },
+    {
+     "ref": "K5",
+     "kind": "label",
+     "value": "5 years and over",
+     "align": "general"
+    },
+    {
+     "ref": "A6",
+     "kind": "label",
+     "value": "           1. Cash and balances due from other financial institutions",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B6",
+     "kind": "formula",
+     "formula": "=SUM(B7:B11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C6",
+     "kind": "formula",
+     "formula": "=SUM(C7:C11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D6",
+     "kind": "formula",
+     "formula": "=SUM(D7:D11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E6",
+     "kind": "formula",
+     "formula": "=SUM(E7:E11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F6",
+     "kind": "formula",
+     "formula": "=SUM(F7:F11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G6",
+     "kind": "formula",
+     "formula": "=SUM(G7:G11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H6",
+     "kind": "formula",
+     "formula": "=SUM(H7:H11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I6",
+     "kind": "formula",
+     "formula": "=SUM(I7:I11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J6",
+     "kind": "formula",
+     "formula": "=SUM(J7:J11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K6",
+     "kind": "formula",
+     "formula": "=SUM(K7:K11)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A7",
+     "kind": "label",
+     "value": "               (a) Foreign currency notes and coins",
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "               (b) Cash on hand ",
+     "align": "general"
+    },
+    {
+     "ref": "B8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "               (c) Correspondent account in non-resident financial institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A10",
+     "kind": "label",
+     "value": "               (d) Claims on other depository institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K10",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "               (e) Claims on other financial institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K11",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A12",
+     "kind": "label",
+     "value": "          2. Bills ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B12",
+     "kind": "formula",
+     "formula": "=SUM(B13:B19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C12",
+     "kind": "formula",
+     "formula": "=SUM(C13:C19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D12",
+     "kind": "formula",
+     "formula": "=SUM(D13:D19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E12",
+     "kind": "formula",
+     "formula": "=SUM(E13:E19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F12",
+     "kind": "formula",
+     "formula": "=SUM(F13:F19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G12",
+     "kind": "formula",
+     "formula": "=SUM(G13:G19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H12",
+     "kind": "formula",
+     "formula": "=SUM(H13:H19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I12",
+     "kind": "formula",
+     "formula": "=SUM(I13:I19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J12",
+     "kind": "formula",
+     "formula": "=SUM(J13:J19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K12",
+     "kind": "formula",
+     "formula": "=SUM(K13:K19)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "                (a) Government",
+     "align": "general"
+    },
+    {
+     "ref": "B13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "               (b) Bank of Ghana",
+     "align": "general"
+    },
+    {
+     "ref": "B14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "               (c) Depository Institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A16",
+     "kind": "label",
+     "value": "               (d) Other Financial Institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "label",
+     "value": "               (e) Public institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K17",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A18",
+     "kind": "label",
+     "value": "               (f) Public enterprises ",
+     "align": "general"
+    },
+    {
+     "ref": "B18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K18",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A19",
+     "kind": "label",
+     "value": "               (g) Private Sector Securities with less than 1 year to maturity",
+     "align": "general"
+    },
+    {
+     "ref": "B19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K19",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A20",
+     "kind": "label",
+     "value": "           3. Loans, overdrafts and other advances (Net) ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B20",
+     "kind": "formula",
+     "formula": "=B28-SUM(B29:B31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C20",
+     "kind": "formula",
+     "formula": "=C28-SUM(C29:C31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D20",
+     "kind": "formula",
+     "formula": "=D28-SUM(D29:D31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E20",
+     "kind": "formula",
+     "formula": "=E28-SUM(E29:E31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F20",
+     "kind": "formula",
+     "formula": "=F28-SUM(F29:F31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G20",
+     "kind": "formula",
+     "formula": "=G28-SUM(G29:G31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H20",
+     "kind": "formula",
+     "formula": "=H28-SUM(H29:H31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I20",
+     "kind": "formula",
+     "formula": "=I28-SUM(I29:I31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J20",
+     "kind": "formula",
+     "formula": "=J28-SUM(J29:J31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K20",
+     "kind": "formula",
+     "formula": "=K28-SUM(K29:K31)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A21",
+     "kind": "label",
+     "value": "              (a)  Government",
+     "align": "general"
+    },
+    {
+     "ref": "B21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A22",
+     "kind": "label",
+     "value": "              (b)  Public institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A23",
+     "kind": "label",
+     "value": "              (c)  Public enterprises",
+     "align": "general"
+    },
+    {
+     "ref": "B23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A24",
+     "kind": "label",
+     "value": "              (d)  Private enterprises",
+     "align": "general"
+    },
+    {
+     "ref": "B24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K24",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A25",
+     "kind": "label",
+     "value": "              (e)  Cocoa syndicated loan",
+     "align": "general"
+    },
+    {
+     "ref": "B25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K25",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A26",
+     "kind": "label",
+     "value": "              (f)  Individuals",
+     "align": "general"
+    },
+    {
+     "ref": "B26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K26",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A27",
+     "kind": "label",
+     "value": "              (e)  Others",
+     "align": "general"
+    },
+    {
+     "ref": "B27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A28",
+     "kind": "label",
+     "value": "             Sub-total",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B28",
+     "kind": "formula",
+     "formula": "=SUM(B21:B27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C28",
+     "kind": "formula",
+     "formula": "=SUM(C21:C27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D28",
+     "kind": "formula",
+     "formula": "=SUM(D21:D27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E28",
+     "kind": "formula",
+     "formula": "=SUM(E21:E27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F28",
+     "kind": "formula",
+     "formula": "=SUM(F21:F27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G28",
+     "kind": "formula",
+     "formula": "=SUM(G21:G27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H28",
+     "kind": "formula",
+     "formula": "=SUM(H21:H27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I28",
+     "kind": "formula",
+     "formula": "=SUM(I21:I27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J28",
+     "kind": "formula",
+     "formula": "=SUM(J21:J27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K28",
+     "kind": "formula",
+     "formula": "=SUM(K21:K27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A29",
+     "kind": "label",
+     "value": "                   Less: Total debt provision",
+     "align": "general"
+    },
+    {
+     "ref": "B29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A30",
+     "kind": "label",
+     "value": "                             Interest in suspense",
+     "align": "general"
+    },
+    {
+     "ref": "B30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A31",
+     "kind": "label",
+     "value": "                             Revaluation gains on non-performing loans",
+     "align": "general"
+    },
+    {
+     "ref": "B31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K31",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A32",
+     "kind": "label",
+     "value": "            4. Securities other than shares ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A33",
+     "kind": "label",
+     "value": "            5.  Shares and other equities(Net)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A34",
+     "kind": "label",
+     "value": "            6.  Other Assets ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A35",
+     "kind": "label",
+     "value": "           7.  Property, Plant & Equipment (Net)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A36",
+     "kind": "label",
+     "value": "           8.  Total Assets (A + B)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B36",
+     "kind": "formula",
+     "formula": "=B6+B12+B20+B32+B33+B34+B35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C36",
+     "kind": "formula",
+     "formula": "=C6+C12+C20+C32+C33+C34+C35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D36",
+     "kind": "formula",
+     "formula": "=D6+D12+D20+D32+D33+D34+D35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E36",
+     "kind": "formula",
+     "formula": "=E6+E12+E20+E32+E33+E34+E35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F36",
+     "kind": "formula",
+     "formula": "=F6+F12+F20+F32+F33+F34+F35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G36",
+     "kind": "formula",
+     "formula": "=G6+G12+G20+G32+G33+G34+G35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H36",
+     "kind": "formula",
+     "formula": "=H6+H12+H20+H32+H33+H34+H35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I36",
+     "kind": "formula",
+     "formula": "=I6+I12+I20+I32+I33+I34+I35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J36",
+     "kind": "formula",
+     "formula": "=J6+J12+J20+J32+J33+J34+J35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K36",
+     "kind": "formula",
+     "formula": "=K6+K12+K20+K32+K33+K34+K35",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B37",
+     "kind": "formula",
+     "formula": "=B68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C37",
+     "kind": "formula",
+     "formula": "=C68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D37",
+     "kind": "formula",
+     "formula": "=D68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E37",
+     "kind": "formula",
+     "formula": "=E68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F37",
+     "kind": "formula",
+     "formula": "=F68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G37",
+     "kind": "formula",
+     "formula": "=G68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H37",
+     "kind": "formula",
+     "formula": "=H68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I37",
+     "kind": "formula",
+     "formula": "=I68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J37",
+     "kind": "formula",
+     "formula": "=J68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K37",
+     "kind": "formula",
+     "formula": "=K68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B38",
+     "kind": "formula",
+     "formula": "=B36-B37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C38",
+     "kind": "formula",
+     "formula": "=C36-C37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D38",
+     "kind": "formula",
+     "formula": "=D36-D37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E38",
+     "kind": "formula",
+     "formula": "=E36-E37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F38",
+     "kind": "formula",
+     "formula": "=F36-F37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G38",
+     "kind": "formula",
+     "formula": "=G36-G37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H38",
+     "kind": "formula",
+     "formula": "=H36-H37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I38",
+     "kind": "formula",
+     "formula": "=I36-I37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J38",
+     "kind": "formula",
+     "formula": "=J36-J37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K38",
+     "kind": "formula",
+     "formula": "=K36-K37",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A40",
+     "kind": "label",
+     "value": "            SHAREHOLDERS' FUNDS AND LIABILITIES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A41",
+     "kind": "label",
+     "value": "     9.  Paid-up capital",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A42",
+     "kind": "label",
+     "value": "     10.  Reserves",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B42",
+     "kind": "formula",
+     "formula": "=SUM(B43:B47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C42",
+     "kind": "formula",
+     "formula": "=SUM(C43:C47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D42",
+     "kind": "formula",
+     "formula": "=SUM(D43:D47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E42",
+     "kind": "formula",
+     "formula": "=SUM(E43:E47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F42",
+     "kind": "formula",
+     "formula": "=SUM(F43:F47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G42",
+     "kind": "formula",
+     "formula": "=SUM(G43:G47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H42",
+     "kind": "formula",
+     "formula": "=SUM(H43:H47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I42",
+     "kind": "formula",
+     "formula": "=SUM(I43:I47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J42",
+     "kind": "formula",
+     "formula": "=SUM(J43:J47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K42",
+     "kind": "formula",
+     "formula": "=SUM(K43:K47)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A43",
+     "kind": "label",
+     "value": "            (a)  Statutory reserves fund",
+     "align": "general"
+    },
+    {
+     "ref": "B43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A44",
+     "kind": "label",
+     "value": "            (b)  Revaluation reserves (Capital Surplus)",
+     "align": "general"
+    },
+    {
+     "ref": "B44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A45",
+     "kind": "label",
+     "value": "            (c)   Income Surplus",
+     "align": "general"
+    },
+    {
+     "ref": "B45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A46",
+     "kind": "label",
+     "value": "            (d)  Profit and loss accounts to date",
+     "align": "general"
+    },
+    {
+     "ref": "B46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A47",
+     "kind": "label",
+     "value": "            (e)   Other reserves",
+     "align": "general"
+    },
+    {
+     "ref": "B47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A48",
+     "kind": "label",
+     "value": "            Shareholders' Funds",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B48",
+     "kind": "formula",
+     "formula": "=B41+B42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C48",
+     "kind": "formula",
+     "formula": "=C41+C42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D48",
+     "kind": "formula",
+     "formula": "=D41+D42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E48",
+     "kind": "formula",
+     "formula": "=E41+E42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F48",
+     "kind": "formula",
+     "formula": "=F41+F42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G48",
+     "kind": "formula",
+     "formula": "=G41+G42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H48",
+     "kind": "formula",
+     "formula": "=H41+H42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I48",
+     "kind": "formula",
+     "formula": "=I41+I42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J48",
+     "kind": "formula",
+     "formula": "=J41+J42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K48",
+     "kind": "formula",
+     "formula": "=K41+K42",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A49",
+     "kind": "label",
+     "value": "     11.  Other amounts allowed as capital",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A50",
+     "kind": "label",
+     "value": "     12.  Long-term borrowing",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B50",
+     "kind": "formula",
+     "formula": "=SUM(B51:B53)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C50",
+     "kind": "formula",
+     "formula": "=SUM(C51:C53)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D50",
+     "kind": "formula",
+     "formula": "=SUM(D51:D53)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E50",
+     "kind": "formula",
+     "formula": "=SUM(E51:E53)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F50",
+     "kind": "formula",
+     "formula": "=SUM(F51:F53)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G50",
+     "kind": "formula",
+     "formula": "=SUM(G51:G53)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H50",
+     "kind": "formula",
+     "formula": "=SUM(H51:H53)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I50",
+     "kind": "formula",
+     "formula": "=SUM(I51:I53)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J50",
+     "kind": "formula",
+     "formula": "=SUM(J51:J53)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K50",
+     "kind": "formula",
+     "formula": "=SUM(K51:K53)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A51",
+     "kind": "label",
+     "value": "               (a) Non-resident financial institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A52",
+     "kind": "label",
+     "value": "               (b) Other non-resident",
+     "align": "general"
+    },
+    {
+     "ref": "B52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A53",
+     "kind": "label",
+     "value": "               (c) Accrued Interest",
+     "align": "general"
+    },
+    {
+     "ref": "B53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K53",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A54",
+     "kind": "label",
+     "value": "      13. Short-term borrowing",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B54",
+     "kind": "formula",
+     "formula": "=SUM(B55:B57)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C54",
+     "kind": "formula",
+     "formula": "=SUM(C55:C57)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D54",
+     "kind": "formula",
+     "formula": "=SUM(D55:D57)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E54",
+     "kind": "formula",
+     "formula": "=SUM(E55:E57)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F54",
+     "kind": "formula",
+     "formula": "=SUM(F55:F57)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G54",
+     "kind": "formula",
+     "formula": "=SUM(G55:G57)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H54",
+     "kind": "formula",
+     "formula": "=SUM(H55:H57)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I54",
+     "kind": "formula",
+     "formula": "=SUM(I55:I57)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J54",
+     "kind": "formula",
+     "formula": "=SUM(J55:J57)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K54",
+     "kind": "formula",
+     "formula": "=SUM(K55:K57)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A55",
+     "kind": "label",
+     "value": "               (a) Non-resident financial institutions",
+     "align": "general"
+    },
+    {
+     "ref": "B55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A56",
+     "kind": "label",
+     "value": "               (b) Other non-resident",
+     "align": "general"
+    },
+    {
+     "ref": "B56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A57",
+     "kind": "label",
+     "value": "               (c) Accrued Interest",
+     "align": "general"
+    },
+    {
+     "ref": "B57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A58",
+     "kind": "label",
+     "value": "       14. Deposits of non-residents",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B58",
+     "kind": "formula",
+     "formula": "=SUM(B59:B63)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C58",
+     "kind": "formula",
+     "formula": "=SUM(C59:C63)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D58",
+     "kind": "formula",
+     "formula": "=SUM(D59:D63)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E58",
+     "kind": "formula",
+     "formula": "=SUM(E59:E63)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F58",
+     "kind": "formula",
+     "formula": "=SUM(F59:F63)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G58",
+     "kind": "formula",
+     "formula": "=SUM(G59:G63)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H58",
+     "kind": "formula",
+     "formula": "=SUM(H59:H63)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I58",
+     "kind": "formula",
+     "formula": "=SUM(I59:I63)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J58",
+     "kind": "formula",
+     "formula": "=SUM(J59:J63)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K58",
+     "kind": "formula",
+     "formula": "=SUM(K59:K63)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A59",
+     "kind": "label",
+     "value": "            (a) Demand deposits",
+     "align": "general"
+    },
+    {
+     "ref": "B59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A60",
+     "kind": "label",
+     "value": "            (b) Savings accounts",
+     "align": "general"
+    },
+    {
+     "ref": "B60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A61",
+     "kind": "label",
+     "value": "            (c) Time deposits",
+     "align": "general"
+    },
+    {
+     "ref": "B61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A62",
+     "kind": "label",
+     "value": "            (d) Certificates of deposit",
+     "align": "general"
+    },
+    {
+     "ref": "B62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K62",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A63",
+     "kind": "label",
+     "value": "            (e) Accrued Interest ",
+     "align": "general"
+    },
+    {
+     "ref": "B63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A64",
+     "kind": "label",
+     "value": "         15. Special deposits",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A65",
+     "kind": "label",
+     "value": "         16. Margins against contingent liabilities",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B65",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C65",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D65",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E65",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F65",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G65",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H65",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I65",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J65",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K65",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A66",
+     "kind": "label",
+     "value": "         17. Bonds issued",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K66",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A67",
+     "kind": "label",
+     "value": "         18. Other liabilities  excluding contigent liabilities",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A68",
+     "kind": "label",
+     "value": "         19. Shareholders' Funds and Liabilities (9+10+11+...+18)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B68",
+     "kind": "formula",
+     "formula": "=B41+B42+B49+B50+B54+B58+B64+B65+B66+B67",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C68",
+     "kind": "formula",
+     "formula": "=C41+C42+C49+C50+C54+C58+C64+C65+C66+C67",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D68",
+     "kind": "formula",
+     "formula": "=D41+D42+D49+D50+D54+D58+D64+D65+D66+D67",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E68",
+     "kind": "formula",
+     "formula": "=E41+E42+E49+E50+E54+E58+E64+E65+E66+E67",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F68",
+     "kind": "formula",
+     "formula": "=F41+F42+F49+F50+F54+F58+F64+F65+F66+F67",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G68",
+     "kind": "formula",
+     "formula": "=G41+G42+G49+G50+G54+G58+G64+G65+G66+G67",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H68",
+     "kind": "formula",
+     "formula": "=H41+H42+H49+H50+H54+H58+H64+H65+H66+H67",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I68",
+     "kind": "formula",
+     "formula": "=I41+I42+I49+I50+I54+I58+I64+I65+I66+I67",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J68",
+     "kind": "formula",
+     "formula": "=J41+J42+J49+J50+J54+J58+J64+J65+J66+J67",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K68",
+     "kind": "formula",
+     "formula": "=K41+K42+K49+K50+K54+K58+K64+K65+K66+K67",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A69",
+     "kind": "label",
+     "value": "         20. ASSETS - SHAREHOLDERS' FUNDS & LIABILITIES (11-27)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B69",
+     "kind": "formula",
+     "formula": "=B36-B68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C69",
+     "kind": "formula",
+     "formula": "=C36-C68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D69",
+     "kind": "formula",
+     "formula": "=D36-D68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E69",
+     "kind": "formula",
+     "formula": "=E36-E68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F69",
+     "kind": "formula",
+     "formula": "=F36-F68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G69",
+     "kind": "formula",
+     "formula": "=G36-G68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H69",
+     "kind": "formula",
+     "formula": "=H36-H68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I69",
+     "kind": "formula",
+     "formula": "=I36-I68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "J69",
+     "kind": "formula",
+     "formula": "=J36-J68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K69",
+     "kind": "formula",
+     "formula": "=K36-K68",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A70",
+     "kind": "label",
+     "value": "         21. Contingent liabilities ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B70",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C70",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D70",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E70",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F70",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G70",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H70",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I70",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J70",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K70",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "A71",
+     "kind": "label",
+     "value": "         22. Managed funds (contra)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "E71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "F71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "G71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "H71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "I71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "J71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "K71",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    }
+   ]
+  }
+ ]
+}

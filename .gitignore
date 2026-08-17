@@ -55,3 +55,6 @@ docs/internal/AequorOS_Market_Data_and_Curve_Platform.md
 
 # Local Snowflake seed CSVs (25MB) loaded into the warehouse — regenerable, not source.
 data_snowflake/
+
+# Generated regulatory export artifacts (PDF/xlsx per run) — reproducible from the pipeline
+exports/

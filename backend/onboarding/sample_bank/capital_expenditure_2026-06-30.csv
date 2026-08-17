@@ -1,0 +1,13 @@
+# Sample Bank onboarding dataset — capital_expenditure (docs/data_engine/datasets/capital_expenditure.md).
+# One row per (period_end, asset_class): two half-years (2025-12-31 = H2 2025, 2026-06-30 = H1 2026) x 7 asset classes.
+# Push ONE period per batch with as_of_date = period_end (the per-period files capital_expenditure_YYYY-MM-DD.csv are the push units).
+# Amounts in cedis. Movements are the half-year's (BSD10 A-H); closing_cost / accumulated_depreciation / closing_nbv / wip_closing
+# are the period-end stock (BSD2 item 12 rows 115-121 + 123). Illustrative, not real bank data.
+period_end,asset_class,currency,opening_nbv_ghs,additions_purchased_ghs,additions_finance_lease_ghs,additions_hire_purchase_ghs,capital_wip_ghs,disposal_proceeds_ghs,disposals_nbv_ghs,depreciation_ghs,closing_cost_ghs,accumulated_depreciation_ghs,closing_nbv_ghs,wip_closing_ghs,contracted_not_provided_ghs,authorised_not_contracted_ghs,forecast_next_6m_ghs,forecast_0_3m_ghs,forecast_3_6m_ghs,budget_ghs,notes
+2026-06-30,land_buildings,GHS,54900000,1900000,0,0,3200000,0,0,1200000,68000000,12400000,55600000,6800000,2400000,5000000,4500000,2000000,2500000,6000000,Kumasi Adum branch build carried as WIP
+2026-06-30,staff_land_premises,GHS,7550000,0,0,0,0,0,0,150000,9500000,2100000,7400000,0,0,0,0,0,0,0,
+2026-06-30,furniture_equipment,GHS,8400000,1600000,0,0,0,60000,100000,1200000,20900000,12200000,8700000,0,500000,800000,1200000,700000,500000,3000000,
+2026-06-30,computers,GHS,10900000,3400000,1100000,0,900000,50000,200000,3700000,37900000,26400000,11500000,1400000,1800000,2500000,3000000,1800000,1200000,7500000,data-centre servers on finance lease; core-banking upgrade WIP
+2026-06-30,other_office_equipment,GHS,2000000,500000,0,0,0,20000,50000,350000,6100000,4000000,2100000,0,100000,200000,300000,200000,100000,800000,
+2026-06-30,motor_vehicles,GHS,5600000,1200000,0,600000,0,450000,300000,1200000,14300000,8400000,5900000,0,400000,900000,1000000,400000,600000,2500000,bullion vans on hire-purchase
+2026-06-30,other_property_legal_rights,GHS,1600000,0,0,0,0,0,0,100000,3100000,1600000,1500000,0,0,0,0,0,0,0,leasehold rights (BSD2 12(f) only; excluded from BSD10)

@@ -10,13 +10,13 @@ from app.api.deps import TenantContext
 from app.models import Bank, Job
 from app.schemas.live import FreshnessModuleRead
 from app.services import freshness, job_queue, pipeline
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import (
     FIXTURE_AS_OF,
     seed_canonical_fixture,
     seed_hedge_and_swap_positions,
 )
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 
 def _ctx() -> TenantContext:
@@ -102,7 +102,21 @@ def test_freshness_rederiving_unchanged_data_stays_fresh(db_session: Session) ->
     liquidity = _liquidity(read)
     assert liquidity.live_hash == liquidity.official_run_hash
     assert liquidity.is_stale is False
-    assert read.is_stale is False
+    # Every module the fixture can compute (it has a live hash) stays fresh
+    # across the churn — the bare re-derivation fabricated no staleness anywhere.
+    computable = [module for module in read.modules if module.live_hash is not None]
+    assert {module.module for module in computable} >= {"liquidity", "capital", "irr", "fx", "ftp"}
+    assert all(module.is_stale is False for module in computable)
+    # The aggregate is deliberately NOT asserted False: the implied-rating module
+    # joined the freshness list (2026-08-14) and on the hermetic fixture it is
+    # unavailable — no published GHANA_SOVEREIGN credit rating, so neither a live
+    # hash nor an official rating run exists — which the "no official run yet"
+    # rule grades as stale. That is an unfiled module, not fabricated drift; the
+    # aggregate must be stale for exactly that reason and no other.
+    rating = next(module for module in read.modules if module.module == "rating")
+    assert rating.live_hash is None
+    assert rating.official_run_hash is None
+    assert read.is_stale is rating.is_stale
 
 
 def test_freshness_without_any_period_is_not_stale(db_session: Session) -> None:

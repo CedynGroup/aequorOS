@@ -311,7 +311,7 @@ class RegulatoryArtifactVersion(UuidV4PrimaryKeyMixin, Base):
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     package_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # widened for xlsx_working
     object_path: Mapped[str] = mapped_column(String(512), nullable=False)
     #: Object-store version id when the backend supplies one (S3/MinIO
     #: versioning). NULL only where the backend cannot report it.

@@ -36,8 +36,11 @@ type ReturnFamily = Literal[
     "large_exposures",
     "dbk",
     "stress",
+    # Official Bank of Ghana BSD prudential returns (BSD1 … BSD17) — see
+    # docs/bog_returns/00_full_return_registry.md and bog_forms/.
+    "bsd",
 ]
-type ReturnFrequency = Literal["monthly", "quarterly", "semiannual", "annual", "daily"]
+type ReturnFrequency = Literal["weekly", "monthly", "quarterly", "semiannual", "annual", "daily"]
 type ChannelCode = Literal["orass_sandbox", "email", "manual"]
 type FilingFormat = Literal["xlsx", "csv", "pdf"]
 
@@ -142,11 +145,31 @@ class ReturnDefinition:
     filing_format: FilingFormat | None = "xlsx"
 
 
+def _bog_definitions() -> list[ReturnDefinition]:
+    """Every official BoG BSD form, built from the bog_forms catalogue.
+
+    Deferred import: bog_forms.registry_entries constructs ReturnDefinition
+    instances with THIS class (passed in) and never imports registry.py, so
+    there is no cycle.
+    """
+    from app.services.regulatory_reporting.bog_forms.registry_entries import (  # noqa: PLC0415
+        build_definitions,
+    )
+
+    return build_definitions(ReturnDefinition)
+
+
 REGISTRY: dict[str, ReturnDefinition] = {
     definition.code: definition
     for definition in (
+        # NOTE (2026-08-15, right-reporting reconciliation): this entry was
+        # registered as "BSD3" before the official BoG templates were available.
+        # Official BSD3 is the Large Exposures return (BSD3A/BSD3B, registered
+        # below from bog_forms). The LCR/NSFR reconstruction keeps generating
+        # under its honest code; stored return_code values were migrated
+        # (alembic 202608150013). See docs/bog_returns/00_full_return_registry.md §3.
         ReturnDefinition(
-            code="BSD3",
+            code="LCR-NSFR",
             family="liquidity",
             title="Liquidity Returns (LCR & NSFR)",
             directive_citation=(
@@ -193,8 +216,13 @@ REGISTRY: dict[str, ReturnDefinition] = {
             fidelity="PARTIAL",
             default_channel="orass_sandbox",
         ),
+        # NOTE (2026-08-15, right-reporting reconciliation): registered as
+        # "BSD2" before the official templates were available. Official BSD2 is
+        # the Statement of Assets and Liabilities; the Capital Adequacy Return
+        # is BSD5A (both registered below from bog_forms, BSD5A fed by this same
+        # capital engine). Stored return_code values migrated (202608150013).
         ReturnDefinition(
-            code="BSD2",
+            code="CAR-RWA",
             family="capital",
             title="Capital Adequacy Return (CAR & RWA)",
             directive_citation=(
@@ -326,33 +354,11 @@ REGISTRY: dict[str, ReturnDefinition] = {
             default_channel="manual",
         ),
         # --- Template-gated returns (product.md §Phase 2 items 12/14) ------
-        # Both are REAL periodic obligations banks must plan for, so they
-        # live in the registry and the compliance calendar TODAY; but their
-        # BoG form layouts are unpublished, and the standing order is to get
-        # the form first, never infer it (the BSD-2 inference is not repeated).
-        # Generation refuses with error_code "template_pending" until the
-        # official layout lands; deadlines are stated conventions and remain
-        # overridable through the existing deadline-override machinery.
-        ReturnDefinition(
-            code="BSD-MONTHLY",
-            family="capital",
-            title="Monthly BSD Prudential Pack (Balance Sheet + P&L)",
-            directive_citation=(
-                "BoG monthly prudential returns (BSD) — the bread-and-butter "
-                "monthly filing carrying balance sheet, P&L, deposits and "
-                "withdrawals in BoG's own form. The official layout is NOT "
-                "published to us; generation is gated until the form is obtained "
-                "(validation register: get the form first, never infer it)."
-            ),
-            frequency="monthly",
-            # Day 9 follows the observed BoG monthly-return convention
-            # (LMTD Part II ¶7 precedent, as for LE-MONTHLY); overridable.
-            deadline_rule=monthly_day(9),
-            generator="template_pending",
-            template_id="bog-bsd-monthly-pending",
-            fidelity="REPRESENTATIVE",
-            default_channel="manual",
-        ),
+        # The former "BSD-MONTHLY" placeholder (Balance Sheet + P&L pack, gated
+        # on the official form) is RETIRED as of 2026-08-15: the official
+        # workbooks landed and BSD2 (Statement of Assets & Liabilities) + BSD7A
+        # (Current Year Results) are registered below from bog_forms. LAS stays
+        # gated: its official layout is still unpublished.
         ReturnDefinition(
             code="LAS-QUARTERLY",
             family="liquidity",
@@ -504,6 +510,15 @@ REGISTRY: dict[str, ReturnDefinition] = {
             default_channel="orass_sandbox",
             event_driven=True,
         ),
+        # --- Official Bank of Ghana BSD prudential returns (BSD1 … BSD17) -----
+        # Every template under docs/reporting/, registered from the bog_forms
+        # catalogue so this list can never drift from it: frequency + time
+        # limit from the Guide's List of Prudential Returns, basis per General
+        # Notes §1 (subsidiaries consolidated only on BSD7B/BSD9 + the GROUP
+        # variants BSD3B/BSD5B), generator "bog_form" (template-faithful export
+        # from the committed official layouts). Registry doc:
+        # docs/bog_returns/00_full_return_registry.md.
+        *_bog_definitions(),
     )
 }
 

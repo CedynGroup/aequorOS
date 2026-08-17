@@ -1,0 +1,2056 @@
+{
+ "form": "BSD13",
+ "workbook": "FORM BSD13 REVISED.xls",
+ "sheets": [
+  {
+   "name": "FOREX OPEN POSITION",
+   "max_row": 56,
+   "max_col": 15,
+   "column_widths": {
+    "A": 3.42,
+    "B": 21.99,
+    "C": 19.99,
+    "G": 4.28,
+    "J": 4.28,
+    "M": 4.56
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "align": "general"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "N2",
+     "kind": "label",
+     "value": "(Monthly)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B3",
+     "kind": "label",
+     "value": "[Form FXP]",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D4",
+     "kind": "label",
+     "value": "REPORT ON FOREX POSITION(S)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B6",
+     "kind": "label",
+     "value": "Report Institution :",
+     "align": "general"
+    },
+    {
+     "ref": "B8",
+     "kind": "label",
+     "value": "Report for Period : ……………………………………………",
+     "align": "general"
+    },
+    {
+     "ref": "F8",
+     "kind": "label",
+     "value": "(month)",
+     "align": "general"
+    },
+    {
+     "ref": "B10",
+     "kind": "label",
+     "value": "Position(s) as on",
+     "align": "general"
+    },
+    {
+     "ref": "D10",
+     "kind": "label",
+     "value": "…………..",
+     "align": "general"
+    },
+    {
+     "ref": "E10",
+     "kind": "label",
+     "value": "…………..",
+     "align": "general"
+    },
+    {
+     "ref": "F10",
+     "kind": "label",
+     "value": "…………..",
+     "align": "general"
+    },
+    {
+     "ref": "D11",
+     "kind": "label",
+     "value": "(Date)",
+     "align": "general"
+    },
+    {
+     "ref": "E11",
+     "kind": "label",
+     "value": "(Month)",
+     "align": "center"
+    },
+    {
+     "ref": "F11",
+     "kind": "label",
+     "value": "(Year)",
+     "align": "right"
+    },
+    {
+     "ref": "C13",
+     "kind": "label",
+     "value": "I.",
+     "bold": true,
+     "align": "right"
+    },
+    {
+     "ref": "D13",
+     "kind": "label",
+     "value": "CURRENCY - WISE POSITIONS (EXPOSURES)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F14",
+     "kind": "label",
+     "value": "(Amounts in Units Of Currencies)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E15",
+     "kind": "label",
+     "value": "US DOLLAR",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H15",
+     "kind": "label",
+     "value": "GB POUND",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "K15",
+     "kind": "label",
+     "value": "DEM",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "N15",
+     "kind": "label",
+     "value": "Other Currencies",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B16",
+     "kind": "label",
+     "value": "Position",
+     "align": "general"
+    },
+    {
+     "ref": "C16",
+     "kind": "label",
+     "value": "Composition",
+     "align": "general"
+    },
+    {
+     "ref": "F16",
+     "kind": "label",
+     "value": "Nature of",
+     "align": "general"
+    },
+    {
+     "ref": "I16",
+     "kind": "label",
+     "value": "Nature of",
+     "align": "general"
+    },
+    {
+     "ref": "L16",
+     "kind": "label",
+     "value": "Nature of",
+     "align": "general"
+    },
+    {
+     "ref": "B17",
+     "kind": "label",
+     "value": "Component",
+     "align": "general"
+    },
+    {
+     "ref": "C17",
+     "kind": "label",
+     "value": "Vide schedule",
+     "align": "general"
+    },
+    {
+     "ref": "E17",
+     "kind": "label",
+     "value": "Amount",
+     "align": "general"
+    },
+    {
+     "ref": "F17",
+     "kind": "label",
+     "value": "Position",
+     "align": "general"
+    },
+    {
+     "ref": "H17",
+     "kind": "label",
+     "value": "Amount",
+     "align": "general"
+    },
+    {
+     "ref": "I17",
+     "kind": "label",
+     "value": "Position",
+     "align": "general"
+    },
+    {
+     "ref": "K17",
+     "kind": "label",
+     "value": "Amount",
+     "align": "general"
+    },
+    {
+     "ref": "L17",
+     "kind": "label",
+     "value": "Position",
+     "align": "general"
+    },
+    {
+     "ref": "N17",
+     "kind": "label",
+     "value": "Amount",
+     "align": "general"
+    },
+    {
+     "ref": "A19",
+     "kind": "label",
+     "value": "i)",
+     "align": "right"
+    },
+    {
+     "ref": "B19",
+     "kind": "label",
+     "value": "Net Assets",
+     "align": "general"
+    },
+    {
+     "ref": "C19",
+     "kind": "label",
+     "value": "(A)",
+     "align": "center"
+    },
+    {
+     "ref": "F19",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "I19",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "L19",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "O19",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "A21",
+     "kind": "label",
+     "value": "ii)",
+     "align": "right"
+    },
+    {
+     "ref": "B21",
+     "kind": "label",
+     "value": "Liabilities on",
+     "align": "general"
+    },
+    {
+     "ref": "C21",
+     "kind": "label",
+     "value": "(B)",
+     "align": "center"
+    },
+    {
+     "ref": "F21",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "I21",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "L21",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "O21",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "B22",
+     "kind": "label",
+     "value": "contingent credits",
+     "align": "general"
+    },
+    {
+     "ref": "A24",
+     "kind": "label",
+     "value": "iii)",
+     "align": "right"
+    },
+    {
+     "ref": "B24",
+     "kind": "label",
+     "value": "Net Trading",
+     "align": "general"
+    },
+    {
+     "ref": "C24",
+     "kind": "label",
+     "value": "(C)",
+     "align": "center"
+    },
+    {
+     "ref": "F24",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "I24",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "L24",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "O24",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "B25",
+     "kind": "label",
+     "value": "Position (under",
+     "align": "general"
+    },
+    {
+     "ref": "B26",
+     "kind": "label",
+     "value": "contracts outstanding)",
+     "align": "general"
+    },
+    {
+     "ref": "B28",
+     "kind": "label",
+     "value": "NET OPEN ",
+     "align": "general"
+    },
+    {
+     "ref": "B29",
+     "kind": "label",
+     "value": "POSITION(NOP)",
+     "align": "general"
+    },
+    {
+     "ref": "F29",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "I29",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "L29",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "O29",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "B30",
+     "kind": "label",
+     "value": "       (i+ii+iii)",
+     "align": "general"
+    },
+    {
+     "ref": "B32",
+     "kind": "label",
+     "value": "Cedi equivalent (in ' 000)",
+     "align": "general"
+    },
+    {
+     "ref": "F32",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "I32",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "L32",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "O32",
+     "kind": "label",
+     "value": "(     )",
+     "align": "center"
+    },
+    {
+     "ref": "B33",
+     "kind": "label",
+     "value": " (of NOP in currency)",
+     "align": "general"
+    },
+    {
+     "ref": "B35",
+     "kind": "label",
+     "value": "Management Limit, if any,",
+     "align": "general"
+    },
+    {
+     "ref": "B36",
+     "kind": "label",
+     "value": "on NOP in currency",
+     "align": "general"
+    },
+    {
+     "ref": "C39",
+     "kind": "label",
+     "value": "II.   AGGREGATE FOREX OPEN POSITION",
+     "bold": true,
+     "align": "left"
+    },
+    {
+     "ref": "C40",
+     "kind": "label",
+     "value": "                (Amounts in cedi equivalent ' 000)",
+     "bold": true,
+     "align": "left"
+    },
+    {
+     "ref": "B42",
+     "kind": "label",
+     "value": "CURRENCY",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C42",
+     "kind": "label",
+     "value": "Net Open Position",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D42",
+     "kind": "label",
+     "value": "(Nature Of Position)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B44",
+     "kind": "label",
+     "value": "US DOLLAR",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D44",
+     "kind": "label",
+     "value": "(      )",
+     "align": "center"
+    },
+    {
+     "ref": "B45",
+     "kind": "label",
+     "value": "GB POUND",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D45",
+     "kind": "label",
+     "value": "(      )",
+     "align": "center"
+    },
+    {
+     "ref": "B46",
+     "kind": "label",
+     "value": "DEM",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D46",
+     "kind": "label",
+     "value": "(      )",
+     "align": "center"
+    },
+    {
+     "ref": "B47",
+     "kind": "label",
+     "value": "Other Currencies",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D47",
+     "kind": "label",
+     "value": "(      )",
+     "align": "center"
+    },
+    {
+     "ref": "A50",
+     "kind": "label",
+     "value": "a.",
+     "align": "general"
+    },
+    {
+     "ref": "B50",
+     "kind": "label",
+     "value": "AGGREGATE FOREX **",
+     "align": "general"
+    },
+    {
+     "ref": "B51",
+     "kind": "label",
+     "value": "OPEN POSITION(AFOP)",
+     "align": "general"
+    },
+    {
+     "ref": "A52",
+     "kind": "label",
+     "value": "b.",
+     "align": "general"
+    },
+    {
+     "ref": "B52",
+     "kind": "label",
+     "value": "Net own funds (NOF) ***",
+     "align": "general"
+    },
+    {
+     "ref": "A53",
+     "kind": "label",
+     "value": "c.",
+     "align": "general"
+    },
+    {
+     "ref": "B53",
+     "kind": "label",
+     "value": "AFOP as % of NOF",
+     "align": "general"
+    },
+    {
+     "ref": "B55",
+     "kind": "label",
+     "value": "Regulatory(ie BoG) limit,",
+     "align": "general"
+    },
+    {
+     "ref": "B56",
+     "kind": "label",
+     "value": "if any, on AFOP.",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "FOREX OPEN POSITION-SCHEDULE-A",
+   "max_row": 64,
+   "max_col": 6,
+   "column_widths": {
+    "A": 4.14,
+    "B": 34.13,
+    "C": 11.42,
+    "D": 10.85,
+    "F": 16.13
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "align": "general"
+    },
+    {
+     "ref": "C1",
+     "kind": "label",
+     "value": "SCHEDULE A",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C3",
+     "kind": "label",
+     "value": "COMPOSITION OF ' NET ASSETS' POSITION",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D4",
+     "kind": "label",
+     "value": "(Amounts in Units Of Curreincies)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F6",
+     "kind": "label",
+     "value": "Other Currencies",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "A.  A S S E T S",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C7",
+     "kind": "label",
+     "value": "US DOLLAR",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "label",
+     "value": "GB POUND",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E7",
+     "kind": "label",
+     "value": "DEM",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F7",
+     "kind": "label",
+     "value": "(in equiv. Cedi 'Million)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "1.",
+     "align": "right"
+    },
+    {
+     "ref": "B8",
+     "kind": "label",
+     "value": "Cash on Hand",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "2.",
+     "align": "right"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "Funds in current a/cs",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C9",
+     "kind": "formula",
+     "formula": "=SUM(C10:C12)",
+     "align": "general"
+    },
+    {
+     "ref": "D9",
+     "kind": "formula",
+     "formula": "=SUM(D10:D12)",
+     "align": "general"
+    },
+    {
+     "ref": "E9",
+     "kind": "formula",
+     "formula": "=SUM(E10:E12)",
+     "align": "general"
+    },
+    {
+     "ref": "F9",
+     "kind": "formula",
+     "formula": "=SUM(F10:F12)",
+     "align": "general"
+    },
+    {
+     "ref": "B10",
+     "kind": "label",
+     "value": "  a. In overseas banks",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B11",
+     "kind": "label",
+     "value": "  b. In BoG",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B12",
+     "kind": "label",
+     "value": "  c. In Ghana banks",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A14",
+     "kind": "label",
+     "value": "3.",
+     "align": "right"
+    },
+    {
+     "ref": "B14",
+     "kind": "label",
+     "value": "Placements / deposits / repos (on own account)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C14",
+     "kind": "formula",
+     "formula": "=SUM(C15:C16)",
+     "align": "general"
+    },
+    {
+     "ref": "D14",
+     "kind": "formula",
+     "formula": "=SUM(D15:D16)",
+     "align": "general"
+    },
+    {
+     "ref": "E14",
+     "kind": "formula",
+     "formula": "=SUM(E15:E16)",
+     "align": "general"
+    },
+    {
+     "ref": "F14",
+     "kind": "formula",
+     "formula": "=SUM(F15:F16)",
+     "align": "general"
+    },
+    {
+     "ref": "B15",
+     "kind": "label",
+     "value": "  a. At Ghana Banks",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B16",
+     "kind": "label",
+     "value": "  b. at overseas banks",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B17",
+     "kind": "label",
+     "value": "A. Placements at overseas banks",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B18",
+     "kind": "label",
+     "value": "       (held on customer account)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A19",
+     "kind": "label",
+     "value": "4.",
+     "align": "right"
+    },
+    {
+     "ref": "B19",
+     "kind": "label",
+     "value": "Securities Investments",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A20",
+     "kind": "label",
+     "value": "5.",
+     "align": "right"
+    },
+    {
+     "ref": "B20",
+     "kind": "label",
+     "value": "Loans & advances (net)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A21",
+     "kind": "label",
+     "value": "6.",
+     "align": "right"
+    },
+    {
+     "ref": "B21",
+     "kind": "label",
+     "value": "Other assets / receivables",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B23",
+     "kind": "label",
+     "value": "TOTAL ASSETS (TA)",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C23",
+     "kind": "formula",
+     "formula": "=C8+C9+C14+C19+C20+C21",
+     "align": "general"
+    },
+    {
+     "ref": "D23",
+     "kind": "formula",
+     "formula": "=D8+D9+D14+D19+D20+D21",
+     "align": "general"
+    },
+    {
+     "ref": "E23",
+     "kind": "formula",
+     "formula": "=E8+E9+E14+E19+E20+E21",
+     "align": "general"
+    },
+    {
+     "ref": "F23",
+     "kind": "formula",
+     "formula": "=F8+F9+F14+F19+F20+F21",
+     "align": "general"
+    },
+    {
+     "ref": "B25",
+     "kind": "label",
+     "value": "B. LIABILITIES",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A27",
+     "kind": "label",
+     "value": "7.",
+     "align": "right"
+    },
+    {
+     "ref": "B27",
+     "kind": "label",
+     "value": "Deposits",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C27",
+     "kind": "formula",
+     "formula": "=SUM(C28:C29)",
+     "align": "general"
+    },
+    {
+     "ref": "D27",
+     "kind": "formula",
+     "formula": "=SUM(D28:D29)",
+     "align": "general"
+    },
+    {
+     "ref": "E27",
+     "kind": "formula",
+     "formula": "=SUM(E28:E29)",
+     "align": "general"
+    },
+    {
+     "ref": "F27",
+     "kind": "formula",
+     "formula": "=SUM(F28:F29)",
+     "align": "general"
+    },
+    {
+     "ref": "B28",
+     "kind": "label",
+     "value": "  a. Non-residents",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B29",
+     "kind": "label",
+     "value": "  b. Residents",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C29",
+     "kind": "formula",
+     "formula": "=SUM(C30:C31)",
+     "align": "general"
+    },
+    {
+     "ref": "D29",
+     "kind": "formula",
+     "formula": "=SUM(D30:D31)",
+     "align": "general"
+    },
+    {
+     "ref": "E29",
+     "kind": "formula",
+     "formula": "=SUM(E30:E31)",
+     "align": "general"
+    },
+    {
+     "ref": "F29",
+     "kind": "formula",
+     "formula": "=SUM(F30:F31)",
+     "align": "general"
+    },
+    {
+     "ref": "B30",
+     "kind": "label",
+     "value": "i) foreign exchange a/cs (external)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B31",
+     "kind": "label",
+     "value": "ii) foreign exchange a/cs (internal)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A33",
+     "kind": "label",
+     "value": "8.",
+     "align": "right"
+    },
+    {
+     "ref": "B33",
+     "kind": "label",
+     "value": "Borrowings in inter-bank market",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A34",
+     "kind": "label",
+     "value": "9.",
+     "align": "right"
+    },
+    {
+     "ref": "B34",
+     "kind": "label",
+     "value": "Other borrowings",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A35",
+     "kind": "label",
+     "value": "10.",
+     "align": "right"
+    },
+    {
+     "ref": "B35",
+     "kind": "label",
+     "value": "Other liabilities / payables",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B37",
+     "kind": "label",
+     "value": "TOTAL LIABILITIES (TL)",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C37",
+     "kind": "formula",
+     "formula": "=C27+C33+C34+C35",
+     "align": "general"
+    },
+    {
+     "ref": "D37",
+     "kind": "formula",
+     "formula": "=D27+D33+D34+D35",
+     "align": "general"
+    },
+    {
+     "ref": "E37",
+     "kind": "formula",
+     "formula": "=E27+E33+E34+E35",
+     "align": "general"
+    },
+    {
+     "ref": "F37",
+     "kind": "formula",
+     "formula": "=F27+F33+F34+F35",
+     "align": "general"
+    },
+    {
+     "ref": "B39",
+     "kind": "label",
+     "value": "NET ASSETS(A-B)",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C39",
+     "kind": "formula",
+     "formula": "=C23-C37",
+     "align": "general"
+    },
+    {
+     "ref": "D39",
+     "kind": "formula",
+     "formula": "=D23-D37",
+     "align": "general"
+    },
+    {
+     "ref": "E39",
+     "kind": "formula",
+     "formula": "=E23-E37",
+     "align": "general"
+    },
+    {
+     "ref": "F39",
+     "kind": "formula",
+     "formula": "=F23-F37",
+     "align": "general"
+    },
+    {
+     "ref": "B40",
+     "kind": "label",
+     "value": "       (TA-TL)",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B42",
+     "kind": "label",
+     "value": "Any comments:",
+     "bold": true,
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "FOREX OPEN POSITION-SCHEDULE-B",
+   "max_row": 40,
+   "max_col": 7,
+   "column_widths": {
+    "A": 4.14,
+    "B": 34.13,
+    "C": 11.42,
+    "D": 10.85,
+    "F": 16.13
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "align": "general"
+    },
+    {
+     "ref": "C1",
+     "kind": "label",
+     "value": "SCHEDULE B",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B3",
+     "kind": "label",
+     "value": "LIABILITIES ON ACCOUNT  CONTINGENT EXPOSURES (IN CURRENCIES) ++",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D4",
+     "kind": "label",
+     "value": "(Amounts in Units Of Curreincies)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B6",
+     "kind": "label",
+     "value": "Liabilities (crystallised)",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "F6",
+     "kind": "label",
+     "value": "Other Currencies",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "under Contingents",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C7",
+     "kind": "label",
+     "value": "US DOLLAR",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "label",
+     "value": "GB POUND",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E7",
+     "kind": "label",
+     "value": "DEM",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F7",
+     "kind": "label",
+     "value": "(in equiv. Cedi 'Million)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "a.",
+     "align": "right"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "Letters of Credit",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "b.",
+     "align": "right"
+    },
+    {
+     "ref": "B11",
+     "kind": "label",
+     "value": "Guarantees",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "c.",
+     "align": "right"
+    },
+    {
+     "ref": "B13",
+     "kind": "label",
+     "value": "Other Commitments",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B15",
+     "kind": "label",
+     "value": "TOTAL ",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C15",
+     "kind": "formula",
+     "formula": "=C9+C11+C13",
+     "align": "general"
+    },
+    {
+     "ref": "D15",
+     "kind": "formula",
+     "formula": "=D9+D11+D13",
+     "align": "general"
+    },
+    {
+     "ref": "E15",
+     "kind": "formula",
+     "formula": "=E9+E11+E13",
+     "align": "general"
+    },
+    {
+     "ref": "F15",
+     "kind": "formula",
+     "formula": "=F9+F11+F13",
+     "align": "general"
+    },
+    {
+     "ref": "B17",
+     "kind": "label",
+     "value": "Net Position (L or S)",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C17",
+     "kind": "label",
+     "value": "   (       )",
+     "align": "center"
+    },
+    {
+     "ref": "D17",
+     "kind": "label",
+     "value": "   (       )",
+     "align": "center"
+    },
+    {
+     "ref": "E17",
+     "kind": "label",
+     "value": "   (       )",
+     "align": "center"
+    },
+    {
+     "ref": "F17",
+     "kind": "label",
+     "value": "   (       )",
+     "align": "center"
+    },
+    {
+     "ref": "B20",
+     "kind": "label",
+     "value": "                                                     ++",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C20",
+     "kind": "label",
+     "value": "(Any comments)",
+     "bold": true,
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "FOREX OPEN POSITION-SCHEDULE-C",
+   "max_row": 54,
+   "max_col": 9,
+   "column_widths": {
+    "A": 4.14,
+    "B": 34.13,
+    "C": 13.56,
+    "D": 10.85,
+    "F": 16.13,
+    "H": 15.56
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A1",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "align": "general"
+    },
+    {
+     "ref": "C1",
+     "kind": "label",
+     "value": "SCHEDULE C",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "PERIOD:",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C3",
+     "kind": "label",
+     "value": "(NET TRADING POSITION - composition)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D4",
+     "kind": "label",
+     "value": "(Amounts in Units Of Curreincies)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F6",
+     "kind": "label",
+     "value": "Other Currencies",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "CONTRACTS OUTSTANDING",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C7",
+     "kind": "label",
+     "value": "US DOLLAR",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "label",
+     "value": "GB POUND",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E7",
+     "kind": "label",
+     "value": "DEM",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F7",
+     "kind": "label",
+     "value": "(in equiv. Cedi 'Million)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "(i)",
+     "align": "right"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "Spot Purchase",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "(ii)",
+     "align": "right"
+    },
+    {
+     "ref": "B11",
+     "kind": "label",
+     "value": "Spot Sale",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "a.",
+     "align": "right"
+    },
+    {
+     "ref": "B13",
+     "kind": "label",
+     "value": "Net Spot Position (i - ii)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C13",
+     "kind": "formula",
+     "formula": "=C9+C11",
+     "align": "general"
+    },
+    {
+     "ref": "D13",
+     "kind": "formula",
+     "formula": "=D9+D11",
+     "align": "general"
+    },
+    {
+     "ref": "E13",
+     "kind": "formula",
+     "formula": "=E9+E11",
+     "align": "general"
+    },
+    {
+     "ref": "F13",
+     "kind": "formula",
+     "formula": "=F9+F11",
+     "align": "general"
+    },
+    {
+     "ref": "B14",
+     "kind": "label",
+     "value": "         (L + or S -)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C14",
+     "kind": "label",
+     "value": "   (      )",
+     "align": "center"
+    },
+    {
+     "ref": "D14",
+     "kind": "label",
+     "value": "   (      )",
+     "align": "center"
+    },
+    {
+     "ref": "E14",
+     "kind": "label",
+     "value": "   (      )",
+     "align": "center"
+    },
+    {
+     "ref": "F14",
+     "kind": "label",
+     "value": "   (      )",
+     "align": "center"
+    },
+    {
+     "ref": "A16",
+     "kind": "label",
+     "value": "(iii)",
+     "align": "right"
+    },
+    {
+     "ref": "B16",
+     "kind": "label",
+     "value": "Forward Purchase *",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A18",
+     "kind": "label",
+     "value": "(iv)",
+     "align": "right"
+    },
+    {
+     "ref": "B18",
+     "kind": "label",
+     "value": "Forward sale *",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A20",
+     "kind": "label",
+     "value": "b.",
+     "align": "right"
+    },
+    {
+     "ref": "B20",
+     "kind": "label",
+     "value": "Net Forward Position (iii - iv)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C20",
+     "kind": "formula",
+     "formula": "=C16+C18",
+     "align": "general"
+    },
+    {
+     "ref": "D20",
+     "kind": "formula",
+     "formula": "=D16+D18",
+     "align": "general"
+    },
+    {
+     "ref": "E20",
+     "kind": "formula",
+     "formula": "=E16+E18",
+     "align": "general"
+    },
+    {
+     "ref": "F20",
+     "kind": "formula",
+     "formula": "=F16+F18",
+     "align": "general"
+    },
+    {
+     "ref": "B21",
+     "kind": "label",
+     "value": "         (L + or S -)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C21",
+     "kind": "label",
+     "value": "   (      )",
+     "align": "center"
+    },
+    {
+     "ref": "D21",
+     "kind": "label",
+     "value": "   (      )",
+     "align": "center"
+    },
+    {
+     "ref": "E21",
+     "kind": "label",
+     "value": "   (      )",
+     "align": "center"
+    },
+    {
+     "ref": "F21",
+     "kind": "label",
+     "value": "   (      )",
+     "align": "center"
+    },
+    {
+     "ref": "B23",
+     "kind": "label",
+     "value": "NET TRADING POSITION",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C23",
+     "kind": "formula",
+     "formula": "=C13+C20",
+     "align": "general"
+    },
+    {
+     "ref": "D23",
+     "kind": "formula",
+     "formula": "=D13+D20",
+     "align": "general"
+    },
+    {
+     "ref": "E23",
+     "kind": "formula",
+     "formula": "=E13+E20",
+     "align": "general"
+    },
+    {
+     "ref": "F23",
+     "kind": "formula",
+     "formula": "=F13+F20",
+     "align": "general"
+    },
+    {
+     "ref": "B24",
+     "kind": "label",
+     "value": "       ( a + b)",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B26",
+     "kind": "label",
+     "value": "Annexure  to  SCHEDULE  C",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C27",
+     "kind": "label",
+     "value": "FORWARD CONTRACTS OUTSTANDING",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C28",
+     "kind": "label",
+     "value": " (as on               )",
+     "align": "general"
+    },
+    {
+     "ref": "F29",
+     "kind": "label",
+     "value": "(Amounts in Curreincies unit in 'Million)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A30",
+     "kind": "label",
+     "value": "A.",
+     "bold": true,
+     "align": "right"
+    },
+    {
+     "ref": "B30",
+     "kind": "label",
+     "value": "PURCHASE CONTRACTS(o/s)",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "H31",
+     "kind": "label",
+     "value": "Forward Points",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H32",
+     "kind": "label",
+     "value": "over Spot(cedis)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I32",
+     "kind": "label",
+     "value": "Delivery /",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A33",
+     "kind": "label",
+     "value": "SI",
+     "bold": true,
+     "align": "right"
+    },
+    {
+     "ref": "C33",
+     "kind": "label",
+     "value": "Name of seller",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F33",
+     "kind": "label",
+     "value": "Forward Period /",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H33",
+     "kind": "label",
+     "value": "+(Premiums)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I33",
+     "kind": "label",
+     "value": "Maturity",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A34",
+     "kind": "label",
+     "value": "No.",
+     "bold": true,
+     "align": "right"
+    },
+    {
+     "ref": "B34",
+     "kind": "label",
+     "value": "Date of contract",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C34",
+     "kind": "label",
+     "value": "(bought from)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D34",
+     "kind": "label",
+     "value": "Currency",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E34",
+     "kind": "label",
+     "value": "Amount",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F34",
+     "kind": "label",
+     "value": "Maturity",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G34",
+     "kind": "label",
+     "value": "Rate",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H34",
+     "kind": "label",
+     "value": "-(Discounts)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I34",
+     "kind": "label",
+     "value": "Date",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A35",
+     "kind": "input",
+     "value": 1,
+     "align": "right"
+    },
+    {
+     "ref": "A36",
+     "kind": "input",
+     "value": 2,
+     "align": "right"
+    },
+    {
+     "ref": "A37",
+     "kind": "input",
+     "value": 3,
+     "align": "right"
+    },
+    {
+     "ref": "A38",
+     "kind": "input",
+     "value": 4,
+     "align": "right"
+    },
+    {
+     "ref": "A39",
+     "kind": "input",
+     "value": 5,
+     "align": "right"
+    },
+    {
+     "ref": "A40",
+     "kind": "input",
+     "value": 6,
+     "align": "right"
+    },
+    {
+     "ref": "A41",
+     "kind": "input",
+     "value": 7,
+     "align": "right"
+    },
+    {
+     "ref": "A43",
+     "kind": "label",
+     "value": "B.",
+     "bold": true,
+     "align": "right"
+    },
+    {
+     "ref": "B43",
+     "kind": "label",
+     "value": "SALE CONTRACTS(o/s)",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "H44",
+     "kind": "label",
+     "value": "Forward Points",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H45",
+     "kind": "label",
+     "value": "over Spot(cedis)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I45",
+     "kind": "label",
+     "value": "Delivery /",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A46",
+     "kind": "label",
+     "value": "SI",
+     "bold": true,
+     "align": "right"
+    },
+    {
+     "ref": "C46",
+     "kind": "label",
+     "value": "Name of seller",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F46",
+     "kind": "label",
+     "value": "Forward Period /",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H46",
+     "kind": "label",
+     "value": "+(Premiums)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I46",
+     "kind": "label",
+     "value": "Maturity",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A47",
+     "kind": "label",
+     "value": "No.",
+     "bold": true,
+     "align": "right"
+    },
+    {
+     "ref": "B47",
+     "kind": "label",
+     "value": "Date of contract",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C47",
+     "kind": "label",
+     "value": "(bought from)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "D47",
+     "kind": "label",
+     "value": "Currency",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E47",
+     "kind": "label",
+     "value": "Amount",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "F47",
+     "kind": "label",
+     "value": "Maturity",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "G47",
+     "kind": "label",
+     "value": "Rate",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "H47",
+     "kind": "label",
+     "value": "-(Discounts)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "I47",
+     "kind": "label",
+     "value": "Date",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A48",
+     "kind": "input",
+     "value": 1,
+     "align": "right"
+    },
+    {
+     "ref": "A49",
+     "kind": "input",
+     "value": 2,
+     "align": "right"
+    },
+    {
+     "ref": "A50",
+     "kind": "input",
+     "value": 3,
+     "align": "right"
+    },
+    {
+     "ref": "A51",
+     "kind": "input",
+     "value": 4,
+     "align": "right"
+    },
+    {
+     "ref": "A52",
+     "kind": "input",
+     "value": 5,
+     "align": "right"
+    },
+    {
+     "ref": "A53",
+     "kind": "input",
+     "value": 6,
+     "align": "right"
+    },
+    {
+     "ref": "A54",
+     "kind": "input",
+     "value": 7,
+     "align": "right"
+    }
+   ]
+  }
+ ]
+}

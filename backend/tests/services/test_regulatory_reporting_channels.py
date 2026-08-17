@@ -35,13 +35,13 @@ from app.services.regulatory_reporting.channels import (
     EmailFallbackChannel,
     OrassSandboxChannel,
 )
+from tests.factories.attestation import relax_signing
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.factories.attestation import relax_signing
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 CHECKER = TenantContext(
@@ -60,7 +60,7 @@ def _transient_package(status: str = "approved") -> RegulatoryPackage:
     return RegulatoryPackage(
         organization_id=DEMO_ORG_ID,
         bank_id=SAMPLE_BANK_ID,
-        return_code="BSD3",
+        return_code="LCR-NSFR",
         return_family="liquidity",
         reporting_date=REPORTING_DATE,
         frequency="monthly",
@@ -74,7 +74,7 @@ def _transient_artifact(kind: str = "xlsx") -> RegulatoryPackageArtifact:
     return RegulatoryPackageArtifact(
         organization_id=DEMO_ORG_ID,
         kind=kind,
-        object_path=f"bog_returns/2026-03-31/pkg/BSD3.{kind}",
+        object_path=f"bog_returns/2026-03-31/pkg/LCR-NSFR.{kind}",
         checksum_sha256="a" * 64,
         size_bytes=2048,
     )
@@ -93,7 +93,8 @@ def _poll_event(external_ref: str) -> RegulatorySubmissionEvent:
 def test_sandbox_submit_labels_everything_as_simulation() -> None:
     channel = OrassSandboxChannel()
     ref = channel.submit(_transient_package(), [_transient_artifact()])
-    assert ref.startswith("BSD3")  # ORASS-style ref; sandbox marker lives in detail
+    # ORASS-style ref (alnum[:4] of the code); the sandbox marker lives in detail
+    assert ref.startswith("LCRN")
     assert channel.last_detail["sandbox"] is True
     assert channel.last_detail["note"] == SANDBOX_NOTE
     assert "not publicly documented" in SANDBOX_NOTE
@@ -169,11 +170,11 @@ def test_email_bundle_contents_and_pending_flag() -> None:
     channel = EmailFallbackChannel(config={"institution_code": "SBL-001"})
     package = _transient_package()
     ref = channel.submit(package, [_transient_artifact(), _transient_artifact("pdf")])
-    assert ref.startswith("EMAIL-BSD3-")
+    assert ref.startswith("EMAIL-LCR-NSFR-")
 
     detail = channel.last_detail
     assert detail["pending_orass_reupload"] is True
-    assert detail["subject"] == "[SBL-001] [BSD3] [2026-03-31] – submitted under ORASS downtime"
+    assert detail["subject"] == "[SBL-001] [LCR-NSFR] [2026-03-31] – submitted under ORASS downtime"
     assert detail["penalty_reminder"] == ACT_930_PENALTY_REMINDER
     assert "500 penalty units" in detail["penalty_reminder"]
     assert "50 penalty units" in detail["penalty_reminder"]
@@ -189,7 +190,7 @@ def test_email_bundle_contents_and_pending_flag() -> None:
     assert CONFIRMED_CONSULTATION_ADDRESS in instructions
     assert "BG/FMD/2026/07" in instructions
     assert "deemed" in instructions
-    assert "BSD3.xlsx" in instructions and "BSD3.pdf" in instructions
+    assert "LCR-NSFR.xlsx" in instructions and "LCR-NSFR.pdf" in instructions
     assert [entry["kind"] for entry in detail["attachments"]] == ["xlsx", "pdf"]
 
 
@@ -210,7 +211,7 @@ def test_email_submit_preconditions_and_poll_always_pending() -> None:
     with pytest.raises(ChannelPreconditionError):
         channel.submit(_transient_package(), [])
 
-    status, detail = channel.poll_with_detail("EMAIL-BSD3-abc")
+    status, detail = channel.poll_with_detail("EMAIL-LCR-NSFR-abc")
     assert status == "pending"
     assert detail["pending_orass_reupload"] is True
 
@@ -257,7 +258,7 @@ def _seed_approved_package(db: Session) -> RegulatoryPackage:
     # every channel test and turning them into attestation tests by accident.
     # The gate itself is proved in tests/services/test_attestation_spine.py and
     # in the Playwright lifecycle journey.
-    relax_signing(db, organization_id=DEMO_ORG_ID, return_code="BSD3")
+    relax_signing(db, organization_id=DEMO_ORG_ID, return_code="LCR-NSFR")
     if db.scalar(select(User.id).where(User.id == CHECKER.actor_user_id)) is None:
         db.add(
             User(
@@ -289,7 +290,7 @@ def _seed_approved_package(db: Session) -> RegulatoryPackage:
         db,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
     validation.validate_package(db, MAKER, SAMPLE_BANK_ID, package.id)
     workflow.request_approval(db, MAKER, SAMPLE_BANK_ID, package.id, PackageApprovalRequestCreate())
@@ -343,7 +344,7 @@ def test_submit_auto_exports_xlsx_when_no_artifacts(
     assert event.channel == "orass_sandbox"
     assert event.event == "submitted"
     assert event.external_ref is not None
-    assert event.external_ref == "BSD300001"
+    assert event.external_ref == "LCRN00001"
     assert event.detail["sandbox"] is True
     assert event.detail["note"] == SANDBOX_NOTE
     assert event.detail["auto_exported_kinds"] == ["xlsx"]
@@ -450,7 +451,7 @@ def test_email_then_orass_reupload_clears_pending_flag(
     email_event = events.events[0]
     assert email_event.channel == "email"
     assert email_event.external_ref is not None
-    assert email_event.external_ref.startswith("EMAIL-BSD3-")
+    assert email_event.external_ref.startswith("EMAIL-LCR-NSFR-")
     assert email_event.detail["pending_orass_reupload"] is True
     assert CONFIRMED_CONSULTATION_ADDRESS in email_event.detail["instructions"]
 
@@ -465,7 +466,7 @@ def test_email_then_orass_reupload_clears_pending_flag(
     bsd3 = [
         item
         for item in late
-        if item.return_code == "BSD3" and item.reporting_date == REPORTING_DATE
+        if item.return_code == "LCR-NSFR" and item.reporting_date == REPORTING_DATE
     ]
     assert bsd3 and bsd3[0].package_status == "submitted"
     assert bsd3[0].rag == "overdue"
@@ -496,7 +497,7 @@ def test_email_then_orass_reupload_clears_pending_flag(
     bsd3 = [
         item
         for item in complete
-        if item.return_code == "BSD3" and item.reporting_date == REPORTING_DATE
+        if item.return_code == "LCR-NSFR" and item.reporting_date == REPORTING_DATE
     ]
     assert bsd3 and bsd3[0].rag == "on_track"
 
@@ -532,7 +533,7 @@ def test_unapproved_submit_is_409(db_session: Session, exporter_calls: list[str]
         db_session,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
     with pytest.raises(HTTPException) as exc_info:
         workflow.submit_package_via_channel(
@@ -554,7 +555,7 @@ def test_email_fallback_instructions_preview_without_submitting(
     preview = workflow.email_fallback_instructions(db_session, MAKER, SAMPLE_BANK_ID, package.id)
     assert preview.package_id == package.id
     assert preview.pending_orass_reupload is True
-    assert preview.subject.startswith("[SBL-001] [BSD3] [2026-03-31]")
+    assert preview.subject.startswith("[SBL-001] [LCR-NSFR] [2026-03-31]")
     assert preview.recipient_guidance.confirmed_consultation_address == (
         CONFIRMED_CONSULTATION_ADDRESS
     )

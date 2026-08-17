@@ -1,0 +1,2438 @@
+{
+ "form": "BSD5A",
+ "workbook": "FORM BSD5A REVISED.xls",
+ "sheets": [
+  {
+   "name": "CAR FORMAT",
+   "max_row": 79,
+   "max_col": 257,
+   "column_widths": {
+    "A": 9.14,
+    "B": 4.56,
+    "C": 4.7,
+    "D": 60.42,
+    "E": 16.7,
+    "F": 9.14
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "C1",
+     "kind": "label",
+     "value": "NAME OF BANK: …………………………………………………",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C2",
+     "kind": "label",
+     "value": "CAPITAL ADEQUACY RATIOS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C3",
+     "kind": "label",
+     "value": "DATA AS OF END………………….…...…. 20……",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C5",
+     "kind": "label",
+     "value": "No",
+     "align": "center"
+    },
+    {
+     "ref": "D5",
+     "kind": "label",
+     "value": "Item",
+     "align": "general"
+    },
+    {
+     "ref": "E5",
+     "kind": "label",
+     "value": "Amount (¢'Million)",
+     "align": "center"
+    },
+    {
+     "ref": "C7",
+     "kind": "input",
+     "value": 1,
+     "align": "center"
+    },
+    {
+     "ref": "D7",
+     "kind": "label",
+     "value": "Paid-up Capital",
+     "align": "general"
+    },
+    {
+     "ref": "E7",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C8",
+     "kind": "input",
+     "value": 2,
+     "align": "center"
+    },
+    {
+     "ref": "D8",
+     "kind": "label",
+     "value": "Disclosed Reserves",
+     "align": "general"
+    },
+    {
+     "ref": "E8",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C9",
+     "kind": "input",
+     "value": 3,
+     "align": "center"
+    },
+    {
+     "ref": "D9",
+     "kind": "label",
+     "value": "Permanent Preference Shares",
+     "align": "general"
+    },
+    {
+     "ref": "E9",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C10",
+     "kind": "input",
+     "value": 4,
+     "align": "center"
+    },
+    {
+     "ref": "D10",
+     "kind": "label",
+     "value": "Tier 1 Capital (1+2+3)",
+     "align": "general"
+    },
+    {
+     "ref": "E10",
+     "kind": "formula",
+     "formula": "=SUM(E7:E9)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "center"
+    },
+    {
+     "ref": "D11",
+     "kind": "label",
+     "value": "Less:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C12",
+     "kind": "input",
+     "value": 5,
+     "align": "center"
+    },
+    {
+     "ref": "D12",
+     "kind": "label",
+     "value": "Goodwill/Intangibles",
+     "align": "general"
+    },
+    {
+     "ref": "E12",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C13",
+     "kind": "input",
+     "value": 6,
+     "align": "center"
+    },
+    {
+     "ref": "D13",
+     "kind": "label",
+     "value": "Losses not Provided For",
+     "align": "general"
+    },
+    {
+     "ref": "E13",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C14",
+     "kind": "input",
+     "value": 7,
+     "align": "center"
+    },
+    {
+     "ref": "D14",
+     "kind": "label",
+     "value": "Investments in Unconsolidated Subsidiaries",
+     "align": "general"
+    },
+    {
+     "ref": "E14",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C15",
+     "kind": "input",
+     "value": 9,
+     "align": "center"
+    },
+    {
+     "ref": "D15",
+     "kind": "label",
+     "value": "Invests in the capital of Other Banks & Fin Insts.",
+     "align": "general"
+    },
+    {
+     "ref": "E15",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C16",
+     "kind": "input",
+     "value": 10,
+     "align": "center"
+    },
+    {
+     "ref": "D16",
+     "kind": "label",
+     "value": "Connected Lending of Long Term Nature",
+     "align": "general"
+    },
+    {
+     "ref": "E16",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C17",
+     "kind": "input",
+     "value": 11,
+     "align": "center"
+    },
+    {
+     "ref": "D17",
+     "kind": "label",
+     "value": "Net Tier 1 Capital (4-5-6-7-8-9-10)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E17",
+     "kind": "formula",
+     "formula": "=E10-SUM(E12:E16)",
+     "bold": true,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "C18",
+     "kind": "input",
+     "value": 12,
+     "align": "center"
+    },
+    {
+     "ref": "D18",
+     "kind": "label",
+     "value": "Capitalised Revaluation Reserves",
+     "align": "general"
+    },
+    {
+     "ref": "C19",
+     "kind": "input",
+     "value": 13,
+     "align": "center"
+    },
+    {
+     "ref": "D19",
+     "kind": "label",
+     "value": "Latent Revaluation Reserves",
+     "align": "general"
+    },
+    {
+     "ref": "C20",
+     "kind": "input",
+     "value": 14,
+     "align": "center"
+    },
+    {
+     "ref": "D20",
+     "kind": "label",
+     "value": "Undisclosed Reserves",
+     "align": "general"
+    },
+    {
+     "ref": "E20",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C21",
+     "kind": "input",
+     "value": 15,
+     "align": "center"
+    },
+    {
+     "ref": "D21",
+     "kind": "label",
+     "value": "Revaluation Reserves",
+     "align": "general"
+    },
+    {
+     "ref": "E21",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C22",
+     "kind": "input",
+     "value": 16,
+     "align": "center"
+    },
+    {
+     "ref": "D22",
+     "kind": "label",
+     "value": "Subordinated Term Debt (Limited to 50% of 4)",
+     "align": "general"
+    },
+    {
+     "ref": "E22",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C23",
+     "kind": "input",
+     "value": 17,
+     "align": "center"
+    },
+    {
+     "ref": "D23",
+     "kind": "label",
+     "value": "Hybrid Capital",
+     "align": "general"
+    },
+    {
+     "ref": "E23",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C24",
+     "kind": "input",
+     "value": 18,
+     "align": "center"
+    },
+    {
+     "ref": "D24",
+     "kind": "label",
+     "value": "Tier 2 Capital (12+13+14+15+16)(Limited to 100% of 4)",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E24",
+     "kind": "formula",
+     "formula": "=SUM(E20:E23)",
+     "bold": true,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "C25",
+     "kind": "input",
+     "value": 19,
+     "align": "center"
+    },
+    {
+     "ref": "D25",
+     "kind": "label",
+     "value": "ADJUSTED CAPITAL BASE (11+16)",
+     "align": "general"
+    },
+    {
+     "ref": "E25",
+     "kind": "formula",
+     "formula": "=E17+E24",
+     "bold": true,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "C27",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "D27",
+     "kind": "label",
+     "value": "TOTAL ASSETS (less Contra Items)",
+     "align": "general"
+    },
+    {
+     "ref": "E27",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D28",
+     "kind": "label",
+     "value": "Less:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C29",
+     "kind": "input",
+     "value": 21,
+     "align": "center"
+    },
+    {
+     "ref": "D29",
+     "kind": "label",
+     "value": "Cash on Hand (Cedis)",
+     "align": "general"
+    },
+    {
+     "ref": "E29",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C30",
+     "kind": "input",
+     "value": 22,
+     "align": "center"
+    },
+    {
+     "ref": "D30",
+     "kind": "label",
+     "value": "Cash on Hand (Forex) ",
+     "align": "general"
+    },
+    {
+     "ref": "E30",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C31",
+     "kind": "input",
+     "value": 23,
+     "align": "center"
+    },
+    {
+     "ref": "D31",
+     "kind": "label",
+     "value": "Claims on Bank of Ghana:",
+     "align": "general"
+    },
+    {
+     "ref": "E31",
+     "kind": "formula",
+     "formula": "=SUM(E32:E36)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "D32",
+     "kind": "label",
+     "value": "i.   Cedi Clearing Account Balance",
+     "align": "general"
+    },
+    {
+     "ref": "E32",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D33",
+     "kind": "label",
+     "value": "ii.   Forex Account Balance ",
+     "align": "general"
+    },
+    {
+     "ref": "E33",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D34",
+     "kind": "label",
+     "value": "iii.  Funds under SWAPS",
+     "align": "general"
+    },
+    {
+     "ref": "E34",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D35",
+     "kind": "label",
+     "value": "iv.  Bills and Bonds",
+     "align": "general"
+    },
+    {
+     "ref": "E35",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D36",
+     "kind": "label",
+     "value": "v.   Repos",
+     "align": "general"
+    },
+    {
+     "ref": "E36",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D37",
+     "kind": "label",
+     "value": "vi  Special Deposits",
+     "align": "general"
+    },
+    {
+     "ref": "C38",
+     "kind": "input",
+     "value": 24,
+     "align": "center"
+    },
+    {
+     "ref": "D38",
+     "kind": "label",
+     "value": "Claims on Government:",
+     "align": "general"
+    },
+    {
+     "ref": "E38",
+     "kind": "formula",
+     "formula": "=E39+E40",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "D39",
+     "kind": "label",
+     "value": "i)  Treasury Securities (Bills and Bonds)",
+     "align": "general"
+    },
+    {
+     "ref": "E39",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D40",
+     "kind": "label",
+     "value": "ii)  Stocks",
+     "align": "general"
+    },
+    {
+     "ref": "E40",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C41",
+     "kind": "input",
+     "value": 25,
+     "align": "center"
+    },
+    {
+     "ref": "D41",
+     "kind": "label",
+     "value": "80% of Cheques drawn on other banks",
+     "align": "general"
+    },
+    {
+     "ref": "E41",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C42",
+     "kind": "input",
+     "value": 26,
+     "align": "center"
+    },
+    {
+     "ref": "D42",
+     "kind": "label",
+     "value": "Goodwill / Intangibles",
+     "align": "general"
+    },
+    {
+     "ref": "E42",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C43",
+     "kind": "input",
+     "value": 27,
+     "align": "center"
+    },
+    {
+     "ref": "D43",
+     "kind": "label",
+     "value": "Investments in Unconsolidated Subsidiaries",
+     "align": "general"
+    },
+    {
+     "ref": "E43",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C44",
+     "kind": "input",
+     "value": 28,
+     "align": "center"
+    },
+    {
+     "ref": "D44",
+     "kind": "label",
+     "value": "Invests in the Capital of Other Banks & Fin Institutions ",
+     "align": "general"
+    },
+    {
+     "ref": "E44",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C45",
+     "kind": "input",
+     "value": 29,
+     "align": "center"
+    },
+    {
+     "ref": "D45",
+     "kind": "label",
+     "value": "Connected Lending of Long Term Nature",
+     "align": "general"
+    },
+    {
+     "ref": "E45",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C46",
+     "kind": "input",
+     "value": 30,
+     "align": "center"
+    },
+    {
+     "ref": "D46",
+     "kind": "label",
+     "value": "80% of claims on Discount Houses in Cedis / Forex ",
+     "align": "general"
+    },
+    {
+     "ref": "E46",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C47",
+     "kind": "input",
+     "value": 31,
+     "align": "center"
+    },
+    {
+     "ref": "D47",
+     "kind": "label",
+     "value": "80% of claims on Other Banks (Cedis/Forex)",
+     "align": "general"
+    },
+    {
+     "ref": "E47",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C48",
+     "kind": "input",
+     "value": 32,
+     "align": "center"
+    },
+    {
+     "ref": "D48",
+     "kind": "label",
+     "value": "50% of claims on Other Fin Insts. (Public Sector) (Cedi/Forex)",
+     "align": "general"
+    },
+    {
+     "ref": "E48",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C49",
+     "kind": "input",
+     "value": 33,
+     "align": "center"
+    },
+    {
+     "ref": "D49",
+     "kind": "label",
+     "value": "80% of loans guaranteed by government",
+     "align": "general"
+    },
+    {
+     "ref": "E49",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C50",
+     "kind": "input",
+     "value": 34,
+     "align": "center"
+    },
+    {
+     "ref": "D50",
+     "kind": "label",
+     "value": "80% of loans guaranteed by multilateral banks",
+     "align": "general"
+    },
+    {
+     "ref": "E50",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C51",
+     "kind": "input",
+     "value": 35,
+     "align": "center"
+    },
+    {
+     "ref": "D51",
+     "kind": "label",
+     "value": "50% of Residential Mortgage Loans",
+     "align": "general"
+    },
+    {
+     "ref": "E51",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C52",
+     "kind": "input",
+     "value": 36,
+     "align": "center"
+    },
+    {
+     "ref": "D52",
+     "kind": "label",
+     "value": "50% of Export Financing Loans",
+     "align": "general"
+    },
+    {
+     "ref": "E52",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C53",
+     "kind": "input",
+     "value": 37,
+     "align": "center"
+    },
+    {
+     "ref": "D53",
+     "kind": "label",
+     "value": "Adjusted Total Assets (18-19-20-21-,……..,-35)",
+     "align": "general"
+    },
+    {
+     "ref": "E53",
+     "kind": "formula",
+     "formula": "=E27-E29-E30-E31-E38-SUM(E41:E52)",
+     "bold": true,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "D54",
+     "kind": "label",
+     "value": "Add: Contingent Liabs",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "E54",
+     "kind": "formula",
+     "formula": "=SUM(E55:E61)",
+     "bold": true,
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "C55",
+     "kind": "input",
+     "value": 38,
+     "align": "center"
+    },
+    {
+     "ref": "D55",
+     "kind": "label",
+     "value": "Commercial Letters of Credit Outstanding",
+     "align": "general"
+    },
+    {
+     "ref": "E55",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C56",
+     "kind": "input",
+     "value": 39,
+     "align": "center"
+    },
+    {
+     "ref": "D56",
+     "kind": "label",
+     "value": "Guarantees / Indemnities",
+     "align": "general"
+    },
+    {
+     "ref": "E56",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C57",
+     "kind": "input",
+     "value": 40,
+     "align": "center"
+    },
+    {
+     "ref": "D57",
+     "kind": "label",
+     "value": "Acceptances",
+     "align": "general"
+    },
+    {
+     "ref": "E57",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C58",
+     "kind": "input",
+     "value": 41,
+     "align": "center"
+    },
+    {
+     "ref": "D58",
+     "kind": "label",
+     "value": "Endorsements",
+     "align": "general"
+    },
+    {
+     "ref": "E58",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C59",
+     "kind": "input",
+     "value": 42,
+     "align": "center"
+    },
+    {
+     "ref": "D59",
+     "kind": "label",
+     "value": "Revolving Underwriting Facilities",
+     "align": "general"
+    },
+    {
+     "ref": "E59",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C60",
+     "kind": "input",
+     "value": 43,
+     "align": "center"
+    },
+    {
+     "ref": "D60",
+     "kind": "label",
+     "value": "Note Issuance Facilities",
+     "align": "general"
+    },
+    {
+     "ref": "E60",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C61",
+     "kind": "input",
+     "value": 44,
+     "align": "center"
+    },
+    {
+     "ref": "D61",
+     "kind": "label",
+     "value": "Standby Letters of Credit to Other Banks",
+     "align": "general"
+    },
+    {
+     "ref": "E61",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "D62",
+     "kind": "label",
+     "value": "Less:",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C63",
+     "kind": "input",
+     "value": 45,
+     "align": "center"
+    },
+    {
+     "ref": "D63",
+     "kind": "label",
+     "value": "50% of class 1 risk weighted off-bal. sheet items",
+     "align": "general"
+    },
+    {
+     "ref": "E63",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C64",
+     "kind": "input",
+     "value": 46,
+     "align": "center"
+    },
+    {
+     "ref": "D64",
+     "kind": "label",
+     "value": "80% of class 2 risk weighted off-bal. sheet items",
+     "align": "general"
+    },
+    {
+     "ref": "E64",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C65",
+     "kind": "input",
+     "value": 47,
+     "align": "center"
+    },
+    {
+     "ref": "D65",
+     "kind": "label",
+     "value": "Net Contingent Liabs.  (37+38+....+43-44-45)",
+     "align": "general"
+    },
+    {
+     "ref": "E65",
+     "kind": "formula",
+     "formula": "=SUM(E55:E61)-E63-E64",
+     "number_format": "_-* #,##0.00_-;\\-* #,##0.00_-;_-* \\-??_-;_-@_-",
+     "align": "general"
+    },
+    {
+     "ref": "D66",
+     "kind": "label",
+     "value": "Add:  ",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "C67",
+     "kind": "input",
+     "value": 48,
+     "align": "center"
+    },
+    {
+     "ref": "D67",
+     "kind": "label",
+     "value": "50% of NOP",
+     "align": "general"
+    },
+    {
+     "ref": "E67",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C68",
+     "kind": "input",
+     "value": 49,
+     "align": "center"
+    },
+    {
+     "ref": "D68",
+     "kind": "label",
+     "value": "100% of 3yrs Average Annual Gross Income",
+     "align": "general"
+    },
+    {
+     "ref": "E68",
+     "kind": "input",
+     "value": 0,
+     "align": "general"
+    },
+    {
+     "ref": "C69",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "D69",
+     "kind": "label",
+     "value": "ADJUSTED ASSET BASE (36+46+47+48)",
+     "align": "general"
+    },
+    {
+     "ref": "E69",
+     "kind": "formula",
+     "formula": "=E53+E65+E67+E68",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    },
+    {
+     "ref": "C70",
+     "kind": "input",
+     "value": 51,
+     "align": "center"
+    },
+    {
+     "ref": "D70",
+     "kind": "label",
+     "value": "Adjusted Capital Base as percentage of Adjusted Asset Base: (17/49 X 100)",
+     "align": "general"
+    },
+    {
+     "ref": "E70",
+     "kind": "formula",
+     "formula": "=E25/E69",
+     "bold": true,
+     "number_format": "0.0%",
+     "align": "general"
+    },
+    {
+     "ref": "C71",
+     "kind": "input",
+     "value": 52,
+     "align": "center"
+    },
+    {
+     "ref": "D71",
+     "kind": "label",
+     "value": "CAPITAL SURPLUS/DEFICIT {17 – (10% of 49)} ",
+     "align": "general"
+    },
+    {
+     "ref": "E71",
+     "kind": "formula",
+     "formula": "=E25-(E69*6%)",
+     "number_format": "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \\-??_);_(@_)",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "NEW RISK WEIGHTS",
+   "max_row": 54,
+   "max_col": 7,
+   "column_widths": {
+    "B": 4.99,
+    "C": 33.28,
+    "D": 10.41,
+    "E": 10.85,
+    "F": 10.41,
+    "G": 26.28
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "B4",
+     "kind": "label",
+     "value": "No",
+     "align": "general"
+    },
+    {
+     "ref": "C4",
+     "kind": "label",
+     "value": "Item",
+     "align": "general"
+    },
+    {
+     "ref": "D4",
+     "kind": "label",
+     "value": "Risk Weight Basle Committee",
+     "align": "left"
+    },
+    {
+     "ref": "E4",
+     "kind": "label",
+     "value": "Risk Weight Proposed",
+     "align": "general"
+    },
+    {
+     "ref": "F4",
+     "kind": "label",
+     "value": "Risk Weight Existing Position",
+     "align": "left"
+    },
+    {
+     "ref": "G4",
+     "kind": "label",
+     "value": "Comment",
+     "align": "general"
+    },
+    {
+     "ref": "C5",
+     "kind": "label",
+     "value": "Cash & Balances",
+     "align": "general"
+    },
+    {
+     "ref": "B6",
+     "kind": "input",
+     "value": 1,
+     "align": "center"
+    },
+    {
+     "ref": "C6",
+     "kind": "label",
+     "value": "Cash on Hand (Cedi)",
+     "align": "general"
+    },
+    {
+     "ref": "D6",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "E6",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "F6",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "B7",
+     "kind": "input",
+     "value": 2,
+     "align": "center"
+    },
+    {
+     "ref": "C7",
+     "kind": "label",
+     "value": "Cash on Hand (Forex)",
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "E7",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "F7",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B8",
+     "kind": "input",
+     "value": 3,
+     "align": "center"
+    },
+    {
+     "ref": "C8",
+     "kind": "label",
+     "value": "Claims on Bank of Ghana (Cedi)",
+     "align": "general"
+    },
+    {
+     "ref": "D8",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "E8",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "F8",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "B9",
+     "kind": "input",
+     "value": 4,
+     "align": "center"
+    },
+    {
+     "ref": "C9",
+     "kind": "label",
+     "value": "Claims on Bank of Ghana (Forex)",
+     "align": "general"
+    },
+    {
+     "ref": "D9",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "E9",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "F9",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B10",
+     "kind": "input",
+     "value": 5,
+     "align": "center"
+    },
+    {
+     "ref": "C10",
+     "kind": "label",
+     "value": "Claims on Other Banks (Cedi)",
+     "align": "general"
+    },
+    {
+     "ref": "D10",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "E10",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "F10",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B11",
+     "kind": "input",
+     "value": 6,
+     "align": "center"
+    },
+    {
+     "ref": "C11",
+     "kind": "label",
+     "value": "Claims on Other Banks (Forex)",
+     "align": "general"
+    },
+    {
+     "ref": "D11",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "E11",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "F11",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B12",
+     "kind": "input",
+     "value": 7,
+     "align": "center"
+    },
+    {
+     "ref": "C12",
+     "kind": "label",
+     "value": "Claims on Discount Houses (Cedi)",
+     "align": "general"
+    },
+    {
+     "ref": "D12",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "E12",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "F12",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "B13",
+     "kind": "input",
+     "value": 8,
+     "align": "center"
+    },
+    {
+     "ref": "C13",
+     "kind": "label",
+     "value": "Claims on Discount Houses (Forex)",
+     "align": "general"
+    },
+    {
+     "ref": "D13",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "E13",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "F13",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "B14",
+     "kind": "input",
+     "value": 9,
+     "align": "center"
+    },
+    {
+     "ref": "C14",
+     "kind": "label",
+     "value": "Cash items in process of collection",
+     "align": "general"
+    },
+    {
+     "ref": "D14",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "E14",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "F14",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "G14",
+     "kind": "label",
+     "value": "Cheques drawn on other banks",
+     "align": "general"
+    },
+    {
+     "ref": "B15",
+     "kind": "input",
+     "value": 10,
+     "align": "center"
+    },
+    {
+     "ref": "C15",
+     "kind": "label",
+     "value": "Claims on other Fin Inst. (Private sector)",
+     "align": "general"
+    },
+    {
+     "ref": "D15",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E15",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F15",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B16",
+     "kind": "input",
+     "value": 11,
+     "align": "center"
+    },
+    {
+     "ref": "C16",
+     "kind": "label",
+     "value": "Claims on other Fin Inst. (Public sector)",
+     "align": "general"
+    },
+    {
+     "ref": "D16",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "E16",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "F16",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "C18",
+     "kind": "label",
+     "value": "Short-term Investments (Bills)",
+     "align": "general"
+    },
+    {
+     "ref": "B19",
+     "kind": "input",
+     "value": 12,
+     "align": "center"
+    },
+    {
+     "ref": "C19",
+     "kind": "label",
+     "value": "Government",
+     "align": "general"
+    },
+    {
+     "ref": "D19",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "E19",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "F19",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "B20",
+     "kind": "input",
+     "value": 13,
+     "align": "center"
+    },
+    {
+     "ref": "C20",
+     "kind": "label",
+     "value": "Bank of Ghana",
+     "align": "general"
+    },
+    {
+     "ref": "D20",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "E20",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "F20",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "B21",
+     "kind": "input",
+     "value": 14,
+     "align": "center"
+    },
+    {
+     "ref": "C21",
+     "kind": "label",
+     "value": "Public Enterprises & Institutions",
+     "align": "general"
+    },
+    {
+     "ref": "D21",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E21",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F21",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B22",
+     "kind": "input",
+     "value": 15,
+     "align": "center"
+    },
+    {
+     "ref": "C22",
+     "kind": "label",
+     "value": "Gov't & Bank of Ghana guaranteed",
+     "align": "general"
+    },
+    {
+     "ref": "D22",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "E22",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "F22",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "C24",
+     "kind": "label",
+     "value": "Loans & Advances",
+     "align": "general"
+    },
+    {
+     "ref": "B25",
+     "kind": "input",
+     "value": 16,
+     "align": "center"
+    },
+    {
+     "ref": "C25",
+     "kind": "label",
+     "value": "Government guaranteed",
+     "align": "general"
+    },
+    {
+     "ref": "D25",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "E25",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "F25",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B26",
+     "kind": "input",
+     "value": 17,
+     "align": "center"
+    },
+    {
+     "ref": "C26",
+     "kind": "label",
+     "value": "Guaranteed by multilateral banks",
+     "align": "general"
+    },
+    {
+     "ref": "D26",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "E26",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "F26",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "G26",
+     "kind": "label",
+     "value": "e.g. AfDB, IBRD, EximBank, etc.",
+     "align": "general"
+    },
+    {
+     "ref": "B27",
+     "kind": "input",
+     "value": 18,
+     "align": "center"
+    },
+    {
+     "ref": "C27",
+     "kind": "label",
+     "value": "Public Enterprises",
+     "align": "general"
+    },
+    {
+     "ref": "D27",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E27",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F27",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B28",
+     "kind": "input",
+     "value": 19,
+     "align": "center"
+    },
+    {
+     "ref": "C28",
+     "kind": "label",
+     "value": "Public Institutions",
+     "align": "general"
+    },
+    {
+     "ref": "D28",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E28",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F28",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B29",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "C29",
+     "kind": "label",
+     "value": "Private Enterprises",
+     "align": "general"
+    },
+    {
+     "ref": "D29",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E29",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F29",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B30",
+     "kind": "input",
+     "value": 21,
+     "align": "center"
+    },
+    {
+     "ref": "C30",
+     "kind": "label",
+     "value": "Individuals",
+     "align": "general"
+    },
+    {
+     "ref": "D30",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E30",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F30",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B31",
+     "kind": "input",
+     "value": 22,
+     "align": "center"
+    },
+    {
+     "ref": "C31",
+     "kind": "label",
+     "value": "Home Mortgage",
+     "align": "general"
+    },
+    {
+     "ref": "D31",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "E31",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "F31",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "G31",
+     "kind": "label",
+     "value": "Residential mortrgage occupied by the borrower or rented.",
+     "align": "general"
+    },
+    {
+     "ref": "B32",
+     "kind": "input",
+     "value": 23,
+     "align": "center"
+    },
+    {
+     "ref": "C32",
+     "kind": "label",
+     "value": "Export Sector",
+     "align": "general"
+    },
+    {
+     "ref": "D32",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E32",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "F32",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "G32",
+     "kind": "label",
+     "value": "To encourage export financing",
+     "align": "general"
+    },
+    {
+     "ref": "C34",
+     "kind": "label",
+     "value": "Long-Term Investments & Securities",
+     "align": "general"
+    },
+    {
+     "ref": "B35",
+     "kind": "input",
+     "value": 24,
+     "align": "center"
+    },
+    {
+     "ref": "C35",
+     "kind": "label",
+     "value": "Government ",
+     "align": "general"
+    },
+    {
+     "ref": "D35",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "E35",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "F35",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "B36",
+     "kind": "input",
+     "value": 25,
+     "align": "center"
+    },
+    {
+     "ref": "C36",
+     "kind": "label",
+     "value": "Bank of Ghana",
+     "align": "general"
+    },
+    {
+     "ref": "D36",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "E36",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "F36",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "B37",
+     "kind": "input",
+     "value": 26,
+     "align": "center"
+    },
+    {
+     "ref": "C37",
+     "kind": "label",
+     "value": "Commercial Banks",
+     "align": "general"
+    },
+    {
+     "ref": "D37",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E37",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F37",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B38",
+     "kind": "input",
+     "value": 27,
+     "align": "center"
+    },
+    {
+     "ref": "C38",
+     "kind": "label",
+     "value": "Other Financial Institutions",
+     "align": "general"
+    },
+    {
+     "ref": "D38",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E38",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F38",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B39",
+     "kind": "input",
+     "value": 28,
+     "align": "center"
+    },
+    {
+     "ref": "C39",
+     "kind": "label",
+     "value": "Public Enterprises & Institutions",
+     "align": "general"
+    },
+    {
+     "ref": "D39",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E39",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F39",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B40",
+     "kind": "input",
+     "value": 29,
+     "align": "center"
+    },
+    {
+     "ref": "C40",
+     "kind": "label",
+     "value": "Private Enterprises",
+     "align": "general"
+    },
+    {
+     "ref": "D40",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E40",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F40",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B41",
+     "kind": "input",
+     "value": 30,
+     "align": "center"
+    },
+    {
+     "ref": "C41",
+     "kind": "label",
+     "value": "Gov't & Bank of Ghana guaranteed",
+     "align": "general"
+    },
+    {
+     "ref": "D41",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "E41",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "F41",
+     "kind": "input",
+     "value": 0,
+     "align": "center"
+    },
+    {
+     "ref": "B43",
+     "kind": "input",
+     "value": 31,
+     "align": "center"
+    },
+    {
+     "ref": "C43",
+     "kind": "label",
+     "value": "Other Assets",
+     "align": "general"
+    },
+    {
+     "ref": "D43",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E43",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F43",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B44",
+     "kind": "input",
+     "value": 32,
+     "align": "center"
+    },
+    {
+     "ref": "C44",
+     "kind": "label",
+     "value": "Fixed Assets",
+     "align": "general"
+    },
+    {
+     "ref": "D44",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E44",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F44",
+     "kind": "label",
+     "value": "-",
+     "align": "center"
+    },
+    {
+     "ref": "G44",
+     "kind": "label",
+     "value": "Currently, net fixed assets is deducted from both capirtal and assets base.",
+     "align": "general"
+    },
+    {
+     "ref": "B45",
+     "kind": "input",
+     "value": 33,
+     "align": "center"
+    },
+    {
+     "ref": "C45",
+     "kind": "label",
+     "value": "Contingent Liabilities",
+     "align": "general"
+    },
+    {
+     "ref": "D45",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E45",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "F45",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "B46",
+     "kind": "input",
+     "value": 34,
+     "align": "center"
+    },
+    {
+     "ref": "C46",
+     "kind": "label",
+     "value": "Bonds (Performance, Bid, Warranties, etc. ) (Class 1 risk weighted assets)",
+     "align": "general"
+    },
+    {
+     "ref": "D46",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "E46",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "F46",
+     "kind": "input",
+     "value": 25,
+     "align": "center"
+    },
+    {
+     "ref": "G46",
+     "kind": "label",
+     "value": "For residential mortgage occupied by the borrower or rented.",
+     "align": "general"
+    },
+    {
+     "ref": "B47",
+     "kind": "input",
+     "value": 35,
+     "align": "center"
+    },
+    {
+     "ref": "C47",
+     "kind": "label",
+     "value": "Short-term Self Liquidating L/Cs (Class 2 risk weighted assets)",
+     "align": "general"
+    },
+    {
+     "ref": "D47",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "E47",
+     "kind": "input",
+     "value": 20,
+     "align": "center"
+    },
+    {
+     "ref": "F47",
+     "kind": "input",
+     "value": 10,
+     "align": "center"
+    },
+    {
+     "ref": "G47",
+     "kind": "label",
+     "value": "For exports financing only.",
+     "align": "general"
+    }
+   ]
+  },
+  {
+   "name": "PROVISION",
+   "max_row": 13,
+   "max_col": 7,
+   "column_widths": {
+    "B": 5.71,
+    "C": 19.28,
+    "D": 12.56,
+    "E": 23.85
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "C7",
+     "kind": "label",
+     "value": "Category",
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "label",
+     "value": "% Provision",
+     "align": "general"
+    },
+    {
+     "ref": "E7",
+     "kind": "label",
+     "value": "No. of Days of Deliquency",
+     "align": "general"
+    },
+    {
+     "ref": "B9",
+     "kind": "input",
+     "value": 1,
+     "align": "general"
+    },
+    {
+     "ref": "C9",
+     "kind": "label",
+     "value": "Current",
+     "align": "general"
+    },
+    {
+     "ref": "D9",
+     "kind": "input",
+     "value": 1,
+     "align": "center"
+    },
+    {
+     "ref": "E9",
+     "kind": "label",
+     "value": "0 - less than 30",
+     "align": "general"
+    },
+    {
+     "ref": "B10",
+     "kind": "input",
+     "value": 2,
+     "align": "general"
+    },
+    {
+     "ref": "C10",
+     "kind": "label",
+     "value": "Olem",
+     "align": "general"
+    },
+    {
+     "ref": "D10",
+     "kind": "input",
+     "value": 10,
+     "align": "center"
+    },
+    {
+     "ref": "E10",
+     "kind": "label",
+     "value": "30 - less than 90",
+     "align": "general"
+    },
+    {
+     "ref": "B11",
+     "kind": "input",
+     "value": 3,
+     "align": "general"
+    },
+    {
+     "ref": "C11",
+     "kind": "label",
+     "value": "Substandard",
+     "align": "general"
+    },
+    {
+     "ref": "D11",
+     "kind": "input",
+     "value": 25,
+     "align": "center"
+    },
+    {
+     "ref": "E11",
+     "kind": "label",
+     "value": "90 - less than 180",
+     "align": "general"
+    },
+    {
+     "ref": "B12",
+     "kind": "input",
+     "value": 4,
+     "align": "general"
+    },
+    {
+     "ref": "C12",
+     "kind": "label",
+     "value": "Doubtful",
+     "align": "general"
+    },
+    {
+     "ref": "D12",
+     "kind": "input",
+     "value": 50,
+     "align": "center"
+    },
+    {
+     "ref": "E12",
+     "kind": "label",
+     "value": "180 -less than 360",
+     "align": "general"
+    },
+    {
+     "ref": "B13",
+     "kind": "input",
+     "value": 5,
+     "align": "general"
+    },
+    {
+     "ref": "C13",
+     "kind": "label",
+     "value": "Loss",
+     "align": "general"
+    },
+    {
+     "ref": "D13",
+     "kind": "input",
+     "value": 100,
+     "align": "center"
+    },
+    {
+     "ref": "E13",
+     "kind": "label",
+     "value": "360 and above",
+     "align": "general"
+    }
+   ]
+  }
+ ]
+}

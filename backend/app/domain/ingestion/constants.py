@@ -168,6 +168,19 @@ REFERENCE_DATASET_KINDS: tuple[str, ...] = (
     "historical_financials",
     "business_units",
     "institution",
+    # --- BoG return data-gap datasets (2026-08-16; migration 202608160014) ---
+    # Each closes lines the official BSD returns need that no canonical entity
+    # carried: uploaded/pushed like every other reference dataset (no fixed
+    # schema; rows preserved verbatim under the kind), documented per kind in
+    # docs/data_engine/datasets/<kind>.md and consumed by bog_forms resolvers.
+    "gl_mapping_bsd7",  # bank CoA → BSD7A/7B P&L item mapping (BSD7A/7B/11)
+    "subsidiaries",  # subsidiary register (BSD3B, 5B, 7B, 9)
+    "tariff_schedule",  # charges/tariff register keyed by official BSD15 row (BSD15A/B, 14)
+    "capital_expenditure",  # capex movements by asset class (BSD10, BSD2 rows 115–123)
+    "atm_operations",  # monthly ATM/card operations (BSD16)
+    "remittance_flows",  # foreign inward remittances (BSD17)
+    "teller_withdrawals",  # over-the-counter cash withdrawals (BSD1A)
+    "interest_accruals",  # accrued-interest sub-ledger (BSD2/BSD6 accrual rows)
 )
 ReferenceDatasetKind = Literal[
     "capital_structure",
@@ -179,6 +192,14 @@ ReferenceDatasetKind = Literal[
     "historical_financials",
     "business_units",
     "institution",
+    "gl_mapping_bsd7",
+    "subsidiaries",
+    "tariff_schedule",
+    "capital_expenditure",
+    "atm_operations",
+    "remittance_flows",
+    "teller_withdrawals",
+    "interest_accruals",
 ]
 
 LINEAGE_OPERATION_TYPES: tuple[str, ...] = (

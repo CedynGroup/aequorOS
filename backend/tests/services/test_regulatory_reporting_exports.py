@@ -76,7 +76,7 @@ def _seed_with_baseline_run(db: Session) -> None:
     assert run.status == "succeeded"
 
 
-def _generate(db: Session, return_code: str = "BSD3") -> RegulatoryPackage:
+def _generate(db: Session, return_code: str = "LCR-NSFR") -> RegulatoryPackage:
     read = generation.generate_package(
         db,
         MAKER,
@@ -121,7 +121,7 @@ def test_export_all_kinds_upserts_artifacts_with_stable_checksums(
     db_session.commit()
 
     assert _artifact_count(db_session, package.id) == 3
-    prefix = f"bog_returns/{REPORTING_DATE.isoformat()}/{package.id}/BSD3"
+    prefix = f"bog_returns/{REPORTING_DATE.isoformat()}/{package.id}/LCR-NSFR"
     assert artifacts["xlsx"].object_path == f"{prefix}.xlsx"
     # BSD3 is multi-section, so the csv-kind artifact is a zip container.
     assert artifacts["csv"].object_path == f"{prefix}.zip"
@@ -310,12 +310,12 @@ def test_headline_comparative_column_renders_prior_period(
             db_session,
             MAKER,
             SAMPLE_BANK_ID,
-            RegulatoryPackageCreate(return_code="BSD3", reporting_date=period_end),
+            RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=period_end),
         )
 
     package = db_session.scalar(
         select(RegulatoryPackage).where(
-            RegulatoryPackage.return_code == "BSD3",
+            RegulatoryPackage.return_code == "LCR-NSFR",
             RegulatoryPackage.reporting_date == REPORTING_DATE,
             RegulatoryPackage.status != "superseded",
         )
@@ -455,6 +455,19 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
         },
         "lrt_capital": {"shareholder_register", "capital_summary", "capital_checklist"},
         "lrt_product": {"products", "product_checklist"},
+    }
+    # Official BoG BSD forms: the bog_form generator emits exactly one section
+    # per official sheet (sheet_<name>), which is what its templates reference —
+    # derived from the catalogue so the two can never drift.
+    from app.services.regulatory_reporting.bog_forms.catalog import (  # noqa: PLC0415
+        all_form_specs,
+    )
+    from app.services.regulatory_reporting.bog_forms.registry_entries import (  # noqa: PLC0415
+        _section_code,
+    )
+
+    generator_sections["bog_form"] = {
+        _section_code(sheet.name) for spec in all_form_specs() for sheet in spec.sheets
     }
     for definition in REGISTRY.values():
         template = get_template(definition.template_id)

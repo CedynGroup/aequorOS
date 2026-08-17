@@ -1,9 +1,14 @@
-"""The signing-workspace API contract (docs/attestation_esignature.md §4.6).
+"""The signing-workspace API contract (docs/attestation_esignature.md §4.6),
+exercised against the ACTUAL primary database.
 
 The dashboard codes against these paths and these field names, so the assertions
 below are deliberately about the *contract*: every endpoint, its gate, and the
 shape it returns. A rename here is a break for the generated client, which is why
-it is asserted rather than assumed.
+it is asserted rather than assumed. Invariants over the real Sample Bank: placement
+resolution order (package > bank template > default) and the per-kind minimum
+boxes; adoption normalises a mark for a signer identity; routing/inbox gates and
+the digest guard on the one-act certify-and-send. Opt-in via
+REAL_DATA_DATABASE_URL; everything rolls back inside ``real_client``.
 """
 
 from __future__ import annotations
@@ -11,24 +16,32 @@ from __future__ import annotations
 import base64
 import io
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw
+from sqlalchemy import delete
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.models import ReturnSignaturePlacement, User
 from app.services.attestation import pdf_signing
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
-from tests.api.helpers import ORG_1, headers
+from tests.real_data import REAL_BANK_ID, REAL_ORG_ID, real_headers, requires_real_data
 
-REPORTING_DATE = "2026-03-31"
-BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages"
+pytestmark = requires_real_data
+
+RETURN_CODE = "LCR-NSFR"
+BANK = f"/api/v1/banks/{REAL_BANK_ID}"
+BASE = f"{BANK}/regulatory-packages"
 
 
 @pytest.fixture(autouse=True)
 def signer_pepper(monkeypatch: pytest.MonkeyPatch) -> None:
     """A signer identity is needed to own an adopted mark, and deriving one needs
-    the pepper. Autouse so it is set before ``db_client`` builds the app."""
+    the pepper. Autouse so it is set before ``real_client`` builds the app. (Real
+    users who already hold a persisted identity keep it — the row is the
+    authority, not the pepper.)"""
     monkeypatch.setenv("SIGNER_ID_PEPPER", "test-signer-pepper-not-for-production")
     get_settings.cache_clear()
 
@@ -41,35 +54,81 @@ def _drawn_png() -> str:
     return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
-def _validated_package(db_client: TestClient) -> dict[str, Any]:
-    seeded = db_client.post("/api/v1/banks/seed-demo", headers=headers())
-    assert seeded.status_code == 200, seeded.text
-    periods = db_client.get(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/reporting-periods", headers=headers()
-    ).json()["periods"]
-    period = next(p for p in periods if p["period_end"] == REPORTING_DATE)
-    run = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
-        headers=headers(),
-        json={
+def _latest_period(client: TestClient) -> dict[str, Any]:
+    response = client.get(f"{BANK}/reporting-periods", headers=real_headers())
+    assert response.status_code == 200, response.text
+    periods = response.json()["periods"]
+    assert periods, "the real Sample Bank must have at least one reporting period"
+    return periods[0]
+
+
+def _ensure_baseline_run(client: TestClient, period_id: str) -> None:
+    """Generation binds the period's latest succeeded baseline liquidity run;
+    reuse the real bank's stored one and run the engine only when absent."""
+    listed = client.get(
+        f"{BANK}/regulatory-runs",
+        headers=real_headers(),
+        params={
             "module": "liquidity",
-            "reporting_period_id": period["id"],
             "scenario_code": "baseline",
+            "reporting_period_id": period_id,
+            "limit": 100,
         },
     )
+    assert listed.status_code == 200, listed.text
+    if any(run["status"] == "succeeded" for run in listed.json()["runs"]):
+        return
+    run = client.post(
+        f"{BANK}/regulatory-runs",
+        headers=real_headers(),
+        json={"module": "liquidity", "reporting_period_id": period_id, "scenario_code": "baseline"},
+    )
     assert run.status_code == 201, run.text
-    created = db_client.post(
+    assert run.json()["status"] == "succeeded", run.json()
+
+
+def _validated_package(client: TestClient) -> dict[str, Any]:
+    period = _latest_period(client)
+    _ensure_baseline_run(client, period["id"])
+    created = client.post(
         BASE,
-        headers=headers(),
-        json={"return_code": "BSD3", "reporting_date": REPORTING_DATE},
+        headers=real_headers(),
+        json={"return_code": RETURN_CODE, "reporting_date": period["period_end"]},
     )
     assert created.status_code == 201, created.text
     package = created.json()
-    validated = db_client.post(
-        f"{BASE}/{package['id']}/validate", headers=headers()
-    )
+    validated = client.post(f"{BASE}/{package['id']}/validate", headers=real_headers())
     assert validated.status_code == 200, validated.text
     return package
+
+
+def _fresh_user(session: Session) -> dict[str, str]:
+    """Headers for a brand-new ACTIVE user in the real org (nothing adopted,
+    nothing routed to them). Written on the shared transaction — rolled back."""
+    session.info["organization_id"] = REAL_ORG_ID
+    user = User(
+        id=uuid4(),
+        organization_id=REAL_ORG_ID,
+        email=f"real-suite.{uuid4().hex[:8]}@samplebank.test",
+        display_name="Real-suite Signer",
+        role="admin",
+    )
+    session.add(user)
+    session.commit()
+    return real_headers(user_id=user.id, email=user.email)
+
+
+def _forget_return_templates(session: Session) -> None:
+    """Start placement resolution from the palette default whatever templates the
+    real bank has placed for the return; the rows come back with the rollback."""
+    session.info["organization_id"] = REAL_ORG_ID
+    session.execute(
+        delete(ReturnSignaturePlacement).where(
+            ReturnSignaturePlacement.organization_id == REAL_ORG_ID,
+            ReturnSignaturePlacement.return_code == RETURN_CODE,
+        )
+    )
+    session.commit()
 
 
 def _box(
@@ -100,15 +159,18 @@ def _default_boxes(page_index: int = 2) -> list[dict[str, Any]]:
 
 
 def test_resolved_placements_report_the_default_and_every_kind_of_minimum(
-    db_client: TestClient,
+    real_client: TestClient, real_session: Session
 ) -> None:
     """The palette needs a floor PER KIND to validate a drag before it posts it."""
-    package = _validated_package(db_client)
-    response = db_client.get(f"{BASE}/{package['id']}/attestation/placements", headers=headers())
+    _forget_return_templates(real_session)
+    package = _validated_package(real_client)
+    response = real_client.get(
+        f"{BASE}/{package['id']}/attestation/placements", headers=real_headers()
+    )
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["source"] == "default"
-    assert body["return_code"] == "BSD3"
+    assert body["return_code"] == RETURN_CODE
     assert body["editable"] is True
     assert {entry["signing_role"] for entry in body["placements"]} == {"preparer", "approver"}
     assert {
@@ -117,11 +179,14 @@ def test_resolved_placements_report_the_default_and_every_kind_of_minimum(
     } == pdf_signing.MIN_BOX_SIZES
 
 
-def test_placing_fields_then_reading_them_back_round_trips(db_client: TestClient) -> None:
-    package = _validated_package(db_client)
-    response = db_client.put(
+def test_placing_fields_then_reading_them_back_round_trips(
+    real_client: TestClient, real_session: Session
+) -> None:
+    _forget_return_templates(real_session)
+    package = _validated_package(real_client)
+    response = real_client.put(
         f"{BASE}/{package['id']}/attestation/placements",
-        headers=headers(),
+        headers=real_headers(),
         json={"placements": _default_boxes(), "reason": "placed in the workspace"},
     )
     assert response.status_code == 200, response.text
@@ -132,9 +197,9 @@ def test_placing_fields_then_reading_them_back_round_trips(db_client: TestClient
     assert (placed["preparer"]["x1"], placed["preparer"]["y2"]) == (60.0, 345.0)
 
     # An empty list clears the override rather than needing a DELETE.
-    cleared = db_client.put(
+    cleared = real_client.put(
         f"{BASE}/{package['id']}/attestation/placements",
-        headers=headers(),
+        headers=real_headers(),
         json={"placements": [], "reason": "back to the template"},
     )
     assert cleared.status_code == 200, cleared.text
@@ -142,14 +207,14 @@ def test_placing_fields_then_reading_them_back_round_trips(db_client: TestClient
 
 
 def test_a_placement_below_the_minimum_box_is_refused_by_the_api(
-    db_client: TestClient,
+    real_client: TestClient,
 ) -> None:
-    package = _validated_package(db_client)
+    package = _validated_package(real_client)
     narrow = _default_boxes()
     narrow[0]["x2"] = narrow[0]["x1"] + pdf_signing.MIN_BOX_SIZES["signature"][0] - 1
-    response = db_client.put(
+    response = real_client.put(
         f"{BASE}/{package['id']}/attestation/placements",
-        headers=headers(),
+        headers=real_headers(),
         json={"placements": narrow, "reason": "too small"},
     )
     assert response.status_code == 409, response.text
@@ -157,13 +222,13 @@ def test_a_placement_below_the_minimum_box_is_refused_by_the_api(
 
 
 def test_a_board_role_cannot_be_placed_at_the_contract_boundary(
-    db_client: TestClient,
+    real_client: TestClient,
 ) -> None:
     """422 from the schema, not a 409 from the service: only two fields exist."""
-    package = _validated_package(db_client)
-    response = db_client.put(
+    package = _validated_package(real_client)
+    response = real_client.put(
         f"{BASE}/{package['id']}/attestation/placements",
-        headers=headers(),
+        headers=real_headers(),
         json={
             "placements": [*_default_boxes(), _box("board", 2, (60, 100, 300, 185))],
             "reason": "board too",
@@ -173,57 +238,63 @@ def test_a_board_role_cannot_be_placed_at_the_contract_boundary(
 
 
 def test_the_placement_template_is_admin_only_and_reason_required(
-    db_client: TestClient,
+    real_client: TestClient, real_session: Session
 ) -> None:
-    db_client.post("/api/v1/banks/seed-demo", headers=headers())
+    _forget_return_templates(real_session)
     payload = {
-        "return_code": "BSD3",
-        "bank_id": SAMPLE_BANK_ID,
+        "return_code": RETURN_CODE,
+        "bank_id": REAL_BANK_ID,
         "placements": _default_boxes(page_index=1),
-        "reason": "BoG BSD-3 signature block",
+        "reason": "BoG LCR/NSFR signature block",
     }
-    forbidden = db_client.put(
+    forbidden = real_client.put(
         "/api/v1/attestation/signature-placements",
-        headers=headers(ORG_1, roles=("analyst",)),
+        headers=real_headers(roles=("analyst",)),
         json=payload,
     )
     assert forbidden.status_code == 403
 
-    created = db_client.put(
-        "/api/v1/attestation/signature-placements", headers=headers(), json=payload
+    created = real_client.put(
+        "/api/v1/attestation/signature-placements", headers=real_headers(), json=payload
     )
     assert created.status_code == 200, created.text
-    assert created.json()["return_code"] == "BSD3"
-    assert created.json()["bank_id"] == SAMPLE_BANK_ID
+    assert created.json()["return_code"] == RETURN_CODE
+    assert created.json()["bank_id"] == REAL_BANK_ID
 
-    listed = db_client.get(
-        "/api/v1/attestation/signature-placements?return_code=BSD3", headers=headers()
+    listed = real_client.get(
+        "/api/v1/attestation/signature-placements",
+        headers=real_headers(),
+        params={"return_code": RETURN_CODE},
     )
     assert listed.status_code == 200, listed.text
-    assert len(listed.json()["templates"]) == 1
+    templates = listed.json()["templates"]
+    assert len(templates) == 1
+    assert (templates[0]["return_code"], templates[0]["bank_id"]) == (RETURN_CODE, REAL_BANK_ID)
 
-    without_reason = db_client.put(
+    without_reason = real_client.put(
         "/api/v1/attestation/signature-placements",
-        headers=headers(),
+        headers=real_headers(),
         json={**payload, "reason": ""},
     )
     assert without_reason.status_code == 422
 
 
-def test_a_return_inherits_its_template(db_client: TestClient) -> None:
-    package = _validated_package(db_client)
-    db_client.put(
+def test_a_return_inherits_its_template(real_client: TestClient, real_session: Session) -> None:
+    _forget_return_templates(real_session)
+    package = _validated_package(real_client)
+    placed = real_client.put(
         "/api/v1/attestation/signature-placements",
-        headers=headers(),
+        headers=real_headers(),
         json={
-            "return_code": "BSD3",
-            "bank_id": SAMPLE_BANK_ID,
+            "return_code": RETURN_CODE,
+            "bank_id": REAL_BANK_ID,
             "placements": _default_boxes(page_index=1),
-            "reason": "BoG BSD-3 signature block",
+            "reason": "BoG LCR/NSFR signature block",
         },
     )
-    resolved = db_client.get(
-        f"{BASE}/{package['id']}/attestation/placements", headers=headers()
+    assert placed.status_code == 200, placed.text
+    resolved = real_client.get(
+        f"{BASE}/{package['id']}/attestation/placements", headers=real_headers()
     ).json()
     assert resolved["source"] == "bank_template"
     assert {entry["page_index"] for entry in resolved["placements"]} == {1}
@@ -232,35 +303,40 @@ def test_a_return_inherits_its_template(db_client: TestClient) -> None:
 # --- adopted appearance -----------------------------------------------------
 
 
-def test_adopting_a_drawn_signature_returns_normalised_bytes(db_client: TestClient) -> None:
-    db_client.post("/api/v1/banks/seed-demo", headers=headers())
-    empty = db_client.get("/api/v1/attestation/my-signature-appearance", headers=headers())
+def test_adopting_a_drawn_signature_returns_normalised_bytes(
+    real_client: TestClient, real_session: Session
+) -> None:
+    signer = _fresh_user(real_session)
+    empty = real_client.get("/api/v1/attestation/my-signature-appearance", headers=signer)
     assert empty.status_code == 200, empty.text
     assert empty.json()["adopted"] is False
     assert empty.json()["signer_id"].startswith("SGN-")
     assert "times_italic" in empty.json()["available_fonts"]
 
     raw = _drawn_png()
-    adopted = db_client.put(
+    adopted = real_client.put(
         "/api/v1/attestation/my-signature-appearance",
-        headers=headers(),
+        headers=signer,
         json={"kind": "drawn", "image_png_base64": raw},
     )
     assert adopted.status_code == 200, adopted.text
     body = adopted.json()
     assert body["adopted"] is True
     assert body["kind"] == "drawn"
+    assert body["signer_id"] == empty.json()["signer_id"]
     assert (body["image_width"], body["image_height"]) == (600, 200)
     # Normalised, not echoed: the raw upload is never what is stored.
     assert body["image_png_base64"] != raw
     assert body["typed_name"] is None
 
 
-def test_adopting_a_typed_signature_records_the_chosen_font(db_client: TestClient) -> None:
-    db_client.post("/api/v1/banks/seed-demo", headers=headers())
-    adopted = db_client.put(
+def test_adopting_a_typed_signature_records_the_chosen_font(
+    real_client: TestClient, real_session: Session
+) -> None:
+    signer = _fresh_user(real_session)
+    adopted = real_client.put(
         "/api/v1/attestation/my-signature-appearance",
-        headers=headers(),
+        headers=signer,
         json={"kind": "typed", "typed_name": "Ama Mensah", "typed_font": "times_italic"},
     )
     assert adopted.status_code == 200, adopted.text
@@ -284,11 +360,10 @@ def test_adopting_a_typed_signature_records_the_chosen_font(db_client: TestClien
     ids=["bad_base64", "a_pdf", "no_payload", "unknown_font", "unknown_kind"],
 )
 def test_an_unacceptable_mark_is_refused_with_422(
-    db_client: TestClient, payload: dict[str, Any], expected: int
+    real_client: TestClient, payload: dict[str, Any], expected: int
 ) -> None:
-    db_client.post("/api/v1/banks/seed-demo", headers=headers())
-    response = db_client.put(
-        "/api/v1/attestation/my-signature-appearance", headers=headers(), json=payload
+    response = real_client.put(
+        "/api/v1/attestation/my-signature-appearance", headers=real_headers(), json=payload
     )
     assert response.status_code == expected, response.text
 
@@ -296,41 +371,41 @@ def test_an_unacceptable_mark_is_refused_with_422(
 # --- routing ----------------------------------------------------------------
 
 
-def test_the_attestation_status_carries_the_recipient_list(db_client: TestClient) -> None:
+def test_the_attestation_status_carries_the_recipient_list(real_client: TestClient) -> None:
     """The UI reads routing from the status payload it already fetches."""
-    package = _validated_package(db_client)
-    response = db_client.get(f"{BASE}/{package['id']}/attestation", headers=headers())
+    package = _validated_package(real_client)
+    response = real_client.get(f"{BASE}/{package['id']}/attestation", headers=real_headers())
     assert response.status_code == 200, response.text
     assert response.json()["recipients"] == []
 
 
 def test_awaiting_my_signature_is_empty_until_something_is_routed(
-    db_client: TestClient,
+    real_client: TestClient, real_session: Session
 ) -> None:
-    db_client.post("/api/v1/banks/seed-demo", headers=headers())
-    response = db_client.get("/api/v1/attestation/awaiting-my-signature", headers=headers())
+    signer = _fresh_user(real_session)
+    response = real_client.get("/api/v1/attestation/awaiting-my-signature", headers=signer)
     assert response.status_code == 200, response.text
     assert response.json() == {"items": []}
 
 
-def test_rerouting_is_approver_gated(db_client: TestClient) -> None:
-    package = _validated_package(db_client)
-    response = db_client.put(
+def test_rerouting_is_approver_gated(real_client: TestClient) -> None:
+    package = _validated_package(real_client)
+    response = real_client.put(
         f"{BASE}/{package['id']}/attestation/recipients",
-        headers=headers(ORG_1, roles=("analyst",)),
+        headers=real_headers(roles=("analyst",)),
         json={"recipients": [], "reason": "reassign"},
     )
     assert response.status_code == 403, response.text
 
 
 def test_certify_and_send_refuses_a_stale_digest_before_anything_is_signed(
-    db_client: TestClient,
+    real_client: TestClient,
 ) -> None:
     """The digest guard applies to the combined act too, not just to ``certify``."""
-    package = _validated_package(db_client)
-    response = db_client.post(
+    package = _validated_package(real_client)
+    response = real_client.post(
         f"{BASE}/{package['id']}/attestation/certify-and-send",
-        headers=headers(),
+        headers=real_headers(),
         json={
             "signing_role": "preparer",
             "authorization_token": "not-a-real-token",
@@ -341,3 +416,7 @@ def test_certify_and_send_refuses_a_stale_digest_before_anything_is_signed(
     )
     assert response.status_code == 409, response.text
     assert response.json()["error"]["details"]["error_code"] == "figures_changed_since_preview"
+    # The refusal left the package where it was: still validated, still unsigned.
+    status = real_client.get(f"{BASE}/{package['id']}", headers=real_headers()).json()
+    assert status["status"] == "validated"
+    assert status["attestation_state"] == "unsigned"

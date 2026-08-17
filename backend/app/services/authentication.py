@@ -237,9 +237,14 @@ def login_with_sso(
         and resolved_org == connection.organization_id
     ):
         # Access-request flow: record (or re-acknowledge) a deactivated stub and
-        # refuse the session — approval is an explicit admin act.
-        if _inactive_user_by_email(db, connection.organization_id, str(email)) is None:
+        # refuse the session — approval is an explicit admin act. A previously
+        # REJECTED stub becomes a fresh request again (the rejection is cleared).
+        stub = _inactive_user_by_email(db, connection.organization_id, str(email))
+        if stub is None:
             _record_sso_access_request(db, connection=connection, claims=claims)
+        elif stub.access_rejected_at is not None:
+            stub.access_rejected_at = None
+            db.commit()
         raise _SSO_PENDING
     if user is None:
         raise HTTPException(
@@ -266,6 +271,7 @@ def _access_request_stmt(organization_id: str):  # noqa: ANN202 - sqlalchemy Sel
         User.auth_provider == "oidc",
         User.password_hash.is_(None),
         User.last_login_at.is_(None),
+        User.access_rejected_at.is_(None),  # a rejected stub is not an open request
     )
 
 
@@ -320,10 +326,13 @@ def approve_sso_access_request(
 
 
 def reject_sso_access_request(db: Session, *, organization_id: str, user_id: UUID) -> None:
-    """Deletes the never-activated stub (safe: it has no history); the employee
-    can request again, which recreates it."""
+    """Records the rejection on the never-activated stub and leaves it
+    deactivated. Users are never physically deleted (signer identities reference
+    them and the append-only privilege tiering makes a DELETE fail on the
+    primary — found 2026-08-16); the employee can request again, which clears
+    the rejection and re-opens the request."""
     user = _get_access_request(db, organization_id, user_id)
-    db.delete(user)
+    user.access_rejected_at = utc_now()
     db.commit()
 
 

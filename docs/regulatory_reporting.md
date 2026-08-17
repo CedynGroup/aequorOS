@@ -116,14 +116,24 @@ any regeneration for the same (family, reporting_date) ⇒ new version, prior �
 
 | family | return_code(s) | source | frequency/deadline (per research) |
 |---|---|---|---|
-| liquidity | LCR return, NSFR return, Liquidity Monitoring Tools set | `get_bsd3_preview` + liquidity runs + maturity/funding analytics | monthly (LMT by day 9 per 2026 directive — confirm from research) |
-| capital | CAR/RWA return (BSD-2 style), leverage, buffers | `get_bsd2_preview` + capital runs | monthly/quarterly per research |
+| liquidity | LCR/NSFR return (`LCR-NSFR`; registered as `BSD3` before the official templates were available — official BSD3 is Large Exposures, recoded 2026-08-15), Liquidity Monitoring Tools set | `get_bsd3_preview` + liquidity runs + maturity/funding analytics | monthly (LMT by day 9 per 2026 directive — confirm from research) |
+| capital | CAR/RWA reconstruction (`CAR-RWA`; was mis-coded `BSD2` — the official Capital Adequacy Return is **BSD5A**, now generated on its official layout from this same engine) | `get_bsd2_preview` + capital runs | monthly/quarterly per research |
 | irrbb | IRRBB pilot return (repricing gap, ΔEVE/ΔNII by shock) | IRR dashboard/run payloads | quarterly (pilot) |
 | icaap_stress | ICAAP data companion + stress summary | forecast + stress runs | annual / per research |
 | fx | Net Open Position return | FX dashboard/runs | per research |
+| **bsd** (2026-08-15) | **Every official Bank of Ghana BSD prudential return** — BSD1, 1A, 1B, 2, 2A, 3A, 3B, 4, 5A, 5B, 6 (6A/6B), 7A, 7B, 8, 9, 10, 11, 13, 14, 15A, 15B, 16, 17 (24 workbooks / 76 sheets under `docs/reporting/`) | `bog_form` — `bog_forms/` computes each form by filling the official INPUT cells from named platform sources and **evaluating the templates' own formulas** (5,903 formula cells, 100% covered), then exports the **official workbook layout** values-only (sealed) | frequency + time limit from the Guide's List of Prudential Returns (weekly 9 days; monthly/quarterly/half-yearly 14 days); basis solo, consolidated only on BSD7B/BSD9 (+ GROUP variants BSD3B/BSD5B). Registry doc: `docs/bog_returns/00_full_return_registry.md`; per-form line maps `docs/bog_returns/<form>_line_map.md`; coverage matrix `docs/bog_returns/99_coverage_matrix.md` |
 
 Registry entries: code, title, directive citation, frequency, deadline rule (callable:
 reporting_date → due_date), generator, template id + fidelity grade, channel default.
+
+### 4a. Export artifacts of a package (2026-08-16)
+
+`POST /banks/{bank}/regulatory-packages/{id}/export?kind=` — `pdf` (values only; **the BoG
+submission package**), `xlsx` / `xlsx_official` (sealed values-only Excel, sheets protected — the
+governance twin of the PDF), `xlsx_working` (official BoG BSD forms only: the same official
+layout with the template's live formulas for ALM/Finance review; labelled WORKING COPY; a
+distinct artifact kind that is never filed and never signed), `csv`. Rendering:
+`bog_forms/render.py` (`mode="official"|"working"`); kinds admitted by migration `202608160015`.
 
 ## 5. Services (`app/services/regulatory_reporting/`)
 

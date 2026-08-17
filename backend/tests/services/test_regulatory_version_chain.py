@@ -30,13 +30,13 @@ from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import regulatory_liquidity
 from app.services.attestation import workflow as attestation_workflow
 from app.services.regulatory_reporting import generation, snapshot_diff, version_chain
+from tests.api.helpers import ORG_2
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.api.helpers import ORG_2
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 NEIGHBOUR = TenantContext(organization_id=ORG_2, actor_user_id=uuid4())
@@ -169,7 +169,7 @@ def _seed_two_versions(db: Session) -> tuple[RegulatoryPackage, RegulatoryPackag
         ),
     )
     assert run.status == "succeeded"
-    payload = RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE)
+    payload = RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE)
     first = generation.generate_package(db, MAKER, SAMPLE_BANK_ID, payload)
     second = generation.generate_package(db, MAKER, SAMPLE_BANK_ID, payload)
     return _row(db, first.id), _row(db, second.id)

@@ -5,7 +5,7 @@ book: the 22-scenario + forecast official-run sweep (`run_official_modules`,
 the same entry the background pipeline uses), the reverse-stress frontier,
 then — for every entry in the return registry — package generation and an
 xlsx export with real bytes. The two template-gated obligations
-(BSD-MONTHLY, LAS-QUARTERLY) must refuse with ``template_pending`` — that
+(LAS-QUARTERLY) must refuse with ``template_pending`` — that
 refusal is their specified behavior, not a gap.
 
 This is the executable form of "generate all reports and confirm the fixes
@@ -49,7 +49,7 @@ from tests.storage.inmemory import InMemoryStorageClient
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 REPORTING_DATE = date(2026, 3, 31)
 
-TEMPLATE_GATED = {"BSD-MONTHLY", "LAS-QUARTERLY"}
+TEMPLATE_GATED = {"LAS-QUARTERLY"}  # BSD-MONTHLY retired: official BSD forms generate (bog_forms)
 
 
 @pytest.fixture
@@ -136,11 +136,20 @@ def test_every_registered_return_generates_and_exports_end_to_end(
         db_session, MAKER, SAMPLE_BANK_ID, period_id
     )
     by_module = {outcome.module: outcome for outcome in outcomes}
-    assert set(by_module) == {"liquidity", "capital", "irr", "fx", "ftp", "forecast"}
+    assert set(by_module) == {
+        "liquidity", "capital", "irr", "fx", "ftp", "forecast", "implied_rating",
+    }  # fmt: skip
+    # implied_rating (PD remediation) joined the sweep after this proof was
+    # written: it REFUSES by design when no GHANA_SOVEREIGN rating has been
+    # published — the hermetic book carries no rating register, so its refusal
+    # is the honest outcome here, not a failure of the official run.
+    rating = by_module["implied_rating"]
+    assert rating.status != "succeeded"
+    assert "GHANA_SOVEREIGN" in str(rating.error)
     failed = {
-        module: outcome.detail  # type: ignore[index]
+        module: outcome.error
         for module, outcome in by_module.items()
-        if outcome.status != "succeeded"
+        if outcome.status != "succeeded" and module != "implied_rating"
     }
     assert not failed, f"Official module runs failed: {failed}"
 

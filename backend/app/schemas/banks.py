@@ -18,6 +18,11 @@ type BankFactGroup = Literal[
     "lcr_inflow",
     "market_risk",
     "operational_income",
+    # "cashflow" is served by the facts view (services/banks._FACT_GROUP_FIELDS
+    # maps it to cash_flows) but was missing here, so any period carrying
+    # cash-flow facts 500'd on serialisation (found by the real-DB tests,
+    # 2026-08-16). Keep this Literal in step with _FACT_GROUP_FIELDS.
+    "cashflow",
     "capital_component",
     "deposit_behavior",
 ]

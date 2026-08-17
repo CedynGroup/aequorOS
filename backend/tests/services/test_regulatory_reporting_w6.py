@@ -124,8 +124,8 @@ def test_solo_and_consolidated_coexist_as_independent_current_versions(
     materialize_canonical_test_book(db_session)
     _liquidity_run(db_session, MARCH)
 
-    solo = _generate(db_session, "BSD3", MARCH, basis="solo")
-    consolidated = _generate(db_session, "BSD3", MARCH, basis="consolidated")
+    solo = _generate(db_session, "LCR-NSFR", MARCH, basis="solo")
+    consolidated = _generate(db_session, "LCR-NSFR", MARCH, basis="consolidated")
 
     # Both are current (non-superseded) for the same (return, date) — the new
     # unique index keys on basis, so they do not collide.
@@ -143,7 +143,7 @@ def test_solo_and_consolidated_coexist_as_independent_current_versions(
         .select_from(RegulatoryPackage)
         .where(
             RegulatoryPackage.bank_id == SAMPLE_BANK_ID,
-            RegulatoryPackage.return_code == "BSD3",
+            RegulatoryPackage.return_code == "LCR-NSFR",
             RegulatoryPackage.reporting_date == MARCH,
             RegulatoryPackage.status != "superseded",
         )
@@ -155,17 +155,17 @@ def test_regenerate_solo_does_not_supersede_consolidated(db_session: Session) ->
     materialize_canonical_test_book(db_session)
     _liquidity_run(db_session, MARCH)
 
-    _generate(db_session, "BSD3", MARCH, basis="solo")
-    consolidated_v1 = _generate(db_session, "BSD3", MARCH, basis="consolidated")
+    _generate(db_session, "LCR-NSFR", MARCH, basis="solo")
+    consolidated_v1 = _generate(db_session, "LCR-NSFR", MARCH, basis="consolidated")
 
-    solo_v2 = _generate(db_session, "BSD3", MARCH, basis="solo")
+    solo_v2 = _generate(db_session, "LCR-NSFR", MARCH, basis="solo")
 
     assert solo_v2.version == 2
     # The consolidated chain is untouched by the solo regeneration.
     db_session.refresh(consolidated_v1)
     assert consolidated_v1.status == "generated"
     assert consolidated_v1.version == 1
-    consolidated_current = _current(db_session, "BSD3", MARCH, "consolidated")
+    consolidated_current = _current(db_session, "LCR-NSFR", MARCH, "consolidated")
     assert consolidated_current is not None
     assert consolidated_current.id == consolidated_v1.id
 
@@ -254,7 +254,7 @@ def test_prior_period_column_blank_on_first_period(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
     _liquidity_run(db_session, MARCH)
 
-    package = _generate(db_session, "BSD3", MARCH)
+    package = _generate(db_session, "LCR-NSFR", MARCH)
     rows = _comparative(package)
     assert rows, "headline_comparative section is emitted"
     # No prior period exists -> every prior_value is blank, never fabricated.
@@ -267,10 +267,10 @@ def test_prior_period_column_populated_on_second_period(db_session: Session) -> 
     _liquidity_run(db_session, FEBRUARY)
     _liquidity_run(db_session, MARCH)
 
-    first = _generate(db_session, "BSD3", FEBRUARY)
+    first = _generate(db_session, "LCR-NSFR", FEBRUARY)
     first_totals = {row["code"]: row["value"] for row in first.snapshot["totals"]}
 
-    second = _generate(db_session, "BSD3", MARCH)
+    second = _generate(db_session, "LCR-NSFR", MARCH)
     rows = _comparative(second)
     # Each headline total's prior_value equals the February package's value.
     assert rows["hqla_total_ghs"]["prior_value"] == first_totals["hqla_total_ghs"]
@@ -285,8 +285,8 @@ def test_prior_period_comparative_is_basis_scoped(db_session: Session) -> None:
     _liquidity_run(db_session, MARCH)
 
     # A February SOLO package must not seed a March CONSOLIDATED comparative.
-    _generate(db_session, "BSD3", FEBRUARY, basis="solo")
-    march_consolidated = _generate(db_session, "BSD3", MARCH, basis="consolidated")
+    _generate(db_session, "LCR-NSFR", FEBRUARY, basis="solo")
+    march_consolidated = _generate(db_session, "LCR-NSFR", MARCH, basis="consolidated")
     rows = _comparative(march_consolidated)
     assert all(row["prior_value"] is None for row in rows.values())
 
@@ -303,7 +303,7 @@ def test_deadline_override_changes_due_date(db_session: Session) -> None:
     baseline = calendar.list_obligations(
         db_session, MAKER, SAMPLE_BANK_ID, horizon_months=1, as_of=as_of
     )
-    bsd2_default = next(item for item in baseline.obligations if item.return_code == "BSD2")
+    bsd2_default = next(item for item in baseline.obligations if item.return_code == "CAR-RWA")
     # Registry default is day 14 of the month after the reporting date.
     assert bsd2_default.due_date.day == 14
 
@@ -311,18 +311,18 @@ def test_deadline_override_changes_due_date(db_session: Session) -> None:
         db_session,
         MAKER,
         SAMPLE_BANK_ID,
-        ReportingSettingsPut(deadline_overrides={"BSD2": 21}),
+        ReportingSettingsPut(deadline_overrides={"CAR-RWA": 21}),
     )
 
     overridden = calendar.list_obligations(
         db_session, MAKER, SAMPLE_BANK_ID, horizon_months=1, as_of=as_of
     )
-    bsd2_over = next(item for item in overridden.obligations if item.return_code == "BSD2")
+    bsd2_over = next(item for item in overridden.obligations if item.return_code == "CAR-RWA")
     assert bsd2_over.reporting_date == bsd2_default.reporting_date
     assert bsd2_over.due_date.day == 21
     # Returns without an override keep the registry default.
-    bsd3_over = next(item for item in overridden.obligations if item.return_code == "BSD3")
-    bsd3_default = next(item for item in baseline.obligations if item.return_code == "BSD3")
+    bsd3_over = next(item for item in overridden.obligations if item.return_code == "LCR-NSFR")
+    bsd3_default = next(item for item in baseline.obligations if item.return_code == "LCR-NSFR")
     assert bsd3_over.due_date == bsd3_default.due_date
 
 
@@ -338,12 +338,12 @@ def test_reporting_settings_get_defaults_empty_then_round_trips(
         db_session,
         MAKER,
         SAMPLE_BANK_ID,
-        ReportingSettingsPut(deadline_overrides={"BSD2": 14, "FX-NOP": 10}),
+        ReportingSettingsPut(deadline_overrides={"CAR-RWA": 14, "FX-NOP": 10}),
     )
     stored = reporting_settings.get_reporting_settings(db_session, MAKER, SAMPLE_BANK_ID)
-    assert stored.deadline_overrides == {"BSD2": 14, "FX-NOP": 10}
+    assert stored.deadline_overrides == {"CAR-RWA": 14, "FX-NOP": 10}
 
 
 def test_reporting_settings_rejects_out_of_range_day() -> None:
     with pytest.raises(ValueError, match="between 1 and 31"):
-        ReportingSettingsPut(deadline_overrides={"BSD2": 40})
+        ReportingSettingsPut(deadline_overrides={"CAR-RWA": 40})

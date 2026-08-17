@@ -1,0 +1,59 @@
+# Sample Bank Ltd (BK-0PMD7Z5M) onboarding dataset — INCOME/EXPENSE general-ledger balances as at 2026-02-28: fiscal-year-to-date (calendar fiscal year, trial-balance convention), cedis; FX-business accounts carry currency=USD with the balance already in cedi equivalent. Push with scripts/ingest_push.py --entity gl_account=<this file> --as-of 2026-02-28. Realistic, not real: sized to the bank's balance sheet (docs/data_engine/datasets/gl_mapping_bsd7.md).
+source_reference,account_code,name,account_class,currency,balance
+4101,4101,Interest Income - Retail Loans,INCOME,GHS,14806601.47
+4102,4102,Interest Income - SME Loans,INCOME,GHS,18201122.61
+4103,4103,Interest Income - Corporate Loans,INCOME,GHS,22016599.16
+4104,4104,Interest Income - Overdrafts,INCOME,GHS,5995492.06
+4105,4105,Interest Income - Residential Mortgages,INCOME,GHS,3280125.81
+4106,4106,Interest Income - Agricultural Loans,INCOME,GHS,2267671.59
+4107,4107,Interest Income - Foreign Currency Loans,INCOME,USD,6485817.05
+4109,4109,Interest in Suspense - Non-performing Loans (contra),INCOME,GHS,962643.86
+4201,4201,Discount Income - Government of Ghana Treasury Bills,INCOME,GHS,13398279.01
+4202,4202,Discount Income - Bank of Ghana Bills,INCOME,GHS,14744740.80
+4301,4301,Interest Income - Government of Ghana Bonds,INCOME,GHS,12765296.46
+4302,4302,Interest Income - Interbank Placements,INCOME,GHS,3267722.98
+4303,4303,Interest Income - Foreign Currency Placements,INCOME,USD,593975.49
+4304,4304,Interest Income - Reverse Repos with Bank of Ghana,INCOME,GHS,366883.57
+4401,4401,Foreign Exchange Trading Income,INCOME,USD,5803135.76
+4402,4402,Foreign Exchange Revaluation Gains,INCOME,USD,1445914.95
+4501,4501,Loan Processing and Commitment Fees,INCOME,GHS,3468192.45
+4502,4502,Trade Finance Commissions - LCs and Guarantees,INCOME,USD,3680111.95
+4503,4503,Account Maintenance and Transaction Fees,INCOME,GHS,2900279.05
+4504,4504,Card and Digital Channel Commissions,INCOME,GHS,2510645.16
+4505,4505,Remittance and Transfer Commissions,INCOME,USD,1033232.19
+4601,4601,Dividend Income - Equity Investments,INCOME,GHS,0.00
+4701,4701,Gain/Loss on Disposal of Property and Equipment,INCOME,GHS,0.00
+4702,4702,Rent Receivable - Investment Property,INCOME,GHS,187273.95
+4703,4703,Gains on Trading Securities,INCOME,GHS,715344.93
+4801,4801,Other Operating Income - Recoveries and Sundry,INCOME,GHS,1155177.51
+5101,5101,Interest Expense - Savings Deposits,EXPENSE,GHS,10352536.28
+5102,5102,Interest Expense - Current Accounts,EXPENSE,GHS,2215307.21
+5103,5103,Interest Expense - Time Deposits - Retail,EXPENSE,GHS,14736397.40
+5104,5104,Interest Expense - Time Deposits - Corporate and Institutional,EXPENSE,GHS,24382266.35
+5105,5105,Interest Expense - Foreign Currency Time Deposits,EXPENSE,USD,1489071.76
+5106,5106,Interest Expense - Interbank Borrowings,EXPENSE,GHS,3816542.49
+5107,5107,Interest Expense - Foreign Currency Borrowings,EXPENSE,USD,843614.26
+5108,5108,Interest Expense - Subordinated Debt,EXPENSE,GHS,3284272.19
+5109,5109,Interest Expense - Repos and BoG Facilities,EXPENSE,GHS,500036.86
+5201,5201,Staff Salaries and Wages,EXPENSE,GHS,17932585.03
+5202,5202,Staff Training and Development,EXPENSE,GHS,638329.15
+5203,5203,Directors Emoluments and Fees,EXPENSE,GHS,548246.64
+5204,5204,"Other Staff Costs - Pensions, Medical and Allowances",EXPENSE,GHS,5196976.02
+5301,5301,"Occupancy - Rent, Utilities and Premises Maintenance",EXPENSE,GHS,4047319.98
+5302,5302,Travel and Transport,EXPENSE,GHS,1035034.18
+5303,5303,Administrative and General Expenses,EXPENSE,GHS,3191106.74
+5304,5304,"IT, Software and Communications",EXPENSE,GHS,4332086.19
+5305,5305,Marketing and Business Promotion,EXPENSE,GHS,1492945.95
+5306,5306,"Audit, Legal and Professional Fees",EXPENSE,GHS,825805.05
+5307,5307,Deposit Protection Premium and Regulatory Levies,EXPENSE,GHS,1782689.17
+5308,5308,Correspondent Banking and Card Scheme Charges,EXPENSE,USD,1112394.20
+5401,5401,Depreciation and Amortisation,EXPENSE,GHS,3468634.62
+5402,5402,Impairment Charge - Loans and Advances,EXPENSE,GHS,7131066.66
+5403,5403,Impairment Charge - Investments and Other Assets,EXPENSE,GHS,580110.62
+5501,5501,Losses on Sale of Investment Securities,EXPENSE,GHS,545984.34
+5502,5502,Losses on Dealing Assets,EXPENSE,GHS,0.00
+5503,5503,Foreign Exchange Losses,EXPENSE,USD,662503.05
+5601,5601,Corporate Income Tax Charge,EXPENSE,GHS,0.00
+5602,5602,Financial Sector Recovery Levy,EXPENSE,GHS,0.00
+5701,5701,Extraordinary Items,EXPENSE,GHS,0.00
+5801,5801,Dividends Paid and Payable,EXPENSE,GHS,0.00

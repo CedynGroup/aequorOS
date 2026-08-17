@@ -1,0 +1,1310 @@
+{
+ "form": "BSD7B",
+ "workbook": "FORM BSD7B REVISED.xls",
+ "sheets": [
+  {
+   "name": "BSD7B",
+   "max_row": 53,
+   "max_col": 6,
+   "column_widths": {
+    "A": 4.14,
+    "B": 47.56,
+    "C": 19.7,
+    "D": 20.41
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "B1",
+     "kind": "label",
+     "value": "CURRENT YEAR RESULTS ",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B2",
+     "kind": "label",
+     "value": "FOR THE PERIOD ENDED ………………",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B3",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "align": "general"
+    },
+    {
+     "ref": "C4",
+     "kind": "label",
+     "value": "Quarter Ended",
+     "number_format": "#,##0.000_);\\(#,##0.000\\)",
+     "align": "center"
+    },
+    {
+     "ref": "D4",
+     "kind": "label",
+     "value": "Period to date",
+     "number_format": "#,##0.000_);\\(#,##0.000\\)",
+     "align": "center"
+    },
+    {
+     "ref": "C5",
+     "kind": "label",
+     "value": "Please put date here",
+     "number_format": "#,##0.000_);\\(#,##0.000\\)",
+     "align": "center"
+    },
+    {
+     "ref": "D5",
+     "kind": "label",
+     "value": "Please put date here",
+     "number_format": "#,##0.000_);\\(#,##0.000\\)",
+     "align": "center"
+    },
+    {
+     "ref": "C6",
+     "kind": "label",
+     "value": "¢'Million",
+     "number_format": "#,##0.000_);\\(#,##0.000\\)",
+     "align": "center"
+    },
+    {
+     "ref": "D6",
+     "kind": "label",
+     "value": "¢'Million",
+     "number_format": "#,##0.000_);\\(#,##0.000\\)",
+     "align": "center"
+    },
+    {
+     "ref": "A7",
+     "kind": "input",
+     "value": 1,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B7",
+     "kind": "label",
+     "value": "Interest received and receivable",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C7",
+     "kind": "formula",
+     "formula": "=SUM(C8:C10)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D7",
+     "kind": "formula",
+     "formula": "=SUM(D8:D10)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B8",
+     "kind": "label",
+     "value": "  (a) Overdrafts, Loans & Other Advances",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C8",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D8",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "  (b) Bills (including discounts)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C9",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D9",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B10",
+     "kind": "label",
+     "value": "  (c) Investments (including discounts)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C10",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D10",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A11",
+     "kind": "input",
+     "value": 2,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B11",
+     "kind": "label",
+     "value": "Interest Paid and Payable",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C11",
+     "kind": "formula",
+     "formula": "=C12+C17",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D11",
+     "kind": "formula",
+     "formula": "=D12+D17",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B12",
+     "kind": "label",
+     "value": "  (a)   Interest on deposits",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C12",
+     "kind": "formula",
+     "formula": "=SUM(C13:C16)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D12",
+     "kind": "formula",
+     "formula": "=SUM(D13:D16)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B13",
+     "kind": "label",
+     "value": "         -Savings",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C13",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D13",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B14",
+     "kind": "label",
+     "value": "          -Current  ",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C14",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D14",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B15",
+     "kind": "label",
+     "value": "          -Time",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C15",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D15",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B16",
+     "kind": "label",
+     "value": "         -Borrowings",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C16",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D16",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B17",
+     "kind": "label",
+     "value": "   (b) Other Interest paymants",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C17",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D17",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A18",
+     "kind": "input",
+     "value": 3,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B18",
+     "kind": "label",
+     "value": "Net Interest Income (1-2)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C18",
+     "kind": "formula",
+     "formula": "=C7-C11",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D18",
+     "kind": "formula",
+     "formula": "=D7-D11",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A19",
+     "kind": "input",
+     "value": 4,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B19",
+     "kind": "label",
+     "value": "Profit/Loss on foreign exchange dealings",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C19",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D19",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A20",
+     "kind": "input",
+     "value": 5,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B20",
+     "kind": "label",
+     "value": "Income from Fees and Commissions",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C20",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D20",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A21",
+     "kind": "input",
+     "value": 6,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B21",
+     "kind": "label",
+     "value": "Dividends received",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C21",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D21",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A22",
+     "kind": "input",
+     "value": 7,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B22",
+     "kind": "label",
+     "value": "Profit/Loss on sale of Property, Plant and Equipment",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C22",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D22",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A23",
+     "kind": "input",
+     "value": 8,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B23",
+     "kind": "label",
+     "value": "Rent Reveivable",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C23",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D23",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A24",
+     "kind": "input",
+     "value": 9,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B24",
+     "kind": "label",
+     "value": "Gain on dealing assets",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C24",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D24",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A25",
+     "kind": "input",
+     "value": 10,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B25",
+     "kind": "label",
+     "value": "Other Income",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C25",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D25",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A26",
+     "kind": "input",
+     "value": 11,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B26",
+     "kind": "label",
+     "value": "Net Income (3+4+5+6+7+…….+10)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C26",
+     "kind": "formula",
+     "formula": "=SUM(C18:C25)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D26",
+     "kind": "formula",
+     "formula": "=SUM(D18:D25)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A27",
+     "kind": "input",
+     "value": 12,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B27",
+     "kind": "label",
+     "value": "Operating Expense - Staff",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C27",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D27",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A28",
+     "kind": "input",
+     "value": 13,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B28",
+     "kind": "label",
+     "value": "                    -Training",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C28",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D28",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A29",
+     "kind": "input",
+     "value": 14,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B29",
+     "kind": "label",
+     "value": "                    -Emoluments",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C29",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D29",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A30",
+     "kind": "input",
+     "value": 15,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B30",
+     "kind": "label",
+     "value": "                   -Others",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C30",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D30",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A31",
+     "kind": "input",
+     "value": 16,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B31",
+     "kind": "label",
+     "value": "                  - Occupancy",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C31",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D31",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A32",
+     "kind": "input",
+     "value": 17,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B32",
+     "kind": "label",
+     "value": "                  - Travel",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C32",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D32",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A33",
+     "kind": "input",
+     "value": 18,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B33",
+     "kind": "label",
+     "value": "                  - Admin. & Other",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C33",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D33",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A34",
+     "kind": "input",
+     "value": 19,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B34",
+     "kind": "label",
+     "value": "Total Operating Expenses (12+13+14+………+18)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C34",
+     "kind": "formula",
+     "formula": "=SUM(C27:C33)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "right"
+    },
+    {
+     "ref": "D34",
+     "kind": "formula",
+     "formula": "=SUM(D27:D33)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "right"
+    },
+    {
+     "ref": "A35",
+     "kind": "input",
+     "value": 20,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B35",
+     "kind": "label",
+     "value": "Provisions - Depreciation",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C35",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D35",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A36",
+     "kind": "input",
+     "value": 21,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B36",
+     "kind": "label",
+     "value": "           - Bad Debts",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C36",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D36",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A37",
+     "kind": "input",
+     "value": 22,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B37",
+     "kind": "label",
+     "value": "           - Other",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C37",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D37",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A38",
+     "kind": "input",
+     "value": 23,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B38",
+     "kind": "label",
+     "value": "Total Provisions (20+21+22)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C38",
+     "kind": "formula",
+     "formula": "=SUM(C35:C37)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D38",
+     "kind": "formula",
+     "formula": "=SUM(D35:D37)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A39",
+     "kind": "input",
+     "value": 24,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B39",
+     "kind": "label",
+     "value": "Loses on sale of Investment",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C39",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D39",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A40",
+     "kind": "input",
+     "value": 25,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B40",
+     "kind": "label",
+     "value": "Loses on dealing assets",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C40",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D40",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A41",
+     "kind": "input",
+     "value": 26,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B41",
+     "kind": "label",
+     "value": "Exchange losses",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C41",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D41",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A42",
+     "kind": "input",
+     "value": 27,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B42",
+     "kind": "label",
+     "value": "Net Profit (11-19-23-24-25-26",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C42",
+     "kind": "formula",
+     "formula": "=C26-C34-C38-C39-C40-C41",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D42",
+     "kind": "formula",
+     "formula": "=D26-D34-D38-D39-D40-D41",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A43",
+     "kind": "input",
+     "value": 28,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B43",
+     "kind": "label",
+     "value": "Provision for Taxation",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C43",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D43",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A44",
+     "kind": "input",
+     "value": 29,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B44",
+     "kind": "label",
+     "value": "Net Profit after Taxation (27-28)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C44",
+     "kind": "formula",
+     "formula": "=C42-C43",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D44",
+     "kind": "formula",
+     "formula": "=D42-D43",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A45",
+     "kind": "input",
+     "value": 30,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B45",
+     "kind": "label",
+     "value": "Extraordinary Items",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C45",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D45",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A46",
+     "kind": "input",
+     "value": 31,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B46",
+     "kind": "label",
+     "value": "Net Profit after Tax & Ext. items (29-30)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C46",
+     "kind": "formula",
+     "formula": "=C44-C45",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D46",
+     "kind": "formula",
+     "formula": "=D44-D45",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A47",
+     "kind": "input",
+     "value": 32,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B47",
+     "kind": "label",
+     "value": "Dividends Paid and Payable",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C47",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D47",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A48",
+     "kind": "input",
+     "value": 33,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B48",
+     "kind": "label",
+     "value": "Retained Profit/Loss (31-32)",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C48",
+     "kind": "formula",
+     "formula": "=C46-C47",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D48",
+     "kind": "formula",
+     "formula": "=D46-D47",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A49",
+     "kind": "input",
+     "value": 34,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B49",
+     "kind": "label",
+     "value": "Statutory Reserves",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C49",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D49",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A50",
+     "kind": "input",
+     "value": 35,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B50",
+     "kind": "label",
+     "value": "Other reserves",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C50",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D50",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A51",
+     "kind": "input",
+     "value": 36,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B51",
+     "kind": "label",
+     "value": "Income Surplus",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C51",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D51",
+     "kind": "input",
+     "value": 0,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "A52",
+     "kind": "input",
+     "value": 37,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "B52",
+     "kind": "label",
+     "value": "TOTAL RESERVES",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "C52",
+     "kind": "formula",
+     "formula": "=SUM(C48:C51)",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    },
+    {
+     "ref": "D52",
+     "kind": "formula",
+     "formula": "=SUM(D48:D51)",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "general"
+    }
+   ]
+  }
+ ]
+}

@@ -161,7 +161,7 @@ def _seed(
         ReturnSigningPolicy(
             organization_id=DEMO_ORG_ID,
             bank_id=SAMPLE_BANK_ID,
-            return_code="BSD3",
+            return_code="LCR-NSFR",
             required_signatures=[
                 {"role": "preparer", "min_count": 1, "officer_titles": []},
                 {
@@ -200,7 +200,7 @@ def _seed(
         db,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
     validation.validate_package(db, MAKER, SAMPLE_BANK_ID, read.id)
     package = db.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == read.id))
@@ -286,7 +286,7 @@ def test_resolution_is_override_then_bank_then_organization_then_default(
     placements.upsert_template(
         db_session,
         MAKER,
-        return_code="BSD3",
+        return_code="LCR-NSFR",
         bank_id=None,
         placements=org_boxes,
         reason="organization default",
@@ -304,7 +304,7 @@ def test_resolution_is_override_then_bank_then_organization_then_default(
     placements.upsert_template(
         db_session,
         MAKER,
-        return_code="BSD3",
+        return_code="LCR-NSFR",
         bank_id=SAMPLE_BANK_ID,
         placements=bank_boxes,
         reason="this bank differs",
@@ -327,7 +327,7 @@ def test_a_template_write_replaces_the_whole_scope(db_session: Session) -> None:
     placements.upsert_template(
         db_session,
         MAKER,
-        return_code="BSD3",
+        return_code="LCR-NSFR",
         bank_id=SAMPLE_BANK_ID,
         placements=PLACED,
         reason="first",
@@ -339,14 +339,14 @@ def test_a_template_write_replaces_the_whole_scope(db_session: Session) -> None:
     placements.upsert_template(
         db_session,
         MAKER,
-        return_code="BSD3",
+        return_code="LCR-NSFR",
         bank_id=SAMPLE_BANK_ID,
         placements=replacement,
         reason="second",
     )
     db_session.commit()
     assert set(placements.resolve(db_session, MAKER, package).placements) == set(replacement)
-    assert len(placements.list_templates(db_session, MAKER, return_code="BSD3")) == 2
+    assert len(placements.list_templates(db_session, MAKER, return_code="LCR-NSFR")) == 2
 
 
 @pytest.mark.parametrize(
@@ -677,7 +677,7 @@ def test_awaiting_signature_lists_only_this_users_pending_requests(
     db_session.commit()
 
     queued = routing.awaiting_signature(db_session, MAKER, APPROVER_USER_ID)
-    assert [package.return_code for _recipient, package in queued] == ["BSD3"]
+    assert [package.return_code for _recipient, package in queued] == ["LCR-NSFR"]
     assert routing.awaiting_signature(db_session, MAKER, OTHER_APPROVER_USER_ID) == []
 
     _certify(db_session, APPROVER, package, role="approver")
@@ -852,7 +852,7 @@ def test_a_bare_approval_still_works_where_signing_is_relaxed(db_session: Sessio
         select(ReturnSigningPolicy).where(
             ReturnSigningPolicy.organization_id == DEMO_ORG_ID,
             ReturnSigningPolicy.bank_id == SAMPLE_BANK_ID,
-            ReturnSigningPolicy.return_code == "BSD3",
+            ReturnSigningPolicy.return_code == "LCR-NSFR",
         )
     )
     assert in_force is not None
@@ -903,7 +903,7 @@ def test_the_esign_kill_switch_routes_a_mandatory_return_through_bare_approval(
     row = db_session.scalar(
         select(ReturnSigningPolicy).where(
             ReturnSigningPolicy.organization_id == DEMO_ORG_ID,
-            ReturnSigningPolicy.return_code == "BSD3",
+            ReturnSigningPolicy.return_code == "LCR-NSFR",
         )
     )
     assert row is not None

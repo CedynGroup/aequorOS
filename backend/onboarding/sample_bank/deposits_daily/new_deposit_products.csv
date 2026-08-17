@@ -1,0 +1,9 @@
+# Deposit products Sample Bank did not yet carry. Pushed as PRODUCT entities before the daily deposit sub-ledger so those positions resolve their product reference; existing products (DEP.RET.CUR, DEP.RET.SAV, …) are reused as-is.
+source_reference,product_code,name
+DEP.CORP.CALL,DEP.CORP.CALL,Corporate Call Account (GHS)
+DEP.GHS.CD,DEP.GHS.CD,Certificate of Deposit (GHS)
+DEP.GHS.SPECIAL,DEP.GHS.SPECIAL,Special Deposit (GHS)
+DEP.GHS.MARGIN,DEP.GHS.MARGIN,Margin against Contingent Liabilities (GHS)
+DEP.USD.CUR,DEP.USD.CUR,USD Current Account
+DEP.FX.SPECIAL,DEP.FX.SPECIAL,Special Deposit (foreign currency)
+DEP.FX.MARGIN,DEP.FX.MARGIN,Margin against Contingent Liabilities (foreign currency)

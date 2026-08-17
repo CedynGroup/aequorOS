@@ -19,13 +19,13 @@ from app.schemas.regulatory_reporting import (
 )
 from app.services import regulatory_liquidity
 from app.services.regulatory_reporting import calendar, generation, validation, workflow
+from tests.factories.attestation import relax_signing
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.factories.attestation import relax_signing
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 CHECKER = TenantContext(
@@ -41,7 +41,7 @@ def _seed_with_baseline_run(db: Session) -> None:
     # with bare approval decisions. Approving and signing are one act for a return
     # that requires signatures, so opt BSD3 out the way an administrator would;
     # the one-act composition is proved in test_attestation_workspace.py.
-    relax_signing(db, organization_id=DEMO_ORG_ID, return_code="BSD3")
+    relax_signing(db, organization_id=DEMO_ORG_ID, return_code="LCR-NSFR")
     if db.scalar(select(User.id).where(User.id == CHECKER.actor_user_id)) is None:
         db.add(
             User(
@@ -76,7 +76,7 @@ def _generate(db: Session):
         db,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
 
 
@@ -271,7 +271,7 @@ def test_prior_period_movement_flags_large_swings_as_warning(db_session: Session
         db_session,
         MAKER,
         SAMPLE_BANK_ID,
-        RegulatoryPackageCreate(return_code="BSD3", reporting_date=prior_date),
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=prior_date),
     )
     validation.validate_package(db_session, MAKER, SAMPLE_BANK_ID, prior_package.id)
     workflow.request_approval(
@@ -332,7 +332,7 @@ def test_calendar_links_current_package_and_grades_rag(db_session: Session) -> N
     bsd3 = [
         item
         for item in obligations
-        if item.return_code == "BSD3" and item.reporting_date == REPORTING_DATE
+        if item.return_code == "LCR-NSFR" and item.reporting_date == REPORTING_DATE
     ]
     assert len(bsd3) == 1
     assert bsd3[0].due_date == date(2026, 4, 9)
@@ -347,7 +347,7 @@ def test_calendar_links_current_package_and_grades_rag(db_session: Session) -> N
     late_bsd3 = [
         item
         for item in late
-        if item.return_code == "BSD3" and item.reporting_date == REPORTING_DATE
+        if item.return_code == "LCR-NSFR" and item.reporting_date == REPORTING_DATE
     ]
     assert late_bsd3 and late_bsd3[0].rag == "overdue"
 
@@ -377,7 +377,7 @@ def test_calendar_links_current_package_and_grades_rag(db_session: Session) -> N
     submitted_bsd3 = [
         item
         for item in submitted
-        if item.return_code == "BSD3" and item.reporting_date == REPORTING_DATE
+        if item.return_code == "LCR-NSFR" and item.reporting_date == REPORTING_DATE
     ]
     assert submitted_bsd3 and submitted_bsd3[0].rag == "on_track"
     assert submitted_bsd3[0].package_status == "submitted"
@@ -391,6 +391,6 @@ def test_unknown_bank_is_tenant_scoped_404(db_session: Session) -> None:
             db_session,
             stranger,
             SAMPLE_BANK_ID,
-            RegulatoryPackageCreate(return_code="BSD3", reporting_date=REPORTING_DATE),
+            RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
         )
     assert exc_info.value.status_code == 404

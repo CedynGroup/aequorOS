@@ -2,7 +2,7 @@
 
 /**
  * Reports Library — the governance console. Three layers:
- *   1. Regulatory pack cards (BSD-2, BSD-3, Board Pack) linking to the
+ *   1. Regulatory pack cards (CAR-RWA, LCR-NSFR, Board Pack) linking to the
  *      module-owned submission pages and the print-ready board pack.
  *   2. Official Runs registry — every persisted regulatory run, grouped by
  *      day, with provenance (input hash, engine version) and module links.

@@ -313,7 +313,7 @@ def test_registry_carries_event_driven_corporate_packs() -> None:
         assert definition.fidelity == "CONFIRMED"
         assert "draft" in definition.directive_citation
     # Periodic returns stay non-event-driven.
-    assert REGISTRY["BSD3"].event_driven is False
+    assert REGISTRY["LCR-NSFR"].event_driven is False
 
 
 def test_lrt_profile_pack_generates_validates_and_exports(
@@ -568,7 +568,7 @@ def test_event_driven_returns_absent_from_calendar(db_session: Session) -> None:
     assert codes.isdisjoint(CORPORATE_CODES)
     assert "corporate" not in {item.return_family for item in obligations}
     # Periodic returns are unaffected by the skip.
-    assert {"BSD3", "BSD2", "IRRBB-PILOT", "FX-NOP", "ICAAP-STRESS", "LMT"} <= codes
+    assert {"LCR-NSFR", "CAR-RWA", "IRRBB-PILOT", "FX-NOP", "ICAAP-STRESS", "LMT"} <= codes
 
 
 def test_corporate_package_appears_in_package_list(db_session: Session) -> None:

@@ -1,0 +1,9 @@
+# Sample Bank onboarding dataset — subsidiaries (docs/data_engine/datasets/subsidiaries.md).
+# One row per (reporting_date, subsidiary_id); the whole register at one reporting date per push (as_of_date = reporting_date).
+# Amounts in cedis. minority_interest_ghs = the group's own consolidation workings (non-controlling share of the subsidiary's equity);
+# intercompany_receivable_ghs = due FROM the subsidiary to the parent, intercompany_payable_ghs = due TO the subsidiary.
+# Illustrative, not real bank data.
+reporting_date,subsidiary_id,name,country_code,entity_type,functional_currency,ownership_pct,consolidation_method,control_via_board,total_assets_ghs,total_liabilities_ghs,equity_ghs,net_profit_ytd_ghs,tier1_capital_ghs,rwa_ghs,minority_interest_ghs,minority_interest_tier2_pref_ghs,investment_carrying_ghs,intercompany_receivable_ghs,intercompany_receivable_type,intercompany_payable_ghs,intercompany_payable_type,regulator,licence_number,notes
+2026-06-30,SUB-001,Sample Investments Ltd,GH,other,GHS,100,full,true,62400000,41800000,20600000,2350000,,,0,0,12000000,8500000,Term loan to subsidiary,14200000,Subsidiary current account and call deposits with parent,"Securities and Exchange Commission, Ghana",SEC/BDL/0142,"investment banking, brokerage and fund management; wholly owned"
+2026-06-30,SUB-002,Sample Insurance Brokers Ltd,GH,insurance,GHS,60,full,true,15300000,8400000,6900000,820000,,,2760000,0,3600000,600000,Management fees receivable,3100000,Premium collection float held with parent,National Insurance Commission,NIC/BR/0087,bancassurance broker; 40% held by a strategic partner
+2026-06-30,SUB-003,Sample Leasing & Finance Ltd,GH,nbfi,GHS,75,full,true,118600000,92100000,26500000,1940000,24800000,96300000,6625000,0,18750000,22000000,Funding line to subsidiary (asset finance book),4700000,Subsidiary placements with parent,Bank of Ghana,BoG/NBFI/FH/0031,finance house (asset finance and leasing); 25% held by a development finance investor

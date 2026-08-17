@@ -1,0 +1,412 @@
+{
+ "form": "BSD2A",
+ "workbook": "FORM BSD2A REVISED.xls",
+ "sheets": [
+  {
+   "name": "FOREIGN CURRENCY EXPOSURES",
+   "max_row": 127,
+   "max_col": 19,
+   "column_widths": {
+    "A": 29.85,
+    "B": 8.85,
+    "E": 10.56,
+    "F": 10.85,
+    "G": 11.99,
+    "H": 11.85,
+    "J": 8.14,
+    "K": 18.56,
+    "L": 16.7,
+    "M": 13.28,
+    "N": 12.85
+   },
+   "merges": [],
+   "cells": [
+    {
+     "ref": "A2",
+     "kind": "label",
+     "value": "MONTHLY REPORT ON FOREIGN CURRENCY EXPOSURES",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A4",
+     "kind": "label",
+     "value": "NAME OF BANK:",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A6",
+     "kind": "label",
+     "value": "MONTH & YEAR :",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A8",
+     "kind": "label",
+     "value": "(¢'Million)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A9",
+     "kind": "label",
+     "value": "NAME OF BANK / INSTITUTION",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "B9",
+     "kind": "label",
+     "value": "TYPE OF EXPOSURE",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "C9",
+     "kind": "label",
+     "value": "CURRENCY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "D9",
+     "kind": "label",
+     "value": "FOREIGN CURRENCY AMOUNT",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E9",
+     "kind": "label",
+     "value": "CEDI EQUIVALENT",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "F9",
+     "kind": "label",
+     "value": "EXCHANGE CONVERSION RATE",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "G9",
+     "kind": "label",
+     "value": "NET WORTH OF REPORTING BANK",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "H9",
+     "kind": "label",
+     "value": "%AGE OF EXPOSURE TO NETWORTH",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "I9",
+     "kind": "label",
+     "value": "MATURITY DATE",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "J9",
+     "kind": "label",
+     "value": "INTEREST RATE",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "K9",
+     "kind": "label",
+     "value": "RATING OF COUNTERPARTY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "L9",
+     "kind": "label",
+     "value": "NETWORTH OF COUNTERPARTY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "M9",
+     "kind": "label",
+     "value": "DATE OF AUDIT REPORT OF COUNTERPARTY",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "N9",
+     "kind": "label",
+     "value": "PROVISION",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "E10",
+     "kind": "label",
+     "value": "(¢'Million)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "G10",
+     "kind": "label",
+     "value": "(¢'Million)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "L10",
+     "kind": "label",
+     "value": "(USD M)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "N10",
+     "kind": "label",
+     "value": "(¢'Million)",
+     "bold": true,
+     "align": "center"
+    },
+    {
+     "ref": "A11",
+     "kind": "label",
+     "value": "A.    FOREIGN ASSETS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A13",
+     "kind": "label",
+     "value": "(a) Foreign currency notes and coins",
+     "align": "general"
+    },
+    {
+     "ref": "A15",
+     "kind": "label",
+     "value": "(b) Correspondent acc. in non-res. financial inst.",
+     "align": "general"
+    },
+    {
+     "ref": "A17",
+     "kind": "label",
+     "value": "(c) Other claims on non-residents",
+     "align": "general"
+    },
+    {
+     "ref": "A19",
+     "kind": "label",
+     "value": " B.   DOMESTIC ASSETS",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A21",
+     "kind": "label",
+     "value": "   (a). Claims on Central Banks",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A22",
+     "kind": "label",
+     "value": "               Bank of Ghana",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A24",
+     "kind": "label",
+     "value": "   (b). Claims on Other Banks",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A27",
+     "kind": "label",
+     "value": "(c) Loans, Overdrafts and Other Advances",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A30",
+     "kind": "label",
+     "value": "(d) Securities",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A39",
+     "kind": "label",
+     "value": "(e)  Other Assets",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A42",
+     "kind": "label",
+     "value": "C.   FOREIGN LIABILITIES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A44",
+     "kind": "label",
+     "value": "(a) Short-Term Borrowings",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A47",
+     "kind": "label",
+     "value": "(b)  Long-term borrowing",
+     "align": "general"
+    },
+    {
+     "ref": "A49",
+     "kind": "label",
+     "value": "(c)  Deposits of non-residents",
+     "align": "general"
+    },
+    {
+     "ref": "A52",
+     "kind": "label",
+     "value": "D - DOMESTIC LIABILITIES",
+     "bold": true,
+     "align": "general"
+    },
+    {
+     "ref": "A54",
+     "kind": "label",
+     "value": " (a) Long-term Borrowings",
+     "align": "general"
+    },
+    {
+     "ref": "A56",
+     "kind": "label",
+     "value": " (b) Short-term borrowing",
+     "align": "general"
+    },
+    {
+     "ref": "A58",
+     "kind": "label",
+     "value": "(c) Cheques for clearing",
+     "align": "general"
+    },
+    {
+     "ref": "A60",
+     "kind": "label",
+     "value": "(d) Deposits of financial institutions",
+     "align": "general"
+    },
+    {
+     "ref": "A62",
+     "kind": "label",
+     "value": "(e) Deposits of non-financial institutions public and govt.",
+     "align": "general"
+    },
+    {
+     "ref": "A64",
+     "kind": "label",
+     "value": "   (1). Demand Deposits",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A66",
+     "kind": "label",
+     "value": "        (i). Individuals & others",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A71",
+     "kind": "label",
+     "value": "       (ii). Inoperative",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A76",
+     "kind": "label",
+     "value": "   (ii). Time Deposits",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A77",
+     "kind": "label",
+     "value": "             Individual",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A79",
+     "kind": "label",
+     "value": "(iii)  Savings",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A80",
+     "kind": "label",
+     "value": "             Individual",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A82",
+     "kind": "label",
+     "value": "(f). Special deposits",
+     "align": "general"
+    },
+    {
+     "ref": "A84",
+     "kind": "label",
+     "value": "(g) Margins against Contingent Liab.",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A90",
+     "kind": "label",
+     "value": "(h) Other Liabilities",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A97",
+     "kind": "label",
+     "value": "E.   CONTINGENT LIABILITIES",
+     "bold": true,
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    },
+    {
+     "ref": "A99",
+     "kind": "label",
+     "value": "              Customers Liabilities",
+     "align": "general"
+    },
+    {
+     "ref": "A103",
+     "kind": "label",
+     "value": "              Bonds & Guarantee",
+     "number_format": "[$-409]#,##0_);\\(#,##0\\)",
+     "align": "left"
+    }
+   ]
+  }
+ ]
+}

@@ -489,7 +489,7 @@ function SigningPolicyPanelInner() {
               rows={2}
               value={form.reason}
               onChange={(event) => set('reason', event.target.value)}
-              placeholder="e.g. Board resolution of 12 Jul 2026: the CFO signs BSD-2 and the Head of Finance signs BSD-3."
+              placeholder="e.g. Board resolution of 12 Jul 2026: the CFO signs BSD5A and the Head of Finance signs BSD2."
               className={inputClass}
             />
           </div>

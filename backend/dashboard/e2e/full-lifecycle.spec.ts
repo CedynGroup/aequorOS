@@ -12,7 +12,7 @@
  *     return is unfrozen, unsigned and unsubmittable again
  *  5. institution register (seeded ORASS code) → LRT corporate pack generates
  *
- * Every BSD3 journey now passes through the SIGNING CEREMONY for real, because
+ * Every LCR-NSFR journey now passes through the SIGNING CEREMONY for real, because
  * signing is required for every return by default and an unsigned return must
  * never be submittable. Relaxing the policy would have turned these three
  * journeys green while deleting coverage of that gate, so instead the fixture
@@ -25,9 +25,9 @@
  * signatures the preparer's certification IS the request — it freezes the figures
  * and routes the return to the approver they name.
  *
- * Independence: each BSD3 journey claims its OWN reporting period (indices
+ * Independence: each LCR-NSFR journey claims its OWN reporting period (indices
  * 1..4 — index 0 stays with the pre-existing submission-lifecycle spec) and
- * mints the liquidity baseline run BSD3 draws on, so no journey shares a
+ * mints the liquidity baseline run LCR-NSFR draws on, so no journey shares a
  * package version chain with another. Sandbox behavior is configured through
  * the API with the minted admin token (PUT channel-configs/orass_sandbox).
  */
@@ -76,7 +76,7 @@ async function api(
 
 let adminToken: string;
 
-/** One reporting date (ISO) per BSD3 journey — never the latest period. */
+/** One reporting date (ISO) per LCR-NSFR journey — never the latest period. */
 const journeyDates = { ack: '', downtime: '', reject: '', sendBack: '' };
 
 test.beforeAll(async () => {
@@ -97,7 +97,7 @@ test.beforeAll(async () => {
   for (const [index, key] of claims.entries()) {
     const period = periods[index + 1];
     journeyDates[key] = String(period.period_end).slice(0, 10);
-    // BSD3 generation pulls from the latest succeeded liquidity baseline run
+    // LCR-NSFR generation pulls from the latest succeeded liquidity baseline run
     // of its reporting period — mint one for each claimed period.
     await api(adminToken, 'POST', `/banks/${SAMPLE_BANK_ID}/regulatory-runs`, {
       module: 'liquidity',
@@ -122,13 +122,13 @@ function setSandboxConfig(config: Record<string, unknown>): Promise<unknown> {
 // ---------------------------------------------------------------------------
 
 /**
- * Generate a fresh BSD3 package for `date` and validate it.
+ * Generate a fresh LCR-NSFR package for `date` and validate it.
  *
  * Validation must pass — ERROR findings keep certification locked, and that is a
  * product bug this helper would surface rather than paper over.
  */
 async function generateAndValidate(page: Page, date: string): Promise<void> {
-  await page.goto(returnsUrl('BSD3', date));
+  await page.goto(returnsUrl('LCR-NSFR', date));
   await expect(
     page.getByRole('heading', { name: /returns workspace/i })
   ).toBeVisible();
@@ -144,7 +144,7 @@ async function generateAndValidate(page: Page, date: string): Promise<void> {
 }
 
 /**
- * Walk a fresh BSD3 package all the way to `approved` — through the ceremony.
+ * Walk a fresh LCR-NSFR package all the way to `approved` — through the ceremony.
  *
  * Two officers, two sessions, as maker-checker requires: the admin session
  * prepares and certifies, a separate approver session approves and signs. The
@@ -157,13 +157,13 @@ async function certifyAndApprove(
   date: string
 ): Promise<void> {
   await generateAndValidate(page, date);
-  await certifyAsPreparer(page, 'BSD3', date);
+  await certifyAsPreparer(page, 'LCR-NSFR', date);
   await approveAndSignAsChecker(browser, approverState, date);
 }
 
 /** Submit the approved, fully certified package through the ORASS sandbox. */
 async function submitViaSandbox(page: Page, date: string): Promise<void> {
-  await page.goto(returnsUrl('BSD3', date));
+  await page.goto(returnsUrl('LCR-NSFR', date));
   // Cleared to submit is now a claim the screen makes only when the service
   // says so — and it says so because both signatures are on record.
   await expect(page.getByTestId('attestation-clearance').first()).toHaveText(
@@ -291,13 +291,13 @@ test.describe('full lifecycle', () => {
     const note = 'Line 12 double-counts the placement maturing 2 April.';
 
     await generateAndValidate(page, date);
-    await certifyAsPreparer(page, 'BSD3', date);
+    await certifyAsPreparer(page, 'LCR-NSFR', date);
     await sendBackAsChecker(browser, approverState, date, note);
 
     // Back with the preparer, and genuinely correctable: the certification that
     // froze the figures is withdrawn, the note is on the record, and nothing on
     // the screen claims the return may be filed.
-    await page.goto(returnsUrl('BSD3', date));
+    await page.goto(returnsUrl('LCR-NSFR', date));
     await expect(page.getByText('Unsigned').first()).toBeVisible();
     await expect(page.getByTestId('attestation-clearance').first()).toHaveText(
       /^Not cleared to submit/i

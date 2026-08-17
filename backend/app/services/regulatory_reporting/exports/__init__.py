@@ -40,11 +40,17 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.models import (
     AttestationSignature,
+    Bank,
     RegulatoryArtifactVersion,
     RegulatoryPackage,
     RegulatoryPackageArtifact,
 )
 from app.services.ingestion import bank_slug
+from app.services.regulatory_reporting.bog_forms.catalog import form_spec
+from app.services.regulatory_reporting.bog_forms.engine import FormResult
+from app.services.regulatory_reporting.bog_forms.registry_entries import is_bog_official_template
+from app.services.regulatory_reporting.bog_forms.render import render_form_xlsx
+from app.services.regulatory_reporting.bog_forms.render_pdf import render_form_pdf
 from app.services.regulatory_reporting.common import get_bank_or_404
 from app.services.regulatory_reporting.exports.csv import render_csv
 from app.services.regulatory_reporting.exports.pdf import render_pdf
@@ -58,13 +64,69 @@ from app.services.regulatory_reporting.templates import (
 from app.storage.client import ObjectMetadata, StorageLocation
 from app.storage.factory import get_storage_client
 
-type ExportKind = Literal["xlsx", "csv", "pdf"]
+type ExportKind = Literal["xlsx", "csv", "pdf", "xlsx_working"]
+
+
+def render_bog_form_xlsx(
+    code: str,
+    snapshot: dict,
+    bank: Bank,
+    generated_at: datetime,
+    *,
+    mode: str = "official",
+) -> bytes:
+    """Template-faithful workbook for an official BoG return, from the snapshot.
+
+    ``mode="official"`` → the sealed values-only artifact (kind ``xlsx``);
+    ``mode="working"`` → the ALM/Finance copy with the template's live formulas
+    (kind ``xlsx_working``, never filed).
+    """
+    spec = form_spec(code)
+    result = FormResult.from_snapshot(spec, snapshot)
+    period = snapshot.get("reporting_period", {})
+    return render_form_xlsx(
+        result,
+        bank_name=str(snapshot.get("institution", {}).get("name") or bank.name),
+        period_label=str(period.get("label", "")),
+        reporting_date=str(snapshot.get("reporting_date", "")),
+        generated_at=generated_at,
+        mode=mode,
+    )
+
+
+def render_bog_form_pdf(
+    code: str,
+    snapshot: dict,
+    bank: Bank,
+    generated_at: datetime,
+    *,
+    package_line: str = "",
+) -> bytes:
+    """The official BoG return as a PDF — the artifact the institution files.
+
+    The same sealed run as the xlsx exports, rendered onto BoG's own grid. The
+    generic tabular renderer must never be used for a BSD form: it emits a
+    line/cell/status listing, which is a completion aid, not a return.
+    """
+    spec = form_spec(code)
+    result = FormResult.from_snapshot(spec, snapshot)
+    period = snapshot.get("reporting_period", {})
+    return render_form_pdf(
+        result,
+        bank_name=str(snapshot.get("institution", {}).get("name") or bank.name),
+        period_label=str(period.get("label", "")),
+        reporting_date=str(snapshot.get("reporting_date", "")),
+        generated_at=generated_at,
+        package_line=package_line,
+    )
+
 
 logger = logging.getLogger(__name__)
 
 WRITTEN_BY = "regulatory_reporting"
 _CONTENT_TYPES = {
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "xlsx_working": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "zip": "application/zip",
     "csv": "text/csv",
     "pdf": "application/pdf",
@@ -197,7 +259,7 @@ def export_package(
     db: Session,
     ctx: TenantContext,
     package: RegulatoryPackage,
-    kind: Literal["xlsx", "csv", "pdf"],
+    kind: ExportKind,
 ) -> RegulatoryPackageArtifact:
     """Render, store, and record one export artifact for the package."""
     artifact, _version = export_package_version(db, ctx, package, kind)
@@ -208,7 +270,7 @@ def export_package_version(
     db: Session,
     ctx: TenantContext,
     package: RegulatoryPackage,
-    kind: Literal["xlsx", "csv", "pdf"],
+    kind: ExportKind,
 ) -> tuple[RegulatoryPackageArtifact, RegulatoryArtifactVersion]:
     """:func:`export_package`, plus the immutable version row it appended.
 
@@ -233,19 +295,54 @@ def export_package_version(
     )
 
     extension = kind
-    if kind == "xlsx":
+    if kind == "xlsx_working":
+        # ALM/Finance working copy: only defined for the official BoG BSD forms
+        # (the generic tabular templates carry no formulas to keep live).
+        if not is_bog_official_template(definition.template_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error_code": "working_copy_unavailable",
+                    "message": (
+                        f"'{package.return_code}' is not an official BoG BSD form; the "
+                        "working copy (live formulas) exists only for BSD returns. Use "
+                        "'xlsx' for the sealed export."
+                    ),
+                },
+            )
+        payload = render_bog_form_xlsx(
+            definition.code, snapshot, bank, package.generated_at, mode="working"
+        )
+        extension = "xlsx"
+    elif kind == "xlsx" and is_bog_official_template(definition.template_id):
+        # Official BoG BSD form: rebuild the OFFICIAL workbook from the committed
+        # layout with the immutable snapshot's cell values (values-only, sealed).
+        payload = render_bog_form_xlsx(definition.code, snapshot, bank, package.generated_at)
+    elif kind == "xlsx":
         payload = render_xlsx(rendered, generated_at=package.generated_at)
     elif kind == "csv":
         payload, extension = render_csv(rendered)
+    elif kind == "pdf" and is_bog_official_template(definition.template_id):
+        # Official BoG BSD form: the filing artifact is the FORM, drawn on the
+        # official grid — never the generic line/cell/status listing.
+        payload = render_bog_form_pdf(
+            definition.code,
+            snapshot,
+            bank,
+            package.generated_at,
+            package_line=f"{package.id} (version {package.version})",
+        )
     else:
         payload = render_pdf(
             rendered, sandbox_watermark=definition.default_channel == "orass_sandbox"
         )
 
     slug = bank_slug(db, bank)
+    file_stem = (
+        f"{package.return_code}.working" if kind == "xlsx_working" else package.return_code
+    )
     object_path = (
-        f"bog_returns/{package.reporting_date.isoformat()}/{package.id}/"
-        f"{package.return_code}.{extension}"
+        f"bog_returns/{package.reporting_date.isoformat()}/{package.id}/{file_stem}.{extension}"
     )
     checksum = hashlib.sha256(payload).hexdigest()
     location = StorageLocation(institution_slug=slug, tier="outputs", object_path=object_path)

@@ -1,0 +1,2 @@
+# interest_accruals template — one row per accrual balance at as_of_date; bsd2_row = official BSD2 sheet row of the 'Accrued interest' line (see docs/data_engine/datasets/interest_accruals.md); side asset|liability; amounts in cedis
+as_of_date,bsd2_row,side,currency,accrued_interest_ghs,accrued_interest_native,gl_account_code,position_reference,counterparty_reference,notes

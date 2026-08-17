@@ -109,6 +109,26 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   against the primary database, never add seeding paths to the UI, and never re-add
   seed CLI scripts.
 
+- **Official BoG BSD returns are generated from the templates themselves (built 2026-08-15;
+  registry `docs/bog_returns/00_full_return_registry.md`).** Every workbook under
+  `docs/reporting/` (BSD1…BSD17, 24 files / 76 sheets) is a registered return (family `bsd`,
+  generator `bog_form`, `backend/app/services/regulatory_reporting/bog_forms/`). The committed
+  `layouts/*.json` ARE the official structures (regenerate ONLY with
+  `scripts/extract_bog_templates.py` from `docs/reporting/` — needs LibreOffice); line maps bind
+  official INPUT cells to named source resolvers (`linemaps/<form>.py`, extra resolvers only in
+  `sources_ext/<form>.py`); the engine then **evaluates the templates' own formulas**
+  (`formulas.py`: SUM/IF/+−×÷/%/`[n]Sheet!` external links — 100% of 5,903 cells) so every
+  roll-up is BoG's — never re-implement or "simplify" a BoG line, never bind a formula cell.
+  Export = THREE artifacts per sealed run: `pdf` (values — the BoG submission package),
+  `xlsx`/`xlsx_official` (official layout, values-only, sheets protected — audit twin),
+  `xlsx_working` (official layout with the template's LIVE formulas, labelled WORKING COPY,
+  never filed/signed; BSD forms only; migration 202608160015) — with a "Completion notes" sheet;
+  input cells with no honest source are `input_required`/`unmapped`, never dropped. Blank data
+  grids (no `0` placeholder) are bound with `grid_lines`, captured inputs with `leaf_lines`.
+  Legacy recode (migration `202608150013`): the pre-template `BSD2`(CAR)/`BSD3`(LCR) entries are
+  now `CAR-RWA`/`LCR-NSFR`; the `BSD-MONTHLY` placeholder is retired. Weekly returns anchor on
+  Friday close (Guide fixes cadence not weekday). Gate: `tests/services/test_bog_forms_framework.py`
+  + `tests/services/bog_forms/`; matrix `scripts/bog_coverage_matrix.py`.
 - **Phase 2 (product.md §Phase 2) is fully built (2026-08-08).** All 11 LMTD
   appendix tables; per-currency gaps + `usd_funding_stress` (snapshot
   `bank-facts-v3`); server-side EWI/CFP with the ¶74 notification

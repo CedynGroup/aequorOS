@@ -1,0 +1,1 @@
+month,atm_id,station,region,branch_code,cards_issued,cards_active,min_withdrawal_ghs,max_withdrawal_ghs,txn_count,txn_value_ghs,cash_dispensed_ghs,downtime_hours,notes

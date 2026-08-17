@@ -1,16 +1,22 @@
-"""Database-Direct core-database connection management API.
+"""Database-Direct core-database connection management API on the ACTUAL primary.
 
 Credential handling is the load-bearing concern: credentials go in through
 request bodies, round-trip the encrypted vault, and must NEVER appear in any
 response — only status, fingerprint, and expiry do. The live test / discover /
 sync endpoints run against an offline fixture driver patched over the service's
-``driver_for`` seam, so no live database is required.
+``driver_for`` seam, so no live database is ever reached. Invariants: activation
+on valid credentials, TESTING on a bad shape, name conflicts (409), lifecycle
+states, the sync routes through the ingestion spine (422 without a mapping,
+202 + a batch with one), tenant isolation. The real bank already holds
+connections; the vault key is set by the test (never read from .env). Opt-in via
+REAL_DATA_DATABASE_URL, rolled back (tests/real_data.py).
 """
 
 from __future__ import annotations
 
 from datetime import date
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -20,25 +26,17 @@ from app.adapters.database_direct.config import ExtractionSpec
 from app.adapters.database_direct.drivers.base import ColumnSchema, TableSchema
 from app.adapters.database_direct.extraction import StagedBundle, StagedTable
 from app.adapters.database_direct.fixtures import Dump, OfflineDumpDriver
-from app.api.v1.database_connections import (
-    get_database_direct_storage,
-)
-from app.api.v1.database_connections import (
-    router as database_connections_router,
-)
+from app.api.v1.database_connections import get_database_direct_storage
 from app.core.config import get_settings
-
-# Importing the model registers its table on Base.metadata so db_client's
-# create_all provisions it (the model is not wired into models/__init__ yet).
-from app.models.database_connection import DatabaseDirectConnection  # noqa: F401
 from app.services import database_connections as database_connections_service
 from app.services.database_connections import _reconcile_as_of
-from tests.api.helpers import ORG_2, USER_2, headers
+from tests.real_data import REAL_BANK_ID, other_headers, real_headers, requires_real_data
 from tests.storage.inmemory import InMemoryStorageClient
 
 MASTER_KEY = "db-direct-api-test-master-key"
 SECRET = "svc-db-password-that-must-never-leak"
 CREDENTIALS = {"username": "AEQUOROS_RO", "password": SECRET}
+BASE = f"/api/v1/banks/{REAL_BANK_ID}/database-direct/connections"
 
 
 @pytest.fixture
@@ -48,27 +46,25 @@ def vault_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def dd_client(db_client: TestClient, storage_engine: InMemoryStorageClient) -> TestClient:
-    """The shared db_client with the (not-yet-wired) router mounted at /api/v1.
+def dd_client(real_client: TestClient, storage_engine: InMemoryStorageClient) -> TestClient:
+    """``real_client`` with the db-direct storage dependency pointed at the same
+    in-memory engine the ingestion path uses.
 
     The db-direct router resolves storage through its own
     ``get_database_direct_storage`` dependency (the app.storage factory), which
-    ``db_client`` does not override — so point it at the same in-memory engine the
-    ingestion path uses, or a sync would hit the real storage client (503 without
-    STORAGE_RETIRE_AFTER, e.g. in CI).
+    ``real_client`` does not override — so point it at the in-memory engine, or a
+    sync would hit the real storage client.
     """
-    app = db_client.app
+    app = real_client.app
     assert isinstance(app, FastAPI)
-    already = any(getattr(r, "name", "") == "list_database_connections" for r in app.routes)
-    if not already:
-        app.include_router(database_connections_router, prefix="/api/v1")
     app.dependency_overrides[get_database_direct_storage] = lambda: storage_engine
-    return db_client
+    return real_client
 
 
 @pytest.fixture(autouse=True)
 def _offline_driver(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Patch the service driver seam so test/discover/sync run offline."""
+    """Patch the service driver seam so test/discover/sync run offline — no
+    core database is ever contacted."""
     tables = (
         TableSchema(
             name="GL_ACCOUNTS",
@@ -89,26 +85,20 @@ def _offline_driver(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _seed_bank(client: TestClient) -> str:
-    response = client.post("/api/v1/banks/seed-demo", headers=headers())
-    assert response.status_code == 200, response.text
-    return response.json()["bank_id"]
-
-
-def _base(bank_id: str) -> str:
-    return f"/api/v1/banks/{bank_id}/database-direct/connections"
+def _unique_name(stem: str = "Core SQL Server") -> str:
+    """The real bank already holds connections; never collide with their names."""
+    return f"{stem} [{uuid4().hex[:8]}]"
 
 
 def _create(
     client: TestClient,
-    bank_id: str,
     *,
-    display_name: str = "Core SQL Server",
+    display_name: str | None = None,
     credentials: dict[str, Any] | None = None,
 ) -> Any:
     payload: dict[str, Any] = {
         "backend": "sqlserver",
-        "display_name": display_name,
+        "display_name": display_name or _unique_name(),
         "host": "core-db.internal",
         "port": 1433,
         "database": "COREBANK",
@@ -119,71 +109,84 @@ def _create(
             "default_mode": "full",
         },
     }
-    return client.post(_base(bank_id), headers=headers(), json=payload)
+    return client.post(BASE, headers=real_headers(), json=payload)
 
 
-def test_create_activates_on_valid_credentials(dd_client: TestClient, vault_key: None) -> None:
-    bank_id = _seed_bank(dd_client)
-    response = _create(dd_client, bank_id)
+@requires_real_data
+@pytest.mark.usefixtures("vault_key")
+def test_create_activates_on_valid_credentials(dd_client: TestClient) -> None:
+    before = dd_client.get(BASE, headers=real_headers()).json()
+    response = _create(dd_client)
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["status"] == "ACTIVE"
     assert body["backend"] == "sqlserver"
     assert body["credential_fingerprint"]
+    after = dd_client.get(BASE, headers=real_headers()).json()
+    assert after["total"] == before["total"] + 1
+    assert body["id"] in {item["id"] for item in after["connections"]}
 
 
-def test_credentials_never_appear_in_any_response(dd_client: TestClient, vault_key: None) -> None:
-    bank_id = _seed_bank(dd_client)
-    created = _create(dd_client, bank_id)
+@requires_real_data
+@pytest.mark.usefixtures("vault_key")
+def test_credentials_never_appear_in_any_response(dd_client: TestClient) -> None:
+    created = _create(dd_client)
+    assert created.status_code == 201, created.text
     assert SECRET not in created.text
     assert "password" not in created.json()
-    listed = dd_client.get(_base(bank_id), headers=headers())
+    listed = dd_client.get(BASE, headers=real_headers())
+    assert listed.status_code == 200
     assert SECRET not in listed.text
+    assert "credential_ciphertext" not in listed.text
 
 
-def test_bad_credential_shape_stays_testing(dd_client: TestClient, vault_key: None) -> None:
-    bank_id = _seed_bank(dd_client)
-    response = _create(dd_client, bank_id, credentials={"username": "RO"})
+@requires_real_data
+@pytest.mark.usefixtures("vault_key")
+def test_bad_credential_shape_stays_testing(dd_client: TestClient) -> None:
+    response = _create(dd_client, credentials={"username": "RO"})
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["status"] == "TESTING"
     assert body["validation_error"]
 
 
-def test_duplicate_display_name_conflicts(dd_client: TestClient, vault_key: None) -> None:
-    bank_id = _seed_bank(dd_client)
-    assert _create(dd_client, bank_id).status_code == 201
-    assert _create(dd_client, bank_id).status_code == 409
+@requires_real_data
+@pytest.mark.usefixtures("vault_key")
+def test_duplicate_display_name_conflicts(dd_client: TestClient) -> None:
+    name = _unique_name()
+    assert _create(dd_client, display_name=name).status_code == 201
+    assert _create(dd_client, display_name=name).status_code == 409
 
 
-def test_test_endpoint_reports_reachable(dd_client: TestClient, vault_key: None) -> None:
-    bank_id = _seed_bank(dd_client)
-    conn_id = _create(dd_client, bank_id).json()["id"]
-    response = dd_client.post(f"{_base(bank_id)}/{conn_id}/test", headers=headers())
+@requires_real_data
+@pytest.mark.usefixtures("vault_key")
+def test_test_endpoint_reports_reachable(dd_client: TestClient) -> None:
+    conn_id = _create(dd_client).json()["id"]
+    response = dd_client.post(f"{BASE}/{conn_id}/test", headers=real_headers())
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["reachable"] is True
     assert body["rows_pulled"] == 0  # test proves connectivity via introspection; pulls no rows
 
 
-def test_schema_discovery_lists_columns(dd_client: TestClient, vault_key: None) -> None:
-    bank_id = _seed_bank(dd_client)
-    conn_id = _create(dd_client, bank_id).json()["id"]
-    response = dd_client.get(f"{_base(bank_id)}/{conn_id}/schema", headers=headers())
+@requires_real_data
+@pytest.mark.usefixtures("vault_key")
+def test_schema_discovery_lists_columns(dd_client: TestClient) -> None:
+    conn_id = _create(dd_client).json()["id"]
+    response = dd_client.get(f"{BASE}/{conn_id}/schema", headers=real_headers())
     assert response.status_code == 200, response.text
     tables = response.json()["tables"]
     assert tables[0]["name"] == "DBO.GL_ACCOUNTS"
     assert {c["name"] for c in tables[0]["columns"]} >= {"ACCT_CODE", "NAME"}
 
 
-def test_schema_discovery_reports_row_count_and_samples(
-    dd_client: TestClient, vault_key: None
-) -> None:
-    # Discovery now runs a bounded COUNT(*) + sample pull so the operator maps
+@requires_real_data
+@pytest.mark.usefixtures("vault_key")
+def test_schema_discovery_reports_row_count_and_samples(dd_client: TestClient) -> None:
+    # Discovery runs a bounded COUNT(*) + sample pull so the operator maps
     # against real values (the offline dump has one GL_ACCOUNTS row).
-    bank_id = _seed_bank(dd_client)
-    conn_id = _create(dd_client, bank_id).json()["id"]
-    response = dd_client.get(f"{_base(bank_id)}/{conn_id}/schema", headers=headers())
+    conn_id = _create(dd_client).json()["id"]
+    response = dd_client.get(f"{BASE}/{conn_id}/schema", headers=real_headers())
     assert response.status_code == 200, response.text
     table = response.json()["tables"][0]
     assert table["row_count"] == 1
@@ -192,27 +195,34 @@ def test_schema_discovery_reports_row_count_and_samples(
     assert by_name["NAME"]["sample_values"] == ["Cash"]
 
 
-def test_sync_requires_active_mapping(dd_client: TestClient, vault_key: None) -> None:
-    # With no DB_DIRECT mapping config the ingestion spine rejects the sync (422),
-    # proving the sync genuinely routes through start_ingestion.
-    bank_id = _seed_bank(dd_client)
-    conn_id = _create(dd_client, bank_id).json()["id"]
+@requires_real_data
+@pytest.mark.usefixtures("vault_key")
+def test_sync_requires_active_mapping(dd_client: TestClient) -> None:
+    # A NEW connection is its own data source (mapping scoped by source_ref =
+    # connection id); with neither a connection-scoped nor a bank-wide DB_DIRECT
+    # mapping active, the ingestion spine rejects the sync (422) — proving the
+    # sync genuinely routes through start_ingestion.
+    conn_id = _create(dd_client).json()["id"]
     response = dd_client.post(
-        f"{_base(bank_id)}/{conn_id}/sync",
-        headers=headers(),
+        f"{BASE}/{conn_id}/sync",
+        headers=real_headers(),
         json={"as_of_date": "2026-06-30"},
     )
     assert response.status_code == 422, response.text
 
 
-def test_sync_ingests_when_mapping_present(dd_client: TestClient, vault_key: None) -> None:
-    bank_id = _seed_bank(dd_client)
-    conn_id = _create(dd_client, bank_id).json()["id"]
+@requires_real_data
+@pytest.mark.usefixtures("vault_key")
+def test_sync_ingests_when_mapping_present(dd_client: TestClient) -> None:
+    conn_id = _create(dd_client).json()["id"]
     mapping = dd_client.post(
-        f"/api/v1/banks/{bank_id}/mapping-configs",
-        headers=headers(),
+        f"/api/v1/banks/{REAL_BANK_ID}/mapping-configs",
+        headers=real_headers(),
         json={
             "source_system": "DB_DIRECT",
+            # Scoped to THIS connection so the real bank's other DB_DIRECT
+            # sources (and their active mappings) stay untouched.
+            "source_ref": conn_id,
             "name": "DB Direct default",
             "config": {
                 "field_mappings": {
@@ -225,8 +235,8 @@ def test_sync_ingests_when_mapping_present(dd_client: TestClient, vault_key: Non
     )
     assert mapping.status_code in (200, 201), mapping.text
     response = dd_client.post(
-        f"{_base(bank_id)}/{conn_id}/sync",
-        headers=headers(),
+        f"{BASE}/{conn_id}/sync",
+        headers=real_headers(),
         json={"as_of_date": "2026-06-30"},
     )
     assert response.status_code == 202, response.text
@@ -234,32 +244,47 @@ def test_sync_ingests_when_mapping_present(dd_client: TestClient, vault_key: Non
     assert body["batch_id"]
     assert body["records_extracted"] == 1
 
+    batch = dd_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/ingestion-batches/{body['batch_id']}",
+        headers=real_headers(),
+    )
+    assert batch.status_code == 200, batch.text
+    assert batch.json()["source_system"] == "DB_DIRECT"
 
-def test_disable_enable_revoke_lifecycle(dd_client: TestClient, vault_key: None) -> None:
-    bank_id = _seed_bank(dd_client)
-    conn_id = _create(dd_client, bank_id).json()["id"]
+
+@requires_real_data
+@pytest.mark.usefixtures("vault_key")
+def test_disable_enable_revoke_lifecycle(dd_client: TestClient) -> None:
+    conn_id = _create(dd_client).json()["id"]
     assert (
-        dd_client.post(f"{_base(bank_id)}/{conn_id}/disable", headers=headers()).json()["status"]
+        dd_client.post(f"{BASE}/{conn_id}/disable", headers=real_headers()).json()["status"]
         == "DISABLED"
     )
     assert (
-        dd_client.post(f"{_base(bank_id)}/{conn_id}/enable", headers=headers()).json()["status"]
+        dd_client.post(f"{BASE}/{conn_id}/enable", headers=real_headers()).json()["status"]
         == "ACTIVE"
     )
-    revoked = dd_client.delete(f"{_base(bank_id)}/{conn_id}", headers=headers())
+    revoked = dd_client.delete(f"{BASE}/{conn_id}", headers=real_headers())
     assert revoked.json()["status"] == "REVOKED"
     assert revoked.json()["credential_fingerprint"] is None
 
 
-def test_tenant_isolation(dd_client: TestClient, vault_key: None) -> None:
-    bank_id = _seed_bank(dd_client)
-    _create(dd_client, bank_id)
-    other = dd_client.get(_base(bank_id), headers=headers(org_id=ORG_2, user_id=USER_2))
+@requires_real_data
+@pytest.mark.usefixtures("vault_key")
+def test_tenant_isolation(dd_client: TestClient) -> None:
+    created = _create(dd_client)
+    assert created.status_code == 201, created.text
+    other = dd_client.get(BASE, headers=other_headers())
     assert other.status_code == 404
+    assert (
+        dd_client.post(f"{BASE}/{created.json()['id']}/test", headers=other_headers()).status_code
+        == 404
+    )
 
 
 class TestAsOfReconciliation:
-    """The sync adopts the snapshot's own reporting date over a wrong request."""
+    """The sync adopts the snapshot's own reporting date over a wrong request
+    (pure — no database)."""
 
     def _bundle(self, as_of_value: str) -> StagedBundle:
         return StagedBundle(
