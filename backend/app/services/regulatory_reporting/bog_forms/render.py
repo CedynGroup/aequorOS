@@ -255,7 +255,7 @@ def _looks_like_a_date(value: Any) -> bool:
     return True
 
 
-def _write_sheet(  # noqa: PLR0912, PLR0913
+def _write_sheet(  # noqa: PLR0912, PLR0913, PLR0915
     ws: Any,
     layout: SheetLayout,
     result: FormResult,

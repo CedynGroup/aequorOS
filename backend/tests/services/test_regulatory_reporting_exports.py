@@ -459,8 +459,12 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
     # Official BoG BSD forms: the bog_form generator emits exactly one section
     # per official sheet (sheet_<name>), which is what its templates reference —
     # derived from the catalogue so the two can never drift.
-    from app.services.regulatory_reporting.bog_forms.catalog import all_form_specs
-    from app.services.regulatory_reporting.bog_forms.registry_entries import _section_code
+    from app.services.regulatory_reporting.bog_forms.catalog import (  # noqa: PLC0415
+        all_form_specs,
+    )
+    from app.services.regulatory_reporting.bog_forms.registry_entries import (  # noqa: PLC0415
+        _section_code,
+    )
 
     generator_sections["bog_form"] = {
         _section_code(sheet.name) for spec in all_form_specs() for sheet in spec.sheets

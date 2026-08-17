@@ -7,13 +7,14 @@ A supervisor must recognise the return on sight, so nothing internal appears in
 the body — no cell references, no line ids, no resolver names.
 
 The earlier implementation fell through to the generic tabular renderer, which
-emitted a Line / Official cell / Status listing. That is a completion aid, not a
-return, so it now lives at the back as an appendix for the preparer, behind the
-form itself.
+emitted a Line / Official cell / Status listing keyed by internal ids. That is a
+completion aid, not a return: no supervisor can read it and BoG would not accept
+it. The completion detail lives on the xlsx export's "Completion notes" sheet,
+which is an internal working artifact — it is deliberately absent here.
 
-Cells the bank has not yet sourced are left BLANK on the form — an official
-return must never show a fabricated zero — and every one of them is named in the
-appendix so the preparer knows exactly what is outstanding.
+Cells the bank has not yet sourced are left BLANK on the form; an official
+return must never show a fabricated zero, and a blank box already means exactly
+"not supplied".
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from decimal import Decimal
 from typing import Any
 
 from openpyxl.utils import get_column_letter
+from openpyxl.utils.cell import column_index_from_string, coordinate_from_string
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -93,7 +95,7 @@ class _PageFurniture:
         canvas.restoreState()
 
 
-def _format_value(value: Any, number_format: str | None) -> str:
+def _format_value(value: Any, number_format: str | None) -> str:  # noqa: PLR0911
     """Render a computed amount the way the official sheet shows it."""
     if value is None:
         return ""
@@ -148,18 +150,14 @@ def _used_columns(layout: SheetLayout, result: FormResult) -> list[int]:
 
 
 def _col_of(ref: str) -> int:
-    from openpyxl.utils.cell import column_index_from_string, coordinate_from_string
-
     return column_index_from_string(coordinate_from_string(ref)[0])
 
 
 def _row_of(ref: str) -> int:
-    from openpyxl.utils.cell import coordinate_from_string
-
     return coordinate_from_string(ref)[1]
 
 
-def _sheet_matrix(
+def _sheet_matrix(  # noqa: PLR0913
     layout: SheetLayout,
     result: FormResult,
     *,
@@ -264,7 +262,7 @@ def _merge_spans(
     return spans
 
 
-def _sheet_story(
+def _sheet_story(  # noqa: PLR0913
     layout: SheetLayout,
     result: FormResult,
     *,
@@ -329,7 +327,7 @@ def _unit_note(spec: Any) -> str:
     return "as stated on each sheet (BoG unit conventions preserved)"
 
 
-def _cover(
+def _cover(  # noqa: PLR0913
     result: FormResult,
     *,
     bank_name: str,

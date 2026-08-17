@@ -76,17 +76,22 @@ BOOK = [
     ("savings", 220, 2_410_000_000, "SAVINGS", "", "GHS", "DEP.RET.SAV", "2002", (4.0, 7.5)),
     ("time_ret", 80, 1_150_000_000, "FIXED", "", "GHS", "DEP.RET.TRM", "2003", (12.0, 19.0)),
     ("time_corp", 50, 1_030_000_000, "FIXED", "", "GHS", "DEP.CORP.TRM", "2005", (12.5, 20.0)),
-    ("cd", 25, 452_000_000, "OTHER", "certificate_of_deposit", "GHS", "DEP.GHS.CD", "2003", (14.0, 20.0)),
-    ("special", 18, 231_000_000, "OTHER", "special_deposit", "GHS", "DEP.GHS.SPECIAL", "2000", (0.0, 3.0)),
-    ("margin", 14, 178_000_000, "OTHER", "margin_against_contingent", "GHS", "DEP.GHS.MARGIN", "2000", (0.0, 0.0)),
+    ("cd", 25, 452_000_000, "OTHER", "certificate_of_deposit", "GHS", "DEP.GHS.CD",
+     "2003", (14.0, 20.0)),
+    ("special", 18, 231_000_000, "OTHER", "special_deposit", "GHS", "DEP.GHS.SPECIAL",
+     "2000", (0.0, 3.0)),
+    ("margin", 14, 178_000_000, "OTHER", "margin_against_contingent", "GHS",
+     "DEP.GHS.MARGIN", "2000", (0.0, 0.0)),
 ]
 
 FX_BOOK = [
     ("fx_current", 44, 1_240_000_000, "CURRENT", "", "USD", "DEP.USD.CUR", "2006", (0.0, 1.5)),
     ("fx_savings", 16, 430_000_000, "SAVINGS", "", "USD", "DEP.USD.SAV", "2006", (0.5, 2.0)),
     ("fx_time", 12, 415_000_000, "FIXED", "", "USD", "DEP.USD.TRM", "2006", (2.0, 5.5)),
-    ("fx_special", 8, 118_000_000, "OTHER", "special_deposit", "USD", "DEP.FX.SPECIAL", "2006", (0.0, 2.0)),
-    ("fx_margin", 6, 94_000_000, "OTHER", "margin_against_contingent", "USD", "DEP.FX.MARGIN", "2006", (0.0, 0.0)),
+    ("fx_special", 8, 118_000_000, "OTHER", "special_deposit", "USD", "DEP.FX.SPECIAL",
+     "2006", (0.0, 2.0)),
+    ("fx_margin", 6, 94_000_000, "OTHER", "margin_against_contingent", "USD",
+     "DEP.FX.MARGIN", "2006", (0.0, 0.0)),
 ]
 
 # cedi per unit — the week's spot, held flat (BSD1 reports the cedi equivalent

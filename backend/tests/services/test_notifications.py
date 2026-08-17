@@ -19,14 +19,14 @@ from app.schemas.regulatory_reporting import (
 )
 from app.services import notifications, regulatory_liquidity, reporting_deadline_scan
 from app.services.regulatory_reporting import generation, validation, workflow
+from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
+from tests.factories.attestation import relax_signing
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
-from tests.factories.attestation import relax_signing
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 ADMIN_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")

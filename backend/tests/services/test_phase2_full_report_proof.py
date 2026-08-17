@@ -136,7 +136,9 @@ def test_every_registered_return_generates_and_exports_end_to_end(
         db_session, MAKER, SAMPLE_BANK_ID, period_id
     )
     by_module = {outcome.module: outcome for outcome in outcomes}
-    assert set(by_module) == {"liquidity", "capital", "irr", "fx", "ftp", "forecast", "implied_rating"}
+    assert set(by_module) == {
+        "liquidity", "capital", "irr", "fx", "ftp", "forecast", "implied_rating",
+    }  # fmt: skip
     # implied_rating (PD remediation) joined the sweep after this proof was
     # written: it REFUSES by design when no GHANA_SOVEREIGN rating has been
     # published — the hermetic book carries no rating register, so its refusal

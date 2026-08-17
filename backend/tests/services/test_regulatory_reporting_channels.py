@@ -35,13 +35,13 @@ from app.services.regulatory_reporting.channels import (
     EmailFallbackChannel,
     OrassSandboxChannel,
 )
+from tests.factories.attestation import relax_signing
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.factories.attestation import relax_signing
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 CHECKER = TenantContext(
@@ -93,7 +93,8 @@ def _poll_event(external_ref: str) -> RegulatorySubmissionEvent:
 def test_sandbox_submit_labels_everything_as_simulation() -> None:
     channel = OrassSandboxChannel()
     ref = channel.submit(_transient_package(), [_transient_artifact()])
-    assert ref.startswith("LCRN")  # ORASS-style ref (alnum[:4] of the code); sandbox marker lives in detail
+    # ORASS-style ref (alnum[:4] of the code); the sandbox marker lives in detail
+    assert ref.startswith("LCRN")
     assert channel.last_detail["sandbox"] is True
     assert channel.last_detail["note"] == SANDBOX_NOTE
     assert "not publicly documented" in SANDBOX_NOTE

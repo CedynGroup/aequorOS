@@ -242,7 +242,7 @@ def _latest_period_end(db_client: TestClient) -> str:
 
 
 @pytest.mark.parametrize("code", sorted(GUIDE_LIST))
-def test_form_generates_and_exports_template_faithful_xlsx(
+def test_form_generates_and_exports_template_faithful_xlsx(  # noqa: PLR0915
     db_client: TestClient, code: str
 ) -> None:
     _materialize(db_client)
@@ -562,9 +562,9 @@ def test_printed_day_dates_match_the_dates_the_line_maps_resolve() -> None:
     they can drift apart silently and publish correctly-sourced figures under
     the wrong dates — a worse defect than a blank cell, because it looks right.
     """
-    from datetime import timedelta
+    from datetime import timedelta  # noqa: PLC0415
 
-    from app.services.regulatory_reporting.bog_forms.sources_ext.bsd1 import (
+    from app.services.regulatory_reporting.bog_forms.sources_ext.bsd1 import (  # noqa: PLC0415
         DAY_COLUMNS,
         PREVIOUS_WEEK_SHIFT,
     )

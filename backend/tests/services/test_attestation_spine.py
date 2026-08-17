@@ -36,9 +36,9 @@ from app.services.attestation.policy import (
     resolve_policy,
 )
 from app.services.public_ids import is_signer_id
-from tests.fixtures.canonical_bank_fixture import DEMO_USER_ID, SAMPLE_BANK_ID
 from tests.api.helpers import ORG_1
 from tests.factories.attestation import relax_signing
+from tests.fixtures.canonical_bank_fixture import DEMO_USER_ID, SAMPLE_BANK_ID
 
 PEPPER = "test-signer-pepper-not-production-0000"
 

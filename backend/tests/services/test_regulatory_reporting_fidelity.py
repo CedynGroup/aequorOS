@@ -41,13 +41,13 @@ from app.services.regulatory_reporting.channels.errors import (
     ChannelPreconditionError,
 )
 from app.services.regulatory_reporting.channels.orass_api import OrassApiChannel
+from tests.factories.attestation import relax_signing
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.factories.attestation import relax_signing
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 CHECKER = TenantContext(
