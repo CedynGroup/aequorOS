@@ -14,8 +14,28 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Job, LiveFinding, LiveMetric, LiveMetricSnapshot, RegulatoryRun
-from app.services import job_queue, live_view, pipeline
+from app.schemas.regulatory_reporting import RegulatoryPackageCreate
+from app.models import (
+    BankFinancialFact,
+    CurrentFinancialFact,
+    Job,
+    LiveFinding,
+    LiveMetric,
+    LiveMetricSnapshot,
+    RegulatoryRun,
+)
+from app.models import RegulatoryPackage
+from app.services import (
+    job_queue,
+    live_view,
+    pipeline,
+    regulatory_capital,
+    regulatory_ftp,
+    regulatory_fx,
+    regulatory_irr,
+    regulatory_liquidity,
+)
+from app.services.regulatory_reporting import generation
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import (
     FIXTURE_AS_OF,
@@ -24,8 +44,8 @@ from tests.factories.canonical import (
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
-_CHEAP = {"liquidity", "capital", "irr", "fx", "ftp", "rating"}
-_OFFICIAL_REGULATORY_MODULES = _CHEAP - {"rating"}
+_CHEAP = {"liquidity", "capital", "irr", "fx", "ftp", "rating", "forecast"}
+_OFFICIAL_REGULATORY_MODULES = _CHEAP - {"rating", "forecast"}
 
 
 def _seed(db_session: Session, *, hedged: bool = False) -> None:
@@ -92,6 +112,20 @@ def test_run_refresh_creates_zero_regulatory_runs(db_session: Session) -> None:
     after = db_session.scalar(select(func.count()).select_from(RegulatoryRun))
     assert before == 0
     assert after == 0
+
+
+def test_run_refresh_does_not_replace_historical_financial_facts(db_session: Session) -> None:
+    _seed(db_session)
+    pipeline.run_official(db_session, _official_job(db_session))
+    historical_ids = set(db_session.scalars(select(BankFinancialFact.id)))
+    assert historical_ids
+
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+
+    assert set(db_session.scalars(select(BankFinancialFact.id))) == historical_ids
+    current = list(db_session.scalars(select(CurrentFinancialFact)))
+    assert current
+    assert {fact.source_as_of_date for fact in current} == {FIXTURE_AS_OF}
 
 
 def test_run_refresh_emits_fx_breach_then_clears_after_hedges(db_session: Session) -> None:
@@ -178,6 +212,83 @@ def test_run_official_mints_immutable_reproducible_runs(db_session: Session) -> 
     baseline_after_second = _baseline_liquidity_hashes(db_session)
     # A second official run on unchanged facts reproduces the same input hash.
     assert baseline_after_second == baseline_after_first
+
+
+def test_live_dashboards_prefer_current_state_over_existing_official_runs(
+    db_session: Session,
+) -> None:
+    """The primary Treasury readers must not silently replay filing evidence."""
+    _seed(db_session)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+    pipeline.run_official(db_session, _official_job(db_session))
+
+    official_fx = db_session.scalar(
+        select(RegulatoryRun)
+        .where(
+            RegulatoryRun.bank_id == SAMPLE_BANK_ID,
+            RegulatoryRun.module == "fx",
+            RegulatoryRun.scenario_code == "baseline",
+            RegulatoryRun.status == "succeeded",
+        )
+        .limit(1)
+    )
+    assert official_fx is not None
+    official_metrics = dict(official_fx.metrics)
+    official_inputs = dict(official_fx.inputs)
+
+    # A changed canonical hedge book changes the live calculation only.
+    seed_hedge_and_swap_positions(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    db_session.commit()
+    before_runs = db_session.scalar(select(func.count()).select_from(RegulatoryRun))
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+    after_runs = db_session.scalar(select(func.count()).select_from(RegulatoryRun))
+    assert after_runs == before_runs
+
+    dashboards = (
+        regulatory_liquidity.get_liquidity_dashboard(db_session, ctx, SAMPLE_BANK_ID),
+        regulatory_capital.get_capital_dashboard(db_session, ctx, SAMPLE_BANK_ID),
+        regulatory_irr.get_irr_dashboard(db_session, ctx, SAMPLE_BANK_ID),
+        regulatory_fx.get_fx_dashboard(db_session, ctx, SAMPLE_BANK_ID),
+        regulatory_ftp.get_ftp_dashboard(db_session, ctx, SAMPLE_BANK_ID),
+    )
+    assert all(not dashboard.stored for dashboard in dashboards)
+    assert all(dashboard.latest_run_id is None for dashboard in dashboards)
+    assert dashboards[3].live is not None
+    assert dashboards[3].live.metrics["nop_pct_tier1"] != official_metrics["nop_pct_tier1"]
+
+    # The immutable filing record is evidence, not a cache entry.
+    db_session.refresh(official_fx)
+    assert official_fx.metrics == official_metrics
+    assert official_fx.inputs == official_inputs
+
+
+def test_live_refresh_cannot_mutate_sealed_regulatory_package(db_session: Session) -> None:
+    """A package binds the official snapshot even as the live book moves on."""
+    _seed(db_session)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+    pipeline.run_official(db_session, _official_job(db_session))
+    package_read = generation.generate_package(
+        db_session,
+        ctx,
+        SAMPLE_BANK_ID,
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=FIXTURE_AS_OF),
+    )
+    package = db_session.get(RegulatoryPackage, package_read.id)
+    assert package is not None
+    snapshot_before = dict(package.snapshot)
+    source_runs_before = list(package.source_runs)
+    seal_before = package.snapshot_sha256
+
+    seed_hedge_and_swap_positions(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    db_session.commit()
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+
+    db_session.refresh(package)
+    assert package.snapshot == snapshot_before
+    assert package.source_runs == source_runs_before
+    assert package.snapshot_sha256 == seal_before
 
 
 def test_official_input_hash_survives_fact_rederivation(db_session: Session) -> None:

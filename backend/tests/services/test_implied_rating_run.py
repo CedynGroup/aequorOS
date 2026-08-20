@@ -111,6 +111,7 @@ def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(db_se
                 currency="GHS",
                 jurisdiction_code="GH",
                 license_type="universal",
+                institution_type="universal_bank",
             ),
         ]
     )

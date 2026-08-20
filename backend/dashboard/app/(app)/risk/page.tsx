@@ -27,10 +27,9 @@ import {
   useIrrDashboard,
   useLiquidityDashboard,
   useLiveSummary,
-  useRefreshBankData,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { fmtRelative, isoDate, statusTone } from '@/lib/api/values';
+import { fmtRelative, statusTone } from '@/lib/api/values';
 import LimitWall from '@/components/risk/LimitWall';
 import {
   extractAllLimits,
@@ -49,19 +48,17 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export default function RiskLimitMonitorPage() {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const liquidity = useLiquidityDashboard(bankId, periodId);
-  const capital = useCapitalDashboard(bankId, periodId);
-  const irr = useIrrDashboard(bankId, periodId);
-  const fx = useFxDashboard(bankId, periodId);
-  const ftp = useFtpDashboard(bankId, periodId);
+  const liquidity = useLiquidityDashboard(bankId);
+  const capital = useCapitalDashboard(bankId);
+  const irr = useIrrDashboard(bankId);
+  const fx = useFxDashboard(bankId);
+  const ftp = useFtpDashboard(bankId);
   const liveSummary = useLiveSummary(bankId);
   const alerts = useBankAlerts(bankId, 200);
   const liquidityRun = useRegulatoryRun(bankId, liquidity.data?.latestRunId ?? undefined);
-  const refresh = useRefreshBankData(bankId);
 
   const [filter, setFilter] = useState<Filter>('all');
   const [tab, setTab] = useState('wall');
@@ -161,25 +158,6 @@ export default function RiskLimitMonitorPage() {
                   </span>
                 </span>
               ))}
-              {liveSummary.data?.isStale && (
-                <span className="inline-flex items-center gap-2">
-                  <StatusPill tone="amber">Data changed since results were last finalised</StatusPill>
-                  <button
-                    type="button"
-                    disabled={refresh.isPending || !period}
-                    onClick={() =>
-                      period &&
-                      refresh.mutate({
-                        asOfDate: isoDate(period.periodEnd),
-                        reason: 'Recompute after data change (Risk & Limits)',
-                      })
-                    }
-                    className="text-caption font-medium text-action hover:underline disabled:opacity-60"
-                  >
-                    {refresh.isPending ? 'Recomputing…' : 'Recompute now'}
-                  </button>
-                </span>
-              )}
             </div>
           )}
 

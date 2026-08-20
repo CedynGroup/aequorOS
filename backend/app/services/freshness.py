@@ -1,4 +1,4 @@
-"""Per-module freshness: does the live view lead the last official filing run?
+"""Governance filing drift: does current live data lead the last official run?
 
 For each module it compares the current baseline input hash (from the upserted
 ``live_metrics`` row, or recomputed with the module's own ``current_input_hash``)
@@ -66,13 +66,15 @@ def get_bank_freshness(
             is_stale=False,
         )
 
+    # Live state is bank/module scoped. The selected period here is used only
+    # to choose the historical official run to compare, never to choose live
+    # ALM data.
     live_rows = {
         row.module: row
         for row in db.scalars(
             select(LiveMetric).where(
                 LiveMetric.organization_id == ctx.organization_id,
                 LiveMetric.bank_id == bank.id,
-                LiveMetric.reporting_period_id == period.id,
             )
         )
     }

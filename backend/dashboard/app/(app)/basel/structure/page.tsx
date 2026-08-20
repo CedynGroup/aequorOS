@@ -85,12 +85,11 @@ function TierBlock({
 }
 
 export default function CapitalStructurePage() {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const structure = useCapitalStructure(bankId, periodId);
-  const dashboard = useCapitalDashboard(bankId, periodId);
+  const structure = useCapitalStructure(bankId);
+  const dashboard = useCapitalDashboard(bankId);
 
   const data = structure.data;
   const needsBaseline = isNoBaselineRunError(structure.error);
@@ -174,10 +173,14 @@ export default function CapitalStructurePage() {
                 subtitle="Share of total qualifying capital by tier"
                 footer={
                   <span>
-                    Source run{' '}
-                    <span className="font-mono text-navy">
-                      {shortId(data.runId)}
-                    </span>
+                    {data.runId ? (
+                      <>
+                        Official run{' '}
+                        <span className="font-mono text-navy">{shortId(data.runId)}</span>
+                      </>
+                    ) : (
+                      'Current live capital computation'
+                    )}
                   </span>
                 }
               >

@@ -1,5 +1,3 @@
-import Image from 'next/image';
-
 export default function BrandLogo({
   inverse = false,
   subtitle,
@@ -8,26 +6,21 @@ export default function BrandLogo({
 }: {
   inverse?: boolean;
   subtitle?: string;
-  /** Render only the mark (collapsed rail) — hides the wordmark + subtitle. */
+  /** Compact text treatment for constrained shell chrome. */
   markOnly?: boolean;
   className?: string;
 }) {
   return (
-    <div className={`inline-flex items-center gap-2.5 ${className}`}>
-      <Image
-        src="/branding/aequoros-mark.png"
-        alt="AequorOS"
-        width={32}
-        height={32}
-        priority
-        className="h-8 w-8 shrink-0"
-      />
-      {markOnly ? null : (
+    <div className={`inline-flex items-center ${className}`}>
       <div className="min-w-0 leading-none">
-        <div className={`font-serif text-xl font-semibold ${inverse ? 'text-white' : 'text-navy'}`}>
+        <div
+          className={`font-serif font-semibold ${
+            markOnly ? 'text-sm' : 'text-xl'
+          } ${inverse ? 'text-white' : 'text-navy'}`}
+        >
           AequorOS
         </div>
-        {subtitle && (
+        {!markOnly && subtitle && (
           <div
             className={`mt-1 text-micro uppercase tracking-widest ${
               inverse ? 'text-slate' : 'text-slate'
@@ -37,7 +30,6 @@ export default function BrandLogo({
           </div>
         )}
       </div>
-      )}
     </div>
   );
 }

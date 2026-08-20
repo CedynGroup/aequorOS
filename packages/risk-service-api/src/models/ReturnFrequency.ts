@@ -15,6 +15,7 @@
  * @export
  */
 export const ReturnFrequency = {
+  Weekly: "weekly",
   Monthly: "monthly",
   Quarterly: "quarterly",
   Semiannual: "semiannual",

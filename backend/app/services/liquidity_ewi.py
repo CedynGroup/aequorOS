@@ -3,8 +3,8 @@
 The eight BoG-named starter indicators are code-defined; the tenant register
 (``liquidity_ewi_indicators``) overrides a starter's Board-set trigger levels
 / enabled state / recovery-plan alignment, or adds custom indicators. The
-evaluator computes each indicator from CANONICAL data and stored regulatory
-runs only — an indicator whose input is not ingested reports ``no_data``
+evaluator computes each indicator from canonical data and current live module
+state — an indicator whose input is not ingested reports ``no_data``
 honestly rather than a fabricated value, and an indicator without Board-set
 thresholds reports ``unconfigured`` (value shown, no RAG claim).
 
@@ -33,8 +33,7 @@ from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     LiquidityEwiIndicator,
-    RegulatoryMetricResult,
-    RegulatoryRun,
+    LiveMetric,
 )
 from app.schemas.liquidity_cfp import (
     EscalationState,
@@ -117,7 +116,7 @@ STARTER_INDICATORS: tuple[StarterIndicator, ...] = (
             "Headline regulatory metrics currently classified amber or red "
             "across the latest baseline liquidity and capital runs."
         ),
-        metric_basis="amber/red headline metrics in latest baseline runs (count)",
+        metric_basis="amber/red current live Liquidity and Capital states (count)",
         unit="count",
         direction="above",
     ),
@@ -406,29 +405,19 @@ def _weighted_liability_maturity(rows: list[_Row]) -> tuple[Decimal | None, str 
 def _near_limit_count(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> tuple[Decimal | None, str | None]:
-    run_ids: list[UUID] = []
-    for module in ("liquidity", "capital"):
-        run_id = db.scalar(
-            select(RegulatoryRun.id)
-            .where(
-                RegulatoryRun.organization_id == ctx.organization_id,
-                RegulatoryRun.bank_id == bank.id,
-                RegulatoryRun.reporting_period_id == period.id,
-                RegulatoryRun.module == module,
-                RegulatoryRun.scenario_code == "baseline",
-                RegulatoryRun.status == "succeeded",
+    _ = period  # EWI configuration remains period-addressable; live metrics do not.
+    rows = list(
+        db.scalars(
+            select(LiveMetric).where(
+                LiveMetric.organization_id == ctx.organization_id,
+                LiveMetric.bank_id == bank.id,
+                LiveMetric.module.in_(("liquidity", "capital")),
             )
-            .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
-            .limit(1)
         )
-        if run_id is not None:
-            run_ids.append(run_id)
-    if not run_ids:
-        return None, "No succeeded baseline liquidity or capital run exists yet."
-    statuses = db.scalars(
-        select(RegulatoryMetricResult.status).where(RegulatoryMetricResult.run_id.in_(run_ids))
-    ).all()
-    return Decimal(sum(1 for value in statuses if value in ("amber", "red"))), None
+    )
+    if not rows:
+        return None, "Current live liquidity or capital state is not available yet."
+    return Decimal(sum(1 for row in rows if row.status in ("amber", "red"))), None
 
 
 def _stage3_loan_share(rows: list[_Row]) -> tuple[Decimal | None, str | None]:

@@ -70,6 +70,7 @@ def _add_bank(org_id: str, bank_id: str, name: str) -> None:
                 currency="GHS",
                 jurisdiction_code="GH",
                 license_type="universal_bank",
+                institution_type="universal_bank",
             )
         )
         session.commit()

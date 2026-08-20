@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { RunId } from "./RunId";
+import {
+  RunIdFromJSON,
+  RunIdFromJSONTyped,
+  RunIdToJSON,
+  RunIdToJSONTyped,
+} from "./RunId";
 import type { CapitalLineRead } from "./CapitalLineRead";
 import {
   CapitalLineReadFromJSON,
@@ -75,10 +82,16 @@ export interface RwaBreakdownRead {
   reportingPeriodId: string;
   /**
    *
+   * @type {RunId}
+   * @memberof RwaBreakdownRead
+   */
+  runId: RunId;
+  /**
+   *
    * @type {string}
    * @memberof RwaBreakdownRead
    */
-  runId: string;
+  source: RwaBreakdownReadSourceEnum;
   /**
    *
    * @type {string}
@@ -86,6 +99,16 @@ export interface RwaBreakdownRead {
    */
   totalRwaGhs: string;
 }
+
+/**
+ * @export
+ */
+export const RwaBreakdownReadSourceEnum = {
+  Live: "live",
+  Official: "official",
+} as const;
+export type RwaBreakdownReadSourceEnum =
+  (typeof RwaBreakdownReadSourceEnum)[keyof typeof RwaBreakdownReadSourceEnum];
 
 /**
  * Check if a given object implements the RwaBreakdownRead interface.
@@ -115,6 +138,7 @@ export function instanceOfRwaBreakdownRead(
   )
     return false;
   if (!("runId" in value) || value["runId"] === undefined) return false;
+  if (!("source" in value) || value["source"] === undefined) return false;
   if (!("totalRwaGhs" in value) || value["totalRwaGhs"] === undefined)
     return false;
   return true;
@@ -147,7 +171,8 @@ export function RwaBreakdownReadFromJSONTyped(
     ),
     operationalRwaGhs: json["operational_rwa_ghs"],
     reportingPeriodId: json["reporting_period_id"],
-    runId: json["run_id"],
+    runId: RunIdFromJSON(json["run_id"]),
+    source: json["source"],
     totalRwaGhs: json["total_rwa_ghs"],
   };
 }
@@ -179,7 +204,8 @@ export function RwaBreakdownReadToJSONTyped(
     ),
     operational_rwa_ghs: value["operationalRwaGhs"],
     reporting_period_id: value["reportingPeriodId"],
-    run_id: value["runId"],
+    run_id: RunIdToJSON(value["runId"]),
+    source: value["source"],
     total_rwa_ghs: value["totalRwaGhs"],
   };
 }

@@ -29,6 +29,7 @@ import type {
   RegulatoryPackageCreate,
   RegulatoryPackageListRead,
   RegulatoryPackageRead,
+  ReportComparisonRead,
   ReportingObligationListRead,
   ReportingSettingsPut,
   ReportingSettingsRead,
@@ -75,6 +76,8 @@ import {
   RegulatoryPackageListReadToJSON,
   RegulatoryPackageReadFromJSON,
   RegulatoryPackageReadToJSON,
+  ReportComparisonReadFromJSON,
+  ReportComparisonReadToJSON,
   ReportingObligationListReadFromJSON,
   ReportingObligationListReadToJSON,
   ReportingSettingsPutFromJSON,
@@ -101,6 +104,15 @@ export interface ComparePackageVersionsRequest {
   bankId: string;
   packageId: string;
   against: string;
+}
+
+export interface CompareReportsRequest {
+  bankId: string;
+  mode: CompareReportsModeEnum;
+  module: CompareReportsModuleEnum;
+  left: string;
+  right: string;
+  scenarioCode?: string;
 }
 
 export interface CreateRegulatoryPackageRequest {
@@ -327,6 +339,114 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<PackageComparisonRead> {
     const response = await this.comparePackageVersionsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Line-item delta over two immutable runs of the same module, with favorability.  ``version`` mode compares two run versions of one reporting period (an original filing vs a resubmission); ``period`` mode compares the latest run of two reporting periods. Each numeric line carries its absolute and percentage delta, direction, and a favorable/adverse/neutral judgment from the governed favorable-direction registry. Returns 404 when a run, period or version is missing, and 422 when the two sides are not comparable.
+   * Compare Reports
+   */
+  async compareReportsRaw(
+    requestParameters: CompareReportsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ReportComparisonRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling compareReports().',
+      );
+    }
+
+    if (requestParameters["mode"] == null) {
+      throw new runtime.RequiredError(
+        "mode",
+        'Required parameter "mode" was null or undefined when calling compareReports().',
+      );
+    }
+
+    if (requestParameters["module"] == null) {
+      throw new runtime.RequiredError(
+        "module",
+        'Required parameter "module" was null or undefined when calling compareReports().',
+      );
+    }
+
+    if (requestParameters["left"] == null) {
+      throw new runtime.RequiredError(
+        "left",
+        'Required parameter "left" was null or undefined when calling compareReports().',
+      );
+    }
+
+    if (requestParameters["right"] == null) {
+      throw new runtime.RequiredError(
+        "right",
+        'Required parameter "right" was null or undefined when calling compareReports().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["mode"] != null) {
+      queryParameters["mode"] = requestParameters["mode"];
+    }
+
+    if (requestParameters["module"] != null) {
+      queryParameters["module"] = requestParameters["module"];
+    }
+
+    if (requestParameters["left"] != null) {
+      queryParameters["left"] = requestParameters["left"];
+    }
+
+    if (requestParameters["right"] != null) {
+      queryParameters["right"] = requestParameters["right"];
+    }
+
+    if (requestParameters["scenarioCode"] != null) {
+      queryParameters["scenario_code"] = requestParameters["scenarioCode"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/reports/comparison`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ReportComparisonReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Line-item delta over two immutable runs of the same module, with favorability.  ``version`` mode compares two run versions of one reporting period (an original filing vs a resubmission); ``period`` mode compares the latest run of two reporting periods. Each numeric line carries its absolute and percentage delta, direction, and a favorable/adverse/neutral judgment from the governed favorable-direction registry. Returns 404 when a run, period or version is missing, and 422 when the two sides are not comparable.
+   * Compare Reports
+   */
+  async compareReports(
+    requestParameters: CompareReportsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ReportComparisonRead> {
+    const response = await this.compareReportsRaw(
       requestParameters,
       initOverrides,
     );
@@ -2262,8 +2382,32 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 /**
  * @export
  */
+export const CompareReportsModeEnum = {
+  Version: "version",
+  Period: "period",
+} as const;
+export type CompareReportsModeEnum =
+  (typeof CompareReportsModeEnum)[keyof typeof CompareReportsModeEnum];
+/**
+ * @export
+ */
+export const CompareReportsModuleEnum = {
+  Liquidity: "liquidity",
+  Capital: "capital",
+  Irr: "irr",
+  Fx: "fx",
+  Ftp: "ftp",
+  Forecast: "forecast",
+} as const;
+export type CompareReportsModuleEnum =
+  (typeof CompareReportsModuleEnum)[keyof typeof CompareReportsModuleEnum];
+/**
+ * @export
+ */
 export const ExportRegulatoryPackageKindEnum = {
   Xlsx: "xlsx",
+  XlsxOfficial: "xlsx_official",
+  XlsxWorking: "xlsx_working",
   Csv: "csv",
   Pdf: "pdf",
 } as const;

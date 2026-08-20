@@ -83,6 +83,7 @@ from app.schemas.regulatory_liquidity import (
 from app.services.audit import record_event
 from app.services.jurisdictions import base_currency, regulator_name
 from app.services.live_block import live_block
+from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
 from app.services.live_types import (
     LiveModuleResult,
     findings_from_validations,
@@ -235,16 +236,16 @@ def get_liquidity_dashboard(
 ) -> LiquidityDashboardRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
-    if not periods:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Reporting period not found."
-        )
     if reporting_period_id is None:
-        period = periods[-1]
+        period = current_fact_period_or_409(db, ctx, bank, MODULE_LIQUIDITY)
     else:
         period = _get_period_or_404(db, ctx, bank, reporting_period_id)
 
-    latest_run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+    latest_run = (
+        _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+        if reporting_period_id is not None
+        else None
+    )
     sections: dict[str, list[LiquidityDashboardLineRead]]
     if latest_run is not None:
         metrics = _metrics_from_run(db, latest_run)
@@ -296,9 +297,11 @@ def get_liquidity_dashboard(
         hqla_composition=sections.get("hqla", []),
         outflows=sections.get("outflow", []),
         inflows=sections.get("inflow", []),
+        asf=sections.get("asf", []),
+        rsf=sections.get("rsf", []),
         trend=trend,
         validations=validations,
-        live=live_block(db, ctx, bank.id, period.id, MODULE_LIQUIDITY),
+        live=live_block(db, ctx, bank.id, MODULE_LIQUIDITY),
     )
 
 
@@ -530,7 +533,7 @@ def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its f
     """Workbench seam: compute one scenario without persisting anything."""
     facts = _load_facts(db, ctx, bank, period)
     active = _load_active_params(db, ctx, bank, period.period_end)
-    currency_ladders = _currency_ladders(db, ctx, bank, period)
+    currency_ladders = _currency_ladders(db, ctx, bank, period.period_end)
     return _execute_scenario_compute(
         db, ctx, bank, period, facts, active, currency_ladders, shocks, scenario_code
     )
@@ -550,7 +553,7 @@ def _create_and_execute(
         if scenario_code != BASELINE_SCENARIO
         else {}
     )
-    currency_ladders = _currency_ladders(db, ctx, bank, period)
+    currency_ladders = _currency_ladders(db, ctx, bank, period.period_end)
     snapshot = _build_snapshot(
         bank, period, scenario_code, facts, active, shocks, currency_ladders
     )
@@ -1137,7 +1140,7 @@ def current_input_hash(
     if not facts:
         return None
     active = _load_active_params(db, ctx, bank, period.period_end)
-    currency_ladders = _currency_ladders(db, ctx, bank, period)
+    currency_ladders = _currency_ladders(db, ctx, bank, period.period_end)
     snapshot = _build_snapshot(
         bank, period, BASELINE_SCENARIO, facts, active, {}, currency_ladders
     )
@@ -1147,9 +1150,26 @@ def current_input_hash(
 def compute_live(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> LiveModuleResult:
-    """Cheap baseline live view — reuses the dashboard's unstored-branch path
-    (``_compute_inline``/``_validation_rows``) and creates no RegulatoryRun."""
-    lcr, nsfr, params = _compute_inline(db, ctx, bank, period)
+    """Compute the baseline live view from current facts without a RegulatoryRun."""
+    current = load_current_facts(db, ctx, bank, _LIQUIDITY_FACT_GROUPS)
+    facts = current.facts
+    active = _load_active_params(db, ctx, bank, current.source_as_of_date)
+    params = _engine_params(active)
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    lcr = compute_lcr(engine_facts, params)
+    nsfr = compute_nsfr(engine_facts, params)
+    snapshot = current_snapshot(
+        _build_snapshot(
+            bank,
+            period,
+            BASELINE_SCENARIO,
+            facts,
+            active,
+            {},
+            _currency_ladders(db, ctx, bank, current.source_as_of_date),
+        ),
+        current.source_as_of_date,
+    )
     metrics = {
         "lcr_pct": str(lcr.lcr_pct),
         "nsfr_pct": str(nsfr.nsfr_pct),
@@ -1165,8 +1185,9 @@ def compute_live(
     return LiveModuleResult(
         metrics=metrics,
         status=status,
-        input_hash=current_input_hash(db, ctx, bank, period),
+        input_hash=_snapshot_hash(snapshot),
         findings=findings,
+        source_as_of_date=current.source_as_of_date,
     )
 
 
@@ -1297,7 +1318,7 @@ def _ladder_bucket_index(
 
 
 def _currency_ladders(
-    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+    db: Session, ctx: TenantContext, bank: Bank, as_of_date: date
 ) -> dict[str, dict[str, list[str] | str]]:
     records = db.execute(
         select(CanonicalPositionSnapshot, CanonicalPosition)
@@ -1305,7 +1326,7 @@ def _currency_ladders(
         .where(
             CanonicalPositionSnapshot.organization_id == ctx.organization_id,
             CanonicalPositionSnapshot.bank_id == bank.id,
-            CanonicalPositionSnapshot.as_of_date == period.period_end,
+            CanonicalPositionSnapshot.as_of_date == as_of_date,
             CanonicalPositionSnapshot.superseded_by.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_CCY_STATUSES),
             CanonicalPosition.position_type.in_(
@@ -1340,7 +1361,7 @@ def _currency_ladders(
             and (snapshot.deposit_account_type or "").upper() in _CCY_DEMAND_DEPOSITS
         )
         index = _ladder_bucket_index(
-            snapshot.contractual_maturity, period.period_end, on_demand=on_demand
+            snapshot.contractual_maturity, as_of_date, on_demand=on_demand
         )
         ladder = ladders.setdefault(
             position.currency,

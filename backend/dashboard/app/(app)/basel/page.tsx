@@ -28,11 +28,10 @@ function kpiStatus(status: 'green' | 'amber' | 'red' | string): KpiStatus {
 }
 
 export default function BaselOverview() {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const dashboard = useCapitalDashboard(bankId, periodId);
+  const dashboard = useCapitalDashboard(bankId);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
 
   const data = dashboard.data;

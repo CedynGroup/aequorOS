@@ -39,6 +39,13 @@ import {
   LiveModuleViewToJSON,
   LiveModuleViewToJSONTyped,
 } from "./LiveModuleView";
+import type { SourceAsOfDate } from "./SourceAsOfDate";
+import {
+  SourceAsOfDateFromJSON,
+  SourceAsOfDateFromJSONTyped,
+  SourceAsOfDateToJSON,
+  SourceAsOfDateToJSONTyped,
+} from "./SourceAsOfDate";
 
 /**
  *
@@ -82,6 +89,12 @@ export interface LiveSummaryRead {
    * @memberof LiveSummaryRead
    */
   reportingPeriodId: ReportingPeriodId;
+  /**
+   *
+   * @type {SourceAsOfDate}
+   * @memberof LiveSummaryRead
+   */
+  sourceAsOfDate: SourceAsOfDate;
 }
 
 /**
@@ -101,6 +114,8 @@ export function instanceOfLiveSummaryRead(
     !("reportingPeriodId" in value) ||
     value["reportingPeriodId"] === undefined
   )
+    return false;
+  if (!("sourceAsOfDate" in value) || value["sourceAsOfDate"] === undefined)
     return false;
   return true;
 }
@@ -124,6 +139,7 @@ export function LiveSummaryReadFromJSONTyped(
     modules: (json["modules"] as Array<any>).map(LiveModuleViewFromJSON),
     periodLabel: PeriodLabelFromJSON(json["period_label"]),
     reportingPeriodId: ReportingPeriodIdFromJSON(json["reporting_period_id"]),
+    sourceAsOfDate: SourceAsOfDateFromJSON(json["source_as_of_date"]),
   };
 }
 
@@ -146,5 +162,6 @@ export function LiveSummaryReadToJSONTyped(
     modules: (value["modules"] as Array<any>).map(LiveModuleViewToJSON),
     period_label: PeriodLabelToJSON(value["periodLabel"]),
     reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),
+    source_as_of_date: SourceAsOfDateToJSON(value["sourceAsOfDate"]),
   };
 }

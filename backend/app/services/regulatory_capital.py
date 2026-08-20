@@ -92,6 +92,7 @@ from app.schemas.regulatory_liquidity import (
 from app.services.audit import record_event
 from app.services.jurisdictions import base_currency, regulator_name
 from app.services.live_block import live_block
+from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
 from app.services.live_types import (
     LiveModuleResult,
     findings_from_validations,
@@ -281,16 +282,16 @@ def get_capital_dashboard(
 ) -> CapitalDashboardRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
-    if not periods:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Reporting period not found."
-        )
     if reporting_period_id is None:
-        period = periods[-1]
+        period = current_fact_period_or_409(db, ctx, bank, MODULE_CAPITAL)
     else:
         period = _get_period_or_404(db, ctx, bank, reporting_period_id)
 
-    latest_run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+    latest_run = (
+        _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+        if reporting_period_id is not None
+        else None
+    )
     if latest_run is not None:
         metrics = _metrics_from_run(db, latest_run)
         sections = _sections_from_run(db, latest_run)
@@ -339,13 +340,22 @@ def get_capital_dashboard(
         trend=_build_trend(db, ctx, bank, periods),
         buffers=_buffers_or_409(active.thresholds, metrics.car_pct),
         validations=validations,
-        live=live_block(db, ctx, bank.id, period.id, MODULE_CAPITAL),
+        live=live_block(db, ctx, bank.id, MODULE_CAPITAL),
     )
 
 
 def get_capital_structure(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> CapitalStructureRead:
+    if reporting_period_id is None:
+        dashboard = get_capital_dashboard(db, ctx, bank_id)
+        return CapitalStructureRead(
+            bank_id=dashboard.bank.id,
+            reporting_period_id=dashboard.period.id,
+            run_id=None,
+            source="live",
+            **dashboard.capital_structure.model_dump(),
+        )
     bank, period, run = _baseline_run_or_409(
         db, ctx, bank_id, reporting_period_id, artifact="the capital structure"
     )
@@ -355,6 +365,7 @@ def get_capital_structure(
         bank_id=bank.id,
         reporting_period_id=period.id,
         run_id=run.id,
+        source="official",
         **summary.model_dump(),
     )
 
@@ -362,6 +373,22 @@ def get_capital_structure(
 def get_rwa_breakdown(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> RwaBreakdownRead:
+    if reporting_period_id is None:
+        dashboard = get_capital_dashboard(db, ctx, bank_id)
+        composition = dashboard.rwa_composition
+        return RwaBreakdownRead(
+            bank_id=dashboard.bank.id,
+            reporting_period_id=dashboard.period.id,
+            run_id=None,
+            source="live",
+            credit_rwa_ghs=composition.credit_rwa_ghs,
+            market_rwa_ghs=composition.market_rwa_ghs,
+            operational_rwa_ghs=composition.operational_rwa_ghs,
+            total_rwa_ghs=composition.total_rwa_ghs,
+            credit_lines=composition.credit_lines,
+            market_lines=[],
+            operational_lines=[],
+        )
     bank, period, run = _baseline_run_or_409(
         db, ctx, bank_id, reporting_period_id, artifact="the RWA breakdown"
     )
@@ -371,6 +398,7 @@ def get_rwa_breakdown(
         bank_id=bank.id,
         reporting_period_id=period.id,
         run_id=run.id,
+        source="official",
         credit_rwa_ghs=metrics["credit_rwa_ghs"],
         market_rwa_ghs=metrics["market_rwa_ghs"],
         operational_rwa_ghs=metrics["operational_rwa_ghs"],
@@ -1169,9 +1197,18 @@ def current_input_hash(
 def compute_live(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> LiveModuleResult:
-    """Cheap baseline live view — reuses the dashboard's unstored-branch path
-    and creates no RegulatoryRun."""
-    rwa, ratios, params = _compute_inline(db, ctx, bank, period)
+    """Compute the baseline live view from current facts without a RegulatoryRun."""
+    current = load_current_facts(db, ctx, bank, _CAPITAL_FACT_GROUPS)
+    facts = current.facts
+    active = _load_active_params(db, ctx, bank, current.source_as_of_date)
+    params = _engine_params(active)
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    rwa = compute_rwa(engine_facts, params)
+    ratios = compute_capital_ratios(engine_facts, rwa, params)
+    snapshot = current_snapshot(
+        _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active, {}),
+        current.source_as_of_date,
+    )
     metrics = {
         "car_pct": str(ratios.car_pct),
         "tier1_ratio_pct": str(ratios.tier1_ratio_pct),
@@ -1189,8 +1226,9 @@ def compute_live(
     return LiveModuleResult(
         metrics=metrics,
         status=status,
-        input_hash=current_input_hash(db, ctx, bank, period),
+        input_hash=_snapshot_hash(snapshot),
         findings=findings,
+        source_as_of_date=current.source_as_of_date,
     )
 
 

@@ -18,13 +18,13 @@ import {
   SignatureFieldPlacementToJSON,
   SignatureFieldPlacementToJSONTyped,
 } from "./SignatureFieldPlacement";
-import type { BankId } from "./BankId";
+import type { BankId1 } from "./BankId1";
 import {
-  BankIdFromJSON,
-  BankIdFromJSONTyped,
-  BankIdToJSON,
-  BankIdToJSONTyped,
-} from "./BankId";
+  BankId1FromJSON,
+  BankId1FromJSONTyped,
+  BankId1ToJSON,
+  BankId1ToJSONTyped,
+} from "./BankId1";
 
 /**
  * Replace the placement set for one scope. Reason-required and audited.
@@ -38,10 +38,10 @@ import {
 export interface SignaturePlacementTemplateUpsertRequest {
   /**
    *
-   * @type {BankId}
+   * @type {BankId1}
    * @memberof SignaturePlacementTemplateUpsertRequest
    */
-  bankId?: BankId;
+  bankId?: BankId1;
   /**
    *
    * @type {Array<SignatureFieldPlacement>}
@@ -92,7 +92,7 @@ export function SignaturePlacementTemplateUpsertRequestFromJSONTyped(
   return {
     ...json,
     bankId:
-      json["bank_id"] == null ? undefined : BankIdFromJSON(json["bank_id"]),
+      json["bank_id"] == null ? undefined : BankId1FromJSON(json["bank_id"]),
     placements: (json["placements"] as Array<any>).map(
       SignatureFieldPlacementFromJSON,
     ),
@@ -116,7 +116,7 @@ export function SignaturePlacementTemplateUpsertRequestToJSONTyped(
   }
 
   return {
-    bank_id: BankIdToJSON(value["bankId"]),
+    bank_id: BankId1ToJSON(value["bankId"]),
     placements: (value["placements"] as Array<any>).map(
       SignatureFieldPlacementToJSON,
     ),

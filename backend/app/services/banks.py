@@ -7,7 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankFinancialFact, BankReportingPeriod, Jurisdiction
+from app.models import (
+    Bank,
+    BankFinancialFact,
+    BankReportingPeriod,
+    InstitutionType,
+    Jurisdiction,
+)
 from app.schemas.banks import (
     BankFactRead,
     BankFactsRead,
@@ -15,6 +21,7 @@ from app.schemas.banks import (
     BankRead,
     BankReportingPeriodListRead,
     BankReportingPeriodRead,
+    InstitutionTypeRead,
     JurisdictionRead,
 )
 from app.services.public_ids import normalize_public_id
@@ -41,9 +48,34 @@ def _jurisdictions_by_code(db: Session, codes: set[str]) -> dict[str, Jurisdicti
     return {row.code: JurisdictionRead.model_validate(row, from_attributes=True) for row in rows}
 
 
-def _bank_read(bank: Bank, registry: dict[str, JurisdictionRead]) -> BankRead:
+def _institution_types_by_code(db: Session, codes: set[str]) -> dict[str, InstitutionTypeRead]:
+    """Resolve institution-type registry rows for the given codes.
+
+    Display-side resolution (like ``_jurisdictions_by_code``): a code with no
+    registry row simply resolves to None on the payload — never a fabricated
+    default. Calculation code that must not silently default goes through
+    ``app/services/institution_types.py`` instead (fail-loud)."""
+    if not codes:
+        return {}
+    rows = db.scalars(select(InstitutionType).where(InstitutionType.type_code.in_(codes)))
+    return {
+        row.type_code: InstitutionTypeRead.model_validate(row, from_attributes=True)
+        for row in rows
+    }
+
+
+def _bank_read(
+    bank: Bank,
+    jurisdictions: dict[str, JurisdictionRead],
+    institution_types: dict[str, InstitutionTypeRead],
+) -> BankRead:
     read = BankRead.model_validate(bank, from_attributes=True)
-    return read.model_copy(update={"jurisdiction": registry.get(bank.jurisdiction_code)})
+    return read.model_copy(
+        update={
+            "jurisdiction": jurisdictions.get(bank.jurisdiction_code),
+            "institution_type_detail": institution_types.get(bank.institution_type),
+        }
+    )
 
 
 def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
@@ -54,14 +86,18 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
             .order_by(Bank.name, Bank.id)
         )
     )
-    registry = _jurisdictions_by_code(db, {bank.jurisdiction_code for bank in banks})
-    return BankListRead(banks=[_bank_read(bank, registry) for bank in banks])
+    jurisdictions = _jurisdictions_by_code(db, {bank.jurisdiction_code for bank in banks})
+    institution_types = _institution_types_by_code(db, {bank.institution_type for bank in banks})
+    return BankListRead(
+        banks=[_bank_read(bank, jurisdictions, institution_types) for bank in banks]
+    )
 
 
 def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
     bank = resolve_bank_reference(db, ctx, bank_reference)
-    registry = _jurisdictions_by_code(db, {bank.jurisdiction_code})
-    return _bank_read(bank, registry)
+    jurisdictions = _jurisdictions_by_code(db, {bank.jurisdiction_code})
+    institution_types = _institution_types_by_code(db, {bank.institution_type})
+    return _bank_read(bank, jurisdictions, institution_types)
 
 
 def list_reporting_periods(

@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { SourceFactPeriodId } from "./SourceFactPeriodId";
+import {
+  SourceFactPeriodIdFromJSON,
+  SourceFactPeriodIdFromJSONTyped,
+  SourceFactPeriodIdToJSON,
+  SourceFactPeriodIdToJSONTyped,
+} from "./SourceFactPeriodId";
 import type { LiveModule } from "./LiveModule";
 import {
   LiveModuleFromJSON,
@@ -32,6 +39,13 @@ import {
   LiveStatusToJSON,
   LiveStatusToJSONTyped,
 } from "./LiveStatus";
+import type { PipelineError } from "./PipelineError";
+import {
+  PipelineErrorFromJSON,
+  PipelineErrorFromJSONTyped,
+  PipelineErrorToJSON,
+  PipelineErrorToJSONTyped,
+} from "./PipelineError";
 
 /**
  *
@@ -39,6 +53,12 @@ import {
  * @interface LiveModuleView
  */
 export interface LiveModuleView {
+  /**
+   *
+   * @type {number}
+   * @memberof LiveModuleView
+   */
+  calculationGeneration: number;
   /**
    *
    * @type {Date}
@@ -53,6 +73,12 @@ export interface LiveModuleView {
   computedFromInputHash: ComputedFromInputHash;
   /**
    *
+   * @type {string}
+   * @memberof LiveModuleView
+   */
+  engineVersion: string;
+  /**
+   *
    * @type {{ [key: string]: any; }}
    * @memberof LiveModuleView
    */
@@ -65,6 +91,30 @@ export interface LiveModuleView {
   module: LiveModule;
   /**
    *
+   * @type {PipelineError}
+   * @memberof LiveModuleView
+   */
+  pipelineError: PipelineError;
+  /**
+   *
+   * @type {string}
+   * @memberof LiveModuleView
+   */
+  pipelineState: LiveModuleViewPipelineStateEnum;
+  /**
+   *
+   * @type {Date}
+   * @memberof LiveModuleView
+   */
+  sourceAsOfDate: Date;
+  /**
+   *
+   * @type {SourceFactPeriodId}
+   * @memberof LiveModuleView
+   */
+  sourceFactPeriodId: SourceFactPeriodId;
+  /**
+   *
    * @type {LiveStatus}
    * @memberof LiveModuleView
    */
@@ -72,11 +122,26 @@ export interface LiveModuleView {
 }
 
 /**
+ * @export
+ */
+export const LiveModuleViewPipelineStateEnum = {
+  Ready: "ready",
+  Failed: "failed",
+} as const;
+export type LiveModuleViewPipelineStateEnum =
+  (typeof LiveModuleViewPipelineStateEnum)[keyof typeof LiveModuleViewPipelineStateEnum];
+
+/**
  * Check if a given object implements the LiveModuleView interface.
  */
 export function instanceOfLiveModuleView(
   value: object,
 ): value is LiveModuleView {
+  if (
+    !("calculationGeneration" in value) ||
+    value["calculationGeneration"] === undefined
+  )
+    return false;
   if (!("computedAt" in value) || value["computedAt"] === undefined)
     return false;
   if (
@@ -84,8 +149,21 @@ export function instanceOfLiveModuleView(
     value["computedFromInputHash"] === undefined
   )
     return false;
+  if (!("engineVersion" in value) || value["engineVersion"] === undefined)
+    return false;
   if (!("metrics" in value) || value["metrics"] === undefined) return false;
   if (!("module" in value) || value["module"] === undefined) return false;
+  if (!("pipelineError" in value) || value["pipelineError"] === undefined)
+    return false;
+  if (!("pipelineState" in value) || value["pipelineState"] === undefined)
+    return false;
+  if (!("sourceAsOfDate" in value) || value["sourceAsOfDate"] === undefined)
+    return false;
+  if (
+    !("sourceFactPeriodId" in value) ||
+    value["sourceFactPeriodId"] === undefined
+  )
+    return false;
   if (!("status" in value) || value["status"] === undefined) return false;
   return true;
 }
@@ -103,12 +181,20 @@ export function LiveModuleViewFromJSONTyped(
   }
   return {
     ...json,
+    calculationGeneration: json["calculation_generation"],
     computedAt: new Date(json["computed_at"]),
     computedFromInputHash: ComputedFromInputHashFromJSON(
       json["computed_from_input_hash"],
     ),
+    engineVersion: json["engine_version"],
     metrics: json["metrics"],
     module: LiveModuleFromJSON(json["module"]),
+    pipelineError: PipelineErrorFromJSON(json["pipeline_error"]),
+    pipelineState: json["pipeline_state"],
+    sourceAsOfDate: new Date(json["source_as_of_date"]),
+    sourceFactPeriodId: SourceFactPeriodIdFromJSON(
+      json["source_fact_period_id"],
+    ),
     status: LiveStatusFromJSON(json["status"]),
   };
 }
@@ -126,12 +212,20 @@ export function LiveModuleViewToJSONTyped(
   }
 
   return {
+    calculation_generation: value["calculationGeneration"],
     computed_at: value["computedAt"].toISOString(),
     computed_from_input_hash: ComputedFromInputHashToJSON(
       value["computedFromInputHash"],
     ),
+    engine_version: value["engineVersion"],
     metrics: value["metrics"],
     module: LiveModuleToJSON(value["module"]),
+    pipeline_error: PipelineErrorToJSON(value["pipelineError"]),
+    pipeline_state: value["pipelineState"],
+    source_as_of_date: value["sourceAsOfDate"].toISOString().substring(0, 10),
+    source_fact_period_id: SourceFactPeriodIdToJSON(
+      value["sourceFactPeriodId"],
+    ),
     status: LiveStatusToJSON(value["status"]),
   };
 }

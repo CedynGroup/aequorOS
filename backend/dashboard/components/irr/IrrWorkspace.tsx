@@ -44,11 +44,10 @@ export default function IrrWorkspace({
   subtitle: string;
   children: (ctx: IrrTabContext) => ReactNode;
 }) {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const dashboard = useIrrDashboard(bankId, periodId);
+  const dashboard = useIrrDashboard(bankId);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
 
   const data = dashboard.data;
@@ -81,7 +80,7 @@ export default function IrrWorkspace({
               latestRun: latestRun.data,
               computedAt: data.live?.computedAt ?? latestRun.data?.createdAt,
               bankId,
-              periodId,
+              periodId: data.period.id,
             })}
           </div>
         )}

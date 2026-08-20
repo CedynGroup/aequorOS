@@ -46,6 +46,7 @@ from app.services.liquidity_ewi import (
     escalation_state,
     evaluate_ewis,
 )
+from app.services.live_state import current_fact_period_or_409
 
 # ¶71: Board approval is (at least) annual.
 _APPROVAL_VALIDITY_DAYS = 365
@@ -126,11 +127,15 @@ def get_cfp(db: Session, ctx: TenantContext, bank_id: str) -> CfpSummaryRead:
 
 
 def ewi_dashboard(
-    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> EwiDashboardRead:
     """The server-side EWI board: evaluations + escalation + CFP posture."""
     bank = _get_bank_or_404(db, ctx, bank_id)
-    period = _get_period_or_404(db, ctx, bank, reporting_period_id)
+    period = (
+        current_fact_period_or_409(db, ctx, bank, "liquidity")
+        if reporting_period_id is None
+        else _get_period_or_404(db, ctx, bank, reporting_period_id)
+    )
     evaluations = evaluate_ewis(db, ctx, bank, period)
     approved = _approved_plan(db, ctx, bank)
     cfp_active = bool(approved is not None and approved.active)

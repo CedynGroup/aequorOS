@@ -180,7 +180,7 @@ function LiveFreshnessPill() {
         )}
         {refresh.isPending
           ? 'Recomputing…'
-          : `Live · stale${latest ? ` (${fmtRelative(latest)})` : ''}`}
+          : `Refresh delayed${latest ? ` (${fmtRelative(latest)})` : ''}`}
       </button>
     );
   }

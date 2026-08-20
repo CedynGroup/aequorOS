@@ -158,6 +158,7 @@ def test_encrypted_db_vault_roundtrip(db_session) -> None:
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     db_session.add(bank)
     db_session.flush()

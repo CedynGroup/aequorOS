@@ -80,13 +80,15 @@ class CapitalStructureSummaryRead(ClosedModel):
 class CapitalStructureRead(CapitalStructureSummaryRead):
     bank_id: str
     reporting_period_id: UUID
-    run_id: UUID
+    run_id: UUID | None
+    source: Literal["live", "official"]
 
 
 class RwaBreakdownRead(ClosedModel):
     bank_id: str
     reporting_period_id: UUID
-    run_id: UUID
+    run_id: UUID | None
+    source: Literal["live", "official"]
     credit_rwa_ghs: Decimal
     market_rwa_ghs: Decimal
     operational_rwa_ghs: Decimal

@@ -49,7 +49,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: 'freshness',
     title: 'Live freshness',
-    body: 'This pill tracks live figures against the last finalised results. Green means in sync; "Changed" means data moved since the period was last closed — reconcile under Governance → Reports.',
+    body: 'This pill shows live calculation health. A delayed refresh means the current engine has not recomputed recently; filing drift is reviewed separately under Governance → Reports.',
     selectors: [
       "header *[title^='Live figures']",
       "header *[title^='Data has changed']",

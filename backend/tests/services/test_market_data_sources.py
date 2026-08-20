@@ -60,6 +60,7 @@ def _seed_bank(db: Session, organization_id: str = ORG_1) -> str:
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     db.add(bank)
     db.flush()

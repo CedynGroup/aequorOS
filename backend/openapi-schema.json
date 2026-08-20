@@ -1,6 +1,313 @@
 {
   "components": {
     "schemas": {
+      "ActionItemIn": {
+        "additionalProperties": false,
+        "description": "One credible action; mirrors the domain ``ManagementAction`` contract.",
+        "properties": {
+          "action_id": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Action Id",
+            "type": "string"
+          },
+          "capital_raise_ghs": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Capital Raise Ghs"
+          },
+          "capital_raise_tier": {
+            "$ref": "#/components/schemas/CapitalRaiseTier",
+            "default": "cet1"
+          },
+          "counts_as_paid_up": {
+            "default": false,
+            "title": "Counts As Paid Up",
+            "type": "boolean"
+          },
+          "dividend_reduction_pct": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Dividend Reduction Pct"
+          },
+          "effective_year": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Effective Year",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActionKind"
+          },
+          "label": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "min_severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "rwa_reduction_ghs": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "0",
+            "title": "Rwa Reduction Ghs"
+          },
+          "severity_factors": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Severity"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity Factors"
+          },
+          "shrinks_leverage_exposure": {
+            "default": false,
+            "title": "Shrinks Leverage Exposure",
+            "type": "boolean"
+          },
+          "sizing": {
+            "$ref": "#/components/schemas/SizingMode",
+            "default": "fixed"
+          },
+          "sort_order": {
+            "default": 0,
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "trigger_kind": {
+            "$ref": "#/components/schemas/TriggerKind"
+          },
+          "watch_minima": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MinimumCode"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watch Minima"
+          }
+        },
+        "required": [
+          "action_id",
+          "kind",
+          "label",
+          "trigger_kind"
+        ],
+        "title": "ActionItemIn",
+        "type": "object"
+      },
+      "ActionItemRead": {
+        "additionalProperties": false,
+        "properties": {
+          "action_id": {
+            "title": "Action Id",
+            "type": "string"
+          },
+          "capital_raise_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Capital Raise Ghs",
+            "type": "string"
+          },
+          "capital_raise_tier": {
+            "$ref": "#/components/schemas/CapitalRaiseTier"
+          },
+          "counts_as_paid_up": {
+            "title": "Counts As Paid Up",
+            "type": "boolean"
+          },
+          "dividend_reduction_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Dividend Reduction Pct",
+            "type": "string"
+          },
+          "effective_year": {
+            "title": "Effective Year",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActionKind"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "min_severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Severity"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "rwa_reduction_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rwa Reduction Ghs",
+            "type": "string"
+          },
+          "severity_factors": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity Factors"
+          },
+          "shrinks_leverage_exposure": {
+            "title": "Shrinks Leverage Exposure",
+            "type": "boolean"
+          },
+          "sizing": {
+            "$ref": "#/components/schemas/SizingMode"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "trigger_kind": {
+            "$ref": "#/components/schemas/TriggerKind"
+          },
+          "watch_minima": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watch Minima"
+          }
+        },
+        "required": [
+          "action_id",
+          "kind",
+          "label",
+          "sort_order",
+          "trigger_kind",
+          "watch_minima",
+          "min_severity",
+          "effective_year",
+          "capital_raise_ghs",
+          "capital_raise_tier",
+          "counts_as_paid_up",
+          "sizing",
+          "dividend_reduction_pct",
+          "rwa_reduction_ghs",
+          "shrinks_leverage_exposure",
+          "severity_factors",
+          "rationale"
+        ],
+        "title": "ActionItemRead",
+        "type": "object"
+      },
+      "ActionKind": {
+        "enum": [
+          "raise_capital",
+          "revise_dividend",
+          "reduce_risk",
+          "sell_assets",
+          "change_strategy",
+          "other"
+        ],
+        "type": "string"
+      },
       "ActivationGroupRead": {
         "additionalProperties": false,
         "properties": {
@@ -471,7 +778,8 @@
         "enum": [
           "xlsx",
           "csv",
-          "pdf"
+          "pdf",
+          "xlsx_working"
         ],
         "type": "string"
       },
@@ -1197,6 +1505,7 @@
           "lcr_inflow",
           "market_risk",
           "operational_income",
+          "cashflow",
           "capital_component",
           "deposit_behavior"
         ],
@@ -1973,6 +2282,20 @@
             "title": "Id",
             "type": "string"
           },
+          "institution_type": {
+            "title": "Institution Type",
+            "type": "string"
+          },
+          "institution_type_detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InstitutionTypeRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "jurisdiction": {
             "anyOf": [
               {
@@ -2017,6 +2340,7 @@
           "currency",
           "jurisdiction_code",
           "license_type",
+          "institution_type",
           "created_at",
           "updated_at"
         ],
@@ -4834,6 +5158,14 @@
         "title": "CapitalProjectionSummaryRead",
         "type": "object"
       },
+      "CapitalRaiseTier": {
+        "enum": [
+          "cet1",
+          "at1",
+          "tier2"
+        ],
+        "type": "string"
+      },
       "CapitalRatioStatus": {
         "enum": [
           "green",
@@ -4910,8 +5242,23 @@
             "type": "string"
           },
           "run_id": {
-            "format": "uuid",
-            "title": "Run Id",
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "source": {
+            "enum": [
+              "live",
+              "official"
+            ],
+            "title": "Source",
             "type": "string"
           },
           "tier1_capital_ghs": {
@@ -4949,7 +5296,8 @@
           "total_capital_ghs",
           "bank_id",
           "reporting_period_id",
-          "run_id"
+          "run_id",
+          "source"
         ],
         "title": "CapitalStructureRead",
         "type": "object"
@@ -7587,6 +7935,186 @@
         "title": "ChannelConfigRead",
         "type": "object"
       },
+      "ComparisonGroupRead": {
+        "additionalProperties": false,
+        "description": "Lines grouped by return section for the UI (e.g. 'Risk-weighted assets').",
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ComparisonLineRead"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "lines"
+        ],
+        "title": "ComparisonGroupRead",
+        "type": "object"
+      },
+      "ComparisonLineRead": {
+        "additionalProperties": false,
+        "description": "One comparable numeric figure aligned across the two sides by ``key``.",
+        "properties": {
+          "delta_ccy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta Ccy"
+          },
+          "delta_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta Pct"
+          },
+          "direction": {
+            "enum": [
+              "up",
+              "down",
+              "flat"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "favorability": {
+            "enum": [
+              "favorable",
+              "adverse",
+              "neutral"
+            ],
+            "title": "Favorability",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "left_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Left Value"
+          },
+          "new": {
+            "title": "New",
+            "type": "boolean"
+          },
+          "right_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Right Value"
+          },
+          "unit": {
+            "enum": [
+              "ccy",
+              "pct",
+              "ratio",
+              "count"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "unit",
+          "left_value",
+          "right_value",
+          "delta_ccy",
+          "delta_pct",
+          "direction",
+          "favorability",
+          "new"
+        ],
+        "title": "ComparisonLineRead",
+        "type": "object"
+      },
+      "ComparisonSideRead": {
+        "additionalProperties": false,
+        "description": "Identity of one immutable run in the comparison.",
+        "properties": {
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "period_label": {
+            "title": "Period Label",
+            "type": "string"
+          },
+          "reporting_date": {
+            "format": "date",
+            "title": "Reporting Date",
+            "type": "string"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scenario_code": {
+            "title": "Scenario Code",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "version",
+          "label",
+          "period_label",
+          "reporting_date",
+          "reporting_period_id",
+          "scenario_code",
+          "engine_version"
+        ],
+        "title": "ComparisonSideRead",
+        "type": "object"
+      },
       "CompleteUploadResponse": {
         "properties": {
           "document_id": {
@@ -7867,7 +8395,8 @@
             "type": "string"
           },
           "run_calculations": {
-            "default": true,
+            "default": false,
+            "description": "Compatibility-only: mint immutable official calculation runs. Never required for live Treasury/ALM refresh.",
             "title": "Run Calculations",
             "type": "boolean"
           }
@@ -9270,6 +9799,412 @@
           "downtime_return_note"
         ],
         "title": "EmailRecipientGuidanceRead",
+        "type": "object"
+      },
+      "EnterpriseStressRead": {
+        "properties": {
+          "appendix_ii": {
+            "additionalProperties": true,
+            "title": "Appendix Ii",
+            "type": "object"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "input_hash": {
+            "title": "Input Hash",
+            "type": "string"
+          },
+          "outcome": {
+            "additionalProperties": true,
+            "title": "Outcome",
+            "type": "object"
+          },
+          "projection": {
+            "additionalProperties": true,
+            "title": "Projection",
+            "type": "object"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scenario_code": {
+            "title": "Scenario Code",
+            "type": "string"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/EnterpriseStressSummary"
+          }
+        },
+        "required": [
+          "run_id",
+          "bank_id",
+          "reporting_period_id",
+          "scenario_id",
+          "scenario_code",
+          "input_hash",
+          "engine_version",
+          "summary",
+          "outcome",
+          "projection",
+          "appendix_ii",
+          "created_at"
+        ],
+        "title": "EnterpriseStressRead",
+        "type": "object"
+      },
+      "EnterpriseStressRunCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "car_target_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "13",
+            "title": "Car Target Pct"
+          },
+          "horizon_years": {
+            "default": 3,
+            "maximum": 10.0,
+            "minimum": 3.0,
+            "title": "Horizon Years",
+            "type": "integer"
+          },
+          "include_fx": {
+            "default": true,
+            "title": "Include Fx",
+            "type": "boolean"
+          },
+          "include_irr": {
+            "default": true,
+            "title": "Include Irr",
+            "type": "boolean"
+          },
+          "management_action_plan_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Management Action Plan Id"
+          },
+          "paid_up_min": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid Up Min"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanAssumptionsIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scenario_id",
+          "reporting_period_id",
+          "reason"
+        ],
+        "title": "EnterpriseStressRunCreate",
+        "type": "object"
+      },
+      "EnterpriseStressRunSummary": {
+        "description": "A lightweight history row for the run registry (docs/stress.md \u00a74.5).\n\nBuilt from immutable-run fields + persisted metrics only \u2014 no re-computation\nand no per-run scenario fetch \u2014 so the workbench can list the full run history\nand re-open any run by ``run_id`` (via GET ``\u2026/enterprise-stress/runs/{run_id}``).",
+        "properties": {
+          "baseline_car_end_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Baseline Car End Pct",
+            "type": "string"
+          },
+          "capital_gap": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Capital Gap",
+            "type": "string"
+          },
+          "car_erosion_pp": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Car Erosion Pp",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "first_breach_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Breach Year"
+          },
+          "input_hash": {
+            "title": "Input Hash",
+            "type": "string"
+          },
+          "management_action_plan_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Management Action Plan Code"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scenario_code": {
+            "title": "Scenario Code",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "stress_stays_above_all_minima": {
+            "title": "Stress Stays Above All Minima",
+            "type": "boolean"
+          },
+          "stressed_car_end_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stressed Car End Pct",
+            "type": "string"
+          },
+          "with_actions_stays_above_all_minima": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "With Actions Stays Above All Minima"
+          }
+        },
+        "required": [
+          "run_id",
+          "reporting_period_id",
+          "scenario_code",
+          "status",
+          "input_hash",
+          "engine_version",
+          "stressed_car_end_pct",
+          "baseline_car_end_pct",
+          "car_erosion_pp",
+          "stress_stays_above_all_minima",
+          "first_breach_year",
+          "capital_gap",
+          "created_at"
+        ],
+        "title": "EnterpriseStressRunSummary",
+        "type": "object"
+      },
+      "EnterpriseStressSummary": {
+        "properties": {
+          "baseline_car_end_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Baseline Car End Pct",
+            "type": "string"
+          },
+          "baseline_lcr_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Baseline Lcr Pct",
+            "type": "string"
+          },
+          "binding_minima": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Binding Minima",
+            "type": "array"
+          },
+          "both_breached": {
+            "title": "Both Breached",
+            "type": "boolean"
+          },
+          "capital_gap": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Capital Gap",
+            "type": "string"
+          },
+          "car_erosion_pp": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Car Erosion Pp",
+            "type": "string"
+          },
+          "first_breach_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Breach Year"
+          },
+          "management_action_plan_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Management Action Plan Code"
+          },
+          "residual_capital_required_after_actions": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Residual Capital Required After Actions"
+          },
+          "scenario_code": {
+            "title": "Scenario Code",
+            "type": "string"
+          },
+          "stress_stays_above_all_minima": {
+            "title": "Stress Stays Above All Minima",
+            "type": "boolean"
+          },
+          "stressed_car_end_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stressed Car End Pct",
+            "type": "string"
+          },
+          "stressed_lcr_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stressed Lcr Pct",
+            "type": "string"
+          },
+          "with_actions_first_breach_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "With Actions First Breach Year"
+          },
+          "with_actions_stays_above_all_minima": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "With Actions Stays Above All Minima"
+          }
+        },
+        "required": [
+          "scenario_code",
+          "stressed_car_end_pct",
+          "baseline_car_end_pct",
+          "car_erosion_pp",
+          "stressed_lcr_pct",
+          "baseline_lcr_pct",
+          "both_breached",
+          "stress_stays_above_all_minima",
+          "first_breach_year",
+          "binding_minima",
+          "capital_gap"
+        ],
+        "title": "EnterpriseStressSummary",
         "type": "object"
       },
       "EntityMapping": {
@@ -16882,6 +17817,66 @@
         "title": "InstitutionProfileRead",
         "type": "object"
       },
+      "InstitutionTypeRead": {
+        "additionalProperties": false,
+        "description": "Institution-type classification resolved from the institution_types\nregistry \u2014 the typed discriminator every future SDI scoping keys off\n(docs/sdi.md \u00a71). ``institution_class`` is the coarse regime axis\n('bank'|'sdi') the threshold register and later capital register key on.",
+        "properties": {
+          "capital_regime": {
+            "title": "Capital Regime",
+            "type": "string"
+          },
+          "default_modules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Default Modules",
+            "type": "array"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "institution_class": {
+            "title": "Institution Class",
+            "type": "string"
+          },
+          "large_exposure_limit_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Large Exposure Limit Pct",
+            "type": "string"
+          },
+          "liquidity_binding": {
+            "title": "Liquidity Binding",
+            "type": "boolean"
+          },
+          "return_family": {
+            "title": "Return Family",
+            "type": "string"
+          },
+          "single_obligor_limit_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Single Obligor Limit Pct",
+            "type": "string"
+          },
+          "type_code": {
+            "title": "Type Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type_code",
+          "display_name",
+          "institution_class",
+          "return_family",
+          "capital_regime",
+          "large_exposure_limit_pct",
+          "single_obligor_limit_pct",
+          "liquidity_binding",
+          "default_modules"
+        ],
+        "title": "InstitutionTypeRead",
+        "type": "object"
+      },
       "IntegrationKeyIssueRequest": {
         "additionalProperties": false,
         "properties": {
@@ -17872,6 +18867,13 @@
       "LiquidityDashboardRead": {
         "additionalProperties": false,
         "properties": {
+          "asf": {
+            "items": {
+              "$ref": "#/components/schemas/LiquidityDashboardLineRead"
+            },
+            "title": "Asf",
+            "type": "array"
+          },
           "bank": {
             "$ref": "#/components/schemas/BankRead"
           },
@@ -17924,6 +18926,13 @@
           "period": {
             "$ref": "#/components/schemas/BankReportingPeriodRead"
           },
+          "rsf": {
+            "items": {
+              "$ref": "#/components/schemas/LiquidityDashboardLineRead"
+            },
+            "title": "Rsf",
+            "type": "array"
+          },
           "stored": {
             "title": "Stored",
             "type": "boolean"
@@ -17952,6 +18961,8 @@
           "hqla_composition",
           "outflows",
           "inflows",
+          "asf",
+          "rsf",
           "trend",
           "validations"
         ],
@@ -18999,6 +20010,10 @@
       "LiveModuleView": {
         "additionalProperties": false,
         "properties": {
+          "calculation_generation": {
+            "title": "Calculation Generation",
+            "type": "integer"
+          },
           "computed_at": {
             "format": "date-time",
             "title": "Computed At",
@@ -19015,6 +20030,10 @@
             ],
             "title": "Computed From Input Hash"
           },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
           "metrics": {
             "additionalProperties": true,
             "title": "Metrics",
@@ -19022,6 +20041,42 @@
           },
           "module": {
             "$ref": "#/components/schemas/LiveModule"
+          },
+          "pipeline_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pipeline Error"
+          },
+          "pipeline_state": {
+            "enum": [
+              "ready",
+              "failed"
+            ],
+            "title": "Pipeline State",
+            "type": "string"
+          },
+          "source_as_of_date": {
+            "format": "date",
+            "title": "Source As Of Date",
+            "type": "string"
+          },
+          "source_fact_period_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Fact Period Id"
           },
           "status": {
             "$ref": "#/components/schemas/LiveStatus"
@@ -19032,7 +20087,13 @@
           "status",
           "metrics",
           "computed_at",
-          "computed_from_input_hash"
+          "computed_from_input_hash",
+          "source_as_of_date",
+          "source_fact_period_id",
+          "engine_version",
+          "calculation_generation",
+          "pipeline_state",
+          "pipeline_error"
         ],
         "title": "LiveModuleView",
         "type": "object"
@@ -19169,12 +20230,25 @@
               }
             ],
             "title": "Reporting Period Id"
+          },
+          "source_as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source As Of Date"
           }
         },
         "required": [
           "bank_id",
           "reporting_period_id",
           "period_label",
+          "source_as_of_date",
           "modules",
           "is_stale",
           "computed_at"
@@ -19213,6 +20287,691 @@
           "password"
         ],
         "title": "LoginRequest",
+        "type": "object"
+      },
+      "MacroModule": {
+        "enum": [
+          "liquidity",
+          "capital",
+          "irr",
+          "fx",
+          "ftp"
+        ],
+        "type": "string"
+      },
+      "MacroPathIn": {
+        "additionalProperties": false,
+        "properties": {
+          "base_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Base Value"
+          },
+          "stress_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Stress Value"
+          },
+          "variable": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Variable",
+            "type": "string"
+          },
+          "year_index": {
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Year Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "variable",
+          "year_index",
+          "base_value",
+          "stress_value"
+        ],
+        "title": "MacroPathIn",
+        "type": "object"
+      },
+      "MacroPathRead": {
+        "additionalProperties": false,
+        "properties": {
+          "base_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Base Value",
+            "type": "string"
+          },
+          "stress_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stress Value",
+            "type": "string"
+          },
+          "variable": {
+            "title": "Variable",
+            "type": "string"
+          },
+          "year_index": {
+            "title": "Year Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "variable",
+          "year_index",
+          "base_value",
+          "stress_value"
+        ],
+        "title": "MacroPathRead",
+        "type": "object"
+      },
+      "MacroScenarioApproval": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "MacroScenarioApproval",
+        "type": "object"
+      },
+      "MacroScenarioCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "code": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "horizon_years": {
+            "default": 3,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Horizon Years",
+            "type": "integer"
+          },
+          "institution_type_applicability": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Type Applicability"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "narrative": {
+            "anyOf": [
+              {
+                "maxLength": 8000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narrative"
+          },
+          "paths": {
+            "items": {
+              "$ref": "#/components/schemas/MacroPathIn"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Paths",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "scenario_type": {
+            "$ref": "#/components/schemas/ScenarioType-Input"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "scenario_type",
+          "paths",
+          "reason"
+        ],
+        "title": "MacroScenarioCreate",
+        "type": "object"
+      },
+      "MacroScenarioListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/MacroScenarioSummaryRead"
+            },
+            "title": "Scenarios",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scenarios",
+          "total"
+        ],
+        "title": "MacroScenarioListRead",
+        "type": "object"
+      },
+      "MacroScenarioRead": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Timestamp"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "bank_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "horizon_years": {
+            "title": "Horizon Years",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "institution_type_applicability": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Type Applicability"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "narrative": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narrative"
+          },
+          "organization_id": {
+            "title": "Organization Id",
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "$ref": "#/components/schemas/MacroPathRead"
+            },
+            "title": "Paths",
+            "type": "array"
+          },
+          "scenario_type": {
+            "$ref": "#/components/schemas/app__schemas__stress__ScenarioType"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ScenarioStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "organization_id",
+          "bank_id",
+          "code",
+          "name",
+          "description",
+          "scenario_type",
+          "severity",
+          "horizon_years",
+          "narrative",
+          "source",
+          "status",
+          "version",
+          "created_by",
+          "approved_by",
+          "approval_timestamp",
+          "institution_type_applicability",
+          "paths",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MacroScenarioRead",
+        "type": "object"
+      },
+      "MacroScenarioSummaryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "bank_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "horizon_years": {
+            "title": "Horizon Years",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path_count": {
+            "title": "Path Count",
+            "type": "integer"
+          },
+          "scenario_type": {
+            "$ref": "#/components/schemas/app__schemas__stress__ScenarioType"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ScenarioStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "code",
+          "name",
+          "scenario_type",
+          "severity",
+          "horizon_years",
+          "status",
+          "version",
+          "path_count",
+          "created_by",
+          "approved_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MacroScenarioSummaryRead",
+        "type": "object"
+      },
+      "MacroScenarioTransition": {
+        "additionalProperties": false,
+        "description": "Reason-carrying body for submit / archive.",
+        "properties": {
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "MacroScenarioTransition",
+        "type": "object"
+      },
+      "MacroScenarioUpdate": {
+        "additionalProperties": false,
+        "description": "Draft-only edit. Any provided ``paths`` REPLACES the full path set.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "horizon_years": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon Years"
+          },
+          "institution_type_applicability": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Type Applicability"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "narrative": {
+            "anyOf": [
+              {
+                "maxLength": 8000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narrative"
+          },
+          "paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MacroPathIn"
+                },
+                "maxItems": 1000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paths"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "scenario_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScenarioType-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "MacroScenarioUpdate",
         "type": "object"
       },
       "ManagementAction": {
@@ -19255,6 +21014,391 @@
           "owner"
         ],
         "title": "ManagementAction",
+        "type": "object"
+      },
+      "ManagementActionPlanApproval": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ManagementActionPlanApproval",
+        "type": "object"
+      },
+      "ManagementActionPlanCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionItemIn"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Actions",
+            "type": "array"
+          },
+          "bank_id": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "code": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "actions",
+          "reason"
+        ],
+        "title": "ManagementActionPlanCreate",
+        "type": "object"
+      },
+      "ManagementActionPlanListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/ManagementActionPlanSummaryRead"
+            },
+            "title": "Plans",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plans",
+          "total"
+        ],
+        "title": "ManagementActionPlanListRead",
+        "type": "object"
+      },
+      "ManagementActionPlanRead": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionItemRead"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "approval_timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Timestamp"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "bank_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "organization_id": {
+            "title": "Organization Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlanStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "organization_id",
+          "bank_id",
+          "code",
+          "name",
+          "description",
+          "status",
+          "version",
+          "created_by",
+          "approved_by",
+          "approval_timestamp",
+          "actions",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ManagementActionPlanRead",
+        "type": "object"
+      },
+      "ManagementActionPlanSummaryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "action_count": {
+            "title": "Action Count",
+            "type": "integer"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "bank_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlanStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "code",
+          "name",
+          "status",
+          "version",
+          "action_count",
+          "created_by",
+          "approved_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ManagementActionPlanSummaryRead",
+        "type": "object"
+      },
+      "ManagementActionPlanTransition": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ManagementActionPlanTransition",
+        "type": "object"
+      },
+      "ManagementActionPlanUpdate": {
+        "additionalProperties": false,
+        "description": "Draft-only edit. Any provided ``actions`` REPLACES the full action set.",
+        "properties": {
+          "actions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ActionItemIn"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actions"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ManagementActionPlanUpdate",
         "type": "object"
       },
       "MappingConfig": {
@@ -20367,6 +22511,16 @@
         ],
         "title": "MeResponse",
         "type": "object"
+      },
+      "MinimumCode": {
+        "enum": [
+          "car",
+          "cet1",
+          "tier1",
+          "leverage",
+          "paid_up"
+        ],
+        "type": "string"
       },
       "NotificationListRead": {
         "additionalProperties": false,
@@ -21909,6 +24063,173 @@
         ],
         "type": "string"
       },
+      "PlanAssumptionsIn": {
+        "additionalProperties": false,
+        "description": "The bank's base-case business plan (the base-leg forecast assumptions).\n\nEvery field is optional; unset fields fall back to the service defaults\n(documented in ``app/services/enterprise_stress.py``). All values are Decimal\npercentages (pp for the securities shift).",
+        "properties": {
+          "cost_to_income_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost To Income Pct"
+          },
+          "credit_loss_rate_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Loss Rate Pct"
+          },
+          "deposit_growth_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Growth Pct"
+          },
+          "dividend_payout_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dividend Payout Pct"
+          },
+          "fee_income_pct_assets": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fee Income Pct Assets"
+          },
+          "fx_depreciation_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Depreciation Pct"
+          },
+          "loan_growth_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loan Growth Pct"
+          },
+          "nim_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nim Pct"
+          },
+          "securities_shift_pp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Securities Shift Pp"
+          },
+          "tax_rate_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Rate Pct"
+          }
+        },
+        "title": "PlanAssumptionsIn",
+        "type": "object"
+      },
+      "PlanStatus": {
+        "enum": [
+          "draft",
+          "pending_approval",
+          "approved",
+          "archived"
+        ],
+        "type": "string"
+      },
       "PlaneAttributionRead": {
         "additionalProperties": false,
         "description": "Provenance + freshness for a served plane (mirrors SourceAttribution).",
@@ -23260,7 +25581,15 @@
                 "historical_cashflows",
                 "historical_financials",
                 "business_units",
-                "institution"
+                "institution",
+                "gl_mapping_bsd7",
+                "subsidiaries",
+                "tariff_schedule",
+                "capital_expenditure",
+                "atm_operations",
+                "remittance_flows",
+                "teller_withdrawals",
+                "interest_accruals"
               ]
             },
             "title": "Reference",
@@ -23422,7 +25751,15 @@
               "historical_cashflows",
               "historical_financials",
               "business_units",
-              "institution"
+              "institution",
+              "gl_mapping_bsd7",
+              "subsidiaries",
+              "tariff_schedule",
+              "capital_expenditure",
+              "atm_operations",
+              "remittance_flows",
+              "teller_withdrawals",
+              "interest_accruals"
             ],
             "title": "Dataset Kind",
             "type": "string"
@@ -25275,6 +27612,68 @@
         "title": "ReportCase",
         "type": "object"
       },
+      "ReportComparisonRead": {
+        "additionalProperties": false,
+        "properties": {
+          "adverse_count": {
+            "title": "Adverse Count",
+            "type": "integer"
+          },
+          "favorable_count": {
+            "title": "Favorable Count",
+            "type": "integer"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ComparisonGroupRead"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "left": {
+            "$ref": "#/components/schemas/ComparisonSideRead"
+          },
+          "mode": {
+            "enum": [
+              "version",
+              "period"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "module": {
+            "enum": [
+              "liquidity",
+              "capital",
+              "irr",
+              "fx",
+              "ftp",
+              "forecast"
+            ],
+            "title": "Module",
+            "type": "string"
+          },
+          "neutral_count": {
+            "title": "Neutral Count",
+            "type": "integer"
+          },
+          "right": {
+            "$ref": "#/components/schemas/ComparisonSideRead"
+          }
+        },
+        "required": [
+          "mode",
+          "module",
+          "left",
+          "right",
+          "groups",
+          "favorable_count",
+          "adverse_count",
+          "neutral_count"
+        ],
+        "title": "ReportComparisonRead",
+        "type": "object"
+      },
       "ReportDecision": {
         "properties": {
           "created_at": {
@@ -25895,12 +28294,14 @@
           "corporate",
           "large_exposures",
           "dbk",
-          "stress"
+          "stress",
+          "bsd"
         ],
         "type": "string"
       },
       "ReturnFrequency": {
         "enum": [
+          "weekly",
           "monthly",
           "quarterly",
           "semiannual",
@@ -26265,8 +28666,23 @@
             "type": "string"
           },
           "run_id": {
-            "format": "uuid",
-            "title": "Run Id",
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "source": {
+            "enum": [
+              "live",
+              "official"
+            ],
+            "title": "Source",
             "type": "string"
           },
           "total_rwa_ghs": {
@@ -26279,6 +28695,7 @@
           "bank_id",
           "reporting_period_id",
           "run_id",
+          "source",
           "credit_rwa_ghs",
           "market_rwa_ghs",
           "operational_rwa_ghs",
@@ -26944,7 +29361,7 @@
             "type": "string"
           },
           "scenario_type": {
-            "$ref": "#/components/schemas/ScenarioType"
+            "$ref": "#/components/schemas/app__schemas__scenarios__ScenarioType"
           },
           "updated_at": {
             "format": "date-time",
@@ -27162,11 +29579,59 @@
         "title": "ScenarioResultRead",
         "type": "object"
       },
-      "ScenarioType": {
+      "ScenarioStatus": {
         "enum": [
-          "baseline",
-          "downside",
-          "custom"
+          "draft",
+          "pending_approval",
+          "approved",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "ScenarioTranslationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "module": {
+            "$ref": "#/components/schemas/MacroModule"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "shocks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Shocks",
+            "type": "object"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ScenarioStatus"
+          }
+        },
+        "required": [
+          "scenario_id",
+          "code",
+          "status",
+          "module",
+          "shocks"
+        ],
+        "title": "ScenarioTranslationRead",
+        "type": "object"
+      },
+      "ScenarioType-Input": {
+        "enum": [
+          "base",
+          "adverse",
+          "historical",
+          "hypothetical",
+          "reverse",
+          "supervisory"
         ],
         "type": "string"
       },
@@ -27441,6 +29906,14 @@
         ],
         "title": "SendBackForCorrectionsRequest",
         "type": "object"
+      },
+      "Severity": {
+        "enum": [
+          "mild",
+          "moderate",
+          "severe"
+        ],
+        "type": "string"
       },
       "ShareholderRights": {
         "enum": [
@@ -28281,6 +30754,13 @@
         ],
         "type": "string"
       },
+      "SizingMode": {
+        "enum": [
+          "fixed",
+          "fill_residual"
+        ],
+        "type": "string"
+      },
       "SnapshotLineChange": {
         "enum": [
           "added",
@@ -28988,6 +31468,479 @@
           }
         },
         "title": "StressScenarioUpdate",
+        "type": "object"
+      },
+      "StressSignoffAttestation": {
+        "additionalProperties": false,
+        "properties": {
+          "board_challenge": {
+            "anyOf": [
+              {
+                "maxLength": 16000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Board Challenge"
+          },
+          "credibility_rationale": {
+            "maxLength": 16000,
+            "minLength": 1,
+            "title": "Credibility Rationale",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "credibility_rationale",
+          "reason"
+        ],
+        "title": "StressSignoffAttestation",
+        "type": "object"
+      },
+      "StressSignoffCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "assumptions_rationale": {
+            "maxLength": 16000,
+            "minLength": 1,
+            "title": "Assumptions Rationale",
+            "type": "string"
+          },
+          "methodology_summary": {
+            "anyOf": [
+              {
+                "maxLength": 16000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Methodology Summary"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scenario_narrative": {
+            "maxLength": 16000,
+            "minLength": 1,
+            "title": "Scenario Narrative",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "scenario_narrative",
+          "assumptions_rationale",
+          "reason"
+        ],
+        "title": "StressSignoffCreate",
+        "type": "object"
+      },
+      "StressSignoffListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "signoffs": {
+            "items": {
+              "$ref": "#/components/schemas/StressSignoffSummary"
+            },
+            "title": "Signoffs",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "signoffs",
+          "total"
+        ],
+        "title": "StressSignoffListRead",
+        "type": "object"
+      },
+      "StressSignoffRead": {
+        "additionalProperties": false,
+        "properties": {
+          "assumptions_rationale": {
+            "title": "Assumptions Rationale",
+            "type": "string"
+          },
+          "attested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attested At"
+          },
+          "attested_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attested By"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "board_challenge": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Board Challenge"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "credibility_rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credibility Rationale"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "methodology_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Methodology Summary"
+          },
+          "organization_id": {
+            "title": "Organization Id",
+            "type": "string"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scenario_code": {
+            "title": "Scenario Code",
+            "type": "string"
+          },
+          "scenario_narrative": {
+            "title": "Scenario Narrative",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StressSignoffStatus"
+          },
+          "stays_above_all_minima": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stays Above All Minima"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "with_actions_stays_above_all_minima": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "With Actions Stays Above All Minima"
+          }
+        },
+        "required": [
+          "id",
+          "organization_id",
+          "bank_id",
+          "run_id",
+          "reporting_period_id",
+          "scenario_code",
+          "status",
+          "version",
+          "scenario_narrative",
+          "assumptions_rationale",
+          "methodology_summary",
+          "board_challenge",
+          "credibility_rationale",
+          "stays_above_all_minima",
+          "with_actions_stays_above_all_minima",
+          "created_by",
+          "submitted_by",
+          "submitted_at",
+          "attested_by",
+          "attested_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "StressSignoffRead",
+        "type": "object"
+      },
+      "StressSignoffStatus": {
+        "enum": [
+          "draft",
+          "pending_attestation",
+          "attested",
+          "withdrawn"
+        ],
+        "type": "string"
+      },
+      "StressSignoffSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "attested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attested At"
+          },
+          "attested_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attested By"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scenario_code": {
+            "title": "Scenario Code",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StressSignoffStatus"
+          },
+          "stays_above_all_minima": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stays Above All Minima"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "reporting_period_id",
+          "scenario_code",
+          "status",
+          "version",
+          "stays_above_all_minima",
+          "attested_by",
+          "attested_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "StressSignoffSummary",
+        "type": "object"
+      },
+      "StressSignoffTransition": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "StressSignoffTransition",
+        "type": "object"
+      },
+      "StressSignoffUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "assumptions_rationale": {
+            "anyOf": [
+              {
+                "maxLength": 16000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumptions Rationale"
+          },
+          "methodology_summary": {
+            "anyOf": [
+              {
+                "maxLength": 16000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Methodology Summary"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "scenario_narrative": {
+            "anyOf": [
+              {
+                "maxLength": 16000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario Narrative"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "StressSignoffUpdate",
         "type": "object"
       },
       "SubmissionEventListRead": {
@@ -29826,6 +32779,14 @@
         "title": "TranslationFailureRead",
         "type": "object"
       },
+      "TriggerKind": {
+        "enum": [
+          "always",
+          "on_breach",
+          "on_severity"
+        ],
+        "type": "string"
+      },
       "TypedSignatureFont": {
         "enum": [
           "caveat",
@@ -30661,6 +33622,25 @@
       },
       "app__schemas__financial_workspace__FinancialString120__2": {
         "maxLength": 120,
+        "type": "string"
+      },
+      "app__schemas__scenarios__ScenarioType": {
+        "enum": [
+          "baseline",
+          "downside",
+          "custom"
+        ],
+        "type": "string"
+      },
+      "app__schemas__stress__ScenarioType": {
+        "enum": [
+          "base",
+          "adverse",
+          "historical",
+          "hypothetical",
+          "reverse",
+          "supervisory"
+        ],
         "type": "string"
       }
     },
@@ -37465,6 +40445,1263 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/enterprise-stress/latest": {
+      "get": {
+        "operationId": "getLatestEnterpriseStress",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reporting_period_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Reporting Period Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseStressRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Latest Enterprise Stress",
+        "tags": [
+          "enterprise-stress"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/enterprise-stress/runs": {
+      "get": {
+        "description": "The run registry: full enterprise-stress run history (docs/stress.md \u00a74.5).",
+        "operationId": "listEnterpriseStressRuns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reporting_period_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reporting Period Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EnterpriseStressRunSummary"
+                  },
+                  "title": "Response Listenterprisestressruns",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Enterprise Stress Runs",
+        "tags": [
+          "enterprise-stress"
+        ]
+      },
+      "post": {
+        "operationId": "runEnterpriseStress",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnterpriseStressRunCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseStressRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Enterprise Stress",
+        "tags": [
+          "enterprise-stress"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/enterprise-stress/runs/{run_id}": {
+      "get": {
+        "description": "Re-open one immutable enterprise-stress run by id (docs/stress.md \u00a74.5).",
+        "operationId": "getEnterpriseStressRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseStressRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Enterprise Stress Run",
+        "tags": [
+          "enterprise-stress"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/enterprise-stress/signoffs": {
+      "get": {
+        "operationId": "listEnterpriseStressSignoffs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reporting_period_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reporting Period Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StressSignoffStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StressSignoffListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Signoffs",
+        "tags": [
+          "enterprise-stress-signoff"
+        ]
+      },
+      "post": {
+        "operationId": "createEnterpriseStressSignoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StressSignoffCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StressSignoffRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Signoff",
+        "tags": [
+          "enterprise-stress-signoff"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}": {
+      "get": {
+        "operationId": "getEnterpriseStressSignoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "signoff_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Signoff Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StressSignoffRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Signoff",
+        "tags": [
+          "enterprise-stress-signoff"
+        ]
+      },
+      "patch": {
+        "operationId": "updateEnterpriseStressSignoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "signoff_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Signoff Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StressSignoffUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StressSignoffRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Signoff",
+        "tags": [
+          "enterprise-stress-signoff"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}/attest": {
+      "post": {
+        "operationId": "attestEnterpriseStressSignoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "signoff_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Signoff Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StressSignoffAttestation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StressSignoffRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Attest Signoff",
+        "tags": [
+          "enterprise-stress-signoff"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}/submit": {
+      "post": {
+        "operationId": "submitEnterpriseStressSignoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "signoff_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Signoff Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StressSignoffTransition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StressSignoffRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit Signoff",
+        "tags": [
+          "enterprise-stress-signoff"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}/withdraw": {
+      "post": {
+        "operationId": "withdrawEnterpriseStressSignoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "signoff_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Signoff Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StressSignoffTransition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StressSignoffRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Withdraw Signoff",
+        "tags": [
+          "enterprise-stress-signoff"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/examiner/documentation-package": {
       "get": {
         "operationId": "getExaminerDocumentationPackage",
@@ -41926,11 +46163,18 @@
           {
             "in": "query",
             "name": "reporting_period_id",
-            "required": true,
+            "required": false,
             "schema": {
-              "format": "uuid",
-              "title": "Reporting Period Id",
-              "type": "string"
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reporting Period Id"
             }
           }
         ],
@@ -48834,12 +53078,16 @@
             }
           },
           {
+            "description": "pdf = values-only submission package (the BoG filing format); xlsx / xlsx_official = sealed values-only Excel (governance twin of the PDF); xlsx_working = ALM/Finance working copy with the template's live formulas (official BoG BSD forms only; never filed); csv = generic sections.",
             "in": "query",
             "name": "kind",
             "required": true,
             "schema": {
+              "description": "pdf = values-only submission package (the BoG filing format); xlsx / xlsx_official = sealed values-only Excel (governance twin of the PDF); xlsx_working = ALM/Finance working copy with the template's live formulas (official BoG BSD forms only; never filed); csv = generic sections.",
               "enum": [
                 "xlsx",
+                "xlsx_official",
+                "xlsx_working",
                 "csv",
                 "pdf"
               ],
@@ -51584,6 +55832,176 @@
         "summary": "Get Bank Period Facts",
         "tags": [
           "banks"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/reports/comparison": {
+      "get": {
+        "description": "Line-item delta over two immutable runs of the same module, with favorability.\n\n``version`` mode compares two run versions of one reporting period (an\noriginal filing vs a resubmission); ``period`` mode compares the latest run\nof two reporting periods. Each numeric line carries its absolute and\npercentage delta, direction, and a favorable/adverse/neutral judgment from the\ngoverned favorable-direction registry. Returns 404 when a run, period or\nversion is missing, and 422 when the two sides are not comparable.",
+        "operationId": "compareReports",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "'version' (same period, two run versions) or 'period' (two periods).",
+            "in": "query",
+            "name": "mode",
+            "required": true,
+            "schema": {
+              "description": "'version' (same period, two run versions) or 'period' (two periods).",
+              "enum": [
+                "version",
+                "period"
+              ],
+              "title": "Mode",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The engine module / return family to compare.",
+            "in": "query",
+            "name": "module",
+            "required": true,
+            "schema": {
+              "description": "The engine module / return family to compare.",
+              "enum": [
+                "liquidity",
+                "capital",
+                "irr",
+                "fx",
+                "ftp",
+                "forecast"
+              ],
+              "title": "Module",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Baseline side: a run id (version mode) or period id (period mode).",
+            "in": "query",
+            "name": "left",
+            "required": true,
+            "schema": {
+              "description": "Baseline side: a run id (version mode) or period id (period mode).",
+              "format": "uuid",
+              "title": "Left",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comparison side: a run id (version mode) or period id (period mode).",
+            "in": "query",
+            "name": "right",
+            "required": true,
+            "schema": {
+              "description": "Comparison side: a run id (version mode) or period id (period mode).",
+              "format": "uuid",
+              "title": "Right",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Scenario whose run is compared in period mode (default 'baseline').",
+            "in": "query",
+            "name": "scenario_code",
+            "required": false,
+            "schema": {
+              "default": "baseline",
+              "description": "Scenario whose run is compared in period mode (default 'baseline').",
+              "maxLength": 40,
+              "minLength": 1,
+              "title": "Scenario Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportComparisonRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Compare Reports",
+        "tags": [
+          "regulatory-reporting"
         ]
       }
     },
@@ -62344,6 +66762,1640 @@
         "summary": "Walk Lineage",
         "tags": [
           "ingestion"
+        ]
+      }
+    },
+    "/api/v1/macro-scenarios": {
+      "get": {
+        "operationId": "listMacroScenarios",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bank_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bank Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenario_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScenarioType-Input"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scenario Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScenarioStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Archived",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MacroScenarioListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Macro Scenarios",
+        "tags": [
+          "macro-scenarios"
+        ]
+      },
+      "post": {
+        "operationId": "createMacroScenario",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MacroScenarioCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MacroScenarioRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Macro Scenario",
+        "tags": [
+          "macro-scenarios"
+        ]
+      }
+    },
+    "/api/v1/macro-scenarios/{scenario_id}": {
+      "get": {
+        "operationId": "getMacroScenario",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MacroScenarioRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Macro Scenario",
+        "tags": [
+          "macro-scenarios"
+        ]
+      },
+      "patch": {
+        "operationId": "updateMacroScenario",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MacroScenarioUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MacroScenarioRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Macro Scenario",
+        "tags": [
+          "macro-scenarios"
+        ]
+      }
+    },
+    "/api/v1/macro-scenarios/{scenario_id}/approve": {
+      "post": {
+        "operationId": "approveMacroScenario",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MacroScenarioApproval"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MacroScenarioRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Macro Scenario",
+        "tags": [
+          "macro-scenarios"
+        ]
+      }
+    },
+    "/api/v1/macro-scenarios/{scenario_id}/archive": {
+      "post": {
+        "operationId": "archiveMacroScenario",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MacroScenarioTransition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MacroScenarioRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Archive Macro Scenario",
+        "tags": [
+          "macro-scenarios"
+        ]
+      }
+    },
+    "/api/v1/macro-scenarios/{scenario_id}/submit": {
+      "post": {
+        "operationId": "submitMacroScenario",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MacroScenarioTransition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MacroScenarioRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit Macro Scenario",
+        "tags": [
+          "macro-scenarios"
+        ]
+      }
+    },
+    "/api/v1/macro-scenarios/{scenario_id}/translation/{module}": {
+      "get": {
+        "operationId": "translateMacroScenario",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "module",
+            "required": true,
+            "schema": {
+              "enum": [
+                "liquidity",
+                "capital",
+                "irr",
+                "fx",
+                "ftp"
+              ],
+              "title": "Module",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioTranslationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Translate Macro Scenario",
+        "tags": [
+          "macro-scenarios"
+        ]
+      }
+    },
+    "/api/v1/management-action-plans": {
+      "get": {
+        "operationId": "listManagementActionPlans",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bank_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bank Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PlanStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Archived",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagementActionPlanListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Management Action Plans",
+        "tags": [
+          "management-action-plans"
+        ]
+      },
+      "post": {
+        "operationId": "createManagementActionPlan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagementActionPlanCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagementActionPlanRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Management Action Plan",
+        "tags": [
+          "management-action-plans"
+        ]
+      }
+    },
+    "/api/v1/management-action-plans/{plan_id}": {
+      "get": {
+        "operationId": "getManagementActionPlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagementActionPlanRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Management Action Plan",
+        "tags": [
+          "management-action-plans"
+        ]
+      },
+      "patch": {
+        "operationId": "updateManagementActionPlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagementActionPlanUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagementActionPlanRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Management Action Plan",
+        "tags": [
+          "management-action-plans"
+        ]
+      }
+    },
+    "/api/v1/management-action-plans/{plan_id}/approve": {
+      "post": {
+        "operationId": "approveManagementActionPlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagementActionPlanApproval"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagementActionPlanRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Management Action Plan",
+        "tags": [
+          "management-action-plans"
+        ]
+      }
+    },
+    "/api/v1/management-action-plans/{plan_id}/archive": {
+      "post": {
+        "operationId": "archiveManagementActionPlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagementActionPlanTransition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagementActionPlanRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Archive Management Action Plan",
+        "tags": [
+          "management-action-plans"
+        ]
+      }
+    },
+    "/api/v1/management-action-plans/{plan_id}/submit": {
+      "post": {
+        "operationId": "submitManagementActionPlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagementActionPlanTransition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagementActionPlanRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit Management Action Plan",
+        "tags": [
+          "management-action-plans"
         ]
       }
     },

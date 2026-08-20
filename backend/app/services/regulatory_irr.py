@@ -95,6 +95,7 @@ from app.schemas.regulatory_liquidity import (
 from app.services import jurisdictions, market_data_sources
 from app.services.audit import record_event
 from app.services.live_block import live_block
+from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
 from app.services.live_types import (
     LiveModuleResult,
     findings_from_validations,
@@ -188,17 +189,17 @@ def get_irr_dashboard(
 ) -> IrrDashboardRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
-    if not periods:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Reporting period not found."
-        )
     period = (
-        periods[-1]
+        current_fact_period_or_409(db, ctx, bank, MODULE_IRR)
         if reporting_period_id is None
         else _get_period_or_404(db, ctx, bank, reporting_period_id)
     )
 
-    latest_run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+    latest_run = (
+        _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+        if reporting_period_id is not None
+        else None
+    )
     if latest_run is not None:
         metrics = _metrics_from_run(latest_run)
         gap_table = _gap_table_from_run(latest_run)
@@ -239,7 +240,7 @@ def get_irr_dashboard(
         eve_scenarios=eve_scenarios,
         trend=_build_trend(db, ctx, bank, periods),
         validations=validations,
-        live=live_block(db, ctx, bank.id, period.id, MODULE_IRR),
+        live=live_block(db, ctx, bank.id, MODULE_IRR),
     )
 
 
@@ -350,6 +351,7 @@ def _run_analysis(  # noqa: PLR0913
     period: BankReportingPeriod,
     facts: list[BankFinancialFact],
     active: _IrrParams | None,
+    tier1: Decimal | None = None,
 ) -> _IrrAnalysis:
     if not facts:
         raise IrrRunError(
@@ -363,7 +365,7 @@ def _run_analysis(  # noqa: PLR0913
             "Required IRR parameters (base curve, scenario shocks, or limits) are not configured.",
             None,
         )
-    tier1 = _load_tier1(db, ctx, bank, period)
+    tier1 = tier1 if tier1 is not None else _load_tier1(db, ctx, bank, period)
     if tier1 <= _ZERO:
         raise IrrRunError(
             "missing_parameter",
@@ -1032,9 +1034,25 @@ def current_input_hash(
 def compute_live(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> LiveModuleResult:
-    """Cheap baseline live view — reuses the dashboard's unstored-branch path
-    and creates no RegulatoryRun."""
-    analysis = _compute_inline(db, ctx, bank, period)
+    """Compute the baseline live view from current facts without a RegulatoryRun."""
+    current = load_current_facts(
+        db, ctx, bank, (*_IRR_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP)
+    )
+    facts = [fact for fact in current.facts if fact.fact_group in _IRR_FACT_GROUPS]
+    active = _load_irr_params_or_none(db, ctx, bank, current.source_as_of_date)
+    analysis = _run_analysis(
+        db,
+        ctx,
+        bank,
+        period,
+        facts,
+        active,
+        tier1=_tier1_from_facts(current.facts),
+    )
+    snapshot = current_snapshot(
+        _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active),
+        current.source_as_of_date,
+    )
     eve = analysis.eve
     metrics = {
         "eve_base_ghs": str(eve.base_eve),
@@ -1050,8 +1068,9 @@ def compute_live(
     return LiveModuleResult(
         metrics=metrics,
         status=status,
-        input_hash=current_input_hash(db, ctx, bank, period),
+        input_hash=_snapshot_hash(snapshot),
         findings=findings,
+        source_as_of_date=current.source_as_of_date,
     )
 
 
@@ -1175,6 +1194,10 @@ def _load_tier1(
             )
         )
     )
+    return _tier1_from_facts(components)
+
+
+def _tier1_from_facts(facts: list[BankFinancialFact]) -> Decimal:
     capital_facts = [
         CapitalFact(
             fact_group=_CAPITAL_COMPONENT_GROUP,
@@ -1183,7 +1206,8 @@ def _load_tier1(
             capital_tier=fact.capital_tier,
             is_deduction=fact.is_deduction,
         )
-        for fact in components
+        for fact in facts
+        if fact.fact_group == _CAPITAL_COMPONENT_GROUP
     ]
     return tier1_capital(capital_facts)
 

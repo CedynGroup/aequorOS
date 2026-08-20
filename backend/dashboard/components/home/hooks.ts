@@ -109,13 +109,24 @@ export function useEffectivePeriod(): EffectivePeriodResult {
     },
   });
 
-  if (!bank || !period) {
+  if (!bank) {
     return {
       period: null,
       selectedPeriod: null,
       isFallback: false,
       isResolving: true,
       isEmpty: false,
+      error: null,
+    };
+  }
+
+  if (!period) {
+    return {
+      period: null,
+      selectedPeriod: null,
+      isFallback: false,
+      isResolving: false,
+      isEmpty: true,
       error: null,
     };
   }

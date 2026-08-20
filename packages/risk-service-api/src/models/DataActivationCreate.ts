@@ -30,7 +30,7 @@ export interface DataActivationCreate {
    */
   reason: string;
   /**
-   *
+   * Compatibility-only: mint immutable official calculation runs. Never required for live Treasury/ALM refresh.
    * @type {boolean}
    * @memberof DataActivationCreate
    */

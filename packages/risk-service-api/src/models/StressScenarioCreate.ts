@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { SeverityFactorsAnyOfValue } from "./SeverityFactorsAnyOfValue";
+import {
+  SeverityFactorsAnyOfValueFromJSON,
+  SeverityFactorsAnyOfValueFromJSONTyped,
+  SeverityFactorsAnyOfValueToJSON,
+  SeverityFactorsAnyOfValueToJSONTyped,
+} from "./SeverityFactorsAnyOfValue";
 import type { Description1 } from "./Description1";
 import {
   Description1FromJSON,
@@ -18,13 +25,6 @@ import {
   Description1ToJSON,
   Description1ToJSONTyped,
 } from "./Description1";
-import type { HaircutsValue } from "./HaircutsValue";
-import {
-  HaircutsValueFromJSON,
-  HaircutsValueFromJSONTyped,
-  HaircutsValueToJSON,
-  HaircutsValueToJSONTyped,
-} from "./HaircutsValue";
 
 /**
  *
@@ -52,10 +52,10 @@ export interface StressScenarioCreate {
   name: string;
   /**
    *
-   * @type {{ [key: string]: HaircutsValue; }}
+   * @type {{ [key: string]: SeverityFactorsAnyOfValue; }}
    * @memberof StressScenarioCreate
    */
-  shocks: { [key: string]: HaircutsValue };
+  shocks: { [key: string]: SeverityFactorsAnyOfValue };
 }
 
 /**
@@ -89,7 +89,7 @@ export function StressScenarioCreateFromJSONTyped(
         ? undefined
         : Description1FromJSON(json["description"]),
     name: json["name"],
-    shocks: mapValues(json["shocks"], HaircutsValueFromJSON),
+    shocks: mapValues(json["shocks"], SeverityFactorsAnyOfValueFromJSON),
   };
 }
 
@@ -109,6 +109,6 @@ export function StressScenarioCreateToJSONTyped(
     code: value["code"],
     description: Description1ToJSON(value["description"]),
     name: value["name"],
-    shocks: mapValues(value["shocks"], HaircutsValueToJSON),
+    shocks: mapValues(value["shocks"], SeverityFactorsAnyOfValueToJSON),
   };
 }

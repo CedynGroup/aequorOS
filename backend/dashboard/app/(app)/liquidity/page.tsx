@@ -67,11 +67,10 @@ function lineColumns(rateHeader: string, weightedHeader: string): Column<LineRow
 }
 
 export default function LiquidityCockpit() {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const dashboard = useLiquidityDashboard(bankId, periodId);
+  const dashboard = useLiquidityDashboard(bankId);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
 
   const data = dashboard.data;

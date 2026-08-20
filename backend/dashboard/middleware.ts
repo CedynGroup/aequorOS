@@ -36,6 +36,6 @@ export default async function middleware(req: NextRequest, event: NextFetchEvent
 // exists), and static assets.
 export const config = {
   matcher: [
-    '/((?!login|inspect|api/auth|api/impersonation|_next/static|_next/image|favicon.ico|icon.svg).*)',
+    '/((?!login|inspect|api/auth|api/impersonation|_next/static|_next/image|branding|favicon.ico|icon.svg).*)',
   ],
 };

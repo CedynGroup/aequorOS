@@ -110,6 +110,8 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryValidationRead,
 )
 from app.services.audit import record_event
+from app.services.live_state import current_snapshot, load_current_facts
+from app.services.live_types import LiveModuleResult, findings_from_validations, worst_status
 from app.services.params import get_active_params
 
 ENGINE_VERSION = "regulatory-forecasting-v1.0.0"
@@ -276,6 +278,70 @@ def create_forecast_run(
             _persist_failure(db, ctx, run_id, _run_error(exc))
     db.expire_all()
     return _read_forecast_run(db, _run_or_404(db, ctx, bank.id, run_id, module=MODULE_FORECAST))
+
+
+def compute_live(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> LiveModuleResult:
+    """Compute the current five-year baseline without creating a RegulatoryRun.
+
+    Saved scenarios and official forecasts remain immutable runs. This function
+    is intentionally the live plane's only forecast entry point.
+    """
+    current = load_current_facts(db, ctx, bank, _FORECAST_FACT_GROUPS)
+    facts = current.facts
+    active = _load_active_params(db, ctx, bank, current.source_as_of_date)
+    presets = _load_presets(db, ctx, bank, current.source_as_of_date)
+    assumptions, resolution_error = _resolve_or_defer(presets, BASE_SCENARIO, None)
+    if assumptions is None:
+        raise resolution_error or _missing_assumptions_error()
+    params = _engine_params(active)
+    projection = project(
+        _engine_facts_or_error(facts, period),
+        params,
+        assumptions,
+        5,
+        period_labels=_live_period_labels(current.source_as_of_date, 5),
+    )
+    summary = projection.summary
+    validations = _validation_rows(summary, params)
+    statuses = (
+        classify_capital_ratio(summary.year5_car_pct, params.capital.car_min_pct),
+        classify_ratio(
+            summary.year5_lcr_pct,
+            params.liquidity.lcr_min_pct,
+            params.liquidity.lcr_amber_floor_pct,
+        ),
+        classify_ratio(
+            summary.year5_nsfr_pct,
+            params.liquidity.nsfr_min_pct,
+            params.liquidity.nsfr_amber_floor_pct,
+        ),
+    )
+    module_status = worst_status(*statuses)
+    snapshot = current_snapshot(_build_snapshot(
+        bank,
+        period,
+        module=MODULE_FORECAST,
+        scenario_code=BASE_SCENARIO,
+        facts=facts,
+        active=active,
+        assumptions=assumptions,
+        overrides=None,
+        horizon_years=5,
+    ), current.source_as_of_date)
+    return LiveModuleResult(
+        metrics={
+            **{field: str(getattr(summary, field)) for field in _SUMMARY_FIELDS},
+            "assumptions": _assumptions_payload(projection.assumptions),
+            "path": [_year_payload(row) for row in projection.years],
+        },
+        status=module_status,
+        input_hash=_snapshot_hash(snapshot),
+        engine_version=ENGINE_VERSION,
+        findings=findings_from_validations(validations, module_status),
+        source_as_of_date=current.source_as_of_date,
+    )
 
 
 def list_forecast_runs(
@@ -924,6 +990,13 @@ def _period_labels(period: BankReportingPeriod, years: int = PROJECTION_YEARS) -
     end = period.period_end
     return [period.label] + [
         f"{end.year + offset:04d}-{end.month:02d}" for offset in range(1, years + 1)
+    ]
+
+
+def _live_period_labels(as_of_date: date, years: int = PROJECTION_YEARS) -> list[str]:
+    return [f"{as_of_date.year:04d}-{as_of_date.month:02d}"] + [
+        f"{as_of_date.year + offset:04d}-{as_of_date.month:02d}"
+        for offset in range(1, years + 1)
     ]
 
 

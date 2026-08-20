@@ -476,6 +476,7 @@ def _tenant_row(  # noqa: PLR0913 - a row is the join of these seven sources
         jurisdiction_code=bank.jurisdiction_code if bank else None,
         currency=bank.currency if bank else None,
         license_type=bank.license_type if bank else None,
+        institution_type=bank.institution_type if bank else None,
         bank_created_at=bank.created_at if bank else None,
         period_count=period_count or 0,
         latest_period_end=latest_period_end,

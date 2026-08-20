@@ -1,7 +1,8 @@
 """The live cross-module view plus the on-demand refresh / official-run buttons.
 
-``get_live_summary`` is a single cheap read of the upserted ``live_metrics``
-rows for a bank's latest period, tagged with a freshness ``is_stale`` flag.
+``get_live_summary`` is a cheap read of the bank/module ``live_metrics`` rows.
+The optional source fact period is provenance for the current canonical
+materialisation, never an identity or a user-facing reporting prerequisite.
 ``refresh_bank_data`` and ``mint_official_run`` enqueue the corresponding jobs
 immediately and return the job id to poll via ``GET /jobs/{id}``.
 """
@@ -54,24 +55,14 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _latest_period(db, ctx, bank)
-    if period is None:
-        return LiveSummaryRead(
-            bank_id=bank.id,
-            reporting_period_id=None,
-            period_label=None,
-            modules=[],
-            is_stale=False,
-            computed_at=None,
-        )
-
-    _ensure_live_current(db, ctx, bank, period)
+    if period is not None:
+        _ensure_live_current(db, ctx, bank, period)
 
     rows = list(
         db.scalars(
             select(LiveMetric).where(
                 LiveMetric.organization_id == ctx.organization_id,
                 LiveMetric.bank_id == bank.id,
-                LiveMetric.reporting_period_id == period.id,
             )
         )
     )
@@ -83,14 +74,21 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
             metrics=row.metrics,
             computed_at=row.computed_at,
             computed_from_input_hash=row.computed_from_input_hash,
+            source_as_of_date=row.source_as_of_date,
+            source_fact_period_id=row.source_fact_period_id,
+            engine_version=row.engine_version,
+            calculation_generation=row.calculation_generation,
+            pipeline_state=row.pipeline_state,  # type: ignore[arg-type]
+            pipeline_error=row.pipeline_error,
         )
         for row in rows
     ]
     computed_at = max((row.computed_at for row in rows), default=None)
     return LiveSummaryRead(
         bank_id=bank.id,
-        reporting_period_id=period.id,
-        period_label=period.label,
+        reporting_period_id=period.id if period is not None else None,
+        period_label=period.label if period is not None else None,
+        source_as_of_date=max((row.source_as_of_date for row in rows), default=None),
         modules=modules,
         is_stale=False,
         computed_at=computed_at,
@@ -116,7 +114,6 @@ def _ensure_live_current(
             select(LiveMetric).where(
                 LiveMetric.organization_id == ctx.organization_id,
                 LiveMetric.bank_id == bank.id,
-                LiveMetric.reporting_period_id == period.id,
             )
         )
     }

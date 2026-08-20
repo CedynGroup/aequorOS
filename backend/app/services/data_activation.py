@@ -1,10 +1,11 @@
-"""Data Engine activation: derive module facts, then recompute all six modules.
+"""Legacy Data Engine activation: derive facts and optionally official runs.
 
 The activation is the bridge between Slice A (canonical ingestion) and the
-regulatory modules: it derives the ``BankFinancialFact`` set for the requested
-as-of date (see ``app.services.fact_derivation``) and then, unless asked not
 to, runs every module's full scenario batch for the new period plus a base
-balance-sheet forecast.
+regulatory modules: it derives the ``BankFinancialFact`` set for the requested
+as-of date (see ``app.services.fact_derivation``). Live calculation is owned by
+the ingestion-triggered pipeline; the retained ``run_calculations`` switch is
+an explicit backwards-compatible request to mint immutable official snapshots.
 
 Failure semantics are deliberately partial: the derivation must succeed (a 409
 is raised when the canonical state cannot support one), but each module

@@ -32,29 +32,28 @@ from app.models import (
     LiveFinding,
     LiveMetric,
     LiveMetricSnapshot,
-    RegulatoryRun,
     User,
 )
 from app.services import (
     data_activation,
     implied_rating,
     regulatory_capital,
+    regulatory_forecasting,
     regulatory_ftp,
     regulatory_fx,
     regulatory_irr,
     regulatory_liquidity,
 )
 from app.services.audit import record_event
-from app.services.fact_derivation import DerivationError, derive_facts
+from app.services.fact_derivation import DerivationError, derive_current_facts, derive_facts
 from app.services.live_types import LiveFindingSpec, LiveModuleResult
 
 REFRESH_EVENT = "bank_data.refreshed"
 OFFICIAL_EVENT = "official_run.completed"
 FORECAST_MODULE = "forecast"
 
-# Modules with a cheap inline compute path (no engine run persisted). Forecast is
-# excluded: it is expensive (LSTM) and inherently official-run-based, so the live
-# forecast row reflects the latest immutable forecast run instead.
+# Modules with a current canonical-data compute path. No function here writes a
+# RegulatoryRun: official snapshots are created only by ``run_official``.
 _ComputeLive = Callable[[Session, TenantContext, Bank, BankReportingPeriod], LiveModuleResult]
 _CHEAP_MODULES: tuple[tuple[str, _ComputeLive], ...] = (
     ("liquidity", regulatory_liquidity.compute_live),
@@ -63,6 +62,7 @@ _CHEAP_MODULES: tuple[tuple[str, _ComputeLive], ...] = (
     ("fx", regulatory_fx.compute_live),
     ("ftp", regulatory_ftp.compute_live),
     ("rating", implied_rating.compute_live),
+    ("forecast", regulatory_forecasting.compute_live),
 )
 
 
@@ -99,21 +99,34 @@ def recompute_modules(
         try:
             result = compute(session, ctx, bank, period)
             _upsert_live_metric(
-                session, ctx, bank, period, module, result.metrics, result.status, result.input_hash
+                session,
+                ctx,
+                bank,
+                period,
+                module,
+                result.metrics,
+                result.status,
+                result.input_hash,
+                result.engine_version,
+                result.source_as_of_date,
             )
-            _reconcile_findings(session, ctx, bank, period, module, result.findings)
+            _reconcile_findings(
+                session,
+                ctx,
+                bank,
+                period,
+                module,
+                result.findings,
+                result.source_as_of_date,
+            )
             session.commit()
             modules_ok.append(module)
         except Exception as exc:  # noqa: BLE001 - partial success is the contract
             session.rollback()
-            modules_failed[module] = str(exc) or type(exc).__name__
-
-    try:
-        if _refresh_forecast_live(session, ctx, bank, period):
+            message = str(exc) or type(exc).__name__
+            modules_failed[module] = message
+            _upsert_live_failure(session, ctx, bank, period, module, message)
             session.commit()
-            modules_ok.append(FORECAST_MODULE)
-    except Exception:  # noqa: BLE001 - forecast reflection is best-effort
-        session.rollback()
 
     return modules_ok, modules_failed
 
@@ -121,12 +134,13 @@ def recompute_modules(
 def recompute_live(
     session: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> RecomputeOutcome:
-    """Full cheap-tier recompute: derive facts from current canonical state THEN
-    recompute every module. The heavy path — run by the background refresh job
-    (``run_refresh``, ingestion-triggered), NOT on the read path. Idempotent.
+    """Full cheap-tier recompute from current canonical state.
+
+    The live materialisation is independent of the historical fact plane;
+    only explicit official runs derive period-keyed ``BankFinancialFact`` rows.
     """
     try:
-        derivation = derive_facts(session, ctx, bank.id, as_of)
+        derive_current_facts(session, ctx, bank.id, as_of)
     except DerivationError as exc:
         session.rollback()
         if exc.code == "no_canonical_data":
@@ -135,7 +149,7 @@ def recompute_live(
         raise
     session.commit()
 
-    period = _get_period(session, ctx, bank, derivation.reporting_period_id)
+    period = _ensure_live_period(session, ctx, bank, as_of)
     modules_ok, modules_failed = recompute_modules(session, ctx, bank, period)
     return RecomputeOutcome(period, modules_ok, modules_failed, None)
 
@@ -221,38 +235,6 @@ def run_official(session: Session, job: Job) -> None:
     }
 
 
-def _refresh_forecast_live(
-    session: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
-) -> bool:
-    """Reflect the latest succeeded official forecast run into a live row.
-
-    Forecast has no cheap inline path, so its live view mirrors the newest
-    immutable forecast run for the period. Returns False when none exists yet.
-    """
-    run = session.scalar(
-        select(RegulatoryRun)
-        .where(
-            RegulatoryRun.organization_id == ctx.organization_id,
-            RegulatoryRun.bank_id == bank.id,
-            RegulatoryRun.reporting_period_id == period.id,
-            RegulatoryRun.module == FORECAST_MODULE,
-            RegulatoryRun.status == "succeeded",
-        )
-        .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
-        .limit(1)
-    )
-    if run is None:
-        return False
-    metrics = {
-        key: value
-        for key, value in run.metrics.items()
-        if isinstance(value, (str, int, float, bool))
-    }
-    metrics["official_run_id"] = str(run.id)
-    _upsert_live_metric(session, ctx, bank, period, FORECAST_MODULE, metrics, "na", run.input_hash)
-    return True
-
-
 def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
     session: Session,
     ctx: TenantContext,
@@ -262,12 +244,13 @@ def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
     metrics: dict[str, Any],
     status: str,
     input_hash: str | None,
+    engine_version: str | None = None,
+    source_as_of_date: date | None = None,
 ) -> None:
     existing = session.scalar(
         select(LiveMetric).where(
             LiveMetric.organization_id == ctx.organization_id,
             LiveMetric.bank_id == bank.id,
-            LiveMetric.reporting_period_id == period.id,
             LiveMetric.module == module,
         )
     )
@@ -277,11 +260,16 @@ def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
             LiveMetric(
                 organization_id=ctx.organization_id,
                 bank_id=bank.id,
-                reporting_period_id=period.id,
+                source_fact_period_id=None,
+                source_as_of_date=source_as_of_date or period.period_end,
                 module=module,
                 metrics=metrics,
                 status=status,
                 computed_from_input_hash=input_hash,
+                engine_version=engine_version or f"live-{module}",
+                calculation_generation=1,
+                pipeline_state="ready",
+                pipeline_error=None,
                 computed_at=now,
             )
         )
@@ -289,8 +277,64 @@ def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
         existing.metrics = metrics
         existing.status = status
         existing.computed_from_input_hash = input_hash
+        existing.source_fact_period_id = None
+        existing.source_as_of_date = source_as_of_date or period.period_end
+        existing.engine_version = engine_version or f"live-{module}"
+        existing.calculation_generation += 1
+        existing.pipeline_state = "ready"
+        existing.pipeline_error = None
         existing.computed_at = now
     _upsert_live_snapshot(session, ctx, bank, period, module, metrics, status, now)
+    session.flush()
+
+
+def _upsert_live_failure(
+    session: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    module: str,
+    error: str,
+) -> None:
+    """Expose a failed module refresh without altering its last good metric.
+
+    The current calculation is not fresh, so callers get an explicit failed
+    state and diagnostic rather than silently reading an old value as current.
+    """
+    existing = session.scalar(
+        select(LiveMetric).where(
+            LiveMetric.organization_id == ctx.organization_id,
+            LiveMetric.bank_id == bank.id,
+            LiveMetric.module == module,
+        )
+    )
+    now = utc_now()
+    if existing is None:
+        session.add(
+            LiveMetric(
+                organization_id=ctx.organization_id,
+                bank_id=bank.id,
+                source_fact_period_id=None,
+                source_as_of_date=period.period_end,
+                module=module,
+                metrics={},
+                status="na",
+                computed_from_input_hash=None,
+                engine_version=f"live-{module}",
+                calculation_generation=1,
+                pipeline_state="failed",
+                pipeline_error=error,
+                computed_at=now,
+            )
+        )
+    else:
+        existing.source_fact_period_id = period.id
+        existing.source_as_of_date = period.period_end
+        existing.calculation_generation += 1
+        existing.pipeline_state = "failed"
+        existing.pipeline_error = error
+        existing.computed_at = now
+    _upsert_live_snapshot(session, ctx, bank, period, module, {}, "na", now)
     session.flush()
 
 
@@ -346,6 +390,7 @@ def _reconcile_findings(  # noqa: PLR0913 - one reconcile carries the full scope
     period: BankReportingPeriod,
     module: str,
     specs: tuple[LiveFindingSpec, ...],
+    source_as_of_date: date | None = None,
 ) -> None:
     """Reconcile a module's open live findings against a fresh breach set.
 
@@ -357,7 +402,6 @@ def _reconcile_findings(  # noqa: PLR0913 - one reconcile carries the full scope
             select(LiveFinding).where(
                 LiveFinding.organization_id == ctx.organization_id,
                 LiveFinding.bank_id == bank.id,
-                LiveFinding.reporting_period_id == period.id,
                 LiveFinding.module == module,
                 LiveFinding.status == "open",
             )
@@ -377,7 +421,8 @@ def _reconcile_findings(  # noqa: PLR0913 - one reconcile carries the full scope
                 LiveFinding(
                     organization_id=ctx.organization_id,
                     bank_id=bank.id,
-                    reporting_period_id=period.id,
+                    source_fact_period_id=None,
+                    source_as_of_date=source_as_of_date or period.period_end,
                     module=module,
                     rule_id=spec.rule_id,
                     severity=spec.severity,
@@ -389,6 +434,9 @@ def _reconcile_findings(  # noqa: PLR0913 - one reconcile carries the full scope
     for rule_id, finding in by_rule.items():
         if rule_id not in fresh_rules:
             finding.status = "superseded"
+    for finding in by_rule.values():
+        finding.source_fact_period_id = None
+        finding.source_as_of_date = source_as_of_date or period.period_end
     session.flush()
 
 
@@ -448,6 +496,26 @@ def _find_period(
             BankReportingPeriod.period_end == as_of,
         )
     )
+
+
+def _ensure_live_period(
+    session: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> BankReportingPeriod:
+    """Create only the snapshot-ladder provenance row needed by the live plane."""
+    period = _find_period(session, ctx, bank, as_of)
+    if period is not None:
+        return period
+    period = BankReportingPeriod(
+        organization_id=ctx.organization_id,
+        bank_id=bank.id,
+        period_start=as_of.replace(day=1),
+        period_end=as_of,
+        label=f"{as_of.year:04d}-{as_of.month:02d}",
+        status="open",
+    )
+    session.add(period)
+    session.flush()
+    return period
 
 
 def _has_facts(

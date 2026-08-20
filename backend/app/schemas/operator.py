@@ -46,6 +46,12 @@ class TenantProvisionCreate(ClosedModel):
     organization_name: str = Field(min_length=1, max_length=255)
     bank_name: str = Field(min_length=1, max_length=255)
     license_type: str = Field(min_length=1, max_length=40)
+    # The typed institution discriminator (docs/sdi.md §1) — REQUIRED with no
+    # default, the same fail-loud discipline as currency/jurisdiction. Validated
+    # against the institution_types registry in the saga (DB lookup); selecting
+    # an SDI class here is what scopes the tenant's modules/requirements/returns
+    # in later phases. The format gate lives here.
+    institution_type: str = Field(min_length=1, max_length=40)
     # Validated against the jurisdictions registry in the saga (a registry
     # lookup needs the DB; the format gate lives here).
     jurisdiction_code: str = Field(min_length=2, max_length=8)
@@ -106,6 +112,9 @@ class TenantRead(ClosedModel):
     jurisdiction_code: str | None
     currency: str | None
     license_type: str | None
+    # The typed institution discriminator (docs/sdi.md §1); null only for an
+    # organization with no bank yet.
+    institution_type: str | None
     bank_created_at: datetime | None
     period_count: int
     latest_period_end: date | None
@@ -461,6 +470,8 @@ class TenantConfigBankRead(ClosedModel):
     jurisdiction_code: str
     currency: str
     license_type: str
+    # The typed institution discriminator (docs/sdi.md §1).
+    institution_type: str
 
 
 class TenantMappingConfigRead(ClosedModel):

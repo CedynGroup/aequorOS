@@ -25,6 +25,7 @@ def _connection(db_session: Session) -> TemenosConnection:
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     db_session.add(bank)
     db_session.flush()

@@ -229,14 +229,17 @@ def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
     ``app/``, and it seals ``content_digest`` unconditionally — so proving every
     registered return dispatches through it proves all of them are sealed,
     without seeding an engine run per return. Count pinned so a new return
-    family must consciously join this guard: 38 = the 15 pre-BSD entries (the
+    family must consciously join this guard: 39 = the 15 pre-BSD entries (the
     original thirteen incl. the recoded CAR-RWA / LCR-NSFR, STRESS-PACK (item 6),
     LAS-QUARTERLY (item 14, still template-gated); BSD-MONTHLY retired) + the
     23 official Bank of Ghana BSD forms (family "bsd", generator "bog_form",
-    2026-08-15 — every one dispatches through generate_package and is sealed).
+    2026-08-15 — every one dispatches through generate_package and is sealed) +
+    ICAAP-STRESS-APPENDIX2 (family "icaap_stress", generator "icaap_stress",
+    2026-08-20 — the annual enterprise-wide stress return in the Appendix II
+    Tables 1–6 formats; docs/stress.md §3.6, also routed through generate_package).
     """
     generators = generation._GENERATORS  # pyright: ignore[reportPrivateUsage]
-    assert len(REGISTRY) == 38  # noqa: PLR2004
+    assert len(REGISTRY) == 39  # noqa: PLR2004
     assert sum(1 for d in REGISTRY.values() if d.family == "bsd") == 23  # noqa: PLR2004
     for definition in REGISTRY.values():
         assert definition.generator in generators, definition.code

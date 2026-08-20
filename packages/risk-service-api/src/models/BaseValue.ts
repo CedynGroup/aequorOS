@@ -15,13 +15,13 @@
  * @export
  * @interface BaseValue
  */
-export type BaseValue = string | null;
+export type BaseValue = number | string;
 
 /**
  * Check if a given object implements the BaseValue interface.
  */
 export function instanceOfBaseValue(value: unknown): value is BaseValue {
-  return typeof value === "string" || value === null;
+  return typeof value === "number" || typeof value === "string";
 }
 
 export function BaseValueFromJSON(json: any): BaseValue {

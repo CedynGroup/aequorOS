@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_operator_settings, get_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
-from app.models import Jurisdiction
+from app.models import InstitutionType, Jurisdiction
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.main import create_operator_app
 from app.operator.services import operator_auth
@@ -44,6 +44,7 @@ def provision_payload(**overrides: Any) -> dict[str, Any]:
         "organization_name": "Test Bancorp Holdings",
         "bank_name": "Test Commercial Bank",
         "license_type": "universal_bank",
+        "institution_type": "universal_bank",
         "jurisdiction_code": "GH",
         "currency": "GHS",
         "admin_email": "admin@testbank.example",
@@ -216,8 +217,62 @@ def _enable_sqlite_foreign_keys(engine: Engine) -> None:
         cursor.close()
 
 
+# The institution-type registry (docs/sdi.md §1) — the operator suite builds
+# the schema with create_all (no seed migration runs), so provisioning
+# validation and the ``banks.institution_type`` FK need these reference rows.
+# Mirrors migration 202608190018.
+_OP_BANK_MODULES = [
+    "command_center", "risk", "alerts", "liquidity", "capital", "regulatory_reporting",
+    "data_engine", "institution", "reports", "settings", "irrbb", "behavioral",
+    "forecasting", "ftp", "fx", "markets", "positions",
+]
+_OP_SDI_MODULES = [
+    "command_center", "risk", "alerts", "liquidity", "capital", "regulatory_reporting",
+    "data_engine", "institution", "reports", "settings",
+]
+_OP_INSTITUTION_TYPE_SEED = [
+    ("universal_bank", "Universal Bank", "bank", "bsd", "crd", 20, 25, False, _OP_BANK_MODULES),
+    ("savings_and_loans", "Savings & Loans", "sdi", "sdi", "s29", 15, 25, True, _OP_SDI_MODULES),
+    ("finance_house", "Finance House", "sdi", "sdi", "s29", 15, 25, True, _OP_SDI_MODULES),
+    ("rural_community_bank", "Rural & Community Bank", "sdi", "sdi", "s29", 15, 25, True,
+     _OP_SDI_MODULES),
+    ("microfinance_bank", "Microfinance Institution", "sdi", "sdi", "s29", 15, 25, True,
+     _OP_SDI_MODULES),
+    ("financial_holding_company", "Financial Holding Company", "bank", "bsd", "crd", 20, 25,
+     False, _OP_BANK_MODULES),
+    ("other_rfi", "Other Regulated Financial Institution", "sdi", "sdi", "s29", 15, 25, True,
+     _OP_SDI_MODULES),
+]
+
+
 def _seed_jurisdictions(engine: Engine) -> None:
     with Session(engine) as session:
+        session.add_all(
+            [
+                InstitutionType(
+                    type_code=code,
+                    display_name=display_name,
+                    institution_class=institution_class,
+                    return_family=return_family,
+                    capital_regime=capital_regime,
+                    large_exposure_limit_pct=large_exposure,
+                    single_obligor_limit_pct=single_obligor,
+                    liquidity_binding=liquidity_binding,
+                    default_modules=modules,
+                )
+                for (
+                    code,
+                    display_name,
+                    institution_class,
+                    return_family,
+                    capital_regime,
+                    large_exposure,
+                    single_obligor,
+                    liquidity_binding,
+                    modules,
+                ) in _OP_INSTITUTION_TYPE_SEED
+            ]
+        )
         session.add_all(
             [
                 Jurisdiction(

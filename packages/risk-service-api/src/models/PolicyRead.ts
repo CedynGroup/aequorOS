@@ -39,13 +39,13 @@ import {
   SignatureSlotReadToJSON,
   SignatureSlotReadToJSONTyped,
 } from "./SignatureSlotRead";
-import type { BankId } from "./BankId";
+import type { BankId1 } from "./BankId1";
 import {
-  BankIdFromJSON,
-  BankIdFromJSONTyped,
-  BankIdToJSON,
-  BankIdToJSONTyped,
-} from "./BankId";
+  BankId1FromJSON,
+  BankId1FromJSONTyped,
+  BankId1ToJSON,
+  BankId1ToJSONTyped,
+} from "./BankId1";
 import type { EffectiveTo } from "./EffectiveTo";
 import {
   EffectiveToFromJSON,
@@ -69,10 +69,10 @@ import {
 export interface PolicyRead {
   /**
    *
-   * @type {BankId}
+   * @type {BankId1}
    * @memberof PolicyRead
    */
-  bankId: BankId;
+  bankId: BankId1;
   /**
    *
    * @type {Basis}
@@ -207,7 +207,7 @@ export function PolicyReadFromJSONTyped(
   }
   return {
     ...json,
-    bankId: BankIdFromJSON(json["bank_id"]),
+    bankId: BankId1FromJSON(json["bank_id"]),
     basis: BasisFromJSON(json["basis"]),
     distinctSigners: json["distinct_signers"],
     effectiveFrom: new Date(json["effective_from"]),
@@ -243,7 +243,7 @@ export function PolicyReadToJSONTyped(
   }
 
   return {
-    bank_id: BankIdToJSON(value["bankId"]),
+    bank_id: BankId1ToJSON(value["bankId"]),
     basis: BasisToJSON(value["basis"]),
     distinct_signers: value["distinctSigners"],
     effective_from: value["effectiveFrom"].toISOString().substring(0, 10),

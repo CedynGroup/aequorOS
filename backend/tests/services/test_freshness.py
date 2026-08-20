@@ -127,6 +127,7 @@ def test_freshness_without_any_period_is_not_stale(db_session: Session) -> None:
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     db_session.add(bank)
     db_session.commit()

@@ -8,6 +8,8 @@ circular import through the pipeline.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
+from typing import Any
 
 # Rank for rolling per-metric traffic-light statuses up to a module status.
 _STATUS_RANK = {"red": 3, "amber": 2, "green": 1, "na": 0}
@@ -30,12 +32,14 @@ class LiveFindingSpec:
 
 @dataclass(frozen=True)
 class LiveModuleResult:
-    """A module's cheap baseline live view for one (bank, period)."""
+    """A module's current baseline view over canonical data."""
 
-    metrics: dict[str, str]
+    metrics: dict[str, Any]
     status: str  # green | amber | red | na
     input_hash: str | None
+    engine_version: str | None = None
     findings: tuple[LiveFindingSpec, ...] = field(default_factory=tuple)
+    source_as_of_date: date | None = None
 
 
 def worst_status(*statuses: str) -> str:

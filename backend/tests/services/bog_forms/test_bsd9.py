@@ -189,6 +189,7 @@ def _rc(column: str, dependencies: dict[str, dict[tuple[str, str], Any]]) -> Res
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     period = BankReportingPeriod(period_start=date(2026, 3, 1), period_end=date(2026, 3, 31))
     return ResolveContext(

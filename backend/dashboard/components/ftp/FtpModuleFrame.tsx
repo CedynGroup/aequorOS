@@ -44,11 +44,10 @@ export default function FtpModuleFrame({
   subtitle?: string;
   children: (ctx: FtpFrameContext) => ReactNode;
 }) {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const dashboard = useFtpDashboard(bankId, periodId);
+  const dashboard = useFtpDashboard(bankId);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
 
   const data = dashboard.data;
@@ -79,7 +78,7 @@ export default function FtpModuleFrame({
               metrics: data.metrics,
               run: latestRun.data,
               bankId,
-              periodId,
+              periodId: data.period.id,
             })}
           </div>
         )}

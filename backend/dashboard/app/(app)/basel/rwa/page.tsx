@@ -69,11 +69,10 @@ function rwaColumns(
 }
 
 export default function RWABreakdown() {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const breakdown = useRwaBreakdown(bankId, periodId);
+  const breakdown = useRwaBreakdown(bankId);
 
   const data = breakdown.data;
   const needsBaseline = isNoBaselineRunError(breakdown.error);
@@ -227,10 +226,14 @@ export default function RWABreakdown() {
                 noPadding
                 footer={
                   <span>
-                    Source run{' '}
-                    <span className="font-mono text-navy">
-                      {shortId(data.runId)}
-                    </span>
+                    {data.runId ? (
+                      <>
+                        Official run{' '}
+                        <span className="font-mono text-navy">{shortId(data.runId)}</span>
+                      </>
+                    ) : (
+                      'Current live capital computation'
+                    )}
                   </span>
                 }
               >
@@ -311,8 +314,13 @@ export default function RWABreakdown() {
                 <span className="font-mono font-medium text-navy">
                   {fmtCurrency(totalRwa)}
                 </span>
-                . Source run{' '}
-                <span className="font-mono text-navy">{shortId(data.runId)}</span>.
+                . {data.runId ? (
+                  <>
+                    Official run <span className="font-mono text-navy">{shortId(data.runId)}</span>.
+                  </>
+                ) : (
+                  'Current live capital computation.'
+                )}
               </p>
             </div>
           )}

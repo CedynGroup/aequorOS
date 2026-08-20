@@ -18,6 +18,13 @@ import {
   TargetValueToJSON,
   TargetValueToJSONTyped,
 } from "./TargetValue";
+import type { BaseValue1 } from "./BaseValue1";
+import {
+  BaseValue1FromJSON,
+  BaseValue1FromJSONTyped,
+  BaseValue1ToJSON,
+  BaseValue1ToJSONTyped,
+} from "./BaseValue1";
 import type { Delta } from "./Delta";
 import {
   DeltaFromJSON,
@@ -25,13 +32,6 @@ import {
   DeltaToJSON,
   DeltaToJSONTyped,
 } from "./Delta";
-import type { BaseValue } from "./BaseValue";
-import {
-  BaseValueFromJSON,
-  BaseValueFromJSONTyped,
-  BaseValueToJSON,
-  BaseValueToJSONTyped,
-} from "./BaseValue";
 import type { DeltaPct } from "./DeltaPct";
 import {
   DeltaPctFromJSON,
@@ -55,10 +55,10 @@ import {
 export interface SnapshotLineDiffRead {
   /**
    *
-   * @type {BaseValue}
+   * @type {BaseValue1}
    * @memberof SnapshotLineDiffRead
    */
-  baseValue: BaseValue;
+  baseValue: BaseValue1;
   /**
    *
    * @type {SnapshotLineChange}
@@ -135,7 +135,7 @@ export function SnapshotLineDiffReadFromJSONTyped(
   }
   return {
     ...json,
-    baseValue: BaseValueFromJSON(json["base_value"]),
+    baseValue: BaseValue1FromJSON(json["base_value"]),
     change: SnapshotLineChangeFromJSON(json["change"]),
     code: json["code"],
     delta: DeltaFromJSON(json["delta"]),
@@ -159,7 +159,7 @@ export function SnapshotLineDiffReadToJSONTyped(
   }
 
   return {
-    base_value: BaseValueToJSON(value["baseValue"]),
+    base_value: BaseValue1ToJSON(value["baseValue"]),
     change: SnapshotLineChangeToJSON(value["change"]),
     code: value["code"],
     delta: DeltaToJSON(value["delta"]),

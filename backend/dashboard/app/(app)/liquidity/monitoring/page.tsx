@@ -93,11 +93,10 @@ const haircutColumns: Column<LiquidityHaircutRead>[] = [
 ];
 
 export default function MonitoringTools() {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const dashboard = useLiquidityDashboard(bankId, periodId);
+  const dashboard = useLiquidityDashboard(bankId);
   const thresholds = useLiquidityThresholdRegister(bankId);
   const haircuts = useLiquidityHaircutSchedule(bankId);
   const latestRunId = dashboard.data?.latestRunId;

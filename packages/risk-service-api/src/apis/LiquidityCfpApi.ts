@@ -67,7 +67,7 @@ export interface GetContingencyFundingPlanRequest {
 
 export interface GetLiquidityEwiDashboardRequest {
   bankId: string;
-  reportingPeriodId: string;
+  reportingPeriodId?: string | null;
 }
 
 export interface ListContingencyFundingPlanEventsRequest {
@@ -365,13 +365,6 @@ export class LiquidityCfpApi extends runtime.BaseAPI {
       throw new runtime.RequiredError(
         "bankId",
         'Required parameter "bankId" was null or undefined when calling getLiquidityEwiDashboard().',
-      );
-    }
-
-    if (requestParameters["reportingPeriodId"] == null) {
-      throw new runtime.RequiredError(
-        "reportingPeriodId",
-        'Required parameter "reportingPeriodId" was null or undefined when calling getLiquidityEwiDashboard().',
       );
     }
 

@@ -512,6 +512,7 @@ def test_publish_fans_out_and_audits(
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     operator_db.add(bank)
     operator_db.commit()

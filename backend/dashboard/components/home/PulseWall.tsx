@@ -11,10 +11,7 @@
  */
 
 import Link from 'next/link';
-import type {
-  BankReportingPeriodRead,
-  LiveModule,
-} from '@aequoros/risk-service-api';
+import type { LiveModule } from '@aequoros/risk-service-api';
 import StatusPill from '@/components/ui/StatusPill';
 import DeltaBadge from '@/components/ui/DeltaBadge';
 import Sparkline from '@/components/ui/Sparkline';
@@ -49,14 +46,12 @@ const SPARK_COLOR: Record<Traffic | 'na', string> = {
 
 export default function PulseWall({
   bankId,
-  period,
   moduleOrder,
 }: {
   bankId: string | undefined;
-  period: BankReportingPeriodRead;
   moduleOrder: ModuleOrder;
 }) {
-  const { cards } = usePulseCards(bankId, period);
+  const { cards } = usePulseCards(bankId);
   const order = resolveOrder(moduleOrder, cards);
 
   return (

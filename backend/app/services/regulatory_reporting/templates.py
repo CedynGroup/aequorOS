@@ -1250,6 +1250,275 @@ _ICAAP_STRESS_TEMPLATE = ReturnTemplate(
 )
 
 # ---------------------------------------------------------------------------
+# ICAAP stress-test submission — BoG Appendix II Tables 1–6 (docs/stress.md §1.8)
+# ---------------------------------------------------------------------------
+
+# Amounts are already in the directive's GHS'000 reporting unit (the Appendix II
+# builder applies the '000 conversion), so the rendered columns use kind
+# "number" — they display the values verbatim and must NOT re-scale.
+_A2_CODE = ColumnSpec("code", "Label", "text")
+_A2_PERIOD = ColumnSpec("description", "Period", "text")
+_A2_APPENDIX2_CITATION = (
+    "Stress Testing Guideline — exposure draft, Feb 2026, Appendix II Tables 1–6 "
+    "(CONFIRMED structures: Summary Results, Regulatory Capital, P&L, Statement of "
+    "Financial Position, Evolution of RWA & Capital Requirements, Key Risk Drivers), "
+    "submitted within the ICAAP by end of March of the ensuing year (¶67, ¶68)"
+)
+
+
+def _a2_num(key: str, header: str) -> ColumnSpec:
+    return ColumnSpec(key, header, "number")
+
+
+_A2_POSITION_COLUMNS: tuple[ColumnSpec, ...] = (
+    _A2_CODE,
+    _A2_PERIOD,
+    _a2_num("value", "Total Reg. Capital"),
+    _a2_num("cet1", "CET1"),
+    _a2_num("tier1", "Tier 1"),
+    _a2_num("tier2", "Tier 2"),
+    _a2_num("total_rwa", "Total RWA"),
+    ColumnSpec("cet1_ratio_pct", "CET1 %", "pct"),
+    ColumnSpec("tier1_ratio_pct", "Tier 1 %", "pct"),
+    ColumnSpec("car_pct", "CAR %", "pct"),
+    _a2_num("paid_up", "Paid-up"),
+)
+
+_ICAAP_STRESS_APPENDIX2_TEMPLATE = ReturnTemplate(
+    template_id="bog-icaap-stress-appendix2-v1",
+    return_code="ICAAP-STRESS-APPENDIX2",
+    title="ICAAP Stress Test — Appendix II Tables 1–6",
+    fidelity="CONFIRMED",
+    source_citation=_A2_APPENDIX2_CITATION,
+    currency_unit="Amounts in GHS '000 (Appendix II reporting unit); ratios in %",
+    attestation_lines=BOARD_ATTESTATION_LINES,
+    sections=(
+        SectionLayout(
+            section_code="t1_summary_positions",
+            layout_id="appendix2_table1_positions",
+            sheet_title="Table 1 — Summary Results (Capital Positions)",
+            columns=_A2_POSITION_COLUMNS,
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 1 Current + Pre-Adverse (Base Case) + "
+                "Post-Adverse (Stress Case), 3-year horizon"
+            ),
+        ),
+        SectionLayout(
+            section_code="t1_impact_of_adverse",
+            layout_id="appendix2_table1_impact",
+            sheet_title="Table 1 — Impact of Adverse (Loss by CRD Class)",
+            columns=(
+                ColumnSpec("code", "Key", "text"),
+                ColumnSpec("description", "CRD Exposure Class", "text"),
+                _a2_num("value", "Adverse Loss"),
+                ColumnSpec("year", "Projection Year", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 1 'Impact of Adverse' losses by CRD "
+                "exposure class (¶67(g) vulnerability granularity)"
+            ),
+        ),
+        SectionLayout(
+            section_code="t1_capital_required",
+            layout_id="appendix2_table1_required",
+            sheet_title="Table 1 — Capital Required to Meet Minima",
+            columns=(
+                ColumnSpec("code", "Key", "text"),
+                _A2_PERIOD,
+                _a2_num("value", "To Meet 13% CAR"),
+                _a2_num("paid_up_shortfall", "To Meet Paid-up Min"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 1 capital required to meet the 13% CAR "
+                "and paid-up minima (¶77)"
+            ),
+        ),
+        SectionLayout(
+            section_code="t1_management_actions",
+            layout_id="appendix2_table1_management_actions",
+            sheet_title="Table 1 — Management Actions (with-actions)",
+            columns=(
+                ColumnSpec("code", "Key", "text"),
+                _A2_PERIOD,
+                _a2_num("value", "Total Management Actions"),
+                _a2_num("capital_raised_total", "Capital Raised"),
+                _a2_num("revision_of_dividend_policy", "Dividend Revision"),
+                _a2_num("change_in_business_strategy", "Strategy Change"),
+                _a2_num("sale_of_assets", "Sale of Assets"),
+                _a2_num("risk_reduction", "Risk Reduction"),
+                _a2_num("other", "Other"),
+                _a2_num("rwa_relief_total", "RWA Relief"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 1 'Management actions' block; results "
+                "with and without management actions (¶67(f), ¶78–81)"
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="t1_post_capitalisation",
+            layout_id="appendix2_table1_post_capitalisation",
+            sheet_title="Table 1 — Post-capitalisation (Stress + Actions)",
+            columns=_A2_POSITION_COLUMNS,
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 1 'Post-capitalisation' block (¶67(f))"
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="t1_residual",
+            layout_id="appendix2_table1_residual",
+            sheet_title="Table 1 — Residual Capital After Actions",
+            columns=(
+                ColumnSpec("code", "Key", "text"),
+                _A2_PERIOD,
+                _a2_num("value", "Residual Capital Required"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 1 residual capital required after "
+                "management actions (¶77)"
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="t2_capital_projection",
+            layout_id="appendix2_table2",
+            sheet_title="Table 2 — Regulatory Capital Projection",
+            columns=(
+                _A2_CODE,
+                _A2_PERIOD,
+                _a2_num("value", "Total Reg. Capital"),
+                _a2_num("gross_cet1", "Gross CET1"),
+                _a2_num("total_deductions", "CET1 Deductions"),
+                _a2_num("cet1_after_deductions", "CET1 After Deductions"),
+                _a2_num("at1_eligible", "AT1 Eligible"),
+                _a2_num("tier2_eligible", "Tier 2 Eligible"),
+                _a2_num("credit_risk_reserve", "Credit Risk Reserve"),
+                _a2_num("total_rwa", "Total RWA"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 2 CET1/AT1/Tier2 build with the 1.5%/2% "
+                "of RWA caps and deductions (Current + Base + Stress, 3-year)"
+            ),
+        ),
+        SectionLayout(
+            section_code="t3_profit_and_loss",
+            layout_id="appendix2_table3",
+            sheet_title="Table 3 — Movement in Profit & Loss",
+            columns=(
+                _A2_CODE,
+                _A2_PERIOD,
+                _a2_num("value", "Profit After Tax"),
+                _a2_num("net_interest_income", "Net Interest Income"),
+                _a2_num("fees_and_commissions", "Fees & Commissions"),
+                _a2_num("operating_expenses", "Operating Expenses"),
+                _a2_num("impairment_losses", "Impairment (incl. stress)"),
+                _a2_num("profit_before_tax", "Profit Before Tax"),
+                _a2_num("tax", "Tax"),
+                _a2_num("distributions", "Distributions"),
+                _a2_num("adjusted_retained_earnings_for_car", "Adj. Retained for CAR"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 3 NII → adjusted retained earnings for "
+                "CAR, impairment includes the stress impact (Base + Stress, 3-year)"
+            ),
+        ),
+        SectionLayout(
+            section_code="t4_financial_position",
+            layout_id="appendix2_table4",
+            sheet_title="Table 4 — Statement of Financial Position",
+            columns=(
+                _A2_CODE,
+                _A2_PERIOD,
+                _a2_num("value", "Total Assets"),
+                _a2_num("loans", "Loans"),
+                _a2_num("cash_and_balances", "Cash & Balances"),
+                _a2_num("short_term_investments", "Short-term Investments"),
+                _a2_num("other_assets", "Other Assets"),
+                _a2_num("total_liabilities", "Total Liabilities"),
+                _a2_num("total_deposits", "Deposits (D/S/T/Other)"),
+                _a2_num("borrowings", "Borrowings"),
+                _a2_num("capital", "Capital"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 4 asset / capital / liability line "
+                "taxonomy (Current + Base + Stress, 3-year)"
+            ),
+        ),
+        SectionLayout(
+            section_code="t5_rwa",
+            layout_id="appendix2_table5",
+            sheet_title="Table 5 — Evolution of RWA & Capital Requirements",
+            columns=(
+                _A2_CODE,
+                _A2_PERIOD,
+                _a2_num("value", "Total Pillar-1 RWA"),
+                _a2_num("credit_rwa", "Credit RWA"),
+                _a2_num("operational_rwa", "Operational RWA"),
+                _a2_num("market_rwa", "Market RWA"),
+                _a2_num("pillar1_requirement", "Pillar-1 Requirement (13%)"),
+                _a2_num("pillar2_total", "Pillar-2 Add-ons"),
+                _a2_num("total_capital_requirement", "Total Capital Requirement"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 5 RWA by Pillar-1 type + Pillar-2 "
+                "add-ons; stressed Total Pillar-1 RWA equals Table 1's stressed RWA"
+            ),
+        ),
+        SectionLayout(
+            section_code="t6_risk_drivers",
+            layout_id="appendix2_table6",
+            sheet_title="Table 6 — Key Risk Drivers & Forecasting Assumptions",
+            columns=(
+                ColumnSpec("description", "Risk Driver", "text"),
+                ColumnSpec("year_index", "Projection Year", "text"),
+                _a2_num("base_value", "Base"),
+                _a2_num("stress_value", "Stress"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 6 GoG yield, GDP, rates, unemployment, "
+                "FX, inflation, GSE index, fiscal deficit (Base + Stress, per year)"
+            ),
+        ),
+        SectionLayout(
+            section_code="governance",
+            layout_id="appendix2_governance",
+            sheet_title="Governance — Board Sign-off & Attestation",
+            columns=(
+                ColumnSpec("code", "Key", "text"),
+                ColumnSpec("description", "Item", "text"),
+                ColumnSpec("value", "Detail", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                "Stress Testing Guideline (Feb 2026) ¶20 / ¶57–63 — the Board attests it "
+                "has reviewed and challenged the framework and results; the source run is "
+                "Board-attested before this submission is generated"
+            ),
+        ),
+    ),
+    notes=(
+        "The snapshot IS the BoG Appendix II Tables 1–6, carried verbatim from a "
+        "Board-attested enterprise-stress run (docs/stress.md §3.4, §3.8). No figure is "
+        "recomputed here; unmodelled directive lines stay blank rather than fabricated.",
+        "Results are shown with and without management actions (¶67(f)); the "
+        "with-actions blocks appear only when the run modelled an approved "
+        "management-actions plan.",
+    ),
+)
+
+# ---------------------------------------------------------------------------
 # Stress Test Output Report pack (product.md §Phase 2 item 6)
 # ---------------------------------------------------------------------------
 
@@ -1837,6 +2106,7 @@ TEMPLATES: dict[str, ReturnTemplate] = {
         _DBK_DAILY_TEMPLATE,
         _LE_TEMPLATE,
         _ICAAP_STRESS_TEMPLATE,
+        _ICAAP_STRESS_APPENDIX2_TEMPLATE,
         _STRESS_PACK_TEMPLATE,
         _LAS_QUARTERLY_TEMPLATE,
         _LRT_PROFILE_TEMPLATE,

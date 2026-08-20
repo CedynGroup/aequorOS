@@ -9,8 +9,9 @@ import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useLatestReverseStress, useRunReverseStress } from '@/lib/api/hooks';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { fmtDateUTC } from '@/lib/api/values';
+import ReverseStressFrontier, {
+  type FrontierAxis,
+} from '@/components/stress/charts/ReverseStressFrontier';
 
 // Reverse stress (Phase 2 item 4): bisection over the existing scenario
 // engines for the severity multipliers that breach the LCR floor and the
@@ -26,6 +27,31 @@ function axisValue(axis: Axis, key: string): string | null {
 
 function axisBreached(axis: Axis): boolean {
   return axis?.['breached'] === true;
+}
+
+function axisNum(axis: Axis, key: string): number | null {
+  const value = axisValue(axis, key);
+  if (value === null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function frontierAxis(
+  axis: Axis,
+  label: string,
+  ratioLabel: string,
+  ratioKey: string,
+  floorKey: string
+): FrontierAxis {
+  return {
+    label,
+    ratioLabel,
+    breached: axisBreached(axis),
+    breachMultiplier: axisNum(axis, 'breach_multiplier'),
+    kMax: axisNum(axis, 'k_max') ?? 3,
+    ratioAtBreach: axisNum(axis, ratioKey),
+    floor: axisNum(axis, floorKey) ?? 0,
+  };
 }
 
 export default function ReverseStress() {
@@ -100,6 +126,30 @@ export default function ReverseStress() {
                   }
                 />
               </div>
+
+              <SectionCard
+                title="Reverse-stress frontier"
+                subtitle="The severity multiplier at which each hard floor breaks — searched by bisection over the stored engines"
+              >
+                <ReverseStressFrontier
+                  axes={[
+                    frontierAxis(
+                      liquidity,
+                      'Liquidity (combined scenario)',
+                      'LCR',
+                      'lcr_at_breach_pct',
+                      'lcr_min_pct'
+                    ),
+                    frontierAxis(
+                      capital,
+                      'Capital (severe scenario)',
+                      'CET1',
+                      'worst_cet1_at_breach_pct',
+                      'cet1_min_pct'
+                    ),
+                  ]}
+                />
+              </SectionCard>
 
               <SectionCard
                 title="Frontier narrative"

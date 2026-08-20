@@ -7,8 +7,6 @@ without recomputing. Returns ``None`` when no refresh has run yet.
 
 from __future__ import annotations
 
-from uuid import UUID
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -17,14 +15,11 @@ from app.models import LiveMetric
 from app.schemas.live import LiveModuleView
 
 
-def live_block(
-    db: Session, ctx: TenantContext, bank_id: str, period_id: UUID, module: str
-) -> LiveModuleView | None:
+def live_block(db: Session, ctx: TenantContext, bank_id: str, module: str) -> LiveModuleView | None:
     row = db.scalar(
         select(LiveMetric).where(
             LiveMetric.organization_id == ctx.organization_id,
             LiveMetric.bank_id == bank_id,
-            LiveMetric.reporting_period_id == period_id,
             LiveMetric.module == module,
         )
     )
@@ -36,4 +31,10 @@ def live_block(
         metrics=row.metrics,
         computed_at=row.computed_at,
         computed_from_input_hash=row.computed_from_input_hash,
+        source_as_of_date=row.source_as_of_date,
+        source_fact_period_id=row.source_fact_period_id,
+        engine_version=row.engine_version,
+        calculation_generation=row.calculation_generation,
+        pipeline_state=row.pipeline_state,  # type: ignore[arg-type]
+        pipeline_error=row.pipeline_error,
     )

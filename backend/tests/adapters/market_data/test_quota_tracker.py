@@ -117,6 +117,7 @@ def test_record_and_read_consumption_roundtrip(db_session) -> None:
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     db_session.add(bank)
     db_session.flush()
@@ -142,6 +143,7 @@ def test_record_consumption_tracks_pull_count(db_session) -> None:
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     db_session.add(bank)
     db_session.flush()

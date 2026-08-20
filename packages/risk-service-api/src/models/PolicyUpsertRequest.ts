@@ -32,13 +32,13 @@ import {
   SignatureSlotReadToJSON,
   SignatureSlotReadToJSONTyped,
 } from "./SignatureSlotRead";
-import type { BankId } from "./BankId";
+import type { BankId1 } from "./BankId1";
 import {
-  BankIdFromJSON,
-  BankIdFromJSONTyped,
-  BankIdToJSON,
-  BankIdToJSONTyped,
-} from "./BankId";
+  BankId1FromJSON,
+  BankId1FromJSONTyped,
+  BankId1ToJSON,
+  BankId1ToJSONTyped,
+} from "./BankId1";
 import type { EffectiveTo } from "./EffectiveTo";
 import {
   EffectiveToFromJSON,
@@ -62,10 +62,10 @@ import {
 export interface PolicyUpsertRequest {
   /**
    *
-   * @type {BankId}
+   * @type {BankId1}
    * @memberof PolicyUpsertRequest
    */
-  bankId?: BankId;
+  bankId?: BankId1;
   /**
    *
    * @type {Basis1}
@@ -165,7 +165,7 @@ export function PolicyUpsertRequestFromJSONTyped(
   return {
     ...json,
     bankId:
-      json["bank_id"] == null ? undefined : BankIdFromJSON(json["bank_id"]),
+      json["bank_id"] == null ? undefined : BankId1FromJSON(json["bank_id"]),
     basis: json["basis"] == null ? undefined : Basis1FromJSON(json["basis"]),
     distinctSigners:
       json["distinct_signers"] == null ? undefined : json["distinct_signers"],
@@ -212,7 +212,7 @@ export function PolicyUpsertRequestToJSONTyped(
   }
 
   return {
-    bank_id: BankIdToJSON(value["bankId"]),
+    bank_id: BankId1ToJSON(value["bankId"]),
     basis: Basis1ToJSON(value["basis"]),
     distinct_signers: value["distinctSigners"],
     effective_from: value["effectiveFrom"].toISOString().substring(0, 10),

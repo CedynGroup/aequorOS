@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { HaircutsValue } from "./HaircutsValue";
+import type { SeverityFactorsAnyOfValue } from "./SeverityFactorsAnyOfValue";
 import {
-  HaircutsValueFromJSON,
-  HaircutsValueFromJSONTyped,
-  HaircutsValueToJSON,
-  HaircutsValueToJSONTyped,
-} from "./HaircutsValue";
+  SeverityFactorsAnyOfValueFromJSON,
+  SeverityFactorsAnyOfValueFromJSONTyped,
+  SeverityFactorsAnyOfValueToJSON,
+  SeverityFactorsAnyOfValueToJSONTyped,
+} from "./SeverityFactorsAnyOfValue";
 import type { Notes2 } from "./Notes2";
 import {
   Notes2FromJSON,
@@ -46,10 +46,10 @@ export interface CrmHaircutUpdate {
   effectiveFrom: Date;
   /**
    *
-   * @type {{ [key: string]: HaircutsValue; }}
+   * @type {{ [key: string]: SeverityFactorsAnyOfValue; }}
    * @memberof CrmHaircutUpdate
    */
-  haircuts: { [key: string]: HaircutsValue };
+  haircuts: { [key: string]: SeverityFactorsAnyOfValue };
   /**
    *
    * @type {Notes2}
@@ -94,7 +94,7 @@ export function CrmHaircutUpdateFromJSONTyped(
     ...json,
     approvedBy: json["approved_by"],
     effectiveFrom: new Date(json["effective_from"]),
-    haircuts: mapValues(json["haircuts"], HaircutsValueFromJSON),
+    haircuts: mapValues(json["haircuts"], SeverityFactorsAnyOfValueFromJSON),
     notes: json["notes"] == null ? undefined : Notes2FromJSON(json["notes"]),
     reason: json["reason"],
   };
@@ -115,7 +115,7 @@ export function CrmHaircutUpdateToJSONTyped(
   return {
     approved_by: value["approvedBy"],
     effective_from: value["effectiveFrom"].toISOString().substring(0, 10),
-    haircuts: mapValues(value["haircuts"], HaircutsValueToJSON),
+    haircuts: mapValues(value["haircuts"], SeverityFactorsAnyOfValueToJSON),
     notes: Notes2ToJSON(value["notes"]),
     reason: value["reason"],
   };

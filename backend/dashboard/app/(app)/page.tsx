@@ -55,28 +55,32 @@ export default function CommandCenterPage() {
       {effective.isResolving ? (
         <CommandCenterSkeleton />
       ) : effective.isEmpty ? (
-        <div className="px-8 py-10 max-w-2xl mx-auto">
-          {effective.error ? (
-            <div className="mb-6">
-              <ErrorPanel
-                error={effective.error}
-                title="Could not resolve a computed reporting period"
-              />
-            </div>
-          ) : null}
-          <EmptyState
-            Icon={Database}
-            title="No computed data yet"
-            description="This bank has reporting periods but none holds activated data. Upload your source files in the Data Engine and activate them — the Command Center lights up for the activated as-of period."
-            action={
-              <Link
-                href="/data-engine"
-                className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary"
-              >
-                Open the Data Engine
-              </Link>
-            }
-          />
+        <div className="px-8 py-6 space-y-6">
+          <BreachBanner bankId={bankId} />
+          <PulseWall bankId={bankId} moduleOrder={lens.moduleOrder} />
+          <div className="py-4 max-w-2xl mx-auto">
+            {effective.error ? (
+              <div className="mb-6">
+                <ErrorPanel
+                  error={effective.error}
+                  title="Could not resolve a computed reporting period"
+                />
+              </div>
+            ) : null}
+            <EmptyState
+              Icon={Database}
+              title="No computed data yet"
+              description="Ingest current source data to populate the live Treasury view. Historical reporting periods are optional for daily ALM work."
+              action={
+                <Link
+                  href="/data-engine"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary"
+                >
+                  Open the Data Engine
+                </Link>
+              }
+            />
+          </div>
         </div>
       ) : effective.period ? (
         <div className="px-8 py-6 space-y-6">
@@ -98,7 +102,7 @@ export default function CommandCenterPage() {
             </div>
           )}
 
-          <BreachBanner bankId={bankId} period={effective.period} />
+          <BreachBanner bankId={bankId} />
 
           {lens.panels.map((panel) => {
             switch (panel) {
@@ -107,7 +111,6 @@ export default function CommandCenterPage() {
                   <PulseWall
                     key="pulse"
                     bankId={bankId}
-                    period={effective.period!}
                     moduleOrder={lens.moduleOrder}
                   />
                 );

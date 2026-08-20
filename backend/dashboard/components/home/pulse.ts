@@ -2,8 +2,8 @@
 
 /**
  * Shared pulse-card model for the Command Center: one headline card per
- * regulatory module, built entirely from the module dashboards and forecast
- * runs for the effective period. Used by the pulse wall (rendering) and the
+ * regulatory module, built from current module dashboards and the live
+ * forecast baseline. Used by the pulse wall (rendering) and the
  * breach banner (status synthesis) — TanStack Query dedupes the underlying
  * dashboard fetches between them.
  *
@@ -12,23 +12,19 @@
  * the module's live block and fall back to the typed dashboard statuses.
  */
 
-import type {
-  BankReportingPeriodRead,
-  LiveModule,
-} from '@aequoros/risk-service-api';
+import type { LiveModule } from '@aequoros/risk-service-api';
 import type { StatusTone } from '@/components/ui/StatusPill';
 import { livePrimaryMetricKey } from '@/components/live/moduleDisplay';
 import {
   useCapitalDashboard,
   useLiveSnapshots,
-  useForecastRuns,
   useFtpDashboard,
   useFxDashboard,
   useIrrDashboard,
   useLiquidityDashboard,
   useLiveSummary,
 } from '@/lib/api/hooks';
-import { labelize, num } from '@/lib/api/values';
+import { num } from '@/lib/api/values';
 
 export type Traffic = 'green' | 'amber' | 'red';
 export type CardStatus = Traffic | 'na';
@@ -90,10 +86,10 @@ type TrendPoint = { reportingPeriodId: string };
 /** Value change vs the previous trend point, or undefined when unavailable. */
 function trendDelta<T extends TrendPoint>(
   trend: T[] | undefined,
-  periodId: string,
+  periodId: string | undefined,
   pick: (p: T) => number
 ): number | undefined {
-  if (!trend) return undefined;
+  if (!trend || !periodId) return undefined;
   const idx = trend.findIndex((p) => p.reportingPeriodId === periodId);
   if (idx <= 0) return undefined;
   return pick(trend[idx]) - pick(trend[idx - 1]);
@@ -118,10 +114,10 @@ function ladderOverlay(
 /** Up to the last 12 trend values ending at the effective period. */
 function trendSpark<T extends TrendPoint>(
   trend: T[] | undefined,
-  periodId: string,
+  periodId: string | undefined,
   pick: (p: T) => number
 ): number[] | undefined {
-  if (!trend) return undefined;
+  if (!trend || !periodId) return undefined;
   const idx = trend.findIndex((p) => p.reportingPeriodId === periodId);
   if (idx < 1) return undefined;
   return trend.slice(Math.max(0, idx - 11), idx + 1).map(pick);
@@ -136,19 +132,16 @@ export type PulseCards = {
 };
 
 export function usePulseCards(
-  bankId: string | undefined,
-  period: BankReportingPeriodRead
+  bankId: string | undefined
 ): PulseCards {
-  const periodId = period.id;
-
-  const liq = useLiquidityDashboard(bankId, periodId);
-  const cap = useCapitalDashboard(bankId, periodId);
-  const irr = useIrrDashboard(bankId, periodId);
-  const fx = useFxDashboard(bankId, periodId);
-  const ftp = useFtpDashboard(bankId, periodId);
-  const forecasts = useForecastRuns(bankId, { limit: 10 });
+  const liq = useLiquidityDashboard(bankId);
+  const cap = useCapitalDashboard(bankId);
+  const irr = useIrrDashboard(bankId);
+  const fx = useFxDashboard(bankId);
+  const ftp = useFtpDashboard(bankId);
   const liveSummary = useLiveSummary(bankId);
   const ratingLive = liveSummary.data?.modules.find((module) => module.module === 'rating');
+  const forecastLive = liveSummary.data?.modules.find((module) => module.module === 'forecast');
 
   // Plane-2 EOD ladders — when at least two daily points exist, the card's
   // delta and sparkline switch from month-over-month to prior-close.
@@ -171,11 +164,11 @@ export function usePulseCards(
         metricLabel: 'Liquidity Coverage Ratio',
         value: fixed(num(liq.data.metrics.lcrPct), 2),
         unit: '%',
-        delta: trendDelta(liq.data.trend, periodId, (p) => num(p.lcrPct)),
-        spark: trendSpark(liq.data.trend, periodId, (p) => num(p.lcrPct)),
+        delta: trendDelta(liq.data.trend, liq.data.period.id, (p) => num(p.lcrPct)),
+        spark: trendSpark(liq.data.trend, liq.data.period.id, (p) => num(p.lcrPct)),
         hint: `NSFR ${fixed(num(liq.data.metrics.nsfrPct), 2)}%`,
         computedAt: liq.data.live?.computedAt ?? null,
-        basisNote: liq.data.stored ? 'stored baseline run' : 'computed inline',
+        basisNote: 'current live calculation',
       }),
       status: liq.data
         ? (liq.data.live?.status ??
@@ -190,14 +183,14 @@ export function usePulseCards(
         metricLabel: 'Capital Adequacy Ratio',
         value: fixed(num(cap.data.metrics.carPct), 2),
         unit: '%',
-        delta: trendDelta(cap.data.trend, periodId, (p) => num(p.carPct)),
-        spark: trendSpark(cap.data.trend, periodId, (p) => num(p.carPct)),
+        delta: trendDelta(cap.data.trend, cap.data.period.id, (p) => num(p.carPct)),
+        spark: trendSpark(cap.data.trend, cap.data.period.id, (p) => num(p.carPct)),
         hint: `Tier 1 ${fixed(num(cap.data.metrics.tier1RatioPct), 2)}% · CET1 ${fixed(
           num(cap.data.metrics.cet1RatioPct),
           2
         )}%`,
         computedAt: cap.data.live?.computedAt ?? null,
-        basisNote: cap.data.stored ? 'stored baseline run' : 'computed inline',
+        basisNote: 'current live calculation',
       }),
       status: cap.data
         ? (cap.data.live?.status ??
@@ -217,11 +210,11 @@ export function usePulseCards(
         metricLabel: 'Worst ΔEVE / Tier 1',
         value: fixed(num(irr.data.metrics.worstEveChangePctTier1), 2),
         unit: '%',
-        delta: trendDelta(irr.data.trend, periodId, (p) =>
+        delta: trendDelta(irr.data.trend, irr.data.period.id, (p) =>
           num(p.worstEveChangePctTier1)
         ),
         invertDelta: true,
-        spark: trendSpark(irr.data.trend, periodId, (p) =>
+        spark: trendSpark(irr.data.trend, irr.data.period.id, (p) =>
           num(p.worstEveChangePctTier1)
         ),
         hint: `Duration gap ${fixed(num(irr.data.metrics.durationGap), 2)}y · limit ${fixed(
@@ -229,7 +222,7 @@ export function usePulseCards(
           0
         )}%`,
         computedAt: irr.data.live?.computedAt ?? null,
-        basisNote: irr.data.stored ? 'stored baseline run' : 'computed inline',
+        basisNote: 'current live calculation',
       }),
       status: irr.data
         ? (irr.data.live?.status ?? irr.data.metrics.eveStatus)
@@ -243,15 +236,15 @@ export function usePulseCards(
         metricLabel: 'Net Open Position / Tier 1',
         value: fixed(num(fx.data.metrics.nopPctTier1), 2),
         unit: '%',
-        delta: trendDelta(fx.data.trend, periodId, (p) => num(p.nopPctTier1)),
+        delta: trendDelta(fx.data.trend, fx.data.period.id, (p) => num(p.nopPctTier1)),
         invertDelta: true,
-        spark: trendSpark(fx.data.trend, periodId, (p) => num(p.nopPctTier1)),
+        spark: trendSpark(fx.data.trend, fx.data.period.id, (p) => num(p.nopPctTier1)),
         hint: `Largest single ccy ${fx.data.metrics.singleCcyMaxCurrency} ${fixed(
           num(fx.data.metrics.singleCcyMaxPct),
           2
         )}%`,
         computedAt: fx.data.live?.computedAt ?? null,
-        basisNote: fx.data.stored ? 'stored baseline run' : 'computed inline',
+        basisNote: 'current live calculation',
       }),
       status: fx.data
         ? (fx.data.live?.status ??
@@ -266,15 +259,15 @@ export function usePulseCards(
         metricLabel: 'Portfolio NIM (weighted)',
         value: fixed(num(ftp.data.metrics.portfolioNimPct), 2),
         unit: '%',
-        delta: trendDelta(ftp.data.trend, periodId, (p) =>
+        delta: trendDelta(ftp.data.trend, ftp.data.period.id, (p) =>
           num(p.portfolioNimPct)
         ),
-        spark: trendSpark(ftp.data.trend, periodId, (p) =>
+        spark: trendSpark(ftp.data.trend, ftp.data.period.id, (p) =>
           num(p.portfolioNimPct)
         ),
         hint: `${ftp.data.metrics.productsBelowMinMargin} of ${ftp.data.metrics.totalProducts} products below margin floor`,
         computedAt: ftp.data.live?.computedAt ?? null,
-        basisNote: ftp.data.stored ? 'stored baseline run' : 'computed inline',
+        basisNote: 'current live calculation',
       }),
       status: ftp.data
         ? (ftp.data.live?.status ?? ftp.data.metrics.nmdCoreStatus)
@@ -294,7 +287,7 @@ export function usePulseCards(
       }),
       status: (ratingLive?.status ?? 'na') as CardStatus,
     },
-    forecast: buildForecastCard(forecasts, periodId),
+    forecast: buildForecastCard(forecastLive, liveSummary.isLoading, liveSummary.error),
   };
 
   const cards = Object.fromEntries(
@@ -320,44 +313,32 @@ export function usePulseCards(
 }
 
 function buildForecastCard(
-  forecasts: ReturnType<typeof useForecastRuns>,
-  periodId: string
+  forecast: { metrics: Record<string, unknown>; status: CardStatus; computedAt: Date } | undefined,
+  isLoading: boolean,
+  error: unknown
 ): PulseCardModel {
   const base: PulseCardModel = {
     module: 'forecast',
-    isLoading: forecasts.isLoading,
-    error: forecasts.error,
+    isLoading,
+    error,
     status: 'na',
   };
-  const runs = forecasts.data?.runs ?? [];
-  if (runs.length === 0) {
+  if (!forecast || forecast.status === 'na') {
     return {
       ...base,
-      pill: { tone: 'slate', label: 'No runs' },
-      hint: 'Run a 5-year projection from the Forecasting module',
+      pill: { tone: 'slate', label: 'Unavailable' },
+      hint: 'Current forecast baseline is not available yet',
     };
   }
-  // Newest run for the effective period, else the newest run overall.
-  const latest = runs.find((r) => r.reportingPeriodId === periodId) ?? runs[0];
-  const pill: PulseCardModel['pill'] =
-    latest.status === 'succeeded'
-      ? { tone: 'success', label: 'Succeeded' }
-      : latest.status === 'failed'
-        ? { tone: 'critical', label: 'Failed' }
-        : { tone: 'pending', label: labelize(latest.status) };
+  const metric = (key: string) => forecast.metrics[key] as string | number | undefined;
   return {
     ...base,
     metricLabel: 'Year-5 CAR (projected)',
-    value:
-      latest.year5CarPct !== null && latest.year5CarPct !== undefined
-        ? fixed(num(latest.year5CarPct), 2)
-        : undefined,
-    unit:
-      latest.year5CarPct !== null && latest.year5CarPct !== undefined
-        ? '%'
-        : undefined,
-    pill,
-    hint: `${labelize(latest.scenarioCode)} scenario · period ${latest.periodLabel}`,
-    computedAt: latest.createdAt,
+    value: fixed(num(metric('year5_car_pct')), 2),
+    unit: '%',
+    status: forecast.status,
+    hint: `Current base assumptions · minimum LCR ${fixed(num(metric('min_lcr_pct')), 2)}%`,
+    computedAt: forecast.computedAt,
+    basisNote: 'current live forecast baseline',
   };
 }

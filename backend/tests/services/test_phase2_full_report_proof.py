@@ -50,6 +50,12 @@ MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 REPORTING_DATE = date(2026, 3, 31)
 
 TEMPLATE_GATED = {"LAS-QUARTERLY"}  # BSD-MONTHLY retired: official BSD forms generate (bog_forms)
+# ICAAP-STRESS-APPENDIX2 (Phase 5) sources the BoG Appendix II tables from a
+# BOARD-ATTESTED enterprise-stress run. The Phase-2 official-run sweep mints no
+# enterprise-stress run and no sign-off, so this return REFUSES here by design —
+# that governance gate is its specified behaviour, proven end to end in
+# tests/services/test_icaap_stress_appendix2_report.py.
+STRESS_RUN_GATED = {"ICAAP-STRESS-APPENDIX2"}
 
 
 @pytest.fixture
@@ -167,6 +173,13 @@ def test_every_registered_return_generates_and_exports_end_to_end(
                 generation.generate_package(db_session, MAKER, SAMPLE_BANK_ID, payload)
             assert excinfo.value.detail["error_code"] == "template_pending", code  # type: ignore[index]
             continue
+        if code in STRESS_RUN_GATED:
+            with pytest.raises(HTTPException) as excinfo:
+                generation.generate_package(db_session, MAKER, SAMPLE_BANK_ID, payload)
+            assert (
+                excinfo.value.detail["error_code"] == "no_attested_stress_run"  # type: ignore[index]
+            ), code
+            continue
         read = generation.generate_package(db_session, MAKER, SAMPLE_BANK_ID, payload)
         package = db_session.scalar(
             select(RegulatoryPackage).where(RegulatoryPackage.id == read.id)
@@ -181,8 +194,9 @@ def test_every_registered_return_generates_and_exports_end_to_end(
         assert artifact.checksum_sha256, code
         generated[code] = len(package.snapshot["sections"])
 
-    # 14 generatable returns; the 2 gated ones refused by design.
-    assert len(generated) == len(REGISTRY) - len(TEMPLATE_GATED)
+    # Every registered return generates, except the gated ones that refuse by design
+    # (LAS-QUARTERLY: template pending; ICAAP-STRESS-APPENDIX2: no attested stress run).
+    assert len(generated) == len(REGISTRY) - len(TEMPLATE_GATED) - len(STRESS_RUN_GATED)
     # Phase 2 signature checks. LMT tool sections are data-gated (they render
     # only when their canonical inputs exist — plan W6.3), so this minimal
     # book yields the LCR subset + the data-backed tools; the full 16-section

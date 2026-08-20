@@ -42,6 +42,7 @@ from app.db.base import utc_now
 from app.models import (
     Bank,
     BankReportingPeriod,
+    InstitutionType,
     Jurisdiction,
     Organization,
     SsoConnection,
@@ -122,6 +123,16 @@ def _validate(db: Session, payload: TenantProvisionCreate, state: _SagaState) ->
                 f"Unknown jurisdiction_code {payload.jurisdiction_code!r}: not in the "
                 "jurisdictions registry. Onboarding a new country is a data exercise "
                 "(registry row + parameter pack + return families), not a form field."
+            ),
+        )
+    if db.get(InstitutionType, payload.institution_type) is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"Unknown institution_type {payload.institution_type!r}: not in the "
+                "institution_types registry. The licence class is the typed "
+                "discriminator every SDI scoping keys off (docs/sdi.md §1) — it must "
+                "resolve to a seeded registry row, not an arbitrary string."
             ),
         )
     if payload.currency != jurisdiction.currency_code:
@@ -417,6 +428,7 @@ def provision_tenant(
             currency=payload.currency,
             jurisdiction_code=payload.jurisdiction_code,
             license_type=payload.license_type,
+            institution_type=payload.institution_type,
         )
         db.add(bank)
         db.flush()
@@ -425,7 +437,7 @@ def provision_tenant(
             "bank",
             "succeeded",
             f"bank {bank.id} created ({payload.jurisdiction_code}, {payload.currency}, "
-            f"{payload.license_type})",
+            f"{payload.license_type}, institution_type={payload.institution_type})",
         )
 
         # c. storage  d. kms  e. sso stub  f. first admin  g. readiness
@@ -489,6 +501,7 @@ def _audit(
             "bank_id": state.bank_id,
             "jurisdiction_code": payload.jurisdiction_code,
             "currency": payload.currency,
+            "institution_type": payload.institution_type,
             "admin_email": payload.admin_email.lower(),
             "steps": [{"step": s.step, "status": s.status} for s in state.steps],
             "warnings": state.warnings,

@@ -38,23 +38,10 @@ __pycache__/
 coverage/
 .turbo/
 .vercel
-docs/*.docx
-# Guiding AI/ML infra spec — kept local, not tracked in the repo.
-docs/ai_engine.md
-# Strategy/spec docs held back until shared with the dev team (local-only for now)
-docs/product.md
-docs/rbac.md
-docs/data_engine.md
-docs/ARCHITECTURE.md
-# Client collateral + its brief (local-only)
-docs/demo_deck_brief.md
-docs/collateral/
+# Local documentation and client collateral.
+/docs/
+/exports/
 start.md
-docs/internal/staff_UI.md
-docs/internal/AequorOS_Market_Data_and_Curve_Platform.md
 
 # Local Snowflake seed CSVs (25MB) loaded into the warehouse — regenerable, not source.
 data_snowflake/
-
-# Generated regulatory export artifacts (PDF/xlsx per run) — reproducible from the pipeline
-exports/

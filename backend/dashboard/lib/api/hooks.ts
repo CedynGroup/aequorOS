@@ -165,7 +165,7 @@ export function useBankPeriodFacts(
 
 export function useLiquidityDashboard(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['liq-dashboard', bankId, periodId],
@@ -176,14 +176,14 @@ export function useLiquidityDashboard(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
 
 export function useCapitalDashboard(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['cap-dashboard', bankId, periodId],
@@ -194,7 +194,7 @@ export function useCapitalDashboard(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
@@ -339,7 +339,7 @@ export function useRunAllCapitalScenarios(bankId: string | undefined) {
 
 export function useIrrDashboard(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['irr-dashboard', bankId, periodId],
@@ -350,7 +350,7 @@ export function useIrrDashboard(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
@@ -375,7 +375,7 @@ export function useRunAllIrrScenarios(bankId: string | undefined) {
 
 export function useFxDashboard(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['fx-dashboard', bankId, periodId],
@@ -386,7 +386,7 @@ export function useFxDashboard(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
@@ -411,7 +411,7 @@ export function useRunAllFxScenarios(bankId: string | undefined) {
 
 export function useFtpDashboard(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['ftp-dashboard', bankId, periodId],
@@ -422,7 +422,7 @@ export function useFtpDashboard(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
@@ -452,7 +452,7 @@ export function isNoBaselineRunError(error: unknown): boolean {
 
 export function useRwaBreakdown(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['cap-rwa', bankId, periodId],
@@ -463,7 +463,7 @@ export function useRwaBreakdown(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     retry: (failureCount, error) =>
       !isNoBaselineRunError(error) && failureCount < 1,
   });
@@ -471,7 +471,7 @@ export function useRwaBreakdown(
 
 export function useCapitalStructure(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['cap-structure', bankId, periodId],
@@ -482,7 +482,7 @@ export function useCapitalStructure(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     retry: (failureCount, error) =>
       !isNoBaselineRunError(error) && failureCount < 1,
   });
@@ -2984,17 +2984,17 @@ export function useUpsertSigningPolicy() {
 
 // --- Phase 2: EWI / CFP / threshold registers / reverse stress -------------
 
-export function useEwiDashboard(bankId: string | undefined, periodId: string | undefined) {
+export function useEwiDashboard(bankId: string | undefined, periodId?: string | undefined) {
   return useQuery({
     queryKey: ['ewi-dashboard', bankId, periodId],
     queryFn: () =>
       apiCall(() =>
         liquidityCfpApi.getLiquidityEwiDashboard({
           bankId: bankId!,
-          reportingPeriodId: periodId!,
+          reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }

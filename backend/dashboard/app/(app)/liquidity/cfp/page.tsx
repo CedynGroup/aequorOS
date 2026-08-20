@@ -111,11 +111,10 @@ const indicatorColumns: Column<EwiEvaluationRead>[] = [
 ];
 
 export default function ContingencyFundingPlan() {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const ewis = useEwiDashboard(bankId, periodId);
+  const ewis = useEwiDashboard(bankId);
   const cfp = useCfpSummary(bankId);
   const events = useCfpEvents(bankId);
 

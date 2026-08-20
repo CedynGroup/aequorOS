@@ -39,7 +39,6 @@ import WaterfallChart, {
 import RatioPathChart from '@/components/forecasting/charts/RatioPathChart';
 import { useScenarioRunSet } from '@/components/forecasting/hooks';
 import {
-  latestSucceededId,
   liabilitiesOf,
   metricStatus,
   metricThreshold,
@@ -52,6 +51,7 @@ import {
   useCreateForecastRun,
   useForecastRun,
   useForecastRuns,
+  useLiveSummary,
 } from '@/lib/api/hooks';
 import { isoDate, labelize, num, statusTone } from '@/lib/api/values';
 import { currencyCode, fmtCurrency, fmtPct, fmtPctSigned, regShort } from '@/lib/format';
@@ -115,8 +115,10 @@ function BalanceSheetWorkspace() {
 
   const runsQuery = useForecastRuns(bankId, { limit: 50 });
   const runs = runsQuery.data?.runs ?? [];
+  const liveSummary = useLiveSummary(bankId);
+  const liveForecast = liveSummary.data?.modules.find((module) => module.module === 'forecast');
   const activeRunId =
-    selectedRunId ?? requestedRunId ?? latestSucceededId(runs);
+    selectedRunId ?? requestedRunId ?? null;
 
   const runQuery = useForecastRun(bankId, activeRunId);
   const createRun = useCreateForecastRun(bankId);
@@ -212,11 +214,15 @@ function BalanceSheetWorkspace() {
           )}
 
           {!activeRunId ? (
-            <EmptyState
-              Icon={PlayCircle}
-              title="No forecast runs yet"
-              description={`Run a forecast to project ${bank?.name ?? 'the bank'}'s balance sheet, P&L, and regulatory ratios ${horizonYears} years forward from ${period?.label ?? 'the selected period'}. Every run is kept as a saved projection you can revisit and compare.`}
-            />
+            liveForecast && liveForecast.status !== 'na' ? (
+              <LiveForecastBaseline forecast={liveForecast} />
+            ) : (
+              <EmptyState
+                Icon={PlayCircle}
+                title="Live forecast is not available yet"
+                description="Ingest current financial data and reviewed base assumptions. The live pipeline will calculate the baseline automatically; saved and official forecasts remain optional evidence snapshots."
+              />
+            )
           ) : runQuery.isLoading ? (
             <SkeletonChart height={320} />
           ) : runQuery.error ? (
@@ -236,6 +242,34 @@ function BalanceSheetWorkspace() {
           ) : null}
         </div>
       </QueryBoundary>
+    </>
+  );
+}
+
+function LiveForecastBaseline({
+  forecast,
+}: {
+  forecast: { metrics: Record<string, unknown>; computedAt: Date; status: string };
+}) {
+  const metrics = forecast.metrics;
+  const metric = (key: string) => metrics[key] as string | number | undefined;
+  return (
+    <>
+      <SectionCard
+        title="Current live forecast baseline"
+        subtitle="Five-year projection from current canonical financials and active base assumptions. This is not a saved or official run."
+        computedAt={forecast.computedAt}
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <KpiStat label="Year-5 CAR" value={fmtPct(num(metric('year5_car_pct')), 2)} />
+          <KpiStat label="Year-5 LCR" value={fmtPct(num(metric('year5_lcr_pct')), 2)} />
+          <KpiStat label="Year-5 NSFR" value={fmtPct(num(metric('year5_nsfr_pct')), 2)} />
+          <KpiStat label="Average ROE" value={fmtPct(num(metric('avg_roe_pct')), 2)} />
+        </div>
+      </SectionCard>
+      <p className="text-caption text-slate">
+        Select a saved run through a direct run link, or create a scenario above to preserve an explicit projection snapshot.
+      </p>
     </>
   );
 }

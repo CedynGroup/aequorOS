@@ -34,6 +34,7 @@ def _bank(db_session: Session, org_id: str = ORG_1, name: str = "Overlay Test Ba
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     db_session.add(bank)
     db_session.flush()
